@@ -1,0 +1,127 @@
+# yaml-language-server: $schema=https://arclint.dev/schema/arclint-rules.schema.json
+# arclint rule registry — the single canonical location is .arclint/rules.yaml.
+# Docs: docs/design/rules.md
+
+version: 1
+
+# Inherit shared rule sets. Local rules with the same id win.
+# extends:
+#   - "arclint:recommended"
+
+# Grandfather existing violations so new code is held to the rules
+# without demanding a big-bang cleanup. Regenerate with:
+#   arclint --update-baseline
+# baseline: .arclint/baseline.json
+
+# Global excludes. node_modules/** and .git/** are always excluded.
+exclude:
+  - ".arclint/**"        # never lint arclint's own config and templates
+  - "**/testdata/**"
+  - "dist/**"
+
+# Per-path suppressions. Omit `rules` to silence everything under the path.
+ignore:
+  - path: "legacy/**"
+    rules: [no-utils-dir, layered-architecture]
+
+rules:
+  # --- structure: what the tree must and must not contain -------------------
+
+  require-ci-config:
+    type: structure
+    # Ships "off" so `arclint check` is clean right after `arclint init`
+    # in an empty repo. Flip to error once CI config and a README exist.
+    severity: "off"
+    description: Repo must carry CI configuration and a README.
+    params:
+      require:
+        - ".github/workflows/*.yml"
+        - "README.md"
+    fixHint: Add the missing file at the expected path.
+
+  no-utils-dir:
+    type: structure
+    severity: error
+    description: No grab-bag utility directories.
+    params:
+      forbid:
+        - "**/utils/**"
+        - "**/helpers/**"
+    fixHint: Move helpers next to the code that uses them.
+
+  # --- naming: ls-lint style conventions per glob ----------------------------
+
+  go-file-naming:
+    type: naming
+    severity: error
+    description: Go source files are snake_case.
+    files:
+      include: ["**/*.go"]
+    params:
+      style: "snake_case"
+
+  package-dir-naming:
+    type: naming
+    severity: warn
+    description: Package directories are lowercase, kebab-case, or version suffixes.
+    files:
+      include: ["internal/**", "pkg/**"]
+    params:
+      target: dir
+      style: "lowercase | kebab-case | regex:v[0-9]+"
+
+  # --- dependencies: import-graph contracts between named modules ------------
+
+  layered-architecture:
+    type: dependencies
+    severity: error
+    description: Infra may use app, app may use domain, never the reverse.
+    params:
+      modules:
+        infra:  ["internal/infra/**"]
+        app:    ["internal/app/**"]
+        domain: ["internal/domain/**"]
+      contract: layers
+      layers: [infra, app, domain]
+    fixHint: Depend inward — invert the dependency with an interface in the lower layer.
+
+  domain-stays-pure:
+    type: dependencies
+    severity: error
+    description: The domain layer may not import infrastructure concerns.
+    params:
+      modules:
+        domain: ["internal/domain/**"]
+        infra:  ["internal/infra/**"]
+        cli:    ["cmd/**"]
+      contract: forbidden
+      forbidden:
+        - from: [domain]
+          to: [infra, cli]
+
+  # --- content: regex checks on file content ---------------------------------
+
+  no-println-outside-cmd:
+    type: content
+    severity: warn
+    description: Use the structured logger, not fmt printing.
+    files:
+      include: ["internal/**/*.go"]
+      exclude: ["**/*_test.go"]
+    params:
+      mustNotContain:
+        - pattern: 'fmt\.Print(ln|f)?\('
+          message: Use slog instead of fmt printing.
+    fixHint: Replace with slog calls.
+
+  # --- custom: external command escape hatch ----------------------------------
+
+  openapi-lint:
+    type: custom
+    severity: "off"      # quoted — see the YAML note in rules.md §4. Enable once the script exists.
+    description: OpenAPI specs pass the in-house checker.
+    files:
+      include: ["api/**/*.yaml"]
+    params:
+      command: ["scripts/check-openapi.sh"]
+      timeoutSeconds: 60

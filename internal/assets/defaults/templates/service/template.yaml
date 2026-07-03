@@ -1,0 +1,26 @@
+version: 1
+description: "A backend service with handler, config, and test scaffolding"
+destination: "services/{{ name | kebab }}"
+
+variables:
+  - name: name
+    description: "Service name (human words, e.g. 'payment gateway')"
+    type: string
+    validate: "^[a-zA-Z][a-zA-Z0-9 _-]*$"
+
+  - name: transport
+    description: "How does this service listen?"
+    type: choice
+    choices: [http, grpc, worker]
+    default: http
+
+  - name: with_db
+    description: "Does this service own a database?"
+    type: bool
+    default: false
+
+  - name: db_name
+    description: "Database name"
+    type: string
+    default: "{{ name | snake }}"
+    when: "with_db == true"

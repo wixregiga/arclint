@@ -1,0 +1,14 @@
+package main
+
+import (
+	"log"
+
+	"{{ repo_name }}/services/{{ name | kebab }}/internal"
+)
+
+func main() {
+	log.Printf("starting {{ name | kebab }} ({{ transport }})")
+	if err := internal.Run(); err != nil {
+		log.Fatal(err)
+	}
+}

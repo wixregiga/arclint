@@ -1,0 +1,17 @@
+# arclint binary
+/arclint
+arclint.exe
+
+# release artifacts
+/dist/
+
+# test and coverage output
+*.test
+coverage.out
+*.cover
+
+# editor/OS noise
+.idea/
+.vscode/
+*.swp
+.DS_Store

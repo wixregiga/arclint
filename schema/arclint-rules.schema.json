@@ -1,0 +1,305 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://arclint.dev/schema/arclint-rules.schema.json",
+  "title": "arclint rules file",
+  "description": "Schema for .arclint/rules.yaml — the single canonical rule registry for arclint.",
+  "type": "object",
+  "required": ["version", "rules"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "description": "Rule file format version. Bumped only on breaking format changes.",
+      "const": 1
+    },
+    "extends": {
+      "description": "Rule files or presets to inherit from, applied in order before local rules. A local rule with the same id fully replaces the inherited one.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "baseline": {
+      "description": "Path (relative to repo root) to a baseline file of grandfathered violations. Violations matching the baseline are reported as baselined and do not fail the run.",
+      "type": "string",
+      "minLength": 1
+    },
+    "exclude": {
+      "description": "Global exclude globs, added on top of the built-in excludes (node_modules/**, .git/** are always excluded).",
+      "type": "array",
+      "items": { "$ref": "#/$defs/glob" }
+    },
+    "ignore": {
+      "description": "Per-path rule suppressions. Each entry silences all rules (or the listed rule ids) for paths matching the glob.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "$ref": "#/$defs/glob" },
+          "rules": {
+            "description": "Rule ids to silence for this path. Omit to silence all rules.",
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/$defs/ruleId" }
+          }
+        }
+      }
+    },
+    "rules": {
+      "description": "Flat rule registry keyed by stable, user-chosen, kebab-case rule id.",
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/ruleId" },
+      "additionalProperties": { "$ref": "#/$defs/rule" }
+    }
+  },
+  "$defs": {
+    "ruleId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "moduleName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "glob": {
+      "description": "doublestar glob, relative to repo root.",
+      "type": "string",
+      "minLength": 1
+    },
+    "globList": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/glob" }
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["error", "warn", "off"]
+    },
+    "files": {
+      "description": "Per-rule file targeting. Defaults to the whole tree minus global excludes.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "include": { "$ref": "#/$defs/globList" },
+        "exclude": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/glob" }
+        }
+      }
+    },
+    "namingPipe": {
+      "description": "ls-lint style pipe expression: one or more conventions separated by '|'. A name is valid if it matches any alternative. Tokens: camelCase, PascalCase, snake_case, kebab-case, SCREAMING_SNAKE_CASE, lowercase, regex:<pattern> (pattern may not contain '|').",
+      "type": "string",
+      "pattern": "^\\s*(camelCase|PascalCase|snake_case|kebab-case|SCREAMING_SNAKE_CASE|lowercase|regex:[^|]+?)(\\s*\\|\\s*(camelCase|PascalCase|snake_case|kebab-case|SCREAMING_SNAKE_CASE|lowercase|regex:[^|]+?))*\\s*$"
+    },
+    "contentMatcher": {
+      "type": "object",
+      "required": ["pattern"],
+      "additionalProperties": false,
+      "properties": {
+        "pattern": {
+          "description": "RE2-compatible regex matched against file content, line by line.",
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "description": "Violation message override for this matcher.",
+          "type": "string"
+        }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "required": ["type", "severity", "description", "params"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "description": "Rule category. Closed enum; params shape depends on it.",
+          "type": "string",
+          "enum": ["structure", "naming", "dependencies", "content", "custom"]
+        },
+        "severity": { "$ref": "#/$defs/severity" },
+        "description": {
+          "description": "Human-readable statement of the architectural intent.",
+          "type": "string",
+          "minLength": 1
+        },
+        "files": { "$ref": "#/$defs/files" },
+        "fixHint": {
+          "description": "Short remediation hint copied into every violation this rule emits.",
+          "type": "string"
+        },
+        "params": { "type": "object" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "structure" } }, "required": ["type"] },
+          "then": { "properties": { "params": { "$ref": "#/$defs/structureParams" } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "naming" } }, "required": ["type"] },
+          "then": { "properties": { "params": { "$ref": "#/$defs/namingParams" } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "dependencies" } }, "required": ["type"] },
+          "then": { "properties": { "params": { "$ref": "#/$defs/dependenciesParams" } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "content" } }, "required": ["type"] },
+          "then": { "properties": { "params": { "$ref": "#/$defs/contentParams" } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "custom" } }, "required": ["type"] },
+          "then": { "properties": { "params": { "$ref": "#/$defs/customParams" } } }
+        }
+      ]
+    },
+    "structureParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        { "required": ["require"] },
+        { "required": ["forbid"] }
+      ],
+      "properties": {
+        "require": {
+          "description": "Each glob must match at least one existing file. Checked against the whole tree minus global excludes; the rule's files block does not apply to require globs.",
+          "$ref": "#/$defs/globList"
+        },
+        "forbid": {
+          "description": "No file within the rule's file targeting may match any of these globs.",
+          "$ref": "#/$defs/globList"
+        }
+      }
+    },
+    "namingParams": {
+      "type": "object",
+      "required": ["style"],
+      "additionalProperties": false,
+      "properties": {
+        "style": {
+          "description": "Pipe expression the basename (extension stripped for files) must satisfy.",
+          "$ref": "#/$defs/namingPipe"
+        },
+        "target": {
+          "description": "Whether the rule checks file basenames or directory basenames within the targeted paths.",
+          "type": "string",
+          "enum": ["file", "dir"],
+          "default": "file"
+        }
+      }
+    },
+    "dependenciesParams": {
+      "type": "object",
+      "required": ["modules", "contract"],
+      "additionalProperties": false,
+      "properties": {
+        "modules": {
+          "description": "Named module map: module name to path globs. All contracts reference these names.",
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/moduleName" },
+          "additionalProperties": { "$ref": "#/$defs/globList" }
+        },
+        "contract": {
+          "type": "string",
+          "enum": ["layers", "forbidden", "independence", "mayDependOn"]
+        },
+        "layers": {
+          "description": "Ordered top-to-bottom. A layer may import layers below it, never above. Used when contract is layers.",
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/moduleName" }
+        },
+        "forbidden": {
+          "description": "Explicit deny edges. Used when contract is forbidden.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["from", "to"],
+            "additionalProperties": false,
+            "properties": {
+              "from": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/moduleName" } },
+              "to": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/moduleName" } }
+            }
+          }
+        },
+        "among": {
+          "description": "Modules that must not import each other. Used when contract is independence.",
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/moduleName" }
+        },
+        "mayDependOn": {
+          "description": "Whitelist: each listed module may depend only on the modules listed for it. An empty list means it may depend on nothing. Used when contract is mayDependOn.",
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "#/$defs/moduleName" },
+          "additionalProperties": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/moduleName" }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "contract": { "const": "layers" } }, "required": ["contract"] },
+          "then": { "required": ["layers"] }
+        },
+        {
+          "if": { "properties": { "contract": { "const": "forbidden" } }, "required": ["contract"] },
+          "then": { "required": ["forbidden"] }
+        },
+        {
+          "if": { "properties": { "contract": { "const": "independence" } }, "required": ["contract"] },
+          "then": { "required": ["among"] }
+        },
+        {
+          "if": { "properties": { "contract": { "const": "mayDependOn" } }, "required": ["contract"] },
+          "then": { "required": ["mayDependOn"] }
+        }
+      ]
+    },
+    "contentParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        { "required": ["mustContain"] },
+        { "required": ["mustNotContain"] }
+      ],
+      "properties": {
+        "mustContain": {
+          "description": "Every targeted file must match every pattern at least once.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/contentMatcher" }
+        },
+        "mustNotContain": {
+          "description": "No targeted file may match any pattern.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/contentMatcher" }
+        }
+      }
+    },
+    "customParams": {
+      "type": "object",
+      "required": ["command"],
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "description": "Argv array executed from the repo root. Receives {\"files\": [<paths>]} on stdin and must print a JSON array of {path, line?, message, fixHint?} objects on stdout; arclint injects ruleId, category, and severity from the rule's config. Violations are conveyed entirely by the stdout array (empty array = clean). Exit 0 is the only success code; any non-zero exit = rule execution error (arclint's exit-2 path).",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "timeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600,
+          "default": 30
+        }
+      }
+    }
+  }
+}

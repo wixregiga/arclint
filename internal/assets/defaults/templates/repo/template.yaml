@@ -1,0 +1,14 @@
+version: 1
+description: "A repository skeleton with README and CI workflow"
+destination: "{{ name | kebab }}"
+
+variables:
+  - name: name
+    description: "Repository name (human words, e.g. 'billing platform')"
+    type: string
+    validate: "^[a-zA-Z][a-zA-Z0-9 _-]*$"
+
+  - name: default_branch
+    description: "Default branch name"
+    type: string
+    default: "main"

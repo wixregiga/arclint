@@ -1,0 +1,12 @@
+package internal
+
+// {{ name | pascal }}Handler handles {{ transport }} requests for the
+// {{ name }} service.
+type {{ name | pascal }}Handler struct{}
+
+// Run starts the {{ name | kebab }} service.
+func Run() error {
+	h := &{{ name | pascal }}Handler{}
+	_ = h
+	return nil
+}

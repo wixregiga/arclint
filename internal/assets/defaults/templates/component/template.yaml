@@ -1,0 +1,14 @@
+version: 1
+description: "A self-contained component with a manifest and docs"
+destination: "components/{{ name | kebab }}"
+
+variables:
+  - name: name
+    description: "Component name (human words, e.g. 'date picker')"
+    type: string
+    validate: "^[a-zA-Z][a-zA-Z0-9 _-]*$"
+
+  - name: owner
+    description: "Owning team"
+    type: string
+    default: "unassigned"
