@@ -9,7 +9,7 @@ import (
 
 	"github.com/goccy/go-yaml"
 
-	"github.com/jofyi/arclint/internal/config"
+	"github.com/wixregiga/arclint/internal/config"
 )
 
 // Baseline file format (rules.md §9.2, referenced from the config's

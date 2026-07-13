@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/jofyi/arclint/internal/config"
+	"github.com/wixregiga/arclint/internal/config"
 )
 
 // compiledMatcher is one content pattern with its optional message

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jofyi/arclint/internal/config"
-	"github.com/jofyi/arclint/internal/rules"
+	"github.com/wixregiga/arclint/internal/config"
+	"github.com/wixregiga/arclint/internal/rules"
 )
 
 func sampleViolations() []rules.Violation {

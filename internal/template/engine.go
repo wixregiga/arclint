@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jofyi/arclint/internal/version"
+	"github.com/wixregiga/arclint/internal/version"
 )
 
 // Template is a loaded thing type: a directory under .arclint/templates/

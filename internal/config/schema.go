@@ -7,7 +7,7 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
-	"github.com/jofyi/arclint/schema"
+	"github.com/wixregiga/arclint/schema"
 )
 
 // compileRulesSchema compiles the embedded rules schema exactly once, on

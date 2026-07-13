@@ -17,8 +17,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jofyi/arclint/internal/answers"
-	"github.com/jofyi/arclint/internal/template"
+	"github.com/wixregiga/arclint/internal/answers"
+	"github.com/wixregiga/arclint/internal/template"
 )
 
 func init() { Register(newMakeCmd()) }

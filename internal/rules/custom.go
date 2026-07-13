@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jofyi/arclint/internal/config"
+	"github.com/wixregiga/arclint/internal/config"
 )
 
 // waitDelay bounds how long cmd.Wait() waits for the child's stdout/stderr

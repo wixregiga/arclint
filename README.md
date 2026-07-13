@@ -5,13 +5,13 @@ arclint is a very fast, language-agnostic architecture linter and template-repos
 ## Install
 
 ```
-go install github.com/jofyi/arclint/cmd/arclint@latest
+go install github.com/wixregiga/arclint/cmd/arclint@latest
 ```
 
 Or build from source:
 
 ```
-git clone https://github.com/jofyi/arclint
+git clone https://github.com/wixregiga/arclint
 cd arclint
 go build ./cmd/arclint
 ```

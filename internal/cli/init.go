@@ -14,7 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jofyi/arclint/internal/assets"
+	"github.com/wixregiga/arclint/internal/assets"
 )
 
 func init() { Register(newInitCmd()) }

@@ -14,7 +14,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/mattn/go-isatty"
 
-	"github.com/jofyi/arclint/internal/template"
+	"github.com/wixregiga/arclint/internal/template"
 )
 
 // Interactive reports whether a prompt may fire at all: stdin and stdout are

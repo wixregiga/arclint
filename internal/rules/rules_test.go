@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jofyi/arclint/internal/config"
-	"github.com/jofyi/arclint/internal/walk"
+	"github.com/wixregiga/arclint/internal/config"
+	"github.com/wixregiga/arclint/internal/walk"
 )
 
 // writeTree materializes a fixture tree under root.

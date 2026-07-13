@@ -15,8 +15,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/jofyi/arclint/internal/config"
-	"github.com/jofyi/arclint/internal/walk"
+	"github.com/wixregiga/arclint/internal/config"
+	"github.com/wixregiga/arclint/internal/walk"
 )
 
 // Violation is one rule finding, shaped per rules.md §1. Path is

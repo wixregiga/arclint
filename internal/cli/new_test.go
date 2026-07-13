@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jofyi/arclint/internal/answers"
+	"github.com/wixregiga/arclint/internal/answers"
 )
 
 // newTestRepo builds a temp repo with one "svc" template and returns its root.

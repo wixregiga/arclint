@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jofyi/arclint/internal/config"
+	"github.com/wixregiga/arclint/internal/config"
 )
 
 // expectedTree is every file a full (non-bare) init must create, relative

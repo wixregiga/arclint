@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jofyi/arclint/internal/config"
-	"github.com/jofyi/arclint/internal/rules"
+	"github.com/wixregiga/arclint/internal/config"
+	"github.com/wixregiga/arclint/internal/rules"
 )
 
 // Summary is the run tail: totals for the summary line / JSON summary

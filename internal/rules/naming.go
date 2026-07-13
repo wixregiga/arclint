@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jofyi/arclint/internal/config"
+	"github.com/wixregiga/arclint/internal/config"
 )
 
 // namingTokens are the ls-lint style tokens from rules.md §5.2, compiled

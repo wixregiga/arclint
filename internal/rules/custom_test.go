@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jofyi/arclint/internal/config"
+	"github.com/wixregiga/arclint/internal/config"
 )
 
 // customRule builds a minimal custom rule for compileCustom tests.

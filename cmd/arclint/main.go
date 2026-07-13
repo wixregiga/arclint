@@ -6,7 +6,7 @@ package main
 import (
 	"os"
 
-	"github.com/jofyi/arclint/internal/cli"
+	"github.com/wixregiga/arclint/internal/cli"
 )
 
 func main() {

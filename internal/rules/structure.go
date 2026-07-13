@@ -3,8 +3,8 @@ package rules
 import (
 	"fmt"
 
-	"github.com/jofyi/arclint/internal/config"
-	"github.com/jofyi/arclint/internal/walk"
+	"github.com/wixregiga/arclint/internal/config"
+	"github.com/wixregiga/arclint/internal/walk"
 )
 
 // compileStructure builds the structure evaluator (rules.md §5.1):

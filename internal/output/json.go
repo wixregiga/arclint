@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/jofyi/arclint/internal/rules"
+	"github.com/wixregiga/arclint/internal/rules"
 )
 
 // jsonViolation mirrors the exact violation shape from cli.md/rules.md:

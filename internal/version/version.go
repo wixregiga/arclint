@@ -5,5 +5,5 @@ package version
 // templates as the arclint_version built-in. A var (not a const) so release
 // builds can override it:
 //
-//	go build -ldflags "-X github.com/jofyi/arclint/internal/version.Version=v1.2.3"
+//	go build -ldflags "-X github.com/wixregiga/arclint/internal/version.Version=v1.2.3"
 var Version = "0.0.0-dev"

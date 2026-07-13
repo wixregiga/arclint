@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"github.com/jofyi/arclint/internal/rules"
+	"github.com/wixregiga/arclint/internal/rules"
 )
 
 const checkTestRules = `version: 1

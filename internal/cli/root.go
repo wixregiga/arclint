@@ -15,7 +15,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jofyi/arclint/internal/version"
+	"github.com/wixregiga/arclint/internal/version"
 )
 
 // Exit codes — the uniform contract from docs/design/cli.md.

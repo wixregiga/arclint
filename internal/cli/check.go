@@ -10,10 +10,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jofyi/arclint/internal/config"
-	"github.com/jofyi/arclint/internal/output"
-	"github.com/jofyi/arclint/internal/rules"
-	"github.com/jofyi/arclint/internal/walk"
+	"github.com/wixregiga/arclint/internal/config"
+	"github.com/wixregiga/arclint/internal/output"
+	"github.com/wixregiga/arclint/internal/rules"
+	"github.com/wixregiga/arclint/internal/walk"
 )
 
 func init() { Register(newCheckCmd()) }

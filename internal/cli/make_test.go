@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jofyi/arclint/internal/answers"
+	"github.com/wixregiga/arclint/internal/answers"
 )
 
 // generateUnit runs `arclint new svc <name>` and fails the test on error.

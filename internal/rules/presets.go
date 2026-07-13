@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"maps"
 
-	"github.com/jofyi/arclint/internal/config"
+	"github.com/wixregiga/arclint/internal/config"
 )
 
 // Presets are rule sets compiled into the binary and referenced from

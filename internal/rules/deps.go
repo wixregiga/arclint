@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jofyi/arclint/internal/config"
-	"github.com/jofyi/arclint/internal/walk"
+	"github.com/wixregiga/arclint/internal/config"
+	"github.com/wixregiga/arclint/internal/walk"
 )
 
 // The dependencies evaluator (rules.md §5.3) is language-agnostic by
