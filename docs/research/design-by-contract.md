@@ -1,0 +1,34 @@
+# Design by Contract for Architecture Linting
+
+Research report, 2026-08-10, for the arclint multi-language design. Every claim carries its source link inline; [INFERENCE] labels mark statements not directly verified.
+
+## 1. DbC core (Bertrand Meyer / Eiffel)
+
+A precondition states "the conditions required for it to be possible for [a routine] to run correctly"; a postcondition states "the conditions that will be true always if [the routine] works correctly" ([eiffel.org](https://www.eiffel.org/doc/eiffel/Design_by_Contract_and_Assertions)). In Eiffel these are `require`/`ensure` clauses. A class invariant is "an assertion describing a property which holds of all instances of a class" ([eiffel.com](https://www.eiffel.com/values/design-by-contract/introduction/)). Meyer casts the relationship as mutual obligations and benefits — client obligation = precondition, client benefit = postcondition; supplier obligation = postcondition, supplier benefit = may assume the precondition — and states blame directly: "A contract document protects both the client, by specifying how much should be done, and the supplier, by stating that the supplier is not liable for failing to carry out tasks outside of the specified scope" ([eiffel.com](https://www.eiffel.com/values/design-by-contract/introduction/)). Concretely, a precondition violation is the caller's fault and the routine need not run; a postcondition violation despite a met precondition is the supplier's fault ([eiffel.org](https://www.eiffel.org/doc/eiffel/Design_by_Contract_and_Assertions)).
+
+## 2. deal (life4/deal)
+
+deal implements DbC as Python decorators with three verification layers. Contract kinds: `@deal.pre` ("condition that must be true before the function is executed"), `@deal.post` ("condition that must be true after the function was executed"), `@deal.ensure` (postcondition seeing both arguments and result), `@deal.inv` ("condition that can be relied upon to be true during execution of a program," checked against class instances) ([deal docs: values](https://deal.readthedocs.io/basic/values.html)); `@deal.pure` (no side effects), `@deal.raises` — a closed exception set; an unlisted exception fails with `RaisesContractError` ([deal docs: exceptions](https://deal.readthedocs.io/basic/exceptions.html)) — and `@deal.has` — a closed side-effect/marker set; an unlisted effect fails with `SilentContractError` and is separately flagged by the linter ([deal docs: side-effects](https://deal.readthedocs.io/basic/side-effects.html)). Example: `@deal.post(lambda result: result >= 0)` stacked over `@deal.pure` on a function ([github.com/life4/deal](https://github.com/life4/deal)). Verification: runtime assertions (togglable in production); test generation via `deal.cases(count)`, a pytest-discoverable case generator integrating Hypothesis; and static analysis via `python3 -m deal lint` or a flake8 plugin, which the README states uses "partial execution" to check possible values without running the code ([github.com/life4/deal](https://github.com/life4/deal)).
+
+## 3. "Contract" in architecture linters
+
+import-linter names five contract types: Forbidden ("Prevent one set of modules being imported by another"), Protected ("Prevent modules from being directly imported, except by modules in an allow-list"), Layers ("Enforce a 'layered architecture'"), Independence ("Prevent a set of modules depending on each other"), Acyclic siblings ("Forbid dependency cycles between siblings") ([import-linter contract types](https://import-linter.readthedocs.io/en/stable/contract_types/)). These are static constraints on the import graph, not routine-level pre/postconditions, and the docs page does not explain the term's DbC lineage. Pact uses "contract" for a different artifact: "Contract testing is a technique for testing an integration point by checking each application in isolation to ensure the messages it sends or receives conform to a shared understanding that is documented in a 'contract'" — an example-based, generated artifact ("contract by example"), not a hand-authored boundary rule ([docs.pact.io](https://docs.pact.io)).
+
+## 4. Synthesis: mapping DbC onto architecture rules
+
+Import-graph contracts in the import-linter sense cover only the client column of Meyer's obligations table: they constrain what a module may consume. Meyer's full triad maps onto repository architecture like this:
+
+- **Preconditions — what a module may consume.** Dependency allow/deny lists, layer position, third-party import policy. This is the territory every existing boundary linter occupies.
+- **Postconditions — what a module must provide.** Required files, required exports, registration obligations ("every feature registers itself in the registry"), correspondence obligations ("every entity substrate has a matching setup substrate"). These state what a module owes its consumers.
+- **Invariants — properties that always hold regardless of interaction.** Naming conventions, forbidden directories, content rules.
+
+[INFERENCE] The postcondition column is the gap in the tool landscape: surveyed architecture linters check consumption (import contracts) and invariants (naming, structure), and none checks provision declaratively. A design that adopts DbC earns its keep exactly there — the provides side is new capability, not renamed capability. A required-file rule alone is invariant-shaped (no obligation/benefit split); a naming rule is precondition-shaped only when something downstream depends on the name; the registration and correspondence rules are genuinely postcondition-shaped, the way deal keeps `@pre` and `@post` distinct.
+
+Two Meyer mechanics transfer with real utility if implemented, not just renamed:
+
+- **Blame assignment.** A flat violation list carries no field distinguishing "the importing file is at fault" (precondition break, consumer's fault) from "the module broke its own promise" (postcondition break, provider's fault). A blame field on each violation is new, checkable behavior that tells the reader which side to fix.
+- **Obligations vs benefits.** A dependency whitelist encodes a module's obligation (import only what is listed) but never states the reciprocal benefit (what dependents may assume the module provides). A module contract that states both `consumes` and `provides` makes each party's benefit the other's obligation, checkable in both directions.
+
+Contract inheritance (Eiffel's rule that an overriding routine may only weaken preconditions or strengthen postconditions) has no analogue in a flat, independent rule registry; adopting it needs contract hierarchies in the schema, not vocabulary.
+
+Honest bottom line: DbC is a load-bearing design model only if the provides side and blame assignment are implemented. Without those two, applying DbC vocabulary to an architecture linter is framing, not function.
