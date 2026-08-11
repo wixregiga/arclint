@@ -7,6 +7,7 @@ modules:
   cmd: ["cmd/**"]
   config: ["internal/config/**"]
   engine: ["internal/engine/**"]
+  ext: ["internal/ext/**"]
   golang: ["internal/lang/golang/**"]
   langs: ["internal/lang/**"]
   oracle: ["internal/oracle/**"]
@@ -37,12 +38,15 @@ contracts:
   config:
     consumes:
       internal: [exprenv]
+  ext:
+    consumes:
+      internal: []
   engine:
     consumes:
-      internal: [config, golang, tree, report, exprenv]
+      internal: [config, golang, tree, report, exprenv, ext]
   cmd:
     consumes:
-      internal: [config, engine, report]
+      internal: [config, engine, report, ext]
     invariants:
       - kind: structure
         require: ["cmd/arclint/main.go"]
@@ -71,7 +75,7 @@ dependencies:
   - kind: layers
     layers: [cmd, engine, config, golang, tree]
   - kind: acyclic
-    modules: [cmd, config, engine, golang, tree, report, exprenv, tools, oracle]
+    modules: [cmd, config, engine, ext, golang, tree, report, exprenv, tools, oracle]
   - kind: protected
     module: report
     allow: [engine, cmd]

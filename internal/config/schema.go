@@ -135,6 +135,7 @@ func schemaDoc() (map[string]any, error) {
 		{"InvariantRule", "severity", sev},
 		{"GraphRule", "kind", []any{"layers", "forbidden", "independence", "protected", "acyclic"}},
 		{"GraphRule", "severity", sev},
+		{"ExtensionRule", "severity", sev},
 	}
 	for _, p := range patches {
 		d := def(p.def)

@@ -4,9 +4,11 @@
 package engine
 
 import (
+	"path/filepath"
 	"sort"
 
 	"github.com/wixregiga/arclint/internal/config"
+	"github.com/wixregiga/arclint/internal/ext"
 	"github.com/wixregiga/arclint/internal/lang/golang"
 	"github.com/wixregiga/arclint/internal/report"
 	"github.com/wixregiga/arclint/internal/tree"
@@ -59,6 +61,19 @@ func Check(rs *config.RuleSet) (*Result, error) {
 	vs = append(vs, checkGraphRules(ctx)...)
 	vs = append(vs, checkProvides(ctx)...)
 	vs = append(vs, checkInvariants(ctx)...)
+	if len(rs.Rules) > 0 {
+		reg, err := ext.LoadDir(rs.Root, ext.Options{
+			CacheDir: filepath.Join(rs.Root, ".arclint", "cache"),
+		})
+		if err != nil {
+			return nil, err
+		}
+		evs, err := checkExtensions(ctx, reg)
+		if err != nil {
+			return nil, err
+		}
+		vs = append(vs, evs...)
+	}
 	report.Sort(vs)
 	sort.Strings(ctx.warnings)
 	return &Result{Violations: vs, Warnings: ctx.warnings, FilesScanned: len(t.Files)}, nil

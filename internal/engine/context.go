@@ -38,6 +38,18 @@ type Context struct {
 
 	contentMu sync.Mutex
 	contents  map[string][]byte
+	files     map[string]*tree.File
+}
+
+// fileByPath resolves a repo-relative path to its tree file, or nil.
+func (c *Context) fileByPath(p string) *tree.File {
+	if c.files == nil {
+		c.files = make(map[string]*tree.File, len(c.Tree.Files))
+		for _, f := range c.Tree.Files {
+			c.files[f.Path] = f
+		}
+	}
+	return c.files[p]
 }
 
 func newContext(rs *config.RuleSet, t *tree.Tree) (*Context, error) {

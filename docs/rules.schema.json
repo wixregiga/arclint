@@ -50,6 +50,32 @@
       },
       "type": "object"
     },
+    "ExtensionRule": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "params": {
+          "type": "object"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warn",
+            "info"
+          ],
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
     "GraphRule": {
       "additionalProperties": false,
       "properties": {
@@ -329,6 +355,12 @@
         "type": "array"
       },
       "type": "object"
+    },
+    "rules": {
+      "items": {
+        "$ref": "#/$defs/ExtensionRule"
+      },
+      "type": "array"
     },
     "runtime": {
       "items": {

@@ -1,0 +1,8 @@
+runtime: [go]
+
+modules:
+  handlers: ["internal/api/handlers/**"]
+
+rules:
+  - type: handler-naming
+    params: { suffix: "Handler" }

@@ -80,6 +80,44 @@ usage error. JSON violations have the stable shape
   `expr` predicates over `file` (`file.lines <= 400`,
   `"os" in file.imports`), type-checked at load time.
 
+## TypeScript extensions (layer 2)
+
+Full rule logic in `.arclint/extensions/*.ts`, executed in-process via
+esbuild + sobek (the k6 pattern): no Node, npm, or tsc on the machine.
+`arclint sdk init` writes `arclint.d.ts` (generated from the Go host
+types) and a `tsconfig.json` for editor typing.
+
+```ts
+// .arclint/extensions/handler-naming.ts
+import { defineRule, s } from "arclint";
+
+export default defineRule({
+  type: "handler-naming",
+  params: s.object({ suffix: s.string().default("Handler") }),
+  check(ctx, params) {
+    for (const f of ctx.files("internal/**/handlers/*.go")) {
+      if (!f.stem.endsWith(params.suffix as string)) {
+        ctx.report({ path: f.path, message: `handler files end in ${params.suffix}` });
+      }
+    }
+  },
+});
+```
+
+Instances stay pure data in rules.yaml, validated against the extension's
+schema before any extension code runs:
+
+```yaml
+rules:
+  - type: handler-naming
+    params: { suffix: "Handler" }
+```
+
+Sandbox: extensions see only the read-only ctx (files, read, imports,
+modules, report); `Date.now`/`Math.random` are host-controlled; runaway
+rules are interrupted after 5s. Relative imports are bundled; bare npm
+imports are rejected.
+
 ## Go import resolution
 
 `go/parser` in ImportsOnly mode; exact classification, no heuristics:

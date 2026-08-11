@@ -13,6 +13,7 @@ import (
 
 	"github.com/wixregiga/arclint/internal/config"
 	"github.com/wixregiga/arclint/internal/engine"
+	"github.com/wixregiga/arclint/internal/ext"
 	"github.com/wixregiga/arclint/internal/report"
 )
 
@@ -53,8 +54,56 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newLoadCmd(), newListCmd(), newRulesCmd(), newCheckCmd())
+	root.AddCommand(newLoadCmd(), newListCmd(), newRulesCmd(), newCheckCmd(), newSdkCmd())
 	return root
+}
+
+// loadExtensionRegistry discovers and registers extensions for a loaded
+// ruleset, and validates every rules.yaml extension instance against its
+// provider's schema. Failures are configuration errors (exit 2).
+func loadExtensionRegistry(rs *config.RuleSet) (*ext.Registry, error) {
+	reg, err := ext.LoadDir(rs.Root, ext.Options{
+		CacheDir: filepath.Join(rs.Root, ".arclint", "cache"),
+	})
+	if err != nil {
+		return nil, &exitError{2, err.Error()}
+	}
+	for i, inst := range rs.Rules {
+		rt := reg.Get(inst.Type)
+		if rt == nil {
+			return nil, &exitError{2, fmt.Sprintf("rules[%d]: no extension registers rule type %q (looked in %s)",
+				i, inst.Type, ext.ExtensionsDir)}
+		}
+		if _, err := rt.ValidateParams(inst.Params); err != nil {
+			return nil, &exitError{2, fmt.Sprintf("rules[%d]: %v", i, err)}
+		}
+	}
+	return reg, nil
+}
+
+// extensionRows presents rules.yaml extension instances for list/rules ls.
+func extensionRows(rs *config.RuleSet, reg *ext.Registry) []config.RuleInstance {
+	var rows []config.RuleInstance
+	for i, inst := range rs.Rules {
+		rt := reg.Get(inst.Type)
+		id := inst.ID
+		if id == "" {
+			id = fmt.Sprintf("rules.%s[%d]", inst.Type, i)
+		}
+		sev := inst.Severity
+		if sev == "" {
+			sev = "error"
+		}
+		rows = append(rows, config.RuleInstance{
+			ID:          id,
+			Clause:      rt.Contract,
+			Kind:        inst.Type,
+			Provider:    "extension:" + rt.SourcePath,
+			Severity:    sev,
+			Description: rt.Describe(),
+		})
+	}
+	return rows
 }
 
 // findRulesFile locates rules.yaml: from a directory upward to the
@@ -109,12 +158,17 @@ func newLoadCmd() *cobra.Command {
 			if err := config.WriteCache(rs, version); err != nil {
 				return &exitError{2, fmt.Sprintf("cannot write cache: %v", err)}
 			}
+			reg, err := loadExtensionRegistry(rs)
+			if err != nil {
+				return err
+			}
 			instances := rs.Instances()
 			counts := config.CountByClause(instances)
+			total := len(instances) + len(rs.Rules)
 			fmt.Fprintf(cmd.OutOrStdout(),
-				"loaded %s: %d rules (%d consumes, %d provides, %d invariants), layers: %d declarative / %d expr / 0 extensions, targets %v, %d modules\n",
-				rs.Path, len(instances), counts["consumes"], counts["provides"], counts["invariant"],
-				len(instances)-counts["expr"], counts["expr"], rs.Runtime, len(rs.Modules))
+				"loaded %s: %d rules (%d consumes, %d provides, %d invariants, %d extension instances), layers: %d declarative / %d expr / %d extension types, targets %v, %d modules\n",
+				rs.Path, total, counts["consumes"], counts["provides"], counts["invariant"], len(rs.Rules),
+				len(instances)-counts["expr"], counts["expr"], len(reg.Types()), rs.Runtime, len(rs.Modules))
 			fmt.Fprintf(cmd.OutOrStdout(), "cache written: %s\n", filepath.Join(rs.Root, ".arclint", "cache.json"))
 			return nil
 		},
@@ -144,7 +198,15 @@ func newListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			for _, inst := range rs.Instances() {
+			rows := rs.Instances()
+			if len(rs.Rules) > 0 {
+				reg, err := loadExtensionRegistry(rs)
+				if err != nil {
+					return err
+				}
+				rows = append(rows, extensionRows(rs, reg)...)
+			}
+			for _, inst := range rows {
 				fmt.Fprintf(cmd.OutOrStdout(), "%s  [%s/%s]  %s  %s\n",
 					inst.ID, inst.Clause, inst.Kind, inst.Severity, inst.Description)
 			}
@@ -167,10 +229,18 @@ func newRulesCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			rows := rs.Instances()
+			if len(rs.Rules) > 0 {
+				reg, err := loadExtensionRegistry(rs)
+				if err != nil {
+					return err
+				}
+				rows = append(rows, extensionRows(rs, reg)...)
+			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
 			fmt.Fprintln(w, "ID\tCONTRACT\tKIND\tPROVIDER\tTARGETS\tSEVERITY\tDESCRIPTION")
 			targets := fmt.Sprintf("%v", rs.Runtime)
-			for _, inst := range rs.Instances() {
+			for _, inst := range rows {
 				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 					inst.ID, inst.Clause, inst.Kind, inst.Provider, targets, inst.Severity, inst.Description)
 			}
@@ -180,6 +250,31 @@ func newRulesCmd() *cobra.Command {
 	ls.Flags().StringVar(&rulesFlag, "rules", "", "path to rules.yaml (default: discovered upward from .)")
 	rules.AddCommand(ls)
 	return rules
+}
+
+func newSdkCmd() *cobra.Command {
+	sdk := &cobra.Command{Use: "sdk", Short: "extension SDK utilities"}
+	initCmd := &cobra.Command{
+		Use:   "init",
+		Short: "write arclint.d.ts (generated from the Go host types) and tsconfig.json into .arclint/extensions",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return &exitError{2, err.Error()}
+			}
+			files, err := ext.SDKInit(cwd)
+			if err != nil {
+				return &exitError{2, err.Error()}
+			}
+			for _, f := range files {
+				fmt.Fprintf(cmd.OutOrStdout(), "wrote %s\n", f)
+			}
+			return nil
+		},
+	}
+	sdk.AddCommand(initCmd)
+	return sdk
 }
 
 func newCheckCmd() *cobra.Command {

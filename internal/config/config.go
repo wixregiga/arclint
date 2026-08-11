@@ -22,6 +22,11 @@ type RuleSet struct {
 	Contracts map[string]ModuleContract `yaml:"contracts" json:"contracts,omitempty"`
 	// Dependencies holds graph-wide consumes clauses spanning modules.
 	Dependencies []GraphRule `yaml:"dependencies" json:"dependencies,omitempty"`
+	// Rules holds layer-2 extension rule instances: pure data naming a
+	// rule type registered by .arclint/extensions plus params that the
+	// host validates against the extension's declared JSON Schema before
+	// the extension ever runs.
+	Rules []ExtensionRule `yaml:"rules" json:"rules,omitempty"`
 
 	// Path is the absolute path of the loaded rules.yaml. Not serialized.
 	Path string `yaml:"-" json:"-"`
@@ -207,6 +212,14 @@ type InvariantRule struct {
 	// violation. Message overrides the default violation text.
 	Assert  string `yaml:"assert" json:"assert,omitempty"`
 	Message string `yaml:"message" json:"message,omitempty"`
+}
+
+// ExtensionRule is one instance of an extension-registered rule type.
+type ExtensionRule struct {
+	ID       string         `yaml:"id" json:"id,omitempty"`
+	Type     string         `yaml:"type" json:"type"`
+	Severity string         `yaml:"severity" json:"severity,omitempty"`
+	Params   map[string]any `yaml:"params" json:"params,omitempty"`
 }
 
 // GraphRule is a graph-wide consumes clause over declared modules.

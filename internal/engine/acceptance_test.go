@@ -89,6 +89,17 @@ func TestFixtures(t *testing.T) {
 			}},
 		},
 		{dir: "correspondence-clean"},
+		{
+			// Driving rule 4 (M2): a TypeScript rule authored against the
+			// SDK, executed in-process, reporting a violation.
+			dir: "extension-handler-naming",
+			want: []wantViolation{{
+				ruleID:   "rules.handler-naming[0]",
+				contract: report.ContractInvariant,
+				blame:    report.BlameProvider,
+				path:     "internal/api/handlers/broken.go",
+			}},
+		},
 	}
 
 	for _, tc := range cases {

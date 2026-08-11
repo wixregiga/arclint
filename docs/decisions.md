@@ -84,6 +84,60 @@ milestone. Dates are decision dates.
     go.mod (uses a custom `vendor.mod`), kubernetes/kubernetes because a
     multi-GB clone makes a poor recurring oracle.
 
+## M2 (2026-08-10)
+
+1. **Extension discovery is top-level only**: every `*.ts`/`*.js` directly
+   under `.arclint/extensions/` is one extension entry, deduplicated by
+   real path; shared helpers live in subdirectories and are bundled via
+   relative imports. `*.d.ts` and dotfiles are skipped.
+2. **Bundling**: esbuild Build (not Transform) with Bundle, CommonJS
+   output, ES2017 target; `"arclint"` resolves to the embedded SDK source;
+   bare npm specifiers are rejected with a designed error. TypeScript
+   import elision applies (an import used only as a type vanishes before
+   resolution).
+3. **Rule instances** live in a top-level `rules:` list ({type, id?,
+   severity?, params?}); the extension's defineRule declares the clause
+   (`contract`, default invariant) and `blame` (default provider), keeping
+   YAML instances pure data.
+4. **Params schema**: the SDK's zod-style `s` builder produces plain JSON
+   Schema inside defineRule at registration; the host compiles it
+   (santhosh-tekuri) and validates YAML params BEFORE any extension code
+   runs. Top-level `default:` values are host-applied (JSON Schema
+   validators do not apply defaults).
+5. **Two-phase lifecycle**: a frozen `__arclint` global exists only to
+   turn runtime calls during the registration phase into a designed
+   error; the functional runtime surface is exactly the ctx argument of
+   check(), which does not exist outside the evaluation phase.
+6. **Sandbox**: bare sobek runtime (ES built-ins only), host-injected
+   read-only ctx (files/read/imports/modules/report), `Date.now` fixed and
+   `Math.random` seeded host-side, interrupt-based 5s timeouts on both
+   registration and each check() invocation. `new Date()` still reads the
+   wall clock — the override covers exactly the documented determinism
+   gap (Date.now/Math.random), recorded here as the residual.
+7. **A crashing or timed-out rule** becomes an error-severity violation
+   anchored at the extension file (CI fails visibly); an unknown rule
+   type or bad params is a config error (exit 2).
+8. **Transpile cache**: bundles cached under `.arclint/cache/extensions/`
+   keyed by a recursive content hash of the extensions directory plus the
+   build info (so upgrading arclint or esbuild invalidates).
+9. **arclint.d.ts** is assembled from tygo-generated declarations of the
+   Go host wire types (internal/ext/types.go) plus the hand-written SDK
+   API surface; `arclint sdk init` writes it with a tsconfig.json wired
+   via `paths`.
+
+### M2 gate results (measured 2026-08-10, WSL2 Ubuntu 24.04, go1.26.4)
+
+- Acceptance: the handler-naming TS rule loads, validates params against
+  its schema, and reports a violation through `arclint check` running with
+  a completely empty process environment (no PATH — nothing external can
+  even be resolved), exit 1 with the stable JSON shape
+  (cmd/arclint e2e test).
+- Size: linux/amd64 20.65 MB, linux/arm64 19.07 MB stripped static
+  builds; delta over the M1 binary (8.07 MB) is +12.59 MB, inside the
+  ~15 MB esbuild+sobek budget from the research measurements.
+- Cold start median 9.73ms over 11 runs; 5,000-file check median 96.4ms
+  (both bounds hold with the embedded runtime).
+
 ### M1 gate results (measured 2026-08-10, WSL2 Ubuntu 24.04, go1.26.4)
 
 - Gate 1: six fixture repos, tests written and failing before the engine
