@@ -1,0 +1,355 @@
+{
+  "$defs": {
+    "CaptureSide": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "files": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "files",
+        "value"
+      ],
+      "type": "object"
+    },
+    "Consumes": {
+      "additionalProperties": false,
+      "properties": {
+        "external": {
+          "enum": [
+            "allow",
+            "forbid"
+          ],
+          "type": "string"
+        },
+        "internal": {
+          "$ref": "#/$defs/InternalPolicy"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warn",
+            "info"
+          ],
+          "type": "string"
+        },
+        "stdlib": {
+          "enum": [
+            "allow",
+            "forbid"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "GraphRule": {
+      "additionalProperties": false,
+      "properties": {
+        "allow": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "from": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "layers",
+            "forbidden",
+            "independence",
+            "protected",
+            "acyclic"
+          ],
+          "type": "string"
+        },
+        "layers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "module": {
+          "type": "string"
+        },
+        "modules": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warn",
+            "info"
+          ],
+          "type": "string"
+        },
+        "to": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "InternalPolicy": {
+      "oneOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "allow": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "deny": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "InvariantRule": {
+      "additionalProperties": false,
+      "properties": {
+        "assert": {
+          "type": "string"
+        },
+        "case": {
+          "type": "string"
+        },
+        "files": {
+          "type": "string"
+        },
+        "forbid": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "naming",
+            "structure",
+            "content",
+            "expr"
+          ],
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "must": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "must_not": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "require": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warn",
+            "info"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "ModuleContract": {
+      "additionalProperties": false,
+      "properties": {
+        "consumes": {
+          "$ref": "#/$defs/Consumes"
+        },
+        "invariants": {
+          "items": {
+            "$ref": "#/$defs/InvariantRule"
+          },
+          "type": "array"
+        },
+        "provides": {
+          "items": {
+            "$ref": "#/$defs/ProvidesRule"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "ProvidesRule": {
+      "additionalProperties": false,
+      "properties": {
+        "each": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "in": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/CaptureSide"
+            }
+          ]
+        },
+        "kind": {
+          "enum": [
+            "registration",
+            "correspondence"
+          ],
+          "type": "string"
+        },
+        "match": {
+          "type": "string"
+        },
+        "of": {
+          "$ref": "#/$defs/CaptureSide"
+        },
+        "relation": {
+          "enum": [
+            "subset",
+            "equal"
+          ],
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warn",
+            "info"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "ScanConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "exclude": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "include_testdata": {
+          "type": "boolean"
+        },
+        "unknown_imports": {
+          "enum": [
+            "warn",
+            "error",
+            "ignore"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$id": "https://raw.githubusercontent.com/wixregiga/arclint/main/docs/rules.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Architecture contracts: modules, consumes/provides/invariants clauses, and graph-wide dependency rules.",
+  "properties": {
+    "contracts": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ModuleContract"
+      },
+      "type": "object"
+    },
+    "dependencies": {
+      "items": {
+        "$ref": "#/$defs/GraphRule"
+      },
+      "type": "array"
+    },
+    "modules": {
+      "additionalProperties": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "type": "object"
+    },
+    "runtime": {
+      "items": {
+        "enum": [
+          "go",
+          "ts",
+          "py"
+        ],
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "scan": {
+      "$ref": "#/$defs/ScanConfig"
+    }
+  },
+  "required": [
+    "runtime",
+    "modules"
+  ],
+  "title": "arclint rules.yaml",
+  "type": "object"
+}

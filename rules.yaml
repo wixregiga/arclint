@@ -1,0 +1,77 @@
+# arclint's own architecture contracts (M1 gate 3: self-hosting).
+# yaml-language-server: $schema=docs/rules.schema.json
+
+runtime: [go]
+
+modules:
+  cmd: ["cmd/**"]
+  config: ["internal/config/**"]
+  engine: ["internal/engine/**"]
+  golang: ["internal/lang/golang/**"]
+  langs: ["internal/lang/**"]
+  oracle: ["internal/oracle/**"]
+  tree: ["internal/tree/**"]
+  report: ["internal/report/**"]
+  exprenv: ["internal/exprenv/**"]
+  tools: ["tools/**"]
+  src: ["internal/**"]
+
+contracts:
+  report:
+    consumes:
+      internal: []
+      external: forbid # the violation model stays stdlib-only
+    invariants:
+      - kind: content
+        files: "internal/report/**/*.go"
+        must_not: ['\bpanic\(']
+  tree:
+    consumes:
+      internal: []
+  exprenv:
+    consumes:
+      internal: []
+  golang:
+    consumes:
+      internal: [tree]
+  config:
+    consumes:
+      internal: [exprenv]
+  engine:
+    consumes:
+      internal: [config, golang, tree, report, exprenv]
+  cmd:
+    consumes:
+      internal: [config, engine, report]
+    invariants:
+      - kind: structure
+        require: ["cmd/arclint/main.go"]
+  tools:
+    consumes:
+      internal: [config]
+  langs:
+    provides:
+      # Every language target ships an embedded stdlib table: the M3
+      # targets inherit this obligation automatically.
+      - kind: correspondence
+        of: { files: 'internal/lang/(?P<lang>[a-z]+)/analyze\.go', value: "{lang}" }
+        in: { files: 'internal/lang/(?P<lang>[a-z]+)/stdlib_gen\.go', value: "{lang}" }
+        relation: subset
+  src:
+    invariants:
+      - kind: naming
+        files: "internal/**/*.go"
+        case: snake_case
+      - kind: expr
+        files: "internal/**/*.go"
+        assert: "file.lines <= 900"
+        message: "keep source files under 900 lines"
+
+dependencies:
+  - kind: layers
+    layers: [cmd, engine, config, golang, tree]
+  - kind: acyclic
+    modules: [cmd, config, engine, golang, tree, report, exprenv, tools, oracle]
+  - kind: protected
+    module: report
+    allow: [engine, cmd]

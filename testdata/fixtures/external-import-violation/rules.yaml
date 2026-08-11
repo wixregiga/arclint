@@ -1,0 +1,11 @@
+runtime: [go]
+
+modules:
+  entities: ["internal/entities/**"]
+
+contracts:
+  entities:
+    consumes:
+      internal: []
+      external: forbid
+      stdlib: allow
