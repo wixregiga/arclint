@@ -34,7 +34,7 @@ contracts:
       internal: []
   golang:
     consumes:
-      internal: [tree]
+      internal: [tree, langs]
   config:
     consumes:
       internal: [exprenv]
@@ -43,7 +43,7 @@ contracts:
       internal: []
   engine:
     consumes:
-      internal: [config, golang, tree, report, exprenv, ext]
+      internal: [config, golang, langs, tree, report, exprenv, ext]
   cmd:
     consumes:
       internal: [config, engine, report, ext]

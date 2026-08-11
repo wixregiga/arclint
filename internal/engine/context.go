@@ -10,6 +10,7 @@ import (
 	"github.com/bmatcuk/doublestar/v4"
 
 	"github.com/wixregiga/arclint/internal/config"
+	"github.com/wixregiga/arclint/internal/lang"
 	"github.com/wixregiga/arclint/internal/lang/golang"
 	"github.com/wixregiga/arclint/internal/tree"
 )
@@ -21,6 +22,10 @@ type Context struct {
 	RS   *config.RuleSet
 	Tree *tree.Tree
 	Go   *golang.Analysis // nil unless the go target is active
+
+	// Imports is the unified per-file import view across every active
+	// language target (files belong to exactly one target by extension).
+	Imports map[string][]lang.Import
 
 	// ModuleNames is sorted for deterministic iteration.
 	ModuleNames []string
@@ -41,6 +46,19 @@ type Context struct {
 	files     map[string]*tree.File
 }
 
+// targetModules resolves the declared modules an internal import lands
+// in: file-granular targets (JS/TS, Python) map through the file's own
+// membership; package-granular targets (Go) through the directory union.
+func (c *Context) targetModules(imp lang.Import) []string {
+	if imp.TargetFile != "" {
+		return c.FileModules[imp.TargetFile]
+	}
+	if imp.TargetDir != "" {
+		return c.DirModules[imp.TargetDir]
+	}
+	return nil
+}
+
 // fileByPath resolves a repo-relative path to its tree file, or nil.
 func (c *Context) fileByPath(p string) *tree.File {
 	if c.files == nil {
@@ -56,6 +74,7 @@ func newContext(rs *config.RuleSet, t *tree.Tree) (*Context, error) {
 	ctx := &Context{
 		RS:          rs,
 		Tree:        t,
+		Imports:     map[string][]lang.Import{},
 		ModuleFiles: map[string][]*tree.File{},
 		FileModules: map[string][]string{},
 		DirModules:  map[string][]string{},

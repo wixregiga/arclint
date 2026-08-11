@@ -84,6 +84,61 @@ milestone. Dates are decision dates.
     go.mod (uses a custom `vendor.mod`), kubernetes/kubernetes because a
     multi-GB clone makes a poor recurring oracle.
 
+## M3 (2026-08-10)
+
+1. **Shared language model** (`internal/lang`): every target produces
+   `lang.Import` with a Class and a tree-resolved target; the Go package
+   aliases its old types onto it. File-granular languages set TargetFile;
+   package-granular Go sets TargetDir; the engine's module lookup honors
+   both.
+2. **JS/TS extractor** (lexer-grade per research §4): comments blanked,
+   string/template bodies masked, regex literals handled with the
+   standard lexer heuristic; extracted forms are import/from,
+   side-effect import, export-from (incl. `export type`), literal
+   `import()` and literal `require()`. Documented false-negative classes,
+   asserted by tests: computed `import(x)`/`require(v)`, template-literal
+   specifiers. `import type` is extracted (runtime-vs-type distinction is
+   below this tier); tsconfig `paths`/`baseUrl` aliases are not resolved
+   (documented). `.d.ts` files are not scanned.
+3. **JS/TS classification**: `node:` prefix and the embedded builtin
+   table (generated from `require('module').builtinModules`, Node
+   v24.17.0) → stdlib; relative specifiers resolve with extension probing
+   (spec, spec+ext, spec/index+ext, directory) → internal; bare
+   specifiers naming an in-repo package.json `name` → internal (workspace
+   semantics, mirroring go.work); otherwise the NEAREST package.json's
+   dependency sections decide external (nested-manifest ownership like
+   nested go.mod); `#imports` aliases and absolute paths → unknown.
+4. **Python extractor** (lexer-grade per research §4): `import` and
+   `from ... import` at any indentation, semicolon statements, backslash
+   continuations, parenthesized from-imports; #-comments and
+   string/docstring bodies blanked by a triple-quote-aware line scanner.
+   Documented false negatives, asserted: `importlib.import_module(name)`
+   and `__import__(name)`.
+5. **Python classification**: embedded stdlib table (from
+   `sys.stdlib_module_names`, CPython 3.11.13) → stdlib by top-level
+   module; source roots (repo root, src/, each pyproject.toml dir and its
+   src/) resolve dotted modules to files or package directories,
+   including PEP 420 namespace dirs → internal; pyproject.toml
+   dependencies (PEP 621 [project], optional-dependencies, PEP 735
+   dependency-groups, tool.poetry.dependencies) matched via PEP 503
+   normalization (typing_extensions ↔ typing-extensions) → external;
+   dist/module name mismatches (PyYAML→yaml) classify unknown, never
+   silently external — the documented manifest limitation.
+6. **Self-hosting caught the refactor**: the M3 dependency edges
+   (engine→langs, golang→langs) violated the repo's own consumes
+   contracts until rules.yaml legitimized them — recorded here as
+   evidence the contracts bind.
+
+### M3 gate results (measured 2026-08-10, WSL2 Ubuntu 24.04, go1.26.4)
+
+- Extractor form matrices and false-negative classes green
+  (internal/lang/jsts, internal/lang/python tests); engine fixtures
+  ts-external-forbid and py-external-forbid flag the third-party import
+  with blame=consumer at the exact line.
+- Self-hosting clean: 17 rules over 12 modules, 65 files in 9ms.
+- Cold start median ~10ms; 5,000-file check median 92.4ms.
+- Size: 20.88 MB amd64 / 19.27 MB arm64 static builds.
+
 ## M2 (2026-08-10)
 
 1. **Extension discovery is top-level only**: every `*.ts`/`*.js` directly

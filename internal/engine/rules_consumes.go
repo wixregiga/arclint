@@ -5,21 +5,18 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/wixregiga/arclint/internal/lang/golang"
+	"github.com/wixregiga/arclint/internal/lang"
 	"github.com/wixregiga/arclint/internal/report"
 )
 
 // checkConsumes evaluates every per-module consumes clause against the
-// import analysis. Blame is always the consumer: the violation anchors at
-// the importing file and line.
+// unified import analysis. Blame is always the consumer: the violation
+// anchors at the importing file and line.
 func checkConsumes(ctx *Context) []report.Violation {
-	if ctx.Go == nil {
-		return nil
-	}
 	var vs []report.Violation
 	for _, f := range ctx.Tree.Files {
-		fa := ctx.Go.Files[f.Path]
-		if fa == nil {
+		imports := ctx.Imports[f.Path]
+		if len(imports) == 0 {
 			continue
 		}
 		for _, m := range ctx.FileModules[f.Path] {
@@ -28,9 +25,9 @@ func checkConsumes(ctx *Context) []report.Violation {
 				continue
 			}
 			sev := report.Severity(severityOf(c.Severity))
-			for _, imp := range fa.Imports {
+			for _, imp := range imports {
 				switch imp.Class {
-				case golang.ClassStdlib:
+				case lang.ClassStdlib:
 					if c.Stdlib == "forbid" {
 						vs = append(vs, report.Violation{
 							RuleID: m + ".consumes.stdlib", Contract: report.ContractConsumes,
@@ -40,7 +37,7 @@ func checkConsumes(ctx *Context) []report.Violation {
 							FixHint: fmt.Sprintf("remove the import or set contracts.%s.consumes.stdlib: allow", m),
 						})
 					}
-				case golang.ClassExternal:
+				case lang.ClassExternal:
 					if c.External == "forbid" {
 						vs = append(vs, report.Violation{
 							RuleID: m + ".consumes.external", Contract: report.ContractConsumes,
@@ -50,11 +47,11 @@ func checkConsumes(ctx *Context) []report.Violation {
 							FixHint: fmt.Sprintf("remove the import or set contracts.%s.consumes.external: allow", m),
 						})
 					}
-				case golang.ClassInternal:
+				case lang.ClassInternal:
 					if c.Internal == nil {
 						continue
 					}
-					targets := ctx.DirModules[imp.TargetDir]
+					targets := ctx.targetModules(imp)
 					if contains(targets, m) {
 						continue // own module, never a violation
 					}
@@ -74,8 +71,8 @@ func checkConsumes(ctx *Context) []report.Violation {
 						if !intersects(targets, allowed) {
 							var msg string
 							switch {
-							case imp.TargetDir == "":
-								msg = fmt.Sprintf("import %q is internal (replace-to-local outside the tree) and not allowed by contract %q", imp.Path, m)
+							case imp.TargetDir == "" && imp.TargetFile == "":
+								msg = fmt.Sprintf("import %q is internal but does not resolve into the tree, and is not allowed by contract %q", imp.Path, m)
 							case len(targets) == 0:
 								msg = fmt.Sprintf("import %q resolves to internal code outside any declared module, not allowed by contract %q", imp.Path, m)
 							default:
@@ -100,11 +97,8 @@ func checkConsumes(ctx *Context) []report.Violation {
 
 // checkUnknownImports applies the repo-wide unknown-import policy
 // (default warn): imports that are neither stdlib, internal, nor declared
-// in go.mod.
+// in the language's dependency manifest.
 func checkUnknownImports(ctx *Context) []report.Violation {
-	if ctx.Go == nil {
-		return nil
-	}
 	policy := ctx.RS.Scan.UnknownImports
 	if policy == "" {
 		policy = "warn"
@@ -114,22 +108,18 @@ func checkUnknownImports(ctx *Context) []report.Violation {
 	}
 	var vs []report.Violation
 	for _, f := range ctx.Tree.Files {
-		fa := ctx.Go.Files[f.Path]
-		if fa == nil {
-			continue
-		}
-		for _, imp := range fa.Imports {
-			if imp.Class != golang.ClassUnknown {
+		for _, imp := range ctx.Imports[f.Path] {
+			if imp.Class != lang.ClassUnknown {
 				continue
 			}
-			msg := fmt.Sprintf("import %q is neither stdlib, internal, nor resolvable via go.mod require", imp.Path)
+			msg := fmt.Sprintf("import %q is neither stdlib, internal, nor declared in the dependency manifest", imp.Path)
 			if policy == "error" {
 				vs = append(vs, report.Violation{
 					RuleID: "scan.unknown-imports", Contract: report.ContractConsumes,
 					Blame: report.BlameConsumer, Severity: report.SeverityError,
 					Path: f.Path, Line: report.IntPtr(imp.Line),
 					Message: msg,
-					FixHint: "declare the dependency in go.mod or set scan.unknown_imports to warn/ignore",
+					FixHint: "declare the dependency in the manifest or set scan.unknown_imports to warn/ignore",
 				})
 			} else {
 				ctx.Warn("%s:%d: %s (unknown_imports: warn)", f.Path, imp.Line, msg)
@@ -151,21 +141,14 @@ type edgeWitness struct {
 // moduleEdges lifts the file-level import graph to declared modules,
 // preserving file order for deterministic reporting.
 func moduleEdges(ctx *Context) []edgeWitness {
-	if ctx.Go == nil {
-		return nil
-	}
 	var ws []edgeWitness
 	for _, f := range ctx.Tree.Files {
-		fa := ctx.Go.Files[f.Path]
-		if fa == nil {
-			continue
-		}
 		froms := ctx.FileModules[f.Path]
-		for _, imp := range fa.Imports {
-			if imp.Class != golang.ClassInternal || imp.TargetDir == "" {
+		for _, imp := range ctx.Imports[f.Path] {
+			if imp.Class != lang.ClassInternal {
 				continue
 			}
-			targets := ctx.DirModules[imp.TargetDir]
+			targets := ctx.targetModules(imp)
 			for _, to := range targets {
 				if len(froms) == 0 {
 					ws = append(ws, edgeWitness{from: "", to: to, file: f.Path, line: imp.Line, importPath: imp.Path})

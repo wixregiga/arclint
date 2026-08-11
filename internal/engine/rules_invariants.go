@@ -233,12 +233,8 @@ func checkExpr(ctx *Context, module, id string, sev report.Severity, rule config
 			}
 		}
 		var imports []string
-		if ctx.Go != nil {
-			if fa := ctx.Go.Files[f.Path]; fa != nil {
-				for _, imp := range fa.Imports {
-					imports = append(imports, imp.Path)
-				}
-			}
+		for _, imp := range ctx.Imports[f.Path] {
+			imports = append(imports, imp.Path)
 		}
 		env := exprenv.File{
 			Path: f.Path, Name: f.Name(), Stem: f.Stem(), Ext: f.Ext(), Dir: f.Dir(),

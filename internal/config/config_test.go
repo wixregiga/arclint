@@ -168,10 +168,6 @@ contracts:
         of: { files: '([unclosed', value: "x" }
         in: { files: 'ok', value: "x" }
 `, "does not compile"},
-		"ts target not implemented": {`runtime: [go, ts]
-modules:
-  a: ["a/**"]
-`, "not supported yet"},
 	}
 	for name, tc := range cases {
 		_, err := parse(t, tc.src)

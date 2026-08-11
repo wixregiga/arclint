@@ -13,32 +13,16 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/wixregiga/arclint/internal/lang"
 	"github.com/wixregiga/arclint/internal/tree"
 )
 
-// Import is one import declaration occurrence in one file.
-type Import struct {
-	Path string
-	Line int
-	// Alias is the local name: "" (none), "_" (blank), "." (dot), or an
-	// identifier.
-	Alias string
-	Class Class
-	// TargetDir is the repo-relative package directory for internal
-	// imports that resolve into the tree ("." = repo root), else "".
-	TargetDir string
-}
+// Import is one import declaration occurrence in one file (the shared
+// language model; Alias is Go-specific).
+type Import = lang.Import
 
 // FileAnalysis is the import extraction result for one Go file.
-type FileAnalysis struct {
-	Path    string
-	Imports []Import
-	// ParseError is non-empty when the file could not be parsed; the file
-	// was warned about and skipped, never fatal.
-	ParseError string
-	// HasCgo is true when the file imports "C".
-	HasCgo bool
-}
+type FileAnalysis = lang.FileAnalysis
 
 // Analysis is the Go target's view of the repository.
 type Analysis struct {

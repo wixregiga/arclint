@@ -90,6 +90,29 @@ func TestFixtures(t *testing.T) {
 		},
 		{dir: "correspondence-clean"},
 		{
+			// M3: the ts target flags a third-party import in an entities
+			// module, same contract shape as the Go driving rule 1.
+			dir: "ts-external-forbid",
+			want: []wantViolation{{
+				ruleID:   "entities.consumes.external",
+				contract: report.ContractConsumes,
+				blame:    report.BlameConsumer,
+				path:     "src/entities/user.ts",
+				line:     2,
+			}},
+		},
+		{
+			// M3: the py target, same contract.
+			dir: "py-external-forbid",
+			want: []wantViolation{{
+				ruleID:   "entities.consumes.external",
+				contract: report.ContractConsumes,
+				blame:    report.BlameConsumer,
+				path:     "app/entities/user.py",
+				line:     3,
+			}},
+		},
+		{
 			// Driving rule 4 (M2): a TypeScript rule authored against the
 			// SDK, executed in-process, reporting a violation.
 			dir: "extension-handler-naming",

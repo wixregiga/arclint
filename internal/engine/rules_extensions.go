@@ -105,15 +105,9 @@ func (c *Context) extensionHost() ext.Host {
 			return string(c.Content(f)), nil
 		},
 		Imports: func(path string) []ext.ImportInfo {
-			if c.Go == nil {
-				return nil
-			}
-			fa := c.Go.Files[path]
-			if fa == nil {
-				return nil
-			}
-			out := make([]ext.ImportInfo, 0, len(fa.Imports))
-			for _, imp := range fa.Imports {
+			imports := c.Imports[path]
+			out := make([]ext.ImportInfo, 0, len(imports))
+			for _, imp := range imports {
 				out = append(out, ext.ImportInfo{
 					Path: imp.Path, Line: imp.Line,
 					Class: string(imp.Class), TargetDir: imp.TargetDir,

@@ -16,6 +16,7 @@ require (
 )
 
 require (
+	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/dlclark/regexp2/v2 v2.5.2 // indirect
 	github.com/fatih/structtag v1.2.0 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect

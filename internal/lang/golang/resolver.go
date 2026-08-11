@@ -10,6 +10,7 @@ import (
 
 	"golang.org/x/mod/modfile"
 
+	"github.com/wixregiga/arclint/internal/lang"
 	"github.com/wixregiga/arclint/internal/tree"
 )
 
@@ -18,16 +19,16 @@ import (
 // path ownership (including replace-to-local and go.work membership),
 // external from go.mod require coverage. Anything else is unknown and
 // subject to the configured policy.
-type Class string
+type Class = lang.Class
 
 const (
-	ClassStdlib   Class = "stdlib"
-	ClassInternal Class = "internal"
-	ClassExternal Class = "external"
-	ClassUnknown  Class = "unknown"
+	ClassStdlib   = lang.ClassStdlib
+	ClassInternal = lang.ClassInternal
+	ClassExternal = lang.ClassExternal
+	ClassUnknown  = lang.ClassUnknown
 	// ClassCgo is the "C" pseudo-import, which is neither a stdlib package
 	// nor a resolvable module path.
-	ClassCgo Class = "cgo"
+	ClassCgo = lang.ClassCgo
 )
 
 // Replace is one replace directive, from a go.mod or the go.work file.

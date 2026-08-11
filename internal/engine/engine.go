@@ -10,6 +10,8 @@ import (
 	"github.com/wixregiga/arclint/internal/config"
 	"github.com/wixregiga/arclint/internal/ext"
 	"github.com/wixregiga/arclint/internal/lang/golang"
+	"github.com/wixregiga/arclint/internal/lang/jsts"
+	"github.com/wixregiga/arclint/internal/lang/python"
 	"github.com/wixregiga/arclint/internal/report"
 	"github.com/wixregiga/arclint/internal/tree"
 )
@@ -53,6 +55,23 @@ func Check(rs *config.RuleSet) (*Result, error) {
 	if contains(rs.Runtime, "go") {
 		ctx.Go = golang.Analyze(t)
 		ctx.warnings = append(ctx.warnings, ctx.Go.Warnings...)
+		for p, fa := range ctx.Go.Files {
+			ctx.Imports[p] = fa.Imports
+		}
+	}
+	if contains(rs.Runtime, "ts") {
+		ja := jsts.Analyze(t)
+		ctx.warnings = append(ctx.warnings, ja.Warnings...)
+		for p, fa := range ja.Files {
+			ctx.Imports[p] = fa.Imports
+		}
+	}
+	if contains(rs.Runtime, "py") {
+		pa := python.Analyze(t)
+		ctx.warnings = append(ctx.warnings, pa.Warnings...)
+		for p, fa := range pa.Files {
+			ctx.Imports[p] = fa.Imports
+		}
 	}
 
 	var vs []report.Violation

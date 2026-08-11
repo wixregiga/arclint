@@ -27,11 +27,8 @@ func (rs *RuleSet) validateSemantics() error {
 		errs = append(errs, fmt.Sprintf(format, args...))
 	}
 
-	for _, target := range rs.Runtime {
-		if target != "go" {
-			addf("runtime: target %q is not supported yet (this build implements: go)", target)
-		}
-	}
+	// Targets go, ts, py are all implemented; the schema enum rejects
+	// anything else before this runs.
 	for _, g := range rs.Scan.Exclude {
 		if !doublestar.ValidatePattern(g) {
 			addf("scan.exclude: invalid glob %q", g)

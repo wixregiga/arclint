@@ -118,6 +118,30 @@ modules, report); `Date.now`/`Math.random` are host-controlled; runaway
 rules are interrupted after 5s. Relative imports are bundled; bare npm
 imports are rejected.
 
+## Multi-language targets
+
+`runtime: [go, ts, py]` activates per-language extraction, embedded
+stdlib tables, and manifest-based external classification. Go is exact
+(`go/parser`, no false-negative class). JS/TS and Python are lexer-grade
+with documented, test-asserted false-negative classes: computed
+specifiers (`import(x)`, `require(v)`, `importlib.import_module(name)`)
+are invisible at this tier by design.
+
+- **JS/TS**: static `import`/`export ... from`/side-effect imports plus
+  literal `import()`/`require()`; `node:` and the Node builtin table
+  (from `require('module').builtinModules`) → stdlib; relative
+  specifiers resolve with extension probing; a bare specifier naming an
+  in-repo package.json → internal (workspace semantics); the nearest
+  package.json's dependency sections → external.
+- **Python**: `import`/`from ... import` at any indentation with
+  continuations and parenthesized forms, docstring-aware; the embedded
+  `sys.stdlib_module_names` table → stdlib; source roots (root, src/,
+  pyproject dirs) resolve dotted modules, including PEP 420 namespace
+  dirs → internal; pyproject.toml dependencies (PEP 621,
+  dependency-groups, poetry) via PEP 503 normalization → external;
+  dist/module name mismatches (PyYAML→yaml) classify unknown, never
+  silently external.
+
 ## Go import resolution
 
 `go/parser` in ImportsOnly mode; exact classification, no heuristics:
