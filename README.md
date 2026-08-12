@@ -224,7 +224,14 @@ make ci        # vet + tests + selfcheck
 make oracle    # differential oracle (network)
 make bench     # gate-4 numbers
 make release   # CGO_ENABLED=0 linux/amd64 + linux/arm64
+make docs      # build the docs site (zola; content in docs/site/content)
 ```
+
+Documentation lives in [docs/site/content](docs/site/content) as plain
+markdown; the [rule reference](docs/site/content/docs/rules.md) is
+generated from the same source as `arclint explain` and the schema
+hovers (`go generate ./tools/gendocs`), and a test fails when it
+drifts.
 
 Design: [docs/design-proposal.md](docs/design-proposal.md). Decisions
 log: [docs/decisions.md](docs/decisions.md).

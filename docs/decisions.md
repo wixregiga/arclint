@@ -3,6 +3,38 @@
 Small ambiguities resolved in favor of the proposal's shapes, recorded per
 milestone. Dates are decision dates.
 
+## M6 (2026-08-12) — docs site
+
+1. **Zola over Starlight.** The handoff allowed either ("Starlette"
+   read as Starlight); both render markdown. Zola wins on the same
+   ground the tool itself stands on: one static binary, no Node
+   toolchain in a repository whose selling point is needing none. It is
+   already available via mise on the dev machine (zola 0.19.2).
+2. **Custom minimal templates instead of a theme**: the standing visual
+   constraints (true black background, white primary text,
+   information-dense, no decorative chrome) cost ~90 lines of inline CSS
+   to meet directly and a lot more to impose on a theme. Four Tera
+   templates: base, landing, docs section, docs page.
+3. **Content is plain markdown** under docs/site/content/ (the explicit
+   requirement). Pages: landing, getting started, concepts (modules,
+   import classes with the exact meaning of internal/external/stdlib/
+   unknown, contracts, blame), rule reference, extensions, patterns,
+   CLI.
+4. **The rule reference page is generated** (tools/gendocs) from the
+   same RuleDocs table that drives `arclint explain` and the schema
+   hovers; a test fails the suite when the committed page drifts from
+   the table. Terminal docs, editor hovers, and the site cannot
+   disagree.
+5. **`make docs` builds the site; it is not part of `make ci`** because
+   zola is not assumed on every machine; the drift test IS in the normal
+   suite, so stale generated docs still fail CI everywhere.
+
+### M6 gate results (measured 2026-08-12, WSL2 Ubuntu 24.04)
+
+- `zola build`: 6 pages, no orphans, 68ms (zola 0.19.2).
+- `go test ./tools/gendocs/` green (reference page current); full
+  `make ci` green.
+
 ## M5 (2026-08-12) — patterns and init
 
 1. **A pattern is a directory bundle**: `pattern.yaml` (description +

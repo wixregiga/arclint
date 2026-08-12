@@ -1,0 +1,13 @@
+base_url = "https://arclint.dev"
+title = "arclint"
+description = "Architecture contracts as data. One static binary, any language."
+compile_sass = false
+build_search_index = false
+
+[markdown]
+highlight_code = true
+highlight_theme = "one-dark"
+
+[extra]
+version = "0.1.0"
+repo = "https://github.com/wixregiga/arclint"

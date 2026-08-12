@@ -1,0 +1,87 @@
++++
+title = "Concepts"
+description = "Modules, contracts, blame, and what internal/external/stdlib mean."
+weight = 2
++++
+
+## Modules
+
+A module is a named set of files, defined by path globs in rules.yaml.
+Modules are the vocabulary of every other rule: contracts, layers, and
+protections refer to module names, never raw paths.
+
+```yaml
+modules:
+  entities:
+    paths: ["internal/entities/**"]
+    description: "Domain types and invariants; depends on nothing."
+  features: ["internal/features/*"]   # terse form
+```
+
+A glob matches files directly, and a glob naming a directory owns the
+whole subtree. Overlapping modules are legal: a file can belong to
+several modules, which makes umbrella modules (`src: ["internal/**"]`)
+cheap for repo-wide invariants.
+
+## Import classes
+
+Every import in every scanned file is classified before any rule runs.
+The class names appear throughout the rule surface, so their exact
+meaning matters:
+
+| class | meaning |
+|---|---|
+| `internal` | resolves to a file inside this repository: another module, or undeclared internal code |
+| `external` | a third-party dependency declared in your manifest: `go.mod` require, `package.json` dependencies, `pyproject.toml` |
+| `stdlib` | the language's standard library (embedded tables generated from each toolchain) |
+| `unknown` | none of the above; governed by `scan.unknown_imports: warn/error/ignore` |
+
+So in a contract, `internal: [app]` means "may import the app module and
+nothing else internal", and `external: forbid` means "no third-party
+libraries here at all". Go classification is exact and proven against
+`go list` over pinned real repositories. TypeScript and Python are
+lexer-grade with documented limits: computed specifiers like
+`import(x)` or `importlib.import_module(name)` are invisible by design.
+
+## Contracts
+
+A module's contract has three clause kinds, borrowed from design by
+contract:
+
+- **consumes** (preconditions): what the module may depend on. Per-module
+  allow and deny lists plus third-party and stdlib policy. Graph-wide
+  clauses live under top-level `dependencies:` because they span modules:
+  `layers`, `forbidden`, `independence`, `protected`, `acyclic`.
+- **provides** (postconditions): what the module must supply.
+  `registration` says every instance of a shape registers itself
+  somewhere; `correspondence` says a value set derived from one side of
+  the tree must exist on the other side.
+- **invariants**: properties that always hold. Naming conventions,
+  required and forbidden paths, content rules, and `expr` predicates
+  type-checked at load time.
+
+Run `arclint explain <kind>` for any of these; the
+[rule reference](/docs/rules/) is the same text.
+
+## Blame
+
+Every violation carries a blame side, and it is checkable output, not
+vocabulary:
+
+- a **consumes** break blames the **consumer**: the importing file broke
+  its own precondition.
+- a **provides** break blames the **provider**: the module failed a
+  promise it made to the rest of the repository.
+- invariants blame the module that holds the property.
+
+TypeScript extension rules declare a default contract and blame once and
+may override both per finding, so a rule that checks two sides of one
+contract labels each finding truthfully.
+
+## Validation layers
+
+rules.yaml passes three gates before anything runs: YAML syntax, the
+published JSON Schema (the same file that powers editor completion), and
+semantic validation (module references, regex compilation, expr type
+checking). Extension rule params are validated against each extension's
+declared schema before a line of extension code executes.

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ config.title }}{% endblock %}</title>
+<meta name="description" content="{{ config.description }}">
+<style>
+:root {
+  --bg: #000;
+  --fg: #fff;
+  --dim: #9a9a9a;
+  --line: #222;
+  --accent: #7ee787;
+  --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre { font-family: var(--mono); font-size: 0.92em; }
+:not(pre) > code { background: #151515; padding: 0.1em 0.35em; border-radius: 3px; }
+pre { padding: 0.9rem 1rem; overflow-x: auto; border: 1px solid var(--line); border-radius: 4px; }
+h1, h2, h3 { line-height: 1.25; margin: 2.2rem 0 0.6rem; }
+h1 { font-size: 1.7rem; margin-top: 0.5rem; }
+h2 { font-size: 1.25rem; border-bottom: 1px solid var(--line); padding-bottom: 0.3rem; }
+h3 { font-size: 1.05rem; }
+p, ul, ol { margin: 0.6rem 0; }
+table { border-collapse: collapse; width: 100%; margin: 0.8rem 0; }
+th, td { text-align: left; padding: 0.35rem 0.7rem 0.35rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; }
+header.site {
+  display: flex; align-items: baseline; gap: 1.2rem;
+  padding: 0.9rem 1.4rem; border-bottom: 1px solid var(--line);
+}
+header.site .name { font-weight: 700; color: var(--fg); }
+header.site .version { color: var(--dim); font-family: var(--mono); font-size: 0.85rem; }
+header.site nav { margin-left: auto; display: flex; gap: 1.1rem; }
+.layout { display: flex; max-width: 72rem; margin: 0 auto; }
+aside.toc {
+  width: 13rem; flex: none; padding: 1.4rem 1rem 1.4rem 1.4rem;
+  font-size: 0.9rem;
+}
+aside.toc a { display: block; color: var(--dim); padding: 0.15rem 0; }
+aside.toc a.current, aside.toc a:hover { color: var(--fg); }
+main { flex: 1; min-width: 0; padding: 1.4rem; }
+@media (max-width: 50rem) { .layout { flex-direction: column; } aside.toc { width: auto; } }
+</style>
+</head>
+<body>
+<header class="site">
+  <a class="name" href="{{ get_url(path='/') }}">arclint</a>
+  <span class="version">v{{ config.extra.version }}</span>
+  <nav>
+    <a href="{{ get_url(path='/docs/') }}">docs</a>
+    <a href="{{ config.extra.repo }}">source</a>
+  </nav>
+</header>
+{% block body %}{% endblock %}
+</body>
+</html>

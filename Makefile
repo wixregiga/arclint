@@ -2,7 +2,7 @@ GO      ?= go
 VERSION ?= 0.1.0
 BIN     ?= ./arclint
 
-.PHONY: build test vet generate selfcheck bench oracle release ci clean
+.PHONY: build test vet generate selfcheck bench oracle release ci clean docs docs-serve
 
 build:
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o $(BIN) ./cmd/arclint
@@ -31,6 +31,15 @@ bench: build
 # Network-permitted; clones cache under ~/.cache/arclint-oracle.
 oracle:
 	$(GO) test -tags oracle -timeout 30m -count=1 -v ./internal/oracle/
+
+# Docs site (docs/site): markdown content, one zola binary to build.
+# The rule reference page is generated (go generate ./tools/gendocs);
+# a test fails when it drifts from the doc table.
+docs:
+	cd docs/site && zola build
+
+docs-serve:
+	cd docs/site && zola serve
 
 release:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o dist/arclint-linux-amd64 ./cmd/arclint

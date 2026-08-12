@@ -1,5 +1,6 @@
 /arclint
 /dist/
+/docs/site/public/
 **/.arclint/cache.json
 **/.arclint/cache/
 .claude-scratch/
