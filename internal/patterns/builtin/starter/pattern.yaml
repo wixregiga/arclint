@@ -1,0 +1,2 @@
+description: "Minimal foundation: one module over the whole tree, unknown imports surfaced. Split into real modules and grow contracts as boundaries emerge."
+runtimes: [go, ts, py]

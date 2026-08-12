@@ -55,7 +55,7 @@ func newRootCmd() *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.AddCommand(newLoadCmd(), newListCmd(), newRulesCmd(), newCheckCmd(), newSdkCmd(),
-		newModuleCmd(), newExplainCmd())
+		newModuleCmd(), newExplainCmd(), newInitCmd(), newPatternsCmd())
 	return root
 }
 

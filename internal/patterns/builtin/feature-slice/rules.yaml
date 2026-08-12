@@ -1,0 +1,150 @@
+# =============================================================================
+# Feature-slice architecture, open set.
+#
+# Fixed places:
+#   cmd/               thin bootstrap: load config, call app, run
+#   internal/app/      the composer: wires adapters into use cases; no rules
+#   internal/shared/   every technology adapter, sealed behind NewAdapters
+#
+# Open sets, classified by shape — no list to maintain:
+#   internal/<d> owning command.go   FEATURE  (a user capability)
+#   any other internal/<d>           CONCEPT  (shared domain rules + its port)
+#
+# Add internal/<newfeature>/ with a command.go and every rule below applies
+# to it immediately, without editing this file.
+#
+# The dependency matrix that YAML cannot scope without named modules
+# (feature->feature bans, concept purity, third-party bans, ports, drift)
+# lives in .arclint/extensions/feature-slice.ts, installed alongside this
+# file. Run `arclint explain feature-slice` to see it documented.
+# =============================================================================
+
+runtime: [go]
+
+scan:
+  unknown_imports: error
+
+modules:
+  cmd:
+    paths: ["cmd/**"]
+    description: "Thin bootstrap: load config, call app, run. No business rules."
+  app:
+    paths: ["internal/app/**"]
+    description: "The composer: builds shared adapters, constructs use cases, mounts handlers."
+  shared:
+    paths: ["internal/shared/**"]
+    description: "All technology adapters (DB, HTTP client, mail), sealed behind one entry point."
+  repo:
+    paths: ["**"]
+    description: "Umbrella for repo-wide invariants; every file belongs to it."
+
+contracts:
+
+  cmd:
+    consumes:
+      internal: [app]        # cmd may reach app and nothing else internal
+      external: allow
+    invariants:
+      - id: cmd.thin-bootstrap
+        kind: expr
+        files: "cmd/**/*.go"
+        assert: "file.lines <= 120"
+        message: "cmd is a thin bootstrap (load config, call app, run)"
+        severity: warn
+
+  app:
+    # The composer may import anything below it (features are an open set,
+    # so no allow-list is possible); nothing imports app except cmd (see
+    # dependencies below).
+    consumes:
+      external: allow
+    invariants:
+      # Business-vocabulary guard: replace the word list with your domain's
+      # rule language (the words that name decisions, not plumbing).
+      - id: app.no-business-rules
+        kind: content
+        files: "internal/app/**/*.go"
+        must_not: ['(?i)\b(eligib\w*|discount\w*|overdue)\b']
+        severity: warn
+
+  shared:
+    consumes:
+      external: allow
+    provides:
+      - id: shared.sealed-entrypoint
+        kind: registration
+        each: 'internal/shared/'
+        in: shared
+        match: 'func NewAdapters\('
+    invariants:
+      - id: shared.no-ports-here
+        kind: structure
+        forbid: ["internal/shared/**/repo.go"]
+      # Same vocabulary guard as app.no-business-rules; keep the lists equal.
+      - id: shared.no-business-rules
+        kind: content
+        files: "internal/shared/**/*.go"
+        must_not: ['(?i)\b(eligib\w*|discount\w*|overdue)\b']
+        severity: warn
+
+  repo:
+    provides:
+      # Feature shape, open set: every dir with a driving adapter has a
+      # command, and every dir with a command has a driving adapter.
+      - id: repo.feature-shape
+        kind: correspondence
+        of: { files: 'internal/(?P<f>[^/]+)/http/handler\.go', value: "{f}" }
+        in: { files: 'internal/(?P<f>[^/]+)/command\.go', value: "{f}" }
+        relation: equal
+      # Every dir owning command.go (= every feature, by shape) must be
+      # imported by the composer.
+      - id: repo.features-wired
+        kind: registration
+        each: 'internal/(?P<feature>[^/]+)/command\.go'
+        in: app
+        match: '/internal/{feature}"'
+    invariants:
+      - id: repo.no-banned-buckets
+        kind: structure
+        forbid:
+          - "ext/**"
+          - "infrastructure/**"
+          - "domain/**"
+          - "application/**"
+          - "internal/ext/**"
+          - "internal/infrastructure/**"
+          - "internal/domain/**"
+          - "internal/application/**"
+      - id: repo.no-dumping-grounds
+        kind: structure
+        forbid: ["**/utils.go", "**/helpers.go", "**/service.go", "**/manager.go"]
+      - id: repo.shallow-hierarchy
+        kind: structure
+        # internal/<pkg>/<sub>/<file> is the deepest legal shape
+        # (feature/http/, shared/<tech>/): review scope stays obvious.
+        forbid: ["internal/*/*/*/*", "internal/*/*/*/*/**"]
+      - id: repo.business-language-filenames
+        kind: naming
+        files: "internal/**/*.go"
+        case: snake_case
+
+# The open-set dependency matrix, third-party bans, concept purity, ports,
+# drift, and thin-use-case checks live in the paired extension.
+rules:
+  - id: repo.slices
+    type: feature-slice
+    params:
+      maxUseCaseLines: 200
+      bannedConceptImports: ["net/http", "database/sql", "net/rpc", "html/template"]
+
+dependencies:
+  # Open-set on the importer side: an undeclared feature importing shared/
+  # or app/ is flagged without being listed anywhere.
+  - id: deps.shared-only-via-app
+    kind: protected
+    module: shared
+    allow: [app]
+  - id: deps.app-only-via-cmd
+    kind: protected
+    module: app
+    allow: [cmd]

@@ -20,7 +20,31 @@ Build (CGO_ENABLED=0, single static binary):
 make build
 ```
 
-Write a `rules.yaml` at your repo root:
+Set a repository up from a shipped architectural pattern:
+
+```bash
+./arclint init
+```
+
+`init` detects the languages present, asks which to analyze and which
+pattern to start from (`--runtimes go,ts --pattern layers` skips the
+prompts), writes rules.yaml plus the pattern's TypeScript extensions,
+generates editor typings, and validates everything. Patterns:
+
+- **feature-slice** (go) — open-set feature/concept slices: a directory
+  owning `command.go` is a feature, any other `internal/` directory is a
+  concept, and every rule applies to new features automatically.
+- **layers** (go, ts, py) — hexagonal: cmd composes, app orchestrates,
+  domain decides and depends on nothing, infra adapts behind ports.
+- **starter** (go, ts, py) — one module, unknown imports surfaced; grow
+  contracts from there.
+
+`arclint patterns` lists them; `--extensions` shows the rule extensions
+each installs. A repository defines its own under
+`.arclint/patterns/<name>/` (`pattern.yaml` + `rules.yaml` +
+`extensions/`), and a local name shadows a builtin.
+
+Or write a `rules.yaml` at your repo root yourself:
 
 ```yaml
 runtime: [go]

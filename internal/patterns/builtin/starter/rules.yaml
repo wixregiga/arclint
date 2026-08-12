@@ -1,0 +1,30 @@
+# =============================================================================
+# Starter ruleset. One module, no opinions imposed.
+#
+# Grow it in three moves:
+#   1. Split `all` into named modules matching your tree
+#      (`arclint explain modules`).
+#   2. Give each module a consumes contract
+#      (`arclint explain consumes`).
+#   3. Add obligations and invariants where promises matter
+#      (`arclint explain registration`, `arclint explain naming`).
+#
+# `arclint explain` lists every rule kind with a ready-to-paste example.
+# =============================================================================
+
+runtime: [go]
+
+scan:
+  # Imports that resolve to no manifest dependency, stdlib, or repo file
+  # are surfaced instead of ignored. Tighten to `error` once clean.
+  unknown_imports: warn
+
+modules:
+  all:
+    paths: ["**"]
+    description: "The whole tree. Split into real modules as boundaries emerge."
+
+dependencies:
+  - id: deps.acyclic
+    kind: acyclic
+    modules: []   # no import cycles among declared modules

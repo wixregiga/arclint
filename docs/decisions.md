@@ -3,6 +3,63 @@
 Small ambiguities resolved in favor of the proposal's shapes, recorded per
 milestone. Dates are decision dates.
 
+## M5 (2026-08-12) — patterns and init
+
+1. **A pattern is a directory bundle**: `pattern.yaml` (description +
+   compatible runtimes), a complete and loadable `rules.yaml` template,
+   and optional `extensions/*.ts`. Built-ins are embedded
+   (internal/patterns/builtin, go:embed); repository-local patterns live
+   under `.arclint/patterns/<name>/` where nested names (`fsd/go`) are
+   legal and a local name shadows a builtin. Patterns do NOT live in
+   `.arclint/extensions/` because that directory means "rule types
+   registered in this repo" and mixing bundles into it would blur both
+   contracts.
+2. **Templates stay valid YAML.** Runtime selection rewrites the single
+   `runtime:` line at materialize time instead of using template
+   placeholders, so every shipped template loads as-is and the pattern
+   gate can exercise it directly.
+3. **Shipped set**: `feature-slice` (go; the open-set variant proven in
+   the pattern-modeling experiments: features and concepts classified by
+   shape, zero enumerated lists, paired extension for the dependency
+   matrix), `layers` (go/ts/py hexagonal starter, fully declarative), and
+   `starter` (one module, unknown imports surfaced, teaches growth via
+   `arclint explain` pointers). The feature-slice extension now labels
+   findings truthfully with M4's per-finding overrides: the
+   missing-port finding reports provides/provider, drift reports
+   invariant/provider — the exact limitation the experiments documented
+   is gone.
+4. **Module globs are repository-specific by nature**: layers/starter
+   templates ship go-flavored defaults plus `src/`-style alternates and
+   tell the user to check `arclint module ls`; init's closing output
+   points there. The wizard does not ask for paths in v1.
+5. **`arclint init`** prompts only for what flags do not provide
+   (`--runtimes`, `--pattern`, `--force`): detected languages (file
+   counts via lang.TargetOf) become the runtime default; compatible
+   patterns are listed with descriptions; everything written is then
+   validated exactly as `arclint load` would, extensions included, and
+   SDK typings are generated when the pattern ships extensions.
+6. **The pattern gate runs through the real binary** (cmd/arclint e2e):
+   every builtin × supported runtime must init and check clean on an
+   empty tree, and the feature-slice pattern is proven against a real
+   repository shape both ways (conforming fixture clean; violating
+   fixture fires findings from every enforcement source, including the
+   provider-blamed port finding). The gate lives in e2e rather than the
+   patterns package so `patterns` keeps a leaf contract
+   (`consumes.internal: []`) in rules.yaml — self-hosting caught exactly
+   that edge during development, again.
+
+### M5 gate results (measured 2026-08-12, WSL2 Ubuntu 24.04, go1.26.4)
+
+- `go vet ./...`, `go test ./...` green; self-hosting clean: 19 rules
+  over 13 modules, 83 files in 6ms.
+- Extra sanity outside the committed fixtures: the shipped feature-slice
+  pattern, installed by `arclint init` into the pattern-modeling demo
+  repos, keeps the conforming repo at exit 0 and the 14-violation-class
+  repo at exit 1.
+- Cold start median 12.48ms over 11 runs (bound 100ms; embedded patterns
+  cost nothing measurable); 5,000-file check median 77.6ms. Static builds
+  21.00 MB amd64 / 19.33 MB arm64.
+
 ## M4 (2026-08-12) — ADR: TypeScript as the single rule IR
 
 Evaluated against what M2 already built: `defineRule` + the zod-style `s`

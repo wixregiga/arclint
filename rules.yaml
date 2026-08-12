@@ -34,6 +34,9 @@ modules:
   exprenv:
     paths: ["internal/exprenv/**"]
     description: "expr-lang environment and compile-time type checking for expr rules."
+  patterns:
+    paths: ["internal/patterns/**"]
+    description: "Embedded architectural pattern bundles served by init and patterns."
   tools:
     paths: ["tools/**"]
     description: "Code generators: stdlib tables, JSON Schema, SDK type declarations."
@@ -66,9 +69,12 @@ contracts:
   engine:
     consumes:
       internal: [config, golang, langs, tree, report, exprenv, ext]
+  patterns:
+    consumes:
+      internal: []
   cmd:
     consumes:
-      internal: [config, engine, report, ext]
+      internal: [config, engine, report, ext, patterns, langs, tree]
     invariants:
       - kind: structure
         require: ["cmd/arclint/main.go"]
@@ -97,7 +103,7 @@ dependencies:
   - kind: layers
     layers: [cmd, engine, config, golang, tree]
   - kind: acyclic
-    modules: [cmd, config, engine, ext, golang, tree, report, exprenv, tools, oracle]
+    modules: [cmd, config, engine, ext, golang, tree, report, exprenv, tools, oracle, patterns]
   - kind: protected
     module: report
     allow: [engine, cmd]
