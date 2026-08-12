@@ -4,6 +4,7 @@ import { defineRule, s } from "arclint";
 // executed without TypeScript tooling on the user's machine.
 export default defineRule({
   type: "handler-naming",
+  description: "Handler files carry the configured suffix.",
   params: s.object({ suffix: s.string().default("Handler") }),
   check(ctx, params) {
     const suffix = params.suffix as string;

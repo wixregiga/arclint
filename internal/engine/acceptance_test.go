@@ -121,6 +121,13 @@ func TestFixtures(t *testing.T) {
 				contract: report.ContractInvariant,
 				blame:    report.BlameProvider,
 				path:     "internal/api/handlers/broken.go",
+			}, {
+				// Per-finding override: the rule type declares
+				// provides/provider, the finding says consumes/consumer.
+				ruleID:   "rules.wiring-audit[1]",
+				contract: report.ContractConsumes,
+				blame:    report.BlameConsumer,
+				path:     "internal/api/handlers/broken.go",
 			}},
 		},
 	}

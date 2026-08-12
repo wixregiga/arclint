@@ -24,7 +24,7 @@ export interface Ctx {
   files(glob?: string): FileInfo[];
   /** Read one file's content. Throws on unreadable paths. */
   read(path: string): string;
-  /** Classified imports of one file (go target), [] otherwise. */
+  /** Classified imports of one file, for every active language target. */
   imports(path: string): ImportInfo[];
   /** Declared module names to their member file paths. */
   modules(): Record<string, string[]>;
@@ -54,6 +54,8 @@ export const s: {
 export interface RuleDef {
   /** Unique rule type name, referenced by rules.yaml entries. */
   type: string;
+  /** One-line summary shown by arclint explain / rules ls. */
+  description?: string;
   /** Contract clause this rule reports under. Default: invariant. */
   contract?: Contract;
   /** Blame side for violations. Default: provider. */
@@ -118,7 +120,11 @@ func SDKInit(repoRoot string) ([]string, error) {
 	return []string{dts, tsconfig}, nil
 }
 
-// Describe returns a one-line summary for `arclint rules ls`.
+// Describe returns a one-line summary for `arclint rules ls`: the
+// author's description when defineRule declares one, else a fallback.
 func (rt *RuleType) Describe() string {
+	if rt.Description != "" {
+		return rt.Description
+	}
 	return fmt.Sprintf("extension rule type %q from %s", rt.Name, rt.SourcePath)
 }

@@ -23,8 +23,12 @@ export interface FileInfo {
 export interface ImportInfo {
   path: string;
   line: number;
+  /** stdlib | internal | external | unknown | cgo */
   class: string;
+  /** Repo-relative package directory for resolved internal imports, else "". */
   targetDir: string;
+  /** Repo-relative file for file-granular languages (JS/TS, Python), else "". */
+  targetFile: string;
 }
 
 export interface ViolationInput {
@@ -33,6 +37,10 @@ export interface ViolationInput {
   line?: number;
   fixHint?: string;
   severity?: Severity;
+  /** Per-finding contract override; defaults to the rule type's contract. */
+  contract?: Contract;
+  /** Per-finding blame override; defaults to the rule type's blame. */
+  blame?: Blame;
 }
 
 export interface Ctx {
@@ -40,7 +48,7 @@ export interface Ctx {
   files(glob?: string): FileInfo[];
   /** Read one file's content. Throws on unreadable paths. */
   read(path: string): string;
-  /** Classified imports of one file (go target), [] otherwise. */
+  /** Classified imports of one file, for every active language target. */
   imports(path: string): ImportInfo[];
   /** Declared module names to their member file paths. */
   modules(): Record<string, string[]>;
@@ -121,6 +129,8 @@ export const s = {
 export interface RuleDef {
   /** Unique rule type name, referenced by rules.yaml entries. */
   type: string;
+  /** One-line summary shown by arclint explain / rules ls. */
+  description?: string;
   /** Contract clause this rule reports under. Default: invariant. */
   contract?: Contract;
   /** Blame side for violations. Default: provider. */
@@ -137,6 +147,9 @@ export function defineRule(def: RuleDef) {
   if (typeof def.check !== "function") {
     throw new Error("defineRule: check must be a function");
   }
+  if (def.description !== undefined && typeof def.description !== "string") {
+    throw new Error("defineRule: description must be a string");
+  }
   const contract = def.contract ?? "invariant";
   if (contract !== "consumes" && contract !== "provides" && contract !== "invariant") {
     throw new Error(`defineRule: invalid contract "${contract}"`);
@@ -151,6 +164,7 @@ export function defineRule(def: RuleDef) {
   return {
     __arclintRule: true,
     type: def.type,
+    description: def.description ?? "",
     contract,
     blame,
     paramsSchema,

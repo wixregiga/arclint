@@ -16,8 +16,9 @@ type RuleSet struct {
 	Runtime []string `yaml:"runtime" json:"runtime"`
 	// Scan tunes tree walking and import-classification policy.
 	Scan ScanConfig `yaml:"scan" json:"scan,omitempty"`
-	// Modules maps a module name to the glob set that defines membership.
-	Modules map[string][]string `yaml:"modules" json:"modules"`
+	// Modules maps a module name to its declaration: the glob set that
+	// defines membership, plus optional authoring metadata.
+	Modules map[string]ModuleDef `yaml:"modules" json:"modules"`
 	// Contracts keys module names declared in Modules.
 	Contracts map[string]ModuleContract `yaml:"contracts" json:"contracts,omitempty"`
 	// Dependencies holds graph-wide consumes clauses spanning modules.
@@ -47,6 +48,37 @@ type ScanConfig struct {
 	// UnknownImports is the policy for imports that classify neither
 	// internal, stdlib, nor external: warn (default), error, or ignore.
 	UnknownImports string `yaml:"unknown_imports" json:"unknown_imports,omitempty"`
+}
+
+// ModuleDef declares one module. The YAML value is either a plain glob
+// list (the common case) or a mapping {paths: [...], description: "..."}
+// when the author wants to document what the module is for. Descriptions
+// surface in `arclint module ls` and `arclint module info`.
+type ModuleDef struct {
+	Paths       []string `json:"paths"`
+	Description string   `json:"description,omitempty"`
+}
+
+// UnmarshalYAML accepts either a sequence of globs or a mapping with
+// paths/description keys.
+func (m *ModuleDef) UnmarshalYAML(node *yaml.Node) error {
+	switch node.Kind {
+	case yaml.SequenceNode:
+		return node.Decode(&m.Paths)
+	case yaml.MappingNode:
+		var plain struct {
+			Paths       []string `yaml:"paths"`
+			Description string   `yaml:"description"`
+		}
+		if err := node.Decode(&plain); err != nil {
+			return err
+		}
+		m.Paths = plain.Paths
+		m.Description = plain.Description
+		return nil
+	default:
+		return fmt.Errorf("line %d: a module must be a glob list or a mapping with paths/description", node.Line)
+	}
 }
 
 // ModuleContract groups the three clause kinds for one module.

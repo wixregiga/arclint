@@ -28,7 +28,7 @@ export interface FileInfo {
 }
 /**
  * ImportInfo is one classified import occurrence as exposed to
- * ctx.imports(path).
+ * ctx.imports(path), for every active language target.
  */
 export interface ImportInfo {
   path: string;
@@ -42,6 +42,11 @@ export interface ImportInfo {
    * imports resolved into the tree, else "".
    */
   targetDir: string;
+  /**
+   * TargetFile is the repo-relative file an internal import resolves to
+   * for file-granular languages (JS/TS, Python), else "".
+   */
+  targetFile: string;
 }
 /**
  * ViolationInput is what ctx.report() accepts from a rule.
@@ -55,4 +60,15 @@ export interface ViolationInput {
    * Severity overrides the instance severity: error | warn | info.
    */
   severity?: string;
+  /**
+   * Contract overrides the rule type's contract clause for this one
+   * finding: consumes | provides | invariant. A rule that enforces both
+   * sides of a contract labels each finding truthfully.
+   */
+  contract?: string;
+  /**
+   * Blame overrides the rule type's blame side for this one finding:
+   * consumer | provider.
+   */
+  blame?: string;
 }

@@ -26,18 +26,15 @@ type Analysis struct {
 	Warnings []string
 }
 
+// sourceExts drives relative-specifier extension probing; file selection
+// goes through lang.TargetOf, the single extension-to-target mapping.
 var sourceExts = []string{".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"}
 
 func analyzable(p string) bool {
 	if strings.HasSuffix(p, ".d.ts") {
 		return false
 	}
-	for _, e := range sourceExts {
-		if strings.HasSuffix(p, e) {
-			return true
-		}
-	}
-	return false
+	return lang.TargetOf(p) == "ts"
 }
 
 // IsStdlib reports Node builtin membership ("fs", "fs/promises"); the

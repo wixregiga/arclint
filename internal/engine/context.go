@@ -87,7 +87,7 @@ func newContext(rs *config.RuleSet, t *tree.Tree) (*Context, error) {
 
 	for _, f := range t.Files {
 		for _, name := range ctx.ModuleNames {
-			if matchAny(rs.Modules[name], f.Path) {
+			if matchAny(rs.Modules[name].Paths, f.Path) {
 				ctx.ModuleFiles[name] = append(ctx.ModuleFiles[name], f)
 				ctx.FileModules[f.Path] = append(ctx.FileModules[f.Path], name)
 			}

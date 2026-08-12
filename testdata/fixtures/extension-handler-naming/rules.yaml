@@ -1,8 +1,11 @@
 runtime: [go]
 
 modules:
-  handlers: ["internal/api/handlers/**"]
+  handlers:
+    paths: ["internal/api/handlers/**"]
+    description: "HTTP handler layer; names end in Handler."
 
 rules:
   - type: handler-naming
     params: { suffix: "Handler" }
+  - type: wiring-audit

@@ -3,6 +3,8 @@
 // tree-resolved targets where the language allows it.
 package lang
 
+import "strings"
+
 // Class is the exact classification of one import specifier.
 type Class string
 
@@ -31,6 +33,25 @@ type Import struct {
 	// TargetFile is the repo-relative file for file-granular languages
 	// (JS/TS, Python) when the specifier resolves to one file, else "".
 	TargetFile string
+}
+
+// TargetOf maps a file path to the language target that analyzes it:
+// "go", "ts", "py", or "" for files no target owns. This is the single
+// extension-to-target mapping; the per-language analyzers select their
+// files through it.
+func TargetOf(path string) string {
+	switch {
+	case strings.HasSuffix(path, ".go"):
+		return "go"
+	case strings.HasSuffix(path, ".ts"), strings.HasSuffix(path, ".tsx"),
+		strings.HasSuffix(path, ".js"), strings.HasSuffix(path, ".jsx"),
+		strings.HasSuffix(path, ".mjs"), strings.HasSuffix(path, ".cjs"):
+		return "ts"
+	case strings.HasSuffix(path, ".py"):
+		return "py"
+	default:
+		return ""
+	}
 }
 
 // FileAnalysis is the extraction result for one source file.

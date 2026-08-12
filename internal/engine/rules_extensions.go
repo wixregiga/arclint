@@ -56,10 +56,18 @@ func checkExtensions(ctx *Context, reg *ext.Registry) ([]report.Violation, error
 			if sev == "" {
 				sev = instSev
 			}
+			contract := r.Contract
+			if contract == "" {
+				contract = rt.Contract
+			}
+			blame := r.Blame
+			if blame == "" {
+				blame = rt.Blame
+			}
 			v := report.Violation{
 				RuleID:   id,
-				Contract: report.Contract(rt.Contract),
-				Blame:    report.Blame(rt.Blame),
+				Contract: report.Contract(contract),
+				Blame:    report.Blame(blame),
 				Severity: report.Severity(sev),
 				Path:     filepath.ToSlash(r.Path),
 				Message:  r.Message,
@@ -111,6 +119,7 @@ func (c *Context) extensionHost() ext.Host {
 				out = append(out, ext.ImportInfo{
 					Path: imp.Path, Line: imp.Line,
 					Class: string(imp.Class), TargetDir: imp.TargetDir,
+					TargetFile: imp.TargetFile,
 				})
 			}
 			return out

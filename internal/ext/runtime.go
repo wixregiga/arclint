@@ -13,11 +13,12 @@ import (
 // RuleType is one extension-registered rule type: a sobek runtime holding
 // the compiled check function, plus the host-compiled params schema.
 type RuleType struct {
-	Name       string
-	Contract   string // consumes | provides | invariant
-	Blame      string // consumer | provider
-	SourcePath string // repo-relative extension file
-	RawSchema  map[string]any
+	Name        string
+	Description string // one-line summary from defineRule
+	Contract    string // consumes | provides | invariant
+	Blame       string // consumer | provider
+	SourcePath  string // repo-relative extension file
+	RawSchema   map[string]any
 
 	schema  *sj.Schema
 	vm      *sobek.Runtime
@@ -147,15 +148,16 @@ func (r *Registry) register(sourcePath, bundleJS string, opts Options) error {
 			return fmt.Errorf("extension %s: rule %q: %w", sourcePath, name, err)
 		}
 		rt := &RuleType{
-			Name:       name,
-			Contract:   d.Get("contract").String(),
-			Blame:      d.Get("blame").String(),
-			SourcePath: sourcePath,
-			RawSchema:  rawSchema,
-			schema:     schema,
-			vm:         vm,
-			check:      checkFn,
-			timeout:    opts.CheckTimeout,
+			Name:        name,
+			Description: d.Get("description").String(),
+			Contract:    d.Get("contract").String(),
+			Blame:       d.Get("blame").String(),
+			SourcePath:  sourcePath,
+			RawSchema:   rawSchema,
+			schema:      schema,
+			vm:          vm,
+			check:       checkFn,
+			timeout:     opts.CheckTimeout,
 		}
 		r.types[name] = rt
 		r.order = append(r.order, name)
@@ -292,6 +294,12 @@ func (rt *RuleType) Check(host Host, params map[string]any) ([]ViolationInput, e
 		if s, ok := raw["severity"].(string); ok {
 			v.Severity = s
 		}
+		if s, ok := raw["contract"].(string); ok {
+			v.Contract = s
+		}
+		if s, ok := raw["blame"].(string); ok {
+			v.Blame = s
+		}
 		if v.Path == "" || v.Message == "" {
 			return fail("ctx.report: path and message are required")
 		}
@@ -299,6 +307,16 @@ func (rt *RuleType) Check(host Host, params map[string]any) ([]ViolationInput, e
 		case "", "error", "warn", "info":
 		default:
 			return fail("ctx.report: invalid severity %q", v.Severity)
+		}
+		switch v.Contract {
+		case "", "consumes", "provides", "invariant":
+		default:
+			return fail("ctx.report: invalid contract %q", v.Contract)
+		}
+		switch v.Blame {
+		case "", "consumer", "provider":
+		default:
+			return fail("ctx.report: invalid blame %q", v.Blame)
 		}
 		reported = append(reported, v)
 		return sobek.Undefined()

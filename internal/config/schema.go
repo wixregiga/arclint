@@ -74,6 +74,18 @@ func schemaDoc() (map[string]any, error) {
 	if rootProps == nil {
 		return nil, fmt.Errorf("schema reflection produced no root properties")
 	}
+
+	// modules: a value is a glob list or a {paths, description} mapping.
+	modules, _ := rootProps["modules"].(map[string]any)
+	if modules == nil {
+		return nil, fmt.Errorf("schema patch: missing modules")
+	}
+	modules["additionalProperties"] = map[string]any{
+		"oneOf": []any{
+			map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			map[string]any{"$ref": "#/$defs/ModuleDef"},
+		},
+	}
 	runtime, _ := rootProps["runtime"].(map[string]any)
 	if runtime == nil {
 		return nil, fmt.Errorf("schema patch: missing runtime")
@@ -144,6 +156,27 @@ func schemaDoc() (map[string]any, error) {
 		}
 		if err := setEnum(d, p.field, p.values...); err != nil {
 			return nil, err
+		}
+	}
+
+	// Hover text from the single-source doc table (ruledoc.go). Editor
+	// completion and `arclint explain` can never drift apart because both
+	// read the same strings.
+	for defName, fields := range fieldDescriptions {
+		target := rootProps
+		if defName != "" {
+			d := def(defName)
+			if d == nil {
+				return nil, fmt.Errorf("schema description patch: missing $defs.%s", defName)
+			}
+			target = props(d)
+		}
+		for field, text := range fields {
+			f, _ := target[field].(map[string]any)
+			if f == nil {
+				return nil, fmt.Errorf("schema description patch: missing %s.%s", defName, field)
+			}
+			f["description"] = text
 		}
 	}
 	return doc, nil

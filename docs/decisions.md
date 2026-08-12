@@ -3,6 +3,64 @@
 Small ambiguities resolved in favor of the proposal's shapes, recorded per
 milestone. Dates are decision dates.
 
+## M4 (2026-08-12) — ADR: TypeScript as the single rule IR
+
+Evaluated against what M2 already built: `defineRule` + the zod-style `s`
+builder emitting JSON Schema, host-side param validation before any
+extension code runs, ctx {files, read, imports, modules, report},
+arclint.d.ts generated from the Go host types via tygo, and no-Node
+execution (esbuild + sobek). The gap: builtin kinds were Go-only with no
+shared metadata; ctx was not runtime-parameterized (ImportInfo dropped
+TargetFile, and its docstring still claimed go-only imports); extensions
+could not label a finding's contract per finding.
+
+1. **Builtins stay Go; TypeScript as the execution IR is rejected.**
+   Reimplementing the 14 builtin kinds in TS would move the hot path into
+   the sobek interpreter (Go builtins: 5,000 files in ~92ms median, M3
+   gate below) and make validation circular (the schema pipeline that
+   validates YAML is Go-side). Nothing the IR would buy requires it.
+2. **Adopted instead: one metadata record per rule TYPE** — the portable
+   half of the idea. `internal/config/ruledoc.go` documents every builtin
+   kind ({kind, where, clause, blame, summary, doc, example}); the same
+   table patches `description` fields into the published JSON Schema
+   (editor hovers), drives `arclint explain [kind]`, and will feed the
+   M6 docs-site reference. Extension types self-describe through
+   defineRule's new `description` field; `arclint explain` merges both
+   sources. `ruledoc_test.go` asserts the table covers exactly the
+   schema's kind enums — no drift in either direction.
+3. **Module descriptions.** A `modules:` value is a glob list (terse
+   form) or `{paths, description}`. `arclint module ls` and
+   `arclint module info <name>` show description, member-file count, and
+   the languages present among members, derived from the files through
+   `lang.TargetOf` — now the single extension-to-target mapping, which
+   the jsts/python analyzers also select through.
+4. **ctx gap closed.** ImportInfo gains `targetFile` (file-granular
+   resolution for JS/TS and Python, engine-side since M3 but previously
+   dropped at the wire type); `imports()` is documented for every active
+   target; ViolationInput accepts per-finding `contract`/`blame`
+   overrides, validated host-side. This removes the "one contract per
+   extension rule type" limit the PATTERN1 experiments documented (a
+   consumes-typed extension had to blame consumers for provider-side
+   findings).
+5. `rules ls` gains a MODULE column; extension descriptions replace the
+   generic "extension rule type X from Y" text in listings.
+6. The differential oracle was not re-run for this milestone: it covers
+   Go classification only, and M4 did not touch the Go analyzer; the
+   jsts/python file-selection refactor is behavior-equal and covered by
+   the extractor test matrices.
+
+### M4 gate results (measured 2026-08-12, WSL2 Ubuntu 24.04, go1.26.4)
+
+- `go vet ./...` and `go test ./...` green; self-hosting clean: 17 rules
+  over 12 modules, 71 files in 5ms, with arclint's own modules now
+  carrying descriptions (dogfooding the mapping form).
+- e2e: `module info`, `explain` (builtin kind and extension type), and
+  the per-finding contract/blame override asserted through the compiled
+  binary's JSON output.
+- Cold start median 13.19ms over 11 runs (bound 100ms); 5,000-file check
+  median 75.9ms over 3 runs. Static builds 20.93 MB amd64 / 19.33 MB
+  arm64 (CGO_ENABLED=0), in line with M3.
+
 ## M1 (2026-08-10)
 
 1. **Module path** `github.com/wixregiga/arclint`, matching the `origin`

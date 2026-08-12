@@ -26,7 +26,9 @@ Write a `rules.yaml` at your repo root:
 runtime: [go]
 
 modules:
-  entities: ["internal/entities/**"]
+  entities:
+    paths: ["internal/entities/**"]
+    description: "Domain types and invariants; depends on nothing."
   features: ["internal/features/*"]
   registry: ["internal/shared/registry.go"]
   setup:    ["internal/setup/**"]
@@ -61,6 +63,15 @@ Load, inspect, check:
 ./arclint check . --format json
 ```
 
+Learn the vocabulary and your own ruleset from the terminal:
+
+```bash
+./arclint explain              # every rule kind, one line each
+./arclint explain consumes     # what internal/external/stdlib mean, with an example
+./arclint module ls            # declared modules: files, languages, description
+./arclint module info entities # one module: description, members, every rule that binds it
+```
+
 Exit codes: `0` clean, `1` violations (severity `error`), `2` config or
 usage error. JSON violations have the stable shape
 `{ruleId, contract, blame, severity, path, line?, message, fixHint}`.
@@ -93,6 +104,7 @@ import { defineRule, s } from "arclint";
 
 export default defineRule({
   type: "handler-naming",
+  description: "Handler files carry the configured suffix.",
   params: s.object({ suffix: s.string().default("Handler") }),
   check(ctx, params) {
     for (const f of ctx.files("internal/**/handlers/*.go")) {
@@ -103,6 +115,13 @@ export default defineRule({
   },
 });
 ```
+
+`ctx.imports(path)` serves every active language target, with classified
+specifiers and tree-resolved targets (`targetDir`, `targetFile`). A rule
+type declares its contract clause and blame side once, and any single
+finding may override both (`ctx.report({..., contract: "consumes",
+blame: "consumer"})`) so multi-sided rules label each finding
+truthfully. Descriptions surface in `arclint explain` and `rules ls`.
 
 Instances stay pure data in rules.yaml, validated against the extension's
 schema before any extension code runs:

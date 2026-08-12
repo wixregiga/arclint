@@ -22,7 +22,7 @@ type FileInfo struct {
 }
 
 // ImportInfo is one classified import occurrence as exposed to
-// ctx.imports(path).
+// ctx.imports(path), for every active language target.
 type ImportInfo struct {
 	Path string `json:"path"`
 	Line int    `json:"line"`
@@ -31,6 +31,9 @@ type ImportInfo struct {
 	// TargetDir is the repo-relative package directory for internal
 	// imports resolved into the tree, else "".
 	TargetDir string `json:"targetDir"`
+	// TargetFile is the repo-relative file an internal import resolves to
+	// for file-granular languages (JS/TS, Python), else "".
+	TargetFile string `json:"targetFile"`
 }
 
 // ViolationInput is what ctx.report() accepts from a rule.
@@ -41,4 +44,11 @@ type ViolationInput struct {
 	FixHint string `json:"fixHint,omitempty"`
 	// Severity overrides the instance severity: error | warn | info.
 	Severity string `json:"severity,omitempty"`
+	// Contract overrides the rule type's contract clause for this one
+	// finding: consumes | provides | invariant. A rule that enforces both
+	// sides of a contract labels each finding truthfully.
+	Contract string `json:"contract,omitempty"`
+	// Blame overrides the rule type's blame side for this one finding:
+	// consumer | provider.
+	Blame string `json:"blame,omitempty"`
 }

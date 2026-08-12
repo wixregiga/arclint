@@ -38,14 +38,14 @@ func (rs *RuleSet) validateSemantics() error {
 	if len(rs.Modules) == 0 {
 		addf("modules: at least one module is required")
 	}
-	for name, globs := range rs.Modules {
+	for name, def := range rs.Modules {
 		if !moduleNameRe.MatchString(name) {
 			addf("modules.%s: names must match %s (they appear in rule ids)", name, moduleNameRe)
 		}
-		if len(globs) == 0 {
+		if len(def.Paths) == 0 {
 			addf("modules.%s: at least one glob is required", name)
 		}
-		for _, g := range globs {
+		for _, g := range def.Paths {
 			if !doublestar.ValidatePattern(g) {
 				addf("modules.%s: invalid glob %q", name, g)
 			}

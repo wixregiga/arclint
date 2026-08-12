@@ -4,17 +4,39 @@
 runtime: [go]
 
 modules:
-  cmd: ["cmd/**"]
-  config: ["internal/config/**"]
-  engine: ["internal/engine/**"]
-  ext: ["internal/ext/**"]
-  golang: ["internal/lang/golang/**"]
-  langs: ["internal/lang/**"]
-  oracle: ["internal/oracle/**"]
-  tree: ["internal/tree/**"]
-  report: ["internal/report/**"]
-  exprenv: ["internal/exprenv/**"]
-  tools: ["tools/**"]
+  cmd:
+    paths: ["cmd/**"]
+    description: "CLI entrypoints: command wiring, output formatting, exit codes."
+  config:
+    paths: ["internal/config/**"]
+    description: "rules.yaml data model, JSON Schema pipeline, and validation."
+  engine:
+    paths: ["internal/engine/**"]
+    description: "Rule evaluation: walks the tree, runs every provider, collects violations."
+  ext:
+    paths: ["internal/ext/**"]
+    description: "TypeScript extension runtime: esbuild transpile, sobek sandbox, SDK."
+  golang:
+    paths: ["internal/lang/golang/**"]
+    description: "Exact Go import extraction and classification (go/parser)."
+  langs:
+    paths: ["internal/lang/**"]
+    description: "Shared import model plus the per-language analyzers."
+  oracle:
+    paths: ["internal/oracle/**"]
+    description: "Differential oracle against `go list` over pinned real repositories."
+  tree:
+    paths: ["internal/tree/**"]
+    description: "Repository walker: exclusions, file metadata, deterministic order."
+  report:
+    paths: ["internal/report/**"]
+    description: "The violation model and its stable JSON shape; stdlib-only."
+  exprenv:
+    paths: ["internal/exprenv/**"]
+    description: "expr-lang environment and compile-time type checking for expr rules."
+  tools:
+    paths: ["tools/**"]
+    description: "Code generators: stdlib tables, JSON Schema, SDK type declarations."
   src: ["internal/**"]
 
 contracts:

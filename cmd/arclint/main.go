@@ -54,7 +54,8 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newLoadCmd(), newListCmd(), newRulesCmd(), newCheckCmd(), newSdkCmd())
+	root.AddCommand(newLoadCmd(), newListCmd(), newRulesCmd(), newCheckCmd(), newSdkCmd(),
+		newModuleCmd(), newExplainCmd())
 	return root
 }
 
@@ -238,11 +239,15 @@ func newRulesCmd() *cobra.Command {
 				rows = append(rows, extensionRows(rs, reg)...)
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-			fmt.Fprintln(w, "ID\tCONTRACT\tKIND\tPROVIDER\tTARGETS\tSEVERITY\tDESCRIPTION")
+			fmt.Fprintln(w, "ID\tCONTRACT\tKIND\tMODULE\tPROVIDER\tTARGETS\tSEVERITY\tDESCRIPTION")
 			targets := fmt.Sprintf("%v", rs.Runtime)
 			for _, inst := range rows {
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-					inst.ID, inst.Clause, inst.Kind, inst.Provider, targets, inst.Severity, inst.Description)
+				module := inst.Module
+				if module == "" {
+					module = "-"
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+					inst.ID, inst.Clause, inst.Kind, module, inst.Provider, targets, inst.Severity, inst.Description)
 			}
 			return w.Flush()
 		},

@@ -241,7 +241,7 @@ func Analyze(t *tree.Tree) *Analysis {
 	g := new(errgroup.Group)
 	g.SetLimit(runtime.GOMAXPROCS(0))
 	for _, f := range t.Files {
-		if !strings.HasSuffix(f.Path, ".py") {
+		if lang.TargetOf(f.Path) != "py" {
 			continue
 		}
 		g.Go(func() error {
