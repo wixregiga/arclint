@@ -17,6 +17,8 @@ type RuleInstance struct {
 	Severity    string
 	Capability  string // exact | structural | heuristic | advisory
 	Description string
+	// Excepts lists the clause's exception entries, shown by rules show.
+	Excepts []ExceptRule
 }
 
 func sevOrDefault(s string) string {
@@ -64,6 +66,7 @@ func (rs *RuleSet) Instances() []RuleInstance {
 				Provider: "builtin", Severity: sevOrDefault(c.Consumes.Severity),
 				Capability:  CapabilityOf("policy"),
 				Description: strings.Join(parts, "; "),
+				Excepts:     c.Consumes.Except,
 			})
 		}
 		for i, r := range c.Provides {
@@ -86,6 +89,7 @@ func (rs *RuleSet) Instances() []RuleInstance {
 				ID: id, Clause: "provides", Kind: r.Kind, Module: m,
 				Provider: "builtin", Severity: sevOrDefault(r.Severity),
 				Capability: CapabilityOf(r.Kind), Description: desc,
+				Excepts:    r.Except,
 			})
 		}
 		for i, r := range c.Invariants {
@@ -125,6 +129,7 @@ func (rs *RuleSet) Instances() []RuleInstance {
 				ID: id, Clause: "invariant", Kind: r.Kind, Module: m,
 				Provider: "builtin", Severity: sevOrDefault(r.Severity),
 				Capability: CapabilityOf(r.Kind), Description: desc,
+				Excepts:    r.Except,
 			})
 		}
 	}
@@ -154,6 +159,7 @@ func (rs *RuleSet) Instances() []RuleInstance {
 			ID: id, Clause: "consumes", Kind: r.Kind,
 			Provider: "builtin", Severity: sevOrDefault(r.Severity),
 			Capability: CapabilityOf(r.Kind), Description: desc,
+			Excepts:    r.Except,
 		})
 	}
 	return out

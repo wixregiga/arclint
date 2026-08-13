@@ -318,7 +318,9 @@ other anchor. Globs use the same doublestar dialect as module paths.
 
 "reason" is required: an exception is a policy decision, and the YAML
 is its audit trail. Suppressed findings are counted in check output,
-never silently dropped.
+never silently dropped; "arclint check --show-suppressed" lists each
+one with its reason, and "arclint rules show <id>" displays a
+requirement's exceptions beside its clauses.
 
 Clauses sharing one explicit id form one requirement; their except
 lists merge, so declare the exception once, on the clause it concerns.

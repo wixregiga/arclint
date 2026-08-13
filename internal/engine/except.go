@@ -13,12 +13,10 @@ import (
 // exceptIndex maps rule ids to their exception globs. Clauses sharing
 // one explicit id contribute to one entry: suppression is id-scoped,
 // matching how findings report. Id derivation mirrors Instances().
-func exceptIndex(rs *config.RuleSet) map[string][]string {
-	idx := map[string][]string{}
+func exceptIndex(rs *config.RuleSet) map[string][]config.ExceptRule {
+	idx := map[string][]config.ExceptRule{}
 	add := func(id string, excepts []config.ExceptRule) {
-		for _, e := range excepts {
-			idx[id] = append(idx[id], e.Paths...)
-		}
+		idx[id] = append(idx[id], excepts...)
 	}
 	for m, c := range rs.Contracts {
 		if c.Consumes != nil && len(c.Consumes.Except) > 0 {
@@ -72,17 +70,19 @@ func exceptIndex(rs *config.RuleSet) map[string][]string {
 	return idx
 }
 
-// applyExcepts drops findings whose anchor path matches an except glob
-// declared for their rule id, and returns the kept findings plus the
-// suppressed count. The rule keeps firing for every other anchor.
-func applyExcepts(rs *config.RuleSet, vs []report.Violation) ([]report.Violation, int) {
+// applyExcepts splits findings whose anchor path matches an except glob
+// declared for their rule id away from the kept set. Suppressed findings
+// are returned marked with the matching entry's reason, so output can
+// show what was omitted and why; the rule keeps firing for every other
+// anchor.
+func applyExcepts(rs *config.RuleSet, vs []report.Violation) (kept, suppressed []report.Violation) {
 	idx := exceptIndex(rs)
 	if len(idx) == 0 {
-		return vs, 0
+		return vs, nil
 	}
-	globsFor := func(id string) []string {
-		if globs, ok := idx[id]; ok {
-			return globs
+	entriesFor := func(id string) []config.ExceptRule {
+		if entries, ok := idx[id]; ok {
+			return entries
 		}
 		// Derived consumes ids carry a per-aspect suffix; the clause
 		// (and its except list) is <module>.consumes.
@@ -93,18 +93,24 @@ func applyExcepts(rs *config.RuleSet, vs []report.Violation) ([]report.Violation
 		}
 		return nil
 	}
-	kept := make([]report.Violation, 0, len(vs))
-	suppressed := 0
+	kept = make([]report.Violation, 0, len(vs))
 	for _, v := range vs {
-		matched := false
-		for _, g := range globsFor(v.RuleID) {
-			if ok, _ := doublestar.Match(g, v.Path); ok {
-				matched = true
+		reason, matched := "", false
+		for _, e := range entriesFor(v.RuleID) {
+			for _, g := range e.Paths {
+				if ok, _ := doublestar.Match(g, v.Path); ok {
+					reason, matched = e.Reason, true
+					break
+				}
+			}
+			if matched {
 				break
 			}
 		}
 		if matched {
-			suppressed++
+			v.Suppressed = true
+			v.SuppressedReason = reason
+			suppressed = append(suppressed, v)
 			continue
 		}
 		kept = append(kept, v)

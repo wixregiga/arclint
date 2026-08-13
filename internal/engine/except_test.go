@@ -113,8 +113,8 @@ func TestExceptSuppressesByAnchorAcrossClauseKinds(t *testing.T) {
 	if base["entities.consumes.internal"] != 2 || base["no-todo"] != 2 || base["shared-protected"] != 2 {
 		t.Fatalf("baseline: %v", base)
 	}
-	if res.Suppressed != 0 {
-		t.Fatalf("baseline suppressed = %d", res.Suppressed)
+	if len(res.Suppressed) != 0 {
+		t.Fatalf("baseline suppressed = %d", len(res.Suppressed))
 	}
 
 	res, err = engine.Check(writeExceptRepo(t, exceptApplied))
@@ -133,8 +133,16 @@ func TestExceptSuppressesByAnchorAcrossClauseKinds(t *testing.T) {
 			t.Errorf("kept finding lost its capability: %+v", v)
 		}
 	}
-	if res.Suppressed != 3 {
-		t.Errorf("suppressed = %d, want 3", res.Suppressed)
+	if len(res.Suppressed) != 3 {
+		t.Fatalf("suppressed = %d, want 3", len(res.Suppressed))
+	}
+	for _, v := range res.Suppressed {
+		if !v.Suppressed || v.SuppressedReason == "" {
+			t.Errorf("suppressed finding not marked with its reason: %+v", v)
+		}
+		if v.Path != "internal/entities/legacy.go" {
+			t.Errorf("wrong anchor suppressed: %+v", v)
+		}
 	}
 }
 

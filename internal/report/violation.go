@@ -52,6 +52,12 @@ type Violation struct {
 	Line    *int   `json:"line,omitempty"`
 	Message string `json:"message"`
 	FixHint string `json:"fixHint"`
+	// Suppressed marks a finding dropped by an except clause; such
+	// findings appear in output only under --show-suppressed and never
+	// affect the exit code.
+	Suppressed bool `json:"suppressed,omitempty"`
+	// SuppressedReason is the except entry's reason.
+	SuppressedReason string `json:"suppressedReason,omitempty"`
 }
 
 // LineValue returns the line number or 0 when the violation is not anchored

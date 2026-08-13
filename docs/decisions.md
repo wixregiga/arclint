@@ -32,6 +32,25 @@ finding.
    the `except` entry of the single-source doc table (which also feeds
    the schema hovers and the generated reference).
 
+### M9 addendum (2026-08-13): suppression visibility
+
+6. **`check --show-suppressed`** lists what was omitted: human output
+   gains a SUPPRESSED section (finding plus its except reason); under
+   `--format json` the suppressed findings join the stable array shape
+   carrying additive `suppressed: true` and `suppressedReason` fields,
+   still never affecting the exit code. Result.Suppressed became the
+   findings themselves (marked, with reasons) rather than a bare count.
+7. **`rules show <id>`** displays a requirement's exceptions beside its
+   clauses (paths and reasons, human and JSON), completing the
+   visibility triangle: the YAML declares, rules show displays the
+   declaration, check --show-suppressed displays the effect, and the
+   always-on count keeps suppression from ever being invisible.
+8. A separate small commit added the published-schema drift test (the
+   committed rules.schema.json now fails CI when stale, mirroring the
+   generated-docs guard); its first version was itself committed red
+   because a piped test invocation masked the exit code — recorded here
+   as a process lesson: never pipe the gate.
+
 ### M9 gate results (measured 2026-08-13, WSL2 Ubuntu 24.04, go1.26.4)
 
 - Engine test proves suppression across three clause families in one

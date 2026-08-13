@@ -127,8 +127,10 @@ The globs use the same doublestar dialect as module paths, the shape is
 identical on `dependencies` rules, invariants, and extension instances,
 and `reason` is required: an exception is policy, and the YAML is its
 audit trail. Suppressed findings are counted in check output
-(`2 suppressed by except`), never silently dropped. `arclint explain
-except` has the full story.
+(`2 suppressed by except`), never silently dropped; `arclint check
+--show-suppressed` lists each one with its reason, and `arclint rules
+show <id>` displays a requirement's exceptions beside its clauses.
+`arclint explain except` has the full story.
 
 ## Validation layers
 

@@ -10,8 +10,9 @@ import (
 )
 
 // writeHuman groups violations by contract clause, blame shown, per the
-// proposal's CLI shape.
-func writeHuman(w io.Writer, res *engine.Result, dur time.Duration) {
+// proposal's CLI shape. showSuppressed additionally lists findings
+// dropped by except clauses, each with its reason.
+func writeHuman(w io.Writer, res *engine.Result, dur time.Duration, showSuppressed bool) {
 	groups := []struct {
 		contract report.Contract
 		header   string
@@ -48,9 +49,22 @@ func writeHuman(w io.Writer, res *engine.Result, dur time.Duration) {
 	for _, v := range res.Violations {
 		counts[v.Severity]++
 	}
+	if showSuppressed && len(res.Suppressed) > 0 {
+		fmt.Fprintln(w, "SUPPRESSED (allowed by except)")
+		for _, v := range res.Suppressed {
+			loc := v.Path
+			if v.Line != nil {
+				loc = fmt.Sprintf("%s:%d", v.Path, *v.Line)
+			}
+			fmt.Fprintf(w, "  %s  %s  %s\n", loc, v.RuleID, v.Severity)
+			fmt.Fprintf(w, "    %s\n", v.Message)
+			fmt.Fprintf(w, "    allowed: %s\n", v.SuppressedReason)
+		}
+		fmt.Fprintln(w)
+	}
 	suppressed := ""
-	if res.Suppressed > 0 {
-		suppressed = fmt.Sprintf(" · %d suppressed by except", res.Suppressed)
+	if len(res.Suppressed) > 0 {
+		suppressed = fmt.Sprintf(" · %d suppressed by except", len(res.Suppressed))
 	}
 	if len(res.Violations) == 0 {
 		fmt.Fprintf(w, "clean: 0 violations%s · %d files · %s\n", suppressed, res.FilesScanned, dur.Round(time.Millisecond))

@@ -103,6 +103,7 @@ func extensionRows(rs *config.RuleSet, reg *ext.Registry) []config.RuleInstance 
 			Severity:    sev,
 			Capability:  rt.Capability,
 			Description: rt.Describe(),
+			Excepts:     inst.Except,
 		})
 	}
 	return rows
@@ -285,6 +286,7 @@ func newSdkCmd() *cobra.Command {
 
 func newCheckCmd() *cobra.Command {
 	var rulesFlag, format string
+	var showSuppressed bool
 	cmd := &cobra.Command{
 		Use:   "check [path]",
 		Short: "evaluate contracts against the repository",
@@ -315,13 +317,19 @@ func newCheckCmd() *cobra.Command {
 			}
 			switch format {
 			case "json":
-				data, err := report.MarshalJSONList(res.Violations)
+				violations := res.Violations
+				if showSuppressed {
+					// Suppressed findings join the stable array shape,
+					// marked, and still never affect the exit code.
+					violations = append(append([]report.Violation{}, violations...), res.Suppressed...)
+				}
+				data, err := report.MarshalJSONList(violations)
 				if err != nil {
 					return &exitError{2, err.Error()}
 				}
 				fmt.Fprintln(cmd.OutOrStdout(), string(data))
 			default:
-				writeHuman(cmd.OutOrStdout(), res, time.Since(began))
+				writeHuman(cmd.OutOrStdout(), res, time.Since(began), showSuppressed)
 			}
 			if res.HasErrors() {
 				return &exitError{code: 1}
@@ -331,5 +339,6 @@ func newCheckCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&rulesFlag, "rules", "", "path to rules.yaml (default: discovered upward from [path])")
 	cmd.Flags().StringVar(&format, "format", "human", "output format: human or json")
+	cmd.Flags().BoolVar(&showSuppressed, "show-suppressed", false, "also list findings dropped by except clauses, with reasons")
 	return cmd
 }

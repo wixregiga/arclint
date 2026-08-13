@@ -56,6 +56,7 @@ func newRulesShowCmd() *cobra.Command {
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
 			fmt.Fprintln(w, "ID\tCONTRACT\tKIND\tMODULE\tSEVERITY\tCAPABILITY\tDESCRIPTION")
+			hasExcepts := false
 			for _, inst := range hits {
 				module := inst.Module
 				if module == "" {
@@ -63,8 +64,21 @@ func newRulesShowCmd() *cobra.Command {
 				}
 				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 					inst.ID, inst.Clause, inst.Kind, module, inst.Severity, inst.Capability, inst.Description)
+				hasExcepts = hasExcepts || len(inst.Excepts) > 0
 			}
-			return w.Flush()
+			if err := w.Flush(); err != nil {
+				return err
+			}
+			if hasExcepts {
+				out := cmd.OutOrStdout()
+				fmt.Fprintln(out, "\nexceptions:")
+				for _, inst := range hits {
+					for _, e := range inst.Excepts {
+						fmt.Fprintf(out, "  %s  %s  %s\n", inst.ID, strings.Join(e.Paths, " "), e.Reason)
+					}
+				}
+			}
+			return nil
 		},
 	}
 	cmd.Flags().StringVar(&rulesFlag, "rules", "", "path to rules.yaml (default: discovered upward from .)")

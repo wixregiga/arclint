@@ -158,6 +158,29 @@ func TestExceptOnExtensionInstance(t *testing.T) {
 	if !strings.Contains(stdout, "1 suppressed by except") {
 		t.Errorf("suppression not visible:\n%s", stdout)
 	}
+
+	// --show-suppressed lists what was omitted, with the reason.
+	stdout, _, _ = runBin(t, dir, os.Environ(), "check", ".", "--show-suppressed")
+	for _, want := range []string{"SUPPRESSED (allowed by except)", "handler files must end in", "allowed: renamed in the next sweep"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("--show-suppressed missing %q:\n%s", want, stdout)
+		}
+	}
+	stdout, _, _ = runBin(t, dir, os.Environ(), "check", ".", "--show-suppressed", "--format", "json")
+	if !strings.Contains(stdout, "\"suppressed\": true") || !strings.Contains(stdout, "\"suppressedReason\"") {
+		t.Errorf("json suppressed fields missing:\n%s", stdout)
+	}
+
+	// rules show displays the exception as part of the requirement.
+	stdout, stderr, code := runBin(t, dir, os.Environ(), "rules", "show", "rules.handler-naming[0]")
+	if code != 0 {
+		t.Fatalf("rules show: exit %d, stderr %s", code, stderr)
+	}
+	for _, want := range []string{"exceptions:", "internal/api/handlers/broken.go", "renamed in the next sweep"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("rules show missing %q:\n%s", want, stdout)
+		}
+	}
 }
 
 func TestModuleAndExplainCommands(t *testing.T) {
