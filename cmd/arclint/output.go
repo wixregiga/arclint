@@ -48,11 +48,15 @@ func writeHuman(w io.Writer, res *engine.Result, dur time.Duration) {
 	for _, v := range res.Violations {
 		counts[v.Severity]++
 	}
+	suppressed := ""
+	if res.Suppressed > 0 {
+		suppressed = fmt.Sprintf(" · %d suppressed by except", res.Suppressed)
+	}
 	if len(res.Violations) == 0 {
-		fmt.Fprintf(w, "clean: 0 violations · %d files · %s\n", res.FilesScanned, dur.Round(time.Millisecond))
+		fmt.Fprintf(w, "clean: 0 violations%s · %d files · %s\n", suppressed, res.FilesScanned, dur.Round(time.Millisecond))
 		return
 	}
-	fmt.Fprintf(w, "%d violations (%d error, %d warn, %d info) · %d files · %s\n",
+	fmt.Fprintf(w, "%d violations (%d error, %d warn, %d info)%s · %d files · %s\n",
 		len(res.Violations), counts[report.SeverityError], counts[report.SeverityWarn],
-		counts[report.SeverityInfo], res.FilesScanned, dur.Round(time.Millisecond))
+		counts[report.SeverityInfo], suppressed, res.FilesScanned, dur.Round(time.Millisecond))
 }

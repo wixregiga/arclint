@@ -63,6 +63,23 @@ func (rs *RuleSet) validateSemantics() error {
 		}
 	}
 
+	validateExcepts := func(where string, excepts []ExceptRule) {
+		for i, e := range excepts {
+			w := fmt.Sprintf("%s.except[%d]", where, i)
+			if len(e.Paths) == 0 {
+				addf("%s: at least one path glob is required", w)
+			}
+			for _, g := range e.Paths {
+				if !doublestar.ValidatePattern(g) {
+					addf("%s: invalid glob %q", w, g)
+				}
+			}
+			if strings.TrimSpace(e.Reason) == "" {
+				addf("%s: reason is required (an exception is policy)", w)
+			}
+		}
+	}
+
 	for name, contract := range rs.Contracts {
 		if !moduleExists(name) {
 			addf("contracts.%s: unknown module", name)
@@ -73,6 +90,7 @@ func (rs *RuleSet) validateSemantics() error {
 				checkRefs(fmt.Sprintf("contracts.%s.consumes.internal.allow", name), c.Internal.Allow)
 				checkRefs(fmt.Sprintf("contracts.%s.consumes.internal.deny", name), c.Internal.Deny)
 			}
+			validateExcepts(fmt.Sprintf("contracts.%s.consumes", name), c.Except)
 		}
 		for i, rule := range contract.Provides {
 			where := fmt.Sprintf("contracts.%s.provides[%d]", name, i)
@@ -82,15 +100,22 @@ func (rs *RuleSet) validateSemantics() error {
 			case "correspondence":
 				validateCorrespondence(addf, where, rule)
 			}
+			validateExcepts(where, rule.Except)
 		}
 		for i, rule := range contract.Invariants {
 			where := fmt.Sprintf("contracts.%s.invariants[%d]", name, i)
 			validateInvariant(addf, where, rule)
+			validateExcepts(where, rule.Except)
 		}
+	}
+
+	for i, rule := range rs.Rules {
+		validateExcepts(fmt.Sprintf("rules[%d]", i), rule.Except)
 	}
 
 	for i, rule := range rs.Dependencies {
 		where := fmt.Sprintf("dependencies[%d] (%s)", i, rule.Kind)
+		validateExcepts(where, rule.Except)
 		switch rule.Kind {
 		case "layers":
 			if len(rule.Layers) < 2 {

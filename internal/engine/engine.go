@@ -24,6 +24,9 @@ type Result struct {
 	Warnings []string
 	// FilesScanned is the walked tree size.
 	FilesScanned int
+	// Suppressed counts findings dropped by except clauses; they are
+	// never silent.
+	Suppressed int
 }
 
 // HasErrors reports whether any violation carries severity error, which is
@@ -94,7 +97,8 @@ func Check(rs *config.RuleSet) (*Result, error) {
 		vs = append(vs, evs...)
 	}
 	fillCapabilities(rs, vs)
+	vs, suppressed := applyExcepts(rs, vs)
 	report.Sort(vs)
 	sort.Strings(ctx.warnings)
-	return &Result{Violations: vs, Warnings: ctx.warnings, FilesScanned: len(t.Files)}, nil
+	return &Result{Violations: vs, Warnings: ctx.warnings, FilesScanned: len(t.Files), Suppressed: suppressed}, nil
 }

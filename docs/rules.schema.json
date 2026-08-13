@@ -22,6 +22,13 @@
     "Consumes": {
       "additionalProperties": false,
       "properties": {
+        "except": {
+          "description": "Exempt specific anchor paths from this clause; the rule keeps firing everywhere else.",
+          "items": {
+            "$ref": "#/$defs/ExceptRule"
+          },
+          "type": "array"
+        },
         "external": {
           "description": "Third-party imports (declared in go.mod/package.json/pyproject): allow (default) or forbid.",
           "enum": [
@@ -58,9 +65,37 @@
       },
       "type": "object"
     },
+    "ExceptRule": {
+      "additionalProperties": false,
+      "properties": {
+        "paths": {
+          "description": "Anchor-path globs to exempt from this rule (doublestar, same dialect as module paths).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "reason": {
+          "description": "Why this exception exists; required, because an exception is policy and the YAML is its audit trail.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "paths",
+        "reason"
+      ],
+      "type": "object"
+    },
     "ExtensionRule": {
       "additionalProperties": false,
       "properties": {
+        "except": {
+          "description": "Exempt specific anchor paths from this rule; it keeps firing everywhere else.",
+          "items": {
+            "$ref": "#/$defs/ExceptRule"
+          },
+          "type": "array"
+        },
         "id": {
           "type": "string"
         },
@@ -94,6 +129,13 @@
           "description": "Modules allowed to import the protected module.",
           "items": {
             "type": "string"
+          },
+          "type": "array"
+        },
+        "except": {
+          "description": "Exempt specific anchor paths from this rule; it keeps firing everywhere else.",
+          "items": {
+            "$ref": "#/$defs/ExceptRule"
           },
           "type": "array"
         },
@@ -193,6 +235,13 @@
         "case": {
           "description": "kebab-case, snake_case, camelCase, PascalCase, or regex:\u003cpattern\u003e; combine alternatives with |.",
           "type": "string"
+        },
+        "except": {
+          "description": "Exempt specific anchor paths from this rule; it keeps firing everywhere else.",
+          "items": {
+            "$ref": "#/$defs/ExceptRule"
+          },
+          "type": "array"
         },
         "files": {
           "description": "Glob narrowing the rule to matching files inside the module.",
@@ -300,6 +349,13 @@
         "each": {
           "description": "Regex over the module's file paths; each named-capture tuple creates one obligation (registration).",
           "type": "string"
+        },
+        "except": {
+          "description": "Exempt specific anchor paths from this rule; it keeps firing everywhere else.",
+          "items": {
+            "$ref": "#/$defs/ExceptRule"
+          },
+          "type": "array"
         },
         "id": {
           "type": "string"

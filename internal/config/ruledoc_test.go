@@ -28,7 +28,7 @@ func TestRuleDocsCoverSchemaKinds(t *testing.T) {
 		return out
 	}
 
-	want := map[string]bool{"modules": true, "consumes": true, "scan": true}
+	want := map[string]bool{"modules": true, "consumes": true, "scan": true, "except": true}
 	for _, def := range []string{"ProvidesRule", "InvariantRule", "GraphRule"} {
 		for _, k := range kindEnum(def) {
 			want[k] = true

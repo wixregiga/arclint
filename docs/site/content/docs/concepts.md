@@ -105,6 +105,31 @@ with a short namespace (`slice:`, `layers:`), so `arclint rules show
 slice` lists a pattern's whole rule set and `arclint rules test
 --pattern` proves it against fixtures.
 
+## Exceptions
+
+Sometimes a rule is right and one file is still allowed to break it.
+Every clause kind accepts an `except` list; a finding is suppressed
+when its anchor path matches, and the rule keeps firing everywhere
+else:
+
+```yaml
+contracts:
+  domain:
+    consumes:
+      internal: []
+      external: forbid
+      except:
+        - paths: ["internal/reports/bridge.go"]
+          reason: "grandfathered direct DB access; remove with the reports rewrite"
+```
+
+The globs use the same doublestar dialect as module paths, the shape is
+identical on `dependencies` rules, invariants, and extension instances,
+and `reason` is required: an exception is policy, and the YAML is its
+audit trail. Suppressed findings are counted in check output
+(`2 suppressed by except`), never silently dropped. `arclint explain
+except` has the full story.
+
 ## Validation layers
 
 rules.yaml passes three gates before anything runs: YAML syntax, the

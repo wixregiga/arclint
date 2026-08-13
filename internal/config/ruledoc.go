@@ -266,6 +266,32 @@ every declared module. The violation reports one full cycle path.`,
     modules: []   # all declared modules`,
 	},
 	{
+		Kind:    "except",
+		Where:   "any rule: contracts.<m>.consumes, provides, invariants, dependencies, rules",
+		Summary: "Exempt specific paths from one rule; it keeps firing everywhere else.",
+		Doc: `Every clause kind accepts an "except" list. A finding is suppressed
+when its anchor path (the path the violation reports) matches any glob
+of any entry declared for the rule's id; the rule still fires for every
+other anchor. Globs use the same doublestar dialect as module paths.
+
+"reason" is required: an exception is a policy decision, and the YAML
+is its audit trail. Suppressed findings are counted in check output,
+never silently dropped.
+
+Clauses sharing one explicit id form one requirement; their except
+lists merge, so declare the exception once, on the clause it concerns.
+One caveat: acyclic findings anchor at a witness edge inside the
+cycle, so path-based exceptions there are less direct than elsewhere.`,
+		Example: `contracts:
+  domain:
+    consumes:
+      internal: []
+      external: forbid
+      except:
+        - paths: ["internal/reports/bridge.go"]
+          reason: "grandfathered direct DB access; remove with the reports rewrite"`,
+	},
+	{
 		Kind:    "scan",
 		Where:   "top-level `scan:`",
 		Summary: "Walk policy: excludes, testdata, unknown-import severity.",
@@ -307,7 +333,12 @@ var fieldDescriptions = map[string]map[string]string{
 		"paths":       "Path globs defining membership. A glob naming a directory owns its whole subtree.",
 		"description": "What this module is for; shown by arclint module ls/info.",
 	},
+	"ExceptRule": {
+		"paths":  "Anchor-path globs to exempt from this rule (doublestar, same dialect as module paths).",
+		"reason": "Why this exception exists; required, because an exception is policy and the YAML is its audit trail.",
+	},
 	"Consumes": {
+		"except":   "Exempt specific anchor paths from this clause; the rule keeps firing everywhere else.",
 		"id":       "Optional stable rule id for this clause (default <module>.consumes); a pattern binds it to a namespaced requirement id.",
 		"internal": "Which declared modules this module may import. A list is an allow-list ([] = none); {allow, deny} expresses both directions.",
 		"external": "Third-party imports (declared in go.mod/package.json/pyproject): allow (default) or forbid.",
@@ -315,6 +346,7 @@ var fieldDescriptions = map[string]map[string]string{
 		"severity": "Violation severity: error (default), warn, or info.",
 	},
 	"ProvidesRule": {
+		"except": "Exempt specific anchor paths from this rule; it keeps firing everywhere else.",
 		"kind":     "registration: every capture of `each` must have a `match` hit in the `in` module. correspondence: the value set of `of` relates to the value set of `in`.",
 		"each":     "Regex over the module's file paths; each named-capture tuple creates one obligation (registration).",
 		"match":    "Regex template over `each` captures that must hit inside the `in` module's files (registration).",
@@ -322,6 +354,7 @@ var fieldDescriptions = map[string]map[string]string{
 		"relation": "subset (default): every of-value exists in in-values; equal: both sets match exactly (correspondence).",
 	},
 	"InvariantRule": {
+		"except": "Exempt specific anchor paths from this rule; it keeps firing everywhere else.",
 		"kind":    "naming: file-stem case convention. structure: require/forbid path globs. content: must/must_not regexes. expr: a predicate over each file.",
 		"files":   "Glob narrowing the rule to matching files inside the module.",
 		"case":    "kebab-case, snake_case, camelCase, PascalCase, or regex:<pattern>; combine alternatives with |.",
@@ -329,6 +362,7 @@ var fieldDescriptions = map[string]map[string]string{
 		"message": "Overrides the default violation text (expr).",
 	},
 	"GraphRule": {
+		"except": "Exempt specific anchor paths from this rule; it keeps firing everywhere else.",
 		"kind":    "layers: ordered stack. forbidden: from-set must not import to-set. independence: no imports among siblings. protected: importable only by allow. acyclic: no cycles.",
 		"layers":  "Module names ordered highest first; imports go same-or-lower only.",
 		"modules": "Module set for independence/acyclic (empty acyclic = all declared).",
@@ -341,6 +375,7 @@ var fieldDescriptions = map[string]map[string]string{
 		"unknown_imports":  "Policy for imports that classify neither internal, external, nor stdlib: warn (default), error, ignore.",
 	},
 	"ExtensionRule": {
+		"except": "Exempt specific anchor paths from this rule; it keeps firing everywhere else.",
 		"type":     "Extension rule type name, registered by a defineRule() in .arclint/extensions/.",
 		"params":   "Rule parameters, validated against the extension's declared JSON Schema before any extension code runs.",
 		"severity": "Violation severity: error (default), warn, or info.",

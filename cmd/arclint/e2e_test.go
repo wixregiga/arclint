@@ -126,6 +126,40 @@ func TestExtensionRuleWithoutToolchain(t *testing.T) {
 	}
 }
 
+// TestExceptOnExtensionInstance proves except works uniformly for
+// extension rule instances, and that suppression is visible in output.
+func TestExceptOnExtensionInstance(t *testing.T) {
+	dir := copyFixture(t, "extension-handler-naming")
+	rules, err := os.ReadFile(filepath.Join(dir, "rules.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	patched := strings.Replace(string(rules),
+		"  - type: handler-naming\n    params: { suffix: \"Handler\" }",
+		"  - type: handler-naming\n    params: { suffix: \"Handler\" }\n"+
+			"    except:\n"+
+			"      - paths: [\"internal/api/handlers/broken.go\"]\n"+
+			"        reason: \"renamed in the next sweep\"", 1)
+	if patched == string(rules) {
+		t.Fatal("fixture rules.yaml shape changed; update the patch")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "rules.yaml"), []byte(patched), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _, code := runBin(t, dir, os.Environ(), "check", ".")
+	// The wiring-audit finding survives (exit 1); the handler-naming
+	// finding on broken.go is suppressed, visibly.
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1\n%s", code, stdout)
+	}
+	if strings.Contains(stdout, "handler files must end in") {
+		t.Errorf("excepted finding still reported:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "1 suppressed by except") {
+		t.Errorf("suppression not visible:\n%s", stdout)
+	}
+}
+
 func TestModuleAndExplainCommands(t *testing.T) {
 	dir := copyFixture(t, "extension-handler-naming")
 	if _, stderr, code := runBin(t, dir, os.Environ(), "load", "rules.yaml"); code != 0 {

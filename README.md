@@ -101,6 +101,12 @@ Learn the vocabulary and your own ruleset from the terminal:
 ./arclint rules test           # run .arclint/tests fixture cases against this ruleset
 ```
 
+When a rule is right but one path is legitimately special, every clause
+takes an `except` list (`{paths, reason}`, same glob dialect as module
+paths): the finding is suppressed by anchor path, the rule keeps firing
+everywhere else, the reason stays in the YAML as the audit trail, and
+check output counts what was suppressed. Run `arclint explain except`.
+
 Every rule type carries a **capability label** stating how it enforces
 its claim (`exact` from the import graph, `structural` from paths and
 declarations, `heuristic` from names and text patterns, `advisory`), and

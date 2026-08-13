@@ -3,6 +3,42 @@
 Small ambiguities resolved in favor of the proposal's shapes, recorded per
 milestone. Dates are decision dates.
 
+## M9 (2026-08-13) — uniform except clauses
+
+Brandon's requirement, verbatim in spirit: a builtin-derived rules.yaml
+must be able to exempt a specific thing from a rule that should keep
+firing, uniformly, via YAML, regardless of which mechanism produced the
+finding.
+
+1. **One shape everywhere**: every clause kind (consumes, provides,
+   invariants including expr, all five graph kinds, extension
+   instances) accepts `except: [{paths, reason}]`. Uniformity rides on
+   an existing engine guarantee: every finding carries exactly one
+   anchor path, so suppression filters findings by rule id + anchor
+   glob, independent of language, kind, or provider.
+2. **Reason is required** (validated): an exception is policy, and the
+   YAML is its audit trail. No owner/expiry fields: expiry would make
+   check results depend on the wall clock, breaking determinism; revisit
+   only with the baseline work.
+3. **Never silent**: Result.Suppressed counts dropped findings and the
+   human summary prints "N suppressed by except". The JSON violations
+   array keeps its stable shape.
+4. **Id-scoped grouping**: clauses sharing one explicit id merge their
+   except lists, consistent with M7's requirement grouping; derived
+   consumes ids resolve through the same per-aspect trimming as
+   capability labels.
+5. **Documented caveat**: acyclic findings anchor at a witness edge
+   inside the cycle, so path excepts there are less direct; recorded in
+   the `except` entry of the single-source doc table (which also feeds
+   the schema hovers and the generated reference).
+
+### M9 gate results (measured 2026-08-13, WSL2 Ubuntu 24.04, go1.26.4)
+
+- Engine test proves suppression across three clause families in one
+  tree with counts; e2e proves it for extension instances through the
+  binary with visible output; validation rejects missing reasons, empty
+  paths, and bad globs.
+
 ## M8 (2026-08-13) — language facts: ADR and spike results
 
 The parity law from M7 applied to syntax facts. Spike artifacts ran in a

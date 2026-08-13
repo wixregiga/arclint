@@ -81,6 +81,17 @@ func (m *ModuleDef) UnmarshalYAML(node *yaml.Node) error {
 	}
 }
 
+// ExceptRule exempts anchor paths from one rule while the rule keeps
+// firing everywhere else. Every clause kind accepts a list of these:
+// a finding is suppressed when its anchor path matches any glob of any
+// except entry declared for its rule id. Reason is required, because an
+// exception is policy, not configuration; suppressed findings are
+// counted in check output, never silently dropped.
+type ExceptRule struct {
+	Paths  []string `yaml:"paths" json:"paths"`
+	Reason string   `yaml:"reason" json:"reason"`
+}
+
 // ModuleContract groups the three clause kinds for one module.
 type ModuleContract struct {
 	Consumes   *Consumes       `yaml:"consumes" json:"consumes,omitempty"`
@@ -103,6 +114,8 @@ type Consumes struct {
 	Stdlib string `yaml:"stdlib" json:"stdlib,omitempty"`
 	// Severity defaults to error.
 	Severity string `yaml:"severity" json:"severity,omitempty"`
+	// Except exempts anchor paths from this clause.
+	Except []ExceptRule `yaml:"except" json:"except,omitempty"`
 }
 
 // InternalPolicy is either an allow-list (Restricted true) or a deny-list,
@@ -167,6 +180,8 @@ type ProvidesRule struct {
 	ID       string `yaml:"id" json:"id,omitempty"`
 	Kind     string `yaml:"kind" json:"kind"`
 	Severity string `yaml:"severity" json:"severity,omitempty"`
+	// Except exempts anchor paths from this rule.
+	Except []ExceptRule `yaml:"except" json:"except,omitempty"`
 
 	// registration params
 	Each  string `yaml:"each" json:"each,omitempty"`
@@ -188,6 +203,7 @@ func (r *ProvidesRule) UnmarshalYAML(node *yaml.Node) error {
 		ID       string       `yaml:"id"`
 		Kind     string       `yaml:"kind"`
 		Severity string       `yaml:"severity"`
+		Except   []ExceptRule `yaml:"except"`
 		Each     string       `yaml:"each"`
 		Match    string       `yaml:"match"`
 		Of       *CaptureSide `yaml:"of"`
@@ -198,7 +214,7 @@ func (r *ProvidesRule) UnmarshalYAML(node *yaml.Node) error {
 	if err := node.Decode(&p); err != nil {
 		return err
 	}
-	r.ID, r.Kind, r.Severity = p.ID, p.Kind, p.Severity
+	r.ID, r.Kind, r.Severity, r.Except = p.ID, p.Kind, p.Severity, p.Except
 	r.Each, r.Match = p.Each, p.Match
 	r.Of, r.Relation = p.Of, p.Relation
 	switch p.In.Kind {
@@ -225,6 +241,8 @@ type InvariantRule struct {
 	ID       string `yaml:"id" json:"id,omitempty"`
 	Kind     string `yaml:"kind" json:"kind"`
 	Severity string `yaml:"severity" json:"severity,omitempty"`
+	// Except exempts anchor paths from this rule.
+	Except []ExceptRule `yaml:"except" json:"except,omitempty"`
 
 	// Files filters by repo-relative glob within the module (naming,
 	// content, expr). Empty means every file of the module.
@@ -255,6 +273,8 @@ type ExtensionRule struct {
 	Type     string         `yaml:"type" json:"type"`
 	Severity string         `yaml:"severity" json:"severity,omitempty"`
 	Params   map[string]any `yaml:"params" json:"params,omitempty"`
+	// Except exempts anchor paths from this rule instance.
+	Except []ExceptRule `yaml:"except" json:"except,omitempty"`
 }
 
 // GraphRule is a graph-wide consumes clause over declared modules.
@@ -263,6 +283,9 @@ type GraphRule struct {
 	ID       string `yaml:"id" json:"id,omitempty"`
 	Kind     string `yaml:"kind" json:"kind"`
 	Severity string `yaml:"severity" json:"severity,omitempty"`
+	// Except exempts anchor paths from this rule. For acyclic rules the
+	// anchor is one witness edge inside the cycle.
+	Except []ExceptRule `yaml:"except" json:"except,omitempty"`
 
 	// layers: ordered highest first; a module may import same or lower
 	// layers, never higher.

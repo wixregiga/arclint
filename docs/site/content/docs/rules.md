@@ -305,6 +305,37 @@ dependencies:
     modules: []   # all declared modules
 ```
 
+## except
+
+Exempt specific paths from one rule; it keeps firing everywhere else.
+
+- where: `any rule: contracts.<m>.consumes, provides, invariants, dependencies, rules`
+
+Every clause kind accepts an "except" list. A finding is suppressed
+when its anchor path (the path the violation reports) matches any glob
+of any entry declared for the rule's id; the rule still fires for every
+other anchor. Globs use the same doublestar dialect as module paths.
+
+"reason" is required: an exception is a policy decision, and the YAML
+is its audit trail. Suppressed findings are counted in check output,
+never silently dropped.
+
+Clauses sharing one explicit id form one requirement; their except
+lists merge, so declare the exception once, on the clause it concerns.
+One caveat: acyclic findings anchor at a witness edge inside the
+cycle, so path-based exceptions there are less direct than elsewhere.
+
+```yaml
+contracts:
+  domain:
+    consumes:
+      internal: []
+      external: forbid
+      except:
+        - paths: ["internal/reports/bridge.go"]
+          reason: "grandfathered direct DB access; remove with the reports rewrite"
+```
+
 ## scan
 
 Walk policy: excludes, testdata, unknown-import severity.
