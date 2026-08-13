@@ -20,6 +20,8 @@ func TestPublishedSchemaCurrent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// tools/genschema terminates the file with a newline.
+	generated = append(generated, '\n')
 	if !bytes.Equal(committed, generated) {
 		t.Fatal("docs/rules.schema.json is stale; run `go generate ./internal/config`")
 	}
