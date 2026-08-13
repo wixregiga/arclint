@@ -19,6 +19,7 @@ export default defineRule({
   description: "Features must not import other features.",
   contract: "consumes",       // default clause for findings
   blame: "consumer",          // default blame side
+  capability: "structural",   // how it enforces: exact | structural | heuristic | advisory
   params: s.object({
     root: s.string().default("internal/features").describe("Feature root."),
   }),

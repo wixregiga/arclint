@@ -27,6 +27,8 @@ export default defineRule({
     "Open-set feature/concept dependency matrix: purity, ports, drift, thin use cases.",
   contract: "consumes",
   blame: "consumer",
+  // Path-shape classification plus the exact import graph: structural.
+  capability: "structural",
   params: s.object({
     maxUseCaseLines: s
       .integer()

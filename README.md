@@ -94,7 +94,19 @@ Learn the vocabulary and your own ruleset from the terminal:
 ./arclint explain consumes     # what internal/external/stdlib mean, with an example
 ./arclint module ls            # declared modules: files, languages, description
 ./arclint module info entities # one module: description, members, every rule that binds it
+./arclint rules show ddd       # every clause grouped under one rule id or namespace
+./arclint rules test           # run .arclint/tests fixture cases against this ruleset
 ```
+
+Every rule type carries a **capability label** stating how it enforces
+its claim (`exact` from the import graph, `structural` from paths and
+declarations, `heuristic` from names and text patterns, `advisory`), and
+every finding carries the label, so a heuristic can never masquerade as
+proof. Rule ids are namespaced by the pattern that ships them
+(`slice:repo.features-wired`), several clauses may share one id to form
+one requirement, and `arclint rules test --pattern <name>` runs the
+fixture suite each builtin pattern bundles — every namespaced rule id is
+covered by at least one case, per language it supports.
 
 Exit codes: `0` clean, `1` violations (severity `error`), `2` config or
 usage error. JSON violations have the stable shape

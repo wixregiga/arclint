@@ -25,6 +25,6 @@ modules:
     description: "The whole tree. Split into real modules as boundaries emerge."
 
 dependencies:
-  - id: deps.acyclic
+  - id: "starter:acyclic"
     kind: acyclic
     modules: []   # no import cycles among declared modules

@@ -90,6 +90,9 @@ type ModuleContract struct {
 
 // Consumes states what a module may depend on (preconditions).
 type Consumes struct {
+	// ID overrides the derived rule id (<module>.consumes), so a
+	// pattern can bind the clause to a namespaced requirement id.
+	ID string `yaml:"id" json:"id,omitempty"`
 	// Internal is nil when unrestricted. A YAML list is an allow-list
 	// (empty list = may import no other declared module); a mapping form
 	// {allow: [...], deny: [...]} expresses both directions.

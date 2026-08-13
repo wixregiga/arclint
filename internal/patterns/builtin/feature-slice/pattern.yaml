@@ -1,2 +1,3 @@
 description: "Feature slices over fixed places: open-set features and concepts under internal/, technology sealed in shared/, app/ composes, cmd/ boots. New features join the rules automatically."
+namespace: slice
 runtimes: [go]

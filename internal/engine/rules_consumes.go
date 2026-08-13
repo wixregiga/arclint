@@ -25,12 +25,20 @@ func checkConsumes(ctx *Context) []report.Violation {
 				continue
 			}
 			sev := report.Severity(severityOf(c.Severity))
+			// An explicit id binds every aspect of the clause to one
+			// requirement; derived ids keep the per-aspect suffix.
+			idFor := func(aspect string) string {
+				if c.ID != "" {
+					return c.ID
+				}
+				return m + ".consumes." + aspect
+			}
 			for _, imp := range imports {
 				switch imp.Class {
 				case lang.ClassStdlib:
 					if c.Stdlib == "forbid" {
 						vs = append(vs, report.Violation{
-							RuleID: m + ".consumes.stdlib", Contract: report.ContractConsumes,
+							RuleID: idFor("stdlib"), Contract: report.ContractConsumes,
 							Blame: report.BlameConsumer, Severity: sev,
 							Path: f.Path, Line: report.IntPtr(imp.Line),
 							Message: fmt.Sprintf("stdlib import %q forbidden by contract %q", imp.Path, m),
@@ -40,7 +48,7 @@ func checkConsumes(ctx *Context) []report.Violation {
 				case lang.ClassExternal:
 					if c.External == "forbid" {
 						vs = append(vs, report.Violation{
-							RuleID: m + ".consumes.external", Contract: report.ContractConsumes,
+							RuleID: idFor("external"), Contract: report.ContractConsumes,
 							Blame: report.BlameConsumer, Severity: sev,
 							Path: f.Path, Line: report.IntPtr(imp.Line),
 							Message: fmt.Sprintf("external import %q forbidden by contract %q", imp.Path, m),
@@ -57,7 +65,7 @@ func checkConsumes(ctx *Context) []report.Violation {
 					}
 					if len(c.Internal.Deny) > 0 && intersects(targets, c.Internal.Deny) {
 						vs = append(vs, report.Violation{
-							RuleID: m + ".consumes.internal", Contract: report.ContractConsumes,
+							RuleID: idFor("internal"), Contract: report.ContractConsumes,
 							Blame: report.BlameConsumer, Severity: sev,
 							Path: f.Path, Line: report.IntPtr(imp.Line),
 							Message: fmt.Sprintf("import %q resolves to module(s) %s, denied by contract %q",
@@ -80,7 +88,7 @@ func checkConsumes(ctx *Context) []report.Violation {
 									imp.Path, quoteList(targets), m)
 							}
 							vs = append(vs, report.Violation{
-								RuleID: m + ".consumes.internal", Contract: report.ContractConsumes,
+								RuleID: idFor("internal"), Contract: report.ContractConsumes,
 								Blame: report.BlameConsumer, Severity: sev,
 								Path: f.Path, Line: report.IntPtr(imp.Line),
 								Message: msg,

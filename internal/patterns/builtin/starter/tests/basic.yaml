@@ -1,0 +1,47 @@
+case: starter-clean-go
+runtime: [go]
+files:
+  pkg1/a.go: |
+    package pkg1
+expect: []
+---
+case: starter-clean-ts
+runtime: [ts]
+files:
+  src/a.ts: |
+    export {};
+expect: []
+---
+case: starter-clean-py
+runtime: [py]
+files:
+  src/a.py: |
+    VALUE = 1
+expect: []
+---
+# The acyclic rule is scaffolding: inert with one module, binding after
+# the documented first growth step (splitting `all` into real modules).
+# This case performs that step and proves the rule fires on a cycle.
+case: starter-acyclic-after-module-split
+runtime: [go]
+files:
+  rules.yaml: |
+    runtime: [go]
+    modules:
+      a: ["a/**"]
+      b: ["b/**"]
+    dependencies:
+      - id: "starter:acyclic"
+        kind: acyclic
+        modules: []
+  a/x.go: |
+    package a
+
+    import _ "test.local/case/b"
+  b/y.go: |
+    package b
+
+    import _ "test.local/case/a"
+expect:
+  - rule: "starter:acyclic"
+    path: a/x.go

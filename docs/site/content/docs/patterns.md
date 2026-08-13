@@ -48,16 +48,26 @@ A repository defines local patterns under `.arclint/patterns/<name>/`
 
 ```text
 .arclint/patterns/fsd/go/
-  pattern.yaml       description + compatible runtimes
+  pattern.yaml       description, namespace, compatible runtimes
   rules.yaml         complete template (valid as-is)
   extensions/*.ts    optional rule extensions
+  tests/*.yaml       rule test cases proving each rule id
 ```
 
 ```yaml
 # pattern.yaml
 description: "Our team's FSD variant for Go services."
+namespace: fsd
 runtimes: [go]
 ```
+
+A pattern's rule ids carry its namespace (`fsd:layer-direction`), which
+keeps requirements recognizable and testable. Bundled tests are rule
+test cases (see `arclint rules test`): each materializes a small file
+tree and asserts the complete violation set. The builtin patterns ship
+suites for every runtime they support — the layers pattern is proven
+with Go, TypeScript, and Python fixtures alike — and CI enforces that
+every namespaced rule id appears in at least one expectation.
 
 `arclint patterns` lists it next to the builtins; `arclint init
 --pattern fsd/go` installs it. Templates keep a literal `runtime:` line;

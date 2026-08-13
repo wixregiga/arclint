@@ -1,2 +1,3 @@
 description: "Minimal foundation: one module over the whole tree, unknown imports surfaced. Split into real modules and grow contracts as boundaries emerge."
+namespace: starter
 runtimes: [go, ts, py]

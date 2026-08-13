@@ -44,6 +44,9 @@ type Violation struct {
 	Contract Contract `json:"contract"`
 	Blame    Blame    `json:"blame"`
 	Severity Severity `json:"severity"`
+	// Capability states how the rule enforces its claim:
+	// exact | structural | heuristic | advisory.
+	Capability string `json:"capability,omitempty"`
 	// Path is repo-root-relative, forward slashes on every platform.
 	Path    string `json:"path"`
 	Line    *int   `json:"line,omitempty"`

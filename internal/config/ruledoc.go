@@ -308,6 +308,7 @@ var fieldDescriptions = map[string]map[string]string{
 		"description": "What this module is for; shown by arclint module ls/info.",
 	},
 	"Consumes": {
+		"id":       "Optional stable rule id for this clause (default <module>.consumes); a pattern binds it to a namespaced requirement id.",
 		"internal": "Which declared modules this module may import. A list is an allow-list ([] = none); {allow, deny} expresses both directions.",
 		"external": "Third-party imports (declared in go.mod/package.json/pyproject): allow (default) or forbid.",
 		"stdlib":   "Standard-library imports: allow (default) or forbid.",

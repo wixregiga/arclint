@@ -93,6 +93,7 @@ func Check(rs *config.RuleSet) (*Result, error) {
 		}
 		vs = append(vs, evs...)
 	}
+	fillCapabilities(rs, vs)
 	report.Sort(vs)
 	sort.Strings(ctx.warnings)
 	return &Result{Violations: vs, Warnings: ctx.warnings, FilesScanned: len(t.Files)}, nil

@@ -101,6 +101,7 @@ func extensionRows(rs *config.RuleSet, reg *ext.Registry) []config.RuleInstance 
 			Kind:        inst.Type,
 			Provider:    "extension:" + rt.SourcePath,
 			Severity:    sev,
+			Capability:  rt.Capability,
 			Description: rt.Describe(),
 		})
 	}
@@ -219,7 +220,7 @@ func newListCmd() *cobra.Command {
 }
 
 func newRulesCmd() *cobra.Command {
-	rules := &cobra.Command{Use: "rules", Short: "inspect rules"}
+	rules := &cobra.Command{Use: "rules", Aliases: []string{"rule"}, Short: "inspect and test rules"}
 	var rulesFlag string
 	ls := &cobra.Command{
 		Use:   "ls",
@@ -239,21 +240,21 @@ func newRulesCmd() *cobra.Command {
 				rows = append(rows, extensionRows(rs, reg)...)
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-			fmt.Fprintln(w, "ID\tCONTRACT\tKIND\tMODULE\tPROVIDER\tTARGETS\tSEVERITY\tDESCRIPTION")
+			fmt.Fprintln(w, "ID\tCONTRACT\tKIND\tMODULE\tPROVIDER\tTARGETS\tSEVERITY\tCAPABILITY\tDESCRIPTION")
 			targets := fmt.Sprintf("%v", rs.Runtime)
 			for _, inst := range rows {
 				module := inst.Module
 				if module == "" {
 					module = "-"
 				}
-				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-					inst.ID, inst.Clause, inst.Kind, module, inst.Provider, targets, inst.Severity, inst.Description)
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+					inst.ID, inst.Clause, inst.Kind, module, inst.Provider, targets, inst.Severity, inst.Capability, inst.Description)
 			}
 			return w.Flush()
 		},
 	}
 	ls.Flags().StringVar(&rulesFlag, "rules", "", "path to rules.yaml (default: discovered upward from .)")
-	rules.AddCommand(ls)
+	rules.AddCommand(ls, newRulesShowCmd(), newRulesTestCmd())
 	return rules
 }
 

@@ -1,0 +1,335 @@
+# The extension's open-set matrix: findings the YAML half cannot scope.
+case: slice-feature-imports-feature
+runtime: [go]
+files:
+  internal/app/app.go: |
+    package app
+
+    import (
+    	_ "test.local/case/internal/borrowbook"
+    	_ "test.local/case/internal/returnbook"
+    )
+  internal/borrowbook/command.go: |
+    package borrowbook
+
+    type Command struct{}
+  internal/borrowbook/http/handler.go: |
+    package http
+  internal/returnbook/command.go: |
+    package returnbook
+
+    type Command struct{}
+  internal/returnbook/http/handler.go: |
+    package http
+  internal/returnbook/grab.go: |
+    package returnbook
+
+    import _ "test.local/case/internal/borrowbook"
+expect:
+  - rule: "slice:repo.slices"
+    path: internal/returnbook/grab.go
+    line: 3
+    contract: consumes
+    blame: consumer
+    message: imports feature
+---
+case: slice-concept-imports-banned-stdlib
+runtime: [go]
+files:
+  internal/member/member.go: |
+    package member
+
+    import _ "net/http"
+  internal/member/repo.go: |
+    package member
+
+    type Repo interface{}
+expect:
+  - rule: "slice:repo.slices"
+    path: internal/member/member.go
+    line: 3
+    message: domain-pure
+---
+case: slice-concept-imports-thirdparty
+runtime: [go]
+files:
+  go.mod: |
+    module test.local/case
+
+    go 1.24
+
+    require example.com/lib v1.0.0
+  internal/member/member.go: |
+    package member
+
+    import _ "example.com/lib"
+  internal/member/repo.go: |
+    package member
+
+    type Repo interface{}
+expect:
+  - rule: "slice:repo.slices"
+    path: internal/member/member.go
+    line: 3
+    message: third-party
+---
+case: slice-concept-missing-port
+runtime: [go]
+files:
+  internal/loan/loan.go: |
+    package loan
+
+    type Loan struct{}
+expect:
+  - rule: "slice:repo.slices"
+    path: internal/loan/loan.go
+    contract: provides
+    blame: provider
+    message: no repo.go port
+---
+case: slice-drift
+runtime: [go]
+files:
+  internal/orphan.go: |
+    package internal
+  pkg/tool.go: |
+    package pkg
+
+    func Tool() {}
+expect:
+  - rule: "slice:repo.slices"
+    path: internal/orphan.go
+    contract: invariant
+    blame: provider
+    message: loose Go file
+  - rule: "slice:repo.slices"
+    path: pkg/tool.go
+    contract: invariant
+    blame: provider
+    message: outside the declared places
+---
+case: slice-thick-use-case
+runtime: [go]
+files:
+  internal/app/app.go: |
+    package app
+
+    import _ "test.local/case/internal/borrowbook"
+  internal/borrowbook/command.go: |
+    package borrowbook
+
+    type Command struct{}
+  internal/borrowbook/http/handler.go: |
+    package http
+  internal/borrowbook/borrowbook.go: |
+    package borrowbook
+
+    func Handle(c Command) error { return nil }
+
+    // step 001 of an overgrown orchestration
+    // step 002 of an overgrown orchestration
+    // step 003 of an overgrown orchestration
+    // step 004 of an overgrown orchestration
+    // step 005 of an overgrown orchestration
+    // step 006 of an overgrown orchestration
+    // step 007 of an overgrown orchestration
+    // step 008 of an overgrown orchestration
+    // step 009 of an overgrown orchestration
+    // step 010 of an overgrown orchestration
+    // step 011 of an overgrown orchestration
+    // step 012 of an overgrown orchestration
+    // step 013 of an overgrown orchestration
+    // step 014 of an overgrown orchestration
+    // step 015 of an overgrown orchestration
+    // step 016 of an overgrown orchestration
+    // step 017 of an overgrown orchestration
+    // step 018 of an overgrown orchestration
+    // step 019 of an overgrown orchestration
+    // step 020 of an overgrown orchestration
+    // step 021 of an overgrown orchestration
+    // step 022 of an overgrown orchestration
+    // step 023 of an overgrown orchestration
+    // step 024 of an overgrown orchestration
+    // step 025 of an overgrown orchestration
+    // step 026 of an overgrown orchestration
+    // step 027 of an overgrown orchestration
+    // step 028 of an overgrown orchestration
+    // step 029 of an overgrown orchestration
+    // step 030 of an overgrown orchestration
+    // step 031 of an overgrown orchestration
+    // step 032 of an overgrown orchestration
+    // step 033 of an overgrown orchestration
+    // step 034 of an overgrown orchestration
+    // step 035 of an overgrown orchestration
+    // step 036 of an overgrown orchestration
+    // step 037 of an overgrown orchestration
+    // step 038 of an overgrown orchestration
+    // step 039 of an overgrown orchestration
+    // step 040 of an overgrown orchestration
+    // step 041 of an overgrown orchestration
+    // step 042 of an overgrown orchestration
+    // step 043 of an overgrown orchestration
+    // step 044 of an overgrown orchestration
+    // step 045 of an overgrown orchestration
+    // step 046 of an overgrown orchestration
+    // step 047 of an overgrown orchestration
+    // step 048 of an overgrown orchestration
+    // step 049 of an overgrown orchestration
+    // step 050 of an overgrown orchestration
+    // step 051 of an overgrown orchestration
+    // step 052 of an overgrown orchestration
+    // step 053 of an overgrown orchestration
+    // step 054 of an overgrown orchestration
+    // step 055 of an overgrown orchestration
+    // step 056 of an overgrown orchestration
+    // step 057 of an overgrown orchestration
+    // step 058 of an overgrown orchestration
+    // step 059 of an overgrown orchestration
+    // step 060 of an overgrown orchestration
+    // step 061 of an overgrown orchestration
+    // step 062 of an overgrown orchestration
+    // step 063 of an overgrown orchestration
+    // step 064 of an overgrown orchestration
+    // step 065 of an overgrown orchestration
+    // step 066 of an overgrown orchestration
+    // step 067 of an overgrown orchestration
+    // step 068 of an overgrown orchestration
+    // step 069 of an overgrown orchestration
+    // step 070 of an overgrown orchestration
+    // step 071 of an overgrown orchestration
+    // step 072 of an overgrown orchestration
+    // step 073 of an overgrown orchestration
+    // step 074 of an overgrown orchestration
+    // step 075 of an overgrown orchestration
+    // step 076 of an overgrown orchestration
+    // step 077 of an overgrown orchestration
+    // step 078 of an overgrown orchestration
+    // step 079 of an overgrown orchestration
+    // step 080 of an overgrown orchestration
+    // step 081 of an overgrown orchestration
+    // step 082 of an overgrown orchestration
+    // step 083 of an overgrown orchestration
+    // step 084 of an overgrown orchestration
+    // step 085 of an overgrown orchestration
+    // step 086 of an overgrown orchestration
+    // step 087 of an overgrown orchestration
+    // step 088 of an overgrown orchestration
+    // step 089 of an overgrown orchestration
+    // step 090 of an overgrown orchestration
+    // step 091 of an overgrown orchestration
+    // step 092 of an overgrown orchestration
+    // step 093 of an overgrown orchestration
+    // step 094 of an overgrown orchestration
+    // step 095 of an overgrown orchestration
+    // step 096 of an overgrown orchestration
+    // step 097 of an overgrown orchestration
+    // step 098 of an overgrown orchestration
+    // step 099 of an overgrown orchestration
+    // step 100 of an overgrown orchestration
+    // step 101 of an overgrown orchestration
+    // step 102 of an overgrown orchestration
+    // step 103 of an overgrown orchestration
+    // step 104 of an overgrown orchestration
+    // step 105 of an overgrown orchestration
+    // step 106 of an overgrown orchestration
+    // step 107 of an overgrown orchestration
+    // step 108 of an overgrown orchestration
+    // step 109 of an overgrown orchestration
+    // step 110 of an overgrown orchestration
+    // step 111 of an overgrown orchestration
+    // step 112 of an overgrown orchestration
+    // step 113 of an overgrown orchestration
+    // step 114 of an overgrown orchestration
+    // step 115 of an overgrown orchestration
+    // step 116 of an overgrown orchestration
+    // step 117 of an overgrown orchestration
+    // step 118 of an overgrown orchestration
+    // step 119 of an overgrown orchestration
+    // step 120 of an overgrown orchestration
+    // step 121 of an overgrown orchestration
+    // step 122 of an overgrown orchestration
+    // step 123 of an overgrown orchestration
+    // step 124 of an overgrown orchestration
+    // step 125 of an overgrown orchestration
+    // step 126 of an overgrown orchestration
+    // step 127 of an overgrown orchestration
+    // step 128 of an overgrown orchestration
+    // step 129 of an overgrown orchestration
+    // step 130 of an overgrown orchestration
+    // step 131 of an overgrown orchestration
+    // step 132 of an overgrown orchestration
+    // step 133 of an overgrown orchestration
+    // step 134 of an overgrown orchestration
+    // step 135 of an overgrown orchestration
+    // step 136 of an overgrown orchestration
+    // step 137 of an overgrown orchestration
+    // step 138 of an overgrown orchestration
+    // step 139 of an overgrown orchestration
+    // step 140 of an overgrown orchestration
+    // step 141 of an overgrown orchestration
+    // step 142 of an overgrown orchestration
+    // step 143 of an overgrown orchestration
+    // step 144 of an overgrown orchestration
+    // step 145 of an overgrown orchestration
+    // step 146 of an overgrown orchestration
+    // step 147 of an overgrown orchestration
+    // step 148 of an overgrown orchestration
+    // step 149 of an overgrown orchestration
+    // step 150 of an overgrown orchestration
+    // step 151 of an overgrown orchestration
+    // step 152 of an overgrown orchestration
+    // step 153 of an overgrown orchestration
+    // step 154 of an overgrown orchestration
+    // step 155 of an overgrown orchestration
+    // step 156 of an overgrown orchestration
+    // step 157 of an overgrown orchestration
+    // step 158 of an overgrown orchestration
+    // step 159 of an overgrown orchestration
+    // step 160 of an overgrown orchestration
+    // step 161 of an overgrown orchestration
+    // step 162 of an overgrown orchestration
+    // step 163 of an overgrown orchestration
+    // step 164 of an overgrown orchestration
+    // step 165 of an overgrown orchestration
+    // step 166 of an overgrown orchestration
+    // step 167 of an overgrown orchestration
+    // step 168 of an overgrown orchestration
+    // step 169 of an overgrown orchestration
+    // step 170 of an overgrown orchestration
+    // step 171 of an overgrown orchestration
+    // step 172 of an overgrown orchestration
+    // step 173 of an overgrown orchestration
+    // step 174 of an overgrown orchestration
+    // step 175 of an overgrown orchestration
+    // step 176 of an overgrown orchestration
+    // step 177 of an overgrown orchestration
+    // step 178 of an overgrown orchestration
+    // step 179 of an overgrown orchestration
+    // step 180 of an overgrown orchestration
+    // step 181 of an overgrown orchestration
+    // step 182 of an overgrown orchestration
+    // step 183 of an overgrown orchestration
+    // step 184 of an overgrown orchestration
+    // step 185 of an overgrown orchestration
+    // step 186 of an overgrown orchestration
+    // step 187 of an overgrown orchestration
+    // step 188 of an overgrown orchestration
+    // step 189 of an overgrown orchestration
+    // step 190 of an overgrown orchestration
+    // step 191 of an overgrown orchestration
+    // step 192 of an overgrown orchestration
+    // step 193 of an overgrown orchestration
+    // step 194 of an overgrown orchestration
+    // step 195 of an overgrown orchestration
+    // step 196 of an overgrown orchestration
+    // step 197 of an overgrown orchestration
+    // step 198 of an overgrown orchestration
+    // step 199 of an overgrown orchestration
+    // step 200 of an overgrown orchestration
+expect:
+  - rule: "slice:repo.slices"
+    path: internal/borrowbook/borrowbook.go
+    contract: invariant
+    blame: provider
+    severity: warn
+    message: use cases are thin

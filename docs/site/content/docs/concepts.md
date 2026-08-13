@@ -78,6 +78,33 @@ TypeScript extension rules declare a default contract and blame once and
 may override both per finding, so a rule that checks two sides of one
 contract labels each finding truthfully.
 
+## Capability labels
+
+Every rule type states how it enforces its claim, and every finding
+carries the label:
+
+| label | basis |
+|---|---|
+| `exact` | the classified import graph or parsed syntax facts |
+| `structural` | paths, shapes, and declaration placement |
+| `heuristic` | names, regexes over text, or complexity signals |
+| `advisory` | guidance; reports without claiming proof |
+
+Builtin dependency rules are `exact`; naming and structure rules are
+`structural`; content regexes are `heuristic`. Extensions declare their
+own tier in `defineRule` and default to `heuristic`, the conservative
+claim. The label prevents false confidence: a rule that matches names
+cannot present its findings as proven semantics.
+
+## Rule identity
+
+Rule ids are stable strings, and several clauses may share one explicit
+id to form one requirement (a layering rule plus a protected rule both
+carrying `ddd:ARCH-002`, for example). Patterns prefix their rule ids
+with a short namespace (`slice:`, `layers:`), so `arclint rules show
+slice` lists a pattern's whole rule set and `arclint rules test
+--pattern` proves it against fixtures.
+
 ## Validation layers
 
 rules.yaml passes three gates before anything runs: YAML syntax, the

@@ -1,2 +1,3 @@
 description: "Hexagonal layering: cmd composes, app orchestrates, domain decides, infra adapts. Domain stays dependency-free; only the composition root touches infra."
+namespace: layers
 runtimes: [go, ts, py]

@@ -3,6 +3,81 @@
 Small ambiguities resolved in favor of the proposal's shapes, recorded per
 milestone. Dates are decision dates.
 
+## M7 (2026-08-13) — rule identity, capability labels, rule tests
+
+Direction settled from the ShelfBook dddflat exercise: an external agent
+implemented all twelve ARCH-* DDD requirements on v1 and reported back
+(the report and its work sit in ../shelfbook/dddflat). Its ruleset needed
+a 427-line extension whose first ~110 lines were a hand-rolled Go
+tokenizer, it grouped two dependency rules under one requirement id by
+accident (nothing validated id sharing), and consumes clauses could not
+carry ids at all.
+
+1. **LSPs rejected as the analysis engine.** Language servers are
+   external per-language processes (gopls; tsserver and pyright need
+   Node), which contradicts the premise the extension e2e proves with an
+   empty PATH; their results are editor-shaped and version-dependent.
+   omp uses LSPs for agent code intelligence, a different job
+   (research: oh-my-pi-extension-architecture.md, lsp-config citation).
+   Language facts (M8) are the deterministic in-process slice of the
+   symbol tier.
+2. **Language parity is a design law.** Analysis interfaces are designed
+   language-neutral and every target implements and tests them the same
+   way. M7 delivers it at the pattern tier: builtin suites carry real
+   TypeScript and Python fixture cases, not just Go. M8 carries it into
+   syntax facts (ADR + spike on the pure-Go tree-sitter runtime, per
+   multi-language-rule-engines.md §3).
+3. **Namespaces.** pattern.yaml declares `namespace:`; builtin patterns
+   are qualified `arclint/<name>`; a pattern's rule ids carry the
+   `<ns>:` prefix. Consumes clauses gain `id:` (dddflat could not bind
+   ARCH-001/ARCH-011 ids to consumes clauses). The engine honors an
+   explicit consumes id across every aspect — the layers suite caught
+   the engine still emitting derived per-aspect ids before the fix.
+4. **Id grouping is now a feature, not an accident**: several clauses
+   sharing one explicit id form one requirement; `arclint rules show
+   <id|namespace>` lists the group. Derived consumes ids keep their
+   per-aspect suffixes.
+5. **Capability labels** state how a rule enforces its claim:
+   exact (import graph / syntax facts), structural (paths,
+   declarations), heuristic (names, text regex, complexity), advisory.
+   Builtin kinds are labeled in one table (content is heuristic — it is
+   a text regex); extensions declare theirs in defineRule, defaulting to
+   heuristic, the conservative claim. Every violation carries its
+   capability. This answers the dddflat report's core finding: "the
+   weak point was proving that semantic heuristics mean what their rule
+   descriptions claim."
+6. **Rule test framework** (internal/ruletest): YAML cases materialize
+   files into a fresh tree and assert the COMPLETE violation set —
+   unexpected findings fail a case like missing ones, and an empty
+   expect list asserts cleanliness. Minimal per-language manifests are
+   injected unless the case brings its own; a case may override
+   rules.yaml. `arclint rules test` runs .arclint/tests or explicit
+   paths against the repo's ruleset; `--pattern` runs a pattern's
+   bundled tests/*.yaml against its own template.
+7. **Patterns are curated test suites.** Every builtin ships per-runtime
+   cases (layers: go, ts, py) and the e2e gate enforces coverage: every
+   namespaced rule id must appear in at least one expectation. The
+   suites immediately caught two real defects: the engine ignoring
+   explicit consumes ids (above) and a redundant shallow-hierarchy glob
+   (`**` matches zero segments, so one glob covers all depths).
+8. **Deferred by decision**: baseline/adoption mode (Brandon: not ready);
+   pattern distribution via npm (identity is designed so scoped names
+   slot in; the registry itself waits, per the steiger lesson in the
+   research).
+
+### M7 gate results (measured 2026-08-13, WSL2 Ubuntu 24.04, go1.26.4)
+
+- 39 pattern-suite cases pass through the compiled binary (starter 4,
+  layers 14 across go/ts/py, feature-slice 21), with the coverage gate
+  proving all 22 namespaced ids are exercised.
+- `go vet ./...`, `go test ./...` green; self-hosting clean: 21 rules
+  over 14 modules, 108 files in 8ms (ruletest joined the contracts; the
+  report module's protected rule gained it as an allowed importer).
+- Cold start median 17.7ms over 11 runs (bound 100ms; the embedded
+  suites and two new commands cost ~5ms over M5); 5,000-file check
+  median 77.1ms. Static builds 21.09 MB amd64 / 19.46 MB arm64. Docs
+  site builds clean (zola, 65ms).
+
 ## M6 (2026-08-12) — docs site
 
 1. **Zola over Starlight.** The handoff allowed either ("Starlette"

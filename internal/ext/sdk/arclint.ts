@@ -126,6 +126,8 @@ export const s = {
   },
 };
 
+export type Capability = "exact" | "structural" | "heuristic" | "advisory";
+
 export interface RuleDef {
   /** Unique rule type name, referenced by rules.yaml entries. */
   type: string;
@@ -135,6 +137,10 @@ export interface RuleDef {
   contract?: Contract;
   /** Blame side for violations. Default: provider. */
   blame?: Blame;
+  /** How this rule enforces its claim: exact (imports/syntax facts),
+   * structural (paths/declarations), heuristic (names/regex/complexity),
+   * advisory (guidance only). Default: heuristic, the conservative claim. */
+  capability?: Capability;
   /** Params schema; YAML params are host-validated against it. */
   params?: Schema;
   check(ctx: Ctx, params: Record<string, unknown>): void;
@@ -158,6 +164,15 @@ export function defineRule(def: RuleDef) {
   if (blame !== "consumer" && blame !== "provider") {
     throw new Error(`defineRule: invalid blame "${blame}"`);
   }
+  const capability = def.capability ?? "heuristic";
+  if (
+    capability !== "exact" &&
+    capability !== "structural" &&
+    capability !== "heuristic" &&
+    capability !== "advisory"
+  ) {
+    throw new Error(`defineRule: invalid capability "${capability}"`);
+  }
   const paramsSchema = def.params
     ? def.params.toJSON()
     : { type: "object", properties: {}, additionalProperties: false };
@@ -167,6 +182,7 @@ export function defineRule(def: RuleDef) {
     description: def.description ?? "",
     contract,
     blame,
+    capability,
     paramsSchema,
     check: def.check,
   };

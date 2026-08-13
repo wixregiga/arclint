@@ -30,6 +30,10 @@
           ],
           "type": "string"
         },
+        "id": {
+          "description": "Optional stable rule id for this clause (default \u003cmodule\u003e.consumes); a pattern binds it to a namespaced requirement id.",
+          "type": "string"
+        },
         "internal": {
           "$ref": "#/$defs/InternalPolicy",
           "description": "Which declared modules this module may import. A list is an allow-list ([] = none); {allow, deny} expresses both directions."

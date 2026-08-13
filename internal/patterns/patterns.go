@@ -36,6 +36,11 @@ type Pattern struct {
 	// pattern's path relative to .arclint/patterns for local patterns.
 	Name        string
 	Description string
+	// Namespace is the short prefix the pattern's rule ids carry
+	// ("slice" for ids like "slice:features-wired"). It scopes rule
+	// identity so requirements stay recognizable across patterns and
+	// `arclint rules show <ns>` can list a pattern's whole rule set.
+	Namespace string
 	// Runtimes lists the language targets the pattern supports.
 	Runtimes []string
 	// Source is "builtin" or the local pattern directory.
@@ -44,12 +49,27 @@ type Pattern struct {
 	RulesYAML []byte
 	// Extensions maps extension file basenames to contents.
 	Extensions map[string][]byte
+	// Tests maps bundled rule-test case files (tests/*.yaml) to contents.
+	Tests map[string][]byte
+}
+
+// FullName qualifies the pattern with its distribution namespace:
+// builtins are arclint/<name>; local patterns keep their repo-local path
+// name. Future installable patterns bring their own scope.
+func (p *Pattern) FullName() string {
+	if p.Source == "builtin" {
+		return "arclint/" + p.Name
+	}
+	return p.Name
 }
 
 type meta struct {
 	Description string   `yaml:"description"`
+	Namespace   string   `yaml:"namespace"`
 	Runtimes    []string `yaml:"runtimes"`
 }
+
+var namespaceRe = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
 
 // load reads one pattern rooted at dir inside fsys.
 func load(fsys fs.FS, dir, name, source string) (*Pattern, error) {
@@ -69,13 +89,17 @@ func load(fsys fs.FS, dir, name, source string) (*Pattern, error) {
 			return nil, fmt.Errorf("pattern %s: unknown runtime %q", name, r)
 		}
 	}
+	if m.Namespace != "" && !namespaceRe.MatchString(m.Namespace) {
+		return nil, fmt.Errorf("pattern %s: namespace must match %s", name, namespaceRe)
+	}
 	rules, err := fs.ReadFile(fsys, path.Join(dir, "rules.yaml"))
 	if err != nil {
 		return nil, fmt.Errorf("pattern %s: %w", name, err)
 	}
 	p := &Pattern{
-		Name: name, Description: m.Description, Runtimes: m.Runtimes,
-		Source: source, RulesYAML: rules, Extensions: map[string][]byte{},
+		Name: name, Description: m.Description, Namespace: m.Namespace,
+		Runtimes: m.Runtimes, Source: source, RulesYAML: rules,
+		Extensions: map[string][]byte{}, Tests: map[string][]byte{},
 	}
 	entries, err := fs.ReadDir(fsys, path.Join(dir, "extensions"))
 	if err != nil && !os.IsNotExist(err) {
@@ -90,6 +114,20 @@ func load(fsys fs.FS, dir, name, source string) (*Pattern, error) {
 			return nil, fmt.Errorf("pattern %s: %w", name, err)
 		}
 		p.Extensions[e.Name()] = data
+	}
+	tests, err := fs.ReadDir(fsys, path.Join(dir, "tests"))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("pattern %s: %w", name, err)
+	}
+	for _, e := range tests {
+		if e.IsDir() || (!strings.HasSuffix(e.Name(), ".yaml") && !strings.HasSuffix(e.Name(), ".yml")) {
+			continue
+		}
+		data, err := fs.ReadFile(fsys, path.Join(dir, "tests", e.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("pattern %s: %w", name, err)
+		}
+		p.Tests[e.Name()] = data
 	}
 	return p, nil
 }
@@ -182,7 +220,8 @@ func All(root string) ([]*Pattern, error) {
 	return out, nil
 }
 
-// Find resolves a pattern by name over All(root).
+// Find resolves a pattern by short or fully qualified name over
+// All(root).
 func Find(root, name string) (*Pattern, error) {
 	all, err := All(root)
 	if err != nil {
@@ -190,10 +229,10 @@ func Find(root, name string) (*Pattern, error) {
 	}
 	var names []string
 	for _, p := range all {
-		if p.Name == name {
+		if p.Name == name || p.FullName() == name {
 			return p, nil
 		}
-		names = append(names, p.Name)
+		names = append(names, p.FullName())
 	}
 	return nil, fmt.Errorf("unknown pattern %q (available: %s)", name, strings.Join(names, ", "))
 }

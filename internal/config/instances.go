@@ -15,6 +15,7 @@ type RuleInstance struct {
 	Module      string // "" for graph-wide rules
 	Provider    string // builtin | extension:<name>
 	Severity    string
+	Capability  string // exact | structural | heuristic | advisory
 	Description string
 }
 
@@ -54,9 +55,14 @@ func (rs *RuleSet) Instances() []RuleInstance {
 			if c.Consumes.Stdlib != "" {
 				parts = append(parts, "stdlib "+c.Consumes.Stdlib)
 			}
+			id := c.Consumes.ID
+			if id == "" {
+				id = m + ".consumes"
+			}
 			out = append(out, RuleInstance{
-				ID: m + ".consumes", Clause: "consumes", Kind: "policy", Module: m,
+				ID: id, Clause: "consumes", Kind: "policy", Module: m,
 				Provider: "builtin", Severity: sevOrDefault(c.Consumes.Severity),
+				Capability:  CapabilityOf("policy"),
 				Description: strings.Join(parts, "; "),
 			})
 		}
@@ -78,7 +84,8 @@ func (rs *RuleSet) Instances() []RuleInstance {
 			}
 			out = append(out, RuleInstance{
 				ID: id, Clause: "provides", Kind: r.Kind, Module: m,
-				Provider: "builtin", Severity: sevOrDefault(r.Severity), Description: desc,
+				Provider: "builtin", Severity: sevOrDefault(r.Severity),
+				Capability: CapabilityOf(r.Kind), Description: desc,
 			})
 		}
 		for i, r := range c.Invariants {
@@ -116,7 +123,8 @@ func (rs *RuleSet) Instances() []RuleInstance {
 			}
 			out = append(out, RuleInstance{
 				ID: id, Clause: "invariant", Kind: r.Kind, Module: m,
-				Provider: "builtin", Severity: sevOrDefault(r.Severity), Description: desc,
+				Provider: "builtin", Severity: sevOrDefault(r.Severity),
+				Capability: CapabilityOf(r.Kind), Description: desc,
 			})
 		}
 	}
@@ -144,7 +152,8 @@ func (rs *RuleSet) Instances() []RuleInstance {
 		}
 		out = append(out, RuleInstance{
 			ID: id, Clause: "consumes", Kind: r.Kind,
-			Provider: "builtin", Severity: sevOrDefault(r.Severity), Description: desc,
+			Provider: "builtin", Severity: sevOrDefault(r.Severity),
+			Capability: CapabilityOf(r.Kind), Description: desc,
 		})
 	}
 	return out

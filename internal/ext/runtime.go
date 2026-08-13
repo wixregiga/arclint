@@ -17,6 +17,7 @@ type RuleType struct {
 	Description string // one-line summary from defineRule
 	Contract    string // consumes | provides | invariant
 	Blame       string // consumer | provider
+	Capability  string // exact | structural | heuristic | advisory
 	SourcePath  string // repo-relative extension file
 	RawSchema   map[string]any
 
@@ -152,6 +153,7 @@ func (r *Registry) register(sourcePath, bundleJS string, opts Options) error {
 			Description: d.Get("description").String(),
 			Contract:    d.Get("contract").String(),
 			Blame:       d.Get("blame").String(),
+			Capability:  d.Get("capability").String(),
 			SourcePath:  sourcePath,
 			RawSchema:   rawSchema,
 			schema:      schema,

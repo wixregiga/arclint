@@ -74,6 +74,7 @@ Every instance of a shape must register itself somewhere.
 
 - where: `contracts.<module>.provides`
 - clause: `provides`, blame: `provider`
+- capability: `structural`
 
 A registration obligation: for every capture of "each" (a regex over
 the module's file paths), the "match" pattern (a regex template over
@@ -100,6 +101,7 @@ A value set derived from one side must exist on the other side.
 
 - where: `contracts.<module>.provides`
 - clause: `provides`, blame: `provider`
+- capability: `structural`
 
 A correspondence obligation: derive a named value set from path (or
 content) captures on the "of" side, another set on the "in" side, and
@@ -127,6 +129,7 @@ File names follow a case convention or regex.
 
 - where: `contracts.<module>.invariants`
 - clause: `invariant`, blame: `provider`
+- capability: `structural`
 
 Applies a naming convention to the file stem (base name minus the
 final extension). Cases: kebab-case, snake_case, camelCase,
@@ -148,6 +151,7 @@ Paths that must exist (require) or must not (forbid).
 
 - where: `contracts.<module>.invariants`
 - clause: `invariant`, blame: `provider`
+- capability: `structural`
 
 Asserts the shape of the tree itself: "require" globs must match at
 least one file; "forbid" globs must match none. Use it to guarantee
@@ -168,6 +172,7 @@ File contents must (or must not) match regexes.
 
 - where: `contracts.<module>.invariants`
 - clause: `invariant`, blame: `provider`
+- capability: `heuristic`
 
 Scans the module's files: every "must" regex has to match somewhere
 in each file, and no "must_not" regex may match anywhere. "files"
@@ -188,6 +193,7 @@ An expr predicate over each file; false is a violation.
 
 - where: `contracts.<module>.invariants`
 - clause: `invariant`, blame: `provider`
+- capability: `structural`
 
 Where the closed vocabulary runs out but a full extension is
 overkill: "assert" is an expr-lang predicate evaluated per file,
@@ -213,6 +219,7 @@ An ordered stack: a module imports only same or lower layers.
 
 - where: `top-level `dependencies:``
 - clause: `consumes`, blame: `consumer`
+- capability: `exact`
 
 Orders modules highest first. A module may import its own layer or
 lower layers, never a higher one. This is the classic layered
@@ -231,6 +238,7 @@ No module in `from` may import any module in `to`.
 
 - where: `top-level `dependencies:``
 - clause: `consumes`, blame: `consumer`
+- capability: `exact`
 
 A directed ban between module sets. Use it for one-off edges the
 layer stack does not express, like "nothing in domain touches the
@@ -249,6 +257,7 @@ Sibling modules must not import each other.
 
 - where: `top-level `dependencies:``
 - clause: `consumes`, blame: `consumer`
+- capability: `exact`
 
 Every module in the set is independent of every other: no import in
 either direction. This is the feature-slice contract: features
@@ -266,6 +275,7 @@ A module only importable by an allow-listed set.
 
 - where: `top-level `dependencies:``
 - clause: `consumes`, blame: `consumer`
+- capability: `exact`
 
 Guards a module from the importer side: only modules in "allow" may
 import it. A file is an allowed importer when any of its modules is
@@ -284,6 +294,7 @@ No import cycles among the named modules.
 
 - where: `top-level `dependencies:``
 - clause: `consumes`, blame: `consumer`
+- capability: `exact`
 
 Asserts the module graph has no cycles. An empty module list covers
 every declared module. The violation reports one full cycle path.

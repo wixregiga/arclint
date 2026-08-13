@@ -65,13 +65,14 @@ func checkExtensions(ctx *Context, reg *ext.Registry) ([]report.Violation, error
 				blame = rt.Blame
 			}
 			v := report.Violation{
-				RuleID:   id,
-				Contract: report.Contract(contract),
-				Blame:    report.Blame(blame),
-				Severity: report.Severity(sev),
-				Path:     filepath.ToSlash(r.Path),
-				Message:  r.Message,
-				FixHint:  r.FixHint,
+				RuleID:     id,
+				Contract:   report.Contract(contract),
+				Blame:      report.Blame(blame),
+				Severity:   report.Severity(sev),
+				Capability: rt.Capability,
+				Path:       filepath.ToSlash(r.Path),
+				Message:    r.Message,
+				FixHint:    r.FixHint,
 			}
 			if r.Line > 0 {
 				v.Line = report.IntPtr(r.Line)

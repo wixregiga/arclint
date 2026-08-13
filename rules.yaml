@@ -37,6 +37,9 @@ modules:
   patterns:
     paths: ["internal/patterns/**"]
     description: "Embedded architectural pattern bundles served by init and patterns."
+  ruletest:
+    paths: ["internal/ruletest/**"]
+    description: "Rule test runner: materializes fixture cases and asserts complete violation sets."
   tools:
     paths: ["tools/**"]
     description: "Code generators: stdlib tables, JSON Schema, SDK type declarations."
@@ -72,9 +75,12 @@ contracts:
   patterns:
     consumes:
       internal: []
+  ruletest:
+    consumes:
+      internal: [config, engine, report]
   cmd:
     consumes:
-      internal: [config, engine, report, ext, patterns, langs, tree]
+      internal: [config, engine, report, ext, patterns, langs, tree, ruletest]
     invariants:
       - kind: structure
         require: ["cmd/arclint/main.go"]
@@ -103,7 +109,7 @@ dependencies:
   - kind: layers
     layers: [cmd, engine, config, golang, tree]
   - kind: acyclic
-    modules: [cmd, config, engine, ext, golang, tree, report, exprenv, tools, oracle, patterns]
+    modules: [cmd, config, engine, ext, golang, tree, report, exprenv, tools, oracle, patterns, ruletest]
   - kind: protected
     module: report
-    allow: [engine, cmd]
+    allow: [engine, cmd, ruletest]

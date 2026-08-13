@@ -18,6 +18,7 @@ const sdkAPIDecl = `
 export type Severity = "error" | "warn" | "info";
 export type Contract = "consumes" | "provides" | "invariant";
 export type Blame = "consumer" | "provider";
+export type Capability = "exact" | "structural" | "heuristic" | "advisory";
 
 export interface Ctx {
   /** Repository files, optionally filtered by a doublestar glob. */
@@ -60,6 +61,10 @@ export interface RuleDef {
   contract?: Contract;
   /** Blame side for violations. Default: provider. */
   blame?: Blame;
+  /** How this rule enforces its claim: exact (imports/syntax facts),
+   * structural (paths/declarations), heuristic (names/regex/complexity),
+   * advisory (guidance only). Default: heuristic, the conservative claim. */
+  capability?: Capability;
   /** Params schema; YAML params are host-validated against it. */
   params?: Schema;
   check(ctx: Ctx, params: Record<string, unknown>): void;

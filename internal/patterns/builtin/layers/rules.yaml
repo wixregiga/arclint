@@ -33,32 +33,39 @@ modules:
     paths: ["internal/infra/**", "src/infra/**"]
     description: "Adapters implementing domain ports: DB, HTTP clients, queues, mail."
 
+# Rule ids carry the pattern's namespace (layers:) so requirements stay
+# recognizable: `arclint rules show layers` lists the whole set, and
+# `arclint rules test --pattern layers` proves each id against fixtures.
 contracts:
   domain:
     consumes:
+      id: "layers:domain.consumes"
       internal: []            # domain imports no other module
       external: forbid        # and no third-party libraries
   app:
     consumes:
+      id: "layers:app.consumes"
       internal: [domain]      # orchestration sees rules and ports only
       external: forbid
   infra:
     consumes:
+      id: "layers:infra.consumes"
       internal: [domain]      # adapters see the ports they implement
       external: allow
   cmd:
     consumes:
+      id: "layers:cmd.consumes"
       internal: [app, infra, domain]
       external: allow
 
 dependencies:
-  - id: deps.spine
+  - id: "layers:spine"
     kind: layers
     layers: [cmd, app, domain]      # imports flow downward only
-  - id: deps.infra-only-via-cmd
+  - id: "layers:infra-only-via-cmd"
     kind: protected
     module: infra
     allow: [cmd]                    # only the composition root builds adapters
-  - id: deps.acyclic
+  - id: "layers:acyclic"
     kind: acyclic
     modules: []                     # no cycles anywhere

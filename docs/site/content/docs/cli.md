@@ -15,6 +15,8 @@ weight = 6
 | `arclint module ls` | declared modules with file counts, languages, descriptions |
 | `arclint module info <name>` | one module: description, paths, members, every rule that binds it |
 | `arclint explain [kind]` | terminal docs for any rule kind or extension type |
+| `arclint rules show <id\|ns>` | every clause grouped under one rule id or namespace prefix; `--format json` |
+| `arclint rules test [paths]` | run rule test cases (default `.arclint/tests`); `--pattern <name>` runs a pattern's bundled suite |
 | `arclint sdk init` | write `arclint.d.ts` + `tsconfig.json` for extension authoring |
 
 Exit codes everywhere: `0` clean, `1` error-severity violations, `2`
@@ -30,6 +32,7 @@ configuration or usage error.
   "contract": "consumes",
   "blame": "consumer",
   "severity": "error",
+  "capability": "exact",
   "path": "internal/borrowbook/sneaky.go",
   "line": 3,
   "message": "import resolves to protected module \"shared\"",

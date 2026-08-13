@@ -33,10 +33,14 @@ func newPatternsCmd() *cobra.Command {
 				return &exitError{2, err.Error()}
 			}
 			w := tabwriter.NewWriter(cmd.OutOrStdout(), 2, 4, 2, ' ', 0)
-			fmt.Fprintln(w, "NAME\tSOURCE\tRUNTIMES\tEXTENSIONS\tDESCRIPTION")
+			fmt.Fprintln(w, "NAME\tNAMESPACE\tSOURCE\tRUNTIMES\tEXTENSIONS\tTESTS\tDESCRIPTION")
 			for _, p := range all {
-				fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n",
-					p.Name, p.Source, strings.Join(p.Runtimes, ","), len(p.Extensions), p.Description)
+				ns := p.Namespace
+				if ns == "" {
+					ns = "-"
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%d\t%s\n",
+					p.FullName(), ns, p.Source, strings.Join(p.Runtimes, ","), len(p.Extensions), len(p.Tests), p.Description)
 			}
 			if err := w.Flush(); err != nil {
 				return err

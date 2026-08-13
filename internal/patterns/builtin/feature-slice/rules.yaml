@@ -42,10 +42,11 @@ contracts:
 
   cmd:
     consumes:
+      id: "slice:cmd.consumes"
       internal: [app]        # cmd may reach app and nothing else internal
       external: allow
     invariants:
-      - id: cmd.thin-bootstrap
+      - id: "slice:cmd.thin-bootstrap"
         kind: expr
         files: "cmd/**/*.go"
         assert: "file.lines <= 120"
@@ -61,7 +62,7 @@ contracts:
     invariants:
       # Business-vocabulary guard: replace the word list with your domain's
       # rule language (the words that name decisions, not plumbing).
-      - id: app.no-business-rules
+      - id: "slice:app.no-business-rules"
         kind: content
         files: "internal/app/**/*.go"
         must_not: ['(?i)\b(eligib\w*|discount\w*|overdue)\b']
@@ -71,17 +72,17 @@ contracts:
     consumes:
       external: allow
     provides:
-      - id: shared.sealed-entrypoint
+      - id: "slice:shared.sealed-entrypoint"
         kind: registration
         each: 'internal/shared/'
         in: shared
         match: 'func NewAdapters\('
     invariants:
-      - id: shared.no-ports-here
+      - id: "slice:shared.no-ports-here"
         kind: structure
         forbid: ["internal/shared/**/repo.go"]
       # Same vocabulary guard as app.no-business-rules; keep the lists equal.
-      - id: shared.no-business-rules
+      - id: "slice:shared.no-business-rules"
         kind: content
         files: "internal/shared/**/*.go"
         must_not: ['(?i)\b(eligib\w*|discount\w*|overdue)\b']
@@ -91,20 +92,20 @@ contracts:
     provides:
       # Feature shape, open set: every dir with a driving adapter has a
       # command, and every dir with a command has a driving adapter.
-      - id: repo.feature-shape
+      - id: "slice:repo.feature-shape"
         kind: correspondence
         of: { files: 'internal/(?P<f>[^/]+)/http/handler\.go', value: "{f}" }
         in: { files: 'internal/(?P<f>[^/]+)/command\.go', value: "{f}" }
         relation: equal
       # Every dir owning command.go (= every feature, by shape) must be
       # imported by the composer.
-      - id: repo.features-wired
+      - id: "slice:repo.features-wired"
         kind: registration
         each: 'internal/(?P<feature>[^/]+)/command\.go'
         in: app
         match: '/internal/{feature}"'
     invariants:
-      - id: repo.no-banned-buckets
+      - id: "slice:repo.no-banned-buckets"
         kind: structure
         forbid:
           - "ext/**"
@@ -115,15 +116,17 @@ contracts:
           - "internal/infrastructure/**"
           - "internal/domain/**"
           - "internal/application/**"
-      - id: repo.no-dumping-grounds
+      - id: "slice:repo.no-dumping-grounds"
         kind: structure
         forbid: ["**/utils.go", "**/helpers.go", "**/service.go", "**/manager.go"]
-      - id: repo.shallow-hierarchy
+      - id: "slice:repo.shallow-hierarchy"
         kind: structure
         # internal/<pkg>/<sub>/<file> is the deepest legal shape
         # (feature/http/, shared/<tech>/): review scope stays obvious.
-        forbid: ["internal/*/*/*/*", "internal/*/*/*/*/**"]
-      - id: repo.business-language-filenames
+        # ** matches zero or more segments, so this one glob covers every
+        # depth past the legal shape.
+        forbid: ["internal/*/*/*/*/**"]
+      - id: "slice:repo.business-language-filenames"
         kind: naming
         files: "internal/**/*.go"
         case: snake_case
@@ -131,7 +134,7 @@ contracts:
 # The open-set dependency matrix, third-party bans, concept purity, ports,
 # drift, and thin-use-case checks live in the paired extension.
 rules:
-  - id: repo.slices
+  - id: "slice:repo.slices"
     type: feature-slice
     params:
       maxUseCaseLines: 200
@@ -140,11 +143,11 @@ rules:
 dependencies:
   # Open-set on the importer side: an undeclared feature importing shared/
   # or app/ is flagged without being listed anywhere.
-  - id: deps.shared-only-via-app
+  - id: "slice:deps.shared-only-via-app"
     kind: protected
     module: shared
     allow: [app]
-  - id: deps.app-only-via-cmd
+  - id: "slice:deps.app-only-via-cmd"
     kind: protected
     module: app
     allow: [cmd]

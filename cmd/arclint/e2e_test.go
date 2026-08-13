@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/wixregiga/arclint/internal/config"
 	"github.com/wixregiga/arclint/internal/patterns"
 )
 
@@ -199,6 +200,81 @@ func TestExitCodeContract(t *testing.T) {
 	}
 }
 
+// TestBuiltinPatternSuites is the M7 pattern gate: every builtin
+// pattern's bundled rule tests pass through the real binary, and every
+// namespaced rule id the pattern declares is exercised by at least one
+// expectation. Patterns are curated test suites, not hardcoded
+// primitives.
+func TestBuiltinPatternSuites(t *testing.T) {
+	builtins, err := patterns.Builtins()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range builtins {
+		t.Run(p.Name, func(t *testing.T) {
+			if p.Namespace == "" {
+				t.Fatalf("builtin pattern %q must declare a namespace", p.Name)
+			}
+			if len(p.Tests) == 0 {
+				t.Fatalf("builtin pattern %q ships no rule tests", p.Name)
+			}
+			dir := t.TempDir()
+			stdout, stderr, code := runBin(t, dir, os.Environ(),
+				"rules", "test", "--pattern", p.Name, "--format", "json")
+			if code != 0 {
+				t.Fatalf("rules test --pattern %s: exit %d\nstdout: %s\nstderr: %s", p.Name, code, stdout, stderr)
+			}
+			var results []struct {
+				Case  string   `json:"case"`
+				Pass  bool     `json:"pass"`
+				Rules []string `json:"rules"`
+			}
+			if err := json.Unmarshal([]byte(stdout), &results); err != nil {
+				t.Fatalf("json: %v\n%s", err, stdout)
+			}
+			tested := map[string]bool{}
+			for _, r := range results {
+				if !r.Pass {
+					t.Errorf("case %q failed", r.Case)
+				}
+				for _, id := range r.Rules {
+					tested[id] = true
+				}
+			}
+
+			// Coverage: every namespaced id in the rendered template must
+			// be exercised. Derived (unprefixed) ids are exempt.
+			rendered, err := p.RenderRules(p.Runtimes[:1])
+			if err != nil {
+				t.Fatal(err)
+			}
+			rs, err := config.Parse(rendered, filepath.Join(dir, "rules.yaml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var declared []string
+			for _, inst := range rs.Instances() {
+				if strings.HasPrefix(inst.ID, p.Namespace+":") {
+					declared = append(declared, inst.ID)
+				}
+			}
+			for _, r := range rs.Rules {
+				if strings.HasPrefix(r.ID, p.Namespace+":") {
+					declared = append(declared, r.ID)
+				}
+			}
+			if len(declared) == 0 {
+				t.Fatalf("pattern %q declares no namespaced rule ids", p.Name)
+			}
+			for _, id := range declared {
+				if !tested[id] {
+					t.Errorf("rule id %q has no test expectation in the pattern's suite", id)
+				}
+			}
+		})
+	}
+}
+
 // TestInitEveryBuiltinPattern is the pattern gate: each shipped pattern,
 // initialized for each runtime it supports through the real binary, must
 // validate and check clean on an empty tree.
@@ -273,23 +349,23 @@ func TestFeatureSlicePattern(t *testing.T) {
 	}
 	wants := []want{
 		{"YAML protected: feature imports shared", func(v map[string]any) bool {
-			return v["ruleId"] == "deps.shared-only-via-app" && v["path"] == "internal/borrowbook/sneaky.go"
+			return v["ruleId"] == "slice:deps.shared-only-via-app" && v["path"] == "internal/borrowbook/sneaky.go"
 		}},
 		{"YAML registration: returnbook unwired", func(v map[string]any) bool {
-			return v["ruleId"] == "repo.features-wired" && strings.Contains(v["message"].(string), "returnbook")
+			return v["ruleId"] == "slice:repo.features-wired" && strings.Contains(v["message"].(string), "returnbook")
 		}},
 		{"YAML structure: dumping ground", func(v map[string]any) bool {
-			return v["ruleId"] == "repo.no-dumping-grounds" && v["path"] == "internal/shared/utils.go"
+			return v["ruleId"] == "slice:repo.no-dumping-grounds" && v["path"] == "internal/shared/utils.go"
 		}},
 		{"extension matrix: feature imports feature", func(v map[string]any) bool {
-			return v["ruleId"] == "repo.slices" && v["path"] == "internal/returnbook/grab.go" &&
+			return v["ruleId"] == "slice:repo.slices" && v["path"] == "internal/returnbook/grab.go" &&
 				v["contract"] == "consumes" && v["blame"] == "consumer"
 		}},
 		{"extension purity: concept imports net/http", func(v map[string]any) bool {
-			return v["ruleId"] == "repo.slices" && v["path"] == "internal/member/web.go"
+			return v["ruleId"] == "slice:repo.slices" && v["path"] == "internal/member/web.go"
 		}},
 		{"extension port finding carries provides/provider", func(v map[string]any) bool {
-			return v["ruleId"] == "repo.slices" && v["path"] == "internal/reporting/report.go" &&
+			return v["ruleId"] == "slice:repo.slices" && v["path"] == "internal/reporting/report.go" &&
 				v["contract"] == "provides" && v["blame"] == "provider"
 		}},
 	}

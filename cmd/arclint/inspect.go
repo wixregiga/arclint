@@ -164,16 +164,20 @@ func newExplainCmd() *cobra.Command {
 
 			if len(args) == 0 {
 				w := tabwriter.NewWriter(out, 2, 4, 2, ' ', 0)
-				fmt.Fprintln(w, "KIND\tCLAUSE\tSUMMARY")
+				fmt.Fprintln(w, "KIND\tCLAUSE\tCAPABILITY\tSUMMARY")
 				for _, d := range config.RuleDocs {
 					clause := d.Clause
 					if clause == "" {
 						clause = "-"
 					}
-					fmt.Fprintf(w, "%s\t%s\t%s\n", d.Kind, clause, d.Summary)
+					capability := config.CapabilityOf(d.Kind)
+					if capability == "" {
+						capability = "-"
+					}
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", d.Kind, clause, capability, d.Summary)
 				}
 				for _, rt := range extTypes {
-					fmt.Fprintf(w, "%s\t%s\t%s\n", rt.Name, rt.Contract, rt.Describe())
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", rt.Name, rt.Contract, rt.Capability, rt.Describe())
 				}
 				if err := w.Flush(); err != nil {
 					return err
@@ -189,6 +193,9 @@ func newExplainCmd() *cobra.Command {
 				if d.Clause != "" {
 					fmt.Fprintf(out, "clause: %s (blame: %s)\n", d.Clause, d.Blame)
 				}
+				if capability := config.CapabilityOf(d.Kind); capability != "" {
+					fmt.Fprintf(out, "capability: %s\n", capability)
+				}
 				fmt.Fprintf(out, "\n%s\n\nexample:\n\n", d.Doc)
 				for _, line := range strings.Split(strings.TrimRight(d.Example, "\n"), "\n") {
 					fmt.Fprintf(out, "  %s\n", line)
@@ -202,6 +209,7 @@ func newExplainCmd() *cobra.Command {
 				fmt.Fprintf(out, "%s — %s\n", rt.Name, rt.Describe())
 				fmt.Fprintf(out, "provider: extension %s\n", rt.SourcePath)
 				fmt.Fprintf(out, "clause: %s (blame: %s)\n", rt.Contract, rt.Blame)
+				fmt.Fprintf(out, "capability: %s\n", rt.Capability)
 				params, err := json.MarshalIndent(rt.RawSchema, "  ", "  ")
 				if err != nil {
 					return &exitError{2, err.Error()}

@@ -37,6 +37,9 @@ hovers in your editor.
 		if d.Clause != "" {
 			fmt.Fprintf(&b, "- clause: `%s`, blame: `%s`\n", d.Clause, d.Blame)
 		}
+		if capability := config.CapabilityOf(d.Kind); capability != "" {
+			fmt.Fprintf(&b, "- capability: `%s`\n", capability)
+		}
 		fmt.Fprintf(&b, "\n%s\n\n```yaml\n%s\n```\n", d.Doc, strings.TrimRight(d.Example, "\n"))
 	}
 	return []byte(b.String())
