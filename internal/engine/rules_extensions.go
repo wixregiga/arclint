@@ -125,6 +125,26 @@ func (c *Context) extensionHost() ext.Host {
 			}
 			return out
 		},
+		Facts: func(path string) *ext.FactsInfo {
+			facts := c.Facts(path)
+			if facts == nil {
+				return nil
+			}
+			out := &ext.FactsInfo{
+				Path: facts.Path, Package: facts.Package, ParseError: facts.ParseError,
+				Decls: make([]ext.DeclInfo, 0, len(facts.Decls)),
+			}
+			for _, d := range facts.Decls {
+				out.Decls = append(out.Decls, ext.DeclInfo{
+					Kind: d.Kind, Name: d.Name, Owner: d.Owner,
+					Exported: d.Exported, StartLine: d.StartLine, EndLine: d.EndLine,
+				})
+			}
+			return out
+		},
+		ModuleOf: func(path string) []string {
+			return c.FileModules[path]
+		},
 		Modules: func() map[string][]string {
 			out := map[string][]string{}
 			for name, files := range c.ModuleFiles {

@@ -26,7 +26,11 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	binPath = filepath.Join(dir, "arclint")
-	build := exec.Command("go", "build", "-o", binPath, ".")
+	// Grammar subset tags mirror the Makefile: the e2e binary embeds only
+	// the fact-provider grammars.
+	build := exec.Command("go", "build",
+		"-tags", "grammar_subset grammar_subset_typescript grammar_subset_tsx grammar_subset_javascript grammar_subset_python",
+		"-o", binPath, ".")
 	build.Env = append(os.Environ(), "CGO_ENABLED=0")
 	if out, err := build.CombinedOutput(); err != nil {
 		panic("build: " + err.Error() + "\n" + string(out))
@@ -386,8 +390,9 @@ func TestInitInteractiveDefaults(t *testing.T) {
 		t.Fatalf("interactive init: %v\n%s", err, out)
 	}
 	// Empty dir detects nothing; the default is go, whose first compatible
-	// pattern is feature-slice, which ships an extension and SDK typings.
-	for _, f := range []string{"rules.yaml", ".arclint/extensions/feature-slice.ts", ".arclint/extensions/arclint.d.ts"} {
+	// pattern (alphabetical) is ddd-flat, which ships an extension and SDK
+	// typings.
+	for _, f := range []string{"rules.yaml", ".arclint/extensions/ddd-flat.ts", ".arclint/extensions/arclint.d.ts"} {
 		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(f))); err != nil {
 			t.Errorf("%s not written: %v", f, err)
 		}

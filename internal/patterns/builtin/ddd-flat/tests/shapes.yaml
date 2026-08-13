@@ -1,0 +1,172 @@
+# Declaration-shape requirements, enforced through ctx.facts.
+case: ddd-aggregate-outside-domain
+runtime: [go]
+files:
+  # Minimal override: the template ships aggregates empty (configure per
+  # repo), so this case configures one the way a repository would.
+  rules.yaml: |
+    runtime: [go]
+    modules:
+      domain: ["domain/**", "internal/domain/**"]
+      application: ["application/**"]
+    rules:
+      - id: "ddd:ARCH-003"
+        type: ddd-aggregate-location
+        severity: error
+        params:
+          aggregates: [Book]
+  application/bad.go: |
+    package application
+
+    type Book struct {
+    	ISBN string
+    }
+expect:
+  - rule: "ddd:ARCH-003"
+    path: application/bad.go
+    line: 3
+    contract: provides
+    blame: provider
+---
+case: ddd-repository-misplacement
+runtime: [go]
+files:
+  application/ports.go: |
+    package application
+
+    type BookRepo interface {
+    	Find(id string) error
+    }
+  domain/pg.go: |
+    package domain
+
+    type PgRepository struct{}
+expect:
+  - rule: "ddd:ARCH-004"
+    path: application/ports.go
+    line: 3
+    message: interface
+  - rule: "ddd:ARCH-004"
+    path: domain/pg.go
+    line: 3
+    message: implementation
+---
+case: ddd-handler-with-business-logic
+runtime: [go]
+files:
+  delivery/handler.go: |
+    package delivery
+
+    func HandleBorrow(memberBlocked bool, openLoans int, copies int) string {
+    	if memberBlocked {
+    		return "blocked"
+    	}
+    	if openLoans >= 5 {
+    		return "limit"
+    	}
+    	for i := 0; i < copies; i++ {
+    		if i > 0 {
+    			continue
+    		}
+    	}
+    	switch openLoans {
+    	case 0:
+    		return "first"
+    	}
+    	return "ok"
+    }
+expect:
+  - rule: "ddd:ARCH-005"
+    path: delivery/handler.go
+    line: 3
+    message: business-logic signals
+---
+case: ddd-thick-application-function
+runtime: [go]
+files:
+  application/borrow.go: |
+    package application
+
+    func Borrow(a int) int {
+    	x := a
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	x++
+    	return x
+    }
+expect:
+  - rule: "ddd:ARCH-006"
+    path: application/borrow.go
+    line: 3
+    severity: warn
+    message: soft limit
+---
+case: ddd-code-outside-layers
+runtime: [go]
+files:
+  domain/book.go: |
+    package domain
+  internal/misc/misc.go: |
+    package misc
+expect:
+  - rule: "ddd:ARCH-007"
+    path: internal/misc/misc.go
+    severity: warn
+    message: outside every DDD Flat layer
+---
+case: ddd-value-object-exposure
+runtime: [go]
+files:
+  domain/ids.go: |
+    package domain
+
+    type BookID struct {
+    	Raw string
+    }
+expect:
+  - rule: "ddd:ARCH-009"
+    path: domain/ids.go
+    line: 4
+    severity: warn
+    message: exposes mutable field
+  - rule: "ddd:ARCH-009"
+    path: domain/ids.go
+    line: 3
+    severity: warn
+    message: no NewBookID constructor

@@ -63,6 +63,8 @@ Node globals.
 | `ctx.read(path)` | one file's content |
 | `ctx.imports(path)` | classified imports for every active language target, with `targetDir` and `targetFile` resolution |
 | `ctx.modules()` | declared module names to member file paths |
+| `ctx.facts(path)` | declaration facts for one file (lazy, cached): kinds, names, owners, visibility, line spans. Go facts are parser-exact; TypeScript and Python come from pinned tree-sitter grammars. `null` when no active target owns the file |
+| `ctx.moduleOf(path)` | the sorted module names a file belongs to |
 | `ctx.report(v)` | record one violation |
 
 `ctx.report` accepts optional `severity`, `contract`, and `blame`

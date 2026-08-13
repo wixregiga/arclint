@@ -49,6 +49,43 @@ export interface ImportInfo {
   targetFile: string;
 }
 /**
+ * DeclInfo is one declaration as exposed through ctx.facts(path).
+ */
+export interface DeclInfo {
+  /**
+   * Kind is a small cross-language vocabulary: struct, interface,
+   * type, class, enum, func, method, field, const, var.
+   */
+  kind: string;
+  name: string;
+  /**
+   * Owner names the enclosing declaration for members (receiver type,
+   * interface, class, enclosing function), else "".
+   */
+  owner: string;
+  /**
+   * Exported: Go identifier case, TS export/accessibility modifiers,
+   * Python leading-underscore convention.
+   */
+  exported: boolean;
+  startLine: number /* int */;
+  endLine: number /* int */;
+}
+/**
+ * FactsInfo is the declaration-fact view of one file as exposed to
+ * ctx.facts(path). A file that failed to parse has empty decls and a
+ * non-empty parseError; rules see absence, never a crash.
+ */
+export interface FactsInfo {
+  path: string;
+  /**
+   * Package is the Go package clause; "" for other languages.
+   */
+  package: string;
+  decls: DeclInfo[];
+  parseError?: string;
+}
+/**
  * ViolationInput is what ctx.report() accepts from a rule.
  */
 export interface ViolationInput {

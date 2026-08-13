@@ -35,6 +35,11 @@ type Host struct {
 	Read    func(path string) (string, error)
 	Imports func(path string) []ImportInfo
 	Modules func() map[string][]string
+	// Facts returns declaration facts for one file, nil when the file is
+	// outside the tree or no active target owns it.
+	Facts func(path string) *FactsInfo
+	// ModuleOf returns the sorted modules a file belongs to.
+	ModuleOf func(path string) []string
 }
 
 // sandboxJS closes the engine's documented determinism gap: Date.now and
@@ -269,6 +274,26 @@ func (rt *RuleType) Check(host Host, params map[string]any) ([]ViolationInput, e
 	})
 	mustSet("modules", func(call sobek.FunctionCall) sobek.Value {
 		return vm.ToValue(host.Modules())
+	})
+	mustSet("facts", func(call sobek.FunctionCall) sobek.Value {
+		if len(call.Arguments) < 1 {
+			return fail("ctx.facts: path is required")
+		}
+		facts := host.Facts(call.Arguments[0].String())
+		if facts == nil {
+			return sobek.Null()
+		}
+		return vm.ToValue(facts)
+	})
+	mustSet("moduleOf", func(call sobek.FunctionCall) sobek.Value {
+		if len(call.Arguments) < 1 {
+			return fail("ctx.moduleOf: path is required")
+		}
+		mods := host.ModuleOf(call.Arguments[0].String())
+		if mods == nil {
+			mods = []string{}
+		}
+		return vm.ToValue(mods)
 	})
 	mustSet("report", func(call sobek.FunctionCall) sobek.Value {
 		if len(call.Arguments) < 1 {

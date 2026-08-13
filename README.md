@@ -31,6 +31,9 @@ pattern to start from (`--runtimes go,ts --pattern layers` skips the
 prompts), writes rules.yaml plus the pattern's TypeScript extensions,
 generates editor typings, and validates everything. Patterns:
 
+- **ddd-flat** (go) — tactical DDD: pure domain, inward dependency
+  direction, aggregates and repository ports in domain, technology in
+  adapters. Rule ids follow the ARCH-* requirement table.
 - **feature-slice** (go) — open-set feature/concept slices: a directory
   owning `command.go` is a feature, any other `internal/` directory is a
   concept, and every rule applies to new features automatically.
@@ -153,7 +156,13 @@ export default defineRule({
 ```
 
 `ctx.imports(path)` serves every active language target, with classified
-specifiers and tree-resolved targets (`targetDir`, `targetFile`). A rule
+specifiers and tree-resolved targets (`targetDir`, `targetFile`).
+`ctx.facts(path)` serves declaration facts (types, interfaces, classes,
+functions, methods, fields, with owners, visibility, and line spans),
+lazily per file: Go through `go/parser`, TypeScript and Python through
+pinned pure-Go tree-sitter grammars, one neutral schema for all three.
+`ctx.moduleOf(path)` resolves a file to its rules.yaml modules so
+extensions never duplicate path aliases. A rule
 type declares its contract clause and blame side once, and any single
 finding may override both (`ctx.report({..., contract: "consumes",
 blame: "consumer"})`) so multi-sided rules label each finding

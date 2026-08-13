@@ -30,6 +30,16 @@ naming); the paired extension enforces what YAML cannot scope without
 named modules: the feature/concept dependency matrix, third-party bans,
 concept purity, ports, drift, and thin use cases.
 
+### ddd-flat (go)
+
+Tactical DDD for services, with the `ARCH-*` requirement table as rule
+ids (`ddd:ARCH-001` domain purity through `ddd:ARCH-012` test
+location). Imports are enforced declaratively; Go declaration shapes
+(aggregate location, repository interface placement, value-object
+encapsulation, function sizes, handler boundaries) come from the
+extension built on `ctx.facts`. Configure your aggregate root names in
+`rules.yaml` to arm `ddd:ARCH-003`.
+
 ### layers (go, ts, py)
 
 The hexagonal spine, fully declarative: `cmd` composes, `app`

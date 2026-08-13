@@ -1,0 +1,120 @@
+# Declarative requirements: purity, direction, cycles, file naming,
+# technology isolation, test location.
+case: ddd-domain-imports-application
+runtime: [go]
+files:
+  domain/book.go: |
+    package domain
+
+    import _ "test.local/case/application"
+  application/svc.go: |
+    package application
+expect:
+  - rule: "ddd:ARCH-001"
+    path: domain/book.go
+    line: 3
+    contract: consumes
+    blame: consumer
+  - rule: "ddd:ARCH-002"
+    path: domain/book.go
+    line: 3
+    message: layer
+---
+case: ddd-domain-imports-thirdparty
+runtime: [go]
+files:
+  go.mod: |
+    module test.local/case
+
+    go 1.24
+
+    require example.com/lib v1.0.0
+  domain/book.go: |
+    package domain
+
+    import _ "example.com/lib"
+expect:
+  - rule: "ddd:ARCH-001"
+    path: domain/book.go
+    line: 3
+    message: external
+---
+case: ddd-delivery-imports-infrastructure
+runtime: [go]
+files:
+  delivery/handler.go: |
+    package delivery
+
+    import _ "test.local/case/infrastructure"
+  infrastructure/db.go: |
+    package infrastructure
+expect:
+  - rule: "ddd:ARCH-002"
+    path: delivery/handler.go
+    line: 3
+    message: allow-list
+  - rule: "ddd:ARCH-002"
+    path: delivery/handler.go
+    line: 3
+    message: protected
+---
+case: ddd-application-domain-cycle
+runtime: [go]
+files:
+  application/svc.go: |
+    package application
+
+    import _ "test.local/case/domain"
+  domain/book.go: |
+    package domain
+
+    import _ "test.local/case/application"
+expect:
+  - rule: "ddd:ARCH-001"
+    path: domain/book.go
+    line: 3
+  - rule: "ddd:ARCH-002"
+    path: domain/book.go
+    line: 3
+    message: layer
+  - rule: "ddd:ARCH-010"
+    path: application/svc.go
+---
+case: ddd-entity-suffix
+runtime: [go]
+files:
+  domain/book_entity.go: |
+    package domain
+
+    type Book struct{}
+expect:
+  - rule: "ddd:ARCH-008"
+    path: domain/book_entity.go
+    severity: warn
+---
+case: ddd-technology-in-domain
+runtime: [go]
+files:
+  domain/book.go: |
+    package domain
+
+    import _ "net/http"
+expect:
+  - rule: "ddd:ARCH-011"
+    path: domain/book.go
+    line: 3
+    contract: consumes
+    blame: consumer
+    message: technology
+---
+case: ddd-integration-test-location
+runtime: [go]
+files:
+  application/svc.go: |
+    package application
+  application/loan_integration_test.go: |
+    package application
+expect:
+  - rule: "ddd:ARCH-012"
+    path: application/loan_integration_test.go
+    severity: info

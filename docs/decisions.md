@@ -3,6 +3,72 @@
 Small ambiguities resolved in favor of the proposal's shapes, recorded per
 milestone. Dates are decision dates.
 
+## M8 (2026-08-13) — language facts: ADR and spike results
+
+The parity law from M7 applied to syntax facts. Spike artifacts ran in a
+scratch module against real files (arclint's own SDK TypeScript, the
+feature-slice extension, CPython 3.12's dataclasses.py).
+
+1. **gotreesitter v0.49.0 adopted, pinned, for TypeScript/TSX/JavaScript
+   and Python facts.** It is the only route preserving CGO_ENABLED=0 and
+   one static binary (research: multi-language-rule-engines.md §3).
+   Spike evidence: pure-Go, arm64 cross-build clean; a subset build
+   embedding only our four grammars is 12.7 MB against 31.8 MB with all
+   206; parse+extract runs ~1-7ms per file (~0.6-0.8µs/byte, in line
+   with the research's ~4x-slower-than-C figure). Risks stay recorded:
+   the project is six months old with a single maintainer; the version
+   is pinned; a parse failure yields absent facts plus a warning, never
+   a crash.
+2. **Go facts come from go/parser**, not tree-sitter: exact, free, and
+   already the foundation the oracle proved. Uniformity of the SCHEMA
+   matters; uniformity of the parser behind it does not.
+3. **Facts are lazy and cached per file.** At ~1-7ms per parse, eager
+   whole-repo facts would dwarf the 77ms 5,000-file check budget; only
+   files a rule asks about are parsed, in parallel, once.
+4. **arclint owns its fact queries.** The library's prebuilt FactProgram
+   was probed and found insufficient: TypeScript interfaces, arrow-bound
+   functions, class fields, and TS import statements were not extracted
+   (Python fared better). The fact schema is therefore defined by
+   arclint's own per-grammar tree-sitter queries, unit-tested per
+   language; the M3 import pipeline remains the only import source
+   (classified, resolved), and fact imports are not used.
+5. **Build tags**: release and dev builds pass the grammar subset tags
+   through one Makefile variable; a tag-less `go test ./...` still works
+   (all grammars embedded in test binaries, correctness unchanged).
+
+### M8 implementation decisions and gate results (2026-08-13)
+
+6. **The fact schema** (internal/lang/facts.go): Decl {kind, name,
+   owner, exported, startLine, endLine} with a small cross-language kind
+   vocabulary. Documented edges, asserted by tests: plain JavaScript
+   without ESM export markers is unexported (CommonJS module.exports is
+   invisible structurally); Python spans anchor at the def line,
+   decorators excluded; Python visibility is the underscore convention.
+7. **ctx.facts and ctx.moduleOf** join the extension surface; moduleOf
+   ends the alias-duplication the dddflat report complained about (path
+   roots defined once in rules.yaml, never repeated in extensions).
+8. **ddd-flat ships as arclint/ddd-flat**, ids ddd:ARCH-001..012.
+   ARCH-001/008 moved fully declarative (consumes ids and structure
+   forbid, which v1 could not express); the extension half runs on facts
+   and replaced the predecessor's ~110-line hand-rolled Go tokenizer.
+   ARCH-005 keeps the ShelfBook semantics (handler-name prefixes; any
+   loop/switch or state mutation flags) after the parity check caught my
+   looser first draft missing their handler finding.
+9. **Parity proven mechanically**: the shipped pattern, initialized into
+   the unmodified ShelfBook dddflat repository (aggregates configured),
+   reports 11 violations (7 error, 3 warn, 1 info) — the same set, ids,
+   anchors, and severities as the hand-built ruleset it replaces, plus
+   capability labels on every finding.
+10. **Cost recorded**: the four grammar blobs plus the tree-sitter
+    runtime add ~6.8 MB (binary 27.9 MB, was 21.1 MB). Grammar subset
+    tags live in one Makefile variable; a tag-less `go test ./...`
+    embeds all grammars in test binaries and stays correct.
+- Gates: full suite green including 53 pattern-suite cases (ddd-flat 14,
+  all ids covered); self-hosting clean, 124 files in 9ms. Cold start
+  median 16.2ms (bound 100ms); 5,000-file check median 86.5ms (facts are
+  lazy: the check path does not parse). Static builds 27.89 MB amd64 /
+  25.69 MB arm64 with the grammar subset tags.
+
 ## M7 (2026-08-13) — rule identity, capability labels, rule tests
 
 Direction settled from the ShelfBook dddflat exercise: an external agent

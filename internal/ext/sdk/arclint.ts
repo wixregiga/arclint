@@ -43,6 +43,25 @@ export interface ViolationInput {
   blame?: Blame;
 }
 
+export interface DeclInfo {
+  /** struct | interface | type | class | enum | func | method | field | const | var */
+  kind: string;
+  name: string;
+  /** Enclosing declaration for members (receiver, interface, class), else "". */
+  owner: string;
+  exported: boolean;
+  startLine: number;
+  endLine: number;
+}
+
+export interface FactsInfo {
+  path: string;
+  /** Go package clause; "" for other languages. */
+  package: string;
+  decls: DeclInfo[];
+  parseError?: string;
+}
+
 export interface Ctx {
   /** Repository files, optionally filtered by a doublestar glob. */
   files(glob?: string): FileInfo[];
@@ -52,6 +71,12 @@ export interface Ctx {
   imports(path: string): ImportInfo[];
   /** Declared module names to their member file paths. */
   modules(): Record<string, string[]>;
+  /** Declaration facts for one file (lazy, cached); null when no active
+   * target owns the file. Go facts are parser-exact; TS/Python come from
+   * pinned tree-sitter grammars. */
+  facts(path: string): FactsInfo | null;
+  /** The sorted module names a file belongs to. */
+  moduleOf(path: string): string[];
   /** Report one violation. */
   report(v: ViolationInput): void;
 }

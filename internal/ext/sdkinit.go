@@ -29,6 +29,12 @@ export interface Ctx {
   imports(path: string): ImportInfo[];
   /** Declared module names to their member file paths. */
   modules(): Record<string, string[]>;
+  /** Declaration facts for one file (lazy, cached); null when no active
+   * target owns the file. Go facts are parser-exact; TS/Python come from
+   * pinned tree-sitter grammars. */
+  facts(path: string): FactsInfo | null;
+  /** The sorted module names a file belongs to. */
+  moduleOf(path: string): string[];
   /** Report one violation. */
   report(v: ViolationInput): void;
 }

@@ -44,6 +44,9 @@ type Context struct {
 	contentMu sync.Mutex
 	contents  map[string][]byte
 	files     map[string]*tree.File
+
+	factsMu sync.Mutex
+	facts   map[string]*lang.FileFacts
 }
 
 // targetModules resolves the declared modules an internal import lands
@@ -79,6 +82,7 @@ func newContext(rs *config.RuleSet, t *tree.Tree) (*Context, error) {
 		FileModules: map[string][]string{},
 		DirModules:  map[string][]string{},
 		contents:    map[string][]byte{},
+		facts:       map[string]*lang.FileFacts{},
 	}
 	for name := range rs.Modules {
 		ctx.ModuleNames = append(ctx.ModuleNames, name)

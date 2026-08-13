@@ -1,11 +1,14 @@
 GO      ?= go
 VERSION ?= 0.1.0
 BIN     ?= ./arclint
+# Embed only the tree-sitter grammars the fact providers use (M8 ADR):
+# without these tags all 206 grammars embed and the binary grows ~19 MB.
+GRAMMARS := grammar_subset grammar_subset_typescript grammar_subset_tsx grammar_subset_javascript grammar_subset_python
 
 .PHONY: build test vet generate selfcheck bench oracle release ci clean docs docs-serve
 
 build:
-	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o $(BIN) ./cmd/arclint
+	CGO_ENABLED=0 $(GO) build -tags "$(GRAMMARS)" -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o $(BIN) ./cmd/arclint
 
 test:
 	$(GO) test ./...
@@ -42,8 +45,8 @@ docs-serve:
 	cd docs/site && zola serve
 
 release:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o dist/arclint-linux-amd64 ./cmd/arclint
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o dist/arclint-linux-arm64 ./cmd/arclint
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -tags "$(GRAMMARS)" -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o dist/arclint-linux-amd64 ./cmd/arclint
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -tags "$(GRAMMARS)" -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o dist/arclint-linux-arm64 ./cmd/arclint
 
 ci: vet test selfcheck
 

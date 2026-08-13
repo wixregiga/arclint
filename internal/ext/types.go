@@ -36,6 +36,33 @@ type ImportInfo struct {
 	TargetFile string `json:"targetFile"`
 }
 
+// DeclInfo is one declaration as exposed through ctx.facts(path).
+type DeclInfo struct {
+	// Kind is a small cross-language vocabulary: struct, interface,
+	// type, class, enum, func, method, field, const, var.
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+	// Owner names the enclosing declaration for members (receiver type,
+	// interface, class, enclosing function), else "".
+	Owner string `json:"owner"`
+	// Exported: Go identifier case, TS export/accessibility modifiers,
+	// Python leading-underscore convention.
+	Exported  bool `json:"exported"`
+	StartLine int  `json:"startLine"`
+	EndLine   int  `json:"endLine"`
+}
+
+// FactsInfo is the declaration-fact view of one file as exposed to
+// ctx.facts(path). A file that failed to parse has empty decls and a
+// non-empty parseError; rules see absence, never a crash.
+type FactsInfo struct {
+	Path string `json:"path"`
+	// Package is the Go package clause; "" for other languages.
+	Package    string     `json:"package"`
+	Decls      []DeclInfo `json:"decls"`
+	ParseError string     `json:"parseError,omitempty"`
+}
+
 // ViolationInput is what ctx.report() accepts from a rule.
 type ViolationInput struct {
 	Path    string `json:"path"`
