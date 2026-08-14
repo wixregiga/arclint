@@ -3,6 +3,79 @@
 Small ambiguities resolved in favor of the proposal's shapes, recorded per
 milestone. Dates are decision dates.
 
+## M10 (2026-08-14) — signature facts: ADR and gate results
+
+Brandon's binding constraints, set 2026-08-13: one interface for every
+language, shipped simultaneously; ts/py are not second-class; proceed
+only if speed, size, and maintainability survive measurement. The plan
+below passed his gate on 2026-08-14.
+
+1. **Structured params/results, not a signature string**: `Decl` gains
+   `params: [{name, type, optional, variadic}]` and `results:
+   [typeText]`, identical for go/ts/py. The port-satisfaction failure in
+   the field was name-subset comparison; the fix needs arity and
+   per-parameter type comparison, and a single string would force rule
+   authors to re-parse it — the heuristic reborn. Types are source
+   text, whitespace-collapsed (`lang.NormalizeType`), never resolved:
+   the M8 rejection of go/types stands, and capability labels stay
+   honest (structural, not proof).
+2. **One extraction rule per language, all syntactic**: Go slices type
+   expressions out of the source by token offset (go/parser, exact
+   AST, frozen by the Go 1 promise); TypeScript reads grammar fields
+   `parameters`/`parameter`/`return_type` and nodes
+   required_parameter, optional_parameter, rest_pattern,
+   assignment_pattern, type_annotation; Python reads `parameters`/
+   `return_type` and the five parameter node types (typed, default,
+   typed_default, list_splat, dictionary_splat). Node names were
+   verified against the pinned v0.49.0 grammars with a probe, not
+   guessed.
+3. **Information-preserving conventions** (Brandon delegated, decided
+   2026-08-14; the test for each was "does the alternative lose
+   information a rule might need"):
+   - Python `self`/`cls` stay in the params list. Both sides of a
+     Python-to-Python comparison carry them, so comparisons stay
+     symmetric, and their absence is the only syntactic signal of a
+     `@staticmethod`. Dropping them is interpretation, and trivially
+     done rule-side.
+   - Python splats keep their prefix in the name (`*args`,
+     `**kwargs`): one `variadic` bool cannot distinguish the two
+     flavors, a second field would be schema weight for one language's
+     edge, and the prefixed name reads exactly like Python.
+   - TS destructuring parameters keep `name: ""` with the type
+     preserved: no single name exists syntactically, and inventing one
+     from the pattern text would fabricate an identifier that no
+     comparison should match on. Parameter names are not part of
+     signature compatibility in any of the three languages.
+4. **Unnamed and multi-name handling**: Go `a, b string` expands to two
+   params; unnamed interface-method params keep `name: ""`; Go result
+   names are dropped (results are types only); an unannotated ts/py
+   return is an empty results list, indistinguishable from a Go func
+   without results — documented, structural tier.
+5. **Wire contract**: `ext.ParamInfo` mirrors `lang.Param`; the SDK
+   `.d.ts` regenerates from the Go structs (tygo), so the extension
+   view cannot drift.
+6. **Known limits recorded**: TS function-typed properties
+   (`foo: (x) => void`) remain `field` decls without signatures;
+   Python quoted annotations keep their quotes (`'Book'`).
+
+### M10 signature-facts gate results (measured 2026-08-14, WSL2 Ubuntu 24.04, go1.26.4)
+
+- Speed, interleaved A/B on one identical corpus (baseline worktree at
+  eef3f13; six samples per side): Go 272 real files (arclint +
+  shelfbook + gin oracle cache) 37.4ms → 39.7ms per corpus pass,
+  about +6%, ≈ +8µs per file; TS/JS 13 files and Python ~150 CPython
+  stdlib files both within run-to-run noise.
+- Check path unaffected: facts stay lazy and cached
+  (internal/engine/facts.go untouched); selfcheck 127 files in 9ms;
+  cold-start median 13.9ms against the 100ms bound; 5k-file bench
+  passes.
+- Binary size: 27,910,306 → 27,926,690 bytes (+16,384, +0.06%), same
+  grammar blobs.
+- Contract pinned per language: TestGoSignatureFacts,
+  TestTypeScriptSignatureFacts, TestPythonSignatureFacts assert exact
+  structs; a grammar update that renames a node or field fails them
+  deterministically.
+
 ## M9 (2026-08-13) — uniform except clauses
 
 Brandon's requirement, verbatim in spirit: a builtin-derived rules.yaml

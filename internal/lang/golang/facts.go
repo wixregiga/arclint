@@ -24,12 +24,62 @@ func Facts(path string, src []byte) *lang.FileFacts {
 	span := func(n ast.Node) (int, int) {
 		return fset.Position(n.Pos()).Line, fset.Position(n.End()).Line
 	}
-	add := func(kind, name, owner string, n ast.Node) {
+	add := func(kind, name, owner string, n ast.Node) *lang.Decl {
 		start, end := span(n)
 		out.Decls = append(out.Decls, lang.Decl{
 			Kind: kind, Name: name, Owner: owner,
 			Exported: ast.IsExported(name), StartLine: start, EndLine: end,
 		})
+		return &out.Decls[len(out.Decls)-1]
+	}
+
+	// exprText slices the type expression straight out of the source, so
+	// the text is what the author wrote (M10: syntactic signatures, no
+	// go/types).
+	exprText := func(e ast.Expr) string {
+		start := fset.Position(e.Pos()).Offset
+		end := fset.Position(e.End()).Offset
+		if start < 0 || end > len(src) || start >= end {
+			return ""
+		}
+		return lang.NormalizeType(string(src[start:end]))
+	}
+	signature := func(ft *ast.FuncType) ([]lang.Param, []string) {
+		var params []lang.Param
+		if ft.Params != nil {
+			for _, f := range ft.Params.List {
+				p := lang.Param{}
+				typ := f.Type
+				if ell, ok := typ.(*ast.Ellipsis); ok {
+					p.Variadic = true
+					typ = ell.Elt
+				}
+				p.Type = exprText(typ)
+				if len(f.Names) == 0 {
+					params = append(params, p)
+					continue
+				}
+				for _, n := range f.Names {
+					named := p
+					named.Name = n.Name
+					params = append(params, named)
+				}
+			}
+		}
+		var results []string
+		if ft.Results != nil {
+			for _, f := range ft.Results.List {
+				t := exprText(f.Type)
+				count := len(f.Names)
+				if count == 0 {
+					count = 1
+				}
+				for range count {
+					results = append(results, t)
+				}
+			}
+		}
+		return params, results
 	}
 
 	fieldNames := func(f *ast.Field) []string {
@@ -63,7 +113,10 @@ func Facts(path string, src []byte) *lang.FileFacts {
 						add("interface", s.Name.Name, "", s)
 						for _, m := range t.Methods.List {
 							for _, name := range m.Names {
-								add("method", name.Name, s.Name.Name, m)
+								d := add("method", name.Name, s.Name.Name, m)
+								if ft, ok := m.Type.(*ast.FuncType); ok {
+									d.Params, d.Results = signature(ft)
+								}
 							}
 						}
 					default:
@@ -82,11 +135,13 @@ func Facts(path string, src []byte) *lang.FileFacts {
 				}
 			}
 		case *ast.FuncDecl:
+			var fd *lang.Decl
 			if d.Recv != nil && len(d.Recv.List) == 1 {
-				add("method", d.Name.Name, embeddedName(d.Recv.List[0].Type), d)
+				fd = add("method", d.Name.Name, embeddedName(d.Recv.List[0].Type), d)
 			} else {
-				add("func", d.Name.Name, "", d)
+				fd = add("func", d.Name.Name, "", d)
 			}
+			fd.Params, fd.Results = signature(d.Type)
 		}
 	}
 	return out

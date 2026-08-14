@@ -36,6 +36,22 @@ type ImportInfo struct {
 	TargetFile string `json:"targetFile"`
 }
 
+// ParamInfo is one function or method parameter at the syntactic tier.
+type ParamInfo struct {
+	// Name is the parameter identifier; "" for unnamed parameters (Go
+	// interface methods) and TS destructuring patterns. Python splat
+	// parameters keep their prefix: "*args", "**kwargs".
+	Name string `json:"name,omitempty"`
+	// Type is the source-text type annotation, whitespace-collapsed,
+	// never resolved; "" when omitted. Signature comparison is
+	// structural, not proof.
+	Type string `json:"type,omitempty"`
+	// Optional: a TS `?` marker or a TS/Python default value.
+	Optional bool `json:"optional,omitempty"`
+	// Variadic: Go `...T`, TS rest parameter, Python `*args`/`**kwargs`.
+	Variadic bool `json:"variadic,omitempty"`
+}
+
 // DeclInfo is one declaration as exposed through ctx.facts(path).
 type DeclInfo struct {
 	// Kind is a small cross-language vocabulary: struct, interface,
@@ -50,6 +66,11 @@ type DeclInfo struct {
 	Exported  bool `json:"exported"`
 	StartLine int  `json:"startLine"`
 	EndLine   int  `json:"endLine"`
+	// Params and Results carry the syntactic signature of func and
+	// method decls; absent for every other kind. Results holds result
+	// type texts; an unannotated TS/Python return is an empty list.
+	Params  []ParamInfo `json:"params,omitempty"`
+	Results []string    `json:"results,omitempty"`
 }
 
 // FactsInfo is the declaration-fact view of one file as exposed to

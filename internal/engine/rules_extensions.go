@@ -135,10 +135,18 @@ func (c *Context) extensionHost() ext.Host {
 				Decls: make([]ext.DeclInfo, 0, len(facts.Decls)),
 			}
 			for _, d := range facts.Decls {
-				out.Decls = append(out.Decls, ext.DeclInfo{
+				info := ext.DeclInfo{
 					Kind: d.Kind, Name: d.Name, Owner: d.Owner,
 					Exported: d.Exported, StartLine: d.StartLine, EndLine: d.EndLine,
-				})
+					Results: d.Results,
+				}
+				for _, p := range d.Params {
+					info.Params = append(info.Params, ext.ParamInfo{
+						Name: p.Name, Type: p.Type,
+						Optional: p.Optional, Variadic: p.Variadic,
+					})
+				}
+				out.Decls = append(out.Decls, info)
 			}
 			return out
 		},

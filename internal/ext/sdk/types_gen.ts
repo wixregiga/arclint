@@ -49,6 +49,31 @@ export interface ImportInfo {
   targetFile: string;
 }
 /**
+ * ParamInfo is one function or method parameter at the syntactic tier.
+ */
+export interface ParamInfo {
+  /**
+   * Name is the parameter identifier; "" for unnamed parameters (Go
+   * interface methods) and TS destructuring patterns. Python splat
+   * parameters keep their prefix: "*args", "**kwargs".
+   */
+  name?: string;
+  /**
+   * Type is the source-text type annotation, whitespace-collapsed,
+   * never resolved; "" when omitted. Signature comparison is
+   * structural, not proof.
+   */
+  type?: string;
+  /**
+   * Optional: a TS `?` marker or a TS/Python default value.
+   */
+  optional?: boolean;
+  /**
+   * Variadic: Go `...T`, TS rest parameter, Python `*args`/`**kwargs`.
+   */
+  variadic?: boolean;
+}
+/**
  * DeclInfo is one declaration as exposed through ctx.facts(path).
  */
 export interface DeclInfo {
@@ -70,6 +95,13 @@ export interface DeclInfo {
   exported: boolean;
   startLine: number /* int */;
   endLine: number /* int */;
+  /**
+   * Params and Results carry the syntactic signature of func and
+   * method decls; absent for every other kind. Results holds result
+   * type texts; an unannotated TS/Python return is an empty list.
+   */
+  params?: ParamInfo[];
+  results?: string[];
 }
 /**
  * FactsInfo is the declaration-fact view of one file as exposed to

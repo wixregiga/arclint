@@ -79,14 +79,82 @@ func (w *tsWalker) name(n *gotreesitter.Node) string {
 	return ""
 }
 
-func (w *tsWalker) add(kind, name, owner string, exported bool, n *gotreesitter.Node) {
+func (w *tsWalker) add(kind, name, owner string, exported bool, n *gotreesitter.Node) *lang.Decl {
 	if name == "" {
-		return
+		return nil
 	}
 	w.out.Decls = append(w.out.Decls, lang.Decl{
 		Kind: kind, Name: name, Owner: owner, Exported: exported,
 		StartLine: int(n.StartPoint().Row) + 1, EndLine: int(n.EndPoint().Row) + 1,
 	})
+	return &w.out.Decls[len(w.out.Decls)-1]
+}
+
+// annotType unwraps a type_annotation (": T") to the normalized text of
+// the type inside it.
+func (w *tsWalker) annotType(annot *gotreesitter.Node) string {
+	if annot == nil || annot.NamedChildCount() == 0 {
+		return ""
+	}
+	return lang.NormalizeType(w.text(annot.NamedChild(0)))
+}
+
+// param maps one parameter node to the neutral shape. The TS grammar
+// wraps every parameter in required_parameter / optional_parameter with
+// fields pattern, type, value; the JS grammar puts the patterns
+// (identifier, assignment_pattern, rest_pattern) directly under
+// formal_parameters. Both shapes land here.
+func (w *tsWalker) param(pn *gotreesitter.Node) lang.Param {
+	p := lang.Param{}
+	pattern := pn
+	switch pn.Type(w.lang) {
+	case "required_parameter", "optional_parameter":
+		p.Optional = pn.Type(w.lang) == "optional_parameter"
+		p.Type = w.annotType(pn.ChildByFieldName("type", w.lang))
+		if pn.ChildByFieldName("value", w.lang) != nil {
+			p.Optional = true // a default value makes the parameter optional
+		}
+		if pat := pn.ChildByFieldName("pattern", w.lang); pat != nil {
+			pattern = pat
+		}
+	case "assignment_pattern": // JS default: x = 3
+		p.Optional = true
+		if left := pn.ChildByFieldName("left", w.lang); left != nil {
+			pattern = left
+		}
+	}
+	switch pattern.Type(w.lang) {
+	case "identifier", "this":
+		p.Name = w.text(pattern)
+	case "rest_pattern":
+		p.Variadic = true
+		if pattern.NamedChildCount() > 0 && pattern.NamedChild(0).Type(w.lang) == "identifier" {
+			p.Name = w.text(pattern.NamedChild(0))
+		}
+	}
+	// Destructuring patterns keep Name "": there is no single name at
+	// the syntactic tier.
+	return p
+}
+
+// signature extracts params and results from any function-shaped node:
+// function_declaration, method_definition, method_signature,
+// arrow_function, function_expression.
+func (w *tsWalker) signature(fn *gotreesitter.Node) ([]lang.Param, []string) {
+	var params []lang.Param
+	if fp := fn.ChildByFieldName("parameters", w.lang); fp != nil {
+		for i := 0; i < fp.NamedChildCount(); i++ {
+			params = append(params, w.param(fp.NamedChild(i)))
+		}
+	} else if single := fn.ChildByFieldName("parameter", w.lang); single != nil {
+		// Arrow shorthand: x => x
+		params = append(params, w.param(single))
+	}
+	var results []string
+	if t := w.annotType(fn.ChildByFieldName("return_type", w.lang)); t != "" {
+		results = []string{t}
+	}
+	return params, results
 }
 
 // memberPublic reports whether a class member lacks private/protected
@@ -135,7 +203,9 @@ func (w *tsWalker) walk(n *gotreesitter.Node, owner string, exported bool) {
 				m := body.NamedChild(i)
 				switch m.Type(w.lang) {
 				case "method_signature":
-					w.add("method", w.name(m), name, true, m)
+					if d := w.add("method", w.name(m), name, true, m); d != nil {
+						d.Params, d.Results = w.signature(m)
+					}
 				case "property_signature":
 					w.add("field", w.name(m), name, true, m)
 				}
@@ -149,12 +219,16 @@ func (w *tsWalker) walk(n *gotreesitter.Node, owner string, exported bool) {
 		w.add("enum", w.name(n), owner, exported, n)
 		return
 	case "function_declaration", "generator_function_declaration":
-		w.add("func", w.name(n), owner, exported, n)
+		if d := w.add("func", w.name(n), owner, exported, n); d != nil {
+			d.Params, d.Results = w.signature(n)
+		}
 		return
 	case "method_definition":
 		// Member visibility is the member's own: private/protected/#name
 		// make it unexported regardless of the class's export.
-		w.add("method", w.name(n), owner, w.memberPublic(n), n)
+		if d := w.add("method", w.name(n), owner, w.memberPublic(n), n); d != nil {
+			d.Params, d.Results = w.signature(n)
+		}
 		return
 	case "public_field_definition", "field_definition":
 		w.add("field", w.name(n), owner, w.memberPublic(n), n)
@@ -170,13 +244,18 @@ func (w *tsWalker) walk(n *gotreesitter.Node, owner string, exported bool) {
 			if strings.HasPrefix(w.text(n), "var") || strings.HasPrefix(w.text(n), "let") {
 				kind = "var"
 			}
+			var fnNode *gotreesitter.Node
 			if v := d.ChildByFieldName("value", w.lang); v != nil {
 				switch v.Type(w.lang) {
 				case "arrow_function", "function_expression", "function":
 					kind = "func"
+					fnNode = v
 				}
 			}
-			w.add(kind, name, owner, exported, d)
+			decl := w.add(kind, name, owner, exported, d)
+			if decl != nil && fnNode != nil {
+				decl.Params, decl.Results = w.signature(fnNode)
+			}
 		}
 		return
 	}

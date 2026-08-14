@@ -63,13 +63,44 @@ Node globals.
 | `ctx.read(path)` | one file's content |
 | `ctx.imports(path)` | classified imports for every active language target, with `targetDir` and `targetFile` resolution |
 | `ctx.modules()` | declared module names to member file paths |
-| `ctx.facts(path)` | declaration facts for one file (lazy, cached): kinds, names, owners, visibility, line spans. Go facts are parser-exact; TypeScript and Python come from pinned tree-sitter grammars. `null` when no active target owns the file |
+| `ctx.facts(path)` | declaration facts for one file (lazy, cached): kinds, names, owners, visibility, line spans, and syntactic signatures on `func`/`method` decls. Go facts are parser-exact; TypeScript and Python come from pinned tree-sitter grammars. `null` when no active target owns the file |
 | `ctx.moduleOf(path)` | the sorted module names a file belongs to |
 | `ctx.report(v)` | record one violation |
 
 `ctx.report` accepts optional `severity`, `contract`, and `blame`
 overrides per finding, so one rule type can label a provider-side broken
 promise and a consumer-side bad import truthfully.
+
+## Signature facts
+
+Every `func` and `method` decl carries `params` and `results`. Types are
+the source text of the annotation, whitespace-collapsed, never resolved:
+signature comparison is structural, not proof. Write port-satisfaction
+rules against arity and parameter types, not against name subsets.
+
+```ts
+// Find(id string) (Member, error) becomes:
+{ kind: "method", name: "Find", owner: "Repo",
+  params: [{ name: "id", type: "string" }],
+  results: ["Member", "error"] }
+```
+
+Each param is `{name?, type?, optional?, variadic?}`:
+
+- `type` is `""` when the author or the language omitted the
+  annotation (plain JavaScript, untyped Python). Comparison degrades to
+  arity and names, visibly.
+- `optional` marks a TypeScript `?` or a TypeScript/Python default
+  value.
+- `variadic` marks Go `...T` (the type keeps only the element text),
+  a TypeScript rest parameter, and Python splats.
+- Conventions, chosen to preserve information: Python `self`/`cls`
+  stay in the list (their absence is how you see a `@staticmethod`);
+  Python splats keep their prefix in the name (`*args`, `**kwargs`) so
+  the two flavors stay distinguishable; a TypeScript destructuring
+  parameter has `name: ""` with its type preserved.
+- `results` holds result type texts. Go result names are dropped. An
+  unannotated TypeScript/Python return is an empty list.
 
 ## Params schemas
 

@@ -67,15 +67,79 @@ func (w *pyWalker) name(n *gotreesitter.Node) string {
 	return ""
 }
 
-func (w *pyWalker) add(kind, name, owner string, n *gotreesitter.Node) {
+func (w *pyWalker) add(kind, name, owner string, n *gotreesitter.Node) *lang.Decl {
 	if name == "" {
-		return
+		return nil
 	}
 	w.out.Decls = append(w.out.Decls, lang.Decl{
 		Kind: kind, Name: name, Owner: owner,
 		Exported:  !strings.HasPrefix(name, "_"),
 		StartLine: int(n.StartPoint().Row) + 1, EndLine: int(n.EndPoint().Row) + 1,
 	})
+	return &w.out.Decls[len(w.out.Decls)-1]
+}
+
+// param maps one node under parameters to the neutral shape. Splat
+// parameters keep their prefix in Name ("*args", "**kwargs") so the two
+// flavors stay distinguishable; `self` and `cls` stay in the list —
+// dropping them would be interpretation, not syntax.
+func (w *pyWalker) param(pn *gotreesitter.Node) (lang.Param, bool) {
+	p := lang.Param{}
+	switch pn.Type(w.lang) {
+	case "identifier":
+		p.Name = pn.Text(w.src)
+	case "typed_parameter":
+		// First named child is the pattern: identifier or a splat.
+		if pn.NamedChildCount() > 0 {
+			first := pn.NamedChild(0)
+			switch first.Type(w.lang) {
+			case "identifier":
+				p.Name = first.Text(w.src)
+			case "list_splat_pattern", "dictionary_splat_pattern":
+				p.Name = first.Text(w.src)
+				p.Variadic = true
+			}
+		}
+		if t := pn.ChildByFieldName("type", w.lang); t != nil {
+			p.Type = lang.NormalizeType(t.Text(w.src))
+		}
+	case "default_parameter", "typed_default_parameter":
+		p.Optional = true
+		if nm := pn.ChildByFieldName("name", w.lang); nm != nil && nm.Type(w.lang) == "identifier" {
+			p.Name = nm.Text(w.src)
+		} else if pn.NamedChildCount() > 0 && pn.NamedChild(0).Type(w.lang) == "identifier" {
+			p.Name = pn.NamedChild(0).Text(w.src)
+		}
+		if t := pn.ChildByFieldName("type", w.lang); t != nil {
+			p.Type = lang.NormalizeType(t.Text(w.src))
+		}
+	case "list_splat_pattern", "dictionary_splat_pattern":
+		p.Name = pn.Text(w.src)
+		p.Variadic = true
+	default:
+		// positional_separator "/", keyword_separator "*", and any
+		// pattern this tier does not model.
+		return p, false
+	}
+	return p, true
+}
+
+// signature extracts params and the annotated return type of one
+// function_definition.
+func (w *pyWalker) signature(n *gotreesitter.Node) ([]lang.Param, []string) {
+	var params []lang.Param
+	if ps := n.ChildByFieldName("parameters", w.lang); ps != nil {
+		for i := 0; i < ps.NamedChildCount(); i++ {
+			if p, ok := w.param(ps.NamedChild(i)); ok {
+				params = append(params, p)
+			}
+		}
+	}
+	var results []string
+	if rt := n.ChildByFieldName("return_type", w.lang); rt != nil {
+		results = []string{lang.NormalizeType(rt.Text(w.src))}
+	}
+	return params, results
 }
 
 // walk visits definitions. owner is the enclosing class or function
@@ -102,7 +166,9 @@ func (w *pyWalker) walk(n *gotreesitter.Node, owner string, inFunction bool) {
 		if owner == "" || inFunction {
 			kind = "func"
 		}
-		w.add(kind, name, owner, n)
+		if d := w.add(kind, name, owner, n); d != nil {
+			d.Params, d.Results = w.signature(n)
+		}
 		if body := n.ChildByFieldName("body", w.lang); body != nil {
 			for i := 0; i < body.NamedChildCount(); i++ {
 				w.walk(body.NamedChild(i), name, true)
