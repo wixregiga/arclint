@@ -4,3 +4,4 @@
 **/.arclint/cache.json
 **/.arclint/cache/
 .claude-scratch/
+GNUmakefile
