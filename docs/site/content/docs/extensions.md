@@ -8,6 +8,20 @@ When the declarative vocabulary runs out, a rule becomes a TypeScript
 file. The binary transpiles and executes it in-process (esbuild + sobek,
 the k6 pattern): contributors and CI need no Node, npm, or tsc.
 
+There is exactly one resolution model: the directory of rules.yaml IS
+the repo root IS the extension root, and extensions live under
+`.arclint/extensions/` inside it. `--rules elsewhere/rules.yaml` moves
+all three together. When no extension registers a configured rule type,
+the error names the absolute directory that was searched.
+
+Start a new rule with `arclint rules scaffold <type>`: it writes a stub
+extension and a failing test case, and prints the rules.yaml snippet.
+Inspect what a rule would see with `arclint facts <file>` — the exact
+`ctx.facts(path)` view, signatures included — instead of writing a
+probe rule. `arclint load` lists extension types that are registered
+but not instantiated, and warns when an armed instance configures an
+empty list param (the rule may be inert).
+
 ## Anatomy
 
 ```ts

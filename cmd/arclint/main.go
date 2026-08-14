@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -55,7 +56,7 @@ func newRootCmd() *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.AddCommand(newLoadCmd(), newListCmd(), newRulesCmd(), newCheckCmd(), newSdkCmd(),
-		newModuleCmd(), newExplainCmd(), newInitCmd(), newPatternsCmd())
+		newModuleCmd(), newExplainCmd(), newInitCmd(), newPatternsCmd(), newFactsCmd())
 	return root
 }
 
@@ -73,7 +74,7 @@ func loadExtensionRegistry(rs *config.RuleSet) (*ext.Registry, error) {
 		rt := reg.Get(inst.Type)
 		if rt == nil {
 			return nil, &exitError{2, fmt.Sprintf("rules[%d]: no extension registers rule type %q (looked in %s)",
-				i, inst.Type, ext.ExtensionsDir)}
+				i, inst.Type, filepath.Join(rs.Root, ext.ExtensionsDir))}
 		}
 		if _, err := rt.ValidateParams(inst.Params); err != nil {
 			return nil, &exitError{2, fmt.Sprintf("rules[%d]: %v", i, err)}
@@ -172,6 +173,27 @@ func newLoadCmd() *cobra.Command {
 				"loaded %s: %d rules (%d consumes, %d provides, %d invariants, %d extension instances), layers: %d declarative / %d expr / %d extension types, targets %v, %d modules\n",
 				rs.Path, total, counts["consumes"], counts["provides"], counts["invariant"], len(rs.Rules),
 				len(instances)-counts["expr"], counts["expr"], len(reg.Types()), rs.Runtime, len(rs.Modules))
+			// Inert-rule visibility (M10): extension types nobody armed,
+			// and armed instances whose params disarm them silently.
+			armed := map[string]bool{}
+			for _, inst := range rs.Rules {
+				armed[inst.Type] = true
+			}
+			var dormant []string
+			for _, rt := range reg.Types() {
+				if !armed[rt.Name] {
+					dormant = append(dormant, rt.Name+" ("+rt.SourcePath+")")
+				}
+			}
+			if len(dormant) > 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "registered but not instantiated: %s\n", strings.Join(dormant, ", "))
+			}
+			for i, inst := range rs.Rules {
+				for _, p := range ext.EmptyListParams(inst.Params) {
+					fmt.Fprintf(cmd.ErrOrStderr(), "warn: rules[%d] (%s): param %q is an empty list (rule may be inert)\n",
+						i, inst.Type, p)
+				}
+			}
 			fmt.Fprintf(cmd.OutOrStdout(), "cache written: %s\n", filepath.Join(rs.Root, ".arclint", "cache.json"))
 			return nil
 		},
@@ -255,7 +277,7 @@ func newRulesCmd() *cobra.Command {
 		},
 	}
 	ls.Flags().StringVar(&rulesFlag, "rules", "", "path to rules.yaml (default: discovered upward from .)")
-	rules.AddCommand(ls, newRulesShowCmd(), newRulesTestCmd())
+	rules.AddCommand(ls, newRulesShowCmd(), newRulesTestCmd(), newRulesScaffoldCmd())
 	return rules
 }
 
@@ -285,7 +307,7 @@ func newSdkCmd() *cobra.Command {
 }
 
 func newCheckCmd() *cobra.Command {
-	var rulesFlag, format string
+	var rulesFlag, format, only string
 	var showSuppressed bool
 	cmd := &cobra.Command{
 		Use:   "check [path]",
@@ -311,6 +333,11 @@ func newCheckCmd() *cobra.Command {
 			res, err := engine.Check(rs)
 			if err != nil {
 				return &exitError{2, err.Error()}
+			}
+			if only != "" {
+				if err := filterOnly(rs, res, only); err != nil {
+					return err
+				}
 			}
 			for _, warning := range res.Warnings {
 				fmt.Fprintln(cmd.ErrOrStderr(), "warn: "+warning)
@@ -340,5 +367,42 @@ func newCheckCmd() *cobra.Command {
 	cmd.Flags().StringVar(&rulesFlag, "rules", "", "path to rules.yaml (default: discovered upward from [path])")
 	cmd.Flags().StringVar(&format, "format", "human", "output format: human or json")
 	cmd.Flags().BoolVar(&showSuppressed, "show-suppressed", false, "also list findings dropped by except clauses, with reasons")
+	cmd.Flags().StringVar(&only, "only", "", "restrict findings to one rule id or namespace prefix (exit code follows the filtered set)")
 	return cmd
+}
+
+// filterOnly restricts a check result to one rule id or namespace
+// prefix, post-collection. An unknown selector is a usage error: a
+// typo'd --only must not report a false clean.
+func filterOnly(rs *config.RuleSet, res *engine.Result, only string) error {
+	rows := rs.Instances()
+	if len(rs.Rules) > 0 {
+		reg, err := loadExtensionRegistry(rs)
+		if err != nil {
+			return err
+		}
+		rows = append(rows, extensionRows(rs, reg)...)
+	}
+	known := false
+	for _, inst := range rows {
+		if inst.ID == only || strings.HasPrefix(inst.ID, only+":") {
+			known = true
+			break
+		}
+	}
+	if !known {
+		return &exitError{2, fmt.Sprintf("--only %q matches no rule id or namespace; run `arclint rules ls`", only)}
+	}
+	keep := func(vs []report.Violation) []report.Violation {
+		var out []report.Violation
+		for _, v := range vs {
+			if v.RuleID == only || strings.HasPrefix(v.RuleID, only+":") {
+				out = append(out, v)
+			}
+		}
+		return out
+	}
+	res.Violations = keep(res.Violations)
+	res.Suppressed = keep(res.Suppressed)
+	return nil
 }

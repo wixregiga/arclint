@@ -200,6 +200,8 @@ func newExplainCmd() *cobra.Command {
 				for _, line := range strings.Split(strings.TrimRight(d.Example, "\n"), "\n") {
 					fmt.Fprintf(out, "  %s\n", line)
 				}
+				fmt.Fprintln(out, "\nProve rule behavior with `arclint rules test`: cases under .arclint/tests")
+				fmt.Fprintln(out, "assert the complete finding set (scaffold one: `arclint rules scaffold <type>`).")
 				return nil
 			}
 			for _, rt := range extTypes {
@@ -215,6 +217,8 @@ func newExplainCmd() *cobra.Command {
 					return &exitError{2, err.Error()}
 				}
 				fmt.Fprintf(out, "\nparams schema:\n\n  %s\n", string(params))
+				fmt.Fprintln(out, "\nProve rule behavior with `arclint rules test`: cases under .arclint/tests")
+				fmt.Fprintln(out, "assert the complete finding set (scaffold one: `arclint rules scaffold <type>`).")
 				return nil
 			}
 			return &exitError{2, fmt.Sprintf("unknown rule kind %q; run `arclint explain` for the list", kind)}

@@ -58,6 +58,40 @@ below passed his gate on 2026-08-14.
    (`foo: (x) => void`) remain `field` decls without signatures;
    Python quoted annotations keep their quotes (`'Book'`).
 
+### M10 addendum (2026-08-14): the six author/debug affordances
+
+7. **`arclint facts <file>`** exposes the exact `ctx.facts(path)` view
+   (human table with rendered signatures; `--format json` is the wire
+   shape) and its errors say WHY facts are unavailable: not in tree, no
+   language target, target not active. Kills the probe-rule ritual.
+8. **Inert-rule visibility**: `load` lists extension types registered
+   but not instantiated, and both `load` and `check` warn when an
+   instance param is an empty list ("rule may be inert"). Advisory by
+   design: an empty list can be a legitimate strict setting, so it can
+   never fail the run; schema-level minItems was rejected as a
+   different contract (a pattern may ship an unconfigured template on
+   purpose — a fresh ddd-flat init now warns instead of staying
+   silent, which is exactly the field failure).
+9. **Extension-resolution honesty**: both "no extension registers rule
+   type" error sites print the ABSOLUTE directory searched; the one
+   model (rules.yaml dir == repo root == extension root, M1 decision
+   13) is now documented in the extensions page. Error text + docs
+   only, no resolution redesign.
+10. **`check --only <id|namespace>`** filters post-collection and the
+    exit code follows the filtered set; an unknown selector is exit 2,
+    because a typo'd --only must never report a false clean.
+11. **`arclint rules scaffold <type>`** writes a stub extension and a
+    FAILING case under .arclint/tests, prints the rules.yaml snippet
+    (with an explicit id so the case references it stably), refuses to
+    overwrite, and validates kebab-case names. Red first: `rules test`
+    fails until check() reports.
+12. **`explain <kind>`** ends with a two-line nudge at `rules test` and
+    `rules scaffold` — the field agent barely found the harness built
+    for their problem.
+13. e2e proof for all six through the binary (e2e_m10_test.go); the
+    harness now captures stderr on success too, which the old
+    cmd.Output()-based runBin silently discarded.
+
 ### M10 signature-facts gate results (measured 2026-08-14, WSL2 Ubuntu 24.04, go1.26.4)
 
 - Speed, interleaved A/B on one identical corpus (baseline worktree at

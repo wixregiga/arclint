@@ -8,15 +8,17 @@ weight = 6
 |---|---|
 | `arclint init` | interactive setup: detect languages, pick a pattern, write rules.yaml + extensions + typings, validate. Flags: `--runtimes go,ts`, `--pattern <name>`, `--force` |
 | `arclint patterns` | list architectural patterns, builtin and `.arclint/patterns/`. `--extensions` also lists each pattern's extension files |
-| `arclint check [path]` | evaluate the contracts; `--format json` for the stable violation shape; `--show-suppressed` also lists findings dropped by except clauses, with reasons |
-| `arclint load [rules.yaml]` | parse, validate (schema + semantics + extension params), cache; prints what loaded |
+| `arclint check [path]` | evaluate the contracts; `--format json` for the stable violation shape; `--show-suppressed` also lists findings dropped by except clauses, with reasons; `--only <id\|ns>` restricts findings (and the exit code) to one rule id or namespace |
+| `arclint load [rules.yaml]` | parse, validate (schema + semantics + extension params), cache; prints what loaded, lists extension types registered but not instantiated, and warns on instances whose params are empty lists (armed but inert) |
 | `arclint list` | one line per loaded rule |
+| `arclint facts <file>` | the declaration facts a rule sees from `ctx.facts(path)`: kinds, names, owners, signatures; `--format json` for the exact wire shape |
 | `arclint rules ls` | rule table: id, contract, kind, module, provider, severity, description |
 | `arclint module ls` | declared modules with file counts, languages, descriptions |
 | `arclint module info <name>` | one module: description, paths, members, every rule that binds it |
 | `arclint explain [kind]` | terminal docs for any rule kind or extension type |
 | `arclint rules show <id\|ns>` | every clause grouped under one rule id or namespace prefix, with its exceptions; `--format json` |
 | `arclint rules test [paths]` | run rule test cases (default `.arclint/tests`); `--pattern <name>` runs a pattern's bundled suite |
+| `arclint rules scaffold <type>` | stub extension + failing test case + rules.yaml snippet: the red-first start of a new rule |
 | `arclint sdk init` | write `arclint.d.ts` + `tsconfig.json` for extension authoring |
 
 Exit codes everywhere: `0` clean, `1` error-severity violations, `2`

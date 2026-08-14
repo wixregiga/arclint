@@ -24,11 +24,14 @@ func checkExtensions(ctx *Context, reg *ext.Registry) ([]report.Violation, error
 		rt := reg.Get(inst.Type)
 		if rt == nil {
 			return nil, fmt.Errorf("rules[%d]: no extension registers rule type %q (looked in %s)",
-				i, inst.Type, ext.ExtensionsDir)
+				i, inst.Type, filepath.Join(ctx.RS.Root, ext.ExtensionsDir))
 		}
 		params, err := rt.ValidateParams(inst.Params)
 		if err != nil {
 			return nil, fmt.Errorf("rules[%d]: %w", i, err)
+		}
+		for _, p := range ext.EmptyListParams(inst.Params) {
+			ctx.Warn("rules[%d] (%s): param %q is an empty list (rule may be inert)", i, inst.Type, p)
 		}
 		id := inst.ID
 		if id == "" {

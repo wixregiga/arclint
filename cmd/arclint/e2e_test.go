@@ -6,6 +6,7 @@ package main
 // (M2 acceptance).
 
 import (
+	"bytes"
 	"encoding/json"
 	"io/fs"
 	"os"
@@ -83,16 +84,17 @@ func runBin(t *testing.T, dir string, env []string, args ...string) (string, str
 	cmd := exec.Command(binPath, args...)
 	cmd.Dir = dir
 	cmd.Env = env
-	var out, errb []byte
-	out, err := cmd.Output()
+	var out, errb bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errb
+	err := cmd.Run()
 	if ee, ok := err.(*exec.ExitError); ok {
-		errb = ee.Stderr
-		return string(out), string(errb), ee.ExitCode()
+		return out.String(), errb.String(), ee.ExitCode()
 	}
 	if err != nil {
 		t.Fatalf("exec: %v", err)
 	}
-	return string(out), "", 0
+	return out.String(), errb.String(), 0
 }
 
 func TestExtensionRuleWithoutToolchain(t *testing.T) {

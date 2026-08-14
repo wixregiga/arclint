@@ -70,6 +70,22 @@ func (r *Registry) Get(name string) *RuleType {
 	return r.types[name]
 }
 
+// EmptyListParams returns the names of params whose configured value is
+// an empty list — the "armed but inert" smell from the field: a rule
+// that filters on an empty list can never report, silently. Sorted for
+// determinism. Advisory: some rules treat an empty list as a valid
+// strict setting, so callers warn, never fail.
+func EmptyListParams(params map[string]any) []string {
+	var out []string
+	for k, v := range params {
+		if list, ok := v.([]any); ok && len(list) == 0 {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // Types returns every rule type in registration order.
 func (r *Registry) Types() []*RuleType {
 	if r == nil {
