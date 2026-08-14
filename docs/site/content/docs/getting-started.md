@@ -60,6 +60,21 @@ arclint check . --format json   # stable shape for CI
 Exit codes: `0` clean, `1` at least one error-severity violation, `2`
 configuration or usage error.
 
+## Adopt an existing repository
+
+A repo with history usually has violations on day one. Freeze them
+instead of fixing everything first:
+
+```bash
+arclint baseline    # records current findings in .arclint/baseline.json
+arclint check .     # clean: 0 violations · 12 baselined
+```
+
+Commit the baseline file. From now on only new findings fail the run,
+the adopted count stays visible, and check warns when adopted findings
+disappear so the file shrinks as debt is paid. The
+[concepts page](/docs/concepts/#baseline) has the full story.
+
 ## Adjust the modules
 
 Patterns ship sensible globs, but module boundaries are yours:
@@ -86,3 +101,8 @@ YAML language server:
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/wixregiga/arclint/main/docs/rules.schema.json
 ```
+
+Until the repository is public that URL does not resolve; point at a
+local copy instead (`docs/rules.schema.json` in the arclint checkout).
+A drift test keeps the committed schema current, so a local copy is
+never stale relative to its checkout.

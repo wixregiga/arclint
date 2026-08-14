@@ -62,6 +62,11 @@ export default defineRule({
   tool checks this side declaratively.
 - **invariants**: naming conventions, required and forbidden paths,
   content rules, and typed expr predicates.
+- **Declaration facts with signatures**: extensions see every func and
+  method with its parameters and result types, in all three languages;
+  `arclint facts <file>` shows the same view for debugging.
+- **Adoptable**: `arclint baseline` freezes existing debt; check then
+  reports only new findings and the debt count stays visible.
 - **Exact Go import analysis** proven against `go list` over pinned real
   repositories: 7,500+ imports, zero mismatches. Lexer-grade TypeScript
   and Python extraction with documented, test-asserted limits.

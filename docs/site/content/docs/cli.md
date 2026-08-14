@@ -23,7 +23,10 @@ weight = 6
 | `arclint sdk init` | write `arclint.d.ts` + `tsconfig.json` for extension authoring |
 
 Exit codes everywhere: `0` clean, `1` error-severity violations, `2`
-configuration or usage error.
+configuration or usage error. Every command that reads a ruleset
+accepts `--rules <path>` to name rules.yaml explicitly; the default is
+discovery upward from the working directory, and the rules.yaml
+directory is the repo root and the extension root.
 
 ## Shell completion
 

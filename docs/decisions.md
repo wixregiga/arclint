@@ -81,6 +81,18 @@ the problem it solves.
    --show-baselined. `check --no-baseline` sees everything; the writer
    itself checks with the baseline skipped, so adoption is always
    computed from the full finding set.
+8. **Docs pass (audit verdict: enhance, no restructuring)**: the pages
+   already map onto Diátaxis (getting-started tutorial, concepts
+   explanation, rules and cli reference, extensions and patterns
+   how-to plus reference) and the voice is consistent, so no serious
+   findings and no reorganization (Brandon's caution honored). Gaps
+   fixed: the front page now names signature facts and baseline; the
+   tutorial gains the adoption step; the schema-URL loose end is
+   reworded honestly (the raw URL resolves only after the first push);
+   cli.md documents --rules. Drift protection extended per the
+   generation preference: TestCLIDocsDrift walks the real cobra
+   command tree and fails when cli.md misses a command or a check
+   flag, complementing the existing gendocs and schema drift tests.
 
 ## M10 (2026-08-14) — signature facts: ADR and gate results
 
