@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      # make ci runs go vet (including the oracle and bench tagged packages),
+      # go test ./..., and the selfcheck that builds the grammar-tagged binary
+      # and lints this repository with its own rules.yaml.
+      - name: Run vet, tests, and selfcheck
+        run: make ci

@@ -1,0 +1,25 @@
+name: Feature request
+description: Propose a new rule kind, fact, or CLI capability
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What architectural constraint or workflow can you not express or check today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should arclint do? A rules.yaml sketch of the desired syntax helps.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you tried and why they fall short.
+    validations:
+      required: false

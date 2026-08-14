@@ -1,0 +1,43 @@
+# goreleaser configuration for arclint.
+# Mirrors the Makefile release target: CGO-free Linux builds for amd64 and
+# arm64, the grammar subset build tags from the Makefile GRAMMARS variable,
+# -trimpath, and stripped binaries stamped with the release version.
+version: 2
+
+project_name: arclint
+
+builds:
+  - main: ./cmd/arclint
+    binary: arclint
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+      - -tags=grammar_subset,grammar_subset_typescript,grammar_subset_tsx,grammar_subset_javascript,grammar_subset_python
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - formats: ["tar.gz"]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs"
+      - "^chore"
+
+release:
+  github:
+    owner: wixregiga
+    name: arclint
+  prerelease: auto

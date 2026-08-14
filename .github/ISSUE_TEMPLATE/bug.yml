@@ -1,0 +1,34 @@
+name: Bug report
+description: Report a defect in arclint
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: arclint version
+      description: Paste the output of `arclint --version`.
+      placeholder: arclint version 0.1.0
+    validations:
+      required: true
+  - type: textarea
+    id: rules
+    attributes:
+      label: rules.yaml snippet
+      description: The smallest rules.yaml that reproduces the problem.
+      render: yaml
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected vs actual
+      description: What you expected arclint to report, and what it reported instead.
+    validations:
+      required: true
+  - type: textarea
+    id: tree
+    attributes:
+      label: Minimal tree
+      description: If possible, the smallest directory layout that reproduces the problem, for example `tree` output or a short file list with relevant contents.
+    validations:
+      required: false

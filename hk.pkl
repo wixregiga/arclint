@@ -1,0 +1,25 @@
+// hk pre-commit configuration for arclint.
+// Pinned to the hk version installed via mise; run `hk install --mise` to
+// write git hooks that execute through `mise x`, so contributors get the
+// pinned toolchain without activating mise in their shell.
+amends "package://github.com/jdx/hk/releases/download/v1.49.0/hk@1.49.0#/Config.pkl"
+
+local linters = new Mapping<String, Step> {
+    ["gofmt"] {
+        glob = List("*.go")
+        check = "test -z \"$(gofmt -l {{files}})\""
+        fix = "gofmt -w {{files}}"
+    }
+    ["go-vet"] {
+        glob = List("*.go")
+        check = "go vet ./..."
+        exclusive = true
+    }
+}
+
+hooks {
+    ["pre-commit"] {
+        fix = true
+        steps = linters
+    }
+}
