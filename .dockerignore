@@ -1,0 +1,9 @@
+.git
+.claude
+.wixregiga-ignore
+.arclint
+AGENTS.md
+GNUmakefile
+arclint
+dist
+docs/site/public

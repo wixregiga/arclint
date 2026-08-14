@@ -14,6 +14,15 @@ git clone https://github.com/wixregiga/arclint && cd arclint
 make build   # produces ./arclint
 ```
 
+Or run it as a container: the image is built from `scratch` (the
+binary is self-contained, TypeScript extensions included), and the
+default command checks the mounted repository:
+
+```bash
+make docker                                  # builds arclint:<version>
+docker run --rm -v "$PWD":/repo arclint:0.1.0
+```
+
 ## Initialize a repository
 
 ```bash

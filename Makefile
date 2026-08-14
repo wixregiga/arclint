@@ -5,7 +5,7 @@ BIN     ?= ./arclint
 # without these tags all 206 grammars embed and the binary grows ~19 MB.
 GRAMMARS := grammar_subset grammar_subset_typescript grammar_subset_tsx grammar_subset_javascript grammar_subset_python
 
-.PHONY: build test vet generate selfcheck bench oracle release ci clean docs docs-serve
+.PHONY: build test vet generate selfcheck bench oracle release ci clean docs docs-serve docker
 
 build:
 	CGO_ENABLED=0 $(GO) build -tags "$(GRAMMARS)" -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o $(BIN) ./cmd/arclint
@@ -43,6 +43,12 @@ docs:
 
 docs-serve:
 	cd docs/site && zola serve
+
+# Container image; grammar tags and version flow from this file so the
+# Makefile stays the single source. Run a repo check with:
+#   docker run --rm -v $(PWD):/repo arclint:$(VERSION)
+docker:
+	docker build --build-arg GRAMMARS="$(GRAMMARS)" --build-arg VERSION=$(VERSION) -t arclint:$(VERSION) .
 
 release:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -tags "$(GRAMMARS)" -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o dist/arclint-linux-amd64 ./cmd/arclint

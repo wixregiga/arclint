@@ -51,6 +51,17 @@ the problem it solves.
    and dogfooding over custom commands where appropriate; his old
    constraint that mise.toml edits reset the terminal no longer holds
    (stated 2026-08-14).
+5. **MIT license** (Brandon's decision, 2026-08-14), copyright holder
+   wixregiga; committed before the first push so the license exists
+   from the first public commit.
+6. **Container image from scratch**: multi-stage Dockerfile; grammar
+   tags and version flow from the Makefile docker target so the
+   Makefile stays the single source. Verified live: --version inside
+   the container prints the bare product version (no .git in the build
+   context, the documented fallback), and a check with TypeScript
+   extensions ran inside scratch and reported both fixture findings —
+   the in-process extension runtime needs no shell and no libc. Image
+   size 39.3 MB. Registry publishing waits for the public repo.
 
 ## M10 (2026-08-14) — signature facts: ADR and gate results
 
