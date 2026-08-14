@@ -107,6 +107,7 @@ func newModuleCmd() *cobra.Command {
 		},
 	}
 
+	info.ValidArgsFunction = completeModules(&rulesFlag)
 	module.AddCommand(ls, info)
 	module.PersistentFlags().StringVar(&rulesFlag, "rules", "", "path to rules.yaml (default: discovered upward from .)")
 	return module
@@ -224,6 +225,7 @@ func newExplainCmd() *cobra.Command {
 			return &exitError{2, fmt.Sprintf("unknown rule kind %q; run `arclint explain` for the list", kind)}
 		},
 	}
+	cmd.ValidArgsFunction = completeExplainKinds(&rulesFlag)
 	cmd.Flags().StringVar(&rulesFlag, "rules", "", "path to rules.yaml (default: discovered upward from .)")
 	return cmd
 }

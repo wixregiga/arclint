@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -306,6 +307,10 @@ func newSdkCmd() *cobra.Command {
 	return sdk
 }
 
+// checkFormats is the closed set `check --format` accepts; completion
+// and validation read the same list so they cannot drift.
+var checkFormats = []string{"human", "json"}
+
 func newCheckCmd() *cobra.Command {
 	var rulesFlag, format, only string
 	var showSuppressed bool
@@ -314,8 +319,8 @@ func newCheckCmd() *cobra.Command {
 		Short: "evaluate contracts against the repository",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if format != "human" && format != "json" {
-				return &exitError{2, fmt.Sprintf("unknown format %q (human, json)", format)}
+			if !slices.Contains(checkFormats, format) {
+				return &exitError{2, fmt.Sprintf("unknown format %q (%s)", format, strings.Join(checkFormats, ", "))}
 			}
 			start := "."
 			if len(args) == 1 {
@@ -365,9 +370,11 @@ func newCheckCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&rulesFlag, "rules", "", "path to rules.yaml (default: discovered upward from [path])")
-	cmd.Flags().StringVar(&format, "format", "human", "output format: human or json")
+	cmd.Flags().StringVar(&format, "format", "human", "output format: "+strings.Join(checkFormats, ", "))
 	cmd.Flags().BoolVar(&showSuppressed, "show-suppressed", false, "also list findings dropped by except clauses, with reasons")
 	cmd.Flags().StringVar(&only, "only", "", "restrict findings to one rule id or namespace prefix (exit code follows the filtered set)")
+	mustFlagCompletion(cmd, "only", completeRuleSelectors(&rulesFlag))
+	mustFlagCompletion(cmd, "format", completeValues(checkFormats...))
 	return cmd
 }
 

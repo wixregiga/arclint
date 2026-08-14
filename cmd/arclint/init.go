@@ -135,6 +135,7 @@ func newInitCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&runtimesFlag, "runtimes", "", "comma-separated targets: go,ts,py (skips the prompt)")
 	cmd.Flags().StringVar(&patternFlag, "pattern", "", "pattern name from `arclint patterns` (skips the prompt)")
+	mustFlagCompletion(cmd, "pattern", completePatterns())
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing rules.yaml / extension files")
 	return cmd
 }

@@ -24,6 +24,16 @@ weight = 6
 Exit codes everywhere: `0` clean, `1` error-severity violations, `2`
 configuration or usage error.
 
+## Shell completion
+
+`arclint completion bash|zsh|fish|powershell` emits the script.
+Completion is dynamic: TAB completes module names for `module info`,
+rule ids and namespaces for `rules show` and `check --only`, pattern
+names for `init --pattern` and `rules test --pattern`, rule kinds for
+`explain`, and closed value sets for `--format`. Values come from the
+rules.yaml the current directory resolves to; without one, value
+completion stays silent.
+
 ## The violation shape
 
 `--format json` emits an array with a stable contract:

@@ -20,6 +20,16 @@ the problem it solves.
    (vcs.revision and vcs.time present). TestVersionSingleSource guards
    the three hand-set places (main.go, Makefile, docs config) until a
    git tag becomes the single source after the first push.
+2. **Dynamic completion via cobra's native mechanism**: ValidArgsFunction
+   and RegisterFlagCompletionFunc feed module names, rule ids and
+   namespaces, pattern names, explain kinds, and --format values to all
+   four shells from one implementation. Completion callbacks re-execute
+   the binary per TAB, so they load the ruleset silently and degrade to
+   an empty list with NoFileComp when no rules.yaml exists — never an
+   error. Extension instance ids derive positionally, without loading
+   the registry: completion latency does not pay for esbuild. The
+   --format value list is one shared variable for validation and
+   completion, so the two cannot drift.
 
 ## M10 (2026-08-14) — signature facts: ADR and gate results
 

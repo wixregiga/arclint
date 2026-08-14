@@ -65,6 +65,8 @@ func newRulesScaffoldCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&rulesFlag, "rules", "", "path to rules.yaml (default: discovered upward from .)")
+	// The argument is a NEW rule type name: nothing to complete.
+	cmd.ValidArgsFunction = completeValues()
 	return cmd
 }
 

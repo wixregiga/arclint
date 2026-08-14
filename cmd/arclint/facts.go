@@ -86,6 +86,7 @@ func newFactsCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&rulesFlag, "rules", "", "path to rules.yaml (default: discovered upward from <file>)")
 	cmd.Flags().StringVar(&format, "format", "human", "output format: human or json")
+	mustFlagCompletion(cmd, "format", completeValues("human", "json"))
 	return cmd
 }
 

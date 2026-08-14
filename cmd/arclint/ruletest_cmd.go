@@ -83,6 +83,8 @@ func newRulesShowCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&rulesFlag, "rules", "", "path to rules.yaml (default: discovered upward from .)")
 	cmd.Flags().StringVar(&format, "format", "human", "output format: human or json")
+	cmd.ValidArgsFunction = completeRuleSelectors(&rulesFlag)
+	mustFlagCompletion(cmd, "format", completeValues("human", "json"))
 	return cmd
 }
 
@@ -176,6 +178,8 @@ func newRulesTestCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&patternFlag, "pattern", "", "run a pattern's bundled test suite instead")
 	cmd.Flags().StringVar(&format, "format", "human", "output format: human or json")
+	mustFlagCompletion(cmd, "pattern", completePatterns())
+	mustFlagCompletion(cmd, "format", completeValues("human", "json"))
 	return cmd
 }
 
