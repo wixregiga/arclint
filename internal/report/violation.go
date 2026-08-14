@@ -58,6 +58,10 @@ type Violation struct {
 	Suppressed bool `json:"suppressed,omitempty"`
 	// SuppressedReason is the except entry's reason.
 	SuppressedReason string `json:"suppressedReason,omitempty"`
+	// Baselined marks a finding adopted into .arclint/baseline.json;
+	// such findings appear in output only under --show-baselined and
+	// never affect the exit code.
+	Baselined bool `json:"baselined,omitempty"`
 }
 
 // LineValue returns the line number or 0 when the violation is not anchored

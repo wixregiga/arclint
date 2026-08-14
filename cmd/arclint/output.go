@@ -11,8 +11,9 @@ import (
 
 // writeHuman groups violations by contract clause, blame shown, per the
 // proposal's CLI shape. showSuppressed additionally lists findings
-// dropped by except clauses, each with its reason.
-func writeHuman(w io.Writer, res *engine.Result, dur time.Duration, showSuppressed bool) {
+// dropped by except clauses, each with its reason; showBaselined lists
+// the adopted debt the committed baseline covers.
+func writeHuman(w io.Writer, res *engine.Result, dur time.Duration, showSuppressed, showBaselined bool) {
 	groups := []struct {
 		contract report.Contract
 		header   string
@@ -62,15 +63,30 @@ func writeHuman(w io.Writer, res *engine.Result, dur time.Duration, showSuppress
 		}
 		fmt.Fprintln(w)
 	}
-	suppressed := ""
+	if showBaselined && len(res.Baselined) > 0 {
+		fmt.Fprintln(w, "BASELINED (adopted debt)")
+		for _, v := range res.Baselined {
+			loc := v.Path
+			if v.Line != nil {
+				loc = fmt.Sprintf("%s:%d", v.Path, *v.Line)
+			}
+			fmt.Fprintf(w, "  %s  %s  %s\n", loc, v.RuleID, v.Severity)
+			fmt.Fprintf(w, "    %s\n", v.Message)
+		}
+		fmt.Fprintln(w)
+	}
+	omitted := ""
+	if len(res.Baselined) > 0 {
+		omitted += fmt.Sprintf(" · %d baselined", len(res.Baselined))
+	}
 	if len(res.Suppressed) > 0 {
-		suppressed = fmt.Sprintf(" · %d suppressed by except", len(res.Suppressed))
+		omitted += fmt.Sprintf(" · %d suppressed by except", len(res.Suppressed))
 	}
 	if len(res.Violations) == 0 {
-		fmt.Fprintf(w, "clean: 0 violations%s · %d files · %s\n", suppressed, res.FilesScanned, dur.Round(time.Millisecond))
+		fmt.Fprintf(w, "clean: 0 violations%s · %d files · %s\n", omitted, res.FilesScanned, dur.Round(time.Millisecond))
 		return
 	}
 	fmt.Fprintf(w, "%d violations (%d error, %d warn, %d info)%s · %d files · %s\n",
 		len(res.Violations), counts[report.SeverityError], counts[report.SeverityWarn],
-		counts[report.SeverityInfo], suppressed, res.FilesScanned, dur.Round(time.Millisecond))
+		counts[report.SeverityInfo], omitted, res.FilesScanned, dur.Round(time.Millisecond))
 }

@@ -62,6 +62,25 @@ the problem it solves.
    extensions ran inside scratch and reported both fixture findings —
    the in-process extension runtime needs no shell and no libc. Image
    size 39.3 MB. Registry publishing waits for the public repo.
+7. **Baseline mode** (unfrozen by Brandon 2026-08-14: version
+   milestones do not gate features, "we have git"). `arclint baseline`
+   adopts current findings into .arclint/baseline.json; check
+   subtracts them, always prints the count, and warns when adopted
+   findings no longer occur. Design decisions: entries key on
+   report.Fingerprint (rule, path, message — shared with SARIF, line
+   moves do not reopen findings) and carry a COUNT so identical
+   findings baseline independently and a third occurrence stays
+   reported; the file is reviewable (each entry carries its finding,
+   not just a hash) and deterministic (no timestamps, sorted keys,
+   byte-identical regeneration proven in e2e); a malformed or
+   future-version file is a loud exit-2 error, never a silent
+   no-baseline; excepts apply first, baseline covers what remains;
+   baselined findings never affect the exit code, stay out of the line
+   format, and appear in sarif as suppressions ("adopted into
+   baseline") and in json marked baselined:true under
+   --show-baselined. `check --no-baseline` sees everything; the writer
+   itself checks with the baseline skipped, so adoption is always
+   computed from the full finding set.
 
 ## M10 (2026-08-14) — signature facts: ADR and gate results
 

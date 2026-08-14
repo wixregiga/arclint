@@ -132,6 +132,23 @@ audit trail. Suppressed findings are counted in check output
 show <id>` displays a requirement's exceptions beside its clauses.
 `arclint explain except` has the full story.
 
+## Baseline
+
+Exceptions are policy for findings that are ALLOWED. The baseline is
+the other adoption tool: debt that is acknowledged but not allowed to
+grow. `arclint baseline` records every current finding in
+`.arclint/baseline.json` (commit it); `check` then reports only new
+findings, always prints the adopted count (`clean: 0 violations · 12
+baselined`), and warns when adopted findings no longer occur so the
+file shrinks as debt is paid. Entries key on a fingerprint of rule,
+path, and message, so line moves do not reopen findings, and identical
+findings carry a count.
+
+`check --show-baselined` lists the adopted debt, `check --no-baseline`
+evaluates without it, and the file itself is reviewable: every entry
+carries the finding it covers, not just a hash, and it contains no
+timestamps, so regenerating it diffs only when findings change.
+
 ## Validation layers
 
 rules.yaml passes three gates before anything runs: YAML syntax, the

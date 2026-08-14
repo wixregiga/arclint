@@ -28,6 +28,17 @@ type Result struct {
 	// carrying their reasons; they never affect the exit code and are
 	// shown only on request, but the count is always printed.
 	Suppressed []report.Violation
+	// Baselined holds findings covered by .arclint/baseline.json:
+	// adopted debt, counted visibly, never affecting the exit code.
+	Baselined []report.Violation
+}
+
+// CheckOptions tunes one check run.
+type CheckOptions struct {
+	// SkipBaseline evaluates without subtracting the committed
+	// baseline: `check --no-baseline`, and the `arclint baseline`
+	// writer, which must see everything it is about to adopt.
+	SkipBaseline bool
 }
 
 // HasErrors reports whether any violation carries severity error, which is
@@ -43,6 +54,11 @@ func (r *Result) HasErrors() bool {
 
 // Check evaluates the ruleset against the tree rooted at rs.Root.
 func Check(rs *config.RuleSet) (*Result, error) {
+	return CheckWith(rs, CheckOptions{})
+}
+
+// CheckWith evaluates with explicit options.
+func CheckWith(rs *config.RuleSet, opts CheckOptions) (*Result, error) {
 	t, err := tree.Walk(rs.Root, tree.Options{
 		Exclude:         rs.Scan.Exclude,
 		IncludeTestdata: rs.Scan.IncludeTestdata,
@@ -99,8 +115,24 @@ func Check(rs *config.RuleSet) (*Result, error) {
 	}
 	fillCapabilities(rs, vs)
 	vs, suppressed := applyExcepts(rs, vs)
+	var baselined []report.Violation
+	if !opts.SkipBaseline {
+		entries, err := loadBaseline(rs.Root)
+		if err != nil {
+			return nil, err
+		}
+		if entries != nil {
+			var stale int
+			vs, baselined, stale = applyBaseline(entries, vs)
+			if stale > 0 {
+				ctx.Warn("baseline: %d adopted findings no longer occur; run `arclint baseline` to refresh", stale)
+			}
+		}
+	}
 	report.Sort(vs)
 	report.Sort(suppressed)
+	report.Sort(baselined)
 	sort.Strings(ctx.warnings)
-	return &Result{Violations: vs, Warnings: ctx.warnings, FilesScanned: len(t.Files), Suppressed: suppressed}, nil
+	return &Result{Violations: vs, Warnings: ctx.warnings, FilesScanned: len(t.Files),
+		Suppressed: suppressed, Baselined: baselined}, nil
 }

@@ -57,7 +57,8 @@ func newRootCmd() *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.AddCommand(newLoadCmd(), newListCmd(), newRulesCmd(), newCheckCmd(), newSdkCmd(),
-		newModuleCmd(), newExplainCmd(), newInitCmd(), newPatternsCmd(), newFactsCmd())
+		newModuleCmd(), newExplainCmd(), newInitCmd(), newPatternsCmd(), newFactsCmd(),
+		newBaselineCmd())
 	return root
 }
 
@@ -315,7 +316,7 @@ var checkFormats = []string{"human", "json", "line", "sarif"}
 
 func newCheckCmd() *cobra.Command {
 	var rulesFlag, format, only string
-	var showSuppressed bool
+	var showSuppressed, showBaselined, noBaseline bool
 	cmd := &cobra.Command{
 		Use:   "check [path]",
 		Short: "evaluate contracts against the repository",
@@ -337,7 +338,7 @@ func newCheckCmd() *cobra.Command {
 				return &exitError{2, err.Error()}
 			}
 			began := time.Now()
-			res, err := engine.Check(rs)
+			res, err := engine.CheckWith(rs, engine.CheckOptions{SkipBaseline: noBaseline})
 			if err != nil {
 				return &exitError{2, err.Error()}
 			}
@@ -349,35 +350,37 @@ func newCheckCmd() *cobra.Command {
 			for _, warning := range res.Warnings {
 				fmt.Fprintln(cmd.ErrOrStderr(), "warn: "+warning)
 			}
+			// Suppressed and baselined findings join machine output only
+			// on request, marked, and never affect the exit code.
+			withOmitted := func() []report.Violation {
+				violations := append([]report.Violation{}, res.Violations...)
+				if showSuppressed {
+					violations = append(violations, res.Suppressed...)
+				}
+				if showBaselined {
+					violations = append(violations, res.Baselined...)
+				}
+				return violations
+			}
 			switch format {
 			case "json":
-				violations := res.Violations
-				if showSuppressed {
-					// Suppressed findings join the stable array shape,
-					// marked, and still never affect the exit code.
-					violations = append(append([]report.Violation{}, violations...), res.Suppressed...)
-				}
-				data, err := report.MarshalJSONList(violations)
+				data, err := report.MarshalJSONList(withOmitted())
 				if err != nil {
 					return &exitError{2, err.Error()}
 				}
 				fmt.Fprintln(cmd.OutOrStdout(), string(data))
 			case "line":
-				// Editors show problems, not policy: suppressed findings
-				// stay out of the line format by design.
+				// Editors show problems, not policy: suppressed and
+				// baselined findings stay out of the line format.
 				cmd.OutOrStdout().Write(report.MarshalLineList(res.Violations))
 			case "sarif":
-				violations := res.Violations
-				if showSuppressed {
-					violations = append(append([]report.Violation{}, violations...), res.Suppressed...)
-				}
-				data, err := report.MarshalSARIF(violations, buildVersion(version))
+				data, err := report.MarshalSARIF(withOmitted(), buildVersion(version))
 				if err != nil {
 					return &exitError{2, err.Error()}
 				}
 				fmt.Fprintln(cmd.OutOrStdout(), string(data))
 			default:
-				writeHuman(cmd.OutOrStdout(), res, time.Since(began), showSuppressed)
+				writeHuman(cmd.OutOrStdout(), res, time.Since(began), showSuppressed, showBaselined)
 			}
 			if res.HasErrors() {
 				return &exitError{code: 1}
@@ -388,6 +391,8 @@ func newCheckCmd() *cobra.Command {
 	cmd.Flags().StringVar(&rulesFlag, "rules", "", "path to rules.yaml (default: discovered upward from [path])")
 	cmd.Flags().StringVar(&format, "format", "human", "output format: "+strings.Join(checkFormats, ", "))
 	cmd.Flags().BoolVar(&showSuppressed, "show-suppressed", false, "also list findings dropped by except clauses, with reasons")
+	cmd.Flags().BoolVar(&showBaselined, "show-baselined", false, "also list findings covered by the committed baseline")
+	cmd.Flags().BoolVar(&noBaseline, "no-baseline", false, "evaluate without subtracting .arclint/baseline.json")
 	cmd.Flags().StringVar(&only, "only", "", "restrict findings to one rule id or namespace prefix (exit code follows the filtered set)")
 	mustFlagCompletion(cmd, "only", completeRuleSelectors(&rulesFlag))
 	mustFlagCompletion(cmd, "format", completeValues(checkFormats...))
@@ -427,5 +432,6 @@ func filterOnly(rs *config.RuleSet, res *engine.Result, only string) error {
 	}
 	res.Violations = keep(res.Violations)
 	res.Suppressed = keep(res.Suppressed)
+	res.Baselined = keep(res.Baselined)
 	return nil
 }

@@ -102,10 +102,11 @@ func sarifLevel(s Severity) string {
 	}
 }
 
-// fingerprint identifies a finding across commits: rule, path, and
+// Fingerprint identifies a finding across commits: rule, path, and
 // message, deliberately excluding the line so pure line shifts do not
-// reopen findings.
-func fingerprint(v Violation) string {
+// reopen findings. SARIF partialFingerprints and the baseline file both
+// key on it.
+func Fingerprint(v Violation) string {
 	sum := sha256.Sum256([]byte(v.RuleID + "|" + v.Path + "|" + v.Message))
 	return hex.EncodeToString(sum[:8])
 }
@@ -142,11 +143,14 @@ func MarshalSARIF(vs []Violation, toolVersion string) ([]byte, error) {
 			Level:               sarifLevel(v.Severity),
 			Message:             sarifMessage{Text: v.Message},
 			Locations:           []sarifLocation{{PhysicalLocation: loc}},
-			PartialFingerprints: map[string]string{"arclintFingerprint/v1": fingerprint(v)},
+			PartialFingerprints: map[string]string{"arclintFingerprint/v1": Fingerprint(v)},
 			Properties:          props,
 		}
 		if v.Suppressed {
 			result.Suppressions = []sarifSuppression{{Kind: "external", Justification: v.SuppressedReason}}
+		}
+		if v.Baselined {
+			result.Suppressions = []sarifSuppression{{Kind: "external", Justification: "adopted into baseline"}}
 		}
 		results = append(results, result)
 	}

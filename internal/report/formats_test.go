@@ -104,7 +104,7 @@ func TestMarshalSARIF(t *testing.T) {
 	}
 	moved := sample()[0]
 	moved.Line = IntPtr(5)
-	if got := fingerprint(moved); got != fp {
+	if got := Fingerprint(moved); got != fp {
 		t.Errorf("fingerprint changed on line move: %s vs %s", got, fp)
 	}
 	if strings.Contains(string(data), "\"line\"") {

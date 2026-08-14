@@ -8,7 +8,8 @@ weight = 6
 |---|---|
 | `arclint init` | interactive setup: detect languages, pick a pattern, write rules.yaml + extensions + typings, validate. Flags: `--runtimes go,ts`, `--pattern <name>`, `--force` |
 | `arclint patterns` | list architectural patterns, builtin and `.arclint/patterns/`. `--extensions` also lists each pattern's extension files |
-| `arclint check [path]` | evaluate the contracts; `--format json\|line\|sarif` for machine shapes; `--show-suppressed` also lists findings dropped by except clauses, with reasons; `--only <id\|ns>` restricts findings (and the exit code) to one rule id or namespace |
+| `arclint check [path]` | evaluate the contracts; `--format json\|line\|sarif` for machine shapes; `--show-suppressed` and `--show-baselined` also list omitted findings; `--no-baseline` ignores the committed baseline; `--only <id\|ns>` restricts findings (and the exit code) to one rule id or namespace |
+| `arclint baseline [path]` | adopt current findings into `.arclint/baseline.json` (commit it); check then reports only new findings, counts the debt visibly, and warns when entries go stale |
 | `arclint load [rules.yaml]` | parse, validate (schema + semantics + extension params), cache; prints what loaded, lists extension types registered but not instantiated, and warns on instances whose params are empty lists (armed but inert) |
 | `arclint list` | one line per loaded rule |
 | `arclint facts <file>` | the declaration facts a rule sees from `ctx.facts(path)`: kinds, names, owners, signatures; `--format json` for the exact wire shape |
