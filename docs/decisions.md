@@ -42,6 +42,15 @@ the problem it solves.
    pure line shifts do not reopen findings; arclint semantics
    (contract, blame, capability, fixHint) ride in the property bag
    instead of invented SARIF fields.
+4. **Repo tool pins and hooks through make**: mise.toml pins hk,
+   goreleaser, gitleaks, and zola, and wires HK_MISE plus a postinstall
+   `hk install --mise`, so hooks work without mise activated in the
+   shell. Hook steps route through make where a target exists (make
+   vet) and the final step dogfoods arclint (make selfcheck): an
+   architecture break cannot be committed. Brandon's direction: make
+   and dogfooding over custom commands where appropriate; his old
+   constraint that mise.toml edits reset the terminal no longer holds
+   (stated 2026-08-14).
 
 ## M10 (2026-08-14) — signature facts: ADR and gate results
 

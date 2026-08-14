@@ -4,15 +4,22 @@
 // pinned toolchain without activating mise in their shell.
 amends "package://github.com/jdx/hk/releases/download/v1.49.0/hk@1.49.0#/Config.pkl"
 
+// Steps route through make where a target exists, and the last step
+// dogfoods arclint itself: make selfcheck lints this repository with
+// its own rules.yaml, so an architecture break cannot be committed.
 local linters = new Mapping<String, Step> {
     ["gofmt"] {
         glob = List("*.go")
         check = "test -z \"$(gofmt -l {{files}})\""
         fix = "gofmt -w {{files}}"
     }
-    ["go-vet"] {
+    ["vet"] {
         glob = List("*.go")
-        check = "go vet ./..."
+        check = "make vet"
+        exclusive = true
+    }
+    ["arclint-selfcheck"] {
+        check = "make selfcheck"
         exclusive = true
     }
 }

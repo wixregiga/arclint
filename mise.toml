@@ -1,0 +1,14 @@
+# Repo tool pins. HK_MISE plus the postinstall hook wire git hooks
+# through `mise x`, so hooks work without mise activated in the shell
+# (https://hk.jdx.dev/mise_integration.html).
+[tools]
+hk = "1.49.0"
+goreleaser = "2.13.0"
+gitleaks = "8.30.1"
+zola = "0.21.0"
+
+[env]
+HK_MISE = 1
+
+[hooks]
+postinstall = "hk install --mise"
