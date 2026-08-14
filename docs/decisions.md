@@ -3,6 +3,24 @@
 Small ambiguities resolved in favor of the proposal's shapes, recorded per
 milestone. Dates are decision dates.
 
+## Spike landings (2026-08-14) — versioning, completion, formats, repo scaffolding
+
+Implementations of the spikes Brandon approved on 2026-08-14, landed in
+parallel lanes with disjoint file ownership. Each commit message states
+the problem it solves.
+
+1. **Version stamping, ReadBuildInfo-first**: `--version` prints the
+   product version plus `(shorthash, dirty, date)` from the VCS build
+   settings Go stamps automatically since 1.18; ldflags keeps setting
+   only the product version, so the Makefile needs no git plumbing. The
+   product stays 0.1.0 until a compat commitment exists, while every
+   build is distinguishable — the two concerns the spike separated.
+   Builds without VCS data fall back to the bare version. Verified
+   against our own Makefile-built binary before implementation
+   (vcs.revision and vcs.time present). TestVersionSingleSource guards
+   the three hand-set places (main.go, Makefile, docs config) until a
+   git tag becomes the single source after the first push.
+
 ## M10 (2026-08-14) — signature facts: ADR and gate results
 
 Brandon's binding constraints, set 2026-08-13: one interface for every

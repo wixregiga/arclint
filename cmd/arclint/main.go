@@ -51,7 +51,7 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "arclint",
 		Short:         "architecture contracts as data: consumes, provides, invariants",
-		Version:       version,
+		Version:       buildVersion(version),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
