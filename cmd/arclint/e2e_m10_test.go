@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -113,6 +114,45 @@ func TestCheckOnly(t *testing.T) {
 	_, stderr, code := runBin(t, dir, os.Environ(), "check", ".", "--only", "rules.handler-naming[9]")
 	if code != 2 || !strings.Contains(stderr, "matches no rule id or namespace") {
 		t.Errorf("unknown --only: exit %d, stderr %s", code, stderr)
+	}
+}
+
+// TestCheckLineAndSarifFormats proves the two editor/CI encodings
+// through the binary: line for problemMatcher/errorformat, SARIF for
+// code scanning.
+func TestCheckLineAndSarifFormats(t *testing.T) {
+	dir := copyFixture(t, "extension-handler-naming")
+
+	stdout, _, code := runBin(t, dir, os.Environ(), "check", ".", "--format", "line")
+	if code != 1 {
+		t.Fatalf("--format line: exit %d\n%s", code, stdout)
+	}
+	lineRe := regexp.MustCompile(`(?m)^internal/api/handlers/broken\.go:\d+: error: .+ \[rules\.handler-naming\[0\]\]$`)
+	if !lineRe.MatchString(stdout) {
+		t.Errorf("line format mismatch:\n%s", stdout)
+	}
+
+	stdout, _, code = runBin(t, dir, os.Environ(), "check", ".", "--format", "sarif")
+	if code != 1 {
+		t.Fatalf("--format sarif: exit %d", code)
+	}
+	var log struct {
+		Version string `json:"version"`
+		Runs    []struct {
+			Results []struct {
+				RuleID string `json:"ruleId"`
+				Level  string `json:"level"`
+			} `json:"results"`
+		} `json:"runs"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &log); err != nil {
+		t.Fatalf("sarif is not valid JSON: %v", err)
+	}
+	if log.Version != "2.1.0" || len(log.Runs) != 1 || len(log.Runs[0].Results) != 2 {
+		t.Errorf("sarif shape: %s", stdout)
+	}
+	if log.Runs[0].Results[0].Level != "error" {
+		t.Errorf("sarif level: %+v", log.Runs[0].Results[0])
 	}
 }
 

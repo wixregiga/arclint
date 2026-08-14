@@ -308,8 +308,10 @@ func newSdkCmd() *cobra.Command {
 }
 
 // checkFormats is the closed set `check --format` accepts; completion
-// and validation read the same list so they cannot drift.
-var checkFormats = []string{"human", "json"}
+// and validation read the same list so they cannot drift. line feeds
+// VS Code problemMatchers and vim errorformat; sarif feeds GitHub code
+// scanning and the SARIF Viewer.
+var checkFormats = []string{"human", "json", "line", "sarif"}
 
 func newCheckCmd() *cobra.Command {
 	var rulesFlag, format, only string
@@ -356,6 +358,20 @@ func newCheckCmd() *cobra.Command {
 					violations = append(append([]report.Violation{}, violations...), res.Suppressed...)
 				}
 				data, err := report.MarshalJSONList(violations)
+				if err != nil {
+					return &exitError{2, err.Error()}
+				}
+				fmt.Fprintln(cmd.OutOrStdout(), string(data))
+			case "line":
+				// Editors show problems, not policy: suppressed findings
+				// stay out of the line format by design.
+				cmd.OutOrStdout().Write(report.MarshalLineList(res.Violations))
+			case "sarif":
+				violations := res.Violations
+				if showSuppressed {
+					violations = append(append([]report.Violation{}, violations...), res.Suppressed...)
+				}
+				data, err := report.MarshalSARIF(violations, buildVersion(version))
 				if err != nil {
 					return &exitError{2, err.Error()}
 				}

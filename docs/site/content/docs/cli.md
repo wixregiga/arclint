@@ -8,7 +8,7 @@ weight = 6
 |---|---|
 | `arclint init` | interactive setup: detect languages, pick a pattern, write rules.yaml + extensions + typings, validate. Flags: `--runtimes go,ts`, `--pattern <name>`, `--force` |
 | `arclint patterns` | list architectural patterns, builtin and `.arclint/patterns/`. `--extensions` also lists each pattern's extension files |
-| `arclint check [path]` | evaluate the contracts; `--format json` for the stable violation shape; `--show-suppressed` also lists findings dropped by except clauses, with reasons; `--only <id\|ns>` restricts findings (and the exit code) to one rule id or namespace |
+| `arclint check [path]` | evaluate the contracts; `--format json\|line\|sarif` for machine shapes; `--show-suppressed` also lists findings dropped by except clauses, with reasons; `--only <id\|ns>` restricts findings (and the exit code) to one rule id or namespace |
 | `arclint load [rules.yaml]` | parse, validate (schema + semantics + extension params), cache; prints what loaded, lists extension types registered but not instantiated, and warns on instances whose params are empty lists (armed but inert) |
 | `arclint list` | one line per loaded rule |
 | `arclint facts <file>` | the declaration facts a rule sees from `ctx.facts(path)`: kinds, names, owners, signatures; `--format json` for the exact wire shape |
@@ -55,3 +55,23 @@ completion stays silent.
 `ruleId` is stable across runs (explicit `id:` wins; defaults derive
 from the module and kind). `line` is present when the violation anchors
 to a line.
+
+## Editor and CI formats
+
+`--format line` prints one finding per line for regex-based toolchains
+(VS Code problemMatcher, vim errorformat):
+
+```text
+internal/borrowbook/sneaky.go:3: error: import resolves to protected module "shared" [deps.shared-only-via-app]
+```
+
+An unanchored finding prints line 0; editors clamp it to the top of the
+file. Suppressed findings never appear in the line format: editors show
+problems, not policy.
+
+`--format sarif` emits SARIF 2.1.0 for GitHub code scanning and the VS
+Code SARIF Viewer. Findings carry a stable `partialFingerprints` entry
+(rule, path, message — line moves do not reopen findings), and under
+`--show-suppressed` the excepted findings appear with a SARIF
+suppressions block carrying the except reason. Contract, blame,
+capability, and fixHint ride in each result's property bag.

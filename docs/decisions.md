@@ -30,6 +30,18 @@ the problem it solves.
    the registry: completion latency does not pay for esbuild. The
    --format value list is one shared variable for validation and
    completion, so the two cannot drift.
+3. **check --format line and sarif**: line is the regex-parseable shape
+   VS Code problemMatchers and vim errorformat need (both are
+   line-oriented and cannot read JSON — diagnostics spike finding);
+   sarif is SARIF 2.1.0 for GitHub code scanning and the SARIF Viewer.
+   Decisions inside: unanchored findings print line 0, never an
+   invented line; suppressed findings stay OUT of the line format
+   (editors show problems, not policy) but join sarif under
+   --show-suppressed as proper SARIF suppressions with the except
+   reason; fingerprints hash rule+path+message, excluding the line, so
+   pure line shifts do not reopen findings; arclint semantics
+   (contract, blame, capability, fixHint) ride in the property bag
+   instead of invented SARIF fields.
 
 ## M10 (2026-08-14) — signature facts: ADR and gate results
 
