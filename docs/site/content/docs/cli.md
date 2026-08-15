@@ -13,6 +13,7 @@ weight = 6
 | `arclint load [rules.yaml]` | parse, validate (schema + semantics + extension params), cache; prints what loaded, lists extension types registered but not instantiated, and warns on instances whose params are empty lists (armed but inert) |
 | `arclint list` | one line per loaded rule |
 | `arclint facts <file>` | the declaration facts a rule sees from `ctx.facts(path)`: kinds, names, owners, signatures; `--format json` for the exact wire shape |
+| `arclint context <path\|module>` | the architectural context of one location: owning modules, allowed internal imports, external/stdlib policy, every binding rule, and the verify command; `--format json` for agents |
 | `arclint rules ls` | rule table: id, contract, kind, module, provider, severity, description |
 | `arclint module ls` | declared modules with file counts, languages, descriptions |
 | `arclint module info <name>` | one module: description, paths, members, every rule that binds it |
@@ -27,6 +28,16 @@ configuration or usage error. Every command that reads a ruleset
 accepts `--rules <path>` to name rules.yaml explicitly; the default is
 discovery upward from the working directory, and the rules.yaml
 directory is the repo root and the extension root.
+
+## Context for agents
+
+`arclint context <path|module>` answers "what is architecturally true
+where I am about to edit?" without loading the whole ruleset into a
+prompt: the modules owning the path, their descriptions, what they may
+import, every rule binding them, and the command that verifies the
+result. A file path, a directory, or a declared module name all
+resolve; an exact module name wins when both match. `--format json`
+emits the machine shape for coding agents.
 
 ## Shell completion
 
