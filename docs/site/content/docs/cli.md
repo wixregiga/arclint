@@ -14,6 +14,7 @@ weight = 6
 | `arclint list` | one line per loaded rule |
 | `arclint facts <file>` | the declaration facts a rule sees from `ctx.facts(path)`: kinds, names, owners, signatures; `--format json` for the exact wire shape |
 | `arclint context <path\|module>` | the architectural context of one location: owning modules, allowed internal imports, external/stdlib policy, every binding rule, and the verify command; `--format json` for agents |
+| `arclint agents` | compile the ruleset into a compact AGENTS.md architecture block; prints by default, `--write` installs or refreshes it between markers in `<repo-root>/AGENTS.md`, preserving everything outside them |
 | `arclint rules ls` | rule table: id, contract, kind, module, provider, severity, description |
 | `arclint module ls` | declared modules with file counts, languages, descriptions |
 | `arclint module info <name>` | one module: description, paths, members, every rule that binds it |
@@ -38,6 +39,13 @@ import, every rule binding them, and the command that verifies the
 result. A file path, a directory, or a declared module name all
 resolve; an exact module name wins when both match. `--format json`
 emits the machine shape for coding agents.
+
+`arclint agents --write` covers the prompt-time half: it compiles the
+ruleset into a generated block inside `AGENTS.md` (modules, dependency
+policy, repo-wide rules, query commands) so agents see the architecture
+before writing code. The block sits between markers; hand-written
+content around it survives regeneration, and the block never carries
+timestamps, so regeneration is idempotent for an unchanged ruleset.
 
 ## Shell completion
 
