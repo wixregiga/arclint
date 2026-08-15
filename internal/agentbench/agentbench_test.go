@@ -68,6 +68,7 @@ type iterationRecord struct {
 type trialRecord struct {
 	Scenario   string            `json:"scenario"`
 	Condition  string            `json:"condition"`
+	Repeat     int               `json:"repeat"`
 	Initial    int               `json:"initialViolations"`
 	Iterations []iterationRecord `json:"iterations"`
 	Final      int               `json:"finalViolations"`
@@ -97,17 +98,38 @@ func TestAgentConvergence(t *testing.T) {
 	if _, err := exec.LookPath(agentArgv()[0]); err != nil {
 		t.Fatalf("agent CLI %q not found; set AGENTBENCH_AGENT_CMD", agentArgv()[0])
 	}
+	// AGENTBENCH_SCENARIOS narrows to named scenarios (comma-separated);
+	// AGENTBENCH_REPEATS runs every (scenario, condition) cell N times so
+	// timing comparisons have a median instead of an anecdote.
+	only := map[string]bool{}
+	if s := os.Getenv("AGENTBENCH_SCENARIOS"); s != "" {
+		for _, name := range strings.Split(s, ",") {
+			only[strings.TrimSpace(name)] = true
+		}
+	}
+	repeats := 1
+	if r := os.Getenv("AGENTBENCH_REPEATS"); r != "" {
+		if _, err := fmt.Sscanf(r, "%d", &repeats); err != nil || repeats < 1 {
+			t.Fatalf("AGENTBENCH_REPEATS %q is not a positive integer", r)
+		}
+	}
 	var records []trialRecord
 	for _, sc := range scenarios {
-		for _, withContext := range []bool{false, true} {
-			condition := "diag"
-			if withContext {
-				condition = "diag+context"
+		if len(only) > 0 && !only[sc.name] {
+			continue
+		}
+		for repeat := 1; repeat <= repeats; repeat++ {
+			for _, withContext := range []bool{false, true} {
+				condition := "diag"
+				if withContext {
+					condition = "diag+context"
+				}
+				t.Run(fmt.Sprintf("%s/%s/r%d", sc.name, condition, repeat), func(t *testing.T) {
+					rec := runTrial(t, bin, sc, withContext)
+					rec.Repeat = repeat
+					records = append(records, rec)
+				})
 			}
-			t.Run(sc.name+"/"+condition, func(t *testing.T) {
-				rec := runTrial(t, bin, sc, withContext)
-				records = append(records, rec)
-			})
 		}
 	}
 	data, err := json.MarshalIndent(records, "", "  ")
