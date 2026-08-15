@@ -17,6 +17,7 @@ vet:
 	$(GO) vet ./...
 	$(GO) vet -tags oracle ./internal/oracle/
 	$(GO) vet -tags bench ./internal/bench/
+	$(GO) vet -tags agentbench ./internal/agentbench/
 
 generate:
 	$(GO) generate ./...
@@ -34,6 +35,12 @@ bench: build
 # Network-permitted; clones cache under ~/.cache/arclint-oracle.
 oracle:
 	$(GO) test -tags oracle -timeout 30m -count=1 -v ./internal/oracle/
+
+# Agent convergence measurement: violations + diagnostics -> real coding
+# agent -> re-check, with and without prompt-time context. Requires an
+# agent CLI (default codex; override AGENTBENCH_AGENT_CMD) and network.
+agentbench: build
+	ARCLINT_BIN=$(abspath $(BIN)) $(GO) test -tags agentbench -timeout 60m -count=1 -v ./internal/agentbench/
 
 # Docs site (docs/site): markdown content, one zola binary to build.
 # The rule reference page is generated (go generate ./tools/gendocs);
