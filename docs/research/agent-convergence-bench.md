@@ -115,3 +115,30 @@ time, where context roughly halved the hard-scenario repair for two of
 three weak models. At n=1 per cell that is a hint to test, not a
 finding. Separating the conditions now clearly requires harder
 scenarios, not weaker agents.
+
+### 2026-08-15 — repetition study, n=5 per cell, hard scenario only
+
+Five repeats per condition on feature-slice-dirty, sequential (no
+concurrent runs contending), two weak models via omp at thinking low.
+All 20 trials: one-iteration convergence, zero gaming, build green —
+the all-time tally is 36/36.
+
+Agent seconds, sorted, with medians:
+
+| model | diag | diag+context |
+|---|---|---|
+| gpt-5.4-mini | 91 115 146 149 203 → **146** | 85 89 92 102 145 → **92** |
+| claude-haiku-4-5 | 126 158 185 211 336 → **185** | 106 118 179 181 207 → **179** |
+
+Reading. The timing effect is model-dependent. For gpt-5.4-mini the
+n=1 hint replicated: a 37% median reduction, with the context sample
+beating the diag sample in 21 of 25 pairwise comparisons — a
+consistent shift, borderline at this sample size. For haiku the
+medians are flat (185 versus 179); the context sample looks better
+only through diag's one 336s outlier, and wins just 18 of 25 pairwise
+comparisons. Conclusion: prompt-time context never changed correctness
+at this difficulty, sped one weak model up substantially and another
+not measurably. The sufficiency verdict on the current diagnostic
+surface is final for this scenario tier; any further case for richer
+prompt-time or per-rule fields has to come from harder scenarios or
+generation-time measurement, not from more repetitions here.
