@@ -88,3 +88,30 @@ discriminating experiment, if wanted: scenario difficulty scaling on a
 real mid-size repository, or generation-time (not repair-time)
 measurement, where the anchoring literature predicts context matters
 most.
+
+### 2026-08-15 — weak-model matrix, omp harness
+
+Same scenarios and conditions, three deliberately weaker agents driven
+through omp (`omp launch -p --auto-approve --no-session --model <m>`):
+gpt-5.4-mini (thinking low, codex OAuth), grok-composer-2.5-fast (xai
+OAuth), claude-haiku-4-5 (thinking low, Anthropic OAuth). 12/12 trials:
+one-iteration convergence, zero gaming, build green. Combined with the
+codex run: 16/16 across four model families.
+
+Agent wall seconds on the six-violation scenario (n=1 per cell, and the
+haiku run overlapped another bench, so times are indicative only):
+
+| model | diag | diag+context |
+|---|---|---|
+| gpt-5.4-mini | 234s | 119s |
+| grok-composer-2.5-fast | 202s | 222s |
+| claude-haiku-4-5 | 262s | 136s |
+
+Reading. The sufficiency conclusion strengthens: arclint's current
+diagnostic surface produced one-shot architectural repair even from
+small non-frontier models. Iterations still cannot separate the
+conditions (ceiling everywhere), so the only visible signal is agent
+time, where context roughly halved the hard-scenario repair for two of
+three weak models. At n=1 per cell that is a hint to test, not a
+finding. Separating the conditions now clearly requires harder
+scenarios, not weaker agents.
