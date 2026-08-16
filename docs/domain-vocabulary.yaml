@@ -1,0 +1,1325 @@
+schema_version: "1.0"
+document: arclint-domain-vocabulary
+status: accepted-desired-model
+
+domain:
+  name: ArcLint
+  definition: >-
+    A repository linter and architecture-conformance system that helps humans
+    and coding agents keep files, folders, modules, dependencies, source
+    structure, and ubiquitous language aligned with selected architectural
+    patterns and repository-owned rules.
+  supported_programming_languages:
+    - go
+    - typescript
+    - python
+  authority:
+    statement: >-
+      This document describes the desired ArcLint domain. Existing code is
+      migration evidence, not design authority.
+    precedence:
+      - accepted decisions recorded in this document
+      - repository architecture and refactoring guidance
+      - current implementation evidence
+  boundaries:
+    owns:
+      - architectural patterns and rules
+      - repository configuration for applying patterns and local rules
+      - module membership used by rules
+      - rule evaluation and conformance diagnostics
+      - language-neutral facts exposed to rule extensions
+      - architectural context for humans and coding agents
+      - storage and exposure of repository ubiquitous language
+    does_not_own:
+      - writing or refactoring application source code
+      - deciding a repository's architecture for its owner
+      - treating existing repository structure as intended architecture
+      - parser, syntax-tree, or filesystem-walking technology as domain language
+
+source_checklist:
+  - source: docs/agents/refactoring.md
+    status: used
+    informed:
+      - desired-model authority
+      - owner and invariant requirements
+      - lifecycle, construction-rule, and intended-operation requirements
+      - anemic-model review criteria
+  - source: docs/design-vocabulary.yaml
+    status: used
+    informed:
+      - entity, value-object, aggregate, invariant, and service distinctions
+      - need for intention-revealing names
+  - source: ArcLint domain grilling, rounds 1-16
+    status: used
+    informed:
+      - product boundary
+      - Pattern, Rule, Module, applicability, and enforcement meanings
+      - diagnostic, exclusion, suppression, disablement, and baseline meanings
+      - agent-facing context and project-vocabulary capabilities
+      - rejected separate Ruleset and rule-selection abstractions
+  - source: current ArcLint documentation and implementation
+    status: current-state-evidence-only
+    informed:
+      - existing normalized facts and extension surface
+      - current configuration, diagnostic, and baseline migration pressure
+      - overloaded terms that the desired model must replace
+
+language_policy:
+  capitalization: Canonical domain terms are capitalized when used with the meanings below.
+  rules:
+    - Use concrete words such as File, Folder, and Module instead of generic container terms.
+    - Qualify a Rule by its stable identity when ambiguity is possible.
+    - Communicate how evidence was obtained separately from how important a Rule is.
+    - Never interpret absence of a Violation as conformance when evaluation was unsupported or undetermined.
+  noncanonical_terms:
+    - term: Ruleset
+      replacement: Pattern
+      reason: >-
+        A packaged set of Rules is a Pattern. ArcLint has no separate resolved,
+        active, or computed Ruleset domain object. The lowercase phrase "rule
+        set" may be used as ordinary prose only.
+    - term: Pattern Application
+      replacement: Pattern, Module, Rule, and Applicability
+      reason: Files and folders become governed through Modules and Rule Applicability without another application object.
+    - term: Rule Selection
+      replacement: direct Rule configuration
+      reason: ArcLint does not model a separate selector or enabled-rule collection as a domain object.
+    - term: Repository Artifact
+      replacement: File, Folder, or Module
+      reason: It hides the concrete thing a Rule evaluates.
+    - term: Architecture Contract
+      replacement: Pattern, Rule, or Claim
+      reason: It is not part of the accepted ArcLint ubiquitous language.
+    - term: Exception
+      replacement: Rule Exclusion, Diagnostic Suppression, Rule Disablement, or Baseline
+      reason: It ambiguously combines four different decisions.
+    - term: Layer
+      replacement: Module plus a dependency Rule
+      reason: >-
+        Layer is Pattern vocabulary when a Pattern needs it, not an ArcLint core
+        structural object. Layering behavior is expressed by Rules over Modules.
+    - term: Runtime
+      replacement: Programming Language or implementation-specific extension execution engine
+      reason: It ambiguously refers to a language being analyzed and the engine executing an Extension.
+    - term: Provider
+      replacement: Pattern Author, Extension Author, or responsible Rule Subject
+      reason: It previously meant several unrelated roles.
+
+actors:
+  - name: ArcLint Maintainer
+    responsibilities:
+      - owns the ArcLint Product Vocabulary
+      - owns the Extension SDK and normalized Language Facts contract
+      - preserves deterministic evaluation and stable public schemas
+  - name: Pattern Author
+    responsibilities:
+      - owns a Pattern's guidance, Rules, tests, vocabulary, and declared language coverage
+      - states limitations and enforcement assurance honestly
+      - versions changes to the Pattern
+  - name: Rule Author
+    responsibilities:
+      - defines a Rule's Claim, schema, applicability, tests, and enforcement implementations
+      - may publish the Rule through a Pattern or keep it repository-local
+  - name: Extension Author
+    responsibilities:
+      - implements Rule Types or Enforcement Implementations through the Extension SDK
+      - declares Language Facts requirements and limitations honestly
+  - name: Pattern Consumer
+    aliases:
+      - Repository Owner
+    responsibilities:
+      - decides which Patterns and Rules govern the repository
+      - maps files and folders into Modules
+      - owns local Rules, Overrides, Exclusions, Suppressions, Disablements, Baselines, and Project Vocabulary
+  - name: Contributor
+    responsibilities:
+      - changes repository code within the applicable Rules
+      - reads ArcLint context and responds to Diagnostics
+  - name: Coding Agent
+    responsibilities:
+      - consumes the same architectural context a human can inspect
+      - may draft code, Rules, Overrides, Exclusions, Suppressions, or Pattern changes
+      - does not receive authority from ArcLint to approve architectural changes
+
+terms:
+  - name: Pattern
+    kind: Aggregate Root
+    owner: Pattern Author
+    definition: >-
+      A named, versioned, tested, and namespaced package of architectural
+      guidance and Rules that users can reference, combine, adapt, and
+      redistribute.
+    identity:
+      fields:
+        - namespace
+        - name
+        - version
+      example: arclint/ddd@1.0.0
+    contains:
+      required:
+        - Rules
+        - Rule Tests
+        - declared language coverage
+      optional:
+        - Extensions
+        - Pattern Dependencies
+        - Pattern Vocabulary
+        - default Module definitions and filesystem suggestions
+    invariants:
+      - Namespace and name identify the Pattern independently of its version.
+      - A published version is immutable.
+      - Every included Rule has a stable identity and a valid Rule Schema.
+      - Declared language coverage reflects actual Rule enforcement implementations.
+      - Required tests pass before the Pattern is published.
+      - Combining Patterns is additive; YAML order never creates implicit precedence.
+      - A Pattern Dependency graph is acyclic.
+      - A Pattern may support one programming language or several.
+      - Default paths are suggestions or initial configuration unless a Rule explicitly makes them mandatory.
+    lifecycle:
+      - drafted
+      - validated
+      - tested
+      - versioned
+      - published or embedded as built-in
+      - referenced
+      - optionally adapted or superseded
+    construction_rules:
+      - Supply a namespace, name, and version.
+      - Include at least one Rule.
+      - Include tests that exercise the Pattern's declared behavior.
+      - Declare supported languages and known coverage gaps.
+      - Record dependencies and provenance when derived from other Patterns.
+    intended_methods:
+      - name: add_rule
+        intent: Add a valid Rule without changing another Rule's identity.
+      - name: add_test
+        intent: Add proof of expected Rule behavior.
+      - name: depend_on
+        intent: Reference another exact Pattern without creating a cycle.
+      - name: declare_language_coverage
+        intent: State what the Pattern can and cannot enforce for a language.
+      - name: validate
+        intent: Check identity, schemas, dependencies, coverage, and tests.
+      - name: publish
+        intent: Freeze and distribute an immutable version.
+
+  - name: Pattern Reference
+    kind: Value Object
+    owner: Pattern Consumer
+    definition: >-
+      A repository-owned reference to a namespaced Pattern and version that can
+      be resolved deterministically to the exact Pattern content used for a check.
+    invariants:
+      - Identifies one Pattern namespace and name.
+      - Resolves to an exact version and content identity.
+      - Resolution does not depend on Pattern declaration order.
+    lifecycle:
+      - constructed
+      - resolved
+      - replaced by an explicit update
+    construction_rules:
+      - Specify the Pattern namespace and name.
+      - Specify or deterministically resolve a version.
+    intended_methods:
+      - name: resolve
+        intent: Obtain the exact Pattern used by ArcLint.
+      - name: update
+        intent: Replace the reference through an explicit repository decision.
+
+  - name: Pattern Dependency
+    kind: Value Object
+    owner: Pattern Author
+    definition: A versioned reference from one Pattern to another Pattern it extends or combines.
+    invariants:
+      - Cannot introduce a dependency cycle.
+      - Does not silently override Rules from another Pattern.
+      - Preserves source Pattern provenance.
+    lifecycle:
+      - declared
+      - validated
+      - resolved when the owning Pattern is used
+    construction_rules:
+      - Identify the dependency by namespace, name, and compatible version.
+    intended_methods:
+      - name: resolve
+        intent: Resolve the exact dependency version.
+      - name: conflicts_with
+        intent: Detect identity or schema conflicts that can be proven mechanically.
+
+  - name: Repository Configuration
+    kind: Aggregate Root
+    owner: Pattern Consumer
+    definition: >-
+      The repository-owned YAML declaration of programming languages, Pattern
+      References, Modules, local Rules, Rule changes, Baseline policy, and
+      Project Vocabulary used by ArcLint.
+    invariants:
+      - Pattern and Rule identities are unambiguous.
+      - Module containment has no cycles.
+      - Every local Rule conforms to its Rule Schema.
+      - Overrides change only fields allowed by the Rule Schema.
+      - Exclusions, Suppressions, and Disablements identify existing Rules.
+      - Configuration order does not create hidden architectural precedence.
+    lifecycle:
+      - initialized
+      - configured
+      - validated
+      - used for checks and context queries
+      - explicitly revised
+    construction_rules:
+      - May begin from detected programming languages and a selected built-in Pattern.
+      - Must record intended Modules and Rule changes explicitly.
+      - May define Rules without packaging them into a Pattern.
+      - Must remain inspectable by humans and coding agents.
+    intended_methods:
+      - name: reference_pattern
+        intent: Add a deterministic Pattern Reference.
+      - name: define_module
+        intent: Create a named logical grouping of files, folders, or Modules.
+      - name: add_local_rule
+        intent: Add a valid repository-owned Rule.
+      - name: override_rule
+        intent: Change an allowed configurable field.
+      - name: exclude_subject
+        intent: Remove a File, Folder, or Module from a Rule's applicability.
+      - name: suppress_diagnostic
+        intent: Retain but ignore a selected Diagnostic's configured effect.
+      - name: disable_rule
+        intent: Prevent a selected Rule from being evaluated.
+      - name: record_project_vocabulary
+        intent: Store repository-owned ubiquitous language.
+      - name: validate
+        intent: Reject invalid configuration before repository evaluation.
+
+  - name: Repository
+    kind: Aggregate Root
+    owner: Pattern Consumer
+    definition: >-
+      The concrete source tree whose Files, Folders, Modules, configuration,
+      vocabulary, and observed code are checked by ArcLint.
+    invariants:
+      - Existing structure is observed evidence and is not automatically intended architecture.
+      - Repository Configuration is owned by the Pattern Consumer.
+      - ArcLint checks the Repository without writing application source code.
+    lifecycle:
+      - initialized for ArcLint
+      - configured
+      - observed during checks and context queries
+      - changed by contributors outside ArcLint
+      - checked again
+    construction_rules:
+      - Identify one root Folder.
+      - Keep all reported paths relative to that root when possible.
+    intended_methods:
+      - name: files
+        intent: Return Files visible to ArcLint.
+      - name: folders
+        intent: Return Folders visible to ArcLint.
+      - name: configuration
+        intent: Return the repository-owned ArcLint configuration.
+
+  - name: File
+    kind: Entity
+    owner: Repository
+    definition: A concrete file in the Repository that may be selected by Rules or included in Modules.
+    identity:
+      fields:
+        - repository-relative path
+    invariants:
+      - Has one path within one Repository observation.
+      - May belong to no Module, one Module, or multiple Modules.
+      - May be a Rule Subject directly or through Module membership.
+      - Observed contents never declare architectural intent by themselves.
+    lifecycle:
+      - discovered
+      - classified by path and Programming Language when possible
+      - observed for Language Facts
+      - evaluated by applicable Rules
+      - changed or removed outside ArcLint
+    construction_rules:
+      - Record the repository-relative path and available file metadata.
+      - Associate a Programming Language only when ArcLint recognizes one.
+    intended_methods:
+      - name: belongs_to
+        intent: Return every Module containing the File directly or transitively.
+      - name: facts
+        intent: Return available normalized Language Facts.
+      - name: context
+        intent: Return the File's Architectural Context.
+
+  - name: Folder
+    kind: Entity
+    owner: Repository
+    definition: A concrete directory in the Repository that may contain Files and Folders or be included in Modules.
+    identity:
+      fields:
+        - repository-relative path
+    invariants:
+      - Has one path within one Repository observation.
+      - Folder selection may include descendants according to explicit configuration.
+      - May belong to no Module, one Module, or multiple Modules.
+      - May be a Rule Subject directly or through Module membership.
+    lifecycle:
+      - discovered
+      - included or excluded by repository scanning policy
+      - evaluated by applicable Rules
+      - changed or removed outside ArcLint
+    construction_rules:
+      - Record the repository-relative path.
+      - Preserve deterministic child ordering when exposed for evaluation.
+    intended_methods:
+      - name: files
+        intent: Return selected descendant Files.
+      - name: folders
+        intent: Return selected descendant Folders.
+      - name: belongs_to
+        intent: Return every Module containing the Folder directly or transitively.
+      - name: context
+        intent: Return the Folder's Architectural Context.
+
+  - name: Programming Language
+    kind: Value Object
+    owner: ArcLint Maintainer
+    definition: A source language ArcLint recognizes and can analyze through a shared product surface.
+    invariants:
+      - Language recognition does not imply that every Rule supports the language.
+      - Language support is reported independently from Pattern and Rule coverage.
+    lifecycle:
+      - declared supported
+      - analyzed
+      - evolved through versioned fact capabilities
+    construction_rules:
+      - Use a stable language identifier.
+      - Declare which normalized Language Facts are available.
+    intended_methods:
+      - name: recognizes
+        intent: Determine whether a File uses the language.
+      - name: available_facts
+        intent: Report the normalized facts ArcLint can supply for the language.
+
+  - name: Language Coverage
+    kind: Value Object
+    owner: Pattern Author and ArcLint Maintainer
+    definition: >-
+      The explicit account of whether a Rule has compatible enforcement and
+      required Language Facts for a Programming Language.
+    invariants:
+      - ArcLint language support and Pattern Rule coverage are reported separately.
+      - Pattern-level summaries are derived from individual Rule coverage.
+      - Missing enforcement or facts never becomes an implicit pass.
+      - A Pattern may be valid with coverage for only one Programming Language.
+    lifecycle:
+      - declared by Enforcement Implementations
+      - checked against available Language Facts
+      - reported during Pattern validation and Conformance Checks
+      - revised when enforcement or facts change
+    construction_rules:
+      - Identify the Rule, Programming Language, required facts, and known gap when present.
+    intended_methods:
+      - name: supports
+        intent: Determine whether the Rule can be evaluated for the language.
+      - name: explain_gap
+        intent: Distinguish missing Pattern enforcement from missing ArcLint facts.
+
+  - name: Module
+    kind: Entity
+    owner: Pattern Consumer
+    definition: A named logical grouping of Files, Folders, and optionally other Modules.
+    identity:
+      fields:
+        - repository-local name
+    invariants:
+      - A Module name is unique within its Repository Configuration.
+      - A Module may use any name and any folder depth.
+      - A File, Folder, or Module may belong to no Module, one Module, or multiple Modules.
+      - Containment of another Module is transitive.
+      - Module containment cannot form a cycle.
+      - Module membership does not imply exclusive ownership.
+      - Rules applying to a containing Module apply through contained Modules unless excluded.
+    lifecycle:
+      - defined
+      - populated by membership declarations
+      - evaluated as a Rule Subject
+      - revised explicitly
+    construction_rules:
+      - Supply a non-empty repository-local name.
+      - Supply at least one File, Folder, or Module membership selector.
+      - Validate containment before use.
+    intended_methods:
+      - name: include_file
+        intent: Add a File to the Module.
+      - name: include_folder
+        intent: Add a Folder and its selected contents to the Module.
+      - name: include_module
+        intent: Add another Module without creating a cycle.
+      - name: contains
+        intent: Determine direct or transitive membership.
+      - name: applicable_rules
+        intent: Identify Rules whose Applicability selects this Module.
+
+  - name: Rule
+    kind: Entity
+    owner: Rule Author
+    definition: >-
+      A stable, meaningful, and configurable architectural Claim that ArcLint
+      evaluates for its applicable Files, Folders, or Modules.
+    identity:
+      invariants:
+        - Every Rule has an explicit stable local ID.
+        - A Pattern namespace qualifies a Pattern-supplied Rule.
+        - A local Rule uses a collision-safe repository-owned identity.
+        - Array position is never part of durable identity.
+        - Pattern version is not part of Rule identity.
+        - Parameter or language-coverage changes preserve identity when the fundamental Claim is unchanged.
+        - A materially different Claim receives a new identity.
+        - Exact punctuation of the ID remains an implementation decision.
+    owns:
+      - Claim
+      - Applicability
+      - Severity
+      - Rule Schema
+      - Enforcement Implementations
+    invariants:
+      - The Claim is stated in domain language.
+      - Applicability is explicit and machine-readable.
+      - Severity communicates importance independently of enforcement assurance.
+      - Every Enforcement Implementation states evidence, supported languages, assurance, and limitations.
+      - Unsupported evaluation never becomes an implicit pass.
+      - The complete Rule configuration validates against its Rule Schema.
+    lifecycle:
+      - authored
+      - configured
+      - validated
+      - tested
+      - evaluated
+      - optionally overridden, excluded for selected subjects, disabled, deprecated, or replaced
+    construction_rules:
+      - Supply stable identity, Claim, Severity, Applicability, and Rule Type.
+      - Supply a complete Rule Schema and at least one tested Enforcement Implementation or advisory behavior.
+      - Declare every supported language and known limitation honestly.
+    intended_methods:
+      - name: applies_to
+        intent: Decide whether a File, Folder, or Module is selected by Applicability.
+      - name: validate_configuration
+        intent: Validate common and Rule-Type-specific fields.
+      - name: evaluate
+        intent: Produce a Rule Evaluation through a compatible Enforcement Implementation.
+      - name: with_override
+        intent: Produce allowed repository-specific configuration without mutating the source Pattern.
+      - name: disable
+        intent: Record that the Rule must not be evaluated for the repository.
+
+  - name: Rule Type
+    kind: Entity
+    owner: ArcLint Maintainer or Extension Author
+    definition: >-
+      A reusable kind of Rule behavior with a parameter schema and one or more
+      ways to evaluate configured Rules of that kind.
+    identity:
+      fields:
+        - stable type name
+    invariants:
+      - Type name is unique within the loaded built-in and Extension surface.
+      - Parameter validation is available before evaluation.
+      - Built-in and Extension Rule Types obey the same Rule reporting model.
+    lifecycle:
+      - defined
+      - registered
+      - used by configured Rules
+      - versioned or deprecated compatibly
+    construction_rules:
+      - Supply a stable name, schema, and evaluation behavior.
+      - Declare evidence needs and supported languages.
+    intended_methods:
+      - name: validate_parameters
+        intent: Reject an invalid Rule configuration.
+      - name: create_evaluation
+        intent: Select compatible enforcement behavior for a configured Rule.
+
+  - name: Rule Schema
+    kind: Value Object
+    owner: Rule Author
+    definition: >-
+      The public machine-readable description required to configure, validate,
+      inspect, and autocomplete a complete Rule.
+    includes:
+      - common Rule fields
+      - Rule-Type-specific parameters and defaults
+      - overridable fields
+      - Applicability shape
+      - exclusion and suppression shapes
+      - enforcement implementations and required Language Facts
+      - supported languages, assurance, and limitations
+      - source Pattern provenance when applicable
+    invariants:
+      - Runtime validation and published editor schema describe the same accepted configuration.
+      - The schema covers the complete Rule rather than parameters alone.
+      - Invalid configuration is rejected before Rule evaluation.
+    lifecycle:
+      - derived or authored
+      - validated
+      - published with its Rule Type or Pattern
+      - used for repository validation and editor assistance
+    construction_rules:
+      - Define all required fields, defaults, types, and override permissions.
+      - Remain serializable and inspectable through the CLI.
+    intended_methods:
+      - name: validate
+        intent: Validate a complete configured Rule.
+      - name: describe
+        intent: Produce editor and CLI documentation.
+      - name: merge_parameters
+        intent: Combine common Rule fields with Rule-Type-specific parameters.
+
+  - name: Claim
+    kind: Value Object
+    owner: Rule Author
+    definition: The architectural proposition a Rule attempts to evaluate.
+    invariants:
+      - Uses intention-revealing domain language.
+      - Identifies what must be true without describing parser or traversal mechanics.
+      - Can be compared with declared evidence and limitations.
+    lifecycle:
+      - stated
+      - evaluated repeatedly without mutation
+      - replaced when its meaning materially changes
+    construction_rules:
+      - State one coherent architectural proposition.
+      - Avoid combining unrelated requirements under one Rule identity.
+    intended_methods:
+      - name: describe
+        intent: Explain the requirement to humans and coding agents.
+      - name: required_evidence
+        intent: Identify evidence needed for an honest evaluation.
+
+  - name: Applicability
+    kind: Value Object
+    owner: Rule Author and Pattern Consumer
+    definition: >-
+      The composable criteria that select the Files, Folders, or Modules a Rule
+      evaluates.
+    selectors:
+      - entire repository
+      - Module membership
+      - Programming Language
+      - File type
+      - File or Folder path
+      - declaration or symbol facts when available
+    invariants:
+      - May select all Files and Folders without requiring a Module.
+      - Different selector dimensions combine by intersection unless stated otherwise.
+      - Multiple values within one selector dimension combine by union unless stated otherwise.
+      - Excluded Rule Subjects are not applicable.
+    lifecycle:
+      - declared with a Rule
+      - optionally narrowed by a Rule Override or Rule Exclusion
+      - evaluated for each candidate Rule Subject
+    construction_rules:
+      - Use only selectors supported by the Rule Schema.
+      - Remain inspectable and explainable.
+    intended_methods:
+      - name: selects
+        intent: Decide whether a File, Folder, or Module is a Rule Subject.
+      - name: exclude
+        intent: Remove an explicitly selected Rule Subject.
+
+  - name: Rule Subject
+    kind: Role
+    owner: Rule
+    definition: A File, Folder, or Module selected for evaluation by a Rule.
+    invariants:
+      - Is always concrete: File, Folder, or Module.
+      - A Programming Language filters applicability but is not itself a Rule Subject.
+      - May be subject to multiple Rules and belong to multiple Modules.
+    lifecycle:
+      - selected by Applicability
+      - evaluated or marked not applicable
+    construction_rules:
+      - Must identify the concrete File, Folder, or Module being evaluated.
+    intended_methods:
+      - name: architectural_context
+        intent: Return Modules, Rules, reasons, vocabulary, and known conformance state for the subject.
+
+  - name: Enforcement Implementation
+    kind: Entity
+    owner: Rule Author
+    definition: >-
+      One implementation that evaluates a Rule's Claim for declared programming
+      languages using stated evidence and assurance.
+    invariants:
+      - Multiple implementations may enforce one Rule without changing Rule identity.
+      - Declares supported languages, required Language Facts, Evidence Method, Assurance, and limitations.
+      - A generic filesystem implementation may support several languages.
+      - A language-specific implementation may use stronger or different evidence.
+      - Missing required facts produces an explicit unsupported or undetermined outcome.
+    lifecycle:
+      - authored
+      - registered or embedded
+      - validated
+      - tested
+      - selected when compatible
+      - executed
+    construction_rules:
+      - Associate with exactly one Rule or Rule Type behavior.
+      - Declare all prerequisites and limitations.
+      - Provide tests for each claimed language behavior.
+    intended_methods:
+      - name: supports
+        intent: Determine compatibility with a Programming Language and available Language Facts.
+      - name: evaluate
+        intent: Produce an evidence-qualified Rule Evaluation.
+
+  - name: Extension
+    kind: Aggregate
+    owner: Extension Author
+    definition: >-
+      Repository-local or Pattern-packaged TypeScript logic that supplies Rule
+      Types or Enforcement Implementations through the shared Extension SDK.
+    invariants:
+      - Uses the same Extension SDK regardless of the language being analyzed.
+      - Has no authority to bypass Rule Schema validation or diagnostic truthfulness.
+      - Does not require a different authoring library for Go, TypeScript, or Python targets.
+    lifecycle:
+      - authored
+      - registered
+      - validated
+      - tested
+      - executed for compatible Rules
+    construction_rules:
+      - Use the supported Extension SDK.
+      - Register stable Rule Type identities and schemas.
+      - Declare required Language Facts.
+    intended_methods:
+      - name: register_rule_type
+        intent: Make a validated Rule Type available.
+      - name: evaluate
+        intent: Evaluate configured Rules without ambient repository mutation.
+
+  - name: Extension SDK
+    kind: Domain Service Interface
+    owner: ArcLint Maintainer
+    definition: >-
+      The single stable authoring surface through which Extensions inspect
+      Files, imports, Modules, Language Facts, and report Diagnostics for every
+      supported programming language.
+    invariants:
+      - One SDK serves Rules targeting Go, TypeScript, Python, and future supported languages.
+      - Common facts use normalized shapes.
+      - Differences in fact availability remain visible.
+      - Host types and published extension types do not drift.
+    lifecycle:
+      - versioned
+      - generated or published
+      - consumed by Extensions
+      - evolved compatibly
+    construction_rules:
+      - Expose only stable, deterministic host capabilities.
+      - Keep parser and syntax-tree implementation details behind the interface.
+    intended_methods:
+      - name: files
+        intent: List Files visible to an Extension.
+      - name: imports
+        intent: Return normalized import facts.
+      - name: modules
+        intent: Return Module definitions and memberships.
+      - name: facts
+        intent: Return normalized Language Facts for a File.
+      - name: report
+        intent: Submit an evidence-qualified Rule Diagnostic.
+
+  - name: Language Facts
+    kind: Value Object
+    owner: ArcLint Maintainer
+    definition: >-
+      A normalized, immutable description of source declarations and related
+      code facts exposed uniformly to built-in Rules and Extensions.
+    examples:
+      - declaration kind and name
+      - owner
+      - visibility
+      - source line span
+      - parameters and results
+      - imports and resolved internal destinations
+    invariants:
+      - Use the same public shape across supported programming languages where the concept is shared.
+      - A language emits only facts it can support honestly.
+      - Absence caused by parse failure is distinguishable from a genuine empty result.
+      - Facts describe observed code and never declare architectural intent.
+    lifecycle:
+      - derived lazily from a File
+      - returned as an immutable snapshot
+      - discarded or cached without changing meaning
+    construction_rules:
+      - Identify the source File and Programming Language.
+      - Record analysis failure explicitly.
+      - Normalize shared concepts without inventing unsupported semantics.
+    intended_methods:
+      - name: declarations
+        intent: Return normalized declaration facts.
+      - name: imports
+        intent: Return normalized import facts when available.
+      - name: supports
+        intent: State whether a requested fact is available.
+
+  - name: Evidence Method
+    kind: Value Object
+    owner: Enforcement Implementation
+    definition: How an Enforcement Implementation obtained the evidence used for a Rule Evaluation.
+    allowed_examples:
+      - filesystem structure
+      - text or regular expression
+      - parsed syntax
+      - declarations and symbols
+      - resolved imports or dependencies
+      - project vocabulary
+    invariants:
+      - Communicated independently from Severity.
+      - Does not imply an Assurance level by its name alone.
+      - Is judged relative to the Rule's Claim.
+    lifecycle:
+      - declared with an Enforcement Implementation
+      - attached to every resulting Rule Evaluation and Diagnostic
+    construction_rules:
+      - Name the actual evidence source without overstating semantic knowledge.
+    intended_methods:
+      - name: describe
+        intent: Explain how ArcLint reached an evaluation outcome.
+
+  - name: Assurance
+    kind: Value Object
+    owner: Enforcement Implementation
+    definition: The strength of the conclusion justified by an Enforcement Implementation's evidence.
+    values:
+      exact: Fully decides the Claim within a documented analysis boundary.
+      partial: Reported violations are trustworthy, but some violations may remain unobservable.
+      heuristic: May produce false positives or false negatives and therefore signals suspicion.
+      advisory: Communicates guidance without an automated truth judgment.
+    invariants:
+      - Independent of Rule Severity.
+      - Unsupported is an Evaluation Outcome, not an Assurance value.
+      - Structural describes a Claim or Evidence Method, not an Assurance rank.
+    lifecycle:
+      - declared by an Enforcement Implementation
+      - copied to each Rule Evaluation and Diagnostic
+    construction_rules:
+      - Choose the weakest value consistent with known limitations.
+      - Document the analysis boundary for exact assurance.
+    intended_methods:
+      - name: permits_conformance
+        intent: State whether absence of a Violation can justify a conforms outcome.
+
+  - name: Severity
+    kind: Value Object
+    owner: Rule Author and Pattern Consumer
+    definition: The linter importance assigned to an actual or suspected Rule violation.
+    values:
+      error: Fails the configured conformance gate.
+      warning: Requires attention but does not fail the default gate.
+      info: Communicates lower-priority architectural guidance.
+    invariants:
+      - Independent of Assurance and Evidence Method.
+      - A high-importance Rule is not downgraded because its detector is heuristic.
+      - Pattern Consumers may override Severity only when allowed by the Rule Schema.
+    lifecycle:
+      - configured on a Rule
+      - optionally overridden
+      - attached to resulting Violations
+    construction_rules:
+      - Use only error, warning, or info.
+    intended_methods:
+      - name: fails_gate
+        intent: Decide whether the default check result fails.
+
+  - name: Rule Evaluation
+    kind: Entity
+    owner: Conformance Check
+    definition: >-
+      One evidence-qualified attempt to evaluate a Rule for an applicable File,
+      Folder, or Module.
+    contains:
+      - Rule identity
+      - Rule Subject
+      - Evaluation Outcome
+      - Evidence Method
+      - Assurance
+      - produced Diagnostics
+    invariants:
+      - Records an explicit outcome for every attempted applicable evaluation.
+      - Never converts missing facts or implementation into conforms.
+      - Remains inspectable in machine-readable output and Architectural Context.
+    lifecycle:
+      - created when a Rule and Rule Subject are paired
+      - evaluated by a compatible Enforcement Implementation
+      - completed with one Evaluation Outcome
+      - retained in a Conformance Assessment
+    construction_rules:
+      - Identify the Rule, Rule Subject, and Enforcement Implementation.
+      - Record evidence, assurance, limitations, and outcome.
+    intended_methods:
+      - name: complete
+        intent: Finish the evaluation with exactly one outcome.
+      - name: diagnostics
+        intent: Return all Diagnostics produced by the evaluation.
+
+  - name: Evaluation Outcome
+    kind: Value Object
+    owner: Rule Evaluation
+    definition: The honest conclusion of one Rule Evaluation.
+    values:
+      conforms: The Claim was sufficiently evaluated and no violation exists within the declared boundary.
+      violates: Sufficient evidence shows that the Claim is broken.
+      suspected-violation: Heuristic evidence indicates a possible violation.
+      undetermined: Evaluation ran but available evidence cannot justify conformance or violation.
+      unsupported: Required enforcement behavior or Language Facts are unavailable.
+      not-applicable: Applicability or a Rule Exclusion removes the Rule Subject.
+      failed: Evaluation could not complete correctly.
+    invariants:
+      - Exactly one value completes a Rule Evaluation.
+      - Only sufficient evidence may produce conforms or violates.
+      - Unsupported, undetermined, and failed remain visible.
+    lifecycle:
+      - created at Rule Evaluation completion
+      - immutable thereafter
+    construction_rules:
+      - Derive from actual evidence and declared Assurance.
+    intended_methods:
+      - name: is_conforming
+        intent: Return true only for conforms.
+      - name: requires_diagnostic
+        intent: Determine whether the outcome must be surfaced.
+
+  - name: Diagnostic
+    kind: Entity
+    owner: ArcLint
+    definition: Any user-visible result produced while loading, checking, or explaining repository conformance.
+    identity:
+      fields:
+        - diagnostic kind
+        - source Rule when present
+        - File, Folder, or Module location when present
+        - stable message identity
+    invariants:
+      - Uses Warning only as a Severity value, never as a separate untyped result collection.
+      - States whether it is architectural, operational, or coverage-related.
+      - Includes enough provenance for a human or coding agent to understand why it exists.
+    lifecycle:
+      - emitted
+      - reported
+      - optionally suppressed or baselined when it is a Violation
+      - resolved when its cause disappears
+    construction_rules:
+      - Supply kind, message, and provenance.
+      - Supply Rule identity, Rule Subject, Severity, Assurance, and Evidence Method when produced by a Rule.
+    intended_methods:
+      - name: explain
+        intent: Describe cause, evidence, impact, and remediation context.
+      - name: format
+        intent: Render consistently for humans or machine consumers.
+
+  - name: Violation
+    kind: Entity
+    owner: Rule Evaluation
+    definition: >-
+      An architectural Diagnostic indicating that a Rule's Claim is violated or
+      suspected to be violated for a File, Folder, or Module.
+    invariants:
+      - References exactly one Rule and one Rule Subject.
+      - Carries Severity independently from Assurance.
+      - Distinguishes violates from suspected-violation.
+      - Remains a Violation when suppressed or baselined.
+    lifecycle:
+      - emitted from a violates or suspected-violation outcome
+      - active, suppressed, or baselined
+      - resolved when a later check no longer produces it
+    construction_rules:
+      - Supply Rule identity, Rule Subject, message, Severity, Assurance, Evidence Method, and source location when known.
+    intended_methods:
+      - name: suppress
+        intent: Apply a Diagnostic Suppression without changing architectural truth.
+      - name: baseline
+        intent: Record the Violation as existing architectural debt.
+      - name: explain
+        intent: Show the violated Claim and supporting evidence.
+
+  - name: Operational Diagnostic
+    kind: Diagnostic subtype
+    owner: ArcLint
+    definition: A Diagnostic reporting that configuration, loading, parsing, or evaluation could not operate correctly.
+    invariants:
+      - Never masquerades as a Rule Violation.
+      - Identifies the failed operation and affected scope.
+    lifecycle:
+      - emitted on operational failure
+      - resolved when the operation succeeds
+    construction_rules:
+      - Supply the failed operation, cause, and remediation context.
+    intended_methods:
+      - name: explain
+        intent: Explain why ArcLint could not complete the operation.
+
+  - name: Coverage Diagnostic
+    kind: Diagnostic subtype
+    owner: ArcLint
+    definition: >-
+      A Diagnostic reporting that a Rule lacks compatible enforcement behavior
+      or required Language Facts for an otherwise applicable language or subject.
+    invariants:
+      - Never reports missing coverage as conformance.
+      - Distinguishes a Pattern implementation gap from an ArcLint fact gap when known.
+    lifecycle:
+      - emitted when coverage is missing
+      - resolved when compatible enforcement and facts become available or the Rule becomes not applicable
+    construction_rules:
+      - Identify the Rule, language, subject, and missing capability.
+    intended_methods:
+      - name: explain
+        intent: Show exactly what is missing and who can supply it.
+
+  - name: Rule Override
+    kind: Value Object
+    owner: Pattern Consumer
+    definition: A repository-local change to a configurable field of a Pattern-supplied Rule.
+    invariants:
+      - Does not mutate the published Pattern.
+      - Changes only fields allowed by the Rule Schema.
+      - Retains the source Rule identity and provenance.
+    lifecycle:
+      - declared
+      - validated
+      - applied before Rule evaluation
+      - removed or revised explicitly
+    construction_rules:
+      - Identify the Rule and changed fields.
+      - Validate changes against the Rule Schema.
+    intended_methods:
+      - name: apply
+        intent: Produce effective repository-specific Rule configuration.
+
+  - name: Rule Exclusion
+    kind: Value Object
+    owner: Pattern Consumer
+    definition: >-
+      A repository decision that removes a selected File, Folder, or Module from
+      one Rule's Applicability.
+    invariants:
+      - Is scoped to one Rule.
+      - Identifies concrete Files, Folders, or Modules.
+      - Produces not-applicable rather than a Violation for excluded subjects.
+      - Does not disable the Rule for other subjects.
+    lifecycle:
+      - declared
+      - validated
+      - applied before evaluation
+      - removed or revised explicitly
+    construction_rules:
+      - Identify the Rule and excluded File, Folder, or Module.
+      - A reason may be recorded for repository history but is not required for validity.
+    intended_methods:
+      - name: excludes
+        intent: Determine whether a candidate Rule Subject is outside Applicability.
+
+  - name: Diagnostic Suppression
+    kind: Value Object
+    owner: Pattern Consumer
+    definition: >-
+      A repository decision that retains a produced Violation but ignores its
+      configured reporting or gate effect for selected Files, Folders, or Modules.
+    invariants:
+      - Does not change Rule Applicability or Evaluation Outcome.
+      - Does not make the repository conform.
+      - Does not suppress unrelated Rules or subjects.
+    lifecycle:
+      - declared
+      - matched after evaluation
+      - reported as suppressed
+      - removed or revised explicitly
+    construction_rules:
+      - Identify the Rule and suppressed diagnostic scope.
+      - A reason may be recorded for repository history but is not required for validity.
+    intended_methods:
+      - name: matches
+        intent: Determine whether a produced Violation is suppressed.
+      - name: apply
+        intent: Mark the Violation suppressed without erasing it.
+
+  - name: Rule Disablement
+    kind: Value Object
+    owner: Pattern Consumer
+    definition: A repository decision that prevents one Rule from being evaluated anywhere in the repository.
+    invariants:
+      - Identifies exactly one Rule.
+      - Keeps the Rule and source Pattern visible during inspection.
+      - Does not imply that the Rule's Claim is false or unimportant outside this repository.
+    lifecycle:
+      - declared
+      - applied before evaluation
+      - removed or revised explicitly
+    construction_rules:
+      - Identify the disabled Rule.
+    intended_methods:
+      - name: disables
+        intent: Determine whether the Rule must be skipped for the repository.
+
+  - name: Baseline
+    kind: Aggregate Root
+    owner: Pattern Consumer
+    definition: >-
+      A recorded set of existing Violations treated as architectural debt so a
+      repository can adopt Rules or refactor incrementally without hiding new
+      Violations.
+    owns:
+      - Baseline Entries
+    invariants:
+      - Never changes Rule Applicability.
+      - Never declares a baselined Violation architecturally acceptable or resolved.
+      - New Violations are not accepted automatically.
+      - Baselined Violations remain inspectable as debt.
+      - Entries whose Violations disappear become stale.
+    lifecycle:
+      - captured from an explicit conformance check
+      - used during later checks
+      - reduced as Violations are resolved
+      - refreshed explicitly
+      - removed when no longer needed
+    construction_rules:
+      - Capture only Violations present at the requested point in time.
+      - Give each Baseline Entry a stable match identity that does not depend solely on line number.
+    intended_methods:
+      - name: capture
+        intent: Record current Violations as existing debt.
+      - name: matches
+        intent: Determine whether a current Violation is baselined.
+      - name: stale_entries
+        intent: Identify debt entries whose Violations disappeared.
+      - name: refresh
+        intent: Remove stale entries without automatically adding new Violations.
+
+  - name: Baseline Entry
+    kind: Value Object
+    owner: Baseline
+    definition: The stable record used to recognize one existing Violation as baselined architectural debt.
+    invariants:
+      - Identifies the source Rule and Violation without relying solely on a line number.
+      - Does not change the Violation's architectural truth.
+      - Becomes stale when no current Violation matches it.
+    lifecycle:
+      - captured from an existing Violation
+      - matched during later checks
+      - marked stale when unmatched
+      - removed by an explicit Baseline refresh
+    construction_rules:
+      - Record stable Rule, location, and message identity sufficient for deterministic matching.
+    intended_methods:
+      - name: matches
+        intent: Determine whether a current Violation is the recorded debt.
+      - name: is_stale
+        intent: Determine whether the recorded Violation disappeared.
+
+  - name: Rule Test
+    kind: Entity
+    owner: Rule Author
+    definition: >-
+      A deterministic fixture scenario that asserts the complete expected
+      Diagnostics produced by a Rule for declared languages and evidence.
+    invariants:
+      - Identifies the Rule being tested.
+      - Asserts the complete result rather than the presence of one convenient Diagnostic.
+      - Covers supported enforcement implementations and important non-violation cases.
+      - Runs without depending on a user's repository state.
+    lifecycle:
+      - authored with the Rule
+      - run during Pattern validation
+      - revised when intended Rule behavior changes
+    construction_rules:
+      - Supply isolated files, folders, Modules, configuration, and expected Diagnostics.
+      - Include both conforming and violating scenarios when the Rule can decide both.
+    intended_methods:
+      - name: run
+        intent: Evaluate the Rule against the isolated fixture.
+      - name: compare_complete_results
+        intent: Detect missing, unexpected, or duplicate Diagnostics.
+
+  - name: Conformance Check
+    kind: Domain Service
+    owner: ArcLint
+    definition: >-
+      The deterministic operation that evaluates applicable enabled Rules
+      against repository Files, Folders, Modules, and Language Facts.
+    invariants:
+      - Does not write or refactor application source code.
+      - Evaluates every applicable enabled Rule or records why it could not.
+      - Applies Rule Exclusions before evaluation.
+      - Applies Diagnostic Suppressions and Baseline matching after evaluation.
+      - Produces deterministic ordering and machine-readable results.
+      - Distinguishes intended architecture from observed code.
+    lifecycle:
+      - validate configuration
+      - observe files, folders, memberships, imports, and Language Facts
+      - evaluate Rules
+      - apply suppression and baseline state
+      - produce a Conformance Assessment
+    construction_rules:
+      - Require valid Repository Configuration and exact Pattern versions.
+      - Use only repository observations and declared architectural intent.
+    intended_methods:
+      - name: run
+        intent: Produce a complete Conformance Assessment.
+      - name: context_for
+        intent: Produce Architectural Context for a File, Folder, Module, or feature scope.
+
+  - name: Conformance Assessment
+    kind: Aggregate
+    owner: Conformance Check
+    definition: >-
+      The immutable result of one Conformance Check, containing Rule
+      Evaluations, Diagnostics, coverage gaps, and suppression or baseline state.
+    invariants:
+      - Separates evaluated conformance from unsupported or undetermined outcomes.
+      - Preserves every Diagnostic's Rule and Pattern provenance.
+      - A passing gate does not imply that every Rule conformed.
+    lifecycle:
+      - produced by one Conformance Check
+      - rendered for humans, agents, editors, or CI
+      - replaced by the next check rather than mutated
+    construction_rules:
+      - Include every relevant Rule Evaluation and Diagnostic.
+      - Record configuration and Pattern identities used for the check.
+    intended_methods:
+      - name: has_errors
+        intent: Determine whether active error-severity Violations fail the gate.
+      - name: diagnostics
+        intent: Return active, suppressed, baselined, operational, and coverage Diagnostics.
+      - name: explain_difference
+        intent: Compare intended architecture with observed repository state.
+
+  - name: Architectural Context
+    kind: Value Object
+    owner: ArcLint
+    definition: >-
+      A human- and agent-readable view of the architecture governing a selected
+      File, Folder, Module, or feature scope, including reasons and known
+      conformance state.
+    includes:
+      - Module membership
+      - applicable Rules and Claims
+      - source Patterns and local Rule provenance
+      - reasons and architectural guidance
+      - applicable Project and Pattern Vocabulary
+      - observed Language Facts when relevant
+      - current Diagnostics and Evaluation Outcomes
+    invariants:
+      - Humans can inspect the same context supplied to coding agents.
+      - Does not require the consumer to reconstruct architecture by walking the repository tree.
+      - Shows intended architecture separately from observed repository state.
+    lifecycle:
+      - requested for a selected scope
+      - derived from current configuration and observations
+      - returned as an immutable snapshot
+    construction_rules:
+      - Identify the selected File, Folder, Module, or feature scope.
+      - Include reasons, not only Rule IDs.
+    intended_methods:
+      - name: explain
+        intent: Present all governing architecture and its rationale in one response.
+      - name: to_agent_guidance
+        intent: Render context suitable for a coding agent prompt.
+
+  - name: ArcLint Product Vocabulary
+    kind: Aggregate
+    owner: ArcLint Maintainer
+    definition: >-
+      The canonical language used to model, implement, document, and refactor
+      ArcLint itself; this document is its authoritative representation.
+    invariants:
+      - Each canonical term has one meaning within the ArcLint product domain.
+      - Ambiguous current-code terms do not override accepted meanings.
+      - Terms include owners, invariants, lifecycle, construction rules, and intended methods.
+    lifecycle:
+      - proposed through domain discussion
+      - accepted by the product owner
+      - recorded in this YAML document
+      - revised explicitly when the domain changes
+    construction_rules:
+      - Add a term only after its meaning and boundaries are understood.
+      - Record replaced or rejected terminology.
+    intended_methods:
+      - name: define
+        intent: Add an unambiguous canonical product term.
+      - name: deprecate
+        intent: Replace an ambiguous term with explicit alternatives.
+      - name: validate_usage
+        intent: Detect product language that conflicts with the accepted model.
+
+  - name: Pattern Vocabulary
+    kind: Aggregate
+    owner: Pattern Author
+    definition: >-
+      Architectural terms supplied by a Pattern so authors and consumers share
+      meanings such as Aggregate, Port, Slice, or a Pattern-specific use of Layer.
+    invariants:
+      - Does not redefine ArcLint Product Vocabulary silently.
+      - States meanings used by the Pattern's Rules and guidance.
+      - May be distributed with the Pattern.
+    lifecycle:
+      - authored with a Pattern
+      - versioned and tested with that Pattern
+      - consumed in repository context
+    construction_rules:
+      - Define every architecture term required to understand the Pattern.
+      - Identify aliases or conflicts explicitly.
+    intended_methods:
+      - name: define_term
+        intent: Add architecture language required by the Pattern.
+      - name: explain_term
+        intent: Supply meaning to humans, agents, and Rules.
+
+  - name: Project Vocabulary
+    kind: Aggregate
+    owner: Pattern Consumer
+    definition: >-
+      Repository-owned ubiquitous language describing the project's business or
+      problem domain, whether or not the repository uses a Pattern library.
+    invariants:
+      - Belongs to the repository, not ArcLint or a third-party Pattern.
+      - A term has one meaning within its declared scope.
+      - May be inspected by humans and coding agents through ArcLint.
+      - May be used by Rules that inspect Files, declarations, symbols, or methods.
+      - Scope is optional until the repository needs more than one vocabulary context.
+    lifecycle:
+      - terms proposed
+      - meanings accepted by the repository owner
+      - stored in repository configuration
+      - used for context and optional linting
+      - revised or deprecated explicitly
+    construction_rules:
+      - Give each term a name and definition.
+      - Add scope, aliases, preferred forms, or forbidden forms when needed.
+      - Keep implementation details out of business definitions.
+    intended_methods:
+      - name: define_term
+        intent: Record a repository-owned domain meaning.
+      - name: terms_for
+        intent: Return vocabulary applicable to a File, Folder, Module, or feature scope.
+      - name: validate_usage
+        intent: Support Rules that detect inconsistent vocabulary in repository code or documentation.
+
+model_reviews:
+  anemic_model:
+    questions:
+      - Can outside code construct an invalid Pattern, Rule, Module, Diagnostic, or Baseline?
+      - Are invariants enforced by the owning concept rather than scattered free functions?
+      - Are domain operations expressed through intention-revealing methods?
+      - Do serialized forms expose mutable aggregate internals?
+      - Would replacing the model with maps and strings preserve most behavior?
+    failure_condition: Multiple yes answers require another modeling pass even when tests pass.
+  terminology:
+    questions:
+      - Does new code introduce a domain word absent from this vocabulary?
+      - Does it use a noncanonical term with one of the rejected meanings?
+      - Does it conflate Rule importance, evidence, and assurance?
+      - Does it conflate intended architecture with observed repository state?
+  coverage_honesty:
+    questions:
+      - Does every applicable Rule produce an honest Evaluation Outcome?
+      - Are missing language enforcement and missing Language Facts visible?
+      - Can a passing check be distinguished from incomplete assessment?

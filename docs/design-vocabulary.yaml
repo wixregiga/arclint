@@ -1,0 +1,118 @@
+metadata:
+  vocab: The terms used within a particular domain of knowledge that is being modeled
+  ddd: 
+    definition: The vocabulary of Domain-Driven Design (DDD) and related concepts.
+    rules: A set of constraints that define the way a term or concept can be judged or used.
+    rule: A statement that defines a constraint on the use of a term or concept.
+  reference: A pointer to a source of information that can be used to clarify the meaning of a term or concept.
+contexts:
+  ddd:
+    references:
+      - https://www.dddcommunity.org/resources/ddd_terms
+    vocab:
+      - name: Entity
+        definition: Defined by identity that persists over time and change.
+        rules:
+          - 2 entities with same attributes but different IDs are different
+          - Can change attributes and remain the same thing
+          - Has an ID (or equivalent identity)
+      - name: Value Object
+        definition: An object that describes some characteristic or attribute but carries no concept of identity.
+        rules:
+          - rule: No ID
+          - rule: equality by value (same field => same)
+          - rule: strongly prefers immutability
+          - rule: replace rather than modify in place
+          - rule: self-validating such as detecting invalid states at construction time.
+          - rule: Side-effect free such as not publishing Domain Events or changing other objects.
+      - name: Aggregate
+        definition: A cluster of associated objects that are treated as a unit for the purpose of data changes.
+        rules:
+          - rule: Internal Entities do not have their own Repositories.
+          - rule: All changes to internal objects go through the aggregate root.
+          - rule: Treated as a consistent whole
+          - rule: Holds invariants for the cluster
+          - rule: Outside the aggregate, you treat the cluster as a whole, not as free-floating internals
+          - rule: Exactly 1 root
+          - rule: External references are restricted to one member of the AGGREGATE, designated as the root
+          - rule: A set of consistency rules (invariants) applies within the AGGREGATE'S boundaries
+          - rule: One aggregate = one transaction
+          - rule: References other aggregates by identity, not by object reference
+          - rule: Design small (start small; expand only when true transactional consistency is required).
+          - rule: It protects true invariants (business rules that must always hold).
+          - rule:
+            description: Prefer small aggregates to large ones, and prefer many small aggregates to one large aggregate
+        recommended: 3-5 internal entities
+        warning_signs:
+          - warn: if > 5 internal entities
+          - warn: frequent concurrent modification conflicts."
+      - name: Aggregate Root
+        definition: The single Entity that is the entry point and guardian of the Aggregate. Only the root may be referenced from outside.
+        rules:
+          - rule: Only Aggregate Roots have Repositories.
+          - rule: All external access and modifications go through the root.
+          - rule: Root enforces every invariant of the Aggregate.
+          - rule: Root is the only member that has a global identity and a Repository.
+          - rule: Expose internal collections as unmodifiable views or copies.
+          - rule: Never return mutable internal Entities for external mutation.
+      - name: Repository
+        definition: Abstraction mechanism for encapsulating storage, retrieval, and search behavior which emulates a collection of objects.
+        rules:
+          - rule: Only Aggregate Roots have Repositories.
+          - rule: Provides methods to add, remove, and query objects
+          - rule: Typically works with aggregates
+          - rule: Interface lives in the domain layer; implementation in infrastructure.
+          - rule: Methods speak the ubiquitous language (findPendingOrdersOlderThan, not findByStatusAndCreatedAtBefore).
+          - rule: Behaves like an in-memory collection.
+          - rule: Soft-delete preferred over hard delete when domain requires history.
+          - rule: Never leak persistence technology (JPA annotations, flush(), etc.) into the domain.
+      - name: Factory
+        definition: A mechanism for encapsulating complex creation logic and abstracting the type of a created object for the sake of a client.
+        rules:
+          - rule: Use when creation involves validation, multiple steps, or external domain data.
+          - rule: Prefer static factory methods on the Aggregate for simple cases.
+          - rule: Use a dedicated Factory class when creation is complex or needs collaborators.
+          - rule: Separate “create new” from “reconstitute from persistence”.
+      - name: Domain Service
+        definition: An operation offered as an interface that stands alone in the model, with no encapsulated state. Holds domain logic that does not naturally belong to a single Entity or Value Object.
+        rules:
+          - rule: Stateless with respect to the domain model.
+          - rule: Domain calculations that need data from several sources (DiscountCalculator, StockValidator).
+          - rule: Used when logic spans multiple Aggregates or requires external domain knowledge.
+        hints:
+          - hint:
+            - question: "Does this operation involve multiple Aggregates or external domain knowledge?"
+            - question: "Does this operation belong to a single Entity or Value Object?"
+              ifyes: Yes?, consider a Domain Service.
+              ifno: No, consider moving the logic to the appropriate Entity or Value Object.
+          - hint: Domain Service = pure domain logic; Application Service = use-case orchestration + transaction boundary.
+      - name: Domain Event
+        definition: A record of something that happened in the domain that domain experts care about. Used for communication between Aggregates and for eventual consistency.
+        rules:
+          - rule: Published by the Aggregate Root when a meaningful state change occurs.
+          - rule: Collected inside the Aggregate and published after successful persistence (usually by the Repository or Application Service).
+          - rule: Should be immutable and self-contained (no references to mutable objects).
+          - rule: Handled in separate transactions (AFTER_COMMIT + REQUIRES_NEW).
+          - rule: Named in past tense and ubiquitous language (OrderConfirmed, ShippingAddressChanged).
+      - name: Command
+        definition: An operation that effects some change to the system (for example, setting a variable). An operation that intentionally creates a side effect.
+      - name: Design Pattern
+        definition: A definition of communicating objects and classes that are customized to solve a general design problem in a particular context
+      - name: Function
+        definition: An operation that computes and returns a result without observable side effects.
+      - name: Immutable
+        definition: The property of never changing observable state after creation. implicit concept A concept that is necessary to understand the meaning of a model or design but is never mentioned.
+      - name: Cohesion
+        definition: Logical agreement and dependence.
+      - name: Model
+        definition: A system of abstractions that describes selected aspects of a domain and can be used to solve problems related to that domain.
+      - name: Unification
+        definition: The internal consistency of a model such that each term is unambiguous and no rules contradict.
+      - name: Service
+        definition: An operation offered as an interface that stands alone in the model, with no encapsulated state.
+      - name: Assertion
+        definition: A statement of the correct state of a program at some point, independent of how it does it. Typically, an ASSERTION specifies the result of an operation or an invariant of a design element.
+      - name: Invariant
+        definition: An Assertion about some design element that must be true at all times, except during specifically transient situations such as the middle of the execution of a method, or the middle of an uncommitted database transaction.
+      - name: Intention-Revealing Interface
+        definition: A design in which the names of classes, methods, and other elements convey both the original developer's purpose in creating them and their value to a client developer.
