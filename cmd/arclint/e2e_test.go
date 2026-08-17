@@ -1,22 +1,17 @@
 package main
 
-// End-to-end tests over the compiled binary. The extension test runs with
-// a COMPLETELY EMPTY environment: no PATH, no HOME — mechanical proof that
-// TypeScript rules execute with no Node, npm, or tsc on the machine
-// (M2 acceptance).
+// End-to-end tests over the compiled binary: the self-hosted engine
+// checking its own repository, the SDK showcase extension gating a
+// fixture, and the full baseline lifecycle.
 
 import (
 	"bytes"
 	"encoding/json"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/wixregiga/arclint/internal/config"
-	"github.com/wixregiga/arclint/internal/patterns"
 )
 
 var binPath string
@@ -27,11 +22,7 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	binPath = filepath.Join(dir, "arclint")
-	// Grammar subset tags mirror the Makefile: the e2e binary embeds only
-	// the fact-provider grammars.
-	build := exec.Command("go", "build",
-		"-tags", "grammar_subset grammar_subset_typescript grammar_subset_tsx grammar_subset_javascript grammar_subset_python",
-		"-o", binPath, ".")
+	build := exec.Command("go", "build", "-o", binPath, ".")
 	build.Env = append(os.Environ(), "CGO_ENABLED=0")
 	if out, err := build.CombinedOutput(); err != nil {
 		panic("build: " + err.Error() + "\n" + string(out))
@@ -41,480 +32,326 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func fixturePath(t *testing.T, name string) string {
-	t.Helper()
-	abs, err := filepath.Abs(filepath.Join("..", "..", "testdata", "fixtures", name))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return abs
-}
-
-// copyFixture avoids polluting testdata with cache artifacts.
-func copyFixture(t *testing.T, name string) string {
-	t.Helper()
-	src := fixturePath(t, name)
-	dst := t.TempDir()
-	err := filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, err := filepath.Rel(src, p)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(dst, rel)
-		if d.IsDir() {
-			return os.MkdirAll(target, 0o755)
-		}
-		data, err := os.ReadFile(p)
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(target, data, 0o644)
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return dst
-}
-
 func runBin(t *testing.T, dir string, env []string, args ...string) (string, string, int) {
 	t.Helper()
 	cmd := exec.Command(binPath, args...)
 	cmd.Dir = dir
 	cmd.Env = env
-	var out, errb bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &errb
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
 	err := cmd.Run()
-	if ee, ok := err.(*exec.ExitError); ok {
-		return out.String(), errb.String(), ee.ExitCode()
+	code := 0
+	if exit, ok := err.(*exec.ExitError); ok {
+		code = exit.ExitCode()
+	} else if err != nil {
+		t.Fatalf("run %v: %v", args, err)
 	}
-	if err != nil {
-		t.Fatalf("exec: %v", err)
-	}
-	return out.String(), errb.String(), 0
+	return stdout.String(), stderr.String(), code
 }
 
-func TestExtensionRuleWithoutToolchain(t *testing.T) {
-	dir := copyFixture(t, "extension-handler-naming")
-	// Empty environment: if anything tried to spawn node/tsc/npm it could
-	// not even resolve a PATH.
-	stdout, stderr, code := runBin(t, dir, []string{}, "check", ".", "--format", "json")
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func write(t *testing.T, root, rel, content string) {
+	t.Helper()
+	abs := filepath.Join(root, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(abs, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+type diagnosticDoc struct {
+	Kind     string `json:"kind"`
+	RuleID   string `json:"ruleId"`
+	Path     string `json:"path"`
+	Line     int    `json:"line"`
+	Severity string `json:"severity"`
+	Status   string `json:"status"`
+	Message  string `json:"message"`
+}
+
+// TestSelfCheckClean is the self-hosting gate: the engine's own
+// repository satisfies every one of its own rules, extension included.
+func TestSelfCheckClean(t *testing.T) {
+	stdout, stderr, code := runBin(t, repoRoot(t), os.Environ(), "check")
+	if code != 0 {
+		t.Fatalf("self-check exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "0 active finding(s)") {
+		t.Errorf("self-check output: %s", stdout)
+	}
+}
+
+func TestRulesListsRuleset(t *testing.T) {
+	stdout, stderr, code := runBin(t, repoRoot(t), os.Environ(), "rules")
+	if code != 0 {
+		t.Fatalf("rules exit %d\nstderr: %s", code, stderr)
+	}
+	lines := strings.Split(strings.TrimSpace(stdout), "\n")
+	if len(lines) != 18 {
+		t.Errorf("rules listed = %d, want 18\n%s", len(lines), stdout)
+	}
+	for _, want := range []string{"arclint:domain/stdlib-only", "arclint:domain/no-panic"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("missing %s in listing", want)
+		}
+	}
+}
+
+func TestExplainAndContext(t *testing.T) {
+	stdout, stderr, code := runBin(t, repoRoot(t), os.Environ(), "explain", "arclint:domain/stdlib-only")
+	if code != 0 || !strings.Contains(stdout, "claim: ") {
+		t.Errorf("explain exit %d, output %q, stderr %s", code, stdout, stderr)
+	}
+
+	stdout, stderr, code = runBin(t, repoRoot(t), os.Environ(),
+		"context", "internal/domain/rule/root.go", "--format", "json")
+	if code != 0 {
+		t.Fatalf("context exit %d\nstderr: %s", code, stderr)
+	}
+	var ctx struct {
+		Modules []struct{ Name string }
+		Rules   []struct{ Reason string }
+	}
+	if err := json.Unmarshal([]byte(stdout), &ctx); err != nil {
+		t.Fatalf("context json: %v\n%s", err, stdout)
+	}
+	names := map[string]bool{}
+	for _, m := range ctx.Modules {
+		names[m.Name] = true
+	}
+	if !names["domain"] || len(ctx.Rules) == 0 {
+		t.Errorf("context = %+v", ctx)
+	}
+}
+
+// TestAgentsBlockCurrent replaces the docs drift test: the installed
+// AGENTS.md block must match what the binary generates from rules.yaml.
+func TestAgentsBlockCurrent(t *testing.T) {
+	stdout, stderr, code := runBin(t, repoRoot(t), os.Environ(), "agents")
+	if code != 0 {
+		t.Fatalf("agents exit %d\nstderr: %s", code, stderr)
+	}
+	installed, err := os.ReadFile(filepath.Join(repoRoot(t), "AGENTS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(installed), strings.TrimSuffix(stdout, "\n")) {
+		t.Errorf("AGENTS.md block is stale; run `arclint agents --write`")
+	}
+}
+
+// TestExtensionDemoGates proves the SDK showcase end to end: the
+// forbid-content extension, configured with an input, gates a real
+// fixture repository.
+func TestExtensionDemoGates(t *testing.T) {
+	demo, err := os.ReadFile(filepath.Join(repoRoot(t), ".arclint", "extensions", "forbid_content.ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	write(t, root, ".arclint/extensions/forbid_content.ts", string(demo))
+	write(t, root, "rules.yaml", `runtime: [go]
+modules:
+  src:
+    paths: ["src/**"]
+contracts:
+  src:
+    invariants:
+      - id: "repo:src/no-panic"
+        kind: extension
+        files: "src/**/*.go"
+        uses: forbid-content
+        with:
+          pattern: '\bpanic\('
+`)
+	write(t, root, "src/bad.go", "package src\n\nfunc boom() {\n\tpanic(\"no\")\n}\n")
+	write(t, root, "src/ok.go", "package src\n")
+
+	stdout, stderr, code := runBin(t, root, os.Environ(), "check", "--format", "json")
 	if code != 1 {
-		t.Fatalf("exit = %d, want 1\nstdout: %s\nstderr: %s", code, stdout, stderr)
+		t.Fatalf("exit %d, want 1\nstdout: %s\nstderr: %s", code, stdout, stderr)
 	}
-	var violations []map[string]any
-	if err := json.Unmarshal([]byte(stdout), &violations); err != nil {
-		t.Fatalf("stdout is not a JSON violation array: %v\n%s", err, stdout)
-	}
-	if len(violations) != 2 {
-		t.Fatalf("violations: %v", violations)
-	}
-	v := violations[0]
-	if v["ruleId"] != "rules.handler-naming[0]" ||
-		v["path"] != "internal/api/handlers/broken.go" ||
-		v["contract"] != "invariant" ||
-		v["blame"] != "provider" {
-		t.Errorf("violation: %v", v)
-	}
-	// The second rule's finding overrides its type-level provides/provider.
-	w := violations[1]
-	if w["ruleId"] != "rules.wiring-audit[1]" ||
-		w["contract"] != "consumes" ||
-		w["blame"] != "consumer" {
-		t.Errorf("override violation: %v", w)
-	}
-}
-
-// TestExceptOnExtensionInstance proves except works uniformly for
-// extension rule instances, and that suppression is visible in output.
-func TestExceptOnExtensionInstance(t *testing.T) {
-	dir := copyFixture(t, "extension-handler-naming")
-	rules, err := os.ReadFile(filepath.Join(dir, "rules.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	patched := strings.Replace(string(rules),
-		"  - type: handler-naming\n    params: { suffix: \"Handler\" }",
-		"  - type: handler-naming\n    params: { suffix: \"Handler\" }\n"+
-			"    except:\n"+
-			"      - paths: [\"internal/api/handlers/broken.go\"]\n"+
-			"        reason: \"renamed in the next sweep\"", 1)
-	if patched == string(rules) {
-		t.Fatal("fixture rules.yaml shape changed; update the patch")
-	}
-	if err := os.WriteFile(filepath.Join(dir, "rules.yaml"), []byte(patched), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	stdout, _, code := runBin(t, dir, os.Environ(), "check", ".")
-	// The wiring-audit finding survives (exit 1); the handler-naming
-	// finding on broken.go is suppressed, visibly.
-	if code != 1 {
-		t.Fatalf("exit = %d, want 1\n%s", code, stdout)
-	}
-	if strings.Contains(stdout, "handler files must end in") {
-		t.Errorf("excepted finding still reported:\n%s", stdout)
-	}
-	if !strings.Contains(stdout, "1 suppressed by except") {
-		t.Errorf("suppression not visible:\n%s", stdout)
-	}
-
-	// --show-suppressed lists what was omitted, with the reason.
-	stdout, _, _ = runBin(t, dir, os.Environ(), "check", ".", "--show-suppressed")
-	for _, want := range []string{"SUPPRESSED (allowed by except)", "handler files must end in", "allowed: renamed in the next sweep"} {
-		if !strings.Contains(stdout, want) {
-			t.Errorf("--show-suppressed missing %q:\n%s", want, stdout)
-		}
-	}
-	stdout, _, _ = runBin(t, dir, os.Environ(), "check", ".", "--show-suppressed", "--format", "json")
-	if !strings.Contains(stdout, "\"suppressed\": true") || !strings.Contains(stdout, "\"suppressedReason\"") {
-		t.Errorf("json suppressed fields missing:\n%s", stdout)
-	}
-
-	// rules show displays the exception as part of the requirement.
-	stdout, stderr, code := runBin(t, dir, os.Environ(), "rules", "show", "rules.handler-naming[0]")
-	if code != 0 {
-		t.Fatalf("rules show: exit %d, stderr %s", code, stderr)
-	}
-	for _, want := range []string{"exceptions:", "internal/api/handlers/broken.go", "renamed in the next sweep"} {
-		if !strings.Contains(stdout, want) {
-			t.Errorf("rules show missing %q:\n%s", want, stdout)
-		}
-	}
-}
-
-func TestModuleAndExplainCommands(t *testing.T) {
-	dir := copyFixture(t, "extension-handler-naming")
-	if _, stderr, code := runBin(t, dir, os.Environ(), "load", "rules.yaml"); code != 0 {
-		t.Fatalf("load: %s", stderr)
-	}
-
-	stdout, stderr, code := runBin(t, dir, os.Environ(), "module", "info", "handlers")
-	if code != 0 {
-		t.Fatalf("module info: exit %d, stderr %s", code, stderr)
-	}
-	for _, want := range []string{
-		"handlers — [go] HTTP handler layer; names end in Handler.",
-		"paths: internal/api/handlers/**",
-		"files: 2",
-	} {
-		if !strings.Contains(stdout, want) {
-			t.Errorf("module info output missing %q:\n%s", want, stdout)
-		}
-	}
-
-	if _, stderr, code := runBin(t, dir, os.Environ(), "module", "info", "nope"); code != 2 ||
-		!strings.Contains(stderr, `unknown module "nope"`) {
-		t.Errorf("unknown module: exit %d, stderr %s", code, stderr)
-	}
-
-	stdout, stderr, code = runBin(t, dir, os.Environ(), "explain")
-	if code != 0 {
-		t.Fatalf("explain: exit %d, stderr %s", code, stderr)
-	}
-	for _, want := range []string{
-		"consumes", "registration", "layers",
-		// Extension types are merged into the listing with their
-		// defineRule descriptions.
-		"handler-naming", "Handler files carry the configured suffix.",
-	} {
-		if !strings.Contains(stdout, want) {
-			t.Errorf("explain listing missing %q:\n%s", want, stdout)
-		}
-	}
-
-	stdout, _, code = runBin(t, dir, os.Environ(), "explain", "consumes")
-	if code != 0 || !strings.Contains(stdout, "external  a third-party dependency") {
-		t.Errorf("explain consumes: exit %d\n%s", code, stdout)
-	}
-
-	stdout, _, code = runBin(t, dir, os.Environ(), "explain", "handler-naming")
-	if code != 0 || !strings.Contains(stdout, "params schema") || !strings.Contains(stdout, "suffix") {
-		t.Errorf("explain extension type: exit %d\n%s", code, stdout)
-	}
-
-	if _, stderr, code = runBin(t, dir, os.Environ(), "explain", "nope"); code != 2 ||
-		!strings.Contains(stderr, "unknown rule kind") {
-		t.Errorf("explain unknown: exit %d, stderr %s", code, stderr)
-	}
-}
-
-func TestExitCodeContract(t *testing.T) {
-	cases := []struct {
-		fixture string
-		want    int
-	}{
-		{"external-import-violation", 1},
-		{"external-import-clean", 0},
-	}
-	for _, tc := range cases {
-		dir := copyFixture(t, tc.fixture)
-		_, stderr, code := runBin(t, dir, os.Environ(), "check", ".")
-		if code != tc.want {
-			t.Errorf("%s: exit = %d, want %d (stderr: %s)", tc.fixture, code, tc.want, stderr)
-		}
-	}
-	// Config error: no rules.yaml anywhere up from an isolated temp dir.
-	_, _, code := runBin(t, t.TempDir(), os.Environ(), "check", ".", "--rules", "/nonexistent/rules.yaml")
-	if code != 2 {
-		t.Errorf("missing rules: exit = %d, want 2", code)
-	}
-}
-
-// TestBuiltinPatternSuites is the M7 pattern gate: every builtin
-// pattern's bundled rule tests pass through the real binary, and every
-// namespaced rule id the pattern declares is exercised by at least one
-// expectation. Patterns are curated test suites, not hardcoded
-// primitives.
-func TestBuiltinPatternSuites(t *testing.T) {
-	builtins, err := patterns.Builtins()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, p := range builtins {
-		t.Run(p.Name, func(t *testing.T) {
-			if p.Namespace == "" {
-				t.Fatalf("builtin pattern %q must declare a namespace", p.Name)
-			}
-			if len(p.Tests) == 0 {
-				t.Fatalf("builtin pattern %q ships no rule tests", p.Name)
-			}
-			dir := t.TempDir()
-			stdout, stderr, code := runBin(t, dir, os.Environ(),
-				"rules", "test", "--pattern", p.Name, "--format", "json")
-			if code != 0 {
-				t.Fatalf("rules test --pattern %s: exit %d\nstdout: %s\nstderr: %s", p.Name, code, stdout, stderr)
-			}
-			var results []struct {
-				Case  string   `json:"case"`
-				Pass  bool     `json:"pass"`
-				Rules []string `json:"rules"`
-			}
-			if err := json.Unmarshal([]byte(stdout), &results); err != nil {
-				t.Fatalf("json: %v\n%s", err, stdout)
-			}
-			tested := map[string]bool{}
-			for _, r := range results {
-				if !r.Pass {
-					t.Errorf("case %q failed", r.Case)
-				}
-				for _, id := range r.Rules {
-					tested[id] = true
-				}
-			}
-
-			// Coverage: every namespaced id in the rendered template must
-			// be exercised. Derived (unprefixed) ids are exempt.
-			rendered, err := p.RenderRules(p.Runtimes[:1])
-			if err != nil {
-				t.Fatal(err)
-			}
-			rs, err := config.Parse(rendered, filepath.Join(dir, "rules.yaml"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			var declared []string
-			for _, inst := range rs.Instances() {
-				if strings.HasPrefix(inst.ID, p.Namespace+":") {
-					declared = append(declared, inst.ID)
-				}
-			}
-			for _, r := range rs.Rules {
-				if strings.HasPrefix(r.ID, p.Namespace+":") {
-					declared = append(declared, r.ID)
-				}
-			}
-			if len(declared) == 0 {
-				t.Fatalf("pattern %q declares no namespaced rule ids", p.Name)
-			}
-			for _, id := range declared {
-				if !tested[id] {
-					t.Errorf("rule id %q has no test expectation in the pattern's suite", id)
-				}
-			}
-		})
-	}
-}
-
-// TestInitEveryBuiltinPattern is the pattern gate: each shipped pattern,
-// initialized for each runtime it supports through the real binary, must
-// validate and check clean on an empty tree.
-func TestInitEveryBuiltinPattern(t *testing.T) {
-	builtins, err := patterns.Builtins()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(builtins) < 3 {
-		t.Fatalf("builtins = %d, want the shipped set", len(builtins))
-	}
-	for _, p := range builtins {
-		for _, rt := range p.Runtimes {
-			t.Run(p.Name+"/"+rt, func(t *testing.T) {
-				dir := t.TempDir()
-				stdout, stderr, code := runBin(t, dir, os.Environ(),
-					"init", "--runtimes", rt, "--pattern", p.Name)
-				if code != 0 {
-					t.Fatalf("init: exit %d\n%s%s", code, stdout, stderr)
-				}
-				if !strings.Contains(stdout, "wrote rules.yaml") {
-					t.Errorf("init output: %s", stdout)
-				}
-				if _, _, code := runBin(t, dir, os.Environ(), "check", "."); code != 0 {
-					t.Errorf("materialized pattern does not check clean (exit %d)", code)
-				}
-			})
-		}
-	}
-}
-
-// TestFeatureSlicePattern proves the shipped pattern against a real
-// repository shape: the conforming library app checks clean; the
-// violating copy fires representative findings from every enforcement
-// source (YAML protected, registration, structure; extension matrix,
-// purity, and the provides/provider port finding).
-func TestFeatureSlicePattern(t *testing.T) {
-	clean := copyFixture(t, "pattern-feature-slice-clean")
-	stdout, stderr, code := runBin(t, clean, os.Environ(),
-		"init", "--runtimes", "go", "--pattern", "feature-slice")
-	if code != 0 {
-		t.Fatalf("init: exit %d\n%s%s", code, stdout, stderr)
-	}
-	if stdout, stderr, code = runBin(t, clean, os.Environ(), "check", "."); code != 0 {
-		t.Fatalf("conforming repo not clean: exit %d\n%s%s", code, stdout, stderr)
-	}
-
-	dirty := copyFixture(t, "pattern-feature-slice-dirty")
-	if _, stderr, code = runBin(t, dirty, os.Environ(),
-		"init", "--runtimes", "go", "--pattern", "feature-slice"); code != 0 {
-		t.Fatalf("init dirty: exit %d\n%s", code, stderr)
-	}
-	stdout, _, code = runBin(t, dirty, os.Environ(), "check", ".", "--format", "json")
-	if code != 1 {
-		t.Fatalf("violating repo: exit %d, want 1\n%s", code, stdout)
-	}
-	var violations []map[string]any
-	if err := json.Unmarshal([]byte(stdout), &violations); err != nil {
+	var diagnostics []diagnosticDoc
+	if err := json.Unmarshal([]byte(stdout), &diagnostics); err != nil {
 		t.Fatalf("json: %v\n%s", err, stdout)
 	}
-	find := func(pred func(map[string]any) bool) *map[string]any {
-		for _, v := range violations {
-			if pred(v) {
-				return &v
-			}
+	var active []diagnosticDoc
+	for _, d := range diagnostics {
+		if d.Kind == "violation" && d.Status == "active" {
+			active = append(active, d)
 		}
-		return nil
 	}
-	type want struct {
-		desc string
-		pred func(map[string]any) bool
-	}
-	wants := []want{
-		{"YAML protected: feature imports shared", func(v map[string]any) bool {
-			return v["ruleId"] == "slice:deps.shared-only-via-app" && v["path"] == "internal/borrowbook/sneaky.go"
-		}},
-		{"YAML registration: returnbook unwired", func(v map[string]any) bool {
-			return v["ruleId"] == "slice:repo.features-wired" && strings.Contains(v["message"].(string), "returnbook")
-		}},
-		{"YAML structure: dumping ground", func(v map[string]any) bool {
-			return v["ruleId"] == "slice:repo.no-dumping-grounds" && v["path"] == "internal/shared/utils.go"
-		}},
-		{"extension matrix: feature imports feature", func(v map[string]any) bool {
-			return v["ruleId"] == "slice:repo.slices" && v["path"] == "internal/returnbook/grab.go" &&
-				v["contract"] == "consumes" && v["blame"] == "consumer"
-		}},
-		{"extension purity: concept imports net/http", func(v map[string]any) bool {
-			return v["ruleId"] == "slice:repo.slices" && v["path"] == "internal/member/web.go"
-		}},
-		{"extension port finding carries provides/provider", func(v map[string]any) bool {
-			return v["ruleId"] == "slice:repo.slices" && v["path"] == "internal/reporting/report.go" &&
-				v["contract"] == "provides" && v["blame"] == "provider"
-		}},
-	}
-	for _, w := range wants {
-		if find(w.pred) == nil {
-			t.Errorf("missing finding: %s\nall: %s", w.desc, stdout)
-		}
+	if len(active) != 1 || active[0].RuleID != "repo:src/no-panic" ||
+		active[0].Path != "src/bad.go" || active[0].Line != 4 {
+		t.Errorf("active = %+v, want the panic line in src/bad.go", active)
 	}
 }
 
-func TestInitInteractiveDefaults(t *testing.T) {
-	dir := t.TempDir()
-	cmd := exec.Command(binPath, "init")
-	cmd.Dir = dir
-	cmd.Stdin = strings.NewReader("\n\n") // accept both defaults
-	out, err := cmd.CombinedOutput()
+// TestInitDraftLoads proves init against the engine itself: the drafted
+// starter ruleset must check clean in a fresh repository.
+func TestInitDraftLoads(t *testing.T) {
+	root := t.TempDir()
+	stdout, stderr, code := runBin(t, root, os.Environ(), "init")
+	if code != 0 || !strings.Contains(stdout, "wrote ") {
+		t.Fatalf("init exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	write(t, root, "hello.go", "package hello\n")
+	if _, stderr, code := runBin(t, root, os.Environ(), "check"); code != 0 {
+		t.Errorf("check on the starter ruleset: exit %d\nstderr: %s", code, stderr)
+	}
+	if _, _, code := runBin(t, root, os.Environ(), "init"); code != 2 {
+		t.Errorf("second init must refuse without --force, got exit %d", code)
+	}
+}
+
+// TestBaselineLifecycle drives adopt, gate, stale, refresh over a real
+// fixture repository.
+func TestBaselineLifecycle(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "rules.yaml", `runtime: [go]
+modules:
+  src:
+    paths: ["src/**"]
+contracts:
+  src:
+    invariants:
+      - id: "repo:src/snake"
+        kind: naming
+        files: "src/**/*.go"
+        case: snake_case
+`)
+	write(t, root, "src/BadName.go", "package src\n")
+	write(t, root, "src/ok.go", "package src\n")
+
+	if _, _, code := runBin(t, root, os.Environ(), "check"); code != 1 {
+		t.Fatalf("pre-baseline check must gate, got %d", code)
+	}
+	stdout, stderr, code := runBin(t, root, os.Environ(), "baseline", "capture")
+	if code != 0 || !strings.Contains(stdout, "1 finding(s)") {
+		t.Fatalf("capture exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	if stdout, _, code := runBin(t, root, os.Environ(), "check"); code != 0 ||
+		!strings.Contains(stdout, "1 baselined") {
+		t.Fatalf("baselined check exit %d\n%s", code, stdout)
+	}
+
+	if err := os.Rename(filepath.Join(root, "src", "BadName.go"),
+		filepath.Join(root, "src", "good_name.go")); err != nil {
+		t.Fatal(err)
+	}
+	if stdout, _, code := runBin(t, root, os.Environ(), "check"); code != 0 ||
+		!strings.Contains(stdout, "no longer occur") {
+		t.Fatalf("stale entries must surface, exit %d\n%s", code, stdout)
+	}
+	stdout, stderr, code = runBin(t, root, os.Environ(), "baseline", "refresh")
+	if code != 0 || !strings.Contains(stdout, "1 stale entr(ies) dropped") {
+		t.Fatalf("refresh exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	if stdout, _, code := runBin(t, root, os.Environ(), "check"); code != 0 ||
+		strings.Contains(stdout, "no longer occur") {
+		t.Fatalf("post-refresh check exit %d\n%s", code, stdout)
+	}
+}
+
+// TestLegacyFormatRejected pins the strict grammar: the retired
+// ruleset constructs fail loudly as configuration errors.
+func TestLegacyFormatRejected(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "rules.yaml", `runtime: [go]
+modules:
+  src: ["src/**"]
+contracts:
+  src:
+    provides:
+      - kind: correspondence
+`)
+	if _, stderr, code := runBin(t, root, os.Environ(), "check"); code != 2 ||
+		!strings.Contains(stderr, "arclint:") {
+		t.Errorf("legacy format: exit %d, stderr %q, want a loud configuration error", code, stderr)
+	}
+}
+
+func TestSDKInitWritesTyping(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "rules.yaml", "runtime: [go]\n")
+	stdout, stderr, code := runBin(t, root, os.Environ(), "sdk", "init")
+	if code != 0 || strings.Count(stdout, "wrote ") != 2 {
+		t.Fatalf("sdk init exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	dts, err := os.ReadFile(filepath.Join(root, ".arclint", "extensions", "arclint.d.ts"))
 	if err != nil {
-		t.Fatalf("interactive init: %v\n%s", err, out)
+		t.Fatal(err)
 	}
-	// Empty dir detects nothing; the default is go, whose first compatible
-	// pattern (alphabetical) is ddd-flat, which ships an extension and SDK
-	// typings.
-	for _, f := range []string{"rules.yaml", ".arclint/extensions/ddd-flat.ts", ".arclint/extensions/arclint.d.ts"} {
-		if _, err := os.Stat(filepath.Join(dir, filepath.FromSlash(f))); err != nil {
-			t.Errorf("%s not written: %v", f, err)
-		}
+	if !strings.Contains(string(dts), "defineRule") {
+		t.Errorf("arclint.d.ts lacks the SDK surface")
 	}
 }
 
-func TestInitRefusesOverwrite(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "rules.yaml"), []byte("runtime: [go]\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	_, stderr, code := runBin(t, dir, os.Environ(), "init", "--runtimes", "go", "--pattern", "starter")
-	if code != 2 || !strings.Contains(stderr, "already exists") {
-		t.Errorf("exit %d, stderr %s", code, stderr)
-	}
-	if _, _, code := runBin(t, dir, os.Environ(), "init", "--runtimes", "go", "--pattern", "starter", "--force"); code != 0 {
-		t.Errorf("--force: exit %d", code)
-	}
-}
+// TestExtensionFactsEndToEnd proves the declaration tier root to
+// sandbox: the extension rule's enforcement declares the fact, the
+// walker gathers it, the Go producer extracts exactly, and the
+// extension reads it through ctx.facts.
+func TestExtensionFactsEndToEnd(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, ".arclint/extensions/exported_inventory.ts", `
+import { defineRule } from "arclint";
+export default defineRule({
+  type: "exported-inventory",
+  check(ctx) {
+    for (const f of ctx.files()) {
+      const facts = ctx.facts(f.path);
+      if (facts === null) continue;
+      for (const d of facts.decls) {
+        if (d.kind === "func" && d.exported) {
+          ctx.report({ path: f.path, line: d.startLine, message: "exported func " + d.name });
+        }
+      }
+    }
+  },
+});
+`)
+	write(t, root, "rules.yaml", `runtime: [go, ts]
+modules:
+  src:
+    paths: ["src/**"]
+contracts:
+  src:
+    invariants:
+      - id: "repo:src/inventory"
+        kind: extension
+        uses: exported-inventory
+`)
+	write(t, root, "src/a.go", "package src\n\nfunc Public() {}\n\nfunc private() {}\n")
+	write(t, root, "src/b.ts", "export function TsThing(): void {}\nfunction hidden(): void {}\n")
 
-func TestPatternsCommand(t *testing.T) {
-	dir := t.TempDir()
-	stdout, stderr, code := runBin(t, dir, os.Environ(), "patterns", "--extensions")
-	if code != 0 {
-		t.Fatalf("patterns: exit %d, stderr %s", code, stderr)
+	stdout, stderr, code := runBin(t, root, os.Environ(), "check", "--format", "json")
+	if code != 1 {
+		t.Fatalf("exit %d, want 1\nstdout: %s\nstderr: %s", code, stdout, stderr)
 	}
-	for _, want := range []string{
-		"feature-slice", "layers", "starter", "builtin",
-		".arclint/extensions/feature-slice.ts",
-	} {
-		if !strings.Contains(stdout, want) {
-			t.Errorf("patterns output missing %q:\n%s", want, stdout)
+	var diagnostics []diagnosticDoc
+	if err := json.Unmarshal([]byte(stdout), &diagnostics); err != nil {
+		t.Fatalf("json: %v\n%s", err, stdout)
+	}
+	var active []diagnosticDoc
+	for _, d := range diagnostics {
+		if d.Kind == "violation" && d.Status == "active" {
+			active = append(active, d)
 		}
 	}
-
-	// A local pattern under .arclint/patterns is listed with its source.
-	local := filepath.Join(dir, ".arclint", "patterns", "fsd", "go")
-	if err := os.MkdirAll(local, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(local, "pattern.yaml"),
-		[]byte("description: \"Team FSD variant.\"\nruntimes: [go]\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(local, "rules.yaml"),
-		[]byte("runtime: [go]\nmodules:\n  all: [\"**\"]\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	stdout, _, code = runBin(t, dir, os.Environ(), "patterns")
-	if code != 0 || !strings.Contains(stdout, "fsd/go") || !strings.Contains(stdout, ".arclint/patterns/fsd/go") {
-		t.Errorf("local pattern not listed (exit %d):\n%s", code, stdout)
-	}
-}
-
-func TestSdkInitCommand(t *testing.T) {
-	dir := t.TempDir()
-	stdout, stderr, code := runBin(t, dir, os.Environ(), "sdk", "init")
-	if code != 0 {
-		t.Fatalf("sdk init: exit %d\n%s%s", code, stdout, stderr)
-	}
-	for _, f := range []string{"arclint.d.ts", "tsconfig.json"} {
-		if _, err := os.Stat(filepath.Join(dir, ".arclint", "extensions", f)); err != nil {
-			t.Errorf("%s: %v", f, err)
-		}
+	if len(active) != 2 ||
+		active[0].Message != "exported func Public" || active[0].Path != "src/a.go" || active[0].Line != 3 ||
+		active[1].Message != "exported func TsThing" || active[1].Path != "src/b.ts" || active[1].Line != 1 {
+		t.Errorf("active = %+v, want the Go and TypeScript exported funcs at their lines", active)
 	}
 }

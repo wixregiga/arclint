@@ -1,6 +1,6 @@
 schema_version: "1.0"
 document: arclint-codebase-scaffold
-status: accepted-target-scaffold
+status: implemented  # switchover completed 2026-08-17; this scaffold is now the live layout
 
 references:
   domain_vocabulary: docs/domain-vocabulary-v2.yaml

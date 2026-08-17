@@ -12,8 +12,58 @@ Orchestrating agents must follow this rule and implementing agents must receive 
 ## References
 References are from the root of the repository.
 
-- Domain-Driven-Design Vocabulary: arclint/docs/design-vocab.yml
-- Domain Vocabulary
+- Domain Vocabulary (target): docs/domain-vocabulary-v2.yaml
+- Codebase Scaffold (target): docs/codebase-scaffold-v2.yaml
+- Executable target ruleset: rules.yaml
+- Design vocabulary (historical evidence only): docs/design-vocabulary.yaml
+
+## Business case first (mandatory)
+
+The legacy codebase is an interpretation of business objectives, and so
+are parts of the target documents that transcribed legacy shapes. Work
+business first:
+
+1. Before implementing any capability, state the business objective it
+   serves and who needs it (actors from the vocabulary).
+2. Evaluate at least one alternative mechanism against that objective.
+   Attestation authorizes the requirement, never the mechanism: a rule
+   kind appearing in rules.yaml proves the claim must be
+   enforceable, not that its current shape is right.
+3. Compare with legacy only AFTER a design exists — never before or
+   during design. Legacy is the post-hoc diff, not the starting point.
+
+A mechanism whose only justification is "the ruleset already uses it"
+has not passed this gate.
+
+## V2 attestation (mandatory)
+
+Every construct entering the target scaffold (internal/domain,
+internal/application, internal/infrastructure, internal/delivery) must
+cite the v2 document that attests it: docs/domain-vocabulary-v2.yaml,
+docs/codebase-scaffold-v2.yaml, or rules.yaml. If you cannot cite
+one, it stays out. The Rule Type enum is exactly the set of kinds
+rules.yaml uses.
+
+### Reading order with a firewall
+
+1. Read the three target documents first.
+2. Write the design skeleton — enums, types, invariants — before opening
+   any legacy file under internal/ that is not part of the target
+   scaffold.
+3. Consult legacy code only as migration evidence. Record each consulted
+   fact by appending to the source_checklist in
+   docs/domain-vocabulary-v2.yaml: the fact, the source file, and why
+   the v2 documents are silent on it.
+
+### Mandatory self-checks
+
+Before writing each target-scaffold file, answer with citations:
+
+1. Is this term in the vocabulary? (docs/domain-vocabulary-v2.yaml)
+2. Is this kind in rules.yaml?
+3. Which document attests this field?
+
+An answer of "the old code does it this way" fails all three.
 
 ## Rules
 Below are the rules for refactoring that have been compiled from past agent failures and successes. Read each one. Peform the asks, the checks, do not ignore the rules, and generate the alerts as is necessary. Peform those steps at the beginning of the refactor. Peform these steps during the refactor as necessary. Always peform it at the the end of the refactor.

@@ -1,8 +1,10 @@
 //go:build bench
 
-// Package bench_test measures the M1 gate-4 numbers against a compiled
-// binary: cold start under 100ms, and a 5,000-file repository checked in
-// low single-digit seconds. Run with:
+// Package bench_test measures the performance bounds against a
+// compiled binary: cold start under 100ms, and a 5,000-file repository
+// checked in low single-digit seconds. Both repositories are
+// synthesized in temp dirs; the bench depends on no fixtures. Run
+// with:
 //
 //	go build -o /tmp/arclint ./cmd/arclint
 //	ARCLINT_BIN=/tmp/arclint go test -tags bench -v ./internal/bench/
@@ -52,14 +54,13 @@ func timeRuns(t *testing.T, runs int, dir string, args ...string) []time.Duratio
 
 func median(d []time.Duration) time.Duration { return d[len(d)/2] }
 
-// TestColdStart: full process lifetime (spawn, load rules, walk, parse,
-// check, report) on a small real fixture stays under 100ms median.
+// TestColdStart: full process lifetime (spawn, load rules, walk,
+// parse, check, report) on a small repository stays under 100ms
+// median.
 func TestColdStart(t *testing.T) {
-	fixture, err := filepath.Abs(filepath.Join("..", "..", "testdata", "fixtures", "external-import-violation"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	times := timeRuns(t, 11, fixture, "check", ".")
+	root := t.TempDir()
+	writeSyntheticRepo(t, root, 6, 4) // 6 packages x 4 files
+	times := timeRuns(t, 11, root, "check", ".")
 	med, max := median(times), times[len(times)-1]
 	t.Logf("cold start over 11 runs: median %s, min %s, max %s", med, times[0], max)
 	if med > 100*time.Millisecond {
@@ -95,23 +96,30 @@ func writeSyntheticRepo(t *testing.T, root string, pkgs, filesPer int) {
 	write("go.mod", "module example.com/synth\n\ngo 1.24\n\nrequire github.com/pkg/errors v0.9.1\n")
 	write("rules.yaml", `runtime: [go]
 modules:
-  entities: ["internal/entities/**"]
-  features: ["internal/features/**"]
-  shared: ["internal/shared/**"]
+  entities:
+    paths: ["internal/entities/**"]
+  features:
+    paths: ["internal/features/**"]
+  shared:
+    paths: ["internal/shared/**"]
 contracts:
   entities:
     consumes:
+      id: "synth:entities/pure"
       internal: []
       external: forbid
   features:
     consumes:
+      id: "synth:features/inward"
       internal: [shared, entities]
     invariants:
-      - kind: naming
+      - id: "synth:features/snake"
+        kind: naming
         files: "internal/features/**/*.go"
         case: snake_case
 dependencies:
-  - kind: acyclic
+  - id: "synth:deps/acyclic"
+    kind: acyclic
 `)
 	for p := 0; p < pkgs; p++ {
 		var area, imports string

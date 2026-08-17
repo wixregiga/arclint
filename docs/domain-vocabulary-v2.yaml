@@ -1,6 +1,6 @@
 schema_version: "2.0"
 document: arclint-domain-vocabulary
-status: accepted-desired-model
+status: implemented  # switchover completed 2026-08-17; this model is now the live domain
 
 domain:
   name: ArcLint
@@ -46,6 +46,34 @@ source_checklist:
     status: migration-evidence-only
     informed:
       - existing Rule evaluation, language-fact, diagnostic, extension, and baseline behavior
+    consulted_facts:
+      - fact: a Module membership glob that names a directory claims the directory's whole subtree
+        from: internal/engine/context.go (matchAny)
+        why: the v2 documents state Module membership selectors without defining subtree semantics
+      - fact: a consumes allow-list implicitly permits the Rule's own Module; Go import targets resolve through the target directory's file-module union
+        from: internal/engine/rules_consumes.go, internal/engine/context.go
+        why: rules.v2.yaml consumes contracts are only coherent under these semantics, which no v2 document spells out
+      - fact: layers order highest first; protection is importer-centric over any of the importer's Modules; cycles are strongly connected components
+        from: internal/engine/rules_consumes.go
+        why: the v2 documents name the kinds but not their evaluation mechanics
+      - fact: the naming case vocabulary is kebab-case, snake_case, camelCase, PascalCase, plus regex alternatives (ls-lint convention)
+        from: internal/engine/rules_invariants.go
+        why: rules.v2.yaml uses only snake_case; the finite published vocabulary needed a source
+      - fact: baseline entries carry counts for duplicate identical findings and no timestamps, so regeneration diffs only when findings change
+        from: internal/engine/baseline.go
+        why: the v2 Baseline term requires stable identities but is silent on duplicates and determinism
+      - fact: exit codes are 0 clean, 1 error-severity findings, 2 configuration or usage error
+        from: cmd/arclint/main.go
+        why: the v2 documents do not define the CLI exit contract
+      - fact: the walker always skips .git, .hg, .svn, .arclint, vendor, node_modules, and testdata unless included, and never follows symlinks
+        from: internal/tree/tree.go
+        why: the v2 scan policy lists user excludes only, not the built-in skip set
+      - fact: Go import classification follows toolchain semantics — embedded `go list std` table, module-path ownership, replace directives (go.work over go.mod), require coverage, longest-prefix match
+        from: internal/lang/golang/resolver.go
+        why: Language Facts must classify honestly; the mechanics belong to the Go toolchain, not to either ArcLint architecture
+      - fact: the published expression vocabulary is `file` with path, name, stem, ext, dir, module, lines, size, imports, type-checked to a bool at compile time
+        from: internal/exprenv/exprenv.go
+        why: rules.v2.yaml attests only `file.lines`; the full attribute set is the expression language repositories already write against
 
 language_policy:
   capitalization: Canonical domain terms are capitalized when used with the meanings below.

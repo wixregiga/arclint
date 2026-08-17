@@ -1,3 +1,0 @@
-description: "Tactical DDD for services: pure domain, inward dependency direction, aggregates and repository ports in domain, technology confined to infrastructure and delivery adapters. Ids follow the ARCH-* requirement table."
-namespace: ddd
-runtimes: [go]

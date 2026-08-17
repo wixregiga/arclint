@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"go/format"
@@ -22,7 +23,7 @@ func main() {
 	pkg := flag.String("pkg", "golang", "package name")
 	flag.Parse()
 
-	cmd := exec.Command("go", "list", "std")
+	cmd := exec.CommandContext(context.Background(), "go", "list", "std")
 	cmd.Stderr = os.Stderr
 	raw, err := cmd.Output()
 	if err != nil {
@@ -63,7 +64,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("generated source does not format: %v", err)
 	}
-	if err := os.WriteFile(*out, formatted, 0o644); err != nil {
+	if err := os.WriteFile(*out, formatted, 0o600); err != nil {
 		log.Fatal(err)
 	}
 	fmt.Printf("wrote %s: %d packages (%s)\n", *out, len(pkgs), runtime.Version())

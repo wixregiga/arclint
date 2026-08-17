@@ -3,12 +3,12 @@
 # (make docker); building this file bare still produces a correct
 # image with the default args below.
 FROM golang:1.26 AS build
-ARG GRAMMARS="grammar_subset grammar_subset_typescript grammar_subset_tsx grammar_subset_javascript grammar_subset_python"
 ARG VERSION=0.1.0
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
+ARG GRAMMARS="grammar_subset grammar_subset_typescript grammar_subset_tsx grammar_subset_python"
 RUN CGO_ENABLED=0 go build -tags "$GRAMMARS" -trimpath \
     -ldflags "-s -w -X main.version=$VERSION" -o /arclint ./cmd/arclint
 

@@ -1,10 +1,11 @@
 // Command genpystdlib generates the embedded Python standard-library
-// module table from sys.stdlib_module_names of the CPython running
-// go:generate — the authoritative source (PEP 632 era, 3.10+).
+// module table from sys.stdlib_module_names of the CPython invoked at
+// generate time — the authoritative source (PEP 632 era, 3.10+).
 package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -20,7 +21,7 @@ func main() {
 	pkg := flag.String("pkg", "python", "package name")
 	flag.Parse()
 
-	raw, err := exec.Command("python3", "-c",
+	raw, err := exec.CommandContext(context.Background(), "python3", "-c",
 		"import sys, json; print(json.dumps({'version': sys.version.split()[0], 'modules': sorted(sys.stdlib_module_names)}))").Output()
 	if err != nil {
 		log.Fatalf("python3 stdlib_module_names: %v (Python is required at generate time only)", err)
@@ -32,15 +33,12 @@ func main() {
 	if err := json.Unmarshal(bytes.TrimSpace(raw), &payload); err != nil {
 		log.Fatalf("parse: %v", err)
 	}
-	var clean []string
-	for _, m := range payload.Modules {
-		// Private stdlib modules (_abc, _ast) stay in the table: importing
-		// them is stdlib consumption, and exact membership beats pruning.
-		clean = append(clean, m)
-	}
-	sort.Strings(clean)
-	if len(clean) < 150 {
-		log.Fatalf("only %d modules; expected the full stdlib set", len(clean))
+	// Private stdlib modules (_abc, _ast) stay in the table: importing
+	// them is stdlib consumption, and exact membership beats pruning.
+	modules := payload.Modules
+	sort.Strings(modules)
+	if len(modules) < 150 {
+		log.Fatalf("only %d modules; expected the full stdlib set", len(modules))
 	}
 
 	var b bytes.Buffer
@@ -50,7 +48,7 @@ func main() {
 	fmt.Fprintf(&b, "// StdlibToolchain is the CPython version whose stdlib_module_names produced the table.\n")
 	fmt.Fprintf(&b, "const StdlibToolchain = %q\n\n", "python"+payload.Version)
 	fmt.Fprintf(&b, "var pyStdlib = map[string]struct{}{\n")
-	for _, m := range clean {
+	for _, m := range modules {
 		fmt.Fprintf(&b, "\t%q: {},\n", m)
 	}
 	fmt.Fprintf(&b, "}\n")
@@ -59,8 +57,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("format: %v", err)
 	}
-	if err := os.WriteFile(*out, formatted, 0o644); err != nil {
+	if err := os.WriteFile(*out, formatted, 0o600); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("wrote %s: %d modules (python %s)\n", *out, len(clean), payload.Version)
+	fmt.Printf("wrote %s: %d modules (python %s)\n", *out, len(modules), payload.Version)
 }

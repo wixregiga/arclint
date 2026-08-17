@@ -2,6 +2,9 @@
 template = "index.html"
 +++
 
+**Status note (2026-08-17):** these pages describe the pre-refactor engine and are awaiting a rewrite; the repository README and generated AGENTS.md are the current references.
+
+
 # Architecture contracts as data
 
 arclint enforces module contracts over a repository: what each module may
