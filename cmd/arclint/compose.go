@@ -23,6 +23,7 @@ import (
 	filesystemobservation "github.com/wixregiga/arclint/internal/infrastructure/observation/filesystem"
 	filesystempattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/filesystem"
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
+	"github.com/wixregiga/arclint/internal/infrastructure/ruletest"
 	filesystemscaffold "github.com/wixregiga/arclint/internal/infrastructure/scaffold/filesystem"
 )
 
@@ -111,11 +112,33 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
+	ruleTests, err := application.NewRunRuleTests(repository, ruletest.NewSource(root),
+		ruletest.NewObserver(golangfacts.NewProducer(), typescriptfacts.NewProducer(), pythonfacts.NewProducer()),
+		extensions)
+	if err != nil {
+		return configError(err)
+	}
+	// The main root carries init as well, so help and completion list
+	// it; execution still routes through runInit above, before any
+	// ruleset is required.
+	cwd, err := os.Getwd()
+	if err != nil {
+		return configError(err)
+	}
+	scaffoldWriter, err := filesystemscaffold.NewWriter(cwd)
+	if err != nil {
+		return configError(err)
+	}
+	initialize, err := application.NewInitializeRepository(scaffoldWriter)
+	if err != nil {
+		return configError(err)
+	}
 
 	rootCommand := cli.Root(buildVersion(version),
 		cli.NewCheckCommand(assess),
-		cli.NewRulesCommand(listRules, showRule),
-		cli.NewExplainCommand(explainRule),
+		cli.NewInitCommand(initialize),
+		cli.NewRulesCommand(listRules, showRule, ruleTests),
+		cli.NewExplainCommand(explainRule, listRules),
 		cli.NewContextCommand(getContext),
 		cli.NewAgentsCommand(publishAgents),
 		cli.NewBaselineCommand(capture, refresh),
@@ -212,7 +235,12 @@ func resolveRulesPath(args []string) (string, []string, error) {
 	if err != nil {
 		// No subcommand means --version or --help: neither needs a
 		// repository, and construction alone never loads the ruleset.
-		if firstPositional(rest) == "" {
+		// The completion machinery must answer without one too — the
+		// shell re-executes the binary on TAB in arbitrary directories,
+		// and completion callbacks degrade to no candidates when the
+		// ruleset fails to load.
+		if fp := firstPositional(rest); fp == "" || fp == "help" || fp == "completion" ||
+			fp == "__complete" || fp == "__completeNoDesc" {
 			fallback, absErr := filepath.Abs("rules.yaml")
 			if absErr != nil {
 				return "", nil, fmt.Errorf("rules path: %w", absErr)

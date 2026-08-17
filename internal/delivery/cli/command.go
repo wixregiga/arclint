@@ -9,6 +9,18 @@ type Flag struct {
 	Default string
 	Bool    bool
 	Doc     string
+	// Options is the static closed value set of a value flag. A
+	// non-empty set lets shells complete the flag's value; parsing
+	// stays with the command, which still rejects unknown values.
+	Options []string
+}
+
+// Candidate is one framework-neutral completion candidate: the value
+// the shell inserts, plus optional descriptive text for shells that
+// render descriptions.
+type Candidate struct {
+	Value string
+	Doc   string
 }
 
 // Context carries one parsed invocation into a command handler.
@@ -36,6 +48,13 @@ type Command struct {
 	MaxArgs int
 	// Run handles the invocation; nil for pure group commands.
 	Run func(Context) error
+	// CompleteArgs supplies dynamic candidates for the next positional
+	// argument; nil keeps the adapter's default (file) completion.
+	// Completion callbacks run when the shell re-executes the binary
+	// on TAB, so they must be fast, silent, and degrade to an empty
+	// candidate list on any failure — never an error and never output
+	// to stderr.
+	CompleteArgs func(args []string, toComplete string) []Candidate
 }
 
 // ExitError carries an explicit exit code through the Adapter. An

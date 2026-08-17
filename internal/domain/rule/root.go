@@ -93,6 +93,9 @@ func New(spec Spec) (Rule, error) {
 		if t.IsZero() {
 			return fail(fmt.Errorf("unconstructed rule test"))
 		}
+		if t.RuleID() != id.Qualified() {
+			return fail(fmt.Errorf("rule test %q identifies %q, not this rule", t.Name(), t.RuleID()))
+		}
 	}
 	var provenance *PatternReference
 	if spec.Provenance != nil {

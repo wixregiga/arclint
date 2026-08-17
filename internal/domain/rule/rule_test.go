@@ -255,23 +255,31 @@ func TestPatternStampsProvenance(t *testing.T) {
 }
 
 func TestRuleTestCompare(t *testing.T) {
-	fixture := []rule.FixtureFile{{Path: "a/x.go", Content: "package a"}}
-	expected := []rule.Finding{
+	files := []rule.TestFile{{Path: "a/x.go", Content: "package a"}}
+	// The vocabulary's duplicate-Diagnostics concern is settled at
+	// construction: an expectation listed twice is unconstructible.
+	if _, err := rule.NewTest("duplicates", "t:a/b", files, []rule.ExpectedFinding{
 		{Path: "a/x.go", Message: "broken"},
 		{Path: "a/x.go", Message: "broken"},
+	}); err == nil {
+		t.Errorf("duplicate expected findings must be unconstructible")
 	}
-	rt, err := rule.NewTest("duplicates", fixture, expected)
+	rt, err := rule.NewTest("compare", "t:a/b", files, []rule.ExpectedFinding{
+		{Path: "a/x.go", Line: 3, Message: "broken"},
+	})
 	if err != nil {
 		t.Fatalf("NewTest: %v", err)
 	}
-	missing, unexpected := rt.Compare([]rule.Finding{
-		{Path: "a/x.go", Message: "broken"},
-		{Path: "a/y.go", Message: "surprise"},
+	cmp := rt.Compare([]rule.Finding{
+		{Kind: rule.FindingViolation, Path: "a/y.go", Message: "surprise"},
 	})
-	if len(missing) != 1 || missing[0].Message != "broken" {
-		t.Errorf("missing = %v, want the second duplicate", missing)
+	if cmp.Clean() {
+		t.Fatalf("mismatched result compared clean")
 	}
-	if len(unexpected) != 1 || unexpected[0].Path != "a/y.go" {
-		t.Errorf("unexpected = %v", unexpected)
+	if len(cmp.Missing) != 1 || cmp.Missing[0].Message != "broken" {
+		t.Errorf("missing = %v, want the unmet expectation", cmp.Missing)
+	}
+	if len(cmp.Unexpected) != 1 || cmp.Unexpected[0].Path != "a/y.go" {
+		t.Errorf("unexpected = %v", cmp.Unexpected)
 	}
 }

@@ -233,6 +233,9 @@ scaffold:
   - path: internal/application/get_architectural_context.go
     package: application
     responsibility: Project Rules, reasons, Modules, vocabulary, and known results for one scope.
+  - path: internal/application/run_rule_tests.go
+    package: application
+    responsibility: Run Rule Tests over deterministic fixtures and compare complete results.
 
   - path: internal/infrastructure/rule/yaml/
     package: yamlrule
@@ -258,6 +261,9 @@ scaffold:
   - path: internal/infrastructure/extension/sobek/
     package: sobekextension
     responsibility: Execute TypeScript Rule enforcement through the Extension SDK.
+  - path: internal/infrastructure/ruletest/
+    package: ruletest
+    responsibility: Load Rule Tests from YAML and observe fixtures through the real pipeline.
 
   - path: internal/delivery/cli/cli.go
     package: cli

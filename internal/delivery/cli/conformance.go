@@ -22,10 +22,16 @@ func NewCheckCommand(assess application.AssessConformance) Command {
 		Name:  "check",
 		Short: "evaluate the configured Rules against the repository",
 		// The optional path selects the repository; the composition root
-		// resolves it before any adapter exists.
+		// resolves it before any adapter exists. The path keeps the
+		// adapter's default file completion, so no CompleteArgs here.
 		MaxArgs: 1,
 		Flags: []Flag{
-			{Name: "format", Default: formatHuman, Doc: "output format: human, json"},
+			{
+				Name:    "format",
+				Default: formatHuman,
+				Doc:     "output format: human, json",
+				Options: []string{formatHuman, formatJSON},
+			},
 			{Name: "no-baseline", Bool: true, Doc: "evaluate without subtracting the committed baseline"},
 		},
 		Run: func(ctx Context) error {

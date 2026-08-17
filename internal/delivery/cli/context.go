@@ -18,7 +18,12 @@ func NewContextCommand(context application.GetArchitecturalContext) Command {
 		Short:   "modules, rules, and reasons binding a location",
 		MaxArgs: 1,
 		Flags: []Flag{
-			{Name: "format", Default: formatHuman, Doc: "output format: human, json"},
+			{
+				Name:    "format",
+				Default: formatHuman,
+				Doc:     "output format: human, json",
+				Options: []string{formatHuman, formatJSON},
+			},
 		},
 		Run: func(ctx Context) error {
 			format := ctx.String("format")

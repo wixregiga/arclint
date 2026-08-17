@@ -1,7 +1,7 @@
 // Package yamlrule loads complete Rule aggregates from YAML
 // representations of the target ruleset format. The accepted grammar
 // is exactly what rules.yaml uses — runtime, scan, modules,
-// contracts (consumes plus structure, naming, and expr invariants),
+// contracts (consumes plus structure, naming, and extension invariants),
 // and dependencies (layers, protected, acyclic) — plus the pattern
 // identity header used by Pattern distribution files. A representation
 // that cannot become a valid Rule is an error, never a partial value.

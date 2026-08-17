@@ -59,7 +59,15 @@ func translate(c cli.Command) *cobra.Command {
 			bools[f.Name] = out.Flags().Bool(f.Name, f.Default == "true", f.Doc)
 		} else {
 			values[f.Name] = out.Flags().String(f.Name, f.Default, f.Doc)
+			if len(f.Options) > 0 {
+				// Registration fails only for an unknown flag name;
+				// the flag was defined on the line above.
+				_ = out.RegisterFlagCompletionFunc(f.Name, staticCompletion(f.Options))
+			}
 		}
+	}
+	if c.CompleteArgs != nil {
+		out.ValidArgsFunction = argsCompletion(c.CompleteArgs, c.MaxArgs)
 	}
 	if c.Run != nil {
 		run := c.Run
@@ -84,4 +92,37 @@ func translate(c cli.Command) *cobra.Command {
 		out.AddCommand(translate(sub))
 	}
 	return out
+}
+
+// staticCompletion completes a value flag's closed Options set, with
+// file completion suppressed.
+func staticCompletion(options []string) cobra.CompletionFunc {
+	return func(*cobra.Command, []string, string) ([]cobra.Completion, cobra.ShellCompDirective) {
+		return options, cobra.ShellCompDirectiveNoFileComp
+	}
+}
+
+// argsCompletion adapts the neutral CompleteArgs seam onto Cobra's
+// ValidArgsFunction: candidates take Cobra's "value\tdescription" form
+// when Doc is set, and completion stops once the positional-argument
+// budget is spent. Cobra's default root supplies the rest of the
+// machinery — the `completion bash|zsh|fish|powershell` subcommand and
+// the hidden `__complete` command — because translate never sets
+// CompletionOptions.
+func argsCompletion(complete func([]string, string) []cli.Candidate, maxArgs int) cobra.CompletionFunc {
+	return func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+		if len(args) >= maxArgs {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		candidates := complete(args, toComplete)
+		completions := make([]cobra.Completion, 0, len(candidates))
+		for _, candidate := range candidates {
+			if candidate.Doc != "" {
+				completions = append(completions, candidate.Value+"\t"+candidate.Doc)
+			} else {
+				completions = append(completions, candidate.Value)
+			}
+		}
+		return completions, cobra.ShellCompDirectiveNoFileComp
+	}
 }
