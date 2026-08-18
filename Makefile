@@ -4,7 +4,7 @@ BIN     ?= ./arclint
 # Embed only the tree-sitter grammars the declaration extractors use:
 # without these tags every grammar embeds and the binary grows ~19 MB.
 GRAMMARS := grammar_subset grammar_subset_typescript grammar_subset_tsx grammar_subset_python
-.PHONY: build test vet lint fmt generate selfcheck bench release ci clean docs docs-serve docker
+.PHONY: build test vet fmt-check fmt lint lint-fix generate selfcheck verify check bench agentbench release ci clean docs docs-serve docker
 
 build:
 	CGO_ENABLED=0 $(GO) build -tags "$(GRAMMARS)" -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o $(BIN) ./cmd/arclint
@@ -18,11 +18,17 @@ vet:
 	$(GO) vet ./...
 	$(GO) vet -tags bench ./internal/bench/
 
+fmt-check:
+	golangci-lint fmt --diff
+
 fmt:
 	golangci-lint fmt
 
 lint:
-	golangci-lint run ./...
+	golangci-lint run --fix=false ./...
+
+lint-fix:
+	golangci-lint run --fix ./...
 
 generate:
 	$(GO) generate ./...
@@ -30,6 +36,13 @@ generate:
 # M1 gate 3: arclint's own rules.yaml runs clean, CI-style.
 selfcheck: build
 	$(BIN) check .
+
+# Behavioral and architecture verification after format and lint pass.
+verify: vet test selfcheck
+
+# Canonical full local/CI gate. hk runs the same targets as separate
+# steps so its fix mode can repair formatting and lint findings first.
+check: fmt-check lint verify
 
 # M1 gate 4: cold start < 100ms; 5,000 files in low single-digit seconds.
 bench: build
@@ -58,7 +71,7 @@ release:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -tags "$(GRAMMARS)" -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o dist/arclint-linux-amd64 ./cmd/arclint
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -tags "$(GRAMMARS)" -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o dist/arclint-linux-arm64 ./cmd/arclint
 
-ci: vet test selfcheck
+ci: check
 
 clean:
 	rm -rf $(BIN) dist

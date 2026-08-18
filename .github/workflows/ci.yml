@@ -19,8 +19,12 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # make ci runs go vet (including the oracle and bench tagged packages),
-      # go test ./..., and the selfcheck that builds the grammar-tagged binary
-      # and lints this repository with its own rules.yaml.
-      - name: Run vet, tests, and selfcheck
+      - name: Set up pinned repository tools
+        uses: jdx/mise-action@v4
+        with:
+          install_args: "aqua:golangci/golangci-lint"
+
+      # make ci is the same full gate used locally and by hk: formatting,
+      # GolangCI, vet, tests, and ArcLint's repository selfcheck.
+      - name: Run full repository check
         run: make ci

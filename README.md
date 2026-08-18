@@ -208,7 +208,7 @@ This repository is checked by its own ruleset on every CI run
 ## Developing
 
 ```bash
-make ci                  # vet + tests (ground truth included) + selfcheck
+make ci                  # format + lint + vet + tests + selfcheck
 go test -short ./...     # the quick loop, network suite skipped
 make bench               # cold start and large-repo timings
 ```

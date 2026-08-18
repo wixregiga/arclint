@@ -30,6 +30,17 @@ linters:
       - text: '(slog|log)\.\w+'
         linters:
           - noctx
+      # Schema construction intentionally repeats published field names
+      # and JSON Schema keywords; constants would obscure the declaration.
+      - path: internal/domain/rule/schema.go
+        linters:
+          - goconst
+      # The caller-selected repository root is this adapter's intended
+      # write boundary; AGENTS.md is joined beneath it before writing.
+      - path: internal/infrastructure/agents/markdown/markdown.go
+        text: 'G703:'
+        linters:
+          - gosec
     generated: lax
     presets:
       - common-false-positives

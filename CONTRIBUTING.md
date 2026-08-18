@@ -2,7 +2,7 @@
 
 Build the binary with `make build`; it produces `./arclint`, a single static binary.
 
-Run the full check suite with `make ci`; it runs `go vet` (including the toolchain, bench, and agentbench tagged packages), `go test ./...`, and a selfcheck that lints this repository with its own `rules.yaml`.
+Run the full check suite with `make ci`; it checks formatting with GolangCI-Lint, runs GolangCI-Lint and `go vet`, executes `go test ./...`, and selfchecks the repository against its own `rules.yaml`. The installed hk pre-commit hook runs the same Make targets and fixes supported formatting and lint findings first.
 
 Rule behavior is verified by the unit suites beside each layer and by the end-to-end suite in `cmd/arclint`, which drives the compiled binary over real fixture repositories; the Go adapter's toolchain suite proves classification against `go list` over pinned real repositories and runs with the normal `go test ./...` (skipped under `-short`).
 

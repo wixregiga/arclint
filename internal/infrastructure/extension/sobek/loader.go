@@ -35,7 +35,10 @@ type Options struct {
 	Version string
 }
 
-const defaultTimeout = 5 * time.Second
+const (
+	defaultTimeout = 5 * time.Second
+	sdkNamespace   = "arclint-sdk"
+)
 
 func (o *Options) fill() {
 	if o.CheckTimeout == 0 {
@@ -184,13 +187,13 @@ func transpile(entry, dirHash, cacheDir string) (string, error) {
 	}
 
 	sdkPlugin := esbuild.Plugin{
-		Name: "arclint-sdk",
+		Name: sdkNamespace,
 		Setup: func(pb esbuild.PluginBuild) {
 			pb.OnResolve(esbuild.OnResolveOptions{Filter: `^arclint$`},
 				func(_ esbuild.OnResolveArgs) (esbuild.OnResolveResult, error) {
-					return esbuild.OnResolveResult{Path: "arclint", Namespace: "arclint-sdk"}, nil
+					return esbuild.OnResolveResult{Path: "arclint", Namespace: sdkNamespace}, nil
 				})
-			pb.OnLoad(esbuild.OnLoadOptions{Filter: `.*`, Namespace: "arclint-sdk"},
+			pb.OnLoad(esbuild.OnLoadOptions{Filter: `.*`, Namespace: sdkNamespace},
 				func(_ esbuild.OnLoadArgs) (esbuild.OnLoadResult, error) {
 					contents := sdkSource
 					return esbuild.OnLoadResult{Contents: &contents, Loader: esbuild.LoaderTS}, nil
