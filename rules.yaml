@@ -9,6 +9,8 @@ runtime: [go, ts]
 scan:
   unknown_imports: error
   exclude:
+    - ".claude/worktrees/**"
+    - ".wixregiga-ignore/**"
     - "**/generated/**"
     - "**/mock_*.go"
 

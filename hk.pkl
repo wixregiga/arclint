@@ -4,22 +4,23 @@
 // pinned toolchain without activating mise in their shell.
 amends "package://github.com/jdx/hk/releases/download/v1.49.0/hk@1.49.0#/Config.pkl"
 
-// Steps route through make where a target exists, and the last step
-// dogfoods arclint itself: make selfcheck lints this repository with
-// its own rules.yaml, so an architecture break cannot be committed.
+// Make owns every command. The hook splits formatting and linting from
+// behavioral verification so fix mode can repair Go files before the
+// full test and ArcLint suite runs.
 local linters = new Mapping<String, Step> {
-    ["gofmt"] {
-        glob = List("*.go")
-        check = "test -z \"$(gofmt -l {{files}})\""
-        fix = "gofmt -w {{files}}"
+    ["golangci-fmt"] {
+        glob = List("**/*.go")
+        check = "make fmt-check"
+        fix = "make fmt"
     }
-    ["vet"] {
-        glob = List("*.go")
-        check = "make vet"
+    ["golangci-lint"] {
+        glob = List("**/*.go")
+        check = "make lint"
+        fix = "make lint-fix"
         exclusive = true
     }
-    ["arclint-selfcheck"] {
-        check = "make selfcheck"
+    ["verify"] {
+        check = "make verify"
         exclusive = true
     }
 }
@@ -28,5 +29,15 @@ hooks {
     ["pre-commit"] {
         fix = true
         steps = linters
+    }
+    ["check"] {
+        steps = linters
+    }
+    ["fix"] {
+        fix = true
+        steps {
+            ["golangci-fmt"] = linters["golangci-fmt"]
+            ["golangci-lint"] = linters["golangci-lint"]
+        }
     }
 }

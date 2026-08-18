@@ -111,10 +111,11 @@ func typeDeclarations(fset *token.FileSet, s *ast.TypeSpec) []conformance.Declar
 			}
 		}
 	}
-	out := []conformance.Declaration{{
+	out := make([]conformance.Declaration, 1, 1+len(members))
+	out[0] = conformance.Declaration{
 		Kind: kind, Name: owner,
 		Exported: ast.IsExported(owner), StartLine: start, EndLine: end,
-	}}
+	}
 	return append(out, members...)
 }
 
