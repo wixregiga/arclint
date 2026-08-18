@@ -36,7 +36,22 @@ func NewInitializeRepository(scaffold RulesetScaffold) (InitializeRepository, er
 	return InitializeRepository{scaffold: scaffold}, nil
 }
 
-var runtimeAliases = map[string]bool{"go": true, "ts": true, "py": true}
+var supportedLanguages = []string{"go", "ts", "py"}
+
+// SupportedLanguages returns the runtime targets accepted by repository
+// initialization, in presentation order.
+func SupportedLanguages() []string {
+	return append([]string(nil), supportedLanguages...)
+}
+
+func supportsLanguage(language string) bool {
+	for _, supported := range supportedLanguages {
+		if language == supported {
+			return true
+		}
+	}
+	return false
+}
 
 // Execute drafts and persists the starter ruleset, returning its path.
 func (uc InitializeRepository) Execute(req InitializeRepositoryRequest) (string, error) {
@@ -45,7 +60,7 @@ func (uc InitializeRepository) Execute(req InitializeRepositoryRequest) (string,
 		languages = []string{"go"}
 	}
 	for _, l := range languages {
-		if !runtimeAliases[l] {
+		if !supportsLanguage(l) {
 			return "", fmt.Errorf("initialize repository: language %q is not one of go, ts, py", l)
 		}
 	}

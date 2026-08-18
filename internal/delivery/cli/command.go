@@ -16,13 +16,13 @@ type Flag struct {
 	// Complete supplies dynamic candidates for the flag's value and
 	// takes precedence over Options. The CompleteArgs contract applies:
 	// fast, silent, and an empty list on any failure.
-	Complete func(toComplete string) []Candidate
+	Complete func(toComplete string) []AutoCompleteCandidate
 }
 
-// Candidate is one framework-neutral completion candidate: the value
+// AutoCompleteCandidate is one framework-neutral completion candidate: the value
 // the shell inserts, plus optional descriptive text for shells that
 // render descriptions.
-type Candidate struct {
+type AutoCompleteCandidate struct {
 	Value string
 	Doc   string
 }
@@ -58,7 +58,7 @@ type Command struct {
 	// on TAB, so they must be fast, silent, and degrade to an empty
 	// candidate list on any failure — never an error and never output
 	// to stderr.
-	CompleteArgs func(args []string, toComplete string) []Candidate
+	CompleteArgs func(args []string, toComplete string) []AutoCompleteCandidate
 }
 
 // ExitError carries an explicit exit code through the Adapter. An

@@ -71,15 +71,15 @@ func NewContextCommand(context application.GetArchitecturalContext) Command {
 // completeModuleNames completes declared Module names for the context
 // --module flag, keeping typed comma segments as the inserted prefix.
 // Per the completion contract a failing ruleset yields no candidates.
-func completeModuleNames(context application.GetArchitecturalContext) func(toComplete string) []Candidate {
-	return func(toComplete string) []Candidate {
+func completeModuleNames(context application.GetArchitecturalContext) func(toComplete string) []AutoCompleteCandidate {
+	return func(toComplete string) []AutoCompleteCandidate {
 		result, err := context.Execute(application.ContextRequest{})
 		if err != nil {
 			return nil
 		}
-		candidates := make([]Candidate, 0, len(result.Modules))
+		candidates := make([]AutoCompleteCandidate, 0, len(result.Modules))
 		for _, m := range result.Modules {
-			candidates = append(candidates, Candidate{Value: m.Name, Doc: m.Description})
+			candidates = append(candidates, AutoCompleteCandidate{Value: m.Name, Doc: m.Description})
 		}
 		return withListPrefix(toComplete, candidates)
 	}

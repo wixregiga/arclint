@@ -14,7 +14,7 @@ func NewInitCommand(initialize application.InitializeRepository) Command {
 		Name:  "init",
 		Short: "draft a starter rules.yaml for this repository",
 		Flags: []Flag{
-			{Name: "languages", Default: "go", Doc: "comma-separated runtime targets: go, ts, py"},
+			{Name: "languages", Default: "go", Doc: "comma-separated runtime targets: go, ts, py", Complete: completeLanguages},
 			{Name: "force", Bool: true, Doc: "overwrite an existing rules.yaml"},
 		},
 		Run: func(ctx Context) error {
@@ -37,4 +37,13 @@ func NewInitCommand(initialize application.InitializeRepository) Command {
 			return nil
 		},
 	}
+}
+
+func completeLanguages(toComplete string) []AutoCompleteCandidate {
+	languages := application.SupportedLanguages()
+	candidates := make([]AutoCompleteCandidate, 0, len(languages))
+	for _, language := range languages {
+		candidates = append(candidates, AutoCompleteCandidate{Value: language})
+	}
+	return withListPrefix(toComplete, candidates)
 }
