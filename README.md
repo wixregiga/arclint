@@ -68,6 +68,46 @@ replace directives, go.work), TypeScript and Python follow their
 manifests, and each shipped language adapter embeds a generated stdlib
 table — an obligation the ruleset itself enforces.
 
+## Authoring rules
+
+The loop is schema-guided, trialed live, then pinned:
+
+1. **Edit with the schema.** [docs/rules.schema.json](docs/rules.schema.json)
+   describes the complete accepted rules.yaml grammar — also printed by
+   `arclint rules schema`, and drift-tested so runtime validation and
+   the published schema accept the same documents. Point your editor at
+   it:
+
+   ```yaml
+   # yaml-language-server: $schema=https://raw.githubusercontent.com/wixregiga/arclint/main/docs/rules.schema.json
+   ```
+
+2. **Trial it on the real repository.** `arclint check --only <id>`
+   evaluates just that rule; patterns like `arclint:domain/*` work,
+   and observation narrows to the facts the selected rules declare.
+
+3. **Pin it.** A rule test is one YAML file under `.arclint/tests/`:
+   fixture files plus the complete expected findings, run through the
+   real parsers by `arclint rules test`. Start with an empty
+   `expect: []` — failures print ready-to-paste entries; adopt the
+   intended ones. An empty list that stays empty asserts complete
+   conformance. This repository's own tests under
+   [.arclint/tests](.arclint/tests) were authored exactly this way:
+
+   ```yaml
+   # .arclint/tests/sole-aggregate-forbids-second.yaml
+   rule: "arclint:domain/rule-is-sole-aggregate"
+   files:
+     internal/domain/rule/root.go: |
+       package rule
+     internal/domain/pattern/pattern.go: |
+       package pattern
+   expect:
+     - kind: violation
+       path: internal/domain/pattern/pattern.go
+       message: "path forbidden by structure rule \"internal/domain/pattern/**\" of Module \"domain\""
+   ```
+
 ## Honest reporting
 
 Every evaluation ends in exactly one outcome: `conforms`, `violates`,
@@ -87,15 +127,32 @@ findings, `check` reports only new ones and counts the covered rest,
 ## Commands
 
 ```
-check [path]        evaluate the repository (--format human|json, --no-baseline)
+check [path]        evaluate the repository (--format human|json, --no-baseline, --only/--exclude <selectors>)
 rules [selector]    list the configured rules; one match shows the complete rule
+rules schema        print the JSON Schema for rules.yaml (committed at docs/rules.schema.json)
+rules test [name]   run the rule tests under .arclint/tests; failures exit 1
 context [paths...]  the architecture, or everything binding the given paths (--module, --format json)
 agents [--write]    compile the ruleset into a generated AGENTS.md block
 baseline capture    adopt current findings   ·  baseline refresh: drop stale entries
 patterns            list local pattern packages (.arclint/patterns/<name>/pattern.yaml)
 sdk init            write arclint.d.ts + tsconfig.json for extension authors
 init                draft a starter rules.yaml (--languages go,ts,py --force)
+completion <shell>  shell completion with live rule ids and module names (bash|zsh|fish|powershell)
 ```
+
+A selector is an exact rule id, an id prefix, or a `path.Match`
+pattern (`arclint:domain/*`); an exact id wins over expansion, and a
+selector matching nothing is a loud error, never a silent no-op.
+`--only` and `--exclude` take several, comma or space separated, with
+exclusion winning.
+
+`context` is the worksite call: give it any number of paths and/or
+`--module <names>` and one payload answers what governs the set — each
+path mapped to its owning modules, each involved module once, and the
+union of applicable rules with the scope parts that pulled them in,
+boundary rules included. Bare `arclint context` explains the
+repository instead: every module and its import policy, the rule kinds
+in use with their meanings, and the unknown-imports posture.
 
 ## Extensions
 
