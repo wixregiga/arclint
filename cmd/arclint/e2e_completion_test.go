@@ -1,9 +1,10 @@
 package main
 
-// Dynamic completion runs through the hidden __complete command the
-// shells call on TAB. These tests invoke it exactly as a shell would:
-// values must appear for real rulesets and degrade to nothing — never
-// an error — without one.
+// End-to-end shell completion tests: the compiled binary is driven
+// through cobra's hidden __complete command exactly as a shell would
+// on TAB. Candidates end with the ":4" directive line — the numeric
+// form of ShellCompDirectiveNoFileComp — which the shell parses and
+// never displays.
 
 import (
 	"os"
@@ -11,62 +12,100 @@ import (
 	"testing"
 )
 
-func TestCompletionValues(t *testing.T) {
-	dir := writeTree(t, map[string]string{
-		"rules.yaml": "runtime: [go]\n\nmodules:\n  app:\n    paths: [\"app/**\"]\n    description: \"application services\"\n",
-		"app/svc.go": "package app\n",
-	})
+// completionRules is a minimal but real ruleset: one naming invariant
+// whose id the completion callbacks must surface.
+const completionRules = `runtime: [go]
+modules:
+  src:
+    paths: ["src/**"]
+contracts:
+  src:
+    invariants:
+      - id: "repo:src/snake"
+        kind: naming
+        files: "src/**/*.go"
+        case: snake_case
+`
 
-	stdout, stderr, code := runBin(t, dir, os.Environ(), "__complete", "module", "info", "")
-	if code != 0 {
-		t.Fatalf("__complete module info: exit %d, stderr %s", code, stderr)
-	}
-	if !strings.Contains(stdout, "app\tapplication services") || !strings.Contains(stdout, ":4") {
-		t.Errorf("module completion missing candidates or NoFileComp directive:\n%s", stdout)
-	}
-
-	// Rule ids for --only, including derived extension instance ids.
-	fixture := copyFixture(t, "extension-handler-naming")
-	stdout, _, code = runBin(t, fixture, os.Environ(), "__complete", "check", "--only", "")
-	if code != 0 {
-		t.Fatalf("__complete check --only: exit %d", code)
-	}
-	for _, want := range []string{"rules.handler-naming[0]", "rules.wiring-audit[1]"} {
-		if !strings.Contains(stdout, want) {
-			t.Errorf("--only completion missing %q:\n%s", want, stdout)
+// containsLine reports whether output has want as one complete line;
+// completion candidates and the directive are line-oriented.
+func containsLine(output, want string) bool {
+	for _, line := range strings.Split(output, "\n") {
+		if line == want || strings.HasPrefix(line, want+"\t") {
+			return true
 		}
 	}
+	return false
+}
 
-	// Patterns complete without any rules.yaml.
-	empty := t.TempDir()
-	stdout, _, code = runBin(t, empty, os.Environ(), "__complete", "init", "--pattern", "")
-	if code != 0 {
-		t.Fatalf("__complete init --pattern: exit %d", code)
-	}
-	for _, want := range []string{"ddd-flat", "starter"} {
-		if !strings.Contains(stdout, want) {
-			t.Errorf("pattern completion missing %q:\n%s", want, stdout)
+// TestCompletionListsRuleIDs proves rules completes its
+// positional argument from the configured ruleset.
+func TestCompletionListsRuleIDs(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "rules.yaml", completionRules)
+	write(t, root, "src/ok.go", "package src\n")
+
+	for _, sub := range []string{"rules"} {
+		stdout, stderr, code := runBin(t, root, os.Environ(), "__complete", sub, "")
+		if code != 0 {
+			t.Fatalf("__complete %s: exit %d\nstdout: %s\nstderr: %s", sub, code, stdout, stderr)
 		}
-	}
-
-	// Explain kinds come from the builtin doc table.
-	stdout, _, _ = runBin(t, empty, os.Environ(), "__complete", "explain", "")
-	if !strings.Contains(stdout, "naming\t") {
-		t.Errorf("explain completion missing builtin kinds:\n%s", stdout)
+		if !containsLine(stdout, "repo:src/snake") {
+			t.Errorf("__complete %s misses the rule id\n%s", sub, stdout)
+		}
+		if !containsLine(stdout, ":4") {
+			t.Errorf("__complete %s misses the NoFileComp directive\n%s", sub, stdout)
+		}
 	}
 }
 
-// TestCompletionWithoutRules proves the no-rules.yaml degradation: no
-// candidates, no error, NoFileComp directive so the shell shows nothing
-// instead of falling back to filenames.
-func TestCompletionWithoutRules(t *testing.T) {
-	dir := t.TempDir()
-	stdout, _, code := runBin(t, dir, os.Environ(), "__complete", "module", "info", "")
+// TestCompletionListsFormatValues proves the check --format flag
+// completes its closed value set.
+func TestCompletionListsFormatValues(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "rules.yaml", completionRules)
+
+	stdout, stderr, code := runBin(t, root, os.Environ(), "__complete", "check", "--format", "")
 	if code != 0 {
-		t.Fatalf("__complete without rules.yaml: exit %d", code)
+		t.Fatalf("__complete check --format: exit %d\nstderr: %s", code, stderr)
 	}
-	lines := strings.Split(strings.TrimSpace(stdout), "\n")
-	if len(lines) != 1 || lines[0] != ":4" {
-		t.Errorf("expected only the :4 directive, got:\n%s", stdout)
+	for _, want := range []string{"human", "json"} {
+		if !containsLine(stdout, want) {
+			t.Errorf("--format completion misses %q\n%s", want, stdout)
+		}
+	}
+	if !containsLine(stdout, ":4") {
+		t.Errorf("--format completion misses the NoFileComp directive\n%s", stdout)
+	}
+}
+
+// TestCompletionDegradesWithoutRuleset pins the contract: with no
+// rules.yaml anywhere, completion exits 0 with no dynamic candidates
+// and no error text — the shell must never see a failure on TAB.
+// Static subcommand names (schema, test) still complete: they need no
+// ruleset.
+func TestCompletionDegradesWithoutRuleset(t *testing.T) {
+	root := t.TempDir()
+	stdout, stderr, code := runBin(t, root, os.Environ(), "__complete", "rules", "")
+	if code != 0 {
+		t.Fatalf("__complete rules without ruleset: exit %d\nstderr: %s", code, stderr)
+	}
+	// No dynamic candidates: every configured rule id contains ":", so
+	// any candidate carrying one means the ruleset leaked in.
+	for _, line := range strings.Split(strings.TrimSpace(stdout), "\n") {
+		if line == ":4" {
+			continue
+		}
+		if strings.Contains(line, ":") {
+			t.Errorf("dynamic candidate without a ruleset: %q\n%s", line, stdout)
+		}
+	}
+	if !containsLine(stdout, ":4") {
+		t.Errorf("missing the NoFileComp directive\n%s", stdout)
+	}
+	// Cobra prints an informational directive note to stderr, which
+	// shells discard; error text must not appear.
+	if strings.Contains(stderr, "arclint:") || strings.Contains(stderr, "Error") {
+		t.Errorf("completion must degrade silently, stderr: %s", stderr)
 	}
 }

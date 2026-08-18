@@ -1,3 +1,0 @@
-description: "Production Go conventions observed across high-star OSS services (Caddy, Tailscale, rclone): small consumer-focused interfaces. Grows one proven rule at a time; each rule is validated against real repositories before it ships."
-namespace: goprod
-runtimes: [go]

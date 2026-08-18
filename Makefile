@@ -1,40 +1,39 @@
 GO      ?= go
 VERSION ?= 0.1.0
 BIN     ?= ./arclint
-# Embed only the tree-sitter grammars the fact providers use (M8 ADR):
-# without these tags all 206 grammars embed and the binary grows ~19 MB.
-GRAMMARS := grammar_subset grammar_subset_typescript grammar_subset_tsx grammar_subset_javascript grammar_subset_python
-
-.PHONY: build test vet generate selfcheck bench oracle release ci clean docs docs-serve docker
+# Embed only the tree-sitter grammars the declaration extractors use:
+# without these tags every grammar embeds and the binary grows ~19 MB.
+GRAMMARS := grammar_subset grammar_subset_typescript grammar_subset_tsx grammar_subset_python
+.PHONY: build test vet lint fmt generate selfcheck bench release ci clean docs docs-serve docker
 
 build:
 	CGO_ENABLED=0 $(GO) build -tags "$(GRAMMARS)" -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o $(BIN) ./cmd/arclint
 
+# The full run includes the toolchain ground truth (network, clones
+# cache under ~/.cache); `go test -short ./...` is the quick loop.
 test:
-	$(GO) test ./...
+	$(GO) test -timeout 30m ./...
 
 vet:
 	$(GO) vet ./...
-	$(GO) vet -tags oracle ./internal/oracle/
 	$(GO) vet -tags bench ./internal/bench/
-	$(GO) vet -tags agentbench ./internal/agentbench/
+
+fmt:
+	golangci-lint fmt
+
+lint:
+	golangci-lint run ./...
 
 generate:
 	$(GO) generate ./...
 
 # M1 gate 3: arclint's own rules.yaml runs clean, CI-style.
 selfcheck: build
-	$(BIN) load rules.yaml
 	$(BIN) check .
 
 # M1 gate 4: cold start < 100ms; 5,000 files in low single-digit seconds.
 bench: build
 	ARCLINT_BIN=$(abspath $(BIN)) $(GO) test -tags bench -count=1 -v ./internal/bench/
-
-# M1 gate 2: differential oracle over pinned real repositories.
-# Network-permitted; clones cache under ~/.cache/arclint-oracle.
-oracle:
-	$(GO) test -tags oracle -timeout 30m -count=1 -v ./internal/oracle/
 
 # Agent convergence measurement: violations + diagnostics -> real coding
 # agent -> re-check, with and without prompt-time context. Requires an
@@ -43,16 +42,14 @@ agentbench: build
 	ARCLINT_BIN=$(abspath $(BIN)) $(GO) test -tags agentbench -timeout 60m -count=1 -v ./internal/agentbench/
 
 # Docs site (docs/site): markdown content, one zola binary to build.
-# The rule reference page is generated (go generate ./tools/gendocs);
-# a test fails when it drifts from the doc table.
 docs:
 	cd docs/site && zola build
 
 docs-serve:
 	cd docs/site && zola serve
 
-# Container image; grammar tags and version flow from this file so the
-# Makefile stays the single source. Run a repo check with:
+# Container image; the version flows from this file so the Makefile
+# stays the single source. Run a repo check with:
 #   docker run --rm -v $(PWD):/repo arclint:$(VERSION)
 docker:
 	docker build --build-arg GRAMMARS="$(GRAMMARS)" --build-arg VERSION=$(VERSION) -t arclint:$(VERSION) .

@@ -1,115 +1,166 @@
-# arclint's own architecture contracts (M1 gate 3: self-hosting).
-# yaml-language-server: $schema=docs/rules.schema.json
+# ArcLint's own architecture contracts, self-hosted on the target
+# domain model: Rule is the sole aggregate, use cases coordinate
+# through ports, adapters stay outbound or inbound, and Cobra stays
+# sealed behind the factory.
 
-runtime: [go]
+# go for the engine itself; ts for the embedded extension SDK sources.
+runtime: [go, ts]
+
+scan:
+  unknown_imports: error
+  exclude:
+    - "**/generated/**"
+    - "**/mock_*.go"
 
 modules:
-  cmd:
+  domain:
+    paths: ["internal/domain/**"]
+    description: "Rule aggregate and domain values; stdlib-only."
+  application:
+    paths: ["internal/application/**"]
+    description: "Action-named use cases coordinating domain objects through ports."
+  infrastructure:
+    paths: ["internal/infrastructure/**"]
+    description: "Outbound technology adapters implementing inward-owned ports."
+  delivery:
+    paths: ["internal/delivery/**"]
+    description: "Inbound adapters translating external input into application requests."
+  cli_factory:
+    paths: ["internal/delivery/cli/factory/**"]
+    description: "Sealed CLI factory selecting an adapter by ArcLint-owned identity."
+  cobra_adapter:
+    paths: ["internal/delivery/cli/adapters/cobra/**"]
+    description: "The only package permitted to import Cobra."
+  composition:
     paths: ["cmd/**"]
-    description: "CLI entrypoints: command wiring, output formatting, exit codes."
-  config:
-    paths: ["internal/config/**"]
-    description: "rules.yaml data model, JSON Schema pipeline, and validation."
-  engine:
-    paths: ["internal/engine/**"]
-    description: "Rule evaluation: walks the tree, runs every provider, collects violations."
-  ext:
-    paths: ["internal/ext/**"]
-    description: "TypeScript extension runtime: esbuild transpile, sobek sandbox, SDK."
-  golang:
-    paths: ["internal/lang/golang/**"]
-    description: "Exact Go import extraction and classification (go/parser)."
-  langs:
-    paths: ["internal/lang/**"]
-    description: "Shared import model plus the per-language analyzers."
-  oracle:
-    paths: ["internal/oracle/**"]
-    description: "Differential oracle against `go list` over pinned real repositories."
-  tree:
-    paths: ["internal/tree/**"]
-    description: "Repository walker: exclusions, file metadata, deterministic order."
-  report:
-    paths: ["internal/report/**"]
-    description: "The violation model and its stable JSON shape; stdlib-only."
-  exprenv:
-    paths: ["internal/exprenv/**"]
-    description: "expr-lang environment and compile-time type checking for expr rules."
-  patterns:
-    paths: ["internal/patterns/**"]
-    description: "Embedded architectural pattern bundles served by init and patterns."
-  ruletest:
-    paths: ["internal/ruletest/**"]
-    description: "Rule test runner: materializes fixture cases and asserts complete violation sets."
-  tools:
-    paths: ["tools/**"]
-    description: "Code generators: stdlib tables, JSON Schema, SDK type declarations."
-  src: ["internal/**"]
+    description: "Composition roots selecting and connecting concrete adapters."
+  source:
+    paths: ["internal/**"]
+    description: "Common source invariants for internal packages."
 
 contracts:
-  report:
+  domain:
     consumes:
+      id: "arclint:domain/stdlib-only"
       internal: []
-      external: forbid # the violation model stays stdlib-only
+      external: forbid
+      stdlib: allow
     invariants:
-      - kind: content
-        files: "internal/report/**/*.go"
-        must_not: ['\bpanic\(']
-  tree:
+      - id: "arclint:domain/rule-is-sole-aggregate"
+        kind: structure
+        require:
+          - "internal/domain/rule/root.go"
+        forbid:
+          - "internal/domain/architecture/**"
+          - "internal/domain/pattern/**"
+          - "internal/domain/baseline/root.go"
+          - "internal/domain/conformance/root.go"
+      # The SDK showcase: content enforcement supplied by the
+      # forbid-content extension under .arclint/extensions.
+      - id: "arclint:domain/no-panic"
+        kind: extension
+        files: "internal/domain/**/*.go"
+        uses: forbid-content
+        with:
+          pattern: '\bpanic\('
+
+  application:
     consumes:
-      internal: []
-  exprenv:
-    consumes:
-      internal: []
-  golang:
-    consumes:
-      internal: [tree, langs]
-  config:
-    consumes:
-      internal: [exprenv]
-  ext:
-    consumes:
-      internal: []
-  engine:
-    consumes:
-      internal: [config, golang, langs, tree, report, exprenv, ext]
-  patterns:
-    consumes:
-      internal: []
-  ruletest:
-    consumes:
-      internal: [config, engine, report]
-  cmd:
-    consumes:
-      internal: [config, engine, report, ext, patterns, langs, tree, ruletest]
+      id: "arclint:application/use-cases-through-ports"
+      internal: [domain]
+      external: forbid
+      stdlib: allow
     invariants:
-      - kind: structure
+      - id: "arclint:application/core-actions-present"
+        kind: structure
+        require:
+          - "internal/application/list_rules.go"
+          - "internal/application/assess_conformance.go"
+          - "internal/application/capture_baseline.go"
+          - "internal/application/list_patterns.go"
+
+  infrastructure:
+    consumes:
+      id: "arclint:infrastructure/outbound-only"
+      internal: [application, domain]
+      external: allow
+      stdlib: allow
+    invariants:
+      # Every shipped language adapter embeds its generated stdlib
+      # table: exact import classification, never heuristics. One
+      # require per adapter; languages are a finite ArcLint enum, so
+      # the parametric legacy correspondence rule is unnecessary.
+      - id: "arclint:infrastructure/stdlib-table-present"
+        kind: structure
+        require:
+          - "internal/infrastructure/language/golang/stdlib_gen.go"
+
+  delivery:
+    consumes:
+      id: "arclint:delivery/inbound-only"
+      internal: [application, domain]
+      external: allow
+      stdlib: allow
+    invariants:
+      - id: "arclint:delivery/cli-seal-present"
+        kind: structure
+        require:
+          - "internal/delivery/cli/cli.go"
+          - "internal/delivery/cli/factory/factory.go"
+          - "internal/delivery/cli/adapters/cobra/cobra.go"
+
+  cli_factory:
+    consumes:
+      id: "arclint:delivery/cli-factory-dependencies"
+      # delivery is allowed because the neutral CLI Interface the
+      # factory selects for lives in the delivery module.
+      internal: [application, domain, cobra_adapter, delivery]
+      external: forbid
+      stdlib: allow
+
+  cobra_adapter:
+    consumes:
+      id: "arclint:delivery/cobra-sealed"
+      # delivery is allowed because the adapter translates the neutral
+      # commands owned by the delivery module; the seal is enforced by
+      # the cobra-factory-only protected rule, not by this allow-list.
+      internal: [application, domain, delivery]
+      external: allow
+      stdlib: allow
+
+  composition:
+    consumes:
+      id: "arclint:composition/selects-adapters"
+      internal: [delivery, infrastructure, application, domain, cli_factory, cobra_adapter]
+      external: allow
+      stdlib: allow
+    invariants:
+      - id: "arclint:composition/main-present"
+        kind: structure
         require: ["cmd/arclint/main.go"]
-  tools:
-    consumes:
-      internal: [config]
-  langs:
-    provides:
-      # Every language target ships an embedded stdlib table: the M3
-      # targets inherit this obligation automatically.
-      - kind: correspondence
-        of: { files: 'internal/lang/(?P<lang>[a-z]+)/analyze\.go', value: "{lang}" }
-        in: { files: 'internal/lang/(?P<lang>[a-z]+)/stdlib_gen\.go', value: "{lang}" }
-        relation: subset
-  src:
+
+  source:
     invariants:
-      - kind: naming
+      - id: "arclint:source/snake-case"
+        kind: naming
         files: "internal/**/*.go"
         case: snake_case
-      - kind: expr
-        files: "internal/**/*.go"
-        assert: "file.lines <= 900"
-        message: "keep source files under 900 lines"
 
 dependencies:
-  - kind: layers
-    layers: [cmd, engine, config, golang, tree]
-  - kind: acyclic
-    modules: [cmd, config, engine, ext, golang, tree, report, exprenv, tools, oracle, patterns, ruletest]
-  - kind: protected
-    module: report
-    allow: [engine, cmd, ruletest]
+  - id: "arclint:dependencies/application-inward"
+    kind: layers
+    layers: [application, domain]
+  - id: "arclint:infrastructure/composition-only"
+    kind: protected
+    module: infrastructure
+    allow: [composition]
+  - id: "arclint:delivery/cobra-factory-only"
+    kind: protected
+    module: cobra_adapter
+    allow: [cli_factory, composition]
+  - id: "arclint:dependencies/acyclic"
+    kind: acyclic
+    # cli_factory and cobra_adapter are excluded: their paths nest
+    # inside delivery's, and overlapping membership lifts intra-delivery
+    # imports into artificial module cycles.
+    modules: [composition, delivery, infrastructure, application, domain]

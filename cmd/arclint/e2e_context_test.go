@@ -1,162 +1,127 @@
 package main
 
+// The context command is the worksite call: one invocation answers
+// what governs a set of paths and modules, and the bare form explains
+// the repository. The JSON shape asserted here is the agent contract.
+
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
-// contextRepo materializes a small two-module repo with a consumes
-// allow-list, an invariant, and a protected graph rule, so every section
-// of `arclint context` output has a source.
-func contextRepo(t *testing.T) string {
-	t.Helper()
-	dir := t.TempDir()
-	files := map[string]string{
-		"rules.yaml": `runtime: [go]
-
-modules:
-  app:
-    paths: ["app/**"]
-    description: "Application wiring."
-  domain:
-    paths: ["domain/**"]
-    description: "Pure business rules."
-
-contracts:
-  app:
-    consumes:
-      internal: [domain]
-  domain:
-    consumes:
-      internal: []
-      external: forbid
-    invariants:
-      - id: "dom:no-panic"
-        kind: content
-        files: "domain/**/*.go"
-        must_not: ['\bpanic\(']
-
-dependencies:
-  - id: "dom:protected"
-    kind: protected
-    module: domain
-    allow: [app]
-`,
-		"app/main.go":   "package app\n",
-		"domain/d.go":   "package domain\n",
-		"stray/free.go": "package stray\n",
-	}
-	for rel, content := range files {
-		p := filepath.Join(dir, rel)
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return dir
-}
-
-func TestContextByFilePath(t *testing.T) {
-	dir := contextRepo(t)
-	stdout, stderr, code := runBin(t, dir, os.Environ(), "context", "domain/d.go")
+func TestContextWorksite(t *testing.T) {
+	stdout, stderr, code := runBin(t, repoRoot(t), os.Environ(), "context",
+		"internal/domain/rule/root.go", "internal/infrastructure/rule/yaml/yaml.go", "--format", "json")
 	if code != 0 {
-		t.Fatalf("exit = %d\nstderr: %s", code, stderr)
+		t.Fatalf("context worksite: exit %d\nstderr: %s", code, stderr)
 	}
-	for _, want := range []string{
-		"path: domain/d.go",
-		"domain — Pure business rules.",
-		"none (may import no other declared module)",
-		"external imports: forbid",
-		"dom:no-panic",
-		"dom:protected",
-		"verify: arclint check .",
-	} {
-		if !strings.Contains(stdout, want) {
-			t.Errorf("output lacks %q\n%s", want, stdout)
+	var ctx struct {
+		Scope string
+		Paths []struct {
+			Path    string
+			Modules []string
+		}
+		Modules []struct{ Name string }
+		Rules   []struct {
+			Summary struct{ ID string }
+			Via     []string
 		}
 	}
-	if strings.Contains(stdout, "app — ") {
-		t.Errorf("unrelated module app rendered:\n%s", stdout)
+	if err := json.Unmarshal([]byte(stdout), &ctx); err != nil {
+		t.Fatalf("context json: %v\n%s", err, stdout)
+	}
+	if len(ctx.Paths) != 2 {
+		t.Fatalf("path bindings = %+v", ctx.Paths)
+	}
+	bound := map[string]bool{}
+	for _, b := range ctx.Paths {
+		for _, m := range b.Modules {
+			bound[b.Path+"→"+m] = true
+		}
+	}
+	if !bound["internal/domain/rule/root.go→domain"] || !bound["internal/infrastructure/rule/yaml/yaml.go→infrastructure"] {
+		t.Errorf("bindings missing expected modules: %+v", ctx.Paths)
+	}
+	cards := map[string]bool{}
+	for _, m := range ctx.Modules {
+		if cards[m.Name] {
+			t.Errorf("module card %q duplicated", m.Name)
+		}
+		cards[m.Name] = true
+	}
+	if !cards["domain"] || !cards["infrastructure"] {
+		t.Errorf("module cards = %v", cards)
+	}
+	rules := map[string][]string{}
+	for _, r := range ctx.Rules {
+		rules[r.Summary.ID] = r.Via
+	}
+	// The boundary rule protecting infrastructure joins the union, and
+	// the extension rule binds through the domain path.
+	if _, ok := rules["arclint:infrastructure/composition-only"]; !ok {
+		t.Errorf("boundary rule missing from union: %v", rules)
+	}
+	if via := rules["arclint:domain/no-panic"]; len(via) == 0 || via[0] != "internal/domain/rule/root.go" {
+		t.Errorf("extension rule via = %v", via)
 	}
 }
 
-func TestContextByDirectoryAndModuleName(t *testing.T) {
-	dir := contextRepo(t)
-	// Directory resolution unions the files underneath.
-	stdout, _, code := runBin(t, dir, os.Environ(), "context", "domain")
-	if code != 0 || !strings.Contains(stdout, "domain — Pure business rules.") {
-		t.Fatalf("directory resolution failed (exit %d):\n%s", code, stdout)
-	}
-	// An exact module name wins over path resolution.
-	stdout, _, code = runBin(t, dir, os.Environ(), "context", "app")
-	if code != 0 || !strings.Contains(stdout, "allow: domain") {
-		t.Fatalf("module-name resolution failed (exit %d):\n%s", code, stdout)
-	}
-	if strings.Contains(stdout, "path: app") {
-		t.Errorf("module-name arg should not render a path line:\n%s", stdout)
-	}
-}
-
-func TestContextJSON(t *testing.T) {
-	dir := contextRepo(t)
-	stdout, stderr, code := runBin(t, dir, os.Environ(), "context", "--format", "json", "domain/d.go")
+func TestContextModuleScopeAndErrors(t *testing.T) {
+	stdout, _, code := runBin(t, repoRoot(t), os.Environ(), "context", "--module", "domain", "--format", "json")
 	if code != 0 {
-		t.Fatalf("exit = %d\nstderr: %s", code, stderr)
+		t.Fatalf("context --module: exit %d", code)
 	}
-	var out struct {
-		Path    string `json:"path"`
-		Modules []struct {
-			Name     string `json:"name"`
-			Internal string `json:"internal"`
-			External string `json:"external"`
-			Rules    []struct {
-				ID     string `json:"id"`
-				Clause string `json:"clause"`
-			} `json:"rules"`
-		} `json:"modules"`
-		Verify string `json:"verify"`
+	var ctx struct {
+		Scope string
+		Rules []struct {
+			Summary struct{ ID string }
+		}
 	}
-	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
-		t.Fatalf("json: %v\n%s", err, stdout)
+	if err := json.Unmarshal([]byte(stdout), &ctx); err != nil {
+		t.Fatalf("json: %v", err)
 	}
-	if out.Path != "domain/d.go" || len(out.Modules) != 1 || out.Modules[0].Name != "domain" {
-		t.Fatalf("unexpected resolution: %+v", out)
-	}
-	if out.Modules[0].External != "forbid" {
-		t.Errorf("external = %q, want forbid", out.Modules[0].External)
+	if ctx.Scope != "module domain" {
+		t.Errorf("scope = %q", ctx.Scope)
 	}
 	ids := map[string]bool{}
-	for _, r := range out.Modules[0].Rules {
-		ids[r.ID] = true
+	for _, r := range ctx.Rules {
+		ids[r.Summary.ID] = true
 	}
-	for _, want := range []string{"dom:no-panic", "dom:protected"} {
-		if !ids[want] {
-			t.Errorf("rules lack %s: %+v", want, out.Modules[0].Rules)
-		}
+	if !ids["arclint:domain/stdlib-only"] {
+		t.Errorf("module scope misses the module's own consumes rule: %v", ids)
 	}
-	if out.Verify != "arclint check ." {
-		t.Errorf("verify = %q", out.Verify)
+
+	_, stderr, code := runBin(t, repoRoot(t), os.Environ(), "context", "--module", "ghost")
+	if code != 2 || !strings.Contains(stderr, "not declared") {
+		t.Errorf("unknown module: exit %d, stderr %s", code, stderr)
 	}
 }
 
-func TestContextUnownedAndUnknownPaths(t *testing.T) {
-	dir := contextRepo(t)
-	// A walked file owned by no module reports that plainly, exit 0.
-	stdout, _, code := runBin(t, dir, os.Environ(), "context", "stray/free.go")
-	if code != 0 || !strings.Contains(stdout, "modules: none") {
-		t.Fatalf("unowned path (exit %d):\n%s", code, stdout)
+func TestContextRepositoryTeaches(t *testing.T) {
+	stdout, _, code := runBin(t, repoRoot(t), os.Environ(), "context")
+	if code != 0 {
+		t.Fatalf("bare context: exit %d", code)
 	}
-	// A path outside the walked tree is a usage error, exit 2.
-	_, stderr, code := runBin(t, dir, os.Environ(), "context", "missing/nope.go")
-	if code != 2 {
-		t.Fatalf("unknown path: exit = %d, want 2\nstderr: %s", code, stderr)
+	for _, want := range []string{
+		"rule types in use:",
+		"protected — restricts which Modules may import one Module",
+		"unknown imports: error",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("bare context missing %q:\n%.400s", want, stdout)
+		}
 	}
-	if !strings.Contains(stderr, "no walked file or directory") {
-		t.Errorf("stderr lacks explanation: %s", stderr)
+}
+
+func TestCompletionModuleNames(t *testing.T) {
+	stdout, _, code := runBin(t, repoRoot(t), os.Environ(), "__complete", "context", "--module", "")
+	if code != 0 || !strings.Contains(stdout, "domain\t") {
+		t.Errorf("--module completion: exit %d\n%s", code, stdout)
+	}
+	stdout, _, code = runBin(t, repoRoot(t), os.Environ(), "__complete", "context", "--module", "domain,")
+	if code != 0 || !strings.Contains(stdout, "domain,application\t") {
+		t.Errorf("--module comma completion: exit %d\n%s", code, stdout)
 	}
 }

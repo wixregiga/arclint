@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -21,13 +22,13 @@ func main() {
 	pkg := flag.String("pkg", "jsts", "package name")
 	flag.Parse()
 
-	verRaw, err := exec.Command("node", "--version").Output()
+	verRaw, err := exec.CommandContext(context.Background(), "node", "--version").Output()
 	if err != nil {
 		log.Fatalf("node --version: %v (Node is required at generate time only)", err)
 	}
 	version := strings.TrimSpace(string(verRaw))
 
-	raw, err := exec.Command("node", "-p", "JSON.stringify(require('module').builtinModules)").Output()
+	raw, err := exec.CommandContext(context.Background(), "node", "-p", "JSON.stringify(require('module').builtinModules)").Output()
 	if err != nil {
 		log.Fatalf("node builtinModules: %v", err)
 	}
@@ -66,7 +67,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("format: %v", err)
 	}
-	if err := os.WriteFile(*out, formatted, 0o644); err != nil {
+	if err := os.WriteFile(*out, formatted, 0o600); err != nil {
 		log.Fatal(err)
 	}
 	fmt.Printf("wrote %s: %d builtins (%s)\n", *out, len(clean), version)
