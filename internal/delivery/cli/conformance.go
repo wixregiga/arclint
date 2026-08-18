@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
+	"unicode"
 
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/domain/conformance"
@@ -16,8 +18,9 @@ const (
 )
 
 // NewCheckCommand adapts the conformance use case into the check
-// command.
-func NewCheckCommand(assess application.AssessConformance) Command {
+// command; the listing use case exists only to complete rule
+// selectors.
+func NewCheckCommand(assess application.AssessConformance, list application.ListRules) Command {
 	return Command{
 		Name:  "check",
 		Short: "evaluate the configured Rules against the repository",
@@ -33,6 +36,16 @@ func NewCheckCommand(assess application.AssessConformance) Command {
 				Options: []string{formatHuman, formatJSON},
 			},
 			{Name: "no-baseline", Bool: true, Doc: "evaluate without subtracting the committed baseline"},
+			{
+				Name:     "only",
+				Doc:      "evaluate only rules matching these ids, prefixes, or patterns (comma or space separated)",
+				Complete: completeRuleSelectors(list),
+			},
+			{
+				Name:     "exclude",
+				Doc:      "skip rules matching these ids, prefixes, or patterns (comma or space separated)",
+				Complete: completeRuleSelectors(list),
+			},
 		},
 		Run: func(ctx Context) error {
 			format := ctx.String("format")
@@ -44,6 +57,8 @@ func NewCheckCommand(assess application.AssessConformance) Command {
 			}
 			assessment, err := assess.Execute(application.AssessConformanceRequest{
 				SkipBaseline: ctx.Bool("no-baseline"),
+				Only:         splitSelectors(ctx.String("only")),
+				Exclude:      splitSelectors(ctx.String("exclude")),
 			})
 			if err != nil {
 				return ConfigError(err)
@@ -64,6 +79,14 @@ func NewCheckCommand(assess application.AssessConformance) Command {
 			return nil
 		},
 	}
+}
+
+// splitSelectors splits one flag value into rule selectors; commas and
+// whitespace both separate.
+func splitSelectors(v string) []string {
+	return strings.FieldsFunc(v, func(r rune) bool {
+		return r == ',' || unicode.IsSpace(r)
+	})
 }
 
 // diagnosticDoc is the stable JSON shape of one Diagnostic in the

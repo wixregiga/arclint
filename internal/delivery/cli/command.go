@@ -13,6 +13,10 @@ type Flag struct {
 	// non-empty set lets shells complete the flag's value; parsing
 	// stays with the command, which still rejects unknown values.
 	Options []string
+	// Complete supplies dynamic candidates for the flag's value and
+	// takes precedence over Options. The CompleteArgs contract applies:
+	// fast, silent, and an empty list on any failure.
+	Complete func(toComplete string) []Candidate
 }
 
 // Candidate is one framework-neutral completion candidate: the value

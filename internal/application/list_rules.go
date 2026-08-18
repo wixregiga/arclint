@@ -51,3 +51,32 @@ func (uc ListRules) Execute() ([]RuleSummary, error) {
 	}
 	return out, nil
 }
+
+// Select returns the summaries of the Rules one selector matches — an
+// exact qualified id, an id prefix, or a path.Match pattern, exact
+// winning completely. Matching nothing is a loud error, never an
+// empty listing.
+func (uc ListRules) Select(selector string) ([]RuleSummary, error) {
+	cfg, err := uc.rules.ConfiguredRules()
+	if err != nil {
+		return nil, fmt.Errorf("load configured rules: %w", err)
+	}
+	ids := make([]string, len(cfg.Rules))
+	byID := make(map[string]rule.Rule, len(cfg.Rules))
+	for i, r := range cfg.Rules {
+		ids[i] = r.ID().Qualified()
+		byID[ids[i]] = r
+	}
+	hits, err := selectorHits(selector, ids)
+	if err != nil {
+		return nil, err
+	}
+	if len(hits) == 0 {
+		return nil, fmt.Errorf("rule selector %q matches no configured rule; run rules to list the configured Rules", selector)
+	}
+	out := make([]RuleSummary, 0, len(hits))
+	for _, id := range hits {
+		out = append(out, summarize(byID[id]))
+	}
+	return out, nil
+}

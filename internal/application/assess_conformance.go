@@ -27,6 +27,14 @@ type BaselineSource interface {
 type AssessConformanceRequest struct {
 	// SkipBaseline evaluates without subtracting the committed Baseline.
 	SkipBaseline bool
+	// Only narrows the check to the Rules matching at least one
+	// selector: an exact qualified id, an id prefix, or a path.Match
+	// pattern such as "arclint:domain/*". Empty selects every
+	// configured Rule.
+	Only []string
+	// Exclude removes the Rules matching any selector; exclusion wins
+	// over selection.
+	Exclude []string
 }
 
 // AssessConformance coordinates observations, configured Rules, the
@@ -67,12 +75,18 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 	if err != nil {
 		return conformance.Assessment{}, fmt.Errorf("load configured rules: %w", err)
 	}
-	observations, err := uc.observations.Observe(cfg.Languages, cfg.Scan, requiredFacts(cfg.Rules))
+	rules := cfg.Rules
+	if len(req.Only) > 0 || len(req.Exclude) > 0 {
+		if rules, err = selectRules(rules, req.Only, req.Exclude); err != nil {
+			return conformance.Assessment{}, err
+		}
+	}
+	observations, err := uc.observations.Observe(cfg.Languages, cfg.Scan, requiredFacts(rules))
 	if err != nil {
 		return conformance.Assessment{}, fmt.Errorf("observe repository: %w", err)
 	}
 	assessment, err := conformance.Run(conformance.Request{
-		Rules:          cfg.Rules,
+		Rules:          rules,
 		Modules:        cfg.Modules,
 		Observations:   observations,
 		UnknownImports: cfg.Scan.UnknownImports,
@@ -108,6 +122,58 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 		return noted, nil
 	}
 	return covered, nil
+}
+
+// selectRules narrows the configured Rules by selectors — exact
+// qualified Rule ids, id prefixes, or path.Match patterns — with
+// exclusion winning over selection. Selection fails loudly, never
+// evaluates vacuously: every selector must match at least one
+// configured Rule, and the narrowed set may not be empty.
+func selectRules(rules []rule.Rule, only, exclude []string) ([]rule.Rule, error) {
+	ids := make([]string, len(rules))
+	for i, r := range rules {
+		ids[i] = r.ID().Qualified()
+	}
+	selected := map[string]bool{}
+	if len(only) == 0 {
+		for _, id := range ids {
+			selected[id] = true
+		}
+	}
+	for _, s := range only {
+		hits, err := selectorHits(s, ids)
+		if err != nil {
+			return nil, err
+		}
+		if len(hits) == 0 {
+			return nil, fmt.Errorf("rule selector %q matches no configured rule", s)
+		}
+		for _, id := range hits {
+			selected[id] = true
+		}
+	}
+	for _, s := range exclude {
+		hits, err := selectorHits(s, ids)
+		if err != nil {
+			return nil, err
+		}
+		if len(hits) == 0 {
+			return nil, fmt.Errorf("rule selector %q matches no configured rule", s)
+		}
+		for _, id := range hits {
+			delete(selected, id)
+		}
+	}
+	if len(selected) == 0 {
+		return nil, fmt.Errorf("rule selection leaves no rule to evaluate")
+	}
+	out := make([]rule.Rule, 0, len(selected))
+	for _, r := range rules {
+		if selected[r.ID().Qualified()] {
+			out = append(out, r)
+		}
+	}
+	return out, nil
 }
 
 func staleCount(entries []baseline.Entry) int {

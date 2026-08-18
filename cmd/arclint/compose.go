@@ -135,7 +135,7 @@ func run(args []string) int {
 	}
 
 	rootCommand := cli.Root(buildVersion(version),
-		cli.NewCheckCommand(assess),
+		cli.NewCheckCommand(assess, listRules),
 		cli.NewInitCommand(initialize),
 		cli.NewRulesCommand(listRules, showRule, ruleTests),
 		cli.NewExplainCommand(explainRule, listRules),

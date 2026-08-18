@@ -18,7 +18,7 @@ func NewRulesCommand(list application.ListRules, show application.ShowRule,
 ) Command {
 	return Command{
 		Name:         "rules",
-		Short:        "list the configured Rules, or show one by id",
+		Short:        "list the configured Rules, or show those matching an id, prefix, or pattern",
 		MaxArgs:      1,
 		CompleteArgs: completeRuleIDs(list),
 		Subcommands: []Command{
@@ -27,38 +27,59 @@ func NewRulesCommand(list application.ListRules, show application.ShowRule,
 		},
 		Run: func(ctx Context) error {
 			if len(ctx.Args) == 1 {
-				detail, err := show.Execute(ctx.Args[0])
-				if err != nil {
-					return ConfigError(err)
-				}
-				if err := writeRuleDetail(ctx.Stdout, detail); err != nil {
-					return fmt.Errorf("write output: %w", err)
-				}
-				return nil
+				return showMatchingRules(ctx, list, show, ctx.Args[0])
 			}
 			rows, err := list.Execute()
 			if err != nil {
 				return ConfigError(err)
 			}
-			p := &printer{w: ctx.Stdout}
-			for _, row := range rows {
-				marker := ""
-				if row.Disabled {
-					marker = fmt.Sprintf("  (disabled: %s)", row.DisabledReason)
-				}
-				provenance := ""
-				if row.Provenance != "" {
-					provenance = "  from " + row.Provenance
-				}
-				p.printf("%s  [%s/%s/%s]  %s%s%s\n",
-					row.ID, row.Type, row.Severity, row.Assurance, row.Claim, provenance, marker)
-			}
-			if p.err != nil {
-				return fmt.Errorf("write output: %w", p.err)
+			if err := writeRuleRows(ctx.Stdout, rows); err != nil {
+				return fmt.Errorf("write output: %w", err)
 			}
 			return nil
 		},
 	}
+}
+
+// showMatchingRules resolves one selector: a single match shows the
+// complete Rule, several render as a narrowed listing.
+func showMatchingRules(ctx Context, list application.ListRules, show application.ShowRule, selector string) error {
+	rows, err := list.Select(selector)
+	if err != nil {
+		return ConfigError(err)
+	}
+	if len(rows) == 1 {
+		detail, err := show.Execute(rows[0].ID)
+		if err != nil {
+			return ConfigError(err)
+		}
+		if err := writeRuleDetail(ctx.Stdout, detail); err != nil {
+			return fmt.Errorf("write output: %w", err)
+		}
+		return nil
+	}
+	if err := writeRuleRows(ctx.Stdout, rows); err != nil {
+		return fmt.Errorf("write output: %w", err)
+	}
+	return nil
+}
+
+// writeRuleRows renders the one-line listing form of Rule summaries.
+func writeRuleRows(w io.Writer, rows []application.RuleSummary) error {
+	p := &printer{w: w}
+	for _, row := range rows {
+		marker := ""
+		if row.Disabled {
+			marker = fmt.Sprintf("  (disabled: %s)", row.DisabledReason)
+		}
+		provenance := ""
+		if row.Provenance != "" {
+			provenance = "  from " + row.Provenance
+		}
+		p.printf("%s  [%s/%s/%s]  %s%s%s\n",
+			row.ID, row.Type, row.Severity, row.Assurance, row.Claim, provenance, marker)
+	}
+	return p.err
 }
 
 func writeRuleDetail(w io.Writer, d application.RuleDetail) error {
@@ -113,6 +134,25 @@ func completeRuleIDs(list application.ListRules) func(args []string, toComplete 
 			candidates = append(candidates, Candidate{Value: row.ID, Doc: row.Claim})
 		}
 		return candidates
+	}
+}
+
+// completeRuleSelectors completes one comma-separated selector list:
+// the trailing segment completes against the configured rule ids while
+// the already-typed segments stay as the inserted prefix.
+func completeRuleSelectors(list application.ListRules) func(toComplete string) []Candidate {
+	ids := completeRuleIDs(list)
+	return func(toComplete string) []Candidate {
+		prefix := ""
+		if i := strings.LastIndexByte(toComplete, ','); i >= 0 {
+			prefix = toComplete[:i+1]
+		}
+		candidates := ids(nil, "")
+		out := make([]Candidate, 0, len(candidates))
+		for _, c := range candidates {
+			out = append(out, Candidate{Value: prefix + c.Value, Doc: c.Doc})
+		}
+		return out
 	}
 }
 
@@ -237,7 +277,19 @@ func NewExplainCommand(explain application.ExplainRule, list application.ListRul
 			if len(ctx.Args) != 1 {
 				return &ExitError{Code: ExitConfigError, Message: "explain requires exactly one rule id"}
 			}
-			text, err := explain.Execute(ctx.Args[0])
+			rows, err := list.Select(ctx.Args[0])
+			if err != nil {
+				return ConfigError(err)
+			}
+			if len(rows) > 1 {
+				ids := make([]string, 0, len(rows))
+				for _, r := range rows {
+					ids = append(ids, r.ID)
+				}
+				return &ExitError{Code: ExitConfigError, Message: fmt.Sprintf(
+					"selector %q matches %d rules (%s); explain one", ctx.Args[0], len(rows), strings.Join(ids, ", "))}
+			}
+			text, err := explain.Execute(rows[0].ID)
 			if err != nil {
 				return ConfigError(err)
 			}

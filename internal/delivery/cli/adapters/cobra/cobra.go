@@ -59,9 +59,12 @@ func translate(c cli.Command) *cobra.Command {
 			bools[f.Name] = out.Flags().Bool(f.Name, f.Default == "true", f.Doc)
 		} else {
 			values[f.Name] = out.Flags().String(f.Name, f.Default, f.Doc)
-			if len(f.Options) > 0 {
-				// Registration fails only for an unknown flag name;
-				// the flag was defined on the line above.
+			// Registration fails only for an unknown flag name; the
+			// flag was defined on the line above.
+			switch {
+			case f.Complete != nil:
+				_ = out.RegisterFlagCompletionFunc(f.Name, dynamicFlagCompletion(f.Complete))
+			case len(f.Options) > 0:
 				_ = out.RegisterFlagCompletionFunc(f.Name, staticCompletion(f.Options))
 			}
 		}
@@ -114,15 +117,28 @@ func argsCompletion(complete func([]string, string) []cli.Candidate, maxArgs int
 		if len(args) >= maxArgs {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		candidates := complete(args, toComplete)
-		completions := make([]cobra.Completion, 0, len(candidates))
-		for _, candidate := range candidates {
-			if candidate.Doc != "" {
-				completions = append(completions, candidate.Value+"\t"+candidate.Doc)
-			} else {
-				completions = append(completions, candidate.Value)
-			}
-		}
-		return completions, cobra.ShellCompDirectiveNoFileComp
+		return renderCandidates(complete(args, toComplete)), cobra.ShellCompDirectiveNoFileComp
 	}
+}
+
+// dynamicFlagCompletion adapts the neutral Flag.Complete seam onto
+// Cobra's flag completion, with file completion suppressed.
+func dynamicFlagCompletion(complete func(string) []cli.Candidate) cobra.CompletionFunc {
+	return func(_ *cobra.Command, _ []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+		return renderCandidates(complete(toComplete)), cobra.ShellCompDirectiveNoFileComp
+	}
+}
+
+// renderCandidates maps neutral candidates onto Cobra's
+// "value\tdescription" completion form.
+func renderCandidates(candidates []cli.Candidate) []cobra.Completion {
+	completions := make([]cobra.Completion, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.Doc != "" {
+			completions = append(completions, candidate.Value+"\t"+candidate.Doc)
+		} else {
+			completions = append(completions, candidate.Value)
+		}
+	}
+	return completions
 }
