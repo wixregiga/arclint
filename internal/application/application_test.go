@@ -237,7 +237,7 @@ func TestCaptureBaselinePersistsSnapshot(t *testing.T) {
 	}
 }
 
-func TestShowAndExplainRule(t *testing.T) {
+func TestShowRule(t *testing.T) {
 	cfg, _ := fixture(t, "m/ok.go")
 	glob, err := rule.NewGlob("m/legacy/**")
 	if err != nil {
@@ -268,23 +268,6 @@ func TestShowAndExplainRule(t *testing.T) {
 	}
 	if _, err := show.Execute("t:m/ghost"); err == nil {
 		t.Errorf("unknown rule id must be an error")
-	}
-
-	explain, err := application.NewExplainRule(show)
-	if err != nil {
-		t.Fatalf("NewExplainRule: %v", err)
-	}
-	text, err := explain.Execute("t:m/snake")
-	if err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	for _, want := range []string{
-		"claim: ", "applies to: Module(s) m", "when violated: fails the gate",
-		"excluded: m/legacy/** (adopted as-is)", "accepted configuration:",
-	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("explanation lacks %q:\n%s", want, text)
-		}
 	}
 }
 

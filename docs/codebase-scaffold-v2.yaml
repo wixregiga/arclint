@@ -212,9 +212,6 @@ scaffold:
   - path: internal/application/assess_conformance.go
     package: application
     responsibility: Coordinate observations, configured Rules, Baseline, and Conformance Check.
-  - path: internal/application/explain_rule.go
-    package: application
-    responsibility: Explain a Rule in human- and agent-readable form.
   - path: internal/application/capture_baseline.go
     package: application
     responsibility: Capture a Baseline from one completed assessment through an output port.

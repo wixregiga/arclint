@@ -101,6 +101,11 @@ func writeRuleDetail(w io.Writer, d application.RuleDetail) error {
 	}
 	write("evidence", d.Evidence)
 	write("assurance", d.Summary.Assurance)
+	if d.Summary.Severity == "error" {
+		write("when violated", "fails the gate")
+	} else {
+		write("when violated", fmt.Sprintf("reported as %s without failing the gate", d.Summary.Severity))
+	}
 	write("languages", strings.Join(d.Languages, ", "))
 	write("facts", strings.Join(d.Facts, ", "))
 	write("limitations", strings.Join(d.Limitations, "; "))
@@ -119,10 +124,10 @@ func writeRuleDetail(w io.Writer, d application.RuleDetail) error {
 }
 
 // completeRuleIDs adapts the listing use case into Rule-id completion
-// candidates for the rules and explain commands. Per the CompleteArgs
-// contract a failing ruleset yields no candidates: the error is
-// swallowed deliberately, because a completion callback may never
-// print or fail.
+// candidates for the rules command and the check selectors. Per the
+// CompleteArgs contract a failing ruleset yields no candidates: the
+// error is swallowed deliberately, because a completion callback may
+// never print or fail.
 func completeRuleIDs(list application.ListRules) func(args []string, toComplete string) []Candidate {
 	return func([]string, string) []Candidate {
 		rows, err := list.Execute()
@@ -263,42 +268,4 @@ func writeExpectEntry(p *printer, kind rule.FindingKind, path string, line int, 
 		p.printf("      line: %d\n", line)
 	}
 	p.printf("      message: %q\n", message)
-}
-
-// NewExplainCommand adapts the explanation use case into the explain
-// command; the listing use case exists only to complete rule ids.
-func NewExplainCommand(explain application.ExplainRule, list application.ListRules) Command {
-	return Command{
-		Name:         "explain",
-		Short:        "explain one Rule in human- and agent-readable form",
-		MaxArgs:      1,
-		CompleteArgs: completeRuleIDs(list),
-		Run: func(ctx Context) error {
-			if len(ctx.Args) != 1 {
-				return &ExitError{Code: ExitConfigError, Message: "explain requires exactly one rule id"}
-			}
-			rows, err := list.Select(ctx.Args[0])
-			if err != nil {
-				return ConfigError(err)
-			}
-			if len(rows) > 1 {
-				ids := make([]string, 0, len(rows))
-				for _, r := range rows {
-					ids = append(ids, r.ID)
-				}
-				return &ExitError{Code: ExitConfigError, Message: fmt.Sprintf(
-					"selector %q matches %d rules (%s); explain one", ctx.Args[0], len(rows), strings.Join(ids, ", "))}
-			}
-			text, err := explain.Execute(rows[0].ID)
-			if err != nil {
-				return ConfigError(err)
-			}
-			p := &printer{w: ctx.Stdout}
-			p.print(text)
-			if p.err != nil {
-				return fmt.Errorf("write output: %w", p.err)
-			}
-			return nil
-		},
-	}
 }

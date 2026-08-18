@@ -108,10 +108,10 @@ func TestRulesListsRuleset(t *testing.T) {
 	}
 }
 
-func TestExplainAndContext(t *testing.T) {
-	stdout, stderr, code := runBin(t, repoRoot(t), os.Environ(), "explain", "arclint:domain/stdlib-only")
-	if code != 0 || !strings.Contains(stdout, "claim: ") {
-		t.Errorf("explain exit %d, output %q, stderr %s", code, stdout, stderr)
+func TestRuleDetailAndContext(t *testing.T) {
+	stdout, stderr, code := runBin(t, repoRoot(t), os.Environ(), "rules", "arclint:domain/stdlib-only")
+	if code != 0 || !strings.Contains(stdout, "when violated: fails the gate") {
+		t.Errorf("rules detail exit %d, output %q, stderr %s", code, stdout, stderr)
 	}
 
 	stdout, stderr, code = runBin(t, repoRoot(t), os.Environ(),

@@ -155,7 +155,7 @@ export type Capability = "exact" | "structural" | "heuristic" | "advisory";
 export interface RuleDef {
   /** Unique rule type name, referenced by rules.yaml entries. */
   type: string;
-  /** One-line summary shown by arclint explain / rules ls. */
+  /** One-line summary shown by arclint rules. */
   description?: string;
   /** How this rule enforces its claim: exact (imports/syntax facts),
    * structural (paths/declarations), heuristic (names/regex/complexity),

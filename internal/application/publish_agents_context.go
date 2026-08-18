@@ -98,7 +98,7 @@ func renderAgentsBlock(ctx ArchitecturalContext) string {
 
 	b.WriteString("\n### Query commands\n\n")
 	b.WriteString("- `arclint context <path>` — modules, rules, and reasons binding a location (`--format json`)\n")
-	b.WriteString("- `arclint rules [id]` / `arclint explain <id>` — the configured rules, one in full, one explained\n")
+	b.WriteString("- `arclint rules [selector]` — the configured rules; one match shows the complete Rule\n")
 	b.WriteString("- `arclint check .` — evaluate every rule; exit 1 on error-severity findings\n")
 	b.WriteString(AgentsEnd + "\n")
 	return b.String()

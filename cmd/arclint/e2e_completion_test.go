@@ -38,14 +38,14 @@ func containsLine(output, want string) bool {
 	return false
 }
 
-// TestCompletionListsRuleIDs proves rules and explain complete their
+// TestCompletionListsRuleIDs proves rules completes its
 // positional argument from the configured ruleset.
 func TestCompletionListsRuleIDs(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "rules.yaml", completionRules)
 	write(t, root, "src/ok.go", "package src\n")
 
-	for _, sub := range []string{"rules", "explain"} {
+	for _, sub := range []string{"rules"} {
 		stdout, stderr, code := runBin(t, root, os.Environ(), "__complete", sub, "")
 		if code != 0 {
 			t.Fatalf("__complete %s: exit %d\nstdout: %s\nstderr: %s", sub, code, stdout, stderr)

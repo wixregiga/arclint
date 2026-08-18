@@ -64,7 +64,7 @@ func starterRuleset(languages []string) string {
 	b.WriteString("# ArcLint architecture contracts.\n")
 	b.WriteString("# Grow this file module by module: declare real Modules under `modules`,\n")
 	b.WriteString("# then state what each may import under `contracts`.\n")
-	b.WriteString("# Query commands: arclint rules · arclint explain <id> · arclint context <path>\n\n")
+	b.WriteString("# Query commands: arclint rules [selector] · arclint context <path>\n\n")
 	fmt.Fprintf(&b, "runtime: [%s]\n\n", strings.Join(languages, ", "))
 	b.WriteString("scan:\n")
 	b.WriteString("  # error | warn | ignore for imports that classify neither stdlib,\n")

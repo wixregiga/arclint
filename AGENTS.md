@@ -31,6 +31,6 @@ Verify changes with `arclint check .`.
 ### Query commands
 
 - `arclint context <path>` — modules, rules, and reasons binding a location (`--format json`)
-- `arclint rules [id]` / `arclint explain <id>` — the configured rules, one in full, one explained
+- `arclint rules [selector]` — the configured rules; one match shows the complete Rule
 - `arclint check .` — evaluate every rule; exit 1 on error-severity findings
 <!-- arclint:agents:end -->

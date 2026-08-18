@@ -72,10 +72,6 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	explainRule, err := application.NewExplainRule(showRule)
-	if err != nil {
-		return configError(err)
-	}
 	assess, err := application.NewAssessConformance(repository, observations, baselines, extensions)
 	if err != nil {
 		return configError(err)
@@ -138,7 +134,6 @@ func run(args []string) int {
 		cli.NewCheckCommand(assess, listRules),
 		cli.NewInitCommand(initialize),
 		cli.NewRulesCommand(listRules, showRule, ruleTests),
-		cli.NewExplainCommand(explainRule, listRules),
 		cli.NewContextCommand(getContext),
 		cli.NewAgentsCommand(publishAgents),
 		cli.NewBaselineCommand(capture, refresh),

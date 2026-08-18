@@ -10,7 +10,7 @@ import (
 // selector is an exact qualified id, an id prefix, or a path.Match
 // pattern — and an exact id wins completely: when the selector names a
 // configured id, prefix and pattern expansion never widen it. The
-// same semantics serve rules, explain, and check --only/--exclude.
+// same semantics serve rules and check --only/--exclude.
 func selectorHits(selector string, ids []string) ([]string, error) {
 	for _, id := range ids {
 		if id == selector {

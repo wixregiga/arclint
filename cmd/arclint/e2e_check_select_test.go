@@ -76,7 +76,7 @@ func TestCheckOnlyAndExclude(t *testing.T) {
 	}
 }
 
-func TestRulesAndExplainSelectors(t *testing.T) {
+func TestRulesSelectors(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "rules.yaml", selectRules)
 	write(t, dir, "core/keep.go", "package core\n")
@@ -100,18 +100,8 @@ func TestRulesAndExplainSelectors(t *testing.T) {
 		t.Errorf("rules single-match detail: exit %d\n%s", code, stdout)
 	}
 
-	// explain requires exactly one resolved rule.
-	_, stderr, code := runBin(t, dir, os.Environ(), "explain", "t:core/*")
-	if code != 2 || !strings.Contains(stderr, "matches 2 rules") {
-		t.Errorf("explain multi-match: exit %d, stderr %s", code, stderr)
-	}
-	stdout, _, code = runBin(t, dir, os.Environ(), "explain", "t:core/has-")
-	if code != 0 || !strings.Contains(stdout, "t:core/has-keep") {
-		t.Errorf("explain prefix single-match: exit %d\n%s", code, stdout)
-	}
-
 	// A selector matching nothing stays loud.
-	_, stderr, code = runBin(t, dir, os.Environ(), "rules", "t:core/nope*")
+	_, stderr, code := runBin(t, dir, os.Environ(), "rules", "t:core/nope*")
 	if code != 2 || !strings.Contains(stderr, "matches no configured rule") {
 		t.Errorf("rules unmatched: exit %d, stderr %s", code, stderr)
 	}

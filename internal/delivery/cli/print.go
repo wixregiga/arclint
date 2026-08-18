@@ -28,10 +28,3 @@ func (p *printer) println(args ...any) {
 	}
 	_, p.err = fmt.Fprintln(p.w, args...)
 }
-
-func (p *printer) print(args ...any) {
-	if p.err != nil {
-		return
-	}
-	_, p.err = fmt.Fprint(p.w, args...)
-}
