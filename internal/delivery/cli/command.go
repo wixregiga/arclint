@@ -48,7 +48,7 @@ type Command struct {
 	Version     string // root command only
 	Flags       []Flag
 	Subcommands []Command
-	// MaxArgs bounds positional arguments.
+	// MaxArgs bounds positional arguments; negative means unlimited.
 	MaxArgs int
 	// Run handles the invocation; nil for pure group commands.
 	Run func(Context) error

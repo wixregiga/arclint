@@ -65,6 +65,29 @@ func (t Type) Valid() bool {
 	return false
 }
 
+// Meaning states the Rule Type's proposition in one line for
+// human-facing surfaces; the Rule Schema carries the field-level
+// contract.
+func (t Type) Meaning() string {
+	switch t {
+	case TypeConsumes:
+		return "states what a Module may import: declared Modules by allow-list, external and standard-library imports by policy"
+	case TypeStructure:
+		return "requires or forbids files matching globs inside a Module"
+	case TypeNaming:
+		return "constrains file names within a Module to a finite case vocabulary"
+	case TypeLayers:
+		return "orders Modules highest first; a Module may import same or lower layers, never higher"
+	case TypeProtected:
+		return "restricts which Modules may import one Module"
+	case TypeAcyclic:
+		return "forbids dependency cycles among declared Modules"
+	case TypeExtension:
+		return "delegates enforcement to a named Extension through the sandboxed SDK"
+	}
+	return ""
+}
+
 // Accepts decides whether parameters are valid for this Rule Type.
 func (t Type) Accepts(p Params) error {
 	if p == nil {

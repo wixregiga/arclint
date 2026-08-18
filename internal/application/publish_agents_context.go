@@ -42,7 +42,7 @@ func NewPublishAgentsContext(context GetArchitecturalContext, publisher AgentsPu
 
 // Render compiles the block without installing it.
 func (uc PublishAgentsContext) Render() (string, error) {
-	ctx, err := uc.context.Execute("")
+	ctx, err := uc.context.Execute(ContextRequest{})
 	if err != nil {
 		return "", err
 	}
@@ -70,7 +70,7 @@ func renderAgentsBlock(ctx ArchitecturalContext) string {
 	b.WriteString("## Architecture contracts (arclint)\n\n")
 	fmt.Fprintf(&b, "Enforced from rules.yaml: %d rules over languages [%s]. Before editing under\n",
 		ctx.RuleCount, strings.Join(ctx.Languages, ", "))
-	b.WriteString("a path, run `arclint context <path>` for the modules and rules that bind it.\n")
+	b.WriteString("a path, run `arclint context <paths...>` for the modules and rules that bind it.\n")
 	b.WriteString("Verify changes with `arclint check .`.\n\n")
 
 	b.WriteString("### Modules\n\n")
@@ -97,7 +97,7 @@ func renderAgentsBlock(ctx ArchitecturalContext) string {
 	}
 
 	b.WriteString("\n### Query commands\n\n")
-	b.WriteString("- `arclint context <path>` — modules, rules, and reasons binding a location (`--format json`)\n")
+	b.WriteString("- `arclint context [paths...]` — the architecture, or everything binding the given paths (`--module <names>`, `--format json`)\n")
 	b.WriteString("- `arclint rules [selector]` — the configured rules; one match shows the complete Rule\n")
 	b.WriteString("- `arclint check .` — evaluate every rule; exit 1 on error-severity findings\n")
 	b.WriteString(AgentsEnd + "\n")

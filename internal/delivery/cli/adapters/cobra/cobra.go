@@ -74,7 +74,11 @@ func translate(c cli.Command) *cobra.Command {
 	}
 	if c.Run != nil {
 		run := c.Run
-		out.Args = cobra.MaximumNArgs(c.MaxArgs)
+		if c.MaxArgs < 0 {
+			out.Args = cobra.ArbitraryArgs
+		} else {
+			out.Args = cobra.MaximumNArgs(c.MaxArgs)
+		}
 		out.RunE = func(cmd *cobra.Command, args []string) error {
 			flags := make(map[string]string, len(values)+len(bools))
 			for name, v := range values {
@@ -114,7 +118,7 @@ func staticCompletion(options []string) cobra.CompletionFunc {
 // CompletionOptions.
 func argsCompletion(complete func([]string, string) []cli.Candidate, maxArgs int) cobra.CompletionFunc {
 	return func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
-		if len(args) >= maxArgs {
+		if maxArgs >= 0 && len(args) >= maxArgs {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 		return renderCandidates(complete(args, toComplete)), cobra.ShellCompDirectiveNoFileComp

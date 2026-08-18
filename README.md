@@ -89,7 +89,7 @@ findings, `check` reports only new ones and counts the covered rest,
 ```
 check [path]        evaluate the repository (--format human|json, --no-baseline)
 rules [selector]    list the configured rules; one match shows the complete rule
-context <path>      modules, rules, and reasons binding a location (--format json)
+context [paths...]  the architecture, or everything binding the given paths (--module, --format json)
 agents [--write]    compile the ruleset into a generated AGENTS.md block
 baseline capture    adopt current findings   ·  baseline refresh: drop stale entries
 patterns            list local pattern packages (.arclint/patterns/<name>/pattern.yaml)

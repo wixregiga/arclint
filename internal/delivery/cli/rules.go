@@ -148,17 +148,24 @@ func completeRuleIDs(list application.ListRules) func(args []string, toComplete 
 func completeRuleSelectors(list application.ListRules) func(toComplete string) []Candidate {
 	ids := completeRuleIDs(list)
 	return func(toComplete string) []Candidate {
-		prefix := ""
-		if i := strings.LastIndexByte(toComplete, ','); i >= 0 {
-			prefix = toComplete[:i+1]
-		}
-		candidates := ids(nil, "")
-		out := make([]Candidate, 0, len(candidates))
-		for _, c := range candidates {
-			out = append(out, Candidate{Value: prefix + c.Value, Doc: c.Doc})
-		}
-		return out
+		return withListPrefix(toComplete, ids(nil, ""))
 	}
+}
+
+// withListPrefix keeps the comma-joined segments already typed as the
+// inserted prefix of every candidate, so completing the trailing
+// segment of a comma list inserts the whole value.
+func withListPrefix(toComplete string, candidates []Candidate) []Candidate {
+	i := strings.LastIndexByte(toComplete, ',')
+	if i < 0 {
+		return candidates
+	}
+	prefix := toComplete[:i+1]
+	out := make([]Candidate, 0, len(candidates))
+	for _, c := range candidates {
+		out = append(out, Candidate{Value: prefix + c.Value, Doc: c.Doc})
+	}
+	return out
 }
 
 // newRuleSchemaCommand prints the published Rule Schema: the JSON

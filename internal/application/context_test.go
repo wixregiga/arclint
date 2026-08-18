@@ -50,7 +50,7 @@ func TestArchitecturalContextForPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewGetArchitecturalContext: %v", err)
 	}
-	ctx, err := uc.Execute("m/service.go")
+	ctx, err := uc.Execute(application.ContextRequest{Paths: []string{"m/service.go"}})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestArchitecturalContextForPath(t *testing.T) {
 		t.Errorf("consumes rule missing from applicable rules: %v", reasons)
 	}
 
-	outside, err := uc.Execute("elsewhere/file.go")
+	outside, err := uc.Execute(application.ContextRequest{Paths: []string{"elsewhere/file.go"}})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 		application.AgentsBegin, application.AgentsEnd,
 		"3 rules over languages [go]", "- **m**",
 		"internal imports none (may import no other declared module)",
-		"arclint context <path>",
+		"arclint context <paths...>",
 	} {
 		if !strings.Contains(block, want) {
 			t.Errorf("block lacks %q:\n%s", want, block)
@@ -138,3 +138,63 @@ func TestInitializeRepositoryRejectsUnknownLanguages(t *testing.T) {
 type fakeScaffold struct{}
 
 func (fakeScaffold) Write(content string, force bool) (string, error) { return "rules.yaml", nil }
+
+func TestArchitecturalContextWorksite(t *testing.T) {
+	uc, err := application.NewGetArchitecturalContext(fakeRepository{contextFixture(t)})
+	if err != nil {
+		t.Fatalf("NewGetArchitecturalContext: %v", err)
+	}
+	ctx, err := uc.Execute(application.ContextRequest{
+		Paths:   []string{"m/service.go", "m/other.go"},
+		Modules: []string{"m"},
+	})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(ctx.Paths) != 2 || ctx.Paths[0].Modules[0] != "m" || ctx.Paths[1].Modules[0] != "m" {
+		t.Errorf("path bindings = %+v", ctx.Paths)
+	}
+	// The module card appears once although three scope parts share it.
+	if len(ctx.Modules) != 1 || ctx.Modules[0].Name != "m" {
+		t.Errorf("modules = %+v, want one deduplicated card", ctx.Modules)
+	}
+	for _, r := range ctx.Rules {
+		if len(r.Via) == 0 {
+			t.Errorf("rule %s carries no via in a multi-part scope", r.Summary.ID)
+		}
+	}
+	if ctx.Scope != "m/service.go, m/other.go, module m" {
+		t.Errorf("scope = %q", ctx.Scope)
+	}
+
+	if _, err := uc.Execute(application.ContextRequest{Modules: []string{"ghost"}}); err == nil ||
+		!strings.Contains(err.Error(), "not declared") {
+		t.Errorf("unknown module err = %v", err)
+	}
+}
+
+func TestArchitecturalContextRepositoryTeaches(t *testing.T) {
+	uc, err := application.NewGetArchitecturalContext(fakeRepository{contextFixture(t)})
+	if err != nil {
+		t.Fatalf("NewGetArchitecturalContext: %v", err)
+	}
+	ctx, err := uc.Execute(application.ContextRequest{})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if ctx.UnknownImports != "warn" {
+		t.Errorf("unknown-imports posture = %q, want the warn default", ctx.UnknownImports)
+	}
+	kinds := map[string]string{}
+	for _, k := range ctx.Kinds {
+		kinds[k.Kind] = k.Meaning
+	}
+	for _, want := range []string{"naming", "consumes", "protected"} {
+		if kinds[want] == "" {
+			t.Errorf("kind %q missing or meaningless in %v", want, kinds)
+		}
+	}
+	if len(ctx.Paths) != 0 || len(ctx.Rules) != 0 {
+		t.Errorf("repository scope must carry no bindings or rule union: %+v", ctx)
+	}
+}
