@@ -116,7 +116,7 @@ func staticCompletion(options []string) cobra.CompletionFunc {
 // machinery — the `completion bash|zsh|fish|powershell` subcommand and
 // the hidden `__complete` command — because translate never sets
 // CompletionOptions.
-func argsCompletion(complete func([]string, string) []cli.Candidate, maxArgs int) cobra.CompletionFunc {
+func argsCompletion(complete func([]string, string) []cli.AutoCompleteCandidate, maxArgs int) cobra.CompletionFunc {
 	return func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
 		if maxArgs >= 0 && len(args) >= maxArgs {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -127,7 +127,7 @@ func argsCompletion(complete func([]string, string) []cli.Candidate, maxArgs int
 
 // dynamicFlagCompletion adapts the neutral Flag.Complete seam onto
 // Cobra's flag completion, with file completion suppressed.
-func dynamicFlagCompletion(complete func(string) []cli.Candidate) cobra.CompletionFunc {
+func dynamicFlagCompletion(complete func(string) []cli.AutoCompleteCandidate) cobra.CompletionFunc {
 	return func(_ *cobra.Command, _ []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
 		return renderCandidates(complete(toComplete)), cobra.ShellCompDirectiveNoFileComp
 	}
@@ -135,7 +135,7 @@ func dynamicFlagCompletion(complete func(string) []cli.Candidate) cobra.Completi
 
 // renderCandidates maps neutral candidates onto Cobra's
 // "value\tdescription" completion form.
-func renderCandidates(candidates []cli.Candidate) []cobra.Completion {
+func renderCandidates(candidates []cli.AutoCompleteCandidate) []cobra.Completion {
 	completions := make([]cobra.Completion, 0, len(candidates))
 	for _, candidate := range candidates {
 		if candidate.Doc != "" {

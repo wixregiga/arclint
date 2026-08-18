@@ -128,15 +128,15 @@ func writeRuleDetail(w io.Writer, d application.RuleDetail) error {
 // CompleteArgs contract a failing ruleset yields no candidates: the
 // error is swallowed deliberately, because a completion callback may
 // never print or fail.
-func completeRuleIDs(list application.ListRules) func(args []string, toComplete string) []Candidate {
-	return func([]string, string) []Candidate {
+func completeRuleIDs(list application.ListRules) func(args []string, toComplete string) []AutoCompleteCandidate {
+	return func([]string, string) []AutoCompleteCandidate {
 		rows, err := list.Execute()
 		if err != nil {
 			return nil
 		}
-		candidates := make([]Candidate, 0, len(rows))
+		candidates := make([]AutoCompleteCandidate, 0, len(rows))
 		for _, row := range rows {
-			candidates = append(candidates, Candidate{Value: row.ID, Doc: row.Claim})
+			candidates = append(candidates, AutoCompleteCandidate{Value: row.ID, Doc: row.Claim})
 		}
 		return candidates
 	}
@@ -145,9 +145,9 @@ func completeRuleIDs(list application.ListRules) func(args []string, toComplete 
 // completeRuleSelectors completes one comma-separated selector list:
 // the trailing segment completes against the configured rule ids while
 // the already-typed segments stay as the inserted prefix.
-func completeRuleSelectors(list application.ListRules) func(toComplete string) []Candidate {
+func completeRuleSelectors(list application.ListRules) func(toComplete string) []AutoCompleteCandidate {
 	ids := completeRuleIDs(list)
-	return func(toComplete string) []Candidate {
+	return func(toComplete string) []AutoCompleteCandidate {
 		return withListPrefix(toComplete, ids(nil, ""))
 	}
 }
@@ -155,15 +155,15 @@ func completeRuleSelectors(list application.ListRules) func(toComplete string) [
 // withListPrefix keeps the comma-joined segments already typed as the
 // inserted prefix of every candidate, so completing the trailing
 // segment of a comma list inserts the whole value.
-func withListPrefix(toComplete string, candidates []Candidate) []Candidate {
+func withListPrefix(toComplete string, candidates []AutoCompleteCandidate) []AutoCompleteCandidate {
 	i := strings.LastIndexByte(toComplete, ',')
 	if i < 0 {
 		return candidates
 	}
 	prefix := toComplete[:i+1]
-	out := make([]Candidate, 0, len(candidates))
+	out := make([]AutoCompleteCandidate, 0, len(candidates))
 	for _, c := range candidates {
-		out = append(out, Candidate{Value: prefix + c.Value, Doc: c.Doc})
+		out = append(out, AutoCompleteCandidate{Value: prefix + c.Value, Doc: c.Doc})
 	}
 	return out
 }

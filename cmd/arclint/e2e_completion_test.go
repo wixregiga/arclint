@@ -79,6 +79,32 @@ func TestCompletionListsFormatValues(t *testing.T) {
 	}
 }
 
+// TestCompletionListsInitLanguages proves the init --languages flag
+// completes both an empty value and the trailing item of a comma list.
+func TestCompletionListsInitLanguages(t *testing.T) {
+	root := t.TempDir()
+	for _, tc := range []struct {
+		toComplete string
+		wantPrefix string
+	}{
+		{wantPrefix: ""},
+		{toComplete: "go,", wantPrefix: "go,"},
+	} {
+		stdout, stderr, code := runBin(t, root, os.Environ(), "__complete", "init", "--languages", tc.toComplete)
+		if code != 0 {
+			t.Fatalf("__complete init --languages %q: exit %d\nstderr: %s", tc.toComplete, code, stderr)
+		}
+		for _, language := range []string{"go", "ts", "py"} {
+			if want := tc.wantPrefix + language; !containsLine(stdout, want) {
+				t.Errorf("--languages completion misses %q\n%s", want, stdout)
+			}
+		}
+		if !containsLine(stdout, ":4") {
+			t.Errorf("--languages completion misses the NoFileComp directive\n%s", stdout)
+		}
+	}
+}
+
 // TestCompletionDegradesWithoutRuleset pins the contract: with no
 // rules.yaml anywhere, completion exits 0 with no dynamic candidates
 // and no error text — the shell must never see a failure on TAB.
