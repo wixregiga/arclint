@@ -30,7 +30,8 @@ type RuleTestResult struct {
 	Missing    []rule.ExpectedFinding
 	Unexpected []rule.Finding
 	// Err reports a test-level failure, such as a Rule ID naming no
-	// configured Rule; "" when the test ran to a comparison.
+	// configured Rule or a conformance/evaluator failure; "" when the
+	// test ran to a comparison.
 	Err string
 }
 
@@ -73,9 +74,9 @@ func NewRunRuleTests(rules rule.Repository, tests RuleTestSource,
 }
 
 // Execute runs every Rule Test and returns one result per test in
-// source order. A test naming no configured Rule fails loudly as a
-// test failure carried in its result; the error return is reserved
-// for infrastructure failures.
+// source order. A test naming no configured Rule, or whose
+// conformance check fails, is a test failure carried in its result;
+// the error return is reserved for infrastructure failures.
 func (uc RunRuleTests) Execute() ([]RuleTestResult, error) {
 	cfg, err := uc.rules.ConfiguredRules()
 	if err != nil {
@@ -110,7 +111,11 @@ func (uc RunRuleTests) Execute() ([]RuleTestResult, error) {
 			Extensions:     uc.extensions,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("rule test %q: conformance check: %w", t.Name(), err)
+			// Evaluator/extension crashes are this test's failure, not
+			// infrastructure: later Rule Tests must still run.
+			result.Err = fmt.Sprintf("conformance check: %v", err)
+			results = append(results, result)
+			continue
 		}
 		comparison := t.Compare(assessmentFindings(assessment))
 		result.Missing = comparison.Missing

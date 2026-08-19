@@ -2,7 +2,6 @@ package sobekextension
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -116,11 +115,15 @@ func (e *Evaluator) host(subjects []string, modules []rule.Module, obs conforman
 			if !inScope[path] {
 				return "", fmt.Errorf("%s is outside this rule's applicability", path)
 			}
-			data, err := os.ReadFile(filepath.Join(e.root, filepath.FromSlash(path)))
+			content := obs.Content()
+			if content == nil {
+				return "", fmt.Errorf("read %s: no content capability on observations", path)
+			}
+			data, err := content.Read(path)
 			if err != nil {
 				return "", fmt.Errorf("read %s: %w", path, err)
 			}
-			return string(data), nil
+			return data, nil
 		},
 		Imports: func(path string) []ImportInfo {
 			if !inScope[path] {

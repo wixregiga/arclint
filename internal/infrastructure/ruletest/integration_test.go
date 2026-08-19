@@ -7,6 +7,7 @@ import (
 
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	sobekextension "github.com/wixregiga/arclint/internal/infrastructure/extension/sobek"
 	"github.com/wixregiga/arclint/internal/infrastructure/language/golang"
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
 	"github.com/wixregiga/arclint/internal/infrastructure/ruletest"
@@ -120,5 +121,109 @@ func TestRunRuleTestsEndToEnd(t *testing.T) {
 	if !passing.Passed() {
 		t.Errorf("structure result = %+v, want a pass: the authored expectation matches the real evaluator output",
 			passing)
+	}
+}
+
+const extensionRuleset = `runtime: [go]
+modules:
+  m:
+    paths: ["m/**"]
+contracts:
+  m:
+    invariants:
+      - id: "t:m/no-panic"
+        kind: extension
+        files: "m/**/*.go"
+        uses: forbid-content
+        with:
+          pattern: '\bpanic\('
+`
+
+// Fixture content contains panic; the repository production file does
+// not. ctx.read must see the fixture bytes or the expectation misses.
+const extensionFixtureTest = `rule: "t:m/no-panic"
+files:
+  m/a.go: |
+    package m
+    func f() { panic("x") }
+expect:
+  - path: m/a.go
+    line: 2
+    message: 'forbidden content matching /\bpanic\(/'
+`
+
+const forbidContentExtension = `import { defineRule, s } from "arclint";
+
+export default defineRule({
+  type: "forbid-content",
+  description: "report lines matching a configured pattern",
+  capability: "exact",
+  params: s.object({
+    pattern: s.string().describe("RegExp source matched against each line"),
+  }),
+  check(ctx, params) {
+    const re = new RegExp(String(params.pattern));
+    for (const file of ctx.files()) {
+      const lines = ctx.read(file.path).split("\n");
+      lines.forEach((line, index) => {
+        if (re.test(line)) {
+          ctx.report({
+            path: file.path,
+            line: index + 1,
+            message: "forbidden content matching /" + params.pattern + "/",
+            fixHint: "remove the content",
+          });
+        }
+      });
+    }
+  },
+});
+`
+
+// TestRuleTestExtensionReadsFixtureContent proves Extension ctx.read
+// sees authored fixture bytes even when the repository has different
+// content at the same path (or would, after the temp fixture tree is
+// gone). A root-filesystem read would miss the panic and fail the test.
+func TestRuleTestExtensionReadsFixtureContent(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		t.Helper()
+		target := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
+			t.Fatalf("MkdirAll %s: %v", rel, err)
+		}
+		if err := os.WriteFile(target, []byte(content), 0o600); err != nil {
+			t.Fatalf("WriteFile %s: %v", rel, err)
+		}
+	}
+	write("rules.yaml", extensionRuleset)
+	write(".arclint/extensions/forbid_content.ts", forbidContentExtension)
+	write(".arclint/tests/fixture_reads_panic.yaml", extensionFixtureTest)
+	// Production path exists with clean content — the opposite of the fixture.
+	write("m/a.go", "package m\n// clean production file\n")
+
+	repo, err := yamlrule.NewRepository(filepath.Join(root, "rules.yaml"))
+	if err != nil {
+		t.Fatalf("NewRepository: %v", err)
+	}
+	extensions, err := sobekextension.NewEvaluator(root)
+	if err != nil {
+		t.Fatalf("NewEvaluator: %v", err)
+	}
+	uc, err := application.NewRunRuleTests(repo, ruletest.NewSource(root),
+		ruletest.NewObserver(golang.NewProducer()), extensions)
+	if err != nil {
+		t.Fatalf("NewRunRuleTests: %v", err)
+	}
+	results, err := uc.Execute()
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("results = %d, want 1", len(results))
+	}
+	got := results[0]
+	if !got.Passed() {
+		t.Fatalf("result = %+v, want pass from fixture-driven ctx.read", got)
 	}
 }

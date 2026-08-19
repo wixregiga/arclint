@@ -87,7 +87,21 @@ func (s Source) Observe(languages []rule.Language, scan rule.Scan, facts []rule.
 	if err != nil {
 		return conformance.Observations{}, fmt.Errorf("assemble observations: %w", err)
 	}
-	return obs, nil
+	// Lazy repository reads for Extension ctx.read — bytes are not
+	// eagerly copied into Observations.
+	return obs.WithContent(rootContent{root: s.root}), nil
+}
+
+// rootContent reads one repo-relative path from the observation root
+// on demand.
+type rootContent struct{ root string }
+
+func (r rootContent) Read(path string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(r.root, filepath.FromSlash(path)))
+	if err != nil {
+		return "", fmt.Errorf("read repository content %q: %w", path, err)
+	}
+	return string(data), nil
 }
 
 func languageRequested(languages []rule.Language, l rule.Language) bool {

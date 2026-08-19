@@ -14,7 +14,9 @@ import (
 // materializing the fixture in a temporary directory and running the
 // real filesystem observation source over it with the supplied fact
 // producers — the fixture passes through the same parsers production
-// uses, never simulated facts.
+// uses, never simulated facts. Content for Extension ctx.read is the
+// authored TestFile bytes, not the temporary tree, so reads stay valid
+// after the materialization is removed.
 type Observer struct {
 	producers []filesystemobservation.FactProducer
 }
@@ -27,7 +29,8 @@ func NewObserver(producers ...filesystemobservation.FactProducer) Observer {
 
 // Observe writes the fixture files under a fresh temporary root,
 // observes it for the requested languages, scan policy, and fact
-// classes, and removes the temporary tree afterwards.
+// classes, attaches durable fixture content for Extension reads, and
+// removes the temporary tree afterwards.
 func (o Observer) Observe(files []rule.TestFile, languages []rule.Language,
 	scan rule.Scan, facts []rule.Fact,
 ) (obs conformance.Observations, err error) {
@@ -61,5 +64,11 @@ func (o Observer) Observe(files []rule.TestFile, languages []rule.Language,
 	if err != nil {
 		return conformance.Observations{}, fmt.Errorf("fixture observation: %w", err)
 	}
-	return obs, nil
+	// Prefer authored TestFile content over the temporary root the
+	// filesystem source attached: the temp tree is deleted on return.
+	content := make(map[string]string, len(files))
+	for _, f := range files {
+		content[f.Path] = f.Content
+	}
+	return obs.WithContent(conformance.MapContent(content)), nil
 }
