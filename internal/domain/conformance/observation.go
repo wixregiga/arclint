@@ -144,11 +144,41 @@ type ObservedFile struct {
 	Size int64
 }
 
+// Content is the deterministic capability to read one observed file's
+// bytes for Extension evaluation (ctx.read). Production supplies a
+// lazy repository reader; Rule Tests supply fixture content directly
+// so temporary fixture materialization cannot invalidate later reads.
+type Content interface {
+	Read(path string) (string, error)
+}
+
+// mapContent is Content backed by an in-memory path-to-bytes map.
+type mapContent map[string]string
+
+func (m mapContent) Read(path string) (string, error) {
+	s, ok := m[path]
+	if !ok {
+		return "", fmt.Errorf("file not found")
+	}
+	return s, nil
+}
+
+// MapContent returns Content from an in-memory path-to-bytes map.
+// The returned capability holds an independent copy of the map.
+func MapContent(files map[string]string) Content {
+	cp := make(mapContent, len(files))
+	for k, v := range files {
+		cp[k] = v
+	}
+	return cp
+}
+
 // Observations is the immutable normalized input to one Conformance
 // Check: the deterministic file list and per-file Language Facts.
 type Observations struct {
-	files []ObservedFile
-	facts map[string]LanguageFacts
+	files   []ObservedFile
+	facts   map[string]LanguageFacts
+	content Content
 }
 
 // NewObservations validates and orders the observed repository. Facts
@@ -214,4 +244,17 @@ func (o Observations) Files() []ObservedFile { return append([]ObservedFile(nil)
 func (o Observations) FactsFor(path string) (LanguageFacts, bool) {
 	f, ok := o.facts[path]
 	return f, ok
+}
+
+// WithContent returns Observations that lend c for Extension content
+// reads. The file list and Language Facts are unchanged.
+func (o Observations) WithContent(c Content) Observations {
+	o.content = c
+	return o
+}
+
+// Content returns the content capability, or nil when none was
+// supplied.
+func (o Observations) Content() Content {
+	return o.content
 }

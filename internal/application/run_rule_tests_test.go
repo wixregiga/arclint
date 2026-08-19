@@ -1,6 +1,7 @@
 package application_test
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -177,5 +178,75 @@ func TestRunRuleTestsMapsAssessmentToFindings(t *testing.T) {
 	}
 	if len(observer.facts) != 1 || observer.facts[0] != rule.FactFileTree {
 		t.Errorf("facts = %v, want exactly [file_tree]", observer.facts)
+	}
+}
+
+// failingExtensions forces conformance.Run to return an error so the
+// use case can prove evaluator failures stay on one RuleTestResult.
+type failingExtensions struct {
+	err error
+}
+
+func (f failingExtensions) Evaluate(string, map[string]any, []string,
+	[]rule.Module, conformance.Observations,
+) ([]conformance.ExtensionFinding, error) {
+	return nil, f.err
+}
+
+func TestRunRuleTestsContainsConformanceErrorAndContinues(t *testing.T) {
+	cfg := ruleTestConfig(t)
+	extScope, err := rule.ModuleApplicability([]rule.ModuleName{"m"})
+	if err != nil {
+		t.Fatalf("ModuleApplicability: %v", err)
+	}
+	extRule, err := rule.New(rule.Spec{
+		ID:            "t:m/ext",
+		Type:          rule.TypeExtension,
+		Params:        rule.ExtensionParams{Uses: "broken-ext"},
+		Applicability: extScope,
+	})
+	if err != nil {
+		t.Fatalf("extension rule.New: %v", err)
+	}
+	cfg.Rules = append(cfg.Rules, extRule)
+
+	files := []rule.TestFile{{Path: "m/all_good.go"}}
+	source := fakeRuleTestSource{tests: []rule.Test{
+		mustRuleTest(t, "extension-crash", "t:m/ext", files, nil),
+		mustRuleTest(t, "still-runs", "t:m/snake", files, nil),
+	}}
+	uc, err := application.NewRunRuleTests(
+		ruleTestRepository{cfg},
+		source,
+		&fakeFixtureObserver{},
+		failingExtensions{err: errors.New("extension blew up")},
+	)
+	if err != nil {
+		t.Fatalf("NewRunRuleTests: %v", err)
+	}
+	results, err := uc.Execute()
+	if err != nil {
+		t.Fatalf("Execute must not treat a conformance error as infrastructure: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("results = %d, want both tests in source order", len(results))
+	}
+
+	first, second := results[0], results[1]
+	if first.Name != "extension-crash" || second.Name != "still-runs" {
+		t.Fatalf("order = %q then %q, want extension-crash then still-runs",
+			first.Name, second.Name)
+	}
+	if first.Passed() || first.Err == "" {
+		t.Fatalf("first = %+v, want a contained test-level error", first)
+	}
+	if !strings.Contains(first.Err, "extension blew up") {
+		t.Errorf("first.Err = %q, want the evaluator failure", first.Err)
+	}
+	if !strings.Contains(first.Err, "conformance check") {
+		t.Errorf("first.Err = %q, want conformance-check context", first.Err)
+	}
+	if !second.Passed() {
+		t.Errorf("second = %+v, want a pass after the contained failure", second)
 	}
 }

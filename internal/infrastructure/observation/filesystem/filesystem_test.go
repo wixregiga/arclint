@@ -77,6 +77,39 @@ func TestObserveWalksDeterministically(t *testing.T) {
 	}
 }
 
+func TestObserveAttachesLazyRepositoryContent(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "m/a.go", "package m // production")
+	source, err := filesystemobservation.NewSource(root)
+	if err != nil {
+		t.Fatalf("NewSource: %v", err)
+	}
+	obs, err := source.Observe(nil, rule.Scan{}, nil)
+	if err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	content := obs.Content()
+	if content == nil {
+		t.Fatal("production observations must lend a content capability")
+	}
+	got, err := content.Read("m/a.go")
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if got != "package m // production" {
+		t.Errorf("Read = %q, want production bytes", got)
+	}
+	// Prove laziness: a post-Observe write is visible on the next Read.
+	write(t, root, "m/a.go", "package m // updated")
+	got, err = content.Read("m/a.go")
+	if err != nil {
+		t.Fatalf("Read after update: %v", err)
+	}
+	if got != "package m // updated" {
+		t.Errorf("Read after update = %q, want lazy filesystem bytes", got)
+	}
+}
+
 func TestObserveSkipsUnrequestedLanguages(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "a/service.go", "package a")

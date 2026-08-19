@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wixregiga/arclint/internal/domain/conformance"
 	sobekextension "github.com/wixregiga/arclint/internal/infrastructure/extension/sobek"
 )
 
@@ -323,5 +324,92 @@ func TestSDKInit(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, ".arclint", "extensions", "tsconfig.json")); err != nil {
 		t.Error(err)
+	}
+}
+
+const forbidContentRule = `
+import { defineRule, s } from "arclint";
+
+export default defineRule({
+  type: "forbid-content",
+  description: "report lines matching a configured pattern",
+  capability: "exact",
+  params: s.object({
+    pattern: s.string().describe("RegExp source matched against each line"),
+  }),
+  check(ctx, params) {
+    const re = new RegExp(String(params.pattern));
+    for (const file of ctx.files()) {
+      const lines = ctx.read(file.path).split("\n");
+      lines.forEach((line, index) => {
+        if (re.test(line)) {
+          ctx.report({
+            path: file.path,
+            line: index + 1,
+            message: "forbidden content matching /" + params.pattern + "/",
+            fixHint: "remove the content",
+          });
+        }
+      });
+    }
+  },
+});
+`
+
+// ctx.read must use Observations content, not the repository root the
+// evaluator loads extensions from: Rule Tests supply fixture bytes that
+// differ from (or are absent on) disk.
+func TestEvaluatorReadUsesObservationContent(t *testing.T) {
+	root := writeExtensions(t, map[string]string{"forbid.ts": forbidContentRule})
+	// Production file is clean; a root-based read would find no match.
+	if err := os.MkdirAll(filepath.Join(root, "m"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "m", "a.go"), []byte("package m\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	eval, err := sobekextension.NewEvaluator(root)
+	if err != nil {
+		t.Fatalf("NewEvaluator: %v", err)
+	}
+	obs, err := conformance.NewObservations([]conformance.ObservedFile{
+		{Path: "m/a.go", Size: 1},
+	}, nil)
+	if err != nil {
+		t.Fatalf("NewObservations: %v", err)
+	}
+	// Fixture-shaped content that the production file does not have.
+	obs = obs.WithContent(conformance.MapContent(map[string]string{
+		"m/a.go": "package m\nfunc f() { panic(\"x\") }\n",
+	}))
+
+	findings, err := eval.Evaluate("forbid-content", map[string]any{
+		"pattern": `\bpanic\(`,
+	}, []string{"m/a.go"}, nil, obs)
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	if len(findings) != 1 {
+		t.Fatalf("findings = %+v, want one from fixture content", findings)
+	}
+	if findings[0].Path != "m/a.go" || findings[0].Line != 2 {
+		t.Errorf("finding = %+v, want m/a.go:2", findings[0])
+	}
+
+	// Missing production path still reads fixture content.
+	missingRoot := writeExtensions(t, map[string]string{"forbid.ts": forbidContentRule})
+	evalMissing, err := sobekextension.NewEvaluator(missingRoot)
+	if err != nil {
+		t.Fatalf("NewEvaluator missing: %v", err)
+	}
+	findings, err = evalMissing.Evaluate("forbid-content", map[string]any{
+		"pattern": `\bpanic\(`,
+	}, []string{"m/a.go"}, nil, obs)
+	if err != nil {
+		t.Fatalf("Evaluate missing production file: %v", err)
+	}
+	if len(findings) != 1 {
+		t.Fatalf("missing production file: findings = %+v, want fixture-driven match", findings)
 	}
 }
