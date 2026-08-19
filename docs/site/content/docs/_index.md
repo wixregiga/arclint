@@ -6,6 +6,6 @@ template = "section.html"
 
 # Documentation
 
-Everything here is plain markdown in `docs/site/content/`; the rule
-reference is generated from the same source that drives `arclint explain`
-and the JSON Schema, so it cannot drift from the binary.
+Everything here is plain markdown in `docs/site/content/`. The rule
+reference matches the published Rule Types and JSON Schema that
+`arclint rules schema` and `arclint rules <id>` expose from the binary.

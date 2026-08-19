@@ -67,9 +67,9 @@ type DeclInfo struct {
 	Results []string    `json:"results,omitempty"`
 }
 
-// FactsInfo is the declaration-fact view of one file as exposed to
-// ctx.facts(path). Only languages that honestly supply declarations
-// produce one; today that is Go (parser-exact).
+// FactsInfo is the cross-language declaration-fact view of one file as
+// exposed through ctx.facts(path). Languages return only declarations
+// they can support honestly.
 type FactsInfo struct {
 	Path string `json:"path"`
 	// Package is the Go package clause; "" for other languages.

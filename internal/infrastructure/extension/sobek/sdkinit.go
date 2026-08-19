@@ -26,8 +26,8 @@ export interface Ctx {
   imports(path: string): ImportInfo[];
   /** Declared module names to their member file paths. */
   modules(): Record<string, string[]>;
-  /** Declaration facts for one file; null when the file's language
-   * does not supply declarations (today: Go only, parser-exact). */
+  /** Cross-language declaration facts for one file; null when its
+   * language did not supply declarations. */
   facts(path: string): FactsInfo | null;
   /** The sorted module names a file belongs to. */
   moduleOf(path: string): string[];

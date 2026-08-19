@@ -4,93 +4,140 @@ description = "Full rule logic in .arclint/extensions/*.ts, executed by the bina
 weight = 4
 +++
 
-When the declarative vocabulary runs out, a rule becomes a TypeScript
-file. The binary transpiles and executes it in-process (esbuild + sobek,
-the k6 pattern): contributors and CI need no Node, npm, or tsc.
+When the declarative vocabulary runs out, a Rule of kind `extension`
+delegates enforcement to a TypeScript file. The binary transpiles and
+executes it in-process (esbuild + sobek, the k6 pattern): contributors
+and CI need no Node, npm, or tsc. Extensions do not add Rule Types;
+they supply enforcement for the finite `extension` kind.
 
-There is exactly one resolution model: the directory of rules.yaml IS
-the repo root IS the extension root, and extensions live under
-`.arclint/extensions/` inside it. `--rules elsewhere/rules.yaml` moves
-all three together. When no extension registers a configured rule type,
+## Resolution
+
+The directory that contains `rules.yaml` is the repository root and the
+Extension root. Extensions load from `<root>/.arclint/extensions/`.
+`--rules path/to/rules.yaml` moves the root and that directory together.
+Without `--rules`, ArcLint discovers `rules.yaml` upward from the working
+directory (`check [path]` starts discovery from the optional path).
+
+Discovery is top-level only: every `*.ts` or `*.js` directly under
+`.arclint/extensions/` is one entry (dotfiles and `*.d.ts` are ignored).
+Shared helpers live in subdirectories and are pulled in through relative
+imports. A missing extensions directory is an empty registry, not an
+error. When a configured Rule names an extension that never registered,
 the error names the absolute directory that was searched.
-
-Start a new rule with `arclint rules scaffold <type>`: it writes a stub
-extension and a failing test case, and prints the rules.yaml snippet.
-Inspect what a rule would see with `arclint facts <file>` — the exact
-`ctx.facts(path)` view, signatures included — instead of writing a
-probe rule. `arclint load` lists extension types that are registered
-but not instantiated, and warns when an armed instance configures an
-empty list param (the rule may be inert).
 
 ## Anatomy
 
 ```ts
-// .arclint/extensions/no-cross-feature.ts
-import { defineRule, s, type ImportInfo } from "arclint";
+// .arclint/extensions/forbid_content.ts
+import { defineRule, s } from "arclint";
 
 export default defineRule({
-  type: "no-cross-feature",
-  description: "Features must not import other features.",
-  contract: "consumes",       // default clause for findings
-  blame: "consumer",          // default blame side
-  capability: "structural",   // how it enforces: exact | structural | heuristic | advisory
+  type: "forbid-content",
+  description: "report lines matching a configured pattern",
+  capability: "exact",
   params: s.object({
-    root: s.string().default("internal/features").describe("Feature root."),
+    pattern: s.string().describe("RegExp source matched against each line"),
   }),
   check(ctx, params) {
-    const root = params.root as string;
-    for (const f of ctx.files(`${root}/**`)) {
-      const from = f.path.split("/")[2];
-      for (const imp of ctx.imports(f.path)) {
-        if (imp.class !== "internal" || !imp.targetDir.startsWith(root)) continue;
-        const to = imp.targetDir.split("/")[2];
-        if (to !== from) {
+    const re = new RegExp(String(params.pattern));
+    for (const file of ctx.files()) {
+      const lines = ctx.read(file.path).split("\n");
+      lines.forEach((line, index) => {
+        if (re.test(line)) {
           ctx.report({
-            path: f.path, line: imp.line,
-            message: `feature "${from}" imports feature "${to}"`,
-            fixHint: "extract the shared rule into a package both features can use",
+            path: file.path,
+            line: index + 1,
+            message: `forbidden content matching /${params.pattern}/`,
+            fixHint: "remove the content or relocate it outside this rule's scope",
           });
         }
-      }
+      });
     }
   },
 });
 ```
 
-Instances stay pure data in rules.yaml and are validated against the
-declared schema before the extension runs:
+`defineRule` accepts only:
+
+| field | required | meaning |
+|---|---|---|
+| `type` | yes | Registered extension name; `uses` in rules.yaml |
+| `check` | yes | `(ctx, params) => void` |
+| `description` | no | One-line summary |
+| `capability` | no | Author claim: `exact` \| `structural` \| `heuristic` \| `advisory` (default `heuristic`) |
+| `params` | no | Schema built with `s`; default empty object, no additional properties |
+
+Default-export one `defineRule(...)` result, or an array of them. Duplicate
+`type` names across entries fail registration.
+
+Wire the Rule under the Module it applies to. Severity, identity, and
+Applicability belong to the Rule, not the TypeScript file:
 
 ```yaml
-rules:
-  - type: no-cross-feature
-    params: { root: "internal/features" }
+modules:
+  domain:
+    paths: ["internal/domain/**"]
+contracts:
+  domain:
+    invariants:
+      - id: "arclint:domain/no-panic"
+        kind: extension
+        # severity defaults to error when omitted
+        files: "internal/domain/**/*.go"   # optional member-file narrow
+        uses: forbid-content
+        with:
+          pattern: '\bpanic\('
 ```
+
+Required fields: `id`, `kind: extension`, `uses`. Optional: `severity`
+(`error` \| `warning` \| `info`), `files` (one glob narrowing member
+files; absent means all members), `with` (object validated host-side
+against the extension's published schema before `check` runs).
 
 ## The ctx surface
 
-Rules see exactly this, and nothing else. No filesystem, no network, no
-Node globals.
+During `check`, the host lends exactly this read-only surface, scoped to
+the Rule's selected subjects. Paths outside Applicability are invisible
+to `files` / `imports` / `facts` / `moduleOf` and unreadable via `read`.
+No ambient filesystem, network, or Node globals.
 
 | call | returns |
 |---|---|
-| `ctx.files(glob?)` | repository files, optionally filtered by a doublestar glob |
-| `ctx.read(path)` | one file's content |
-| `ctx.imports(path)` | classified imports for every active language target, with `targetDir` and `targetFile` resolution |
-| `ctx.modules()` | declared module names to member file paths |
-| `ctx.facts(path)` | declaration facts for one file (lazy, cached): kinds, names, owners, visibility, line spans, and syntactic signatures on `func`/`method` decls. Go facts are parser-exact; TypeScript and Python come from pinned tree-sitter grammars. `null` when no active target owns the file |
-| `ctx.moduleOf(path)` | the sorted module names a file belongs to |
-| `ctx.report(v)` | record one violation |
+| `ctx.files(glob?)` | selected subjects as `FileInfo`, optionally filtered by a doublestar glob |
+| `ctx.read(path)` | one selected file's content; throws when out of scope or unreadable |
+| `ctx.imports(path)` | classified imports (`stdlib` \| `internal` \| `external` \| `unknown` \| `cgo`) with `targetDir` / `targetFile` when resolved |
+| `ctx.modules()` | declared Module names to their **selected** member paths |
+| `ctx.facts(path)` | declaration facts, or `null` when the language did not supply them |
+| `ctx.moduleOf(path)` | sorted Module names containing the path (empty when out of scope) |
+| `ctx.report(v)` | record one finding |
 
-`ctx.report` accepts optional `severity`, `contract`, and `blame`
-overrides per finding, so one rule type can label a provider-side broken
-promise and a consumer-side bad import truthfully.
+`ctx.report` accepts only:
+
+```ts
+{ path: string; message: string; line?: number; fixHint?: string }
+```
+
+`path` and `message` are required. Severity is not on the wire: the Rule
+owns it. Legacy per-finding `severity`, `contract`, and `blame` fields are
+ignored if present.
+
+## Evidence honesty
+
+ArcLint always treats Extension enforcement as heuristic, regardless of
+the author's `capability` claim. Findings become suspected Violations at
+the Rule's Severity (still gate when Severity is `error`). Subjects with
+no findings evaluate undetermined, never conformance.
 
 ## Signature facts
 
-Every `func` and `method` decl carries `params` and `results`. Types are
-the source text of the annotation, whitespace-collapsed, never resolved:
-signature comparison is structural, not proof. Write port-satisfaction
-rules against arity and parameter types, not against name subsets.
+When declarations are available, every `func` and `method` declaration
+carries `params` and `results`. Types are whitespace-collapsed source
+text, not resolved types, so signature comparison is structural rather
+than proof.
+
+Go facts are parser-exact. TypeScript and Python declarations come from
+their pinned tree-sitter grammars. `ctx.facts(path)` returns `null` when
+the file's language did not supply declarations.
 
 ```ts
 // Find(id string) (Member, error) becomes:
@@ -99,30 +146,19 @@ rules against arity and parameter types, not against name subsets.
   results: ["Member", "error"] }
 ```
 
-Each param is `{name?, type?, optional?, variadic?}`:
-
-- `type` is `""` when the author or the language omitted the
-  annotation (plain JavaScript, untyped Python). Comparison degrades to
-  arity and names, visibly.
-- `optional` marks a TypeScript `?` or a TypeScript/Python default
-  value.
-- `variadic` marks Go `...T` (the type keeps only the element text),
-  a TypeScript rest parameter, and Python splats.
-- Conventions, chosen to preserve information: Python `self`/`cls`
-  stay in the list (their absence is how you see a `@staticmethod`);
-  Python splats keep their prefix in the name (`*args`, `**kwargs`) so
-  the two flavors stay distinguishable; a TypeScript destructuring
-  parameter has `name: ""` with its type preserved.
-- `results` holds result type texts. Go result names are dropped. An
-  unannotated TypeScript/Python return is an empty list.
+Parameters may carry `name`, `type`, `optional`, and `variadic`. Python
+splats retain their prefix, TypeScript destructuring has an empty name,
+and Go result names are dropped. Use these facts for syntax-level checks
+such as arity and parameter shape.
 
 ## Params schemas
 
 `s` is a zod-style builder that produces JSON Schema at registration:
 `s.string()`, `s.integer()`, `s.number()`, `s.boolean()`,
 `s.enum(...)`, `s.array(items)`, `s.object(props)`, with `.optional()`,
-`.default(v)`, and `.describe(text)`. The host applies defaults and
-rejects bad params before `check` is ever invoked.
+`.default(v)`, and `.describe(text)`. Object schemas set
+`additionalProperties: false`. The host applies top-level defaults and
+rejects bad `with` values before `check` runs.
 
 ## Editor typing
 
@@ -132,15 +168,45 @@ arclint sdk init
 
 writes `arclint.d.ts` (generated from the Go host types, so it cannot
 drift) and a `tsconfig.json` into `.arclint/extensions/`. Full
-completion, no npm install. Note that types are author-time only:
-esbuild strips them without checking, and the host enforces the params
-schema instead.
+completion, no npm install. Types are author-time only: esbuild strips
+them without checking, and the host enforces the params schema instead.
 
 ## Sandbox and failure
 
-Extensions run on a bare ES runtime: `Date.now` and `Math.random` are
-host-controlled, timeouts interrupt runaway rules (5s per phase), and a
-crashing rule becomes an error-severity violation anchored at the
-extension file, so CI fails visibly instead of silently skipping.
-Relative imports are bundled; bare npm specifiers are rejected with a
-designed error.
+Extensions run on a bare ES runtime:
+
+- `Date.now` and `Math.random` are host-controlled (deterministic).
+- Registration and each `check` invocation time out after 5s
+  (interrupt-based).
+- Relative imports are bundled; bare npm specifiers are rejected with a
+  designed error. Import the SDK as `"arclint"`.
+- Transpile results cache under `<root>/.arclint/cache/extensions/`.
+
+A crashing or timed-out extension fails the Conformance Check with an
+error (check exits 2). It does not become a Violation and is not
+silently skipped. During `arclint rules test`, the same failure is that
+test's error; later tests still run.
+
+## Applicability breaches
+
+`ctx.report` accepts any path string. If any reported path falls outside
+the Rule's selected subjects, the whole Extension run is untrustworthy:
+
+- every finding from that run is discarded (none become Violations),
+- each selected subject evaluates `failed`,
+- excluded subjects stay `not_applicable`,
+- error-severity operational Diagnostics name each breach,
+- the Assessment stays complete so other Rules still report,
+- the gate fails (exit 1) via those operational Diagnostics.
+
+## Rule tests
+
+Author fixture-backed tests under `.arclint/tests/` and run
+`arclint rules test`. Extension `ctx.read` sees the authored fixture
+bytes for each path, not the live repository file at that path, so a
+production tree with different content cannot hide a case.
+
+Expect the exact CLI-emitted Diagnostic messages (kind, path, line,
+message). Start from `expect: []`, paste the unexpected findings the
+CLI prints, and keep only the intended ones. Full authoring loop:
+[Rule tests](/docs/cli/#rule-tests).

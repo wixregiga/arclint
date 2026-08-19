@@ -6,6 +6,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,6 +70,59 @@ func TestRuleTestsRunThroughBinary(t *testing.T) {
 	_, stderr, code = runBin(t, dir, os.Environ(), "rules", "test", "absent")
 	if code != 2 || !strings.Contains(stderr, "no rule test named") {
 		t.Errorf("unknown test name: exit %d, stderr %s", code, stderr)
+	}
+}
+
+// TestRuleTestEmptyExpectPrintsExactConsumesMessage locks the CLI
+// authoring contract: with expect empty, unexpected findings print as
+// ready-to-paste YAML including the evaluator's exact message. A Rule
+// Author can copy Module(s) ["adapters"] without reading check_imports.
+func TestRuleTestEmptyExpectPrintsExactConsumesMessage(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "rules.yaml", `runtime: [go]
+scan:
+  unknown_imports: error
+modules:
+  core:
+    paths: ["core/**"]
+  adapters:
+    paths: ["adapters/**"]
+contracts:
+  core:
+    consumes:
+      id: "t:core/consumes"
+      internal: []
+      external: forbid
+      stdlib: allow
+`)
+	write(t, dir, ".arclint/tests/disallowed_adapters_import.yaml",
+		`rule: "t:core/consumes"
+files:
+  go.mod: "module example.com/app\n\ngo 1.26\n"
+  core/a.go: "package core\n\nimport _ \"example.com/app/adapters\"\n"
+  adapters/a.go: "package adapters\n"
+expect: []
+`)
+
+	stdout, stderr, code := runBin(t, dir, os.Environ(), "rules", "test")
+	if code != 1 {
+		t.Fatalf("rules test: exit %d, want findings exit 1\nstdout:\n%s\nstderr:\n%s", code, stdout, stderr)
+	}
+	// Exact Diagnostic text the consumes evaluator emits for a
+	// disallowed internal import into Module adapters — exposed
+	// verbatim so authors paste it into expect.message.
+	wantMessage := `import "example.com/app/adapters" resolves to Module(s) ["adapters"], not in the allow-list of Module "core"`
+	for _, want := range []string{
+		"FAIL disallowed_adapters_import (t:core/consumes)",
+		"- kind: violation",
+		"path: core/a.go",
+		"line: 3",
+		fmt.Sprintf("message: %q", wantMessage),
+		"0 passed · 1 failed",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("missing %q in CLI output:\n%s", want, stdout)
+		}
 	}
 }
 
