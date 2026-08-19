@@ -68,6 +68,7 @@ func Run(req Request) (Assessment, error) {
 		}
 		applied = append(applied, r.ID().Qualified())
 		var es []Evaluation
+		var ruleDiags []Diagnostic
 		switch {
 		case !r.Enforcement().CanEvaluate():
 			es, err = evaluateUnsupported(r, mem)
@@ -78,7 +79,7 @@ func Run(req Request) (Assessment, error) {
 		case r.Type() == rule.TypeNaming:
 			es, err = evaluateNaming(r, mem)
 		case r.Type() == rule.TypeExtension:
-			es, err = evaluateExtensionRule(r, mem, req.Observations, req.Extensions, req.Modules)
+			es, ruleDiags, err = evaluateExtensionRule(r, mem, req.Observations, req.Extensions, req.Modules)
 		case r.Type() == rule.TypeLayers, r.Type() == rule.TypeProtected, r.Type() == rule.TypeAcyclic:
 			es, err = evaluateGraph(r, mem, req.Observations)
 		default:
@@ -88,6 +89,7 @@ func Run(req Request) (Assessment, error) {
 			return Assessment{}, err
 		}
 		evals = append(evals, es...)
+		diags = append(diags, ruleDiags...)
 	}
 
 	opDiags, err := observationDiagnostics(req.Observations, policy)
@@ -335,7 +337,7 @@ func observationDiagnostics(obs Observations, policy rule.UnknownImportPolicy) (
 			continue
 		}
 		if facts.ParseFailure != "" {
-			d, err := NewOperational(f.Path, 0, rule.SeverityWarning,
+			d, err := NewOperational("", f.Path, 0, rule.SeverityWarning,
 				fmt.Sprintf("analysis failed, file skipped: %s", facts.ParseFailure))
 			if err != nil {
 				return nil, err
@@ -354,7 +356,7 @@ func observationDiagnostics(obs Observations, policy rule.UnknownImportPolicy) (
 			if imp.Class != ImportUnknown {
 				continue
 			}
-			d, err := NewOperational(f.Path, imp.Line, severity,
+			d, err := NewOperational("", f.Path, imp.Line, severity,
 				fmt.Sprintf("import %q is neither stdlib, internal, nor declared in the dependency manifest", imp.Path))
 			if err != nil {
 				return nil, err
