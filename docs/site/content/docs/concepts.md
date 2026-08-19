@@ -1,158 +1,122 @@
 +++
 title = "Concepts"
-description = "Modules, contracts, blame, and what internal/external/stdlib mean."
+description = "Modules, contracts, Assurance, and how ArcLint reports findings."
 weight = 2
 +++
 
 ## Modules
 
-A module is a named set of files, defined by path globs in rules.yaml.
-Modules are the vocabulary of every other rule: contracts, layers, and
-protections refer to module names, never raw paths.
+A Module is a named set of files, defined by path globs in `rules.yaml`.
+Modules are the vocabulary other Rules use: consumes allow-lists,
+layers, and protections refer to Module names, never raw paths.
 
 ```yaml
 modules:
   entities:
     paths: ["internal/entities/**"]
     description: "Domain types and invariants; depends on nothing."
-  features: ["internal/features/*"]   # terse form
+  features:
+    paths: ["internal/features/*"]
 ```
 
 A glob matches files directly, and a glob naming a directory owns the
-whole subtree. Overlapping modules are legal: a file can belong to
-several modules, which makes umbrella modules (`src: ["internal/**"]`)
-cheap for repo-wide invariants.
+whole subtree. Overlapping Modules are legal: a file can belong to
+several Modules, which makes umbrella Modules
+(`paths: ["internal/**"]`) cheap for repo-wide invariants.
+
+Inspect the loaded map with `arclint context` or
+`arclint context --module <name>`.
 
 ## Import classes
 
-Every import in every scanned file is classified before any rule runs.
-The class names appear throughout the rule surface, so their exact
-meaning matters:
+Every import in every scanned file is classified before dependency
+Rules run. The class names appear throughout the Rule surface:
 
 | class | meaning |
 |---|---|
-| `internal` | resolves to a file inside this repository: another module, or undeclared internal code |
+| `internal` | resolves to a file inside this repository: another Module, or undeclared internal code |
 | `external` | a third-party dependency declared in your manifest: `go.mod` require, `package.json` dependencies, `pyproject.toml` |
 | `stdlib` | the language's standard library (embedded tables generated from each toolchain) |
 | `unknown` | none of the above; governed by `scan.unknown_imports: warn/error/ignore` |
 
-So in a contract, `internal: [app]` means "may import the app module and
-nothing else internal", and `external: forbid` means "no third-party
-libraries here at all". Go classification is exact and proven against
-`go list` over pinned real repositories. TypeScript and Python are
-lexer-grade with documented limits: computed specifiers like
-`import(x)` or `importlib.import_module(name)` are invisible by design.
+So in a consumes Rule, `internal: [app]` means "may import the app
+Module and nothing else internal", and `external: forbid` means "no
+third-party libraries here at all". Go classification follows toolchain
+semantics. TypeScript and Python are lexer-grade with documented
+limits: computed specifiers like `import(x)` or
+`importlib.import_module(name)` are invisible by design.
 
-## Contracts
+## Contracts and dependencies
 
-A module's contract has three clause kinds, borrowed from design by
-contract:
+`rules.yaml` binds Rules in two places:
 
-- **consumes** (preconditions): what the module may depend on. Per-module
-  allow and deny lists plus third-party and stdlib policy. Graph-wide
-  clauses live under top-level `dependencies:` because they span modules:
-  `layers`, `forbidden`, `independence`, `protected`, `acyclic`.
-- **provides** (postconditions): what the module must supply.
-  `registration` says every instance of a shape registers itself
-  somewhere; `correspondence` says a value set derived from one side of
-  the tree must exist on the other side.
-- **invariants**: properties that always hold. Naming conventions,
-  required and forbidden paths, content rules, and `expr` predicates
-  type-checked at load time.
+- **`contracts.<module>`** — Rules scoped to one declared Module:
+  - `consumes`: what the Module may depend on (internal allow-list,
+    external and stdlib policy).
+  - `invariants`: properties that always hold over member files —
+    `structure`, `naming`, and `extension` Rule Types.
+- **`dependencies:`** — repository-wide graph Rules that span Modules:
+  `layers`, `protected`, and `acyclic`.
 
-Run `arclint explain <kind>` for any of these; the
-[rule reference](/docs/rules/) is the same text.
+The [rule reference](/docs/rules/) lists every published Rule Type and
+paste-ready YAML. `arclint rules` lists configured Rules;
+`arclint rules <id>` shows one complete Rule when the selector matches
+exactly.
 
-## Blame
+## Assurance
 
-Every violation carries a blame side, and it is checkable output, not
-vocabulary:
+Every Rule Type states how strongly Enforcement can decide its Claim.
+Findings and Rule detail carry the label:
 
-- a **consumes** break blames the **consumer**: the importing file broke
-  its own precondition.
-- a **provides** break blames the **provider**: the module failed a
-  promise it made to the rest of the repository.
-- invariants blame the module that holds the property.
-
-TypeScript extension rules declare a default contract and blame once and
-may override both per finding, so a rule that checks two sides of one
-contract labels each finding truthfully.
-
-## Capability labels
-
-Every rule type states how it enforces its claim, and every finding
-carries the label:
-
-| label | basis |
+| Assurance | basis |
 |---|---|
-| `exact` | the classified import graph or parsed syntax facts |
-| `structural` | paths, shapes, and declaration placement |
-| `heuristic` | names, regexes over text, or complexity signals |
-| `advisory` | guidance; reports without claiming proof |
+| `exact` | fully decides the Claim within a documented analysis limit |
+| `partial` | reported Violations are trustworthy, but some cases may be unobservable |
+| `heuristic` | may produce false positives or false negatives |
+| `advisory` | guidance without automated truth judgment |
 
-Builtin dependency rules are `exact`; naming and structure rules are
-`structural`; content regexes are `heuristic`. Extensions declare their
-own tier in `defineRule` and default to `heuristic`, the conservative
-claim. The label prevents false confidence: a rule that matches names
-cannot present its findings as proven semantics.
+Builtin import and tree Rules use `exact`. Extension Rules are
+`heuristic`: the engine treats extension evidence as heuristic
+regardless of what an Extension declares. Severity (`error`,
+`warning`, `info`) is configured on the Rule and is independent from
+Assurance.
 
 ## Rule identity
 
-Rule ids are stable strings, and several clauses may share one explicit
-id to form one requirement (a layering rule plus a protected rule both
-carrying `ddd:ARCH-002`, for example). Patterns prefix their rule ids
-with a short namespace (`slice:`, `layers:`), so `arclint rules show
-slice` lists a pattern's whole rule set and `arclint rules test
---pattern` proves it against fixtures.
-
-## Exceptions
-
-Sometimes a rule is right and one file is still allowed to break it.
-Every clause kind accepts an `except` list; a finding is suppressed
-when its anchor path matches, and the rule keeps firing everywhere
-else:
-
-```yaml
-contracts:
-  domain:
-    consumes:
-      internal: []
-      external: forbid
-      except:
-        - paths: ["internal/reports/bridge.go"]
-          reason: "grandfathered direct DB access; remove with the reports rewrite"
-```
-
-The globs use the same doublestar dialect as module paths, the shape is
-identical on `dependencies` rules, invariants, and extension instances,
-and `reason` is required: an exception is policy, and the YAML is its
-audit trail. Suppressed findings are counted in check output
-(`2 suppressed by except`), never silently dropped; `arclint check
---show-suppressed` lists each one with its reason, and `arclint rules
-show <id>` displays a requirement's exceptions beside its clauses.
-`arclint explain except` has the full story.
+Rule IDs are stable strings. A material Claim change needs a new ID.
+Patterns may namespace IDs (`slice:…`, `layers:…`) so a selector can
+narrow a distributed set. `arclint rules <selector>` lists matches or
+shows one Rule; `arclint rules test` runs fixture-backed Rule Tests
+under `.arclint/tests`.
 
 ## Baseline
 
-Exceptions are policy for findings that are ALLOWED. The baseline is
-the other adoption tool: debt that is acknowledged but not allowed to
-grow. `arclint baseline` records every current finding in
-`.arclint/baseline.json` (commit it); `check` then reports only new
-findings, always prints the adopted count (`clean: 0 violations · 12
-baselined`), and warns when adopted findings no longer occur so the
-file shrinks as debt is paid. Entries key on a fingerprint of rule,
-path, and message, so line moves do not reopen findings, and identical
-findings carry a count.
+The Baseline is the adoption tool for debt that is acknowledged but
+must not grow. `arclint baseline capture` records current active
+findings in `.arclint/baseline.v2.json` (commit it). `check` then reports
+only new findings, always prints the baselined count, and
+`arclint baseline refresh` replaces the snapshot after comparison so
+stale entries drop as debt is paid. Entries key on a fingerprint of
+Rule, subject, and message, so line moves do not reopen findings, and
+identical findings carry a count.
 
-`check --show-baselined` lists the adopted debt, `check --no-baseline`
-evaluates without it, and the file itself is reviewable: every entry
-carries the finding it covers, not just a hash, and it contains no
-timestamps, so regenerating it diffs only when findings change.
+`check --no-baseline` evaluates without subtracting the file. The file
+itself is reviewable: every entry carries the finding it covers, not
+just a hash, and it contains no timestamps, so regenerating it diffs
+only when findings change.
 
 ## Validation layers
 
-rules.yaml passes three gates before anything runs: YAML syntax, the
-published JSON Schema (the same file that powers editor completion), and
-semantic validation (module references, regex compilation, expr type
-checking). Extension rule params are validated against each extension's
-declared schema before a line of extension code executes.
+`rules.yaml` passes three gates before anything runs: YAML syntax, the
+published JSON Schema (the same file that powers editor completion and
+`arclint rules schema`), and semantic validation (Module references,
+regex compilation, Extension parameter schemas). Extension Rule params
+are validated against each Extension's declared schema before a line of
+extension code executes.
+
+## Exit codes
+
+`0` is a clean command. `1` means the gate failed: an active
+error-severity Violation or an error-severity operational Diagnostic
+(or a Rule Test expectation mismatch). `2` is configuration or usage
+error.

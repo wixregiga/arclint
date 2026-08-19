@@ -1,85 +1,42 @@
 +++
 title = "Patterns"
-description = "Shipped architectural patterns, and how to define your own."
+description = "What a Pattern is in ArcLint, and the current patterns command."
 weight = 5
 +++
 
-A pattern is a complete, working starting point: a rules.yaml template
-plus any TypeScript extensions it needs. `arclint init` installs one;
-`arclint patterns` lists what is available.
+A **Pattern** is a named, versioned collection of Rules packaged for
+distribution. In the domain it may also carry Extensions, coverage,
+vocabulary, and provenance so a repository can pin an exact release
+and reason about where each Rule came from.
 
-## Shipped patterns
+Patterns are the distributable form of Rules. Local Rules in
+`rules.yaml` do not need a Pattern. When a Pattern is available, a
+repository would reference a specific version rather than copying rule
+text by hand.
 
-### feature-slice (go)
+## Current CLI
 
-Feature slices over fixed places, with open sets classified by shape:
-
-```text
-cmd/               thin bootstrap
-internal/app/      the composer: wires adapters into use cases
-internal/shared/   every technology adapter, sealed behind NewAdapters
-internal/<d>       owning command.go     a FEATURE (user capability)
-internal/<d>       anything else         a CONCEPT (shared rules + port)
+```bash
+arclint patterns
 ```
 
-Because identity is structural, `internal/newfeature/` with a
-`command.go` joins every rule the moment it exists. No list to maintain.
-The YAML half enforces the fixed places (protected shared and app, the
-feature shape correspondence, wiring registration, banned buckets,
-naming); the paired extension enforces what YAML cannot scope without
-named modules: the feature/concept dependency matrix, third-party bans,
-concept purity, ports, drift, and thin use cases.
+Lists Pattern distribution packages the running CLI can see. Today the
+command prints:
 
-### ddd-flat (go)
-
-Tactical DDD for services, with the `ARCH-*` requirement table as rule
-ids (`ddd:ARCH-001` domain purity through `ddd:ARCH-012` test
-location). Imports are enforced declaratively; Go declaration shapes
-(aggregate location, repository interface placement, value-object
-encapsulation, function sizes, handler boundaries) come from the
-extension built on `ctx.facts`. Configure your aggregate root names in
-`rules.yaml` to arm `ddd:ARCH-003`.
-
-### layers (go, ts, py)
-
-The hexagonal spine, fully declarative: `cmd` composes, `app`
-orchestrates, `domain` decides and depends on nothing, `infra` adapts
-behind domain ports and is reachable only from the composition root.
-
-### starter (go, ts, py)
-
-One module over the whole tree, unknown imports surfaced, and pointers
-to `arclint explain` for growing real contracts as boundaries emerge.
-
-## Your own patterns
-
-A repository defines local patterns under `.arclint/patterns/<name>/`
-(nested names like `fsd/go` are legal; a local name shadows a builtin):
-
-```text
-.arclint/patterns/fsd/go/
-  pattern.yaml       description, namespace, compatible runtimes
-  rules.yaml         complete template (valid as-is)
-  extensions/*.ts    optional rule extensions
-  tests/*.yaml       rule test cases proving each rule id
+```
+no patterns available
 ```
 
-```yaml
-# pattern.yaml
-description: "Our team's FSD variant for Go services."
-namespace: fsd
-runtimes: [go]
-```
+There are no built-in Pattern packages shipped with the CLI yet, and
+the listing is empty until distributions exist and are discoverable.
 
-A pattern's rule ids carry its namespace (`fsd:layer-direction`), which
-keeps requirements recognizable and testable. Bundled tests are rule
-test cases (see `arclint rules test`): each materializes a small file
-tree and asserts the complete violation set. The builtin patterns ship
-suites for every runtime they support — the layers pattern is proven
-with Go, TypeScript, and Python fixtures alike — and CI enforces that
-every namespaced rule id appears in at least one expectation.
+`arclint init` drafts a starter `rules.yaml` from `--languages` (and
+`--force` to overwrite). It does not install or select Patterns.
 
-`arclint patterns` lists it next to the builtins; `arclint init
---pattern fsd/go` installs it. Templates keep a literal `runtime:` line;
-init rewrites it to the chosen targets, so a template always loads
-standalone during development.
+## What this page does not cover
+
+Authoring layout, local pattern directories, namespaces, install flags,
+and packaged test suites for Patterns are not part of the current
+product surface. Prefer repository-local Rules (see [Rules](./rules.md)
+and [Getting started](./getting-started.md)) until Pattern distribution
+is available.

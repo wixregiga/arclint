@@ -4,10 +4,10 @@
 //////////
 // source: types.go
 /*
-Package ext implements the TypeScript extension SDK: discovery under
-.arclint/extensions/, in-process transpilation via esbuild, execution on
-sobek (the k6 pattern), a two-phase register-then-run lifecycle, and a
-sandbox with no ambient I/O.
+Package sobekextension implements the TypeScript extension SDK:
+discovery under .arclint/extensions/, in-process transpilation via
+esbuild, execution on sobek (the k6 pattern), a two-phase
+register-then-run lifecycle, and a sandbox with no ambient I/O.
 
 The types in this file are the host/extension wire contract. The
 TypeScript declarations rule authors see are generated from these
@@ -98,9 +98,9 @@ export interface DeclInfo {
   results?: string[];
 }
 /**
- * FactsInfo is the declaration-fact view of one file as exposed to
- * ctx.facts(path). Only languages that honestly supply declarations
- * produce one; today that is Go (parser-exact).
+ * FactsInfo is the cross-language declaration-fact view of one file as
+ * exposed through ctx.facts(path). Languages return only declarations
+ * they can support honestly.
  */
 export interface FactsInfo {
   path: string;

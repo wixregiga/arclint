@@ -2,78 +2,56 @@
 template = "index.html"
 +++
 
-**Status note (2026-08-17):** these pages describe the pre-refactor engine and are awaiting a rewrite; the repository README and generated AGENTS.md are the current references.
+# Architecture rules as data
 
-
-# Architecture contracts as data
-
-arclint enforces module contracts over a repository: what each module may
-**consume**, what it must **provide**, and the **invariants** that always
-hold. Go, TypeScript, and Python, checked by one static binary. No Node,
-no npm, no runtime dependencies.
+ArcLint evaluates Rules against Files, Folders, and Modules. It reports
+what it proved, what it suspects, and what it could not determine. Go,
+TypeScript, and Python repositories use the same static binary.
 
 ```bash
-arclint init      # pick runtimes and a pattern; writes rules.yaml
-arclint check .   # enforce the contracts
+arclint init --languages go,ts
+arclint check .
 ```
 
-Rules are plain YAML with a published JSON Schema. Every violation names
-the broken contract and carries blame: a `consumes` break points at the
-importing file, a `provides` break points at the module that failed its
-promise.
+`init` drafts a starter `rules.yaml`. Define Modules, then add Rules that
+state what those Modules may import and which invariants their Files must
+satisfy:
 
 ```yaml
+runtime: [go]
+
+modules:
+  domain:
+    paths: ["internal/domain/**"]
+
 contracts:
-  entities:
+  domain:
     consumes:
-      internal: []          # no other internal modules
-      external: forbid      # no third-party imports
-    provides:
-      - kind: registration  # every entity registers itself
-        each: 'internal/entities/(?P<name>[^/]+)/'
-        in: registry
-        match: 'Register\("{name}"\)'
+      id: "repo:domain/stdlib-only"
+      internal: []
+      external: forbid
+      stdlib: allow
+    invariants:
+      - id: "repo:domain/snake-case"
+        kind: naming
+        files: "internal/domain/**/*.go"
+        case: snake_case
 ```
 
-When YAML runs out, full rule logic is a TypeScript file in
-`.arclint/extensions/`, executed in-process by the binary itself:
+The published Rule Types cover Module imports, required or forbidden
+paths, naming, dependency layers, protected Modules, dependency cycles,
+and TypeScript Extension enforcement. Extensions run in-process through
+a scoped SDK when the built-in Rule Types cannot express a check.
 
-```ts
-import { defineRule, s } from "arclint";
+Every assessment preserves unsupported, undetermined, failed, and
+not-applicable evaluations instead of treating silence as conformance.
+Diagnostics distinguish active or suspected Violations from operational
+and coverage problems.
 
-export default defineRule({
-  type: "handler-naming",
-  description: "Handler files carry the configured suffix.",
-  params: s.object({ suffix: s.string().default("Handler") }),
-  check(ctx, params) {
-    for (const f of ctx.files("internal/**/handlers/*.go")) {
-      if (!f.stem.endsWith(params.suffix as string)) {
-        ctx.report({ path: f.path, message: `handler files end in ${params.suffix}` });
-      }
-    }
-  },
-});
-```
+Existing debt can be adopted into `.arclint/baseline.v2.json` with
+`arclint baseline capture`. Later checks still show the covered count,
+and `arclint baseline refresh` removes entries that no longer occur.
 
-## Capabilities
-
-- **consumes**: per-module allow and deny lists, third-party and stdlib
-  policy, plus graph-wide layers, forbidden edges, independence,
-  protected modules, and cycle detection.
-- **provides**: registration obligations (every X registers itself) and
-  correspondence obligations (every X has a matching Y). No surveyed
-  tool checks this side declaratively.
-- **invariants**: naming conventions, required and forbidden paths,
-  content rules, and typed expr predicates.
-- **Declaration facts with signatures**: extensions see every func and
-  method with its parameters and result types, in all three languages;
-  `arclint facts <file>` shows the same view for debugging.
-- **Adoptable**: `arclint baseline` freezes existing debt; check then
-  reports only new findings and the debt count stays visible.
-- **Exact Go import analysis** proven against `go list` over pinned real
-  repositories: 7,500+ imports, zero mismatches. Lexer-grade TypeScript
-  and Python extraction with documented, test-asserted limits.
-- **Fast**: ~13ms cold start; 5,000 files check in ~80ms.
-
-[Get started](/docs/getting-started/) or read the
-[concepts](/docs/concepts/).
+[Get started](/docs/getting-started/), read the
+[concepts](/docs/concepts/), or inspect the complete
+[Rule reference](/docs/rules/).

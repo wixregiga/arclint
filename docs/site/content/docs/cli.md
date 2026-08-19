@@ -6,29 +6,78 @@ weight = 6
 
 | command | does |
 |---|---|
-| `arclint init` | interactive setup: detect languages, pick a pattern, write rules.yaml + extensions + typings, validate. Flags: `--runtimes go,ts`, `--pattern <name>`, `--force` |
-| `arclint patterns` | list architectural patterns, builtin and `.arclint/patterns/`. `--extensions` also lists each pattern's extension files |
-| `arclint check [path]` | evaluate the contracts; `--format json\|line\|sarif` for machine shapes; `--show-suppressed` and `--show-baselined` also list omitted findings; `--no-baseline` ignores the committed baseline; `--only <id\|ns>` restricts findings (and the exit code) to one rule id or namespace |
-| `arclint baseline [path]` | adopt current findings into `.arclint/baseline.json` (commit it); check then reports only new findings, counts the debt visibly, and warns when entries go stale |
-| `arclint load [rules.yaml]` | parse, validate (schema + semantics + extension params), cache; prints what loaded, lists extension types registered but not instantiated, and warns on instances whose params are empty lists (armed but inert) |
-| `arclint list` | one line per loaded rule |
-| `arclint facts <file>` | the declaration facts a rule sees from `ctx.facts(path)`: kinds, names, owners, signatures; `--format json` for the exact wire shape |
-| `arclint context <path\|module>` | the architectural context of one location: owning modules, allowed internal imports, external/stdlib policy, every binding rule, and the verify command; `--format json` for agents |
-| `arclint agents` | compile the ruleset into a compact AGENTS.md architecture block; prints by default, `--write` installs or refreshes it between markers in `<repo-root>/AGENTS.md`, preserving everything outside them |
-| `arclint rules ls` | rule table: id, contract, kind, module, provider, severity, description |
-| `arclint module ls` | declared modules with file counts, languages, descriptions |
-| `arclint module info <name>` | one module: description, paths, members, every rule that binds it |
-| `arclint explain [kind]` | terminal docs for any rule kind or extension type |
-| `arclint rules show <id\|ns>` | every clause grouped under one rule id or namespace prefix, with its exceptions; `--format json` |
-| `arclint rules test [paths]` | run rule test cases (default `.arclint/tests`); `--pattern <name>` runs a pattern's bundled suite |
-| `arclint rules scaffold <type>` | stub extension + failing test case + rules.yaml snippet: the red-first start of a new rule |
-| `arclint sdk init` | write `arclint.d.ts` + `tsconfig.json` for extension authoring |
+| `arclint init` | draft a starter `rules.yaml`; `--languages go,ts,py` selects runtime targets and `--force` permits replacing an existing file |
+| `arclint patterns` | list visible Pattern distribution packages; the current binary reports `no patterns available` |
+| `arclint check [path]` | evaluate configured Rules; accepts `--format human\|json`, `--no-baseline`, and `--only` / `--exclude` Rule selectors |
+| `arclint baseline capture` | replace `.arclint/baseline.v2.json` with the active findings from one complete assessment |
+| `arclint baseline refresh` | reassess and replace the Baseline, dropping stale entries |
+| `arclint context [paths...]` | explain the repository or everything binding the selected paths; `--module` adds named Modules and `--format json` emits the machine form |
+| `arclint agents` | print the generated `AGENTS.md` architecture block; `--write` installs or refreshes it between markers without changing surrounding text |
+| `arclint rules [selector]` | list configured Rules, or show one complete Rule when the selector has one exact match; broader selectors produce a narrowed list |
+| `arclint rules schema` | print the indented JSON Schema accepted for `rules.yaml` |
+| `arclint rules test [name]` | run all Rule Tests under `.arclint/tests`, or one test selected by name |
+| `arclint sdk init` | write `arclint.d.ts` and `tsconfig.json` under `.arclint/extensions` |
 
-Exit codes everywhere: `0` clean, `1` error-severity violations, `2`
-configuration or usage error. Every command that reads a ruleset
-accepts `--rules <path>` to name rules.yaml explicitly; the default is
-discovery upward from the working directory, and the rules.yaml
-directory is the repo root and the extension root.
+Exit codes are `0` for a clean command, `1` when the gate fails or a
+Rule Test does not match its expectation, and `2` for configuration or
+usage errors. A gate failure can come from an active error-severity
+Violation or an error-severity operational Diagnostic.
+
+Commands that use repository configuration accept `--rules <path>` or
+`--rules=<path>` to select `rules.yaml` explicitly. Otherwise ArcLint
+discovers it upward from the working directory. `check [path]` starts
+discovery from the optional path. The directory containing `rules.yaml`
+is the repository root and Extension root.
+
+## Rule tests
+
+A rule test is one YAML file under `.arclint/tests/` (stem = test name):
+fixture files plus the complete expected Diagnostics for one rule id.
+`arclint rules test` materializes the fixtures and runs them through the
+real parsers and evaluators.
+
+```yaml
+# .arclint/tests/disallowed-adapters-import.yaml
+rule: "t:core/consumes"
+files:
+  go.mod: |
+    module example.com/app
+
+    go 1.26
+  core/a.go: |
+    package core
+
+    import _ "example.com/app/adapters"
+  adapters/a.go: |
+    package adapters
+expect: []
+```
+
+Author expected findings from the CLI, not from evaluator source. Start
+with `expect: []` and run `arclint rules test`. Failures print every
+unexpected finding as a ready-to-paste `.arclint/tests` entry — `kind`,
+`path`, optional `line`, and `message` — under `unexpected findings
+(add intended ones to expect):`. Copy only the entries you intend; leave
+the list empty when the case must produce no Diagnostics. An empty list
+that stays empty asserts exactly that, not a stronger conformance outcome.
+
+The `message` field is an exact Diagnostic contract. Paste the
+CLI-emitted text verbatim (Go-quoted). Do not hand-format or reconstruct
+it: consumes, for example, renders quoted Module lists as
+`Module(s) ["adapters"]`, not bare `"adapters"`. A failure for the
+fixture above looks like:
+
+```
+FAIL disallowed-adapters-import (t:core/consumes)
+  unexpected findings (add intended ones to expect):
+    - kind: violation
+      path: core/a.go
+      line: 3
+      message: "import \"example.com/app/adapters\" resolves to Module(s) [\"adapters\"], not in the allow-list of Module \"core\""
+0 passed · 1 failed
+```
+
+Adopt that block into `expect:` and re-run until the case passes.
 
 ## Context for agents
 
@@ -49,52 +98,47 @@ timestamps, so regeneration is idempotent for an unchanged ruleset.
 
 ## Shell completion
 
-`arclint completion bash|zsh|fish|powershell` emits the script.
-Completion is dynamic: TAB completes module names for `module info`,
-rule ids and namespaces for `rules show` and `check --only`, pattern
-names for `init --pattern` and `rules test --pattern`, rule kinds for
-`explain`, and closed value sets for `--format`. Values come from the
-rules.yaml the current directory resolves to; without one, value
-completion stays silent.
+`arclint completion bash|zsh|fish|powershell` emits the shell script.
+Completion uses the resolved `rules.yaml` when available: Rule IDs for
+`rules` and the `check --only` / `--exclude` selectors, Module names for
+`context --module`, supported languages for `init --languages`, and the
+closed `human` / `json` output-format values. Without a loadable
+repository configuration, repository-derived candidates stay empty.
 
-## The violation shape
+## JSON diagnostics
 
-`--format json` emits an array with a stable contract:
+`arclint check --format json` emits an array containing every Diagnostic
+in the complete Conformance Assessment. The stable shape is:
 
 ```json
-{
-  "ruleId": "deps.shared-only-via-app",
-  "contract": "consumes",
-  "blame": "consumer",
-  "severity": "error",
-  "capability": "exact",
-  "path": "internal/borrowbook/sneaky.go",
-  "line": 3,
-  "message": "import resolves to protected module \"shared\"",
-  "fixHint": "route the dependency through app"
-}
+[
+  {
+    "kind": "violation",
+    "ruleId": "repo:dependencies/application-inward",
+    "path": "internal/delivery/handler.go",
+    "line": 3,
+    "severity": "error",
+    "status": "active",
+    "message": "import resolves to Module \"infrastructure\", not allowed by Module \"delivery\"",
+    "remediation": "depend on the inward-owned port"
+  }
+]
 ```
 
-`ruleId` is stable across runs (explicit `id:` wins; defaults derive
-from the module and kind). `line` is present when the violation anchors
-to a line.
+`kind` is `violation`, `operational`, or `coverage`. Fields that do not
+apply are omitted: coverage Diagnostics have no Severity, operational
+Diagnostics may have no Rule ID, and only Violation Diagnostics have a
+status. `line` is omitted when the Diagnostic is not line-anchored, and
+`remediation` is omitted when none was supplied.
 
-## Editor and CI formats
+The default human output prints active Violations and operational or
+coverage Diagnostics, followed by counts for active, suppressed, and
+baselined findings and applied Rules. Suppressed and baselined
+Violations remain part of the Assessment and JSON output but do not
+appear as active findings.
 
-`--format line` prints one finding per line for regex-based toolchains
-(VS Code problemMatcher, vim errorformat):
+## Schema output
 
-```text
-internal/borrowbook/sneaky.go:3: error: import resolves to protected module "shared" [deps.shared-only-via-app]
-```
-
-An unanchored finding prints line 0; editors clamp it to the top of the
-file. Suppressed findings never appear in the line format: editors show
-problems, not policy.
-
-`--format sarif` emits SARIF 2.1.0 for GitHub code scanning and the VS
-Code SARIF Viewer. Findings carry a stable `partialFingerprints` entry
-(rule, path, message — line moves do not reopen findings), and under
-`--show-suppressed` the excepted findings appear with a SARIF
-suppressions block carrying the except reason. Contract, blame,
-capability, and fixHint ride in each result's property bag.
+`arclint rules schema` always emits indented JSON. The same generated
+schema is committed as `docs/rules.schema.json`; tests keep the command
+output and committed file byte-for-byte identical.
