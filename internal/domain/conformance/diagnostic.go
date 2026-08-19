@@ -39,7 +39,9 @@ type Diagnostic struct {
 
 // NewOperational reports an operational problem. Severity states its
 // gate effect: an error-severity operational Diagnostic fails the gate.
-func NewOperational(path string, line int, severity rule.Severity, message string) (Diagnostic, error) {
+// ruleID may be empty for rule-less notes; set it when the problem is
+// tied to one Rule so Diagnostics carry provenance.
+func NewOperational(ruleID, path string, line int, severity rule.Severity, message string) (Diagnostic, error) {
 	if strings.TrimSpace(message) == "" {
 		return Diagnostic{}, fmt.Errorf("operational diagnostic: missing message")
 	}
@@ -50,7 +52,7 @@ func NewOperational(path string, line int, severity rule.Severity, message strin
 		return Diagnostic{}, fmt.Errorf("operational diagnostic: negative line")
 	}
 	return Diagnostic{
-		kind: DiagnosticOperational, path: path, line: line,
+		kind: DiagnosticOperational, ruleID: ruleID, path: path, line: line,
 		severity: severity, message: message,
 	}, nil
 }

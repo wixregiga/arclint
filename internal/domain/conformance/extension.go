@@ -16,8 +16,8 @@ type ExtensionFinding struct {
 // subjects with host-validated parameters, and return its complete
 // findings. Extensions operate only through deterministic host
 // capabilities and cannot bypass diagnostic truthfulness; a finding
-// outside the selected subjects is a contract breach the check
-// rejects.
+// outside the selected subjects is an Applicability breach the check
+// contains without aborting the Assessment.
 type ExtensionEvaluator interface {
 	Evaluate(extension string, params map[string]any, subjects []string,
 		modules []rule.Module, obs Observations) ([]ExtensionFinding, error)
