@@ -19,6 +19,10 @@ local linters = new Mapping<String, Step> {
         fix = "make lint-fix"
         exclusive = true
     }
+    ["gitleaks"] {
+        check = "gitleaks detect --verbose"
+        exclusive = true
+    }
     ["verify"] {
         check = "make verify"
         exclusive = true
