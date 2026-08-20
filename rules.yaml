@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=./docs/rules.schema.json
 # ArcLint's own architecture contracts, self-hosted on the target
 # domain model: Rule is the sole aggregate, use cases coordinate
 # through ports, adapters stay outbound or inbound, and Cobra stays
