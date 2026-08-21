@@ -50,7 +50,8 @@ func (s Source) Patterns() ([]rule.Pattern, error) {
 		if !e.IsDir() {
 			continue
 		}
-		file := filepath.Join(s.dir, e.Name(), FileName)
+		pkgDir := filepath.Join(s.dir, e.Name())
+		file := filepath.Join(pkgDir, FileName)
 		data, err := os.ReadFile(file)
 		if os.IsNotExist(err) {
 			continue
@@ -65,8 +66,12 @@ func (s Source) Patterns() ([]rule.Pattern, error) {
 		if doc.Pattern == nil {
 			return nil, fmt.Errorf("%s: missing pattern identity header (namespace, name, version)", file)
 		}
+		exts, err := loadPatternExtensions(pkgDir)
+		if err != nil {
+			return nil, err
+		}
 		p, err := rule.NewPattern(doc.Pattern.Namespace, doc.Pattern.Name, doc.Pattern.Version,
-			doc.Configured.Rules, doc.Pattern.Coverage)
+			doc.Configured.Rules, exts, doc.Pattern.Coverage)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %v", file, err)
 		}
@@ -75,5 +80,41 @@ func (s Source) Patterns() ([]rule.Pattern, error) {
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].Reference().String() < out[j].Reference().String()
 	})
+	return out, nil
+}
+
+func loadPatternExtensions(pkgDir string) ([]rule.PatternExtension, error) {
+	dir := filepath.Join(pkgDir, "extensions")
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("extensions: %w", err)
+	}
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		names = append(names, e.Name())
+	}
+	sort.Strings(names)
+	var out []rule.PatternExtension
+	for _, name := range names {
+		if !rule.InstallableExtensionFileName(name) {
+			continue
+		}
+		path := filepath.Join(dir, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", path, err)
+		}
+		ext, err := rule.NewPatternExtension(name, string(data))
+		if err != nil {
+			return nil, fmt.Errorf("%s: %v", path, err)
+		}
+		out = append(out, ext)
+	}
 	return out, nil
 }

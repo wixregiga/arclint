@@ -34,3 +34,19 @@ Verify changes with `arclint check .`.
 - `arclint rules [selector]` — the configured rules; one match shows the complete Rule
 - `arclint check .` — evaluate every rule; exit 1 on error-severity findings
 <!-- arclint:agents:end -->
+
+## Finish gate
+
+Before yielding a completed session or goal, run:
+
+```bash
+make check-fix
+```
+
+or the same pair through mise:
+
+```bash
+mise run check-fix
+```
+
+That is the hk pre-commit sequence: format, lint with fixes, vet/test/selfcheck, then gitleaks. `make check` is check-only and skips gitleaks; do not substitute it.

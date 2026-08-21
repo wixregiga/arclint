@@ -4,7 +4,7 @@ BIN     ?= ./arclint
 # Embed only the tree-sitter grammars the declaration extractors use:
 # without these tags every grammar embeds and the binary grows ~19 MB.
 GRAMMARS := grammar_subset grammar_subset_typescript grammar_subset_tsx grammar_subset_python
-.PHONY: build test vet fmt-check fmt lint lint-fix generate selfcheck verify check bench agentbench release ci clean docs docs-serve docker
+.PHONY: build test vet fmt-check fmt lint lint-fix generate selfcheck verify check check-fix leak-check bench agentbench release ci clean docs docs-serve docker
 
 build:
 	CGO_ENABLED=0 $(GO) build -tags "$(GRAMMARS)" -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o $(BIN) ./cmd/arclint
@@ -39,6 +39,18 @@ selfcheck: build
 
 # Behavioral and architecture verification after format and lint pass.
 verify: vet test selfcheck
+
+# hk pre-commit secret scan. Not a Make-owned linter; gitleaks is the hook.
+leak-check:
+	gitleaks detect --verbose
+
+# hk pre-commit Make half: format, lint with fixes, then verify.
+# Pair with check-leak. Run sequentially so verify sees the repaired tree.
+check-fix:
+	$(MAKE) fmt
+	$(MAKE) lint-fix
+	$(MAKE) verify
+	$(MAKE) leak-check
 
 # Canonical full local/CI gate. hk runs the same targets as separate
 # steps so its fix mode can repair formatting and lint findings first.

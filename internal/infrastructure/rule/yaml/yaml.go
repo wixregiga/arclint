@@ -80,7 +80,12 @@ type documentDoc struct {
 	Scan         scanDoc                `yaml:"scan"`
 	Modules      map[string]moduleDoc   `yaml:"modules"`
 	Contracts    map[string]contractDoc `yaml:"contracts"`
+	Repository   *repositoryDoc         `yaml:"repository"`
 	Dependencies []dependencyDoc        `yaml:"dependencies"`
+}
+
+type repositoryDoc struct {
+	Invariants []invariantDoc `yaml:"invariants"`
 }
 
 type patternDoc struct {
@@ -217,6 +222,18 @@ func Load(data []byte, source string) (Document, error) {
 			}
 		}
 	}
+	if doc.Repository != nil {
+		for i, inv := range doc.Repository.Invariants {
+			where := fmt.Sprintf("repository.invariants[%d]", i)
+			spec, err := repositoryInvariantSpec(inv)
+			if err != nil {
+				return fail("%s: %v", where, err)
+			}
+			if err := appendRule(spec, where); err != nil {
+				return fail("%v", err)
+			}
+		}
+	}
 	for i, dep := range doc.Dependencies {
 		where := fmt.Sprintf("dependencies[%d]", i)
 		spec, err := dependencySpec(dep)
@@ -344,26 +361,14 @@ func invariantSpec(module string, doc invariantDoc) (rule.Spec, error) {
 	if err != nil {
 		return rule.Spec{}, fmt.Errorf("applicability: %w", err)
 	}
-	forbidFields := func(kind string, fields map[string]bool) error {
-		for name, set := range fields {
-			if set {
-				return fmt.Errorf("kind %s does not accept %s", kind, name)
-			}
-		}
-		return nil
-	}
-	var files []rule.Glob
-	if doc.Files != "" {
-		g, err := rule.NewGlob(doc.Files)
-		if err != nil {
-			return rule.Spec{}, fmt.Errorf("files: %w", err)
-		}
-		files = []rule.Glob{g}
+	files, err := invariantFiles(doc)
+	if err != nil {
+		return rule.Spec{}, err
 	}
 	spec := rule.Spec{ID: doc.ID, Severity: doc.Severity}
 	switch doc.Kind {
 	case "structure":
-		if err := forbidFields("structure", map[string]bool{
+		if err := forbidKindFields("structure", map[string]bool{
 			"files": doc.Files != "", "case": doc.Case != "",
 			"uses": doc.Uses != "", "with": len(doc.With) > 0,
 		}); err != nil {
@@ -384,20 +389,13 @@ func invariantSpec(module string, doc invariantDoc) (rule.Spec, error) {
 			return rule.Spec{}, fmt.Errorf("structure: %w", err)
 		}
 	case "extension":
-		if err := forbidFields("extension", map[string]bool{
-			"require": len(doc.Require) > 0, "forbid": len(doc.Forbid) > 0,
-			"case": doc.Case != "",
-		}); err != nil {
-			return rule.Spec{}, err
-		}
-		spec.Type = rule.TypeExtension
-		spec.Params = rule.ExtensionParams{Uses: doc.Uses, With: doc.With}
-		spec.Applicability, err = rule.ModuleApplicability([]rule.ModuleName{moduleName}, files...)
+		scope, err := rule.ModuleApplicability([]rule.ModuleName{moduleName}, files...)
 		if err != nil {
 			return rule.Spec{}, fmt.Errorf("extension: %w", err)
 		}
+		return extensionInvariantSpec(scope, doc)
 	case "naming":
-		if err := forbidFields("naming", map[string]bool{
+		if err := forbidKindFields("naming", map[string]bool{
 			"require": len(doc.Require) > 0, "forbid": len(doc.Forbid) > 0,
 			"uses": doc.Uses != "", "with": len(doc.With) > 0,
 		}); err != nil {
@@ -417,6 +415,57 @@ func invariantSpec(module string, doc invariantDoc) (rule.Spec, error) {
 		return rule.Spec{}, fmt.Errorf("invariant kind %q is not part of the target ruleset format", doc.Kind)
 	}
 	return spec, nil
+}
+
+func repositoryInvariantSpec(doc invariantDoc) (rule.Spec, error) {
+	if doc.Kind != "extension" {
+		return rule.Spec{}, fmt.Errorf("repository invariant kind %q must be extension", doc.Kind)
+	}
+	files, err := invariantFiles(doc)
+	if err != nil {
+		return rule.Spec{}, err
+	}
+	scope, err := rule.RepositoryApplicability(files...)
+	if err != nil {
+		return rule.Spec{}, fmt.Errorf("extension: %w", err)
+	}
+	return extensionInvariantSpec(scope, doc)
+}
+
+func extensionInvariantSpec(scope rule.Applicability, doc invariantDoc) (rule.Spec, error) {
+	if err := forbidKindFields("extension", map[string]bool{
+		"require": len(doc.Require) > 0, "forbid": len(doc.Forbid) > 0,
+		"case": doc.Case != "",
+	}); err != nil {
+		return rule.Spec{}, err
+	}
+	return rule.Spec{
+		ID:            doc.ID,
+		Severity:      doc.Severity,
+		Type:          rule.TypeExtension,
+		Params:        rule.ExtensionParams{Uses: doc.Uses, With: doc.With},
+		Applicability: scope,
+	}, nil
+}
+
+func invariantFiles(doc invariantDoc) ([]rule.Glob, error) {
+	if doc.Files == "" {
+		return nil, nil
+	}
+	g, err := rule.NewGlob(doc.Files)
+	if err != nil {
+		return nil, fmt.Errorf("files: %w", err)
+	}
+	return []rule.Glob{g}, nil
+}
+
+func forbidKindFields(kind string, fields map[string]bool) error {
+	for name, set := range fields {
+		if set {
+			return fmt.Errorf("kind %s does not accept %s", kind, name)
+		}
+	}
+	return nil
 }
 
 func dependencySpec(doc dependencyDoc) (rule.Spec, error) {

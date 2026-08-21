@@ -461,6 +461,56 @@ contracts:
         files: "core/**/*.go"
 `, false,
 		},
+		{
+			"minimal repository extension", `
+repository:
+  invariants:
+    - id: t:repos/application-only
+      kind: extension
+      uses: vertical/repository-location
+      with:
+        module: application
+`, true,
+		},
+		{
+			"repository extension with files", `
+repository:
+  invariants:
+    - id: t:repos/go-only
+      kind: extension
+      files: "**/*.go"
+      uses: vertical/repository-location
+      with:
+        module: application
+`, true,
+		},
+		{
+			"repository extension missing uses", `
+repository:
+  invariants:
+    - id: t:repos/unbound
+      kind: extension
+`, false,
+		},
+		{
+			"repository invariant wrong kind", `
+repository:
+  invariants:
+    - id: t:repos/structure
+      kind: structure
+      require: ["internal/**"]
+`, false,
+		},
+		{
+			"repository unknown field", `
+repository:
+  extra: true
+  invariants:
+    - id: t:repos/extra
+      kind: extension
+      uses: vertical/repository-location
+`, false,
+		},
 		{"pattern header missing version", "pattern:\n  namespace: acme\n  name: hexagonal\n", false},
 	}
 

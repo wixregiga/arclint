@@ -366,7 +366,7 @@
   "$id": "https://raw.githubusercontent.com/wixregiga/arclint/main/docs/rules.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "The complete rules.yaml document ArcLint accepts: runtime targets, scan policy, Module declarations, per-Module contracts, repository-wide dependency Rules, and the Pattern identity header of a distribution file. Unknown keys are rejected everywhere.",
+  "description": "The complete rules.yaml document ArcLint accepts: runtime targets, scan policy, Module declarations, per-Module contracts, repository-scoped Extension invariants, repository-wide dependency Rules, and the Pattern identity header of a distribution file. Unknown keys are rejected everywhere.",
   "properties": {
     "contracts": {
       "additionalProperties": {
@@ -464,6 +464,20 @@
         "name",
         "version"
       ],
+      "type": "object"
+    },
+    "repository": {
+      "additionalProperties": false,
+      "description": "Repository-scoped Extension invariants that inspect files outside every declared Module.",
+      "properties": {
+        "invariants": {
+          "description": "Extension Rules whose subjects are the whole repository.",
+          "items": {
+            "$ref": "#/$defs/extensionInvariant"
+          },
+          "type": "array"
+        }
+      },
       "type": "object"
     },
     "runtime": {

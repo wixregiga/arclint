@@ -116,7 +116,7 @@ func TestSchemaRejectsUnknownKeys(t *testing.T) {
 			t.Errorf("%s required = %v, want id first", name, required)
 		}
 	}
-	for _, name := range []string{"pattern", "scan"} {
+	for _, name := range []string{"pattern", "scan", "repository"} {
 		if got := dig(t, doc, "properties", name, "additionalProperties"); got != false {
 			t.Errorf("properties.%s additionalProperties = %v, want false", name, got)
 		}

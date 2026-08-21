@@ -27,8 +27,8 @@ func NewPatternsCommand(list application.ListPatterns) Command {
 				if len(row.Coverage) > 0 {
 					coverage = "  coverage [" + strings.Join(row.Coverage, ", ") + "]"
 				}
-				p.printf("%s/%s@%s  %d rule(s)%s\n",
-					row.Namespace, row.Name, row.Version, row.Rules, coverage)
+				p.printf("%s/%s@%s  %d rule(s)  %d extension(s)%s\n",
+					row.Namespace, row.Name, row.Version, row.Rules, row.Extensions, coverage)
 			}
 			if p.err != nil {
 				return fmt.Errorf("write output: %w", p.err)

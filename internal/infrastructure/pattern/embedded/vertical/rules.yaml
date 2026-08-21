@@ -33,41 +33,73 @@ modules:
 contracts:
   domain:
     consumes:
-      id: "repo:domain/stdlib-only"
+      id: "vertical:domain/stdlib-only"
       internal: []
       external: forbid
+    invariants:
+      - id: "vertical:domain/no-context"
+        kind: extension
+        uses: vertical/forbid-imports
+        with:
+          packages: [context]
+      - id: "vertical:domain/no-io"
+        kind: extension
+        uses: vertical/forbid-imports
+        with:
+          packages: [bufio, database/sql, io, log, net, os, syscall]
   application:
     consumes:
-      id: "repo:application/use-cases-through-ports"
+      id: "vertical:application/use-cases-through-ports"
       internal: [domain]
       external: forbid
+    invariants:
+      - id: "vertical:application/repository-context"
+        kind: extension
+        uses: vertical/repository-context
+      - id: "vertical:application/usecase-contract"
+        kind: extension
+        uses: vertical/usecase
   infra:
     consumes:
-      id: "repo:infra/outbound-only"
+      id: "vertical:infra/outbound-only"
       internal: [application, domain, shared]
   app:
     consumes:
-      id: "repo:app/driving-and-wiring"
+      id: "vertical:app/driving-and-wiring"
       internal: [application, domain, infra, shared]
   shared:
     consumes:
-      id: "repo:shared/mechanism-only"
+      id: "vertical:shared/mechanism-only"
       internal: []
+    invariants:
+      - id: "vertical:shared/concerns"
+        kind: extension
+        uses: vertical/shared-concerns
+        with:
+          concerns: [logging, tracing, metrics, config, security, errors, cache, db, validation, events]
   composition:
     consumes:
-      id: "repo:composition/selects-adapters"
+      id: "vertical:composition/selects-adapters"
       internal: [app, infra, application, domain, shared]
 
+repository:
+  invariants:
+    - id: "vertical:repositories/application-only"
+      kind: extension
+      uses: vertical/repository-location
+      with:
+        module: application
+
 dependencies:
-  - id: "repo:dependencies/inward"
+  - id: "vertical:dependencies/inward"
     kind: layers
     layers: [app, application, domain]
-  - id: "repo:infra/app-and-composition-only"
+  - id: "vertical:infra/app-and-composition-only"
     kind: protected
     module: infra
     allow: [app, composition]
-  - id: "repo:features/independent"
+  - id: "vertical:features/independent"
     kind: independence
     folders: ["internal/*"]
-  - id: "repo:dependencies/acyclic"
+  - id: "vertical:dependencies/acyclic"
     kind: acyclic

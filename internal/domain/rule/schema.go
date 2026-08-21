@@ -210,7 +210,7 @@ func schemaDocument() map[string]any {
 		"$schema":              "https://json-schema.org/draft/2020-12/schema",
 		"$id":                  "https://raw.githubusercontent.com/wixregiga/arclint/main/docs/rules.schema.json",
 		"title":                "ArcLint ruleset",
-		"description":          "The complete rules.yaml document ArcLint accepts: runtime targets, scan policy, Module declarations, per-Module contracts, repository-wide dependency Rules, and the Pattern identity header of a distribution file. Unknown keys are rejected everywhere.",
+		"description":          "The complete rules.yaml document ArcLint accepts: runtime targets, scan policy, Module declarations, per-Module contracts, repository-scoped Extension invariants, repository-wide dependency Rules, and the Pattern identity header of a distribution file. Unknown keys are rejected everywhere.",
 		"type":                 "object",
 		"additionalProperties": false,
 		"properties": map[string]any{
@@ -220,9 +220,10 @@ func schemaDocument() map[string]any {
 				"type":        "array",
 				"items":       map[string]any{"enum": runtimeTargets()},
 			},
-			"scan":      scanSchema(),
-			"modules":   modulesSchema(),
-			"contracts": contractsSchema(),
+			"scan":       scanSchema(),
+			"modules":    modulesSchema(),
+			"contracts":  contractsSchema(),
+			"repository": repositorySchema(),
 			"dependencies": map[string]any{
 				"description": "Repository-wide dependency Rules over the Module graph.",
 				"type":        "array",
@@ -276,6 +277,19 @@ func schemaDefs() map[string]any {
 		"independenceDependency": independenceDependencySchema(),
 		"acyclicDependency":      acyclicDependencySchema(),
 	}
+}
+
+func repositorySchema() map[string]any {
+	return strictObjectSchema(
+		"Repository-scoped Extension invariants that inspect files outside every declared Module.",
+		map[string]any{
+			"invariants": map[string]any{
+				"description": "Extension Rules whose subjects are the whole repository.",
+				"type":        "array",
+				"items":       schemaRef("extensionInvariant"),
+			},
+		},
+	)
 }
 
 func patternHeaderSchema() map[string]any {

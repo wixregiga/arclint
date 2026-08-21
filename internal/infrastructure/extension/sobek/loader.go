@@ -13,6 +13,8 @@ import (
 	"time"
 
 	esbuild "github.com/evanw/esbuild/pkg/api"
+
+	"github.com/wixregiga/arclint/internal/domain/rule"
 )
 
 //go:embed sdk/arclint.ts
@@ -114,10 +116,7 @@ func LoadDir(repoRoot string, opts Options) (*Registry, error) {
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		if strings.HasPrefix(name, ".") || strings.HasSuffix(name, ".d.ts") {
-			continue
-		}
-		if !strings.HasSuffix(name, ".ts") && !strings.HasSuffix(name, ".js") {
+		if !rule.InstallableExtensionFileName(name) {
 			continue
 		}
 		abs := filepath.Join(dir, name)
