@@ -94,6 +94,25 @@ Required fields: `id`, `kind: extension`, `uses`. Optional: `severity`
 files; absent means all members), `with` (object validated host-side
 against the extension's published schema before `check` runs).
 
+To inspect files outside every declared Module, put the same extension
+shape under top-level `repository.invariants`. That is repository-scoped
+enforcement, not a new Rule Type: only `kind: extension` is accepted
+there. `uses`, `with`, and optional `files` keep the same meaning.
+
+```yaml
+repository:
+  invariants:
+    - id: "vertical:repositories/application-only"
+      kind: extension
+      uses: vertical/repository-location
+      with:
+        module: application
+```
+
+`arclint init --pattern vertical` copies Pattern extension entries into
+`.arclint/extensions`. Those files are then ordinary repository-owned
+registry entries.
+
 ## The ctx surface
 
 During `check`, the host lends exactly this read-only surface, scoped to

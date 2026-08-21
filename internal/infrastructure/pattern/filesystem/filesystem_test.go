@@ -3,6 +3,7 @@ package filesystempattern_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	filesystempattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/filesystem"
@@ -83,5 +84,91 @@ func TestPatternsAbsenceAndInvalidity(t *testing.T) {
 	}
 	if _, err := broken.Patterns(); err == nil {
 		t.Errorf("a pattern file without an identity header must be an error, never skipped")
+	}
+}
+
+func TestPatternsLoadsExtensions(t *testing.T) {
+	dir := t.TempDir()
+	pkg := filepath.Join(dir, "sample")
+	extDir := filepath.Join(pkg, "extensions")
+	if err := os.MkdirAll(extDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pkg, filesystempattern.FileName), []byte(samplePattern), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	source := "export default { type: \"sample/ok\" }\n"
+	if err := os.WriteFile(filepath.Join(extDir, "ok.ts"), []byte(source), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(extDir, "types.d.ts"), []byte("export {}"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(extDir, ".hidden.ts"), []byte("export default {}"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(extDir, "readme.md"), []byte("no"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(extDir, "helpers"), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	src, err := filesystempattern.NewSource(dir)
+	if err != nil {
+		t.Fatalf("NewSource: %v", err)
+	}
+	patterns, err := src.Patterns()
+	if err != nil {
+		t.Fatalf("Patterns: %v", err)
+	}
+	exts := patterns[0].Extensions()
+	if len(exts) != 1 || exts[0].FileName() != "ok.ts" || exts[0].Source() != source {
+		t.Errorf("extensions = %+v, want preserved ok.ts", exts)
+	}
+}
+
+func TestPatternsMissingExtensionsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	pkg := filepath.Join(dir, "sample")
+	if err := os.MkdirAll(pkg, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pkg, filesystempattern.FileName), []byte(samplePattern), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	src, err := filesystempattern.NewSource(dir)
+	if err != nil {
+		t.Fatalf("NewSource: %v", err)
+	}
+	patterns, err := src.Patterns()
+	if err != nil {
+		t.Fatalf("Patterns: %v", err)
+	}
+	if len(patterns[0].Extensions()) != 0 {
+		t.Errorf("missing extensions directory must yield no extensions")
+	}
+}
+
+func TestPatternsInvalidExtensionEntry(t *testing.T) {
+	dir := t.TempDir()
+	pkg := filepath.Join(dir, "sample")
+	extDir := filepath.Join(pkg, "extensions")
+	if err := os.MkdirAll(extDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pkg, filesystempattern.FileName), []byte(samplePattern), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(extDir, "empty.ts"), []byte("   \n"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	src, err := filesystempattern.NewSource(dir)
+	if err != nil {
+		t.Fatalf("NewSource: %v", err)
+	}
+	if _, err := src.Patterns(); err == nil {
+		t.Errorf("blank extension source must be an error")
+	} else if !strings.Contains(err.Error(), "empty.ts") {
+		t.Errorf("invalid-entry error must name the asset path, got %v", err)
 	}
 }

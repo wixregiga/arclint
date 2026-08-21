@@ -48,8 +48,13 @@ Choose a built-in Pattern instead of the bare draft:
 arclint init --pattern vertical
 ```
 
-Accepted values are `go`, `ts`, and `py` (comma-separated). An existing
-`rules.yaml` is refused unless you pass `--force`.
+That copies the Pattern's Extension entries into `.arclint/extensions`
+as repository-owned files, then writes `rules.yaml`. `--pattern bare`
+writes only the draft ruleset. An existing `rules.yaml` or any of those
+extension files is refused unless you pass `--force`.
+
+Accepted values for `--languages` are `go`, `ts`, and `py`
+(comma-separated).
 
 On success:
 

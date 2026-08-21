@@ -15,11 +15,12 @@ type PatternSource interface {
 // PatternSummary is the plain result value describing one available
 // Pattern.
 type PatternSummary struct {
-	Namespace string
-	Name      string
-	Version   string
-	Rules     int
-	Coverage  []string
+	Namespace  string
+	Name       string
+	Version    string
+	Rules      int
+	Extensions int
+	Coverage   []string
 }
 
 // ListPatterns lists available Pattern distribution packages through
@@ -56,11 +57,12 @@ func (uc ListPatterns) Execute() ([]PatternSummary, error) {
 				coverage = append(coverage, string(l))
 			}
 			out = append(out, PatternSummary{
-				Namespace: ref.Namespace(),
-				Name:      ref.Name(),
-				Version:   ref.Version(),
-				Rules:     len(p.Rules()),
-				Coverage:  coverage,
+				Namespace:  ref.Namespace(),
+				Name:       ref.Name(),
+				Version:    ref.Version(),
+				Rules:      len(p.Rules()),
+				Extensions: len(p.Extensions()),
+				Coverage:   coverage,
 			})
 		}
 	}

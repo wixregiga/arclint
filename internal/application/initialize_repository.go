@@ -3,6 +3,8 @@ package application
 import (
 	"fmt"
 	"strings"
+
+	"github.com/wixregiga/arclint/internal/domain/rule"
 )
 
 const (
@@ -10,17 +12,24 @@ const (
 	BarePattern = "bare"
 )
 
-// RulesetScaffold persists a drafted repository ruleset. Write refuses
-// to overwrite an existing ruleset unless forced.
-type RulesetScaffold interface {
-	Write(content string, force bool) (path string, err error)
+// PatternScaffold is one built-in Pattern's repository-form ruleset and
+// optional Extension sources to materialize together.
+type PatternScaffold struct {
+	Ruleset    string
+	Extensions []rule.PatternExtension
 }
 
-// PatternScaffolds supplies built-in Pattern packages as
-// repository-form rulesets init can materialize.
+// RulesetScaffold persists a drafted repository ruleset and any Pattern
+// Extension entries. Write refuses to overwrite existing targets unless forced.
+type RulesetScaffold interface {
+	Write(content string, extensions []rule.PatternExtension, force bool) (path string, err error)
+}
+
+// PatternScaffolds supplies built-in Pattern packages as cohesive
+// bundles init can materialize.
 type PatternScaffolds interface {
 	Names() []string
-	Ruleset(name string) (content string, ok bool)
+	Scaffold(name string) (PatternScaffold, bool)
 }
 
 // InitializeRepositoryRequest carries the explicit choices a draft is
@@ -91,29 +100,30 @@ func (uc InitializeRepository) Execute(req InitializeRepositoryRequest) (string,
 			return "", fmt.Errorf("initialize repository: language %q is not one of %s", l, strings.Join(supportedLanguages, ", "))
 		}
 	}
-	content, err := uc.rulesetContent(req.Pattern, languages)
+	content, extensions, err := uc.rulesetContent(req.Pattern, languages)
 	if err != nil {
 		return "", err
 	}
-	path, err := uc.scaffold.Write(content, req.Force)
+	path, err := uc.scaffold.Write(content, extensions, req.Force)
 	if err != nil {
 		return "", fmt.Errorf("write ruleset: %w", err)
 	}
 	return path, nil
 }
 
-func (uc InitializeRepository) rulesetContent(pattern string, languages []string) (string, error) {
+func (uc InitializeRepository) rulesetContent(pattern string, languages []string) (string, []rule.PatternExtension, error) {
 	if pattern == "" {
 		pattern = BarePattern
 	}
 	if pattern == BarePattern {
-		return starterRuleset(languages), nil
+		return starterRuleset(languages), nil, nil
 	}
-	content, ok := uc.patterns.Ruleset(pattern)
+	scaffold, ok := uc.patterns.Scaffold(pattern)
 	if !ok {
-		return "", fmt.Errorf("initialize repository: pattern %q is not one of %s", pattern, strings.Join(uc.Patterns(), ", "))
+		return "", nil, fmt.Errorf("initialize repository: pattern %q is not one of %s", pattern, strings.Join(uc.Patterns(), ", "))
 	}
-	return strings.Replace(content, "runtime: [go]", fmt.Sprintf("runtime: [%s]", strings.Join(languages, ", ")), 1), nil
+	content := strings.Replace(scaffold.Ruleset, "runtime: [go]", fmt.Sprintf("runtime: [%s]", strings.Join(languages, ", ")), 1)
+	return content, scaffold.Extensions, nil
 }
 
 // starterRuleset renders the commented draft. It declares one Module

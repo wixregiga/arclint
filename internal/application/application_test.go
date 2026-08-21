@@ -320,7 +320,7 @@ func (f fakePatternSource) Patterns() ([]rule.Pattern, error) { return f.pattern
 
 func TestListPatternsSummarizes(t *testing.T) {
 	cfg, _ := fixture(t, "m/ok.go")
-	p, err := rule.NewPattern("arclint", "ddd-flat", "1.2.3", cfg.Rules, []rule.Language{rule.LanguageGo})
+	p, err := rule.NewPattern("arclint", "ddd-flat", "1.2.3", cfg.Rules, nil, []rule.Language{rule.LanguageGo})
 	if err != nil {
 		t.Fatalf("NewPattern: %v", err)
 	}
@@ -334,10 +334,11 @@ func TestListPatternsSummarizes(t *testing.T) {
 	}
 	want := application.PatternSummary{
 		Namespace: "arclint", Name: "ddd-flat",
-		Version: "1.2.3", Rules: 1, Coverage: []string{"go"},
+		Version: "1.2.3", Rules: 1, Extensions: 0, Coverage: []string{"go"},
 	}
 	if len(rows) != 1 || rows[0].Namespace != want.Namespace || rows[0].Name != want.Name ||
 		rows[0].Version != want.Version || rows[0].Rules != want.Rules ||
+		rows[0].Extensions != want.Extensions ||
 		len(rows[0].Coverage) != 1 || rows[0].Coverage[0] != "go" {
 		t.Errorf("rows = %+v, want %+v", rows, want)
 	}

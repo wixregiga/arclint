@@ -152,13 +152,17 @@ func TestInitializeRepositoryRejectsUnknownPatterns(t *testing.T) {
 
 type fakeScaffold struct{}
 
-func (fakeScaffold) Write(content string, force bool) (string, error) { return "rules.yaml", nil }
+func (fakeScaffold) Write(string, []rule.PatternExtension, bool) (string, error) {
+	return "rules.yaml", nil
+}
 
 type fakePatternScaffolds struct{}
 
 func (fakePatternScaffolds) Names() []string { return nil }
 
-func (fakePatternScaffolds) Ruleset(string) (string, bool) { return "", false }
+func (fakePatternScaffolds) Scaffold(string) (application.PatternScaffold, bool) {
+	return application.PatternScaffold{}, false
+}
 
 func TestArchitecturalContextWorksite(t *testing.T) {
 	uc, err := application.NewGetArchitecturalContext(fakeRepository{contextFixture(t)})

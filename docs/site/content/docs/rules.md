@@ -182,7 +182,7 @@ candidate is dropped when a declared Module owns that folder's subtree.
 
 ```yaml
 dependencies:
-  - id: "repo:features/independent"
+  - id: "vertical:features/independent"
     kind: independence
     folders: ["internal/*"]
 ```
