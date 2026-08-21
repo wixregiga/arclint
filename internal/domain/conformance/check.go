@@ -80,7 +80,7 @@ func Run(req Request) (Assessment, error) {
 			es, err = evaluateNaming(r, mem)
 		case r.Type() == rule.TypeExtension:
 			es, ruleDiags, err = evaluateExtensionRule(r, mem, req.Observations, req.Extensions, req.Modules)
-		case r.Type() == rule.TypeLayers, r.Type() == rule.TypeProtected, r.Type() == rule.TypeAcyclic:
+		case r.Type() == rule.TypeLayers, r.Type() == rule.TypeProtected, r.Type() == rule.TypeIndependence, r.Type() == rule.TypeAcyclic:
 			es, err = evaluateGraph(r, mem, req.Observations)
 		default:
 			es, err = evaluateUnsupported(r, mem)

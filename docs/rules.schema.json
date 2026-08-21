@@ -99,6 +99,9 @@
           "$ref": "#/$defs/protectedDependency"
         },
         {
+          "$ref": "#/$defs/independenceDependency"
+        },
+        {
           "$ref": "#/$defs/acyclicDependency"
         }
       ]
@@ -149,6 +152,36 @@
         "allow",
         "forbid"
       ]
+    },
+    "independenceDependency": {
+      "additionalProperties": false,
+      "description": "An independence Rule: sibling Folders selected by the globs may not import each other.",
+      "properties": {
+        "folders": {
+          "description": "Globs selecting sibling Folders; at least one, no duplicates.",
+          "items": {
+            "$ref": "#/$defs/glob"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "id": {
+          "$ref": "#/$defs/ruleID"
+        },
+        "kind": {
+          "const": "independence"
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "folders"
+      ],
+      "type": "object"
     },
     "invariant": {
       "oneOf": [

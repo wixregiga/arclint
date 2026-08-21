@@ -33,12 +33,19 @@ cd ~/projects/your-repo
 arclint init
 ```
 
-`init` drafts a commented starter `rules.yaml` from explicit language
-choices. It does not scan the tree and does not select a Pattern.
-Default languages is `go`. Pass others with `--languages`:
+`init` drafts a `rules.yaml` from explicit language choices. It does not
+scan the tree. The no-flag default is `--pattern bare`: a commented
+single-module draft. Default languages is `go`. Pass others with
+`--languages`:
 
 ```bash
 arclint init --languages go,ts
+```
+
+Choose a built-in Pattern instead of the bare draft:
+
+```bash
+arclint init --pattern vertical
 ```
 
 Accepted values are `go`, `ts`, and `py` (comma-separated). An existing

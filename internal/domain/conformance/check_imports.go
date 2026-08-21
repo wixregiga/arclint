@@ -195,8 +195,8 @@ func moduleEdges(mem membership, obs Observations) []edge {
 	return out
 }
 
-// evaluateGraph judges layers, protected, and acyclic Rules over the
-// Module-level import graph, one Evaluation per Module in scope.
+// evaluateGraph judges layers, protected, independence, and acyclic
+// Rules over the observed import graph.
 func evaluateGraph(r rule.Rule, mem membership, obs Observations) ([]Evaluation, error) {
 	edges := moduleEdges(mem, obs)
 	switch p := r.Params().(type) {
@@ -204,6 +204,8 @@ func evaluateGraph(r rule.Rule, mem membership, obs Observations) ([]Evaluation,
 		return evaluateLayers(r, p, edges)
 	case rule.ProtectedParams:
 		return evaluateProtected(r, p, edges, mem)
+	case rule.IndependenceParams:
+		return evaluateIndependence(r, p, mem, obs)
 	case rule.AcyclicParams:
 		return evaluateAcyclic(r, p, edges, mem)
 	}
@@ -322,6 +324,124 @@ func evaluateProtected(r rule.Rule, p rule.ProtectedParams, edges []edge, mem me
 		return nil, err
 	}
 	return []Evaluation{e}, nil
+}
+
+// evaluateIndependence judges sibling Folders: a file under member A
+// may not import a target under member B. Module-owned candidates are
+// not members. Fewer than two members is vacuously satisfied.
+func evaluateIndependence(r rule.Rule, p rule.IndependenceParams, mem membership, obs Observations) ([]Evaluation, error) {
+	members := independenceMembers(p, mem)
+	subject, err := independenceSubject(members, p)
+	if err != nil {
+		return nil, err
+	}
+	if len(members) < 2 {
+		e, err := completeEvaluation(r, subject, nil)
+		if err != nil {
+			return nil, err
+		}
+		return []Evaluation{e}, nil
+	}
+	var vs []Violation
+	for _, path := range mem.files {
+		from, ok := independenceFolderOf(path, members)
+		if !ok {
+			continue
+		}
+		facts, ok := obs.FactsFor(path)
+		if !ok {
+			continue
+		}
+		for _, imp := range facts.Imports {
+			if imp.Class != ImportInternal {
+				continue
+			}
+			target := imp.TargetFile
+			if target == "" {
+				target = imp.TargetDir
+			}
+			if target == "" {
+				continue
+			}
+			to, ok := independenceFolderOf(target, members)
+			if !ok || to == from {
+				continue
+			}
+			v, err := newViolation(r, subject, path, imp.Line,
+				fmt.Sprintf("Folder %q is independent of sibling Folder %q: import of %q", from, to, imp.Path),
+				"remove the cross-folder import")
+			if err != nil {
+				return nil, err
+			}
+			vs = append(vs, v)
+		}
+	}
+	e, err := completeEvaluation(r, subject, vs)
+	if err != nil {
+		return nil, err
+	}
+	return []Evaluation{e}, nil
+}
+
+func independenceMembers(p rule.IndependenceParams, mem membership) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, g := range p.Folders {
+		n := len(strings.Split(g.String(), "/"))
+		for _, path := range mem.files {
+			parts := strings.Split(path, "/")
+			if len(parts) <= n {
+				continue
+			}
+			candidate := strings.Join(parts[:n], "/")
+			if seen[candidate] || !g.Match(candidate) {
+				continue
+			}
+			if independenceModuleOwns(mem, candidate) {
+				continue
+			}
+			seen[candidate] = true
+			out = append(out, candidate)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func independenceModuleOwns(mem membership, folder string) bool {
+	for _, name := range mem.names {
+		if mem.modules[name].Contains(folder) {
+			return true
+		}
+	}
+	return false
+}
+
+func independenceFolderOf(path string, members []string) (string, bool) {
+	matched := ""
+	for _, m := range members {
+		if path == m || strings.HasPrefix(path, m+"/") {
+			if len(m) > len(matched) {
+				matched = m
+			}
+		}
+	}
+	if matched == "" {
+		return "", false
+	}
+	return matched, true
+}
+
+func independenceSubject(members []string, p rule.IndependenceParams) (rule.Subject, error) {
+	id := p.Folders[0].String()
+	if len(members) > 0 {
+		id = members[0]
+	}
+	subject, err := rule.FolderSubject(id)
+	if err != nil {
+		return rule.Subject{}, fmt.Errorf("independence: %w", err)
+	}
+	return subject, nil
 }
 
 // evaluateAcyclic judges each Module in scope: it participates in no

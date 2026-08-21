@@ -6,8 +6,8 @@ weight = 6
 
 | command | does |
 |---|---|
-| `arclint init` | draft a starter `rules.yaml`; `--languages go,ts,py` selects runtime targets and `--force` permits replacing an existing file |
-| `arclint patterns` | list visible Pattern distribution packages; the current binary reports `no patterns available` |
+| `arclint init` | draft a starter `rules.yaml`; `--pattern bare` (default) or a built-in Pattern (`vertical`); `--languages go,ts,py` selects runtime targets and `--force` permits replacing an existing file |
+| `arclint patterns` | list visible Pattern distribution packages, including built-in packages such as `arclint/vertical@0.1.0` |
 | `arclint check [path]` | evaluate configured Rules; accepts `--format human\|json`, `--no-baseline`, and `--only` / `--exclude` Rule selectors |
 | `arclint baseline capture` | replace `.arclint/baseline.v2.json` with the active findings from one complete assessment |
 | `arclint baseline refresh` | reassess and replace the Baseline, dropping stale entries |

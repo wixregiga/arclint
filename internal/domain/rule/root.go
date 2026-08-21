@@ -127,7 +127,7 @@ func validateScope(t Type, a Applicability) error {
 		if len(a.Modules()) == 0 {
 			return fmt.Errorf("%s rule requires module applicability", t)
 		}
-	case TypeLayers, TypeProtected, TypeAcyclic:
+	case TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic:
 		if !a.EntireRepository() {
 			return fmt.Errorf("%s rule requires repository applicability", t)
 		}
@@ -144,7 +144,7 @@ func validateScope(t Type, a Applicability) error {
 func deriveClaim(a Applicability, p Params) string {
 	proposition := p.proposition()
 	switch p.Type() {
-	case TypeLayers, TypeProtected, TypeAcyclic:
+	case TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic:
 		return proposition
 	case TypeConsumes, TypeStructure, TypeNaming, TypeExtension:
 		// Module-scoped Types: the Claim carries the Modules below.

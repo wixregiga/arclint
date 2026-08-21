@@ -267,6 +267,94 @@ func TestConformanceCheckIsDeterministic(t *testing.T) {
 	}
 }
 
+func TestIndependenceForbidsSiblingImports(t *testing.T) {
+	modules := []rule.Module{
+		mustModule(t, "app", "internal/app/**"),
+	}
+	files := []conformance.ObservedFile{
+		{Path: "internal/order/application/create.go"},
+		{Path: "internal/customer/domain/customer.go"},
+		{Path: "internal/app/app.go"},
+	}
+	facts := map[string]conformance.LanguageFacts{
+		"internal/order/application/create.go": {
+			Language: rule.LanguageGo, ImportsAvailable: true,
+			Imports: []conformance.Import{
+				{Path: "example.com/shop/internal/customer/domain", Line: 3, Class: conformance.ImportInternal, TargetDir: "internal/customer/domain"},
+			},
+		},
+		"internal/customer/domain/customer.go": {Language: rule.LanguageGo, ImportsAvailable: true},
+		"internal/app/app.go": {
+			Language: rule.LanguageGo, ImportsAvailable: true,
+			Imports: []conformance.Import{
+				{Path: "example.com/shop/internal/customer/domain", Line: 3, Class: conformance.ImportInternal, TargetDir: "internal/customer/domain"},
+			},
+		},
+	}
+	obs, err := conformance.NewObservations(files, facts)
+	if err != nil {
+		t.Fatalf("NewObservations: %v", err)
+	}
+	r := mustRule(t, rule.Spec{
+		ID:            "t:features/independent",
+		Type:          rule.TypeIndependence,
+		Params:        rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*")}},
+		Applicability: repoScope(t),
+	})
+	a, err := conformance.Run(conformance.Request{
+		Rules: []rule.Rule{r}, Modules: modules, Observations: obs,
+		UnknownImports: rule.UnknownImportsWarn,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	active := violationKeys(a.ActiveViolations())
+	if len(active) != 1 || active[0] != "t:features/independent|internal/order/application/create.go" {
+		t.Fatalf("active = %v, want one order→customer independence violation", active)
+	}
+	msg := a.ActiveViolations()[0].Message()
+	want := `Folder "internal/order" is independent of sibling Folder "internal/customer": import of "example.com/shop/internal/customer/domain"`
+	if msg != want {
+		t.Errorf("message = %q, want %q", msg, want)
+	}
+	for _, v := range a.ActiveViolations() {
+		if strings.Contains(v.Path(), "internal/app") {
+			t.Errorf("module-owned folder produced a violation: %s", v.Path())
+		}
+	}
+}
+
+func TestIndependenceIsVacuousWithOneMember(t *testing.T) {
+	files := []conformance.ObservedFile{
+		{Path: "internal/order/application/create.go"},
+	}
+	facts := map[string]conformance.LanguageFacts{
+		"internal/order/application/create.go": {Language: rule.LanguageGo, ImportsAvailable: true},
+	}
+	obs, err := conformance.NewObservations(files, facts)
+	if err != nil {
+		t.Fatalf("NewObservations: %v", err)
+	}
+	r := mustRule(t, rule.Spec{
+		ID:            "t:features/independent",
+		Type:          rule.TypeIndependence,
+		Params:        rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*")}},
+		Applicability: repoScope(t),
+	})
+	a, err := conformance.Run(conformance.Request{
+		Rules: []rule.Rule{r}, Observations: obs, UnknownImports: rule.UnknownImportsWarn,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(a.ActiveViolations()) != 0 {
+		t.Errorf("vacuous independence produced violations %v", violationKeys(a.ActiveViolations()))
+	}
+	if len(a.Evaluations()) != 1 || a.Evaluations()[0].Outcome() != conformance.OutcomeConforms {
+		t.Errorf("vacuous independence must emit one conforms evaluation")
+	}
+}
+
 func TestFingerprintIsLineIndependent(t *testing.T) {
 	subject, err := rule.FileSubject("alpha/service.go")
 	if err != nil {

@@ -2,7 +2,7 @@
 // representations of the target ruleset format. The accepted grammar
 // is exactly what rules.yaml uses — runtime, scan, modules,
 // contracts (consumes plus structure, naming, and extension invariants),
-// and dependencies (layers, protected, acyclic) — plus the pattern
+// and dependencies (layers, protected, independence, acyclic) — plus the pattern
 // identity header used by Pattern distribution files. A representation
 // that cannot become a valid Rule is an error, never a partial value.
 package yamlrule
@@ -134,6 +134,7 @@ type dependencyDoc struct {
 	Module   string   `yaml:"module"`
 	Allow    []string `yaml:"allow"`
 	Modules  []string `yaml:"modules"`
+	Folders  []string `yaml:"folders"`
 }
 
 // Load parses one target-format ruleset document strictly: unknown
@@ -437,7 +438,7 @@ func dependencySpec(doc dependencyDoc) (rule.Spec, error) {
 	spec := rule.Spec{ID: doc.ID, Severity: doc.Severity, Applicability: scope}
 	switch doc.Kind {
 	case "layers":
-		if doc.Module != "" || len(doc.Allow) > 0 || len(doc.Modules) > 0 {
+		if doc.Module != "" || len(doc.Allow) > 0 || len(doc.Modules) > 0 || len(doc.Folders) > 0 {
 			return rule.Spec{}, fmt.Errorf("kind layers accepts only layers")
 		}
 		layers, err := names("layers", doc.Layers)
@@ -447,7 +448,7 @@ func dependencySpec(doc dependencyDoc) (rule.Spec, error) {
 		spec.Type = rule.TypeLayers
 		spec.Params = rule.LayersParams{Layers: layers}
 	case "protected":
-		if len(doc.Layers) > 0 || len(doc.Modules) > 0 {
+		if len(doc.Layers) > 0 || len(doc.Modules) > 0 || len(doc.Folders) > 0 {
 			return rule.Spec{}, fmt.Errorf("kind protected accepts only module and allow")
 		}
 		module, err := rule.NewModuleName(doc.Module)
@@ -460,8 +461,21 @@ func dependencySpec(doc dependencyDoc) (rule.Spec, error) {
 		}
 		spec.Type = rule.TypeProtected
 		spec.Params = rule.ProtectedParams{Module: module, Allow: allow}
+	case "independence":
+		if doc.Module != "" || len(doc.Allow) > 0 || len(doc.Layers) > 0 || len(doc.Modules) > 0 {
+			return rule.Spec{}, fmt.Errorf("kind independence accepts only folders")
+		}
+		if len(doc.Folders) == 0 {
+			return rule.Spec{}, fmt.Errorf("kind independence requires folders")
+		}
+		globs, err := rule.NewGlobs(doc.Folders)
+		if err != nil {
+			return rule.Spec{}, fmt.Errorf("folders: %v", err)
+		}
+		spec.Type = rule.TypeIndependence
+		spec.Params = rule.IndependenceParams{Folders: globs}
 	case "acyclic":
-		if len(doc.Layers) > 0 || doc.Module != "" || len(doc.Allow) > 0 {
+		if len(doc.Layers) > 0 || doc.Module != "" || len(doc.Allow) > 0 || len(doc.Folders) > 0 {
 			return rule.Spec{}, fmt.Errorf("kind acyclic accepts only modules")
 		}
 		modules, err := names("modules", doc.Modules)

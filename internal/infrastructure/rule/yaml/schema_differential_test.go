@@ -232,6 +232,14 @@ dependencies:
 `, true,
 		},
 		{
+			"minimal independence rule", `
+dependencies:
+  - id: t:deps/independent
+    kind: independence
+    folders: ["internal/*"]
+`, true,
+		},
+		{
 			"minimal acyclic rule", `
 dependencies:
   - id: t:deps/acyclic
@@ -373,6 +381,22 @@ dependencies:
   - id: t:deps/unprotected
     kind: protected
     allow: [app]
+`, false,
+		},
+		{
+			"independence without folders", `
+dependencies:
+  - id: t:deps/nofolders
+    kind: independence
+`, false,
+		},
+		{
+			"independence with modules", `
+dependencies:
+  - id: t:deps/with-modules
+    kind: independence
+    folders: ["internal/*"]
+    modules: [app]
 `, false,
 		},
 		{

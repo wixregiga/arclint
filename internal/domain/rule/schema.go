@@ -95,6 +95,13 @@ func (t Type) Schema() TypeSchema {
 			{Name: "module", Kind: "string", Required: true, Doc: "the protected Module"},
 			{Name: "allow", Kind: "module_list", Doc: "Modules permitted to import it"},
 		}
+	case TypeIndependence:
+		params = []FieldSchema{
+			{
+				Name: "folders", Kind: "glob_list", Required: true,
+				Doc: "globs selecting sibling Folders that may not import each other",
+			},
+		}
 	case TypeAcyclic:
 		params = []FieldSchema{
 			{Name: "modules", Kind: "module_list", Doc: "cycle scope; absent = every declared Module"},
@@ -258,15 +265,16 @@ func schemaDefs() map[string]any {
 			"type":        "string",
 			"pattern":     caseSpecPattern(),
 		},
-		"consumes":            consumesSchema(),
-		"invariant":           oneOfRefs("structureInvariant", "namingInvariant", "extensionInvariant"),
-		"structureInvariant":  structureInvariantSchema(),
-		"namingInvariant":     namingInvariantSchema(),
-		"extensionInvariant":  extensionInvariantSchema(),
-		"dependency":          oneOfRefs("layersDependency", "protectedDependency", "acyclicDependency"),
-		"layersDependency":    layersDependencySchema(),
-		"protectedDependency": protectedDependencySchema(),
-		"acyclicDependency":   acyclicDependencySchema(),
+		"consumes":               consumesSchema(),
+		"invariant":              oneOfRefs("structureInvariant", "namingInvariant", "extensionInvariant"),
+		"structureInvariant":     structureInvariantSchema(),
+		"namingInvariant":        namingInvariantSchema(),
+		"extensionInvariant":     extensionInvariantSchema(),
+		"dependency":             oneOfRefs("layersDependency", "protectedDependency", "independenceDependency", "acyclicDependency"),
+		"layersDependency":       layersDependencySchema(),
+		"protectedDependency":    protectedDependencySchema(),
+		"independenceDependency": independenceDependencySchema(),
+		"acyclicDependency":      acyclicDependencySchema(),
 	}
 }
 
@@ -494,6 +502,25 @@ func protectedDependencySchema() map[string]any {
 			},
 		},
 		"id", "kind", "module",
+	)
+}
+
+func independenceDependencySchema() map[string]any {
+	return strictObjectSchema(
+		"An independence Rule: sibling Folders selected by the globs may not import each other.",
+		map[string]any{
+			"id":       schemaRef("ruleID"),
+			"kind":     map[string]any{"const": string(TypeIndependence)},
+			"severity": schemaRef("severity"),
+			"folders": map[string]any{
+				"description": "Globs selecting sibling Folders; at least one, no duplicates.",
+				"type":        "array",
+				"minItems":    1,
+				"uniqueItems": true,
+				"items":       schemaRef("glob"),
+			},
+		},
+		"id", "kind", "folders",
 	)
 }
 

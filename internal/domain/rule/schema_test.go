@@ -68,12 +68,13 @@ func TestSchemaPublishesDomainEnums(t *testing.T) {
 func TestSchemaCoversEveryRuleType(t *testing.T) {
 	doc := schemaTree(t)
 	kindDefs := map[rule.Type]string{
-		rule.TypeStructure: "structureInvariant",
-		rule.TypeNaming:    "namingInvariant",
-		rule.TypeExtension: "extensionInvariant",
-		rule.TypeLayers:    "layersDependency",
-		rule.TypeProtected: "protectedDependency",
-		rule.TypeAcyclic:   "acyclicDependency",
+		rule.TypeStructure:    "structureInvariant",
+		rule.TypeNaming:       "namingInvariant",
+		rule.TypeExtension:    "extensionInvariant",
+		rule.TypeLayers:       "layersDependency",
+		rule.TypeProtected:    "protectedDependency",
+		rule.TypeIndependence: "independenceDependency",
+		rule.TypeAcyclic:      "acyclicDependency",
 	}
 	for _, typ := range rule.Types() {
 		if typ == rule.TypeConsumes {

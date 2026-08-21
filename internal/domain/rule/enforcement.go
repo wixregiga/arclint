@@ -197,7 +197,7 @@ func (e Enforcement) IsZero() bool { return e.evidence == "" }
 // honestly yield unsupported.
 func BuiltinEnforcement(t Type) Enforcement {
 	switch t {
-	case TypeConsumes, TypeLayers, TypeProtected, TypeAcyclic:
+	case TypeConsumes, TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic:
 		e, _ := NewEnforcement([]Language{LanguageGo, LanguageTypeScript, LanguagePython},
 			[]Fact{FactImports},
 			"static import classification against the module and dependency manifests",

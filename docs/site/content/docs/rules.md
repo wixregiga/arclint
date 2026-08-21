@@ -169,6 +169,24 @@ dependencies:
     allow: [composition]
 ```
 
+## independence
+
+Sibling Folders selected by globs may not import each other.
+
+- where: top-level `dependencies:`
+- Rule Type: `independence` (`kind: independence`)
+- Assurance: `exact`
+
+Each glob in `folders` selects member folders from observed files. A
+candidate is dropped when a declared Module owns that folder's subtree.
+
+```yaml
+dependencies:
+  - id: "repo:features/independent"
+    kind: independence
+    folders: ["internal/*"]
+```
+
 ## acyclic
 
 No import cycles among the named Modules.

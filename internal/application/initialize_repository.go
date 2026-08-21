@@ -5,10 +5,22 @@ import (
 	"strings"
 )
 
+const (
+	// BarePattern is the name of the commented starter ruleset.
+	BarePattern = "bare"
+)
+
 // RulesetScaffold persists a drafted repository ruleset. Write refuses
 // to overwrite an existing ruleset unless forced.
 type RulesetScaffold interface {
 	Write(content string, force bool) (path string, err error)
+}
+
+// PatternScaffolds supplies built-in Pattern packages as
+// repository-form rulesets init can materialize.
+type PatternScaffolds interface {
+	Names() []string
+	Ruleset(name string) (content string, ok bool)
 }
 
 // InitializeRepositoryRequest carries the explicit choices a draft is
@@ -16,24 +28,33 @@ type RulesetScaffold interface {
 type InitializeRepositoryRequest struct {
 	// Languages are the runtime targets: go, ts, py. Empty means go.
 	Languages []string
+	// Pattern selects a built-in Pattern name, or BarePattern for the
+	// commented starter. Empty means BarePattern.
+	Pattern string
 	// Force overwrites an existing ruleset.
 	Force bool
 }
 
 // InitializeRepository drafts repository Rule and Module configuration
 // from explicit choices: a commented starter ruleset the owner grows
-// into real Modules and contracts. The draft must load through the
-// same strict loader that governs every ruleset.
+// into real Modules and contracts, or a built-in Pattern materialized
+// as the repository ruleset. The draft must load through the same
+// strict loader that governs every ruleset.
 type InitializeRepository struct {
 	scaffold RulesetScaffold
+	patterns PatternScaffolds
 }
 
-// NewInitializeRepository requires the scaffold port.
-func NewInitializeRepository(scaffold RulesetScaffold) (InitializeRepository, error) {
+// NewInitializeRepository requires the scaffold and built-in Pattern
+// ports.
+func NewInitializeRepository(scaffold RulesetScaffold, patterns PatternScaffolds) (InitializeRepository, error) {
 	if scaffold == nil {
 		return InitializeRepository{}, fmt.Errorf("initialize repository: missing ruleset scaffold")
 	}
-	return InitializeRepository{scaffold: scaffold}, nil
+	if patterns == nil {
+		return InitializeRepository{}, fmt.Errorf("initialize repository: missing pattern scaffolds")
+	}
+	return InitializeRepository{scaffold: scaffold, patterns: patterns}, nil
 }
 
 var supportedLanguages = []string{"go", "ts", "py"}
@@ -53,6 +74,12 @@ func supportsLanguage(language string) bool {
 	return false
 }
 
+// Patterns returns the init choices: bare, then every built-in Pattern
+// name.
+func (uc InitializeRepository) Patterns() []string {
+	return append([]string{"bare"}, uc.patterns.Names()...)
+}
+
 // Execute drafts and persists the starter ruleset, returning its path.
 func (uc InitializeRepository) Execute(req InitializeRepositoryRequest) (string, error) {
 	languages := req.Languages
@@ -61,14 +88,32 @@ func (uc InitializeRepository) Execute(req InitializeRepositoryRequest) (string,
 	}
 	for _, l := range languages {
 		if !supportsLanguage(l) {
-			return "", fmt.Errorf("initialize repository: language %q is not one of go, ts, py", l)
+			return "", fmt.Errorf("initialize repository: language %q is not one of %s", l, strings.Join(supportedLanguages, ", "))
 		}
 	}
-	path, err := uc.scaffold.Write(starterRuleset(languages), req.Force)
+	content, err := uc.rulesetContent(req.Pattern, languages)
+	if err != nil {
+		return "", err
+	}
+	path, err := uc.scaffold.Write(content, req.Force)
 	if err != nil {
 		return "", fmt.Errorf("write ruleset: %w", err)
 	}
 	return path, nil
+}
+
+func (uc InitializeRepository) rulesetContent(pattern string, languages []string) (string, error) {
+	if pattern == "" {
+		pattern = BarePattern
+	}
+	if pattern == BarePattern {
+		return starterRuleset(languages), nil
+	}
+	content, ok := uc.patterns.Ruleset(pattern)
+	if !ok {
+		return "", fmt.Errorf("initialize repository: pattern %q is not one of %s", pattern, strings.Join(uc.Patterns(), ", "))
+	}
+	return strings.Replace(content, "runtime: [go]", fmt.Sprintf("runtime: [%s]", strings.Join(languages, ", ")), 1), nil
 }
 
 // starterRuleset renders the commented draft. It declares one Module
