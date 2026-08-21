@@ -103,6 +103,24 @@ func TestInvalidRulesCannotBeConstructed(t *testing.T) {
 			Params:        rule.NamingParams{},
 			Applicability: mustModuleApplicability(t, "a"),
 		}},
+		{"independence without folders", rule.Spec{
+			ID:            "t:independence-empty",
+			Type:          rule.TypeIndependence,
+			Params:        rule.IndependenceParams{},
+			Applicability: mustRepoApplicability(t),
+		}},
+		{"independence with duplicate folders", rule.Spec{
+			ID:            "t:independence-dup",
+			Type:          rule.TypeIndependence,
+			Params:        rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*"), mustGlob(t, "internal/*")}},
+			Applicability: mustRepoApplicability(t),
+		}},
+		{"independence with module scope", rule.Spec{
+			ID:            "t:independence-scope",
+			Type:          rule.TypeIndependence,
+			Params:        rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*")}},
+			Applicability: mustModuleApplicability(t, "a"),
+		}},
 	}
 	for _, c := range cases {
 		if _, err := rule.New(c.spec); err == nil {

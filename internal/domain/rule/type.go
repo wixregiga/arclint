@@ -7,10 +7,10 @@ import (
 )
 
 // Type is one value from the finite ArcLint-owned set of supported Rule
-// shapes: consumes, structure, naming, layers, protected, acyclic, and
-// extension. Pattern and Extension authors configure existing values;
-// they do not add new ones — custom logic plugs into the extension
-// kind through the SDK, it never grows this enum.
+// shapes: consumes, structure, naming, layers, protected, independence,
+// acyclic, and extension. Pattern and Extension authors configure
+// existing values; they do not add new ones — custom logic plugs into
+// the extension kind through the SDK, it never grows this enum.
 type Type string
 
 const (
@@ -29,6 +29,8 @@ const (
 	TypeLayers Type = "layers"
 	// TypeProtected restricts which Modules may import one Module.
 	TypeProtected Type = "protected"
+	// TypeIndependence forbids imports between sibling Folders.
+	TypeIndependence Type = "independence"
 	// TypeAcyclic forbids dependency cycles among declared Modules.
 	TypeAcyclic Type = "acyclic"
 	// TypeExtension delegates enforcement to a named Extension through
@@ -41,7 +43,7 @@ const (
 func Types() []Type {
 	return []Type{
 		TypeConsumes, TypeStructure, TypeNaming,
-		TypeLayers, TypeProtected, TypeAcyclic, TypeExtension,
+		TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic, TypeExtension,
 	}
 }
 
@@ -80,6 +82,8 @@ func (t Type) Meaning() string {
 		return "orders Modules highest first; a Module may import same or lower layers, never higher"
 	case TypeProtected:
 		return "restricts which Modules may import one Module"
+	case TypeIndependence:
+		return "forbids imports between sibling Folders selected by globs"
 	case TypeAcyclic:
 		return "forbids dependency cycles among declared Modules"
 	case TypeExtension:
@@ -356,6 +360,37 @@ func (p AcyclicParams) proposition() string {
 		return "declared Module dependencies contain no cycle"
 	}
 	return fmt.Sprintf("dependencies among %s contain no cycle", moduleList(p.Modules))
+}
+
+// IndependenceParams configures an independence Rule: sibling Folders
+// selected by the globs may not import each other.
+type IndependenceParams struct {
+	Folders []Glob
+}
+
+// Type returns TypeIndependence.
+func (p IndependenceParams) Type() Type { return TypeIndependence }
+
+func (p IndependenceParams) validate() error {
+	if len(p.Folders) == 0 {
+		return fmt.Errorf("independence folders: none declared")
+	}
+	seen := map[string]bool{}
+	for _, g := range p.Folders {
+		s := g.String()
+		if s == "" {
+			return fmt.Errorf("independence folders: empty glob")
+		}
+		if seen[s] {
+			return fmt.Errorf("independence folders: duplicate %q", s)
+		}
+		seen[s] = true
+	}
+	return nil
+}
+
+func (p IndependenceParams) proposition() string {
+	return fmt.Sprintf("sibling Folders matching %s may not import each other", globList(p.Folders))
 }
 
 func uniqueValidModules(what string, modules []ModuleName) error {

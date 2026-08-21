@@ -215,6 +215,18 @@ func TestInitDraftLoads(t *testing.T) {
 	}
 }
 
+func TestInitVerticalLoads(t *testing.T) {
+	root := t.TempDir()
+	stdout, stderr, code := runBin(t, root, os.Environ(), "init", "--pattern", "vertical")
+	if code != 0 || !strings.Contains(stdout, "wrote ") {
+		t.Fatalf("init --pattern vertical exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	write(t, root, "hello.go", "package hello\n")
+	if _, stderr, code := runBin(t, root, os.Environ(), "check"); code != 0 {
+		t.Errorf("check on the vertical ruleset: exit %d\nstderr: %s", code, stderr)
+	}
+}
+
 // TestBaselineLifecycle drives adopt, gate, stale, refresh over a real
 // fixture repository.
 func TestBaselineLifecycle(t *testing.T) {

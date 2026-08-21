@@ -126,7 +126,7 @@ func (f *fakePublisher) Install(block string) (bool, string, error) {
 }
 
 func TestInitializeRepositoryRejectsUnknownLanguages(t *testing.T) {
-	uc, err := application.NewInitializeRepository(fakeScaffold{})
+	uc, err := application.NewInitializeRepository(fakeScaffold{}, fakePatternScaffolds{})
 	if err != nil {
 		t.Fatalf("NewInitializeRepository: %v", err)
 	}
@@ -135,9 +135,30 @@ func TestInitializeRepositoryRejectsUnknownLanguages(t *testing.T) {
 	}
 }
 
+func TestInitializeRepositoryRejectsUnknownPatterns(t *testing.T) {
+	uc, err := application.NewInitializeRepository(fakeScaffold{}, fakePatternScaffolds{})
+	if err != nil {
+		t.Fatalf("NewInitializeRepository: %v", err)
+	}
+	_, err = uc.Execute(application.InitializeRepositoryRequest{Pattern: "hexagonal"})
+	if err == nil {
+		t.Fatal("unknown pattern must be rejected")
+	}
+	want := `initialize repository: pattern "hexagonal" is not one of bare`
+	if err.Error() != want {
+		t.Errorf("error = %q, want %q", err.Error(), want)
+	}
+}
+
 type fakeScaffold struct{}
 
 func (fakeScaffold) Write(content string, force bool) (string, error) { return "rules.yaml", nil }
+
+type fakePatternScaffolds struct{}
+
+func (fakePatternScaffolds) Names() []string { return nil }
+
+func (fakePatternScaffolds) Ruleset(string) (string, bool) { return "", false }
 
 func TestArchitecturalContextWorksite(t *testing.T) {
 	uc, err := application.NewGetArchitecturalContext(fakeRepository{contextFixture(t)})

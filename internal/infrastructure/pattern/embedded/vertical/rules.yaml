@@ -1,0 +1,73 @@
+# ArcLint architecture contracts: vertical slices with hexagonal layers inside.
+# Each feature folder under internal/ owns its domain, application, and infra;
+# internal/app wires transports, internal/shared holds cross-cutting mechanisms.
+# Query commands: arclint rules [selector] · arclint context <path>
+
+runtime: [go]
+
+scan:
+  # error | warn | ignore for imports that classify neither stdlib,
+  # internal, nor declared in the dependency manifest.
+  unknown_imports: warn
+
+modules:
+  domain:
+    paths: ["internal/*/domain/**"]
+    description: "Pure domain model per feature; stdlib-only."
+  application:
+    paths: ["internal/*/application/**"]
+    description: "Use cases and ports per feature."
+  infra:
+    paths: ["internal/*/infra/**"]
+    description: "Driven adapters implementing the feature's ports."
+  app:
+    paths: ["internal/app/**"]
+    description: "Driving adapters and wiring, organized by transport."
+  shared:
+    paths: ["internal/shared/**"]
+    description: "Cross-cutting mechanisms with no product meaning."
+  composition:
+    paths: ["cmd/**"]
+    description: "Entrypoints; each main.go builds a binary."
+
+contracts:
+  domain:
+    consumes:
+      id: "repo:domain/stdlib-only"
+      internal: []
+      external: forbid
+  application:
+    consumes:
+      id: "repo:application/use-cases-through-ports"
+      internal: [domain]
+      external: forbid
+  infra:
+    consumes:
+      id: "repo:infra/outbound-only"
+      internal: [application, domain, shared]
+  app:
+    consumes:
+      id: "repo:app/driving-and-wiring"
+      internal: [application, domain, infra, shared]
+  shared:
+    consumes:
+      id: "repo:shared/mechanism-only"
+      internal: []
+  composition:
+    consumes:
+      id: "repo:composition/selects-adapters"
+      internal: [app, infra, application, domain, shared]
+
+dependencies:
+  - id: "repo:dependencies/inward"
+    kind: layers
+    layers: [app, application, domain]
+  - id: "repo:infra/app-and-composition-only"
+    kind: protected
+    module: infra
+    allow: [app, composition]
+  - id: "repo:features/independent"
+    kind: independence
+    folders: ["internal/*"]
+  - id: "repo:dependencies/acyclic"
+    kind: acyclic

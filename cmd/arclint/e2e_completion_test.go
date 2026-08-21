@@ -105,6 +105,22 @@ func TestCompletionListsInitLanguages(t *testing.T) {
 	}
 }
 
+func TestCompletionListsInitPatterns(t *testing.T) {
+	root := t.TempDir()
+	stdout, stderr, code := runBin(t, root, os.Environ(), "__complete", "init", "--pattern", "")
+	if code != 0 {
+		t.Fatalf("__complete init --pattern: exit %d\nstderr: %s", code, stderr)
+	}
+	for _, name := range []string{"bare", "vertical"} {
+		if !containsLine(stdout, name) {
+			t.Errorf("--pattern completion misses %q\n%s", name, stdout)
+		}
+	}
+	if !containsLine(stdout, ":4") {
+		t.Errorf("--pattern completion misses the NoFileComp directive\n%s", stdout)
+	}
+}
+
 // TestCompletionDegradesWithoutRuleset pins the contract: with no
 // rules.yaml anywhere, completion exits 0 with no dynamic candidates
 // and no error text — the shell must never see a failure on TAB.

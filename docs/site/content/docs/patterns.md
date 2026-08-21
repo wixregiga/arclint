@@ -20,18 +20,19 @@ text by hand.
 arclint patterns
 ```
 
-Lists Pattern distribution packages the running CLI can see. Today the
-command prints:
+Lists Pattern distribution packages the running CLI can see: built-in
+packages embedded in the binary, then any local packages under
+`.arclint/patterns`. Built-in packages appear the same way local ones
+do; they differ only in where their bytes come from.
 
 ```
-no patterns available
+arclint/vertical@0.1.0  10 rule(s)  coverage [go]
 ```
 
-There are no built-in Pattern packages shipped with the CLI yet, and
-the listing is empty until distributions exist and are discoverable.
-
-`arclint init` drafts a starter `rules.yaml` from `--languages` (and
-`--force` to overwrite). It does not install or select Patterns.
+`arclint init --pattern vertical` materializes that built-in package as
+the repository `rules.yaml`. `--pattern bare` (the no-flag default)
+writes the commented single-module draft instead. Local distribution
+files keep their `pattern:` header and are not materialized by init.
 
 ## What this page does not cover
 

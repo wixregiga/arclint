@@ -21,6 +21,7 @@ import (
 	pythonfacts "github.com/wixregiga/arclint/internal/infrastructure/language/python"
 	typescriptfacts "github.com/wixregiga/arclint/internal/infrastructure/language/typescript"
 	filesystemobservation "github.com/wixregiga/arclint/internal/infrastructure/observation/filesystem"
+	embeddedpattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/embedded"
 	filesystempattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/filesystem"
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
 	"github.com/wixregiga/arclint/internal/infrastructure/ruletest"
@@ -84,7 +85,7 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	listPatterns, err := application.NewListPatterns(patterns)
+	listPatterns, err := application.NewListPatterns(embeddedpattern.NewSource(), patterns)
 	if err != nil {
 		return configError(err)
 	}
@@ -125,7 +126,7 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	initialize, err := application.NewInitializeRepository(scaffoldWriter)
+	initialize, err := application.NewInitializeRepository(scaffoldWriter, embeddedpattern.NewSource())
 	if err != nil {
 		return configError(err)
 	}
@@ -177,7 +178,7 @@ func runInit(args []string, configError func(error) int) int {
 	if err != nil {
 		return configError(err)
 	}
-	initialize, err := application.NewInitializeRepository(writer)
+	initialize, err := application.NewInitializeRepository(writer, embeddedpattern.NewSource())
 	if err != nil {
 		return configError(err)
 	}
