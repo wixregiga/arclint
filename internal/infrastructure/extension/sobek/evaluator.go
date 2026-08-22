@@ -9,6 +9,7 @@ import (
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 // Evaluator implements the domain's ExtensionEvaluator port: discover
@@ -41,7 +42,7 @@ func NewEvaluator(root string) (*Evaluator, error) {
 
 // Evaluate runs one extension rule over the selected subjects.
 func (e *Evaluator) Evaluate(extension string, params map[string]any, subjects []string,
-	modules []rule.Module, obs conformance.Observations,
+	modules []rule.Module, obs conformance.Observations, knowledge vocab.UbiquitousLanguage,
 ) ([]conformance.ExtensionFinding, error) {
 	e.once.Do(func() { e.registry, e.loadErr = LoadDir(e.root, e.opts) })
 	if e.loadErr != nil {
@@ -56,7 +57,7 @@ func (e *Evaluator) Evaluate(extension string, params map[string]any, subjects [
 	if err != nil {
 		return nil, err
 	}
-	reported, err := ruleType.Check(e.host(subjects, modules, obs), validated)
+	reported, err := ruleType.Check(e.host(subjects, modules, obs, knowledge), validated)
 	if err != nil {
 		return nil, err
 	}
@@ -75,11 +76,12 @@ func (e *Evaluator) Evaluate(extension string, params map[string]any, subjects [
 // host lends the read-only capability surface, scoped to the selected
 // subjects: files outside the Rule's Applicability are invisible and
 // unreadable, so exclusions hold mechanically.
-func (e *Evaluator) host(subjects []string, modules []rule.Module, obs conformance.Observations) Host {
+func (e *Evaluator) host(subjects []string, modules []rule.Module, obs conformance.Observations, knowledge vocab.UbiquitousLanguage) Host {
 	inScope := make(map[string]bool, len(subjects))
 	for _, s := range subjects {
 		inScope[s] = true
 	}
+	domain := domainInfoFrom(knowledge)
 	return Host{
 		Files: func(glob string) ([]FileInfo, error) {
 			var matcher *rule.Glob
@@ -196,7 +198,62 @@ func (e *Evaluator) host(subjects []string, modules []rule.Module, obs conforman
 			sort.Strings(out)
 			return out
 		},
+		Domain: func() DomainInfo { return domain },
 	}
+}
+
+// emptyDomainInfo returns a DomainInfo whose collections are non-nil
+// empty slices so JavaScript sees arrays rather than null.
+func emptyDomainInfo() DomainInfo {
+	return DomainInfo{
+		Entities:      []DomainDefinitionInfo{},
+		ValueObjects:  []DomainDefinitionInfo{},
+		BusinessRules: []DomainDefinitionInfo{},
+		Events:        []DomainDefinitionInfo{},
+	}
+}
+
+// domainInfoFrom translates the recorded Language into the SDK wire
+// shape, guaranteeing non-nil slices.
+func domainInfoFrom(lang vocab.UbiquitousLanguage) DomainInfo {
+	info := emptyDomainInfo()
+	info.Entities = entityInfos(lang.ListEntities())
+	info.ValueObjects = definitionInfos(lang.ValueObjects)
+	info.BusinessRules = definitionInfos(lang.BusinessRules)
+	info.Events = definitionInfos(lang.Events)
+	return info
+}
+
+func entityInfos(entities []vocab.Entity) []DomainDefinitionInfo {
+	if len(entities) == 0 {
+		return []DomainDefinitionInfo{}
+	}
+	out := make([]DomainDefinitionInfo, len(entities))
+	for i, e := range entities {
+		out[i] = DomainDefinitionInfo{
+			Name:       e.Name,
+			Definition: e.Definition.Definition,
+			Aliases:    e.Aliases,
+			Aggregate:  e.Aggregate,
+		}
+	}
+	return out
+}
+
+func definitionInfos(defs []vocab.Definition) []DomainDefinitionInfo {
+	if len(defs) == 0 {
+		return []DomainDefinitionInfo{}
+	}
+	out := make([]DomainDefinitionInfo, len(defs))
+	for i, d := range defs {
+		out[i] = DomainDefinitionInfo{
+			Name:       d.Name,
+			Definition: d.Definition,
+			Aliases:    d.Aliases,
+			Aggregate:  false,
+		}
+	}
+	return out
 }
 
 // SDKWriter implements the application's SDKScaffold port: write the

@@ -38,6 +38,9 @@ type Host struct {
 	Facts func(path string) *FactsInfo
 	// ModuleOf returns the sorted modules a file belongs to.
 	ModuleOf func(path string) []string
+	// Domain returns the project's recorded domain model; nil means
+	// the host supplies empty collections.
+	Domain func() DomainInfo
 }
 
 // sandboxJS closes the engine's documented determinism gap: Date.now and
@@ -297,6 +300,12 @@ func (rt *RuleType) Check(host Host, params map[string]any) ([]ViolationInput, e
 			mods = []string{}
 		}
 		return vm.ToValue(mods)
+	})
+	mustSet("domain", func(_ sobek.FunctionCall) sobek.Value {
+		if host.Domain == nil {
+			return vm.ToValue(emptyDomainInfo())
+		}
+		return vm.ToValue(host.Domain())
 	})
 	mustSet("report", func(call sobek.FunctionCall) sobek.Value {
 		if len(call.Arguments) < 1 {

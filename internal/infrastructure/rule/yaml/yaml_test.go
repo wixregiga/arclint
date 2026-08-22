@@ -20,11 +20,11 @@ func TestLoadTargetRuleset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConfiguredRules: %v", err)
 	}
-	if len(cfg.Modules) != 8 {
-		t.Errorf("modules = %d, want 8", len(cfg.Modules))
+	if len(cfg.Modules) != 9 {
+		t.Errorf("modules = %d, want 9", len(cfg.Modules))
 	}
-	if len(cfg.Rules) != 18 {
-		t.Errorf("rules = %d, want 18", len(cfg.Rules))
+	if len(cfg.Rules) != 21 {
+		t.Errorf("rules = %d, want 21", len(cfg.Rules))
 	}
 	if len(cfg.Languages) != 2 || cfg.Languages[0] != rule.LanguageGo || cfg.Languages[1] != rule.LanguageTypeScript {
 		t.Errorf("languages = %v, want [go typescript]", cfg.Languages)

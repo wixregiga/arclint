@@ -7,6 +7,7 @@ import (
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 type fakeExtensions struct {
@@ -20,7 +21,7 @@ type fakeExtensions struct {
 }
 
 func (f *fakeExtensions) Evaluate(extension string, params map[string]any, subjects []string,
-	modules []rule.Module, obs conformance.Observations,
+	modules []rule.Module, obs conformance.Observations, knowledge vocab.UbiquitousLanguage,
 ) ([]conformance.ExtensionFinding, error) {
 	f.saw.extension = extension
 	f.saw.params = params

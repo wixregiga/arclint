@@ -31,6 +31,10 @@ export interface Ctx {
   facts(path: string): FactsInfo | null;
   /** The sorted module names a file belongs to. */
   moduleOf(path: string): string[];
+  /** The project's recorded domain model (ubiquitous-language.yaml);
+   * empty collections when the project records none. Read-only:
+   * declaring knowledge never creates a diagnostic by itself. */
+  domain(): DomainInfo;
   /** Report one violation. */
   report(v: ViolationInput): void;
 }

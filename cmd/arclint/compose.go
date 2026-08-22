@@ -26,6 +26,7 @@ import (
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
 	"github.com/wixregiga/arclint/internal/infrastructure/ruletest"
 	filesystemscaffold "github.com/wixregiga/arclint/internal/infrastructure/scaffold/filesystem"
+	yamlvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/yaml"
 )
 
 func run(args []string) int {
@@ -64,6 +65,10 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
+	knowledge, err := yamlvocab.NewRepository(root)
+	if err != nil {
+		return configError(err)
+	}
 
 	listRules, err := application.NewListRules(repository)
 	if err != nil {
@@ -73,7 +78,7 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	assess, err := application.NewAssessConformance(repository, observations, baselines, extensions)
+	assess, err := application.NewAssessConformance(repository, observations, baselines, extensions, knowledge)
 	if err != nil {
 		return configError(err)
 	}
@@ -89,7 +94,7 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	getContext, err := application.NewGetArchitecturalContext(repository)
+	getContext, err := application.NewGetArchitecturalContext(repository, knowledge)
 	if err != nil {
 		return configError(err)
 	}
@@ -111,7 +116,7 @@ func run(args []string) int {
 	}
 	ruleTests, err := application.NewRunRuleTests(repository, ruletest.NewSource(root),
 		ruletest.NewObserver(golangfacts.NewProducer(), typescriptfacts.NewProducer(), pythonfacts.NewProducer()),
-		extensions)
+		extensions, yamlvocab.Parser{})
 	if err != nil {
 		return configError(err)
 	}
@@ -130,12 +135,32 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-
+	getDomainOverview, err := application.NewGetDomainOverview(knowledge)
+	if err != nil {
+		return configError(err)
+	}
+	listDomainDefinitions, err := application.NewListDomainDefinitions(knowledge)
+	if err != nil {
+		return configError(err)
+	}
+	showDomainDefinition, err := application.NewShowDomainDefinition(knowledge)
+	if err != nil {
+		return configError(err)
+	}
+	defineDomainDefinition, err := application.NewDefineDomainDefinition(knowledge)
+	if err != nil {
+		return configError(err)
+	}
+	removeDomainDefinition, err := application.NewRemoveDomainDefinition(knowledge)
+	if err != nil {
+		return configError(err)
+	}
 	rootCommand := cli.Root(buildVersion(version),
 		cli.NewCheckCommand(assess, listRules),
 		cli.NewInitCommand(initialize),
 		cli.NewRulesCommand(listRules, showRule, ruleTests),
 		cli.NewContextCommand(getContext),
+		cli.NewDomainCommand(getDomainOverview, listDomainDefinitions, showDomainDefinition, defineDomainDefinition, removeDomainDefinition),
 		cli.NewAgentsCommand(publishAgents),
 		cli.NewBaselineCommand(capture, refresh),
 		cli.NewPatternsCommand(listPatterns),
@@ -145,7 +170,7 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	outcome := adapter.Run(rootCommand, cli.Invocation{Args: rest, Stdout: os.Stdout, Stderr: os.Stderr})
+	outcome := adapter.Run(rootCommand, cli.Invocation{Args: rest, Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr})
 	return outcome.ExitCode
 }
 

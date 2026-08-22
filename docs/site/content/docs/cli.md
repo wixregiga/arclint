@@ -12,6 +12,14 @@ weight = 6
 | `arclint baseline capture` | replace `.arclint/baseline.v2.json` with the active findings from one complete assessment |
 | `arclint baseline refresh` | reassess and replace the Baseline, dropping stale entries |
 | `arclint context [paths...]` | explain the repository or everything binding the selected paths; `--module` adds named Modules and `--format json` emits the machine form |
+| `arclint domain` | shorthand for `arclint domain overview`; inspect and maintain the project's ubiquitous language |
+| `arclint domain overview` | summarize the project's ubiquitous language for understanding |
+| `arclint domain list [type]` | list domain definitions, optionally filtered to `entities`, `aggregates`, `value-objects`, `business-rules`, or `events` |
+| `arclint domain show <type> <name>` | show one domain definition by singular type and canonical name |
+| `arclint domain explain [type]` | explain ArcLint's supported domain concepts |
+| `arclint domain define <type> <name>` | create or update a domain definition; `--guided` starts interactive authoring |
+| `arclint domain remove <type> <name>` | remove a domain definition (`rm` alias); never touches source files |
+| `arclint domain schema` | print the JSON Schema accepted for `ubiquitous-language.yaml` |
 | `arclint agents` | print the generated `AGENTS.md` architecture block; `--write` installs or refreshes it between markers without changing surrounding text |
 | `arclint rules [selector]` | list configured Rules, or show one complete Rule when the selector has one exact match; broader selectors produce a narrowed list |
 | `arclint rules schema` | print the indented JSON Schema accepted for `rules.yaml` |
@@ -142,3 +150,37 @@ appear as active findings.
 `arclint rules schema` always emits indented JSON. The same generated
 schema is committed as `docs/rules.schema.json`; tests keep the command
 output and committed file byte-for-byte identical.
+
+## Project domain model
+
+`arclint domain` inspects and maintains the project's Ubiquitous Language:
+the shared language used by developers, domain experts, documentation,
+tests, and code. ArcLint records that language as a structured Project
+Domain Model in a committed `ubiquitous-language.yaml` beside the
+resolved `rules.yaml`. ArcLint does not search for the model
+independently; `--rules <path>` moves both files' project root together.
+
+Running `arclint domain` with no subcommand is the same as
+`arclint domain overview`. Subcommands cover summary (`overview`),
+inventory (`list`), one definition (`show`), ArcLint-owned concept
+meanings (`explain`), create-or-update (`define`, including
+`--guided`), removal (`remove` / `rm`), and the published schema
+(`schema`).
+
+Every domain subcommand except `schema` accepts `--format text|json`
+(default `text`). Text is for humans; JSON is the stable machine shape
+for agents and scripts. `domain schema` always emits indented JSON, the
+same contract committed as `docs/ubiquitous-language.schema.json`.
+
+Domain command exit codes:
+
+| code | meaning |
+|---|---|
+| `0` | operation succeeded, including an unchanged `define` |
+| `1` | operation could not be completed (missing definition, malformed model, write failure) |
+| `2` | invalid command usage (unknown type, missing name, mutually exclusive flags, bad `--format`) |
+
+Declaring knowledge never creates a Diagnostic by itself. Domain quality
+findings remain the responsibility of enabled Rules under
+`arclint check`. `arclint context` surfaces the recorded model when
+present; focused path relevance stays with `context`, not `domain`.

@@ -40,6 +40,9 @@ modules:
   source:
     paths: ["internal/**"]
     description: "Common source invariants for internal packages."
+  vocabulary:
+    paths: ["ubiquitous-language.yaml"]
+    description: "The project's recorded Ubiquitous Language vocabulary."
 
 contracts:
   domain:
@@ -66,6 +69,37 @@ contracts:
         uses: forbid-content
         with:
           pattern: '\bpanic\('
+      # Domain directories talk through their file names: a domain
+      # file is named for the vocabulary concept it holds, never for a
+      # generic container.
+      - id: "arclint:domain/files-speak-the-vocabulary"
+        kind: structure
+        forbid:
+          - "internal/domain/**/model.go"
+          - "internal/domain/**/types.go"
+          - "internal/domain/**/util.go"
+          - "internal/domain/**/utils.go"
+          - "internal/domain/**/helpers.go"
+          - "internal/domain/**/common.go"
+      # Domain errors scream their subject: ErrDefinitionNotFound,
+      # never a bare ErrNotFound the package qualifier cannot rescue.
+      - id: "arclint:domain/errors-name-their-subject"
+        kind: extension
+        files: "internal/domain/**/*.go"
+        uses: forbid-content
+        with:
+          pattern: '\bErr(NotFound|Invalid|Failed|Exists)\b'
+
+  vocabulary:
+    invariants:
+      # The vocabulary showcase: an extension consumes the recorded
+      # Ubiquitous Language through ctx.domain(). Inert until a
+      # project records terms; a recorded term must carry a
+      # definition.
+      - id: "arclint:vocabulary/terms-carry-definitions"
+        kind: extension
+        files: "ubiquitous-language.yaml"
+        uses: require-defined-terms
 
   application:
     consumes:

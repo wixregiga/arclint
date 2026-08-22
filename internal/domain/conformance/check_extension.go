@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 // evaluateExtensionRule delegates one Rule to its Extension through
@@ -21,7 +22,7 @@ import (
 // operational Diagnostics identify the breach. The check still returns
 // a complete Assessment (no error) so other Rules keep reporting.
 func evaluateExtensionRule(r rule.Rule, mem membership, obs Observations,
-	evaluator ExtensionEvaluator, modules []rule.Module,
+	evaluator ExtensionEvaluator, modules []rule.Module, knowledge vocab.UbiquitousLanguage,
 ) ([]Evaluation, []Diagnostic, error) {
 	params, ok := r.Params().(rule.ExtensionParams)
 	if !ok {
@@ -32,7 +33,7 @@ func evaluateExtensionRule(r rule.Rule, mem membership, obs Observations,
 		return es, nil, err
 	}
 	selected, excluded := partitionFiles(r, mem)
-	findings, err := evaluator.Evaluate(params.Uses, params.With, selected, modules, obs)
+	findings, err := evaluator.Evaluate(params.Uses, params.With, selected, modules, obs, knowledge)
 	if err != nil {
 		return nil, nil, fmt.Errorf("rule %s: %v", r.ID(), err)
 	}

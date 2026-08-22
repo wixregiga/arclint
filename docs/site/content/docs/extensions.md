@@ -115,10 +115,12 @@ registry entries.
 
 ## The ctx surface
 
-During `check`, the host lends exactly this read-only surface, scoped to
-the Rule's selected subjects. Paths outside Applicability are invisible
-to `files` / `imports` / `facts` / `moduleOf` and unreadable via `read`.
-No ambient filesystem, network, or Node globals.
+During `check`, the host lends exactly this read-only surface. File-scoped
+calls are limited to the Rule's selected subjects: paths outside
+Applicability are invisible to `files` / `imports` / `facts` / `moduleOf`
+and unreadable via `read`. `ctx.domain()` is project-wide recorded
+knowledge, not path-scoped. No ambient filesystem, network, or Node
+globals.
 
 | call | returns |
 |---|---|
@@ -129,6 +131,7 @@ No ambient filesystem, network, or Node globals.
 | `ctx.facts(path)` | declaration facts, or `null` when the language did not supply them |
 | `ctx.moduleOf(path)` | sorted Module names containing the path (empty when out of scope) |
 | `ctx.report(v)` | record one finding |
+| `ctx.domain()` | the project's recorded domain model (`DomainInfo`); empty collections when none is recorded |
 
 `ctx.report` accepts only:
 
@@ -139,6 +142,37 @@ No ambient filesystem, network, or Node globals.
 `path` and `message` are required. Severity is not on the wire: the Rule
 owns it. Legacy per-finding `severity`, `contract`, and `blame` fields are
 ignored if present.
+
+`ctx.domain()` returns read-only `DomainInfo`:
+
+```ts
+{
+  entities: DomainDefinitionInfo[];
+  valueObjects: DomainDefinitionInfo[];
+  businessRules: DomainDefinitionInfo[];
+  events: DomainDefinitionInfo[];
+}
+
+// DomainDefinitionInfo
+{
+  name: string;
+  definition?: string;
+  aliases?: string[];
+  aggregate?: boolean; // entities only; true when designated Aggregate
+}
+```
+
+Collections are always arrays (empty when the project records none or
+the file is absent). Declaring knowledge never creates a Diagnostic by
+itself; an Extension only surfaces findings when its `check` calls
+`ctx.report`.
+
+Rule Tests exercise `ctx.domain()` the same way they exercise files: a
+fixture that authors `ubiquitous-language.yaml` at its tree root is
+parsed with the production loader, and the extension under test
+observes that vocabulary through `ctx.domain()`. Fixtures without one
+see an empty model. See `arclint:vocabulary/terms-carry-definitions`
+and its cases under `.arclint/tests/` for a complete example.
 
 ## Evidence honesty
 

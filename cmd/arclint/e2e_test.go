@@ -50,6 +50,26 @@ func runBin(t *testing.T, dir string, env []string, args ...string) (string, str
 	return stdout.String(), stderr.String(), code
 }
 
+// runBinStdin is runBin with a scripted stdin payload (guided authoring).
+func runBinStdin(t *testing.T, dir string, env []string, stdin string, args ...string) (string, string, int) {
+	t.Helper()
+	cmd := exec.Command(binPath, args...)
+	cmd.Dir = dir
+	cmd.Env = env
+	cmd.Stdin = strings.NewReader(stdin)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	code := 0
+	if exit, ok := err.(*exec.ExitError); ok {
+		code = exit.ExitCode()
+	} else if err != nil {
+		t.Fatalf("run %v: %v", args, err)
+	}
+	return stdout.String(), stderr.String(), code
+}
+
 func repoRoot(t *testing.T) string {
 	t.Helper()
 	root, err := filepath.Abs(filepath.Join("..", ".."))
@@ -98,8 +118,8 @@ func TestRulesListsRuleset(t *testing.T) {
 		t.Fatalf("rules exit %d\nstderr: %s", code, stderr)
 	}
 	lines := strings.Split(strings.TrimSpace(stdout), "\n")
-	if len(lines) != 18 {
-		t.Errorf("rules listed = %d, want 18\n%s", len(lines), stdout)
+	if len(lines) != 21 {
+		t.Errorf("rules listed = %d, want 21\n%s", len(lines), stdout)
 	}
 	for _, want := range []string{"arclint:domain/stdlib-only", "arclint:domain/no-panic"} {
 		if !strings.Contains(stdout, want) {

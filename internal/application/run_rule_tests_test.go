@@ -8,6 +8,7 @@ import (
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 // ruleTestConfig builds one configured repository for Rule Test runs:
@@ -97,18 +98,35 @@ func mustRuleTest(t *testing.T, name, ruleID string, files []rule.TestFile,
 	return rt
 }
 
+// fakeVocabularySource returns a configured vocabulary and records the
+// content it was asked to parse.
+type fakeVocabularySource struct {
+	lang    vocab.UbiquitousLanguage
+	err     error
+	content []byte
+}
+
+func (f *fakeVocabularySource) ParseUbiquitousLanguage(content []byte) (vocab.UbiquitousLanguage, error) {
+	f.content = content
+	return f.lang, f.err
+}
+
 func TestNewRunRuleTestsRejectsMissingPorts(t *testing.T) {
 	repo := ruleTestRepository{}
 	source := fakeRuleTestSource{}
 	observer := &fakeFixtureObserver{}
-	if _, err := application.NewRunRuleTests(nil, source, observer, nil); err == nil {
+	vocabulary := &fakeVocabularySource{}
+	if _, err := application.NewRunRuleTests(nil, source, observer, nil, vocabulary); err == nil {
 		t.Errorf("nil repository accepted")
 	}
-	if _, err := application.NewRunRuleTests(repo, nil, observer, nil); err == nil {
+	if _, err := application.NewRunRuleTests(repo, nil, observer, nil, vocabulary); err == nil {
 		t.Errorf("nil test source accepted")
 	}
-	if _, err := application.NewRunRuleTests(repo, source, nil, nil); err == nil {
+	if _, err := application.NewRunRuleTests(repo, source, nil, nil, vocabulary); err == nil {
 		t.Errorf("nil fixture observer accepted")
+	}
+	if _, err := application.NewRunRuleTests(repo, source, observer, nil, nil); err == nil {
+		t.Errorf("nil vocabulary source accepted")
 	}
 }
 
@@ -128,7 +146,7 @@ func TestRunRuleTestsMapsAssessmentToFindings(t *testing.T) {
 			[]rule.TestFile{{Path: "m/all_good.go"}}, nil),
 	}}
 	observer := &fakeFixtureObserver{}
-	uc, err := application.NewRunRuleTests(ruleTestRepository{cfg}, source, observer, nil)
+	uc, err := application.NewRunRuleTests(ruleTestRepository{cfg}, source, observer, nil, &fakeVocabularySource{})
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
@@ -188,7 +206,7 @@ type failingExtensions struct {
 }
 
 func (f failingExtensions) Evaluate(string, map[string]any, []string,
-	[]rule.Module, conformance.Observations,
+	[]rule.Module, conformance.Observations, vocab.UbiquitousLanguage,
 ) ([]conformance.ExtensionFinding, error) {
 	return nil, f.err
 }
@@ -220,6 +238,7 @@ func TestRunRuleTestsContainsConformanceErrorAndContinues(t *testing.T) {
 		source,
 		&fakeFixtureObserver{},
 		failingExtensions{err: errors.New("extension blew up")},
+		&fakeVocabularySource{},
 	)
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
@@ -248,5 +267,99 @@ func TestRunRuleTestsContainsConformanceErrorAndContinues(t *testing.T) {
 	}
 	if !second.Passed() {
 		t.Errorf("second = %+v, want a pass after the contained failure", second)
+	}
+}
+
+// recordingExtensions captures the vocabulary each evaluation received
+// so tests can prove fixture knowledge reaches ctx.domain().
+type recordingExtensions struct {
+	knowledge vocab.UbiquitousLanguage
+}
+
+func (r *recordingExtensions) Evaluate(_ string, _ map[string]any, _ []string,
+	_ []rule.Module, _ conformance.Observations, knowledge vocab.UbiquitousLanguage,
+) ([]conformance.ExtensionFinding, error) {
+	r.knowledge = knowledge
+	return nil, nil
+}
+
+func TestRunRuleTestsFeedsFixtureVocabularyToExtensions(t *testing.T) {
+	cfg := ruleTestConfig(t)
+	extScope, err := rule.ModuleApplicability([]rule.ModuleName{"m"})
+	if err != nil {
+		t.Fatalf("ModuleApplicability: %v", err)
+	}
+	extRule, err := rule.New(rule.Spec{
+		ID:            "t:m/ext",
+		Type:          rule.TypeExtension,
+		Params:        rule.ExtensionParams{Uses: "domain-probe"},
+		Applicability: extScope,
+	})
+	if err != nil {
+		t.Fatalf("extension rule.New: %v", err)
+	}
+	cfg.Rules = append(cfg.Rules, extRule)
+
+	const authored = "version: 1\nentities:\n  - name: Order\n"
+	recorded := vocab.UbiquitousLanguage{Entities: []vocab.Entity{
+		{Definition: vocab.Definition{Name: "Order"}},
+	}}
+	files := []rule.TestFile{
+		{Path: "m/all_good.go"},
+		{Path: vocab.UbiquitousLanguageFileName, Content: authored},
+	}
+	source := fakeRuleTestSource{tests: []rule.Test{
+		mustRuleTest(t, "sees-vocabulary", "t:m/ext", files, nil),
+	}}
+	vocabulary := &fakeVocabularySource{lang: recorded}
+	recorder := &recordingExtensions{}
+	uc, err := application.NewRunRuleTests(
+		ruleTestRepository{cfg}, source, &fakeFixtureObserver{}, recorder, vocabulary)
+	if err != nil {
+		t.Fatalf("NewRunRuleTests: %v", err)
+	}
+	results, err := uc.Execute()
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(results) != 1 || !results[0].Passed() {
+		t.Fatalf("results = %+v, want one pass", results)
+	}
+	if string(vocabulary.content) != authored {
+		t.Errorf("parsed content = %q, want the authored fixture bytes", vocabulary.content)
+	}
+	if len(recorder.knowledge.Entities) != 1 || recorder.knowledge.Entities[0].Name != "Order" {
+		t.Errorf("evaluator knowledge = %+v, want the parsed Order entity", recorder.knowledge)
+	}
+}
+
+func TestRunRuleTestsContainsFixtureVocabularyError(t *testing.T) {
+	cfg := ruleTestConfig(t)
+	files := []rule.TestFile{
+		{Path: "m/all_good.go"},
+		{Path: vocab.UbiquitousLanguageFileName, Content: "version: 2\n"},
+	}
+	source := fakeRuleTestSource{tests: []rule.Test{
+		mustRuleTest(t, "broken-vocabulary", "t:m/snake", files, nil),
+		mustRuleTest(t, "still-runs", "t:m/snake", []rule.TestFile{{Path: "m/all_good.go"}}, nil),
+	}}
+	vocabulary := &fakeVocabularySource{err: errors.New("unsupported version 2")}
+	uc, err := application.NewRunRuleTests(
+		ruleTestRepository{cfg}, source, &fakeFixtureObserver{}, nil, vocabulary)
+	if err != nil {
+		t.Fatalf("NewRunRuleTests: %v", err)
+	}
+	results, err := uc.Execute()
+	if err != nil {
+		t.Fatalf("Execute must contain a fixture vocabulary failure: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("results = %d, want both tests", len(results))
+	}
+	if results[0].Passed() || !strings.Contains(results[0].Err, "fixture vocabulary") {
+		t.Errorf("first = %+v, want a contained fixture-vocabulary error", results[0])
+	}
+	if !results[1].Passed() {
+		t.Errorf("second = %+v, want a pass after the contained failure", results[1])
 	}
 }

@@ -87,3 +87,22 @@ type ViolationInput struct {
 	Line    int    `json:"line,omitempty"`
 	FixHint string `json:"fixHint,omitempty"`
 }
+
+// DomainDefinitionInfo is one recorded project domain definition as
+// exposed through ctx.domain().
+type DomainDefinitionInfo struct {
+	Name       string   `json:"name"`
+	Definition string   `json:"definition,omitempty"`
+	Aliases    []string `json:"aliases,omitempty"`
+	Aggregate  bool     `json:"aggregate,omitempty"`
+}
+
+// DomainInfo is the project's recorded domain model as exposed through
+// ctx.domain(): empty collections when the project records none.
+// Read-only: declaring knowledge never creates a diagnostic by itself.
+type DomainInfo struct {
+	Entities      []DomainDefinitionInfo `json:"entities"`
+	ValueObjects  []DomainDefinitionInfo `json:"valueObjects"`
+	BusinessRules []DomainDefinitionInfo `json:"businessRules"`
+	Events        []DomainDefinitionInfo `json:"events"`
+}

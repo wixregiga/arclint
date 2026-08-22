@@ -1,6 +1,9 @@
 package conformance
 
-import "github.com/wixregiga/arclint/internal/domain/rule"
+import (
+	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
+)
 
 // ExtensionFinding is one Diagnostic an Extension reports for a
 // selected subject.
@@ -17,8 +20,9 @@ type ExtensionFinding struct {
 // findings. Extensions operate only through deterministic host
 // capabilities and cannot bypass diagnostic truthfulness; a finding
 // outside the selected subjects is an Applicability breach the check
-// contains without aborting the Assessment.
+// contains without aborting the Assessment. Knowledge is the project's
+// recorded domain model, empty when none is recorded.
 type ExtensionEvaluator interface {
 	Evaluate(extension string, params map[string]any, subjects []string,
-		modules []rule.Module, obs Observations) ([]ExtensionFinding, error)
+		modules []rule.Module, obs Observations, knowledge vocab.UbiquitousLanguage) ([]ExtensionFinding, error)
 }

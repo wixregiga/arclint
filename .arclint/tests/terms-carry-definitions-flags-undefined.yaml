@@ -1,0 +1,22 @@
+# Violating case: recorded terms without definition text; the
+# extension observes the fixture's vocabulary through ctx.domain()
+# and reports each undefined term.
+rule: "arclint:vocabulary/terms-carry-definitions"
+files:
+  ubiquitous-language.yaml: |
+    version: 1
+    entities:
+      - name: Order
+        definition: A customer's request to purchase products.
+      - name: Customer
+    events:
+      - name: OrderPlaced
+expect:
+  - kind: violation
+    path: ubiquitous-language.yaml
+    line: 1
+    message: "entity \"Customer\" has no definition recorded in the project vocabulary"
+  - kind: violation
+    path: ubiquitous-language.yaml
+    line: 1
+    message: "domain event \"OrderPlaced\" has no definition recorded in the project vocabulary"

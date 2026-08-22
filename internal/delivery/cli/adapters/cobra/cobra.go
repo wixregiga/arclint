@@ -26,6 +26,9 @@ func (Adapter) Run(root cli.Command, invocation cli.Invocation) cli.Outcome {
 	command.SetArgs(invocation.Args)
 	command.SetOut(invocation.Stdout)
 	command.SetErr(invocation.Stderr)
+	if invocation.Stdin != nil {
+		command.SetIn(invocation.Stdin)
+	}
 	if err := command.Execute(); err != nil {
 		var exit *cli.ExitError
 		if errors.As(err, &exit) {
@@ -46,18 +49,35 @@ func translate(c cli.Command) *cobra.Command {
 	out := &cobra.Command{
 		Use:           c.Name,
 		Short:         c.Short,
+		Long:          c.Long,
+		Example:       c.Example,
 		SilenceUsage:  true,
 		SilenceErrors: true,
+	}
+	if len(c.Aliases) > 0 {
+		out.Aliases = append([]string(nil), c.Aliases...)
 	}
 	if c.Version != "" {
 		out.Version = c.Version
 	}
 	values := map[string]*string{}
 	bools := map[string]*bool{}
+	lists := map[string]*[]string{}
+	flagNames := make([]string, 0, len(c.Flags))
 	for _, f := range c.Flags {
-		if f.Bool {
+		flagNames = append(flagNames, f.Name)
+		switch {
+		case f.Bool:
 			bools[f.Name] = out.Flags().Bool(f.Name, f.Default == "true", f.Doc)
-		} else {
+		case f.Repeat:
+			lists[f.Name] = out.Flags().StringArray(f.Name, nil, f.Doc)
+			switch {
+			case f.Complete != nil:
+				_ = out.RegisterFlagCompletionFunc(f.Name, dynamicFlagCompletion(f.Complete))
+			case len(f.Options) > 0:
+				_ = out.RegisterFlagCompletionFunc(f.Name, staticCompletion(f.Options))
+			}
+		default:
 			values[f.Name] = out.Flags().String(f.Name, f.Default, f.Doc)
 			// Registration fails only for an unknown flag name; the
 			// flag was defined on the line above.
@@ -87,9 +107,24 @@ func translate(c cli.Command) *cobra.Command {
 			for name, v := range bools {
 				flags[name] = strconv.FormatBool(*v)
 			}
+			listVals := make(map[string][]string, len(lists))
+			for name, v := range lists {
+				if v == nil || len(*v) == 0 {
+					listVals[name] = nil
+					continue
+				}
+				listVals[name] = append([]string(nil), (*v)...)
+			}
+			changed := make(map[string]bool, len(flagNames))
+			for _, name := range flagNames {
+				changed[name] = cmd.Flags().Changed(name)
+			}
 			return run(cli.Context{
 				Args:   args,
 				Flags:  flags,
+				Lists:  listVals,
+				Set:    changed,
+				Stdin:  cmd.InOrStdin(),
 				Stdout: cmd.OutOrStdout(),
 				Stderr: cmd.ErrOrStderr(),
 			})

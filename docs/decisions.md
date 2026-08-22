@@ -3,6 +3,112 @@
 Small ambiguities resolved in favor of the proposal's shapes, recorded per
 milestone. Dates are decision dates.
 
+## Project Domain Model direction (2026-08-21) — context and inspection first
+
+**Status:** accepted. **Decider:** Brandon. The decision was pressure-tested
+through a design-tree interview and accepted before this record was written.
+
+### Context
+
+Agents implementing features need the project's language and domain intent,
+but today they reconstruct both by reading an unpredictable number of files.
+A repository-owned source of domain knowledge could reduce that search and
+help humans, agents, Patterns, and Rules use the same project concepts. The
+design must not turn ArcLint into an authority over whether a project's
+real-world language is correct, and useful declarations must not silently
+become lint failures.
+
+### Decision
+
+ArcLint will add a repository-owned Project Domain Model whose first product
+value is **context and inspection**. ArcLint defines the meanings of supported
+concepts such as Entity, Value Object, Aggregate, Business Rule, and Domain
+Event; a project supplies its own real-world names and statements. Thinking is
+Entity-first: an Aggregate arises when the project decides an Entity is an
+Aggregate. `DomainElement` is useful discussion vocabulary, but this decision
+does not require it to become an implemented base abstraction.
+
+A Business Rule is first-class project knowledge and is distinct from an
+Architecture Rule. Project description or purpose may provide contextual
+knowledge without being forced into one of the domain concepts. Repository
+data is authored and reviewed through normal version control, and agents may
+propose model changes alongside code changes.
+
+The initial capability will make the model inspectable as a whole and surface
+relevant portions in architectural context. Relevance may come from explicit
+project data, Modules and paths, Rules, Patterns, conventions, built-in
+analysis, or agent suggestions; no one source is exclusive or a prerequisite
+for focused context. Imperfect relevance does not disqualify the focused view.
+
+Extension Rules receive read-only access to the project knowledge in the
+initial capability. Patterns and Rules may enumerate and find the supplied
+Entities, Value Objects, Aggregates, Business Rules, and Domain Events, then
+lint propositions that use those values. Merely declaring project knowledge
+does not create a diagnostic. Patterns may also surface likely additions
+through normal non-error reporting. Declarative YAML integration is an
+exploration topic after Extension usage demonstrates a need.
+
+### Alternatives considered
+
+1. **Term-first glossary.** Rejected as the organizing model. Canonical terms
+   and aliases may be useful, but asking projects for unstructured terms gives
+   less immediate value than asking for Entities, Aggregates, Value Objects,
+   Business Rules, and Events.
+2. **Declaration automatically enables enforcement.** Rejected. ArcLint is
+   a linter: enabled Architecture Rules make judgments, carry severity, and can
+   be disabled. Project declarations are inputs those Rules may consume.
+3. **One mandatory relevance mechanism.** Rejected. Module paths, Pattern
+   expectations, Rules, explicit associations, analysis, and suggestions can
+   all contribute without one becoming a permanent gate.
+4. **Natural-language feature modeling in ArcLint core.** Deferred. Prompts,
+   skills, plugins, hooks, MCP, or a librarian-style agent can interpret
+   feature requests against ArcLint's inspectable model first.
+
+### Consequences
+
+**Positive**
+
+- Developers and agents can inspect useful domain knowledge without first
+  reconstructing it from the repository.
+- Pattern and Extension Rule authors gain project-specific values for stronger
+  context, projections, diagnostics, and experiments.
+- ArcLint's meanings stay stable while every repository retains authority over
+  its actual ubiquitous language.
+- The context-first slice provides value before domain-aware enforcement or
+  dedicated authoring workflows exist.
+
+**Trade-offs**
+
+- Context quality depends on the project maintaining useful domain knowledge.
+- The initial model does not settle source-code bindings, interaction
+  representation, Bounded Contexts, lifecycle states, or a dedicated editing
+  experience.
+- Extension-first programmatic access may expose needs that require later SDK
+  or declarative design changes.
+
+**Risks and responses**
+
+- Stale model knowledge can mislead agents. Version-controlled changes,
+  instructions, Rules, hooks, skills, documentation, prompts, built-ins, MCP,
+  and future librarian workflows are complementary responses; none can force a
+  team to care.
+- Premature structure can make the feature ceremonial. Storage, CLI shape,
+  concrete `DomainElement` implementation, notes, identifiers, relationships,
+  and YAML integration remain explicit implementation or exploration
+  decisions rather than hidden commitments.
+- A relevance mechanism can be mistaken for the relevance mechanism. The
+  product contract keeps relevance additive and does not require perfect
+  calculation before focused context is useful.
+
+### Explicit non-decisions
+
+This decision does not select a storage format, file layout, CLI, exact SDK
+syntax, built-in domain Rule catalog, benchmark, source-code binding model,
+relationship representation, Bounded Context design, standalone glossary,
+notes model, lifecycle, stable identifier scheme, or dedicated suggestion
+workflow. Historical design-vocabulary documents are not inputs to this
+feature. Refused or withdrawn interview questions imply no decision.
+
 ## Spike landings (2026-08-14) — versioning, completion, formats, repo scaffolding
 
 Implementations of the spikes Brandon approved on 2026-08-14, landed in

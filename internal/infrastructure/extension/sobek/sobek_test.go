@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 	sobekextension "github.com/wixregiga/arclint/internal/infrastructure/extension/sobek"
 )
 
@@ -386,7 +387,7 @@ func TestEvaluatorReadUsesObservationContent(t *testing.T) {
 
 	findings, err := eval.Evaluate("forbid-content", map[string]any{
 		"pattern": `\bpanic\(`,
-	}, []string{"m/a.go"}, nil, obs)
+	}, []string{"m/a.go"}, nil, obs, vocab.UbiquitousLanguage{})
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
@@ -405,11 +406,72 @@ func TestEvaluatorReadUsesObservationContent(t *testing.T) {
 	}
 	findings, err = evalMissing.Evaluate("forbid-content", map[string]any{
 		"pattern": `\bpanic\(`,
-	}, []string{"m/a.go"}, nil, obs)
+	}, []string{"m/a.go"}, nil, obs, vocab.UbiquitousLanguage{})
 	if err != nil {
 		t.Fatalf("Evaluate missing production file: %v", err)
 	}
 	if len(findings) != 1 {
 		t.Fatalf("missing production file: findings = %+v, want fixture-driven match", findings)
+	}
+}
+
+const domainProbeRule = `
+import { defineRule } from "arclint";
+
+export default defineRule({
+  type: "domain-probe",
+  check(ctx) {
+    const domain = ctx.domain();
+    for (const e of domain.entities) {
+      ctx.report({ path: "domain", message: e.name });
+    }
+  },
+});
+`
+
+// ctx.domain() exposes the recorded model read-only: a consuming rule
+// can report from entity names, and an empty model produces no
+// findings and no error (declaration alone never creates diagnostics).
+func TestEvaluatorDomainExposesRecordedModel(t *testing.T) {
+	root := writeExtensions(t, map[string]string{"domain.ts": domainProbeRule})
+	eval, err := sobekextension.NewEvaluator(root)
+	if err != nil {
+		t.Fatalf("NewEvaluator: %v", err)
+	}
+	obs, err := conformance.NewObservations([]conformance.ObservedFile{
+		{Path: "m/a.go", Size: 1},
+	}, nil)
+	if err != nil {
+		t.Fatalf("NewObservations: %v", err)
+	}
+
+	lang, err := vocab.NewUbiquitousLanguage([]vocab.Entity{
+		{Definition: vocab.Definition{Name: "Order"}, Aggregate: true},
+		{Definition: vocab.Definition{Name: "Customer"}},
+	}, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("NewUbiquitousLanguage: %v", err)
+	}
+	findings, err := eval.Evaluate("domain-probe", nil, []string{"m/a.go"}, nil, obs, lang)
+	if err != nil {
+		t.Fatalf("Evaluate with model: %v", err)
+	}
+	if len(findings) != 2 {
+		t.Fatalf("findings = %+v, want one per entity", findings)
+	}
+	got := map[string]bool{}
+	for _, f := range findings {
+		got[f.Message] = true
+	}
+	if !got["Order"] || !got["Customer"] {
+		t.Errorf("entity findings = %v, want Order and Customer", got)
+	}
+
+	empty, err := eval.Evaluate("domain-probe", nil, []string{"m/a.go"}, nil, obs, vocab.UbiquitousLanguage{})
+	if err != nil {
+		t.Fatalf("Evaluate empty model: %v", err)
+	}
+	if len(empty) != 0 {
+		t.Fatalf("empty model findings = %+v, want none", empty)
 	}
 }

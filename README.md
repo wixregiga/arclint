@@ -132,6 +132,7 @@ rules [selector]    list the configured rules; one match shows the complete rule
 rules schema        print the JSON Schema for rules.yaml (committed at docs/rules.schema.json)
 rules test [name]   run the rule tests under .arclint/tests; failures exit 1
 context [paths...]  the architecture, or everything binding the given paths (--module, --format json)
+domain              inspect and maintain the project's ubiquitous language (overview/list/show/explain/define/remove/schema)
 agents [--write]    compile the ruleset into a generated AGENTS.md block
 baseline capture    adopt current findings   ·  baseline refresh: drop stale entries
 patterns            list local pattern packages (.arclint/patterns/<name>/pattern.yaml)
