@@ -11,6 +11,7 @@ import (
 	"github.com/wixregiga/arclint/internal/infrastructure/language/golang"
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
 	"github.com/wixregiga/arclint/internal/infrastructure/ruletest"
+	yamlvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/yaml"
 )
 
 const integrationRuleset = `runtime: [go]
@@ -81,7 +82,7 @@ func TestRunRuleTestsEndToEnd(t *testing.T) {
 		t.Fatalf("NewRepository: %v", err)
 	}
 	uc, err := application.NewRunRuleTests(repo, ruletest.NewSource(root),
-		ruletest.NewObserver(golang.NewProducer()), nil)
+		ruletest.NewObserver(golang.NewProducer()), nil, yamlvocab.Parser{})
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
@@ -211,7 +212,7 @@ func TestRuleTestExtensionReadsFixtureContent(t *testing.T) {
 		t.Fatalf("NewEvaluator: %v", err)
 	}
 	uc, err := application.NewRunRuleTests(repo, ruletest.NewSource(root),
-		ruletest.NewObserver(golang.NewProducer()), extensions)
+		ruletest.NewObserver(golang.NewProducer()), extensions, yamlvocab.Parser{})
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}

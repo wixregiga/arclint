@@ -20,7 +20,7 @@ func NewContextCommand(context application.GetArchitecturalContext) Command {
 		MaxArgs: -1,
 		Flags: []Flag{
 			{
-				Name:    "format",
+				Name:    flagFormat,
 				Default: formatHuman,
 				Doc:     "output format: human, json",
 				Options: []string{formatHuman, formatJSON},
@@ -32,7 +32,7 @@ func NewContextCommand(context application.GetArchitecturalContext) Command {
 			},
 		},
 		Run: func(ctx Context) error {
-			format := ctx.String("format")
+			format := ctx.String(flagFormat)
 			if format != formatHuman && format != formatJSON {
 				return &ExitError{
 					Code:    ExitConfigError,
@@ -125,6 +125,9 @@ func writeContext(w io.Writer, c application.ArchitecturalContext) error {
 			p.printf("  stdlib imports: %s\n", m.Stdlib)
 		}
 	}
+	if c.Domain != nil {
+		writeDomainKnowledge(p, c.Domain)
+	}
 	if len(c.Kinds) > 0 {
 		p.println("\nrule types in use:")
 		for _, k := range c.Kinds {
@@ -142,4 +145,39 @@ func writeContext(w io.Writer, c application.ArchitecturalContext) error {
 		}
 	}
 	return p.err
+}
+
+// writeDomainKnowledge prints the project domain summary after the
+// modules block: counts line, then one line per non-empty group.
+// Designated entities carry " [aggregate]" only in this text form.
+func writeDomainKnowledge(p *printer, d *application.DomainKnowledge) {
+	counts := d.Counts
+	p.printf("\nproject domain (%s): %s", d.Source, domainCountPhrase(counts.Entities, "entity", "entities"))
+	if counts.Aggregates > 0 {
+		p.printf(" (%s)", domainCountPhrase(counts.Aggregates, "aggregate", "aggregates"))
+	}
+	p.printf(", %s, %s, %s\n",
+		domainCountPhrase(counts.ValueObjects, "value object", "value objects"),
+		domainCountPhrase(counts.BusinessRules, "business rule", "business rules"),
+		domainCountPhrase(counts.Events, "event", "events"),
+	)
+	if len(d.Entities) > 0 {
+		p.printf("  entities: %s\n", strings.Join(d.EntityDisplayNames(), ", "))
+	}
+	if len(d.ValueObjects) > 0 {
+		p.printf("  value objects: %s\n", strings.Join(d.ValueObjects, ", "))
+	}
+	if len(d.BusinessRules) > 0 {
+		p.printf("  business rules: %s\n", strings.Join(d.BusinessRules, ", "))
+	}
+	if len(d.Events) > 0 {
+		p.printf("  events: %s\n", strings.Join(d.Events, ", "))
+	}
+}
+
+func domainCountPhrase(n int, singular, plural string) string {
+	if n == 1 {
+		return fmt.Sprintf("1 %s", singular)
+	}
+	return fmt.Sprintf("%d %s", n, plural)
 }

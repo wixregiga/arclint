@@ -46,7 +46,7 @@ func contextFixture(t *testing.T) rule.Configured {
 }
 
 func TestArchitecturalContextForPath(t *testing.T) {
-	uc, err := application.NewGetArchitecturalContext(fakeRepository{contextFixture(t)})
+	uc, err := application.NewGetArchitecturalContext(fakeRepository{contextFixture(t)}, emptyKnowledge())
 	if err != nil {
 		t.Fatalf("NewGetArchitecturalContext: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestArchitecturalContextForPath(t *testing.T) {
 }
 
 func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
-	getContext, err := application.NewGetArchitecturalContext(fakeRepository{contextFixture(t)})
+	getContext, err := application.NewGetArchitecturalContext(fakeRepository{contextFixture(t)}, emptyKnowledge())
 	if err != nil {
 		t.Fatalf("NewGetArchitecturalContext: %v", err)
 	}
@@ -165,7 +165,7 @@ func (fakePatternScaffolds) Scaffold(string) (application.PatternScaffold, bool)
 }
 
 func TestArchitecturalContextWorksite(t *testing.T) {
-	uc, err := application.NewGetArchitecturalContext(fakeRepository{contextFixture(t)})
+	uc, err := application.NewGetArchitecturalContext(fakeRepository{contextFixture(t)}, emptyKnowledge())
 	if err != nil {
 		t.Fatalf("NewGetArchitecturalContext: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestArchitecturalContextWorksite(t *testing.T) {
 }
 
 func TestArchitecturalContextRepositoryTeaches(t *testing.T) {
-	uc, err := application.NewGetArchitecturalContext(fakeRepository{contextFixture(t)})
+	uc, err := application.NewGetArchitecturalContext(fakeRepository{contextFixture(t)}, emptyKnowledge())
 	if err != nil {
 		t.Fatalf("NewGetArchitecturalContext: %v", err)
 	}

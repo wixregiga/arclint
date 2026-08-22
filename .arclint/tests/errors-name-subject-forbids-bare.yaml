@@ -1,0 +1,15 @@
+# Violating case: a bare error name the package qualifier cannot
+# rescue; the forbid-content rule must report the line.
+rule: "arclint:domain/errors-name-their-subject"
+files:
+  internal/domain/vocab/language.go: |
+    package vocab
+
+    import "errors"
+
+    var ErrNotFound = errors.New("not found")
+expect:
+  - kind: violation
+    path: internal/domain/vocab/language.go
+    line: 5
+    message: "forbidden content matching /\\bErr(NotFound|Invalid|Failed|Exists)\\b/"

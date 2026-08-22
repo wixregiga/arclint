@@ -105,6 +105,30 @@ itself is reviewable: every entry carries the finding it covers, not
 just a hash, and it contains no timestamps, so regenerating it diffs
 only when findings change.
 
+## Project domain model
+
+The project's Ubiquitous Language lives in a committed
+`ubiquitous-language.yaml` beside `rules.yaml`. It is first-class
+project knowledge—not hidden ArcLint machinery—organized as a structured
+Project Domain Model of Entities, Aggregates, Value Objects, Business
+Rules, and Domain Events. ArcLint owns the meanings of those concepts;
+the project supplies names, definitions, and aliases.
+
+| concept | meaning |
+|---|---|
+| Entity | A domain concept whose identity matters as it changes over time. |
+| Aggregate | An Entity the project treats as a consistency boundary: it is changed as one unit and other objects reach it through its identity. |
+| Value Object | A domain value defined entirely by its attributes, with no identity of its own. |
+| Business Rule | A statement the project requires to always or never be true about its domain. |
+| Domain Event | Something that has completed in the domain and that the project cares to record. |
+
+An Aggregate is an Entity designation (`aggregate: true` on an entity
+entry), not a second unrelated object. Inspect and maintain the model
+with `arclint domain`; `arclint domain explain` prints the same ArcLint
+meanings used by help, guided authoring, JSON output, and the extension
+SDK. Declaring knowledge never creates a Diagnostic by itself—enabled
+Rules under `arclint check` decide whether the model is enforced.
+
 ## Validation layers
 
 `rules.yaml` passes three gates before anything runs: YAML syntax, the

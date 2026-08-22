@@ -7,6 +7,7 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/baseline"
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 // ObservationSource is the port through which the use case requests
@@ -44,13 +45,15 @@ type AssessConformance struct {
 	observations ObservationSource
 	baselines    BaselineSource
 	extensions   conformance.ExtensionEvaluator
+	knowledge    vocab.Repository
 }
 
-// NewAssessConformance requires the repository, observation, and
-// baseline ports. The Extension mechanism may be nil: extension Rules
-// then evaluate unsupported, honestly, rather than being skipped.
+// NewAssessConformance requires the repository, observation, baseline,
+// and domain-model ports. The Extension mechanism may be nil: extension
+// Rules then evaluate unsupported, honestly, rather than being skipped.
 func NewAssessConformance(rules rule.Repository, observations ObservationSource,
 	baselines BaselineSource, extensions conformance.ExtensionEvaluator,
+	knowledge vocab.Repository,
 ) (AssessConformance, error) {
 	if rules == nil {
 		return AssessConformance{}, fmt.Errorf("assess conformance: missing rule repository")
@@ -61,9 +64,12 @@ func NewAssessConformance(rules rule.Repository, observations ObservationSource,
 	if baselines == nil {
 		return AssessConformance{}, fmt.Errorf("assess conformance: missing baseline source")
 	}
+	if knowledge == nil {
+		return AssessConformance{}, fmt.Errorf("assess conformance: missing domain model repository")
+	}
 	return AssessConformance{
 		rules: rules, observations: observations,
-		baselines: baselines, extensions: extensions,
+		baselines: baselines, extensions: extensions, knowledge: knowledge,
 	}, nil
 }
 
@@ -85,12 +91,23 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 	if err != nil {
 		return conformance.Assessment{}, fmt.Errorf("observe repository: %w", err)
 	}
+	// Missing domain model is an empty Ubiquitous Language; load
+	// failure is a configuration error, same class as an unreadable
+	// rules.yaml.
+	knowledge, found, err := uc.knowledge.RecordedLanguage()
+	if err != nil {
+		return conformance.Assessment{}, fmt.Errorf("load domain model: %w", err)
+	}
+	if !found {
+		knowledge = vocab.UbiquitousLanguage{}
+	}
 	assessment, err := conformance.Run(conformance.Request{
 		Rules:          rules,
 		Modules:        cfg.Modules,
 		Observations:   observations,
 		UnknownImports: cfg.Scan.UnknownImports,
 		Extensions:     uc.extensions,
+		Knowledge:      knowledge,
 	})
 	if err != nil {
 		return conformance.Assessment{}, fmt.Errorf("conformance check: %w", err)

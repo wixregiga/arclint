@@ -30,7 +30,7 @@ func NewCheckCommand(assess application.AssessConformance, list application.List
 		MaxArgs: 1,
 		Flags: []Flag{
 			{
-				Name:    "format",
+				Name:    flagFormat,
 				Default: formatHuman,
 				Doc:     "output format: human, json",
 				Options: []string{formatHuman, formatJSON},
@@ -48,7 +48,7 @@ func NewCheckCommand(assess application.AssessConformance, list application.List
 			},
 		},
 		Run: func(ctx Context) error {
-			format := ctx.String("format")
+			format := ctx.String(flagFormat)
 			if format != formatHuman && format != formatJSON {
 				return &ExitError{
 					Code:    ExitConfigError,

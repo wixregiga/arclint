@@ -8,7 +8,10 @@ type Flag struct {
 	Name    string
 	Default string
 	Bool    bool
-	Doc     string
+	// Repeat marks a value flag that collects every occurrence into a
+	// string slice (Context.Strings) instead of a single string.
+	Repeat bool
+	Doc    string
 	// Options is the static closed value set of a value flag. A
 	// non-empty set lets shells complete the flag's value; parsing
 	// stays with the command, which still rejects unknown values.
@@ -29,8 +32,16 @@ type AutoCompleteCandidate struct {
 
 // Context carries one parsed invocation into a command handler.
 type Context struct {
-	Args   []string
-	Flags  map[string]string
+	Args  []string
+	Flags map[string]string
+	// Lists holds values for Repeat flags; absent or empty when the
+	// flag was never set.
+	Lists map[string][]string
+	// Set reports whether each flag appeared on the command line, so
+	// handlers can distinguish an omitted value flag from an explicit
+	// empty string.
+	Set    map[string]bool
+	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
 }
@@ -41,10 +52,29 @@ func (c Context) String(name string) string { return c.Flags[name] }
 // Bool returns the parsed value of a bool flag.
 func (c Context) Bool(name string) bool { return c.Flags[name] == "true" }
 
+// Strings returns the values of a Repeat flag, or nil when unset.
+func (c Context) Strings(name string) []string {
+	if c.Lists == nil {
+		return nil
+	}
+	return c.Lists[name]
+}
+
+// Changed reports whether the named flag appeared on the command line.
+func (c Context) Changed(name string) bool {
+	if c.Set == nil {
+		return false
+	}
+	return c.Set[name]
+}
+
 // Command is one framework-neutral command description.
 type Command struct {
 	Name        string
 	Short       string
+	Long        string
+	Example     string
+	Aliases     []string
 	Version     string // root command only
 	Flags       []Flag
 	Subcommands []Command

@@ -5,6 +5,7 @@ import (
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 // RuleTestSource is the port through which the use case loads the
@@ -19,6 +20,14 @@ type RuleTestSource interface {
 // and fact classes through the same analysis production uses.
 type FixtureObserver interface {
 	Observe(files []rule.TestFile, languages []rule.Language, scan rule.Scan, facts []rule.Fact) (conformance.Observations, error)
+}
+
+// VocabularySource is the port through which the use case turns a
+// fixture's authored ubiquitous-language.yaml content into the
+// recorded vocabulary that extension rules under test observe through
+// ctx.domain().
+type VocabularySource interface {
+	ParseUbiquitousLanguage(content []byte) (vocab.UbiquitousLanguage, error)
 }
 
 // RuleTestResult is the outcome of one Rule Test: the comparison of
@@ -50,13 +59,16 @@ type RunRuleTests struct {
 	tests      RuleTestSource
 	fixtures   FixtureObserver
 	extensions conformance.ExtensionEvaluator
+	vocabulary VocabularySource
 }
 
-// NewRunRuleTests requires the repository, test source, and fixture
-// observer ports. The Extension mechanism may be nil: extension Rules
-// then evaluate unsupported, honestly, rather than being skipped.
+// NewRunRuleTests requires the repository, test source, fixture
+// observer, and vocabulary source ports. The Extension mechanism may
+// be nil: extension Rules then evaluate unsupported, honestly, rather
+// than being skipped.
 func NewRunRuleTests(rules rule.Repository, tests RuleTestSource,
 	fixtures FixtureObserver, extensions conformance.ExtensionEvaluator,
+	vocabulary VocabularySource,
 ) (RunRuleTests, error) {
 	if rules == nil {
 		return RunRuleTests{}, fmt.Errorf("run rule tests: missing rule repository")
@@ -67,9 +79,13 @@ func NewRunRuleTests(rules rule.Repository, tests RuleTestSource,
 	if fixtures == nil {
 		return RunRuleTests{}, fmt.Errorf("run rule tests: missing fixture observer")
 	}
+	if vocabulary == nil {
+		return RunRuleTests{}, fmt.Errorf("run rule tests: missing vocabulary source")
+	}
 	return RunRuleTests{
 		rules: rules, tests: tests,
 		fixtures: fixtures, extensions: extensions,
+		vocabulary: vocabulary,
 	}, nil
 }
 
@@ -103,12 +119,22 @@ func (uc RunRuleTests) Execute() ([]RuleTestResult, error) {
 		if err != nil {
 			return nil, fmt.Errorf("rule test %q: observe fixture: %w", t.Name(), err)
 		}
+		// A fixture authors its recorded vocabulary as
+		// ubiquitous-language.yaml at the tree root; extension rules
+		// under test observe it through ctx.domain().
+		knowledge, err := uc.fixtureVocabulary(t.Files())
+		if err != nil {
+			result.Err = fmt.Sprintf("fixture vocabulary: %v", err)
+			results = append(results, result)
+			continue
+		}
 		assessment, err := conformance.Run(conformance.Request{
 			Rules:          []rule.Rule{r},
 			Modules:        cfg.Modules,
 			Observations:   observations,
 			UnknownImports: cfg.Scan.UnknownImports,
 			Extensions:     uc.extensions,
+			Knowledge:      knowledge,
 		})
 		if err != nil {
 			// Evaluator/extension crashes are this test's failure, not
@@ -123,6 +149,25 @@ func (uc RunRuleTests) Execute() ([]RuleTestResult, error) {
 		results = append(results, result)
 	}
 	return results, nil
+}
+
+// fixtureVocabulary parses the vocabulary a fixture authors as
+// ubiquitous-language.yaml at its tree root; fixtures without one see
+// an empty vocabulary.
+func (uc RunRuleTests) fixtureVocabulary(files []rule.TestFile) (vocab.UbiquitousLanguage, error) {
+	for _, f := range files {
+		if f.Path == vocab.UbiquitousLanguageFileName {
+			lang, err := uc.vocabulary.ParseUbiquitousLanguage([]byte(f.Content))
+			if err != nil {
+				// No prefix: the parser's message already names
+				// the vocabulary file; Execute adds the
+				// fixture-vocabulary context.
+				return vocab.UbiquitousLanguage{}, fmt.Errorf("%w", err)
+			}
+			return lang, nil
+		}
+	}
+	return vocab.UbiquitousLanguage{}, nil
 }
 
 // assessmentFindings maps one Assessment to the neutral findings a

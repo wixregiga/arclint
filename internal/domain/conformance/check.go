@@ -13,12 +13,14 @@ import (
 	"strings"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 // Request carries everything one Conformance Check evaluates: the
 // configured Rules (with their Exclusions, Suppressions, and
 // Disablements attached), the declared Modules, the Observations, the
-// unknown-import policy, and the Extension enforcement mechanism.
+// unknown-import policy, the Extension enforcement mechanism, and the
+// project's recorded domain model for read-only extension access.
 type Request struct {
 	Rules          []rule.Rule
 	Modules        []rule.Module
@@ -27,6 +29,10 @@ type Request struct {
 	// Extensions supplies Extension enforcement; nil makes every
 	// extension-rule subject evaluate unsupported, honestly.
 	Extensions ExtensionEvaluator
+	// Knowledge is the project's recorded domain model; empty when the
+	// project records none. Extensions may read it; declaring knowledge
+	// never creates a diagnostic by itself.
+	Knowledge vocab.UbiquitousLanguage
 }
 
 // Run evaluates every applicable enabled Rule or records why it could
@@ -79,7 +85,7 @@ func Run(req Request) (Assessment, error) {
 		case r.Type() == rule.TypeNaming:
 			es, err = evaluateNaming(r, mem)
 		case r.Type() == rule.TypeExtension:
-			es, ruleDiags, err = evaluateExtensionRule(r, mem, req.Observations, req.Extensions, req.Modules)
+			es, ruleDiags, err = evaluateExtensionRule(r, mem, req.Observations, req.Extensions, req.Modules, req.Knowledge)
 		case r.Type() == rule.TypeLayers, r.Type() == rule.TypeProtected, r.Type() == rule.TypeIndependence, r.Type() == rule.TypeAcyclic:
 			es, err = evaluateGraph(r, mem, req.Observations)
 		default:

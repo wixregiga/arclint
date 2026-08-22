@@ -35,6 +35,10 @@ linters:
       - path: internal/domain/rule/schema.go
         linters:
           - goconst
+      # Same rationale for the ubiquitous-language schema declaration.
+      - path: internal/domain/vocab/schema.go
+        linters:
+          - goconst
       # The caller-selected repository root is this adapter's intended
       # write boundary; AGENTS.md is joined beneath it before writing.
       - path: internal/infrastructure/agents/markdown/markdown.go

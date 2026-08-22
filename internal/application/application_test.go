@@ -8,6 +8,7 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/baseline"
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 // fixture builds one configured repository: module "m" with a
@@ -93,11 +94,37 @@ func (f *fakeBaselineOutput) Write(s baseline.Snapshot) error {
 	return nil
 }
 
+// fakeKnowledge is an in-memory vocab.Repository for application tests.
+type fakeKnowledge struct {
+	lang  vocab.UbiquitousLanguage
+	found bool
+	err   error
+	saves int
+	last  vocab.UbiquitousLanguage
+}
+
+func (f *fakeKnowledge) RecordedLanguage() (vocab.UbiquitousLanguage, bool, error) {
+	if f.err != nil {
+		return vocab.UbiquitousLanguage{}, false, f.err
+	}
+	return f.lang, f.found, nil
+}
+
+func (f *fakeKnowledge) Record(lang vocab.UbiquitousLanguage) error {
+	f.saves++
+	f.last = lang
+	f.lang = lang
+	f.found = true
+	return nil
+}
+
+func emptyKnowledge() *fakeKnowledge { return &fakeKnowledge{} }
+
 func newAssess(t *testing.T, cfg rule.Configured, obs conformance.Observations,
 	baselines *fakeBaselineSource,
 ) application.AssessConformance {
 	t.Helper()
-	uc, err := application.NewAssessConformance(fakeRepository{cfg}, &fakeObservations{obs: obs}, baselines, nil)
+	uc, err := application.NewAssessConformance(fakeRepository{cfg}, &fakeObservations{obs: obs}, baselines, nil, emptyKnowledge())
 	if err != nil {
 		t.Fatalf("NewAssessConformance: %v", err)
 	}
@@ -107,7 +134,7 @@ func newAssess(t *testing.T, cfg rule.Configured, obs conformance.Observations,
 func TestAssessConformanceRequestsDeclaredFacts(t *testing.T) {
 	cfg, obs := fixture(t, "m/ok.go")
 	observations := &fakeObservations{obs: obs}
-	uc, err := application.NewAssessConformance(fakeRepository{cfg}, observations, &fakeBaselineSource{}, nil)
+	uc, err := application.NewAssessConformance(fakeRepository{cfg}, observations, &fakeBaselineSource{}, nil, emptyKnowledge())
 	if err != nil {
 		t.Fatalf("NewAssessConformance: %v", err)
 	}

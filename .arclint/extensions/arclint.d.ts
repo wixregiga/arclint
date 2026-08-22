@@ -8,10 +8,10 @@ declare module "arclint" {
   //////////
   // source: types.go
   /*
-  Package ext implements the TypeScript extension SDK: discovery under
-  .arclint/extensions/, in-process transpilation via esbuild, execution on
-  sobek (the k6 pattern), a two-phase register-then-run lifecycle, and a
-  sandbox with no ambient I/O.
+  Package sobekextension implements the TypeScript extension SDK:
+  discovery under .arclint/extensions/, in-process transpilation via
+  esbuild, execution on sobek (the k6 pattern), a two-phase
+  register-then-run lifecycle, and a sandbox with no ambient I/O.
 
   The types in this file are the host/extension wire contract. The
   TypeScript declarations rule authors see are generated from these
@@ -102,9 +102,9 @@ declare module "arclint" {
     results?: string[];
   }
   /**
-   * FactsInfo is the declaration-fact view of one file as exposed to
-   * ctx.facts(path). Only languages that honestly supply declarations
-   * produce one; today that is Go (parser-exact).
+   * FactsInfo is the cross-language declaration-fact view of one file as
+   * exposed through ctx.facts(path). Languages return only declarations
+   * they can support honestly.
    */
   export interface FactsInfo {
     path: string;
@@ -126,6 +126,27 @@ declare module "arclint" {
     line?: number /* int */;
     fixHint?: string;
   }
+  /**
+   * DomainDefinitionInfo is one recorded project domain definition as
+   * exposed through ctx.domain().
+   */
+  export interface DomainDefinitionInfo {
+    name: string;
+    definition?: string;
+    aliases?: string[];
+    aggregate?: boolean;
+  }
+  /**
+   * DomainInfo is the project's recorded domain model as exposed through
+   * ctx.domain(): empty collections when the project records none.
+   * Read-only: declaring knowledge never creates a diagnostic by itself.
+   */
+  export interface DomainInfo {
+    entities: DomainDefinitionInfo[];
+    valueObjects: DomainDefinitionInfo[];
+    businessRules: DomainDefinitionInfo[];
+    events: DomainDefinitionInfo[];
+  }
 
 
   export type Capability = "exact" | "structural" | "heuristic" | "advisory";
@@ -139,11 +160,15 @@ declare module "arclint" {
     imports(path: string): ImportInfo[];
     /** Declared module names to their member file paths. */
     modules(): Record<string, string[]>;
-    /** Declaration facts for one file; null when the file's language
-     * does not supply declarations (today: Go only, parser-exact). */
+    /** Cross-language declaration facts for one file; null when its
+     * language did not supply declarations. */
     facts(path: string): FactsInfo | null;
     /** The sorted module names a file belongs to. */
     moduleOf(path: string): string[];
+    /** The project's recorded domain model (ubiquitous-language.yaml);
+     * empty collections when the project records none. Read-only:
+     * declaring knowledge never creates a diagnostic by itself. */
+    domain(): DomainInfo;
     /** Report one violation. */
     report(v: ViolationInput): void;
   }

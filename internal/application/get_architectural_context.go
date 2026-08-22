@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 // ContextRequest selects the scope: no paths and no modules means the
@@ -77,20 +78,56 @@ type ArchitecturalContext struct {
 	// UnknownImports is the effective scan policy for unclassifiable
 	// imports; repository scope only.
 	UnknownImports string
+	// Domain is the project's recorded domain model summary; nil when
+	// the project records none. Whole-model, never inferred per-path
+	// relevance.
+	Domain *DomainKnowledge `json:"domain,omitempty"`
+}
+
+// DomainKnowledge is the project's recorded domain model summary as
+// projected into architectural context.
+type DomainKnowledge struct {
+	Source        string       `json:"source"`
+	Counts        vocab.Counts `json:"counts"`
+	Entities      []string     `json:"entities,omitempty"`
+	ValueObjects  []string     `json:"valueObjects,omitempty"`
+	BusinessRules []string     `json:"businessRules,omitempty"`
+	Events        []string     `json:"events,omitempty"`
+	// aggregate marks Entities designated as aggregates for human text.
+	aggregate map[string]bool
+}
+
+// EntityDisplayNames returns entity names for human text, with
+// designated aggregates suffixed " [aggregate]".
+func (d DomainKnowledge) EntityDisplayNames() []string {
+	out := make([]string, len(d.Entities))
+	for i, name := range d.Entities {
+		if d.aggregate[name] {
+			out[i] = name + " [aggregate]"
+		} else {
+			out[i] = name
+		}
+	}
+	return out
 }
 
 // GetArchitecturalContext projects Rules, Modules, and applicability
 // reasons for a selected scope.
 type GetArchitecturalContext struct {
-	rules rule.Repository
+	rules     rule.Repository
+	knowledge vocab.Repository
 }
 
-// NewGetArchitecturalContext requires the Rule repository port.
-func NewGetArchitecturalContext(rules rule.Repository) (GetArchitecturalContext, error) {
+// NewGetArchitecturalContext requires the Rule and domain-model
+// repository ports.
+func NewGetArchitecturalContext(rules rule.Repository, knowledge vocab.Repository) (GetArchitecturalContext, error) {
 	if rules == nil {
 		return GetArchitecturalContext{}, fmt.Errorf("architectural context: missing rule repository")
 	}
-	return GetArchitecturalContext{rules: rules}, nil
+	if knowledge == nil {
+		return GetArchitecturalContext{}, fmt.Errorf("architectural context: missing domain model repository")
+	}
+	return GetArchitecturalContext{rules: rules, knowledge: knowledge}, nil
 }
 
 // Execute projects the context for one scope: an empty request means
@@ -106,6 +143,13 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 	out := ArchitecturalContext{Scope: "repository", RuleCount: len(cfg.Rules)}
 	for _, l := range cfg.Languages {
 		out.Languages = append(out.Languages, string(l))
+	}
+	lang, found, err := uc.knowledge.RecordedLanguage()
+	if err != nil {
+		return ArchitecturalContext{}, fmt.Errorf("load domain model: %w", err)
+	}
+	if found {
+		out.Domain = domainKnowledgeOf(lang)
 	}
 	if len(req.Paths) == 0 && len(req.Modules) == 0 {
 		for _, m := range cfg.Modules {
@@ -354,4 +398,31 @@ func joinNames(names []rule.ModuleName) string {
 		out += string(n)
 	}
 	return out
+}
+
+// domainKnowledgeOf projects a recorded Ubiquitous Language into the
+// context summary: canonical names only; aggregate designation is
+// retained for human text rendering.
+func domainKnowledgeOf(lang vocab.UbiquitousLanguage) *DomainKnowledge {
+	dk := &DomainKnowledge{
+		Source:    vocab.UbiquitousLanguageFileName,
+		Counts:    lang.Counts(),
+		aggregate: map[string]bool{},
+	}
+	for _, e := range lang.ListEntities() {
+		dk.Entities = append(dk.Entities, e.Name)
+		if e.Aggregate {
+			dk.aggregate[e.Name] = true
+		}
+	}
+	for _, v := range lang.ValueObjects {
+		dk.ValueObjects = append(dk.ValueObjects, v.Name)
+	}
+	for _, r := range lang.BusinessRules {
+		dk.BusinessRules = append(dk.BusinessRules, r.Name)
+	}
+	for _, e := range lang.Events {
+		dk.Events = append(dk.Events, e.Name)
+	}
+	return dk
 }

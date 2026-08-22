@@ -1,0 +1,10 @@
+# Violating case: a generic container file name appears in a domain
+# package; the structure rule must report the forbidden file.
+rule: "arclint:domain/files-speak-the-vocabulary"
+files:
+  internal/domain/vocab/model.go: |
+    package vocab
+expect:
+  - kind: violation
+    path: internal/domain/vocab/model.go
+    message: "path forbidden by structure rule \"internal/domain/**/model.go\" of Module \"domain\""

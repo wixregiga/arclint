@@ -1,0 +1,9 @@
+# Conforming case: domain files are named for the vocabulary concepts
+# they hold, so the structure rule must stay silent.
+rule: "arclint:domain/files-speak-the-vocabulary"
+files:
+  internal/domain/vocab/language.go: |
+    package vocab
+  internal/domain/vocab/entity.go: |
+    package vocab
+expect: []

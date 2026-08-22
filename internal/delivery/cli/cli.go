@@ -17,6 +17,7 @@ const (
 // Invocation is one CLI run request.
 type Invocation struct {
 	Args   []string
+	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
 }

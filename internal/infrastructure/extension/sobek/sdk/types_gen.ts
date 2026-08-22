@@ -122,3 +122,24 @@ export interface ViolationInput {
   line?: number /* int */;
   fixHint?: string;
 }
+/**
+ * DomainDefinitionInfo is one recorded project domain definition as
+ * exposed through ctx.domain().
+ */
+export interface DomainDefinitionInfo {
+  name: string;
+  definition?: string;
+  aliases?: string[];
+  aggregate?: boolean;
+}
+/**
+ * DomainInfo is the project's recorded domain model as exposed through
+ * ctx.domain(): empty collections when the project records none.
+ * Read-only: declaring knowledge never creates a diagnostic by itself.
+ */
+export interface DomainInfo {
+  entities: DomainDefinitionInfo[];
+  valueObjects: DomainDefinitionInfo[];
+  businessRules: DomainDefinitionInfo[];
+  events: DomainDefinitionInfo[];
+}
