@@ -14,7 +14,7 @@ func NewSDKCommand(initialize application.InitializeExtensionSDK) Command {
 		Short: "extension SDK utilities",
 		Subcommands: []Command{
 			{
-				Name:  "init",
+				Name:  commandInit,
 				Short: "write arclint.d.ts and tsconfig.json into .arclint/extensions",
 				Run: func(ctx Context) error {
 					paths, err := initialize.Execute()

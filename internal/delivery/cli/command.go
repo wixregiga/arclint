@@ -2,6 +2,8 @@ package cli
 
 import "io"
 
+const commandInit = "init"
+
 // Flag is one framework-neutral flag description: value flags parse a
 // string, bool flags parse presence.
 type Flag struct {

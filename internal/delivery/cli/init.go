@@ -11,7 +11,7 @@ import (
 // a commented starter ruleset from explicit choices.
 func NewInitCommand(initialize application.InitializeRepository) Command {
 	return Command{
-		Name:  "init",
+		Name:  commandInit,
 		Short: "draft a starter rules.yaml for this repository",
 		Flags: []Flag{
 			{Name: "languages", Default: "go", Doc: "comma-separated runtime targets: go, ts, py", Complete: completeLanguages},

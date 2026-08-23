@@ -124,10 +124,11 @@ the project supplies names, definitions, and aliases.
 
 An Aggregate is an Entity designation (`aggregate: true` on an entity
 entry), not a second unrelated object. Inspect and maintain the model
-with `arclint domain`; `arclint domain explain` prints the same ArcLint
-meanings used by help, guided authoring, JSON output, and the extension
-SDK. Declaring knowledge never creates a Diagnostic by itself—enabled
-Rules under `arclint check` decide whether the model is enforced.
+with `arclint domain`; start an empty model with `arclint domain init`.
+Initialization leaves an existing file untouched. `arclint domain explain`
+prints the same ArcLint meanings used by help, guided authoring, JSON output,
+and the extension SDK. Declaring knowledge never creates a Diagnostic by
+itself—enabled Rules under `arclint check` decide whether the model is enforced.
 
 ## Validation layers
 

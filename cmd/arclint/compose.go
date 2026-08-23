@@ -135,6 +135,10 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
+	initDomain, err := application.NewInitDomain(knowledge)
+	if err != nil {
+		return configError(err)
+	}
 	getDomainOverview, err := application.NewGetDomainOverview(knowledge)
 	if err != nil {
 		return configError(err)
@@ -160,7 +164,7 @@ func run(args []string) int {
 		cli.NewInitCommand(initialize),
 		cli.NewRulesCommand(listRules, showRule, ruleTests),
 		cli.NewContextCommand(getContext),
-		cli.NewDomainCommand(getDomainOverview, listDomainDefinitions, showDomainDefinition, defineDomainDefinition, removeDomainDefinition),
+		cli.NewDomainCommand(initDomain, getDomainOverview, listDomainDefinitions, showDomainDefinition, defineDomainDefinition, removeDomainDefinition),
 		cli.NewAgentsCommand(publishAgents),
 		cli.NewBaselineCommand(capture, refresh),
 		cli.NewPatternsCommand(listPatterns),

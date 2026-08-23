@@ -13,6 +13,7 @@ weight = 6
 | `arclint baseline refresh` | reassess and replace the Baseline, dropping stale entries |
 | `arclint context [paths...]` | explain the repository or everything binding the selected paths; `--module` adds named Modules and `--format json` emits the machine form |
 | `arclint domain` | shorthand for `arclint domain overview`; inspect and maintain the project's ubiquitous language |
+| `arclint domain init` | create an empty, schema-hinted `ubiquitous-language.yaml` beside the resolved `rules.yaml`; leave an existing file unchanged |
 | `arclint domain overview` | summarize the project's ubiquitous language for understanding |
 | `arclint domain list [type]` | list domain definitions, optionally filtered to `entities`, `aggregates`, `value-objects`, `business-rules`, or `events` |
 | `arclint domain show <type> <name>` | show one domain definition by singular type and canonical name |
@@ -161,13 +162,15 @@ resolved `rules.yaml`. ArcLint does not search for the model
 independently; `--rules <path>` moves both files' project root together.
 
 Running `arclint domain` with no subcommand is the same as
-`arclint domain overview`. Subcommands cover summary (`overview`),
-inventory (`list`), one definition (`show`), ArcLint-owned concept
-meanings (`explain`), create-or-update (`define`, including
-`--guided`), removal (`remove` / `rm`), and the published schema
-(`schema`).
+`arclint domain overview`. Subcommands cover file initialization
+(`init`), summary (`overview`), inventory (`list`), one definition
+(`show`), ArcLint-owned concept meanings (`explain`), create-or-update
+(`define`, including `--guided`), removal (`remove` / `rm`), and the
+published schema (`schema`). `domain init` is idempotent: it creates a
+versioned, schema-hinted empty file when none exists and never replaces
+an existing model.
 
-Every domain subcommand except `schema` accepts `--format text|json`
+Every domain subcommand except `init` and `schema` accepts `--format text|json`
 (default `text`). Text is for humans; JSON is the stable machine shape
 for agents and scripts. `domain schema` always emits indented JSON, the
 same contract committed as `docs/ubiquitous-language.schema.json`.

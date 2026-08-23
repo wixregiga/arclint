@@ -15,6 +15,7 @@ type memoryKnowledge struct {
 	found bool
 	saves int
 	err   error
+	save  error
 }
 
 func (m *memoryKnowledge) RecordedLanguage() (vocab.UbiquitousLanguage, bool, error) {
@@ -25,13 +26,81 @@ func (m *memoryKnowledge) RecordedLanguage() (vocab.UbiquitousLanguage, bool, er
 }
 
 func (m *memoryKnowledge) Record(lang vocab.UbiquitousLanguage) error {
-	if m.err != nil {
-		return m.err
+	if m.save != nil {
+		return m.save
 	}
 	m.lang = lang
 	m.found = true
 	m.saves++
 	return nil
+}
+
+func TestInitDomainCreatesMissingFile(t *testing.T) {
+	t.Parallel()
+	repo := &memoryKnowledge{}
+	uc, err := application.NewInitDomain(repo)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	out, err := uc.Execute()
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if !out.Created || out.Source != vocab.UbiquitousLanguageFileName {
+		t.Fatalf("result = %+v", out)
+	}
+	if repo.saves != 1 || !repo.found || !repo.lang.Empty() {
+		t.Fatalf("repository after init = %+v", repo)
+	}
+}
+
+func TestInitDomainLeavesExistingFileUnchanged(t *testing.T) {
+	t.Parallel()
+	lang, err := vocab.NewUbiquitousLanguage(
+		[]vocab.Entity{{Definition: vocab.Definition{Name: "Order"}}},
+		nil, nil, nil,
+	)
+	if err != nil {
+		t.Fatalf("NewUbiquitousLanguage: %v", err)
+	}
+	repo := &memoryKnowledge{lang: lang, found: true}
+	uc, err := application.NewInitDomain(repo)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	out, err := uc.Execute()
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if out.Created || repo.saves != 0 {
+		t.Fatalf("result/repository = %+v/%+v", out, repo)
+	}
+	if _, ok := repo.lang.FindEntity("Order"); !ok {
+		t.Fatal("existing definition was not preserved")
+	}
+}
+
+func TestInitDomainContainsRepositoryErrors(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		repo *memoryKnowledge
+		want string
+	}{
+		{name: "load", repo: &memoryKnowledge{err: errors.New("read failed")}, want: "load domain model: read failed"},
+		{name: "save", repo: &memoryKnowledge{save: errors.New("write failed")}, want: "save domain model: write failed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			uc, err := application.NewInitDomain(tc.repo)
+			if err != nil {
+				t.Fatalf("construct: %v", err)
+			}
+			if _, err := uc.Execute(); err == nil || err.Error() != tc.want {
+				t.Fatalf("error = %v, want %q", err, tc.want)
+			}
+		})
+	}
 }
 
 func TestGetDomainOverviewMissingFile(t *testing.T) {
@@ -357,6 +426,9 @@ func TestRemoveDomainDefinitionUsageError(t *testing.T) {
 
 func TestDomainConstructorsRejectNil(t *testing.T) {
 	t.Parallel()
+	if _, err := application.NewInitDomain(nil); err == nil {
+		t.Fatal("NewInitDomain(nil) accepted")
+	}
 	if _, err := application.NewGetDomainOverview(nil); err == nil {
 		t.Fatal("NewGetDomainOverview(nil) accepted")
 	}

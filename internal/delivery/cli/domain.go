@@ -23,10 +23,11 @@ const (
 )
 
 // NewDomainCommand adapts the project domain-model use cases into the
-// domain command family: overview (also the bare `domain` default),
-// list, show, explain, define (including --guided), remove/rm, and
-// schema.
+// domain command family: init, overview (also the bare `domain`
+// default), list, show, explain, define (including --guided),
+// remove/rm, and schema.
 func NewDomainCommand(
+	initialize application.InitDomain,
 	overview application.GetDomainOverview,
 	list application.ListDomainDefinitions,
 	show application.ShowDomainDefinition,
@@ -47,6 +48,14 @@ func NewDomainCommand(
 			return runOverview(ctx)
 		},
 		Subcommands: []Command{
+			{
+				Name:    commandInit,
+				Short:   "initialize the project's ubiquitous language file",
+				Long:    initDomainLong,
+				Example: initDomainExample,
+				MaxArgs: 0,
+				Run:     initDomainRunner(initialize),
+			},
 			{
 				Name:    "overview",
 				Short:   "summarize the project's ubiquitous language for understanding",
@@ -116,6 +125,24 @@ func NewDomainCommand(
 				Run:     domainSchemaRunner(),
 			},
 		},
+	}
+}
+
+func initDomainRunner(initialize application.InitDomain) func(Context) error {
+	return func(ctx Context) error {
+		result, err := initialize.Execute()
+		if err != nil {
+			return domainError(err)
+		}
+		if result.Created {
+			_, err = fmt.Fprintf(ctx.Stdout, "Initialized %s.\n", result.Source)
+		} else {
+			_, err = fmt.Fprintf(ctx.Stdout, "%s already exists; left unchanged.\n", result.Source)
+		}
+		if err != nil {
+			return fmt.Errorf("write output: %w", err)
+		}
+		return nil
 	}
 }
 
@@ -330,6 +357,9 @@ func domainSchemaRunner() func(Context) error {
 func writeMissingDomainGuidance(w io.Writer) error {
 	p := &printer{w: w}
 	p.println("No recorded Ubiquitous Language found at " + vocab.UbiquitousLanguageFileName + ".")
+	p.println()
+	p.println("Initialize an empty model:")
+	p.println("  arclint domain init")
 	p.println()
 	p.println("Define one item:")
 	p.println("  arclint domain define entity <name> --definition <text>")
@@ -1182,6 +1212,14 @@ extensions, and agent integrations.
 Running arclint domain without a subcommand is the same as:
 
   arclint domain overview`
+
+const initDomainLong = `Initialize the project's ubiquitous language file.
+
+The file is created beside the resolved rules.yaml with the current document
+version and an editor schema hint. If it already exists, ArcLint leaves it
+unchanged.`
+
+const initDomainExample = `  arclint domain init`
 
 const overviewLong = `Summarize the project's domain model for understanding.
 

@@ -38,6 +38,7 @@ func mustRunDomain(t *testing.T, root string, args ...string) string {
 }
 
 func TestDomainCommandFamily(t *testing.T) {
+	t.Run("init", testDomainInit)
 	t.Run("resolution", testDomainResolution)
 	t.Run("fullFlow", testDomainFullFlow)
 	t.Run("exitCodes", testDomainExitCodes)
@@ -52,6 +53,48 @@ func TestDomainCommandFamily(t *testing.T) {
 	t.Run("context", testDomainContext)
 }
 
+func testDomainInit(t *testing.T) {
+	root := domainFixture(t)
+	modelPath := filepath.Join(root, "ubiquitous-language.yaml")
+
+	stdout := mustRunDomain(t, root, "domain", "init")
+	if stdout != "Initialized ubiquitous-language.yaml.\n" {
+		t.Fatalf("first init output = %q", stdout)
+	}
+	created, err := os.ReadFile(modelPath)
+	if err != nil {
+		t.Fatalf("read initialized model: %v", err)
+	}
+	text := string(created)
+	if !strings.Contains(text, "yaml-language-server: $schema=") || !strings.Contains(text, "version: 1") {
+		t.Fatalf("initialized model lacks schema hint or version:\n%s", text)
+	}
+
+	existing := `# project-owned comment
+version: 1
+entities:
+  - name: Order
+    definition: A purchase request.
+`
+	write(t, root, "ubiquitous-language.yaml", existing)
+	stdout = mustRunDomain(t, root, "domain", "init")
+	if stdout != "ubiquitous-language.yaml already exists; left unchanged.\n" {
+		t.Fatalf("repeated init output = %q", stdout)
+	}
+	unchanged, err := os.ReadFile(modelPath)
+	if err != nil {
+		t.Fatalf("read existing model: %v", err)
+	}
+	if string(unchanged) != existing {
+		t.Fatalf("repeated init changed existing model:\n%s", unchanged)
+	}
+
+	_, stderr, code := runBin(t, root, os.Environ(), "domain", "init", "extra")
+	if code != 2 {
+		t.Fatalf("init with argument: exit %d stderr %q", code, stderr)
+	}
+}
+
 func testDomainResolution(t *testing.T) {
 	root := domainFixture(t)
 
@@ -62,6 +105,9 @@ func testDomainResolution(t *testing.T) {
 	}
 	wantMissing := "" +
 		"No recorded Ubiquitous Language found at ubiquitous-language.yaml.\n" +
+		"\n" +
+		"Initialize an empty model:\n" +
+		"  arclint domain init\n" +
 		"\n" +
 		"Define one item:\n" +
 		"  arclint domain define entity <name> --definition <text>\n" +
@@ -600,7 +646,7 @@ func testDomainHelp(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("domain --help exit %d\nstderr: %s", code, stderr)
 	}
-	for _, sub := range []string{"overview", "list", "show", "explain", "define", "remove", "schema"} {
+	for _, sub := range []string{"init", "overview", "list", "show", "explain", "define", "remove", "schema"} {
 		if !strings.Contains(stdout, sub) {
 			t.Errorf("domain --help missing %q", sub)
 		}
@@ -618,6 +664,7 @@ func testDomainHelp(t *testing.T) {
 	}
 	// Examples present on a few key commands.
 	for _, cmd := range [][]string{
+		{"domain", "init", "--help"},
 		{"domain", "overview", "--help"},
 		{"domain", "define", "--help"},
 		{"domain", "show", "--help"},
