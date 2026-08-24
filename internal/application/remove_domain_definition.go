@@ -11,6 +11,7 @@ import (
 // definition or clearing an Aggregate designation.
 type DomainRemoveResult struct {
 	Concept         vocab.Concept
+	Context         string
 	Name            string
 	EntityPreserved bool
 }
@@ -33,13 +34,13 @@ func NewRemoveDomainDefinition(knowledge vocab.Repository) (RemoveDomainDefiniti
 // Execute removes one definition. Unknown concepts and empty names are
 // usage errors. A missing file or missing name wraps
 // vocab.ErrDefinitionNotFound and never saves.
-func (uc RemoveDomainDefinition) Execute(concept, name string) (DomainRemoveResult, error) {
+func (uc RemoveDomainDefinition) Execute(concept, context, name string) (DomainRemoveResult, error) {
 	c, err := vocab.ParseConcept(concept)
 	if err != nil {
 		return DomainRemoveResult{}, fmt.Errorf("%w: %v", ErrDomainUsage, err)
 	}
 	name = strings.TrimSpace(name)
-	if name == "" {
+	if name == "" && c != vocab.ConceptBoundedContext {
 		return DomainRemoveResult{}, fmt.Errorf("%w: name is required", ErrDomainUsage)
 	}
 
@@ -48,7 +49,23 @@ func (uc RemoveDomainDefinition) Execute(concept, name string) (DomainRemoveResu
 		return DomainRemoveResult{}, fmt.Errorf("load domain model: %w", err)
 	}
 
-	next, result, err := lang.Remove(c, name)
+	ctxName, _, ok, err := findInContexts(lang, c, context, name)
+	if err != nil {
+		return DomainRemoveResult{}, err
+	}
+	if !ok {
+		return DomainRemoveResult{}, definitionNotFound(c, ctxName, name)
+	}
+
+	// For bounded_context the domain Remove keys on name.
+	removeContext := ctxName
+	removeName := name
+	if c == vocab.ConceptBoundedContext {
+		removeName = ctxName
+		removeContext = ctxName
+	}
+
+	next, result, err := lang.Remove(c, removeContext, removeName)
 	if err != nil {
 		// No prefix: the domain vocabulary is the complete
 		// user-facing message (wraps vocab.ErrDefinitionNotFound).
@@ -59,6 +76,7 @@ func (uc RemoveDomainDefinition) Execute(concept, name string) (DomainRemoveResu
 	}
 	return DomainRemoveResult{
 		Concept:         c,
+		Context:         ctxName,
 		Name:            name,
 		EntityPreserved: result.EntityPreserved,
 	}, nil

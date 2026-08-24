@@ -84,31 +84,44 @@ type ArchitecturalContext struct {
 	Domain *DomainKnowledge `json:"domain,omitempty"`
 }
 
-// DomainKnowledge is the project's recorded domain model summary as
-// projected into architectural context.
-type DomainKnowledge struct {
-	Source        string       `json:"source"`
-	Counts        vocab.Counts `json:"counts"`
-	Entities      []string     `json:"entities,omitempty"`
-	ValueObjects  []string     `json:"valueObjects,omitempty"`
-	BusinessRules []string     `json:"businessRules,omitempty"`
-	Events        []string     `json:"events,omitempty"`
-	// aggregate marks Entities designated as aggregates for human text.
-	aggregate map[string]bool
+// DomainEntityRef is one entity name inside a bounded-context summary,
+// with aggregate designation when set.
+type DomainEntityRef struct {
+	Name      string `json:"name"`
+	Aggregate bool   `json:"aggregate,omitempty"`
 }
 
-// EntityDisplayNames returns entity names for human text, with
-// designated aggregates suffixed " [aggregate]".
-func (d DomainKnowledge) EntityDisplayNames() []string {
-	out := make([]string, len(d.Entities))
-	for i, name := range d.Entities {
-		if d.aggregate[name] {
-			out[i] = name + " [aggregate]"
-		} else {
-			out[i] = name
-		}
-	}
-	return out
+// DomainInvariantRef is one invariant statement with its owner.
+type DomainInvariantRef struct {
+	Statement string `json:"statement"`
+	Owner     string `json:"owner"`
+}
+
+// DomainRelationRef is one context-map edge.
+type DomainRelationRef struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+	Kind string `json:"kind"`
+}
+
+// DomainContextKnowledge is one bounded context projected into
+// architectural context: canonical names only, aggregates marked.
+type DomainContextKnowledge struct {
+	Name         string               `json:"name"`
+	Entities     []DomainEntityRef    `json:"entities,omitempty"`
+	ValueObjects []string             `json:"valueObjects,omitempty"`
+	Invariants   []DomainInvariantRef `json:"invariants,omitempty"`
+	Events       []string             `json:"events,omitempty"`
+}
+
+// DomainKnowledge is the project's recorded domain model summary as
+// projected into architectural context. contexts replaces the four
+// flat term arrays from the pre-contexts shape.
+type DomainKnowledge struct {
+	Source    string                   `json:"source"`
+	Counts    vocab.Counts             `json:"counts"`
+	Contexts  []DomainContextKnowledge `json:"contexts,omitempty"`
+	Relations []DomainRelationRef      `json:"relations,omitempty"`
 }
 
 // GetArchitecturalContext projects Rules, Modules, and applicability
@@ -401,28 +414,41 @@ func joinNames(names []rule.ModuleName) string {
 }
 
 // domainKnowledgeOf projects a recorded Ubiquitous Language into the
-// context summary: canonical names only; aggregate designation is
-// retained for human text rendering.
+// context summary: per-context term groups, aggregate designation on
+// entities, invariant statements with owners, and relations.
 func domainKnowledgeOf(lang vocab.UbiquitousLanguage) *DomainKnowledge {
 	dk := &DomainKnowledge{
-		Source:    vocab.UbiquitousLanguageFileName,
-		Counts:    lang.Counts(),
-		aggregate: map[string]bool{},
+		Source: vocab.UbiquitousLanguageFileName,
+		Counts: lang.Counts(),
 	}
-	for _, e := range lang.ListEntities() {
-		dk.Entities = append(dk.Entities, e.Name)
-		if e.Aggregate {
-			dk.aggregate[e.Name] = true
+	for _, ctx := range lang.ListContexts() {
+		summary := DomainContextKnowledge{Name: ctx.Name}
+		for _, e := range ctx.Entities {
+			summary.Entities = append(summary.Entities, DomainEntityRef{
+				Name:      e.Name,
+				Aggregate: e.Aggregate,
+			})
 		}
+		for _, v := range ctx.ValueObjects {
+			summary.ValueObjects = append(summary.ValueObjects, v.Name)
+		}
+		for _, inv := range ctx.Invariants {
+			summary.Invariants = append(summary.Invariants, DomainInvariantRef{
+				Statement: inv.Statement,
+				Owner:     inv.Owner,
+			})
+		}
+		for _, e := range ctx.Events {
+			summary.Events = append(summary.Events, e.Name)
+		}
+		dk.Contexts = append(dk.Contexts, summary)
 	}
-	for _, v := range lang.ValueObjects {
-		dk.ValueObjects = append(dk.ValueObjects, v.Name)
-	}
-	for _, r := range lang.BusinessRules {
-		dk.BusinessRules = append(dk.BusinessRules, r.Name)
-	}
-	for _, e := range lang.Events {
-		dk.Events = append(dk.Events, e.Name)
+	for _, rel := range lang.Relations {
+		dk.Relations = append(dk.Relations, DomainRelationRef{
+			From: rel.From,
+			To:   rel.To,
+			Kind: string(rel.Kind),
+		})
 	}
 	return dk
 }

@@ -131,7 +131,7 @@ globals.
 | `ctx.facts(path)` | declaration facts, or `null` when the language did not supply them |
 | `ctx.moduleOf(path)` | sorted Module names containing the path (empty when out of scope) |
 | `ctx.report(v)` | record one finding |
-| `ctx.domain()` | the project's recorded domain model (`DomainInfo`); empty collections when none is recorded |
+| `ctx.domain()` | the project's recorded domain model (`DomainInfo`); empty `contexts` and `relations` when none is recorded |
 
 `ctx.report` accepts only:
 
@@ -143,29 +143,47 @@ globals.
 owns it. Legacy per-finding `severity`, `contract`, and `blame` fields are
 ignored if present.
 
-`ctx.domain()` returns read-only `DomainInfo`:
+`ctx.domain()` returns read-only `DomainInfo` (camelCase JSON):
 
 ```ts
 {
-  entities: DomainDefinitionInfo[];
-  valueObjects: DomainDefinitionInfo[];
-  businessRules: DomainDefinitionInfo[];
-  events: DomainDefinitionInfo[];
-}
-
-// DomainDefinitionInfo
-{
-  name: string;
-  definition?: string;
-  aliases?: string[];
-  aggregate?: boolean; // entities only; true when designated Aggregate
+  contexts: Array<{
+    name: string;
+    entities: Array<{
+      name: string;
+      definition?: string;
+      aliases?: string[];
+      aggregate?: boolean;
+    }>;
+    valueObjects: Array<{
+      name: string;
+      definition?: string;
+      aliases?: string[];
+    }>;
+    invariants: Array<{
+      statement: string;
+      owner: string;
+    }>;
+    events: Array<{
+      name: string;
+      definition?: string;
+      aliases?: string[];
+    }>;
+  }>;
+  relations: Array<{
+    from: string;
+    to: string;
+    kind: string; // partnership | shared_kernel | customer_supplier | ...
+  }>;
 }
 ```
 
 Collections are always arrays (empty when the project records none or
-the file is absent). Declaring knowledge never creates a Diagnostic by
-itself; an Extension only surfaces findings when its `check` calls
-`ctx.report`.
+the file is absent). Each term lives inside a named bounded context.
+`aggregate` is an entity designation, never a separate collection.
+Invariants carry a statement and exactly one owner. Declaring knowledge
+never creates a Diagnostic by itself; an Extension only surfaces
+findings when its `check` calls `ctx.report`.
 
 Rule Tests exercise `ctx.domain()` the same way they exercise files: a
 fixture that authors `ubiquitous-language.yaml` at its tree root is

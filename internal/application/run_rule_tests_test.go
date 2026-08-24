@@ -300,10 +300,11 @@ func TestRunRuleTestsFeedsFixtureVocabularyToExtensions(t *testing.T) {
 	}
 	cfg.Rules = append(cfg.Rules, extRule)
 
-	const authored = "version: 1\nentities:\n  - name: Order\n"
-	recorded := vocab.UbiquitousLanguage{Entities: []vocab.Entity{
-		{Definition: vocab.Definition{Name: "Order"}},
-	}}
+	const authored = "version: 1\ncontexts:\n  - name: Ordering\n    entities:\n      - name: Order\n"
+	recorded := vocab.UbiquitousLanguage{Contexts: []vocab.BoundedContext{{
+		Name:     "Ordering",
+		Entities: []vocab.Entity{{Definition: vocab.Definition{Name: "Order"}}},
+	}}}
 	files := []rule.TestFile{
 		{Path: "m/all_good.go"},
 		{Path: vocab.UbiquitousLanguageFileName, Content: authored},
@@ -328,7 +329,9 @@ func TestRunRuleTestsFeedsFixtureVocabularyToExtensions(t *testing.T) {
 	if string(vocabulary.content) != authored {
 		t.Errorf("parsed content = %q, want the authored fixture bytes", vocabulary.content)
 	}
-	if len(recorder.knowledge.Entities) != 1 || recorder.knowledge.Entities[0].Name != "Order" {
+	if len(recorder.knowledge.Contexts) != 1 ||
+		len(recorder.knowledge.Contexts[0].Entities) != 1 ||
+		recorder.knowledge.Contexts[0].Entities[0].Name != "Order" {
 		t.Errorf("evaluator knowledge = %+v, want the parsed Order entity", recorder.knowledge)
 	}
 }

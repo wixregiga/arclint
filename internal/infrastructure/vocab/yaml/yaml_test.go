@@ -35,7 +35,7 @@ func TestLoadRejectsMalformedYAML(t *testing.T) {
 
 func TestLoadRejectsVersion2(t *testing.T) {
 	dir := t.TempDir()
-	writeModel(t, dir, "version: 2\nentities: []\n")
+	writeModel(t, dir, "version: 2\ncontexts: []\n")
 	repo := newRepo(t, dir)
 	_, found, err := repo.RecordedLanguage()
 	if err == nil {
@@ -51,7 +51,7 @@ func TestLoadRejectsVersion2(t *testing.T) {
 
 func TestLoadRejectsMissingVersion(t *testing.T) {
 	dir := t.TempDir()
-	writeModel(t, dir, "entities:\n  - name: Order\n")
+	writeModel(t, dir, "contexts:\n  - name: Ordering\n")
 	repo := newRepo(t, dir)
 	_, _, err := repo.RecordedLanguage()
 	if err == nil {
@@ -62,21 +62,56 @@ func TestLoadRejectsMissingVersion(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsUnknownKey(t *testing.T) {
+	dir := t.TempDir()
+	writeModel(t, dir, `version: 1
+extra: true
+contexts: []
+`)
+	repo := newRepo(t, dir)
+	if _, _, err := repo.RecordedLanguage(); err == nil {
+		t.Fatal("RecordedLanguage accepted unknown top-level key")
+	}
+}
+
 func TestLoadRejectsEmptyAndDuplicateNames(t *testing.T) {
-	t.Run("empty name", func(t *testing.T) {
+	t.Run("empty entity name", func(t *testing.T) {
 		dir := t.TempDir()
-		writeModel(t, dir, "version: 1\nentities:\n  - name: \"\"\n")
+		writeModel(t, dir, `version: 1
+contexts:
+  - name: Ordering
+    entities:
+      - name: ""
+`)
 		repo := newRepo(t, dir)
 		if _, _, err := repo.RecordedLanguage(); err == nil {
 			t.Fatal("RecordedLanguage accepted empty name")
 		}
 	})
-	t.Run("duplicate name", func(t *testing.T) {
+	t.Run("duplicate entity name within context", func(t *testing.T) {
 		dir := t.TempDir()
-		writeModel(t, dir, "version: 1\nentities:\n  - name: Order\n  - name: Order\n")
+		writeModel(t, dir, `version: 1
+contexts:
+  - name: Ordering
+    entities:
+      - name: Order
+      - name: Order
+`)
 		repo := newRepo(t, dir)
 		if _, _, err := repo.RecordedLanguage(); err == nil {
 			t.Fatal("RecordedLanguage accepted duplicate name")
+		}
+	})
+	t.Run("duplicate context name", func(t *testing.T) {
+		dir := t.TempDir()
+		writeModel(t, dir, `version: 1
+contexts:
+  - name: Ordering
+  - name: Ordering
+`)
+		repo := newRepo(t, dir)
+		if _, _, err := repo.RecordedLanguage(); err == nil {
+			t.Fatal("RecordedLanguage accepted duplicate context name")
 		}
 	})
 }
@@ -84,9 +119,11 @@ func TestLoadRejectsEmptyAndDuplicateNames(t *testing.T) {
 func TestLoadRejectsAggregateOnValueObject(t *testing.T) {
 	dir := t.TempDir()
 	writeModel(t, dir, `version: 1
-value_objects:
-  - name: Money
-    aggregate: true
+contexts:
+  - name: Ordering
+    value_objects:
+      - name: Money
+        aggregate: true
 `)
 	repo := newRepo(t, dir)
 	if _, _, err := repo.RecordedLanguage(); err == nil {
@@ -94,24 +131,72 @@ value_objects:
 	}
 }
 
+func TestLoadRejectsRelationToUndeclaredContext(t *testing.T) {
+	dir := t.TempDir()
+	writeModel(t, dir, `version: 1
+contexts:
+  - name: Ordering
+relations:
+  - from: Ordering
+    to: Billing
+    kind: customer_supplier
+`)
+	repo := newRepo(t, dir)
+	if _, _, err := repo.RecordedLanguage(); err == nil {
+		t.Fatal("RecordedLanguage accepted relation to undeclared context")
+	}
+}
+
+func TestLoadRejectsInvalidRelationKind(t *testing.T) {
+	dir := t.TempDir()
+	writeModel(t, dir, `version: 1
+contexts:
+  - name: Ordering
+  - name: Billing
+relations:
+  - from: Ordering
+    to: Billing
+    kind: not_a_kind
+`)
+	repo := newRepo(t, dir)
+	if _, _, err := repo.RecordedLanguage(); err == nil {
+		t.Fatal("RecordedLanguage accepted invalid relation kind")
+	}
+}
+
 func TestSaveLoadRoundTrip(t *testing.T) {
 	dir := t.TempDir()
+	// Fresh file without local schema → remote modeline.
 	repo := newRepo(t, dir)
 
 	lang, err := vocab.NewUbiquitousLanguage(
-		[]vocab.Entity{
-			{Definition: vocab.Definition{Name: "Order", Definition: "A customer's request.", Aliases: []string{"Purchase Order"}}, Aggregate: true},
-			{Definition: vocab.Definition{Name: "Customer", Definition: "Places Orders."}},
+		[]vocab.BoundedContext{
+			{
+				Name: "Ordering",
+				Entities: []vocab.Entity{
+					{Definition: vocab.Definition{Name: "Order", Definition: "A customer's request.", Aliases: []string{"Purchase Order"}}, Aggregate: true},
+					{Definition: vocab.Definition{Name: "Customer", Definition: "Places Orders."}},
+				},
+				ValueObjects: []vocab.Definition{
+					{Name: "Money", Definition: "A monetary amount."},
+					{Name: "OrderID", Definition: "Order identity."},
+				},
+				Invariants: []vocab.Invariant{
+					{Statement: "Every Order identifies its Customer.", Owner: "Order"},
+				},
+				Events: []vocab.Definition{
+					{Name: "OrderPlaced", Definition: "An Order was accepted."},
+				},
+			},
+			{
+				Name: "Billing",
+				Entities: []vocab.Entity{
+					{Definition: vocab.Definition{Name: "Invoice", Definition: "A bill for payment."}},
+				},
+			},
 		},
-		[]vocab.Definition{
-			{Name: "Money", Definition: "A monetary amount."},
-			{Name: "OrderID", Definition: "Order identity."},
-		},
-		[]vocab.Definition{
-			{Name: "OrderMustHaveCustomer", Definition: "Every Order identifies its Customer."},
-		},
-		[]vocab.Definition{
-			{Name: "OrderPlaced", Definition: "An Order was accepted."},
+		[]vocab.ContextRelation{
+			{From: "Ordering", To: "Billing", Kind: vocab.RelationKind("customer_supplier")},
 		},
 	)
 	if err != nil {
@@ -128,38 +213,69 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	if !found {
 		t.Fatal("found = false after Record")
 	}
-	assertEntities(t, "entities", got.Entities, lang.Entities)
-	assertDefs(t, "value_objects", got.ValueObjects, lang.ValueObjects)
-	assertDefs(t, "business_rules", got.BusinessRules, lang.BusinessRules)
-	assertDefs(t, "events", got.Events, lang.Events)
+	assertContexts(t, got.Contexts, lang.Contexts)
+	assertRelations(t, got.Relations, lang.Relations)
 
 	raw, err := os.ReadFile(repo.Path())
 	if err != nil {
 		t.Fatalf("ReadFile: %v", err)
 	}
 	text := string(raw)
-	if !strings.Contains(text, schemaHint) {
-		t.Fatalf("fresh file missing schema modeline:\n%s", text)
+	if !strings.Contains(text, remoteSchemaHint) {
+		t.Fatalf("fresh file missing remote schema modeline:\n%s", text)
 	}
 	if !strings.Contains(text, "version: 1") {
 		t.Fatalf("fresh file missing version:\n%s", text)
+	}
+	if !strings.Contains(text, "kind: customer_supplier") {
+		t.Fatalf("fresh file missing relation kind:\n%s", text)
+	}
+}
+
+func TestFreshModelineUsesLocalSchemaWhenPresent(t *testing.T) {
+	dir := t.TempDir()
+	schemaDir := filepath.Join(dir, ".agents", "skills", "domain-librarian")
+	if err := os.MkdirAll(schemaDir, 0o750); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(schemaDir, "library.schema.json"), []byte(`{"$id":"x"}`), 0o600); err != nil {
+		t.Fatalf("WriteFile schema: %v", err)
+	}
+	repo := newRepo(t, dir)
+	lang, err := vocab.NewUbiquitousLanguage(
+		[]vocab.BoundedContext{{Name: "Ordering"}},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("NewUbiquitousLanguage: %v", err)
+	}
+	if err := repo.Record(lang); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	raw := readModel(t, repo.Path())
+	if !strings.Contains(raw, localSchemaHint) {
+		t.Fatalf("fresh file missing local schema modeline:\n%s", raw)
+	}
+	if strings.Contains(raw, remoteSchemaHint) {
+		t.Fatalf("fresh file used remote modeline despite local schema:\n%s", raw)
 	}
 }
 
 func TestCommentPreservation(t *testing.T) {
 	dir := t.TempDir()
-	// Head/line/foot comments on Customer; Order is defined later via the model.
 	initial := `version: 1
 
-entities:
-  # head comment on Customer
-  - name: Customer # line comment on Customer
-    definition: A person or organization that places Orders.
-    # foot comment after Customer mapping
-
-value_objects:
-  - name: Money
-    definition: A monetary amount.
+contexts:
+  # head comment on Ordering
+  - name: Ordering # line comment on Ordering
+    entities:
+      # head comment on Customer
+      - name: Customer # line comment on Customer
+        definition: A person or organization that places Orders.
+        # foot comment after Customer mapping
+    value_objects:
+      - name: Money
+        definition: A monetary amount.
 `
 	writeModel(t, dir, initial)
 	repo := newRepo(t, dir)
@@ -171,15 +287,22 @@ value_objects:
 	if !found {
 		t.Fatal("expected found model")
 	}
+	if len(lang.Contexts) != 1 {
+		t.Fatalf("contexts = %d, want 1", len(lang.Contexts))
+	}
 
-	lang, _, err = lang.Define(vocab.ConceptEntity, "Order", vocab.Change{
-		SetDefinition:  true,
-		DefinitionText: "A customer's request to purchase products.",
-		SetAggregate:   true,
-		Aggregate:      true,
+	// Append Order entity while leaving Customer untouched.
+	c := lang.Contexts[0]
+	c.Entities = append(c.Entities, vocab.Entity{
+		Definition: vocab.Definition{
+			Name:       "Order",
+			Definition: "A customer's request to purchase products.",
+		},
+		Aggregate: true,
 	})
+	lang, err = vocab.NewUbiquitousLanguage([]vocab.BoundedContext{c}, lang.Relations)
 	if err != nil {
-		t.Fatalf("Define: %v", err)
+		t.Fatalf("NewUbiquitousLanguage: %v", err)
 	}
 	if err := repo.Record(lang); err != nil {
 		t.Fatalf("Record: %v", err)
@@ -191,6 +314,8 @@ value_objects:
 	}
 	text := string(raw)
 	for _, want := range []string{
+		"# head comment on Ordering",
+		"# line comment on Ordering",
 		"# head comment on Customer",
 		"# line comment on Customer",
 		"# foot comment after Customer mapping",
@@ -200,8 +325,9 @@ value_objects:
 		}
 	}
 	// Customer remains before Order (file order of surviving entries).
+	// "name: Order\n" avoids matching the "name: Ordering" context line.
 	customerAt := strings.Index(text, "name: Customer")
-	orderAt := strings.Index(text, "name: Order")
+	orderAt := strings.Index(text, "name: Order\n")
 	if customerAt < 0 || orderAt < 0 {
 		t.Fatalf("missing Customer or Order after Record:\n%s", text)
 	}
@@ -213,21 +339,22 @@ value_objects:
 func TestClearDefinitionRemovesKey(t *testing.T) {
 	dir := t.TempDir()
 	writeModel(t, dir, `version: 1
-entities:
-  - name: Order
-    definition: keep me briefly
+contexts:
+  - name: Ordering
+    entities:
+      - name: Order
+        definition: keep me briefly
 `)
 	repo := newRepo(t, dir)
 	lang, _, err := repo.RecordedLanguage()
 	if err != nil {
 		t.Fatalf("RecordedLanguage: %v", err)
 	}
-	lang, _, err = lang.Define(vocab.ConceptEntity, "Order", vocab.Change{
-		SetDefinition:  true,
-		DefinitionText: "",
-	})
+	c := lang.Contexts[0]
+	c.Entities[0].Definition.Definition = ""
+	lang, err = vocab.NewUbiquitousLanguage([]vocab.BoundedContext{c}, nil)
 	if err != nil {
-		t.Fatalf("Define: %v", err)
+		t.Fatalf("NewUbiquitousLanguage: %v", err)
 	}
 	if err := repo.Record(lang); err != nil {
 		t.Fatalf("Record: %v", err)
@@ -244,21 +371,23 @@ entities:
 func TestClearAliasesRemovesKey(t *testing.T) {
 	dir := t.TempDir()
 	writeModel(t, dir, `version: 1
-entities:
-  - name: Order
-    aliases:
-      - Purchase Order
+contexts:
+  - name: Ordering
+    entities:
+      - name: Order
+        aliases:
+          - Purchase Order
 `)
 	repo := newRepo(t, dir)
 	lang, _, err := repo.RecordedLanguage()
 	if err != nil {
 		t.Fatalf("RecordedLanguage: %v", err)
 	}
-	lang, _, err = lang.Define(vocab.ConceptEntity, "Order", vocab.Change{
-		ClearAliases: true,
-	})
+	c := lang.Contexts[0]
+	c.Entities[0].Aliases = nil
+	lang, err = vocab.NewUbiquitousLanguage([]vocab.BoundedContext{c}, nil)
 	if err != nil {
-		t.Fatalf("Define: %v", err)
+		t.Fatalf("NewUbiquitousLanguage: %v", err)
 	}
 	if err := repo.Record(lang); err != nil {
 		t.Fatalf("Record: %v", err)
@@ -272,9 +401,11 @@ entities:
 func TestAggregateKeyAddAndRemove(t *testing.T) {
 	dir := t.TempDir()
 	writeModel(t, dir, `version: 1
-entities:
-  - name: Order
-    definition: A customer's request.
+contexts:
+  - name: Ordering
+    entities:
+      - name: Order
+        definition: A customer's request.
 `)
 	repo := newRepo(t, dir)
 	lang, _, err := repo.RecordedLanguage()
@@ -282,9 +413,11 @@ entities:
 		t.Fatalf("RecordedLanguage: %v", err)
 	}
 
-	lang, _, err = lang.Define(vocab.ConceptAggregate, "Order", vocab.Change{})
+	c := lang.Contexts[0]
+	c.Entities[0].Aggregate = true
+	lang, err = vocab.NewUbiquitousLanguage([]vocab.BoundedContext{c}, nil)
 	if err != nil {
-		t.Fatalf("Define aggregate: %v", err)
+		t.Fatalf("NewUbiquitousLanguage designate: %v", err)
 	}
 	if err := repo.Record(lang); err != nil {
 		t.Fatalf("Record designate: %v", err)
@@ -294,9 +427,11 @@ entities:
 		t.Fatalf("aggregate key not added:\n%s", raw)
 	}
 
-	lang, _, err = lang.Remove(vocab.ConceptAggregate, "Order")
+	c = lang.Contexts[0]
+	c.Entities[0].Aggregate = false
+	lang, err = vocab.NewUbiquitousLanguage([]vocab.BoundedContext{c}, nil)
 	if err != nil {
-		t.Fatalf("Remove aggregate: %v", err)
+		t.Fatalf("NewUbiquitousLanguage clear: %v", err)
 	}
 	if err := repo.Record(lang); err != nil {
 		t.Fatalf("Record clear aggregate: %v", err)
@@ -313,19 +448,30 @@ entities:
 func TestRemovalDeletesOnlyOneEntry(t *testing.T) {
 	dir := t.TempDir()
 	writeModel(t, dir, `version: 1
-entities:
-  - name: Order
-  - name: Customer
-  - name: Product
+contexts:
+  - name: Ordering
+    entities:
+      - name: Order
+      - name: Customer
+      - name: Product
 `)
 	repo := newRepo(t, dir)
 	lang, _, err := repo.RecordedLanguage()
 	if err != nil {
 		t.Fatalf("RecordedLanguage: %v", err)
 	}
-	lang, _, err = lang.Remove(vocab.ConceptEntity, "Customer")
+	c := lang.Contexts[0]
+	kept := make([]vocab.Entity, 0, 2)
+	for _, e := range c.Entities {
+		if e.Name == "Customer" {
+			continue
+		}
+		kept = append(kept, e)
+	}
+	c.Entities = kept
+	lang, err = vocab.NewUbiquitousLanguage([]vocab.BoundedContext{c}, nil)
 	if err != nil {
-		t.Fatalf("Remove: %v", err)
+		t.Fatalf("NewUbiquitousLanguage: %v", err)
 	}
 	if err := repo.Record(lang); err != nil {
 		t.Fatalf("Record: %v", err)
@@ -339,12 +485,83 @@ entities:
 	}
 }
 
+func TestInvariantAndRelationSurgery(t *testing.T) {
+	dir := t.TempDir()
+	writeModel(t, dir, `version: 1
+contexts:
+  - name: Ordering
+    entities:
+      - name: Order
+        definition: A customer's request.
+    invariants:
+      # keep this invariant
+      - statement: Every Order identifies its Customer.
+        owner: Order
+  - name: Billing
+    entities:
+      - name: Invoice
+        definition: A bill.
+relations:
+  # keep this edge
+  - from: Ordering
+    to: Billing
+    kind: customer_supplier
+`)
+	repo := newRepo(t, dir)
+	lang, _, err := repo.RecordedLanguage()
+	if err != nil {
+		t.Fatalf("RecordedLanguage: %v", err)
+	}
+	// Add a second invariant and flip relation kind; preserve comments on survivors.
+	var ordering vocab.BoundedContext
+	var billing vocab.BoundedContext
+	for _, c := range lang.Contexts {
+		switch c.Name {
+		case "Ordering":
+			ordering = c
+		case "Billing":
+			billing = c
+		}
+	}
+	ordering.Invariants = append(ordering.Invariants, vocab.Invariant{
+		Statement: "Order total is non-negative.",
+		Owner:     "Order",
+	})
+	lang, err = vocab.NewUbiquitousLanguage(
+		[]vocab.BoundedContext{ordering, billing},
+		[]vocab.ContextRelation{
+			{From: "Ordering", To: "Billing", Kind: vocab.RelationKind("conformist")},
+		},
+	)
+	if err != nil {
+		t.Fatalf("NewUbiquitousLanguage: %v", err)
+	}
+	if err := repo.Record(lang); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	raw := readModel(t, repo.Path())
+	if !strings.Contains(raw, "# keep this invariant") {
+		t.Fatalf("invariant comment lost:\n%s", raw)
+	}
+	if !strings.Contains(raw, "# keep this edge") {
+		t.Fatalf("relation comment lost:\n%s", raw)
+	}
+	if !strings.Contains(raw, "Order total is non-negative.") {
+		t.Fatalf("new invariant missing:\n%s", raw)
+	}
+	if !strings.Contains(raw, "kind: conformist") {
+		t.Fatalf("relation kind not updated:\n%s", raw)
+	}
+}
+
 func TestAtomicWriteLeavesNoTempFiles(t *testing.T) {
 	dir := t.TempDir()
 	repo := newRepo(t, dir)
 	lang, err := vocab.NewUbiquitousLanguage(
-		[]vocab.Entity{{Definition: vocab.Definition{Name: "Order"}}},
-		nil, nil, nil,
+		[]vocab.BoundedContext{
+			{Name: "Ordering", Entities: []vocab.Entity{{Definition: vocab.Definition{Name: "Order"}}}},
+		},
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("NewUbiquitousLanguage: %v", err)
@@ -391,7 +608,10 @@ func TestPathBindsFileName(t *testing.T) {
 	}
 }
 
-const schemaHint = "# yaml-language-server: $schema=https://raw.githubusercontent.com/wixregiga/arclint/main/docs/ubiquitous-language.schema.json"
+const (
+	localSchemaHint  = "# yaml-language-server: $schema=.agents/skills/domain-librarian/library.schema.json"
+	remoteSchemaHint = "# yaml-language-server: $schema=https://raw.githubusercontent.com/wixregiga/arclint/main/.agents/skills/domain-librarian/library.schema.json"
+)
 
 func newRepo(t *testing.T, root string) yamlvocab.Repository {
 	t.Helper()
@@ -419,6 +639,34 @@ func readModel(t *testing.T, path string) string {
 	return string(raw)
 }
 
+func assertContexts(t *testing.T, got, want []vocab.BoundedContext) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("contexts: len=%d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i].Name != want[i].Name {
+			t.Fatalf("contexts[%d].Name = %q, want %q", i, got[i].Name, want[i].Name)
+		}
+		assertEntities(t, want[i].Name+".entities", got[i].Entities, want[i].Entities)
+		assertDefs(t, want[i].Name+".value_objects", got[i].ValueObjects, want[i].ValueObjects)
+		assertInvariants(t, want[i].Name+".invariants", got[i].Invariants, want[i].Invariants)
+		assertDefs(t, want[i].Name+".events", got[i].Events, want[i].Events)
+	}
+}
+
+func assertRelations(t *testing.T, got, want []vocab.ContextRelation) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("relations: len=%d, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i].From != want[i].From || got[i].To != want[i].To || got[i].Kind != want[i].Kind {
+			t.Fatalf("relations[%d] = %#v, want %#v", i, got[i], want[i])
+		}
+	}
+}
+
 func assertEntities(t *testing.T, section string, got, want []vocab.Entity) {
 	t.Helper()
 	if len(got) != len(want) {
@@ -443,6 +691,18 @@ func assertDefs(t *testing.T, section string, got, want []vocab.Definition) {
 		if got[i].Name != want[i].Name ||
 			got[i].Definition != want[i].Definition ||
 			!stringSlicesEqual(got[i].Aliases, want[i].Aliases) {
+			t.Fatalf("%s[%d] = %#v, want %#v", section, i, got[i], want[i])
+		}
+	}
+}
+
+func assertInvariants(t *testing.T, section string, got, want []vocab.Invariant) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("%s: len=%d, want %d", section, len(got), len(want))
+	}
+	for i := range want {
+		if got[i].Statement != want[i].Statement || got[i].Owner != want[i].Owner {
 			t.Fatalf("%s[%d] = %#v, want %#v", section, i, got[i], want[i])
 		}
 	}

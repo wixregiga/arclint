@@ -3,6 +3,55 @@
 Small ambiguities resolved in favor of the proposal's shapes, recorded per
 milestone. Dates are decision dates.
 
+## Domain-librarian skill inversion (2026-08-23) — generated artifacts, contexts schema
+
+**Status:** accepted. **Decider:** Brandon.
+
+### Context
+
+The domain-librarian skill bundle (SKILL.md, VOCAB.yaml, and the
+ubiquitous-language JSON Schema) was hand-authored under
+`.agents/skills/domain-librarian/`, while the Go domain still described a
+flat top-level entities/value_objects/business_rules/events shape and
+published schema bytes under `docs/` beside the rules schema. That
+split drifted and forced dual maintenance.
+
+### Decision
+
+Go code is the single source of truth for the skill artifacts and the
+ubiquitous-language schema. `arclint agents skill` writes SKILL.md,
+VOCAB.yaml, and library.schema.json (default directory
+`.agents/skills/domain-librarian/`). `arclint agents md|markdown|agentsmd`
+manages the AGENTS.md architecture block (`--write` installs it). The
+committed files under the skill path are litmus fixtures the generator
+must reproduce byte-for-byte. `arclint domain schema` prints the same
+schema bytes.
+
+The recorded model is contexts-organized only:
+
+- `version: 1`
+- `contexts[]` with `name`, `entities`, `value_objects`, `invariants`,
+  `events`
+- `relations[]` with `from`, `to`, and `kind` drawn from the closed
+  set: partnership, shared_kernel, customer_supplier, conformist,
+  anticorruption_layer, open_host_service, published_language,
+  separate_ways
+
+The flat top-level vocabulary shape is deleted. Extension `ctx.domain()`
+exposes `{ contexts, relations }` (camelCase). Fresh
+`ubiquitous-language.yaml` files modeline to
+`.agents/skills/domain-librarian/library.schema.json` (or the raw GitHub
+URL when the local skill file is absent). Concept spellings are
+underscore forms; `business_rule`/`assertion` resolve to invariants with
+one owner; aggregate is an entity designation.
+
+### Consequences
+
+- Docs and the editor schema path move to the generated skill library schema.
+- Skill content is regenerated from the binary; hand edits to the litmus
+  trio are wrong unless the domain model changes first.
+- No dual readers or compatibility shims for the flat file shape.
+
 ## Project Domain Model direction (2026-08-21) — context and inspection first
 
 **Status:** accepted. **Decider:** Brandon. The decision was pressure-tested
@@ -106,7 +155,7 @@ This decision does not select a storage format, file layout, CLI, exact SDK
 syntax, built-in domain Rule catalog, benchmark, source-code binding model,
 relationship representation, Bounded Context design, standalone glossary,
 notes model, lifecycle, stable identifier scheme, or dedicated suggestion
-workflow. Historical design-vocabulary documents are not inputs to this
+workflow. Historical standalone design glossaries are not inputs to this
 feature. Refused or withdrawn interview questions imply no decision.
 
 ## Spike landings (2026-08-14) — versioning, completion, formats, repo scaffolding

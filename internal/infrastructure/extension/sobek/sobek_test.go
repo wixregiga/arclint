@@ -422,8 +422,10 @@ export default defineRule({
   type: "domain-probe",
   check(ctx) {
     const domain = ctx.domain();
-    for (const e of domain.entities) {
-      ctx.report({ path: "domain", message: e.name });
+    for (const bound of domain.contexts) {
+      for (const e of bound.entities) {
+        ctx.report({ path: "domain", message: e.name });
+      }
     }
   },
 });
@@ -445,10 +447,13 @@ func TestEvaluatorDomainExposesRecordedModel(t *testing.T) {
 		t.Fatalf("NewObservations: %v", err)
 	}
 
-	lang, err := vocab.NewUbiquitousLanguage([]vocab.Entity{
-		{Definition: vocab.Definition{Name: "Order"}, Aggregate: true},
-		{Definition: vocab.Definition{Name: "Customer"}},
-	}, nil, nil, nil)
+	lang, err := vocab.NewUbiquitousLanguage([]vocab.BoundedContext{{
+		Name: "Ordering",
+		Entities: []vocab.Entity{
+			{Definition: vocab.Definition{Name: "Order"}, Aggregate: true},
+			{Definition: vocab.Definition{Name: "Customer"}},
+		},
+	}}, nil)
 	if err != nil {
 		t.Fatalf("NewUbiquitousLanguage: %v", err)
 	}

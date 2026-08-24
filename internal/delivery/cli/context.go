@@ -148,30 +148,50 @@ func writeContext(w io.Writer, c application.ArchitecturalContext) error {
 }
 
 // writeDomainKnowledge prints the project domain summary after the
-// modules block: counts line, then one line per non-empty group.
-// Designated entities carry " [aggregate]" only in this text form.
+// modules block: counts line, then per-context term groups and
+// relations. Designated entities carry " [aggregate]" only in this
+// text form.
 func writeDomainKnowledge(p *printer, d *application.DomainKnowledge) {
 	counts := d.Counts
-	p.printf("\nproject domain (%s): %s", d.Source, domainCountPhrase(counts.Entities, "entity", "entities"))
+	p.printf("\nproject domain (%s): %s", d.Source, domainCountPhrase(counts.Contexts, "context", "contexts"))
+	p.printf(", %s", domainCountPhrase(counts.Entities, "entity", "entities"))
 	if counts.Aggregates > 0 {
 		p.printf(" (%s)", domainCountPhrase(counts.Aggregates, "aggregate", "aggregates"))
 	}
 	p.printf(", %s, %s, %s\n",
 		domainCountPhrase(counts.ValueObjects, "value object", "value objects"),
-		domainCountPhrase(counts.BusinessRules, "business rule", "business rules"),
+		domainCountPhrase(counts.Invariants, "invariant", "invariants"),
 		domainCountPhrase(counts.Events, "event", "events"),
 	)
-	if len(d.Entities) > 0 {
-		p.printf("  entities: %s\n", strings.Join(d.EntityDisplayNames(), ", "))
+	for _, ctx := range d.Contexts {
+		p.printf("  context %s:\n", ctx.Name)
+		if len(ctx.Entities) > 0 {
+			names := make([]string, len(ctx.Entities))
+			for i, e := range ctx.Entities {
+				if e.Aggregate {
+					names[i] = e.Name + " [aggregate]"
+				} else {
+					names[i] = e.Name
+				}
+			}
+			p.printf("    entities: %s\n", strings.Join(names, ", "))
+		}
+		if len(ctx.ValueObjects) > 0 {
+			p.printf("    value objects: %s\n", strings.Join(ctx.ValueObjects, ", "))
+		}
+		if len(ctx.Invariants) > 0 {
+			parts := make([]string, len(ctx.Invariants))
+			for i, inv := range ctx.Invariants {
+				parts[i] = fmt.Sprintf("%s (owner: %s)", inv.Statement, inv.Owner)
+			}
+			p.printf("    invariants: %s\n", strings.Join(parts, "; "))
+		}
+		if len(ctx.Events) > 0 {
+			p.printf("    events: %s\n", strings.Join(ctx.Events, ", "))
+		}
 	}
-	if len(d.ValueObjects) > 0 {
-		p.printf("  value objects: %s\n", strings.Join(d.ValueObjects, ", "))
-	}
-	if len(d.BusinessRules) > 0 {
-		p.printf("  business rules: %s\n", strings.Join(d.BusinessRules, ", "))
-	}
-	if len(d.Events) > 0 {
-		p.printf("  events: %s\n", strings.Join(d.Events, ", "))
+	for _, rel := range d.Relations {
+		p.printf("  relation: %s -[%s]-> %s\n", rel.From, rel.Kind, rel.To)
 	}
 }
 

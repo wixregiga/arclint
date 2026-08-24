@@ -9,12 +9,16 @@ type Definition struct {
 	Aliases    []string
 }
 
-// Counts tallies each concept group. Aggregates counts designated
-// Entities.
+// Counts tallies contexts, terms, and relations. Aggregates counts
+// designated Entities across every context. Invariants counts every
+// recorded invariant (including those entered via business_rule or
+// assertion).
 type Counts struct {
-	Entities      int
-	Aggregates    int
-	ValueObjects  int
-	BusinessRules int
-	Events        int
+	Contexts     int
+	Entities     int
+	Aggregates   int
+	ValueObjects int
+	Invariants   int
+	Events       int
+	Relations    int
 }

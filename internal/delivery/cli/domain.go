@@ -13,13 +13,13 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
+// flagFormat names the shared output-format flag; jsonKeyType and
+// jsonKeyName are the recurring JSON document keys.
 const (
-	formatText = "text"
-	// flagFormat names the shared output-format flag; jsonKeyType and
-	// jsonKeyName are the recurring JSON document keys.
 	flagFormat  = "format"
 	jsonKeyType = "type"
 	jsonKeyName = "name"
+	formatText  = "text"
 )
 
 // NewDomainCommand adapts the project domain-model use cases into the
@@ -43,13 +43,13 @@ func NewDomainCommand(
 		Flags:   []Flag{formatFlag()},
 		Run: func(ctx Context) error {
 			if len(ctx.Args) > 0 {
-				return ConfigError(fmt.Errorf("unknown command %q for \"arclint domain\"", ctx.Args[0]))
+				return ConfigError(fmt.Errorf("unknown command %q for `arclint domain`", ctx.Args[0]))
 			}
 			return runOverview(ctx)
 		},
 		Subcommands: []Command{
 			{
-				Name:    commandInit,
+				Name:    "init",
 				Short:   "initialize the project's ubiquitous language file",
 				Long:    initDomainLong,
 				Example: initDomainExample,
@@ -71,7 +71,7 @@ func NewDomainCommand(
 				Long:         listLong,
 				Example:      listExample,
 				MaxArgs:      1,
-				Flags:        []Flag{formatFlag()},
+				Flags:        []Flag{formatFlag(), contextFlag()},
 				CompleteArgs: completeListings(),
 				Run:          listRunner(list),
 			},
@@ -81,7 +81,7 @@ func NewDomainCommand(
 				Long:         showLong,
 				Example:      showExample,
 				MaxArgs:      2,
-				Flags:        []Flag{formatFlag()},
+				Flags:        []Flag{formatFlag(), contextFlag()},
 				CompleteArgs: completeShowArgs(list),
 				Run:          showRunner(show),
 			},
@@ -112,7 +112,7 @@ func NewDomainCommand(
 				Example:      removeExample,
 				Aliases:      []string{"rm"},
 				MaxArgs:      2,
-				Flags:        []Flag{formatFlag()},
+				Flags:        []Flag{formatFlag(), contextFlag()},
 				CompleteArgs: completeShowArgs(list),
 				Run:          removeRunner(remove),
 			},
@@ -128,19 +128,24 @@ func NewDomainCommand(
 	}
 }
 
+func contextFlag() Flag {
+	return Flag{Name: "context", Doc: "bounded context that owns the definition"}
+}
+
 func initDomainRunner(initialize application.InitDomain) func(Context) error {
 	return func(ctx Context) error {
 		result, err := initialize.Execute()
 		if err != nil {
 			return domainError(err)
 		}
+		var writeErr error
 		if result.Created {
-			_, err = fmt.Fprintf(ctx.Stdout, "Initialized %s.\n", result.Source)
+			_, writeErr = fmt.Fprintf(ctx.Stdout, "Initialized %s.\n", result.Source)
 		} else {
-			_, err = fmt.Fprintf(ctx.Stdout, "%s already exists; left unchanged.\n", result.Source)
+			_, writeErr = fmt.Fprintf(ctx.Stdout, "%s already exists; left unchanged.\n", result.Source)
 		}
-		if err != nil {
-			return fmt.Errorf("write output: %w", err)
+		if writeErr != nil {
+			return fmt.Errorf("write output: %w", writeErr)
 		}
 		return nil
 	}
@@ -207,7 +212,7 @@ func listRunner(list application.ListDomainDefinitions) func(Context) error {
 		if len(ctx.Args) == 1 {
 			listing = ctx.Args[0]
 		}
-		result, err := list.Execute(listing)
+		result, err := list.Execute(listing, ctx.String("context"))
 		if err != nil {
 			return domainError(err)
 		}
@@ -228,9 +233,9 @@ func showRunner(show application.ShowDomainDefinition) func(Context) error {
 			return err
 		}
 		if len(ctx.Args) != 2 {
-			return ConfigError(fmt.Errorf("show requires <entity|aggregate|value-object|business-rule|event> <name>"))
+			return ConfigError(fmt.Errorf("show requires <concept> <name>"))
 		}
-		result, err := show.Execute(ctx.Args[0], ctx.Args[1])
+		result, err := show.Execute(ctx.Args[0], ctx.String("context"), ctx.Args[1])
 		if err != nil {
 			return domainError(err)
 		}
@@ -275,9 +280,11 @@ func explainRunner() func(Context) error {
 
 func defineFlags() []Flag {
 	return []Flag{
+		contextFlag(),
 		{Name: "definition", Doc: "project-specific meaning of the definition"},
 		{Name: "alias", Repeat: true, Doc: "recognized alternative name; may be repeated"},
 		{Name: "clear-aliases", Bool: true, Doc: "remove every alias from the definition"},
+		{Name: "owner", Doc: "enforcing owner for invariant, assertion, or business_rule"},
 		{Name: "guided", Bool: true, Doc: "start an interactive authoring session"},
 		formatFlag(),
 	}
@@ -290,19 +297,22 @@ func defineRunner(define application.DefineDomainDefinition) func(Context) error
 			return err
 		}
 		if ctx.Bool("guided") {
-			if len(ctx.Args) > 0 || ctx.Changed("definition") || ctx.Changed("alias") || ctx.Changed("clear-aliases") {
+			if len(ctx.Args) > 0 || ctx.Changed("definition") || ctx.Changed("alias") ||
+				ctx.Changed("clear-aliases") || ctx.Changed("owner") || ctx.Changed("context") {
 				return ConfigError(fmt.Errorf("--guided cannot be combined with a type, name, or mutation flags"))
 			}
 			return runGuidedDefine(ctx, define, format)
 		}
 		if len(ctx.Args) != 2 {
-			return ConfigError(fmt.Errorf("define requires <entity|aggregate|value-object|business-rule|event> <name>, or --guided"))
+			return ConfigError(fmt.Errorf("define requires <concept> <name>, or --guided"))
 		}
 		req := application.DefineDomainRequest{
 			Concept:      ctx.Args[0],
+			Context:      ctx.String("context"),
 			Name:         ctx.Args[1],
 			Aliases:      ctx.Strings("alias"),
 			ClearAliases: ctx.Bool("clear-aliases"),
+			Owner:        ctx.String("owner"),
 		}
 		if ctx.Changed("definition") {
 			def := ctx.String("definition")
@@ -326,9 +336,9 @@ func removeRunner(remove application.RemoveDomainDefinition) func(Context) error
 			return err
 		}
 		if len(ctx.Args) != 2 {
-			return ConfigError(fmt.Errorf("remove requires <entity|aggregate|value-object|business-rule|event> <name>"))
+			return ConfigError(fmt.Errorf("remove requires <concept> <name>"))
 		}
-		result, err := remove.Execute(ctx.Args[0], ctx.Args[1])
+		result, err := remove.Execute(ctx.Args[0], ctx.String("context"), ctx.Args[1])
 		if err != nil {
 			return domainError(err)
 		}
@@ -362,7 +372,7 @@ func writeMissingDomainGuidance(w io.Writer) error {
 	p.println("  arclint domain init")
 	p.println()
 	p.println("Define one item:")
-	p.println("  arclint domain define entity <name> --definition <text>")
+	p.println("  arclint domain define entity <name> --context <context> --definition <text>")
 	p.println()
 	p.println("Start guided authoring:")
 	p.println("  arclint domain define --guided")
@@ -376,56 +386,76 @@ func writeOverviewText(w io.Writer, result application.DomainOverview) error {
 	p.println("Project domain")
 	p.printf("Source: %s\n", result.Source)
 	p.println()
-	p.printf("%s · %s · %s · %s · %s\n",
+	p.printf("%s · %s · %s · %s · %s · %s\n",
+		countPhrase(counts.Contexts, "Context", "Contexts"),
 		countPhrase(counts.Entities, "Entity", "Entities"),
 		countPhrase(counts.Aggregates, "Aggregate", "Aggregates"),
 		countPhrase(counts.ValueObjects, "Value Object", "Value Objects"),
-		countPhrase(counts.BusinessRules, "Business Rule", "Business Rules"),
+		countPhrase(counts.Invariants, "Invariant", "Invariants"),
 		countPhrase(counts.Events, "Event", "Events"),
 	)
 
-	aggregates := lang.ListAggregates()
-	if len(aggregates) > 0 {
+	for _, ctx := range lang.ListContexts() {
 		p.println()
-		if len(aggregates) == 1 {
-			p.println("Aggregate")
-		} else {
-			p.println("Aggregates")
+		p.printf("Context %s\n", ctx.Name)
+
+		var aggregates, plain []vocab.Entity
+		for _, e := range ctx.Entities {
+			if e.Aggregate {
+				aggregates = append(aggregates, e)
+			} else {
+				plain = append(plain, e)
+			}
 		}
-		p.println()
-		writeTwoLineEntities(p, aggregates)
+		if len(aggregates) > 0 {
+			p.println()
+			if len(aggregates) == 1 {
+				p.println("  Aggregate")
+			} else {
+				p.println("  Aggregates")
+			}
+			p.println()
+			writeTwoLineEntities(p, aggregates, "  ")
+		}
+		if len(plain) > 0 {
+			p.println()
+			p.println("  Entities")
+			p.println()
+			writePaddedEntityOneLiners(p, plain, "  ")
+		}
+		if len(ctx.Invariants) > 0 {
+			p.println()
+			p.println("  Invariants")
+			p.println()
+			for i, inv := range ctx.Invariants {
+				if i > 0 {
+					p.println()
+				}
+				p.printf("    %s\n", inv.Statement)
+				p.printf("    owner: %s\n", inv.Owner)
+			}
+		}
+		if len(ctx.ValueObjects) > 0 {
+			p.println()
+			p.println("  Value objects")
+			p.println()
+			writePaddedOneLiners(p, ctx.ValueObjects, "  ")
+		}
+		if len(ctx.Events) > 0 {
+			p.println()
+			p.println("  Domain events")
+			p.println()
+			writePaddedOneLiners(p, ctx.Events, "  ")
+		}
 	}
 
-	entities := nonAggregateEntities(lang)
-	if len(entities) > 0 {
+	if len(lang.Relations) > 0 {
 		p.println()
-		p.println("Entities")
+		p.println("Relations")
 		p.println()
-		writePaddedEntityOneLiners(p, entities)
-	}
-
-	rules := lang.List(vocab.ConceptBusinessRule)
-	if len(rules) > 0 {
-		p.println()
-		p.println("Business rules")
-		p.println()
-		writeTwoLineEntries(p, rules)
-	}
-
-	values := lang.List(vocab.ConceptValueObject)
-	if len(values) > 0 {
-		p.println()
-		p.println("Value objects")
-		p.println()
-		writePaddedOneLiners(p, values)
-	}
-
-	events := lang.List(vocab.ConceptEvent)
-	if len(events) > 0 {
-		p.println()
-		p.println("Domain events")
-		p.println()
-		writePaddedOneLiners(p, events)
+		for _, rel := range lang.Relations {
+			p.printf("  %s -[%s]-> %s\n", rel.From, rel.Kind, rel.To)
+		}
 	}
 	return p.err
 }
@@ -433,23 +463,65 @@ func writeOverviewText(w io.Writer, result application.DomainOverview) error {
 func writeListText(w io.Writer, result application.DomainListing) error {
 	p := &printer{w: w}
 	p.println("Project domain")
+	contexts := selectedContexts(result)
 	if result.Filtered {
-		switch result.Concept {
-		case vocab.ConceptEntity:
-			writeEntityListGroup(p, listGroupHeader(result.Concept), sortedEntities(result.Language.ListEntities()), true)
-		case vocab.ConceptAggregate:
-			writeEntityListGroup(p, listGroupHeader(result.Concept), sortedEntities(result.Language.ListAggregates()), false)
-		default:
-			writeListGroup(p, listGroupHeader(result.Concept), sortedDefs(result.Language.List(result.Concept)))
+		for _, ctx := range contexts {
+			p.println()
+			p.printf("Context %s\n", ctx.Name)
+			switch result.Concept {
+			case vocab.ConceptEntity:
+				writeEntityListGroup(p, "  Entities", ctx.Entities, true)
+			case vocab.ConceptAggregate, vocab.ConceptAggregateRoot:
+				var aggs []vocab.Entity
+				for _, e := range ctx.Entities {
+					if e.Aggregate {
+						aggs = append(aggs, e)
+					}
+				}
+				writeEntityListGroup(p, "  "+listGroupHeader(result.Concept), aggs, false)
+			case vocab.ConceptValueObject:
+				writeListGroup(p, "  Value objects", ctx.ValueObjects)
+			case vocab.ConceptInvariant, vocab.ConceptAssertion, vocab.ConceptBusinessRule:
+				writeInvariantListGroup(p, "  "+listGroupHeader(result.Concept), ctx.Invariants)
+			case vocab.ConceptDomainEvent:
+				writeListGroup(p, "  Domain events", ctx.Events)
+			case vocab.ConceptBoundedContext:
+				p.printf("  %s\n", ctx.Name)
+			default:
+				writeListGroup(p, "  "+listGroupHeader(result.Concept), nil)
+			}
 		}
 		return p.err
 	}
-	lang := result.Language
-	writeEntityListGroup(p, "Entities", sortedEntities(lang.ListEntities()), true)
-	writeListGroup(p, "Value objects", sortedDefs(lang.List(vocab.ConceptValueObject)))
-	writeListGroup(p, "Business rules", sortedDefs(lang.List(vocab.ConceptBusinessRule)))
-	writeListGroup(p, "Domain events", sortedDefs(lang.List(vocab.ConceptEvent)))
+	for _, ctx := range contexts {
+		p.println()
+		p.printf("Context %s\n", ctx.Name)
+		writeEntityListGroup(p, "  Entities", ctx.Entities, true)
+		writeListGroup(p, "  Value objects", ctx.ValueObjects)
+		writeInvariantListGroup(p, "  Invariants", ctx.Invariants)
+		writeListGroup(p, "  Domain events", ctx.Events)
+	}
+	if result.Context == "" && len(result.Language.Relations) > 0 {
+		p.println()
+		p.println("Relations")
+		for _, rel := range result.Language.Relations {
+			p.printf("  %s -[%s]-> %s\n", rel.From, rel.Kind, rel.To)
+		}
+	}
 	return p.err
+}
+
+func selectedContexts(result application.DomainListing) []vocab.BoundedContext {
+	all := result.Language.ListContexts()
+	if result.Context == "" {
+		return all
+	}
+	for _, ctx := range all {
+		if ctx.Name == result.Context {
+			return []vocab.BoundedContext{ctx}
+		}
+	}
+	return nil
 }
 
 func writeListGroup(p *printer, header string, defs []vocab.Definition) {
@@ -458,8 +530,21 @@ func writeListGroup(p *printer, header string, defs []vocab.Definition) {
 	}
 	p.println()
 	p.println(header)
-	for _, d := range defs {
-		p.printf("  %s\n", d.Name)
+	for _, d := range sortedDefs(defs) {
+		p.printf("    %s\n", d.Name)
+	}
+}
+
+func writeInvariantListGroup(p *printer, header string, invs []vocab.Invariant) {
+	if len(invs) == 0 {
+		return
+	}
+	p.println()
+	p.println(header)
+	sorted := append([]vocab.Invariant(nil), invs...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Statement < sorted[j].Statement })
+	for _, inv := range sorted {
+		p.printf("    %s (owner: %s)\n", inv.Statement, inv.Owner)
 	}
 }
 
@@ -469,12 +554,12 @@ func writeEntityListGroup(p *printer, header string, entities []vocab.Entity, ma
 	}
 	p.println()
 	p.println(header)
-	for _, e := range entities {
+	for _, e := range sortedEntities(entities) {
 		if markAggregate && e.Aggregate {
-			p.printf("  %s [aggregate]\n", e.Name)
+			p.printf("    %s [aggregate]\n", e.Name)
 			continue
 		}
-		p.printf("  %s\n", e.Name)
+		p.printf("    %s\n", e.Name)
 	}
 }
 
@@ -482,12 +567,21 @@ func writeShowText(w io.Writer, result application.DomainDefinitionView) error {
 	p := &printer{w: w}
 	doc := result.Concept.Doc()
 	p.printf("%s: %s\n", doc.Title, result.Definition.Name)
-	if result.Concept == vocab.ConceptEntity {
+	if result.Context != "" {
+		p.printf("Context: %s\n", result.Context)
+	}
+	if isEntityShow(result.Concept) {
 		if result.Aggregate {
 			p.println("Aggregate: yes")
-		} else {
+		} else if result.Concept == vocab.ConceptEntity {
 			p.println("Aggregate: no")
 		}
+	}
+	if isInvariantShow(result.Concept) {
+		if result.Owner != "" {
+			p.printf("Owner: %s\n", result.Owner)
+		}
+		return p.err
 	}
 	if result.Definition.Definition != "" {
 		p.printf("Definition: %s\n", result.Definition.Definition)
@@ -499,6 +593,14 @@ func writeShowText(w io.Writer, result application.DomainDefinitionView) error {
 		}
 	}
 	return p.err
+}
+
+func isEntityShow(c vocab.Concept) bool {
+	return c == vocab.ConceptEntity || c == vocab.ConceptAggregate || c == vocab.ConceptAggregateRoot
+}
+
+func isInvariantShow(c vocab.Concept) bool {
+	return c == vocab.ConceptInvariant || c == vocab.ConceptAssertion || c == vocab.ConceptBusinessRule
 }
 
 func writeExplainText(w io.Writer, docs []vocab.ConceptDoc) error {
@@ -547,6 +649,8 @@ func writeDefineText(w io.Writer, result application.DomainDefineResult, req app
 				}
 			case "aggregate":
 				p.println("  aggregate: designated")
+			case "owner":
+				p.println("  owner: changed")
 			}
 		}
 	default:
@@ -557,7 +661,7 @@ func writeDefineText(w io.Writer, result application.DomainDefineResult, req app
 
 func writeRemoveText(w io.Writer, result application.DomainRemoveResult) error {
 	p := &printer{w: w}
-	if result.Concept == vocab.ConceptAggregate || result.EntityPreserved {
+	if result.Concept == vocab.ConceptAggregate || result.Concept == vocab.ConceptAggregateRoot || result.EntityPreserved {
 		p.printf("Removed the Aggregate designation from %s.\n", result.Name)
 		p.printf("The %s Entity remains defined.\n", result.Name)
 		return p.err
@@ -567,31 +671,19 @@ func writeRemoveText(w io.Writer, result application.DomainRemoveResult) error {
 	return p.err
 }
 
-func writeTwoLineEntries(p *printer, defs []vocab.Definition) {
-	for i, d := range defs {
-		if i > 0 {
-			p.println()
-		}
-		p.printf("  %s\n", d.Name)
-		if d.Definition != "" {
-			p.printf("  %s\n", d.Definition)
-		}
-	}
-}
-
-func writeTwoLineEntities(p *printer, entities []vocab.Entity) {
+func writeTwoLineEntities(p *printer, entities []vocab.Entity, indent string) {
 	for i, e := range entities {
 		if i > 0 {
 			p.println()
 		}
-		p.printf("  %s\n", e.Name)
+		p.printf("%s  %s\n", indent, e.Name)
 		if e.Definition.Definition != "" {
-			p.printf("  %s\n", e.Definition.Definition)
+			p.printf("%s  %s\n", indent, e.Definition.Definition)
 		}
 	}
 }
 
-func writePaddedOneLiners(p *printer, defs []vocab.Definition) {
+func writePaddedOneLiners(p *printer, defs []vocab.Definition, indent string) {
 	width := 0
 	for _, d := range defs {
 		if d.Definition != "" && len(d.Name) > width {
@@ -600,14 +692,14 @@ func writePaddedOneLiners(p *printer, defs []vocab.Definition) {
 	}
 	for _, d := range defs {
 		if d.Definition == "" {
-			p.printf("  %s\n", d.Name)
+			p.printf("%s  %s\n", indent, d.Name)
 			continue
 		}
-		p.printf("  %-*s — %s\n", width, d.Name, d.Definition)
+		p.printf("%s  %-*s — %s\n", indent, width, d.Name, d.Definition)
 	}
 }
 
-func writePaddedEntityOneLiners(p *printer, entities []vocab.Entity) {
+func writePaddedEntityOneLiners(p *printer, entities []vocab.Entity, indent string) {
 	width := 0
 	for _, e := range entities {
 		if e.Definition.Definition != "" && len(e.Name) > width {
@@ -616,10 +708,10 @@ func writePaddedEntityOneLiners(p *printer, entities []vocab.Entity) {
 	}
 	for _, e := range entities {
 		if e.Definition.Definition == "" {
-			p.printf("  %s\n", e.Name)
+			p.printf("%s  %s\n", indent, e.Name)
 			continue
 		}
-		p.printf("  %-*s — %s\n", width, e.Name, e.Definition.Definition)
+		p.printf("%s  %-*s — %s\n", indent, width, e.Name, e.Definition.Definition)
 	}
 }
 
@@ -628,17 +720,6 @@ func countPhrase(n int, singular, plural string) string {
 		return fmt.Sprintf("%d %s", n, singular)
 	}
 	return fmt.Sprintf("%d %s", n, plural)
-}
-
-func nonAggregateEntities(lang vocab.UbiquitousLanguage) []vocab.Entity {
-	all := lang.ListEntities()
-	out := make([]vocab.Entity, 0, len(all))
-	for _, e := range all {
-		if !e.Aggregate {
-			out = append(out, e)
-		}
-	}
-	return out
 }
 
 func sortedDefs(defs []vocab.Definition) []vocab.Definition {
@@ -659,12 +740,20 @@ func listGroupHeader(c vocab.Concept) string {
 		return "Entities"
 	case vocab.ConceptAggregate:
 		return "Aggregates"
+	case vocab.ConceptAggregateRoot:
+		return "Aggregate roots"
 	case vocab.ConceptValueObject:
 		return "Value objects"
+	case vocab.ConceptInvariant:
+		return "Invariants"
+	case vocab.ConceptAssertion:
+		return "Assertions"
 	case vocab.ConceptBusinessRule:
 		return "Business rules"
-	case vocab.ConceptEvent:
+	case vocab.ConceptDomainEvent:
 		return "Domain events"
+	case vocab.ConceptBoundedContext:
+		return "Bounded contexts"
 	default:
 		return vocab.Listing(c)
 	}
@@ -673,11 +762,13 @@ func listGroupHeader(c vocab.Concept) string {
 // --- JSON docs ------------------------------------------------------------
 
 type domainCountsJSON struct {
-	Entities      int `json:"entities"`
-	Aggregates    int `json:"aggregates"`
-	ValueObjects  int `json:"valueObjects"`
-	BusinessRules int `json:"businessRules"`
-	Events        int `json:"events"`
+	Contexts     int `json:"contexts"`
+	Entities     int `json:"entities"`
+	Aggregates   int `json:"aggregates"`
+	ValueObjects int `json:"valueObjects"`
+	Invariants   int `json:"invariants"`
+	Events       int `json:"events"`
+	Relations    int `json:"relations"`
 }
 
 type domainDefJSON struct {
@@ -687,14 +778,33 @@ type domainDefJSON struct {
 	Aggregate  bool     `json:"aggregate,omitempty"`
 }
 
+type domainInvariantJSON struct {
+	Statement string `json:"statement"`
+	Owner     string `json:"owner"`
+}
+
+type domainContextJSON struct {
+	Name         string                `json:"name"`
+	Entities     []domainDefJSON       `json:"entities,omitempty"`
+	ValueObjects []domainDefJSON       `json:"valueObjects,omitempty"`
+	Invariants   []domainInvariantJSON `json:"invariants,omitempty"`
+	Events       []domainDefJSON       `json:"events,omitempty"`
+	// Filtered listing keys when only one concept is requested.
+	Aggregates []domainDefJSON `json:"aggregates,omitempty"`
+}
+
+type domainRelationJSON struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+	Kind string `json:"kind"`
+}
+
 type domainOverviewJSON struct {
-	Source        string           `json:"source"`
-	Found         bool             `json:"found"`
-	Counts        domainCountsJSON `json:"counts"`
-	Entities      []domainDefJSON  `json:"entities,omitempty"`
-	ValueObjects  []domainDefJSON  `json:"valueObjects,omitempty"`
-	BusinessRules []domainDefJSON  `json:"businessRules,omitempty"`
-	Events        []domainDefJSON  `json:"events,omitempty"`
+	Source    string               `json:"source"`
+	Found     bool                 `json:"found"`
+	Counts    domainCountsJSON     `json:"counts"`
+	Contexts  []domainContextJSON  `json:"contexts,omitempty"`
+	Relations []domainRelationJSON `json:"relations,omitempty"`
 }
 
 func overviewJSONDoc(result application.DomainOverview) domainOverviewJSON {
@@ -703,22 +813,55 @@ func overviewJSONDoc(result application.DomainOverview) domainOverviewJSON {
 		Source: result.Source,
 		Found:  result.Found,
 		Counts: domainCountsJSON{
-			Entities:      counts.Entities,
-			Aggregates:    counts.Aggregates,
-			ValueObjects:  counts.ValueObjects,
-			BusinessRules: counts.BusinessRules,
-			Events:        counts.Events,
+			Contexts:     counts.Contexts,
+			Entities:     counts.Entities,
+			Aggregates:   counts.Aggregates,
+			ValueObjects: counts.ValueObjects,
+			Invariants:   counts.Invariants,
+			Events:       counts.Events,
+			Relations:    counts.Relations,
 		},
 	}
 	if !result.Found {
 		return doc
 	}
-	lang := result.Language
-	doc.Entities = entitiesToJSON(lang.ListEntities(), true)
-	doc.ValueObjects = defsToJSON(lang.List(vocab.ConceptValueObject))
-	doc.BusinessRules = defsToJSON(lang.List(vocab.ConceptBusinessRule))
-	doc.Events = defsToJSON(lang.List(vocab.ConceptEvent))
+	doc.Contexts = contextsToJSON(result.Language.ListContexts(), false)
+	doc.Relations = relationsToJSON(result.Language.Relations)
 	return doc
+}
+
+func contextsToJSON(contexts []vocab.BoundedContext, namesOnly bool) []domainContextJSON {
+	if len(contexts) == 0 {
+		return nil
+	}
+	out := make([]domainContextJSON, 0, len(contexts))
+	for _, ctx := range contexts {
+		item := domainContextJSON{Name: ctx.Name}
+		if namesOnly {
+			item.Entities = entityNamesJSON(ctx.Entities)
+			item.ValueObjects = defNamesJSON(ctx.ValueObjects)
+			item.Invariants = invariantJSON(ctx.Invariants)
+			item.Events = defNamesJSON(ctx.Events)
+		} else {
+			item.Entities = entitiesToJSON(ctx.Entities, true)
+			item.ValueObjects = defsToJSON(ctx.ValueObjects)
+			item.Invariants = invariantJSON(ctx.Invariants)
+			item.Events = defsToJSON(ctx.Events)
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func relationsToJSON(rels []vocab.ContextRelation) []domainRelationJSON {
+	if len(rels) == 0 {
+		return nil
+	}
+	out := make([]domainRelationJSON, 0, len(rels))
+	for _, r := range rels {
+		out = append(out, domainRelationJSON{From: r.From, To: r.To, Kind: string(r.Kind)})
+	}
+	return out
 }
 
 func defsToJSON(defs []vocab.Definition) []domainDefJSON {
@@ -732,6 +875,17 @@ func defsToJSON(defs []vocab.Definition) []domainDefJSON {
 			Definition: d.Definition,
 			Aliases:    d.Aliases,
 		})
+	}
+	return out
+}
+
+func defNamesJSON(defs []vocab.Definition) []domainDefJSON {
+	if len(defs) == 0 {
+		return nil
+	}
+	out := make([]domainDefJSON, 0, len(defs))
+	for _, d := range sortedDefs(defs) {
+		out = append(out, domainDefJSON{Name: d.Name})
 	}
 	return out
 }
@@ -755,33 +909,104 @@ func entitiesToJSON(entities []vocab.Entity, withAggregate bool) []domainDefJSON
 	return out
 }
 
-func listJSONDoc(result application.DomainListing) map[string]any {
-	lang := result.Language
-	if result.Filtered {
-		key := listJSONKey(result.Concept)
-		switch result.Concept {
-		case vocab.ConceptEntity:
-			return map[string]any{key: listEntitiesJSON(lang.ListEntities(), result.Concept)}
-		case vocab.ConceptAggregate:
-			return map[string]any{key: listEntitiesJSON(lang.ListAggregates(), result.Concept)}
-		default:
-			return map[string]any{key: listDefsJSON(lang.List(result.Concept))}
+func entityNamesJSON(entities []vocab.Entity) []domainDefJSON {
+	if len(entities) == 0 {
+		return nil
+	}
+	out := make([]domainDefJSON, 0, len(entities))
+	for _, e := range sortedEntities(entities) {
+		item := domainDefJSON{Name: e.Name}
+		if e.Aggregate {
+			item.Aggregate = true
 		}
-	}
-	out := map[string]any{}
-	if items := listEntitiesJSON(lang.ListEntities(), vocab.ConceptEntity); len(items) > 0 {
-		out["entities"] = items
-	}
-	if items := listDefsJSON(lang.List(vocab.ConceptValueObject)); len(items) > 0 {
-		out["valueObjects"] = items
-	}
-	if items := listDefsJSON(lang.List(vocab.ConceptBusinessRule)); len(items) > 0 {
-		out["businessRules"] = items
-	}
-	if items := listDefsJSON(lang.List(vocab.ConceptEvent)); len(items) > 0 {
-		out["events"] = items
+		out = append(out, item)
 	}
 	return out
+}
+
+func invariantJSON(invs []vocab.Invariant) []domainInvariantJSON {
+	if len(invs) == 0 {
+		return nil
+	}
+	out := make([]domainInvariantJSON, 0, len(invs))
+	for _, inv := range invs {
+		out = append(out, domainInvariantJSON{Statement: inv.Statement, Owner: inv.Owner})
+	}
+	return out
+}
+
+func listJSONDoc(result application.DomainListing) map[string]any {
+	contexts := selectedContexts(result)
+	out := map[string]any{}
+	items := make([]map[string]any, 0, len(contexts))
+	for _, ctx := range contexts {
+		entry := map[string]any{"name": ctx.Name}
+		if result.Filtered {
+			addFilteredListEntry(entry, ctx, result.Concept)
+		} else {
+			addFullListEntry(entry, ctx)
+		}
+		items = append(items, entry)
+	}
+	if len(items) > 0 {
+		out["contexts"] = items
+	}
+	if !result.Filtered && result.Context == "" {
+		if rels := relationsToJSON(result.Language.Relations); len(rels) > 0 {
+			out["relations"] = rels
+		}
+	}
+	return out
+}
+
+// addFilteredListEntry records only the listed concept's section.
+func addFilteredListEntry(entry map[string]any, ctx vocab.BoundedContext, c vocab.Concept) {
+	switch c {
+	case vocab.ConceptEntity:
+		if v := entityNamesJSON(ctx.Entities); len(v) > 0 {
+			entry["entities"] = v
+		}
+	case vocab.ConceptAggregate, vocab.ConceptAggregateRoot:
+		var aggs []vocab.Entity
+		for _, e := range ctx.Entities {
+			if e.Aggregate {
+				aggs = append(aggs, e)
+			}
+		}
+		if v := entityNamesJSON(aggs); len(v) > 0 {
+			entry[listJSONKey(c)] = v
+		}
+	case vocab.ConceptValueObject:
+		if v := defNamesJSON(ctx.ValueObjects); len(v) > 0 {
+			entry["valueObjects"] = v
+		}
+	case vocab.ConceptInvariant, vocab.ConceptAssertion, vocab.ConceptBusinessRule:
+		if v := invariantJSON(ctx.Invariants); len(v) > 0 {
+			entry[listJSONKey(c)] = v
+		}
+	case vocab.ConceptDomainEvent:
+		if v := defNamesJSON(ctx.Events); len(v) > 0 {
+			entry["events"] = v
+		}
+	case vocab.ConceptBoundedContext:
+		// name already present
+	}
+}
+
+// addFullListEntry records every recorded section of the context.
+func addFullListEntry(entry map[string]any, ctx vocab.BoundedContext) {
+	if v := entityNamesJSON(ctx.Entities); len(v) > 0 {
+		entry["entities"] = v
+	}
+	if v := defNamesJSON(ctx.ValueObjects); len(v) > 0 {
+		entry["valueObjects"] = v
+	}
+	if v := invariantJSON(ctx.Invariants); len(v) > 0 {
+		entry["invariants"] = v
+	}
+	if v := defNamesJSON(ctx.Events); len(v) > 0 {
+		entry["events"] = v
+	}
 }
 
 func listJSONKey(c vocab.Concept) string {
@@ -790,37 +1015,23 @@ func listJSONKey(c vocab.Concept) string {
 		return "entities"
 	case vocab.ConceptAggregate:
 		return "aggregates"
+	case vocab.ConceptAggregateRoot:
+		return "aggregateRoots"
 	case vocab.ConceptValueObject:
 		return "valueObjects"
+	case vocab.ConceptInvariant:
+		return "invariants"
+	case vocab.ConceptAssertion:
+		return "assertions"
 	case vocab.ConceptBusinessRule:
 		return "businessRules"
-	case vocab.ConceptEvent:
+	case vocab.ConceptDomainEvent:
 		return "events"
+	case vocab.ConceptBoundedContext:
+		return "boundedContexts"
 	default:
 		return string(c)
 	}
-}
-
-func listDefsJSON(defs []vocab.Definition) []map[string]any {
-	sorted := sortedDefs(defs)
-	out := make([]map[string]any, 0, len(sorted))
-	for _, d := range sorted {
-		out = append(out, map[string]any{jsonKeyName: d.Name})
-	}
-	return out
-}
-
-func listEntitiesJSON(entities []vocab.Entity, concept vocab.Concept) []map[string]any {
-	sorted := sortedEntities(entities)
-	out := make([]map[string]any, 0, len(sorted))
-	for _, e := range sorted {
-		item := map[string]any{jsonKeyName: e.Name}
-		if (concept == vocab.ConceptEntity || concept == vocab.ConceptAggregate) && e.Aggregate {
-			item["aggregate"] = true
-		}
-		out = append(out, item)
-	}
-	return out
 }
 
 func showJSONDoc(result application.DomainDefinitionView) map[string]any {
@@ -828,8 +1039,17 @@ func showJSONDoc(result application.DomainDefinitionView) map[string]any {
 		jsonKeyType: string(result.Concept),
 		jsonKeyName: result.Definition.Name,
 	}
-	if result.Concept == vocab.ConceptEntity || result.Concept == vocab.ConceptAggregate {
-		doc["aggregate"] = result.Aggregate || result.Concept == vocab.ConceptAggregate
+	if result.Context != "" {
+		doc["context"] = result.Context
+	}
+	if isEntityShow(result.Concept) {
+		doc["aggregate"] = result.Aggregate || result.Concept == vocab.ConceptAggregate || result.Concept == vocab.ConceptAggregateRoot
+	}
+	if isInvariantShow(result.Concept) {
+		if result.Owner != "" {
+			doc["owner"] = result.Owner
+		}
+		return doc
 	}
 	if result.Definition.Definition != "" {
 		doc["definition"] = result.Definition.Definition
@@ -855,6 +1075,9 @@ func defineJSONDoc(result application.DomainDefineResult, req application.Define
 		jsonKeyType: string(result.Concept),
 		jsonKeyName: result.Name,
 	}
+	if result.Context != "" {
+		doc["context"] = result.Context
+	}
 	if len(result.Changed) > 0 {
 		doc["changed"] = result.Changed
 	}
@@ -863,6 +1086,9 @@ func defineJSONDoc(result application.DomainDefineResult, req application.Define
 	}
 	if req.Definition != nil && *req.Definition != "" {
 		doc["definition"] = *req.Definition
+	}
+	if req.Owner != "" {
+		doc["owner"] = req.Owner
 	}
 	return doc
 }
@@ -873,7 +1099,10 @@ func removeJSONDoc(result application.DomainRemoveResult) map[string]any {
 		jsonKeyName: result.Name,
 		"result":    "removed",
 	}
-	if result.EntityPreserved || result.Concept == vocab.ConceptAggregate {
+	if result.Context != "" {
+		doc["context"] = result.Context
+	}
+	if result.EntityPreserved || result.Concept == vocab.ConceptAggregate || result.Concept == vocab.ConceptAggregateRoot {
 		doc["entityPreserved"] = true
 		return doc
 	}
@@ -903,7 +1132,7 @@ func runGuidedDefine(ctx Context, define application.DefineDomainDefinition, for
 	readLine := func() (string, error) {
 		if !sc.Scan() {
 			if err := sc.Err(); err != nil {
-				return "", fmt.Errorf("read guided input: %w", err)
+				return "", fmt.Errorf("read input: %w", err)
 			}
 			return "", io.EOF
 		}
@@ -920,24 +1149,22 @@ func runGuidedDefine(ctx Context, define application.DefineDomainDefinition, for
 	if err := prompt("What are you defining?"); err != nil {
 		return err
 	}
-	if err := promptBlank(); err != nil {
-		return err
-	}
 	options := []struct {
 		title   string
 		concept vocab.Concept
 	}{
 		{"Entity", vocab.ConceptEntity},
 		{"Value Object", vocab.ConceptValueObject},
+		{"Invariant", vocab.ConceptInvariant},
+		{"Domain Event", vocab.ConceptDomainEvent},
+		{"Bounded Context", vocab.ConceptBoundedContext},
 		{"Business Rule", vocab.ConceptBusinessRule},
-		{"Domain Event", vocab.ConceptEvent},
 	}
 	for i, opt := range options {
 		if err := prompt(fmt.Sprintf("  %d) %s", i+1, opt.title)); err != nil {
 			return err
 		}
 	}
-
 	var chosen vocab.Concept
 	var chosenTitle string
 	for {
@@ -950,11 +1177,10 @@ func runGuidedDefine(ctx Context, define application.DefineDomainDefinition, for
 			chosenTitle = title
 			break
 		}
-		if err := prompt("Please choose 1-4 or the concept title."); err != nil {
+		if err := prompt("Please choose 1-" + fmt.Sprint(len(options)) + " or the concept title."); err != nil {
 			return err
 		}
 	}
-
 	doc := chosen.Doc()
 	if err := promptBlank(); err != nil {
 		return err
@@ -969,11 +1195,35 @@ func runGuidedDefine(ctx Context, define application.DefineDomainDefinition, for
 		return err
 	}
 
-	var term string
-	for {
-		if err := prompt("Project term:"); err != nil {
+	contextName := ""
+	if chosen != vocab.ConceptBoundedContext {
+		if err := prompt("Bounded context:"); err != nil {
 			return err
 		}
+		for {
+			line, err := readLine()
+			if err != nil {
+				return guidedAborted(err)
+			}
+			if line != "" {
+				contextName = line
+				break
+			}
+			if err := prompt("A bounded context name is required."); err != nil {
+				return err
+			}
+		}
+	}
+
+	termPrompt := "Project term:"
+	if isInvariantShow(chosen) {
+		termPrompt = "Invariant statement:"
+	}
+	if err := prompt(termPrompt); err != nil {
+		return err
+	}
+	var term string
+	for {
 		line, err := readLine()
 		if err != nil {
 			return guidedAborted(err)
@@ -982,65 +1232,109 @@ func runGuidedDefine(ctx Context, define application.DefineDomainDefinition, for
 			term = line
 			break
 		}
-	}
-
-	if err := prompt(fmt.Sprintf("Define %s in the project's Ubiquitous Language:", term)); err != nil {
-		return err
-	}
-	definition, err := readLine()
-	if err != nil {
-		return guidedAborted(err)
-	}
-
-	if err := prompt("Recognized aliases:"); err != nil {
-		return err
-	}
-	aliasLine, err := readLine()
-	if err != nil {
-		return guidedAborted(err)
-	}
-	aliases := splitCommaList(aliasLine)
-
-	var aggregate *bool
-	if chosen == vocab.ConceptEntity {
-		if err := prompt(fmt.Sprintf("Is %s an Aggregate? [y/N]", term)); err != nil {
+		if err := prompt(fmt.Sprintf("Define it in the project's Ubiquitous Language: %s", termPrompt)); err != nil {
 			return err
 		}
-		ans, err := readLine()
+	}
+
+	req := application.DefineDomainRequest{
+		Concept: string(chosen),
+		Context: contextName,
+		Name:    term,
+	}
+
+	switch {
+	case chosen == vocab.ConceptBoundedContext:
+		if err := promptBlank(); err != nil {
+			return err
+		}
+		if err := prompt(fmt.Sprintf("  %s: %s", chosenTitle, term)); err != nil {
+			return err
+		}
+	case isInvariantShow(chosen):
+		if err := prompt("Owner:"); err != nil {
+			return err
+		}
+		for {
+			line, err := readLine()
+			if err != nil {
+				return guidedAborted(err)
+			}
+			if line != "" {
+				req.Owner = line
+				break
+			}
+			if err := prompt("Owner is required for invariants."); err != nil {
+				return err
+			}
+		}
+		if err := promptBlank(); err != nil {
+			return err
+		}
+		if err := prompt(fmt.Sprintf("  %s: %s", chosenTitle, term)); err != nil {
+			return err
+		}
+		if err := prompt(fmt.Sprintf("  Owner: %s", req.Owner)); err != nil {
+			return err
+		}
+	default:
+		if err := prompt("Proposed definition:"); err != nil {
+			return err
+		}
+		definition, err := readLine()
 		if err != nil {
 			return guidedAborted(err)
 		}
-		yes := isYes(ans)
-		aggregate = &yes
+		if err := prompt("Recognized aliases:"); err != nil {
+			return err
+		}
+		aliasLine, err := readLine()
+		if err != nil {
+			return guidedAborted(err)
+		}
+		aliases := splitCommaList(aliasLine)
+		var aggregate *bool
+		if chosen == vocab.ConceptEntity {
+			if err := prompt(fmt.Sprintf("Is %s an Aggregate? [y/N]", term)); err != nil {
+				return err
+			}
+			ans, err := readLine()
+			if err != nil {
+				return guidedAborted(err)
+			}
+			yes := isYes(ans)
+			aggregate = &yes
+		}
+		if err := promptBlank(); err != nil {
+			return err
+		}
+		if err := prompt("Proposed definition:"); err != nil {
+			return err
+		}
+		if err := prompt(fmt.Sprintf("  %s: %s", chosenTitle, term)); err != nil {
+			return err
+		}
+		if aggregate != nil && *aggregate {
+			if err := prompt("  Aggregate: yes"); err != nil {
+				return err
+			}
+		}
+		if definition != "" {
+			if err := prompt(fmt.Sprintf("  Definition: %s", definition)); err != nil {
+				return err
+			}
+			def := definition
+			req.Definition = &def
+		}
+		if len(aliases) > 0 {
+			if err := prompt(fmt.Sprintf("  Aliases: %s", strings.Join(aliases, ", "))); err != nil {
+				return err
+			}
+			req.Aliases = aliases
+		}
+		req.Aggregate = aggregate
 	}
 
-	if err := promptBlank(); err != nil {
-		return err
-	}
-	if err := prompt("Proposed definition:"); err != nil {
-		return err
-	}
-	if err := promptBlank(); err != nil {
-		return err
-	}
-	if err := prompt(fmt.Sprintf("  %s: %s", chosenTitle, term)); err != nil {
-		return err
-	}
-	if aggregate != nil && *aggregate {
-		if err := prompt("  Aggregate: yes"); err != nil {
-			return err
-		}
-	}
-	if definition != "" {
-		if err := prompt(fmt.Sprintf("  Definition: %s", definition)); err != nil {
-			return err
-		}
-	}
-	if len(aliases) > 0 {
-		if err := prompt(fmt.Sprintf("  Aliases: %s", strings.Join(aliases, ", "))); err != nil {
-			return err
-		}
-	}
 	if err := promptBlank(); err != nil {
 		return err
 	}
@@ -1058,16 +1352,6 @@ func runGuidedDefine(ctx Context, define application.DefineDomainDefinition, for
 		return nil
 	}
 
-	req := application.DefineDomainRequest{
-		Concept:   string(chosen),
-		Name:      term,
-		Aliases:   aliases,
-		Aggregate: aggregate,
-	}
-	if definition != "" {
-		def := definition
-		req.Definition = &def
-	}
 	result, err := define.Execute(req)
 	if err != nil {
 		return domainError(err)
@@ -1102,9 +1386,10 @@ func splitCommaList(line string) []string {
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
-		if p != "" {
-			out = append(out, p)
+		if p == "" {
+			continue
 		}
+		out = append(out, p)
 	}
 	return out
 }
@@ -1122,7 +1407,7 @@ func guidedAborted(err error) error {
 	if err == io.EOF {
 		return &ExitError{Code: ExitViolations, Message: "guided authoring aborted"}
 	}
-	return &ExitError{Code: ExitViolations, Message: "guided authoring aborted"}
+	return err
 }
 
 // --- completion -----------------------------------------------------------
@@ -1132,9 +1417,11 @@ func completeListings() func(args []string, toComplete string) []AutoCompleteCan
 		if len(args) > 0 {
 			return nil
 		}
-		return filterCandidates(toComplete, []string{
-			"entities", "aggregates", "value-objects", "business-rules", "events",
-		})
+		values := make([]string, 0, len(vocab.Concepts()))
+		for _, c := range vocab.Concepts() {
+			values = append(values, vocab.Listing(c))
+		}
+		return filterCandidates(toComplete, values)
 	}
 }
 
@@ -1173,14 +1460,34 @@ func definitionNameCandidates(list application.ListDomainDefinitions, conceptArg
 	if err != nil {
 		return nil
 	}
-	result, err := list.Execute("")
+	result, err := list.Execute("", "")
 	if err != nil {
 		return nil
 	}
-	defs := result.Language.List(concept)
-	names := make([]string, 0, len(defs))
-	for _, d := range defs {
-		names = append(names, d.Name)
+	var names []string
+	for _, ctx := range result.Language.ListContexts() {
+		switch concept {
+		case vocab.ConceptEntity, vocab.ConceptAggregate, vocab.ConceptAggregateRoot:
+			for _, e := range ctx.Entities {
+				if concept == vocab.ConceptEntity || e.Aggregate {
+					names = append(names, e.Name)
+				}
+			}
+		case vocab.ConceptValueObject:
+			for _, d := range ctx.ValueObjects {
+				names = append(names, d.Name)
+			}
+		case vocab.ConceptDomainEvent:
+			for _, d := range ctx.Events {
+				names = append(names, d.Name)
+			}
+		case vocab.ConceptInvariant, vocab.ConceptAssertion, vocab.ConceptBusinessRule:
+			for _, inv := range ctx.Invariants {
+				names = append(names, inv.Statement)
+			}
+		case vocab.ConceptBoundedContext:
+			names = append(names, ctx.Name)
+		}
 	}
 	sort.Strings(names)
 	return filterCandidates(toComplete, names)
@@ -1196,21 +1503,21 @@ func filterCandidates(toComplete string, values []string) []AutoCompleteCandidat
 	return out
 }
 
-// --- help text (verbatim from docs/domain-cli-recommendation.md) ----------
+// --- help text ------------------------------------------------------------
 
 const domainGroupLong = `Inspect and maintain the project's ubiquitous language and domain model.
 
 A project's Ubiquitous Language is the shared language used by its developers,
 domain experts, documentation, tests, and code.
 
-ArcLint records that language as a structured Project Domain Model containing
-Entities, Aggregates, Value Objects, Business Rules, and Domain Events.
+ArcLint records that language as a structured Project Domain Model organized by
+bounded contexts containing entities, value objects, invariants, and domain
+events, plus optional context-map relations.
 
 ArcLint makes this knowledge available to context, enabled lint rules, patterns,
 extensions, and agent integrations.
 
 Running arclint domain without a subcommand is the same as:
-
   arclint domain overview`
 
 const initDomainLong = `Initialize the project's ubiquitous language file.
@@ -1223,7 +1530,7 @@ const initDomainExample = `  arclint domain init`
 
 const overviewLong = `Summarize the project's domain model for understanding.
 
-The overview presents stored definitions by their domain role. It does not
+The overview presents stored definitions grouped by bounded context. It does not
 infer source boundaries, relationships, or path relevance.
 
 Running arclint domain without a subcommand runs this command.`
@@ -1234,25 +1541,27 @@ const overviewExample = `  arclint domain
 
 const listLong = `List the project's domain definitions.
 
-Without a type, definitions are grouped by entities, aggregates, value objects,
-business rules, and domain events.`
+Without a type, definitions are grouped by bounded context under entities,
+value objects, invariants, and domain events.`
 
 const listExample = `  arclint domain list
   arclint domain list entities
   arclint domain list aggregates
-  arclint domain list business-rules
-  arclint domain list events
+  arclint domain list invariants
+  arclint domain list domain_events
+  arclint domain list --context Ordering
   arclint domain list --format json`
 
 const showLong = `Show one domain definition.
 
-Names are matched exactly. Quote names containing spaces.`
+Names are matched exactly. Quote names containing spaces. Pass --context when
+the same name exists in more than one bounded context.`
 
 const showExample = `  arclint domain show entity Order
-  arclint domain show aggregate Order
-  arclint domain show value-object Money
-  arclint domain show business-rule OrderMustHaveCustomer
-  arclint domain show event OrderPlaced
+  arclint domain show aggregate Order --context Ordering
+  arclint domain show value_object Money
+  arclint domain show invariant "Every Order must identify its Customer."
+  arclint domain show domain_event OrderPlaced
   arclint domain show entity "Purchase Order"
   arclint domain show entity Order --format json`
 
@@ -1265,7 +1574,8 @@ their project.`
 const explainExample = `  arclint domain explain
   arclint domain explain entity
   arclint domain explain aggregate
-  arclint domain explain business-rule
+  arclint domain explain invariant
+  arclint domain explain business_rule
   arclint domain explain --format json`
 
 const defineLong = `Create or update a domain definition.
@@ -1278,26 +1588,29 @@ Running the same command repeatedly produces no additional change.
 Defining an Aggregate designates the named Entity as an Aggregate. If the
 Entity does not exist yet, ArcLint creates it as part of the same operation.
 
-ArcLint validates the structure of the definition but does not decide whether
-the project's real-world language is correct. Enabled lint rules may apply
-additional project requirements.`
+Entity, value_object, and domain_event require --definition at create.
+Invariant, assertion, and business_rule use the name argument as the statement
+and require --owner at create. bounded_context takes only a name.
 
-const defineExample = `  arclint domain define entity Order
-  arclint domain define aggregate Order
+Pass --context when the project has zero or multiple bounded contexts.`
 
-  arclint domain define entity Order \
+const defineExample = `  arclint domain define bounded_context Ordering
+
+  arclint domain define entity Order --context Ordering \
     --definition "A customer's request to purchase products"
 
-  arclint domain define value-object Money \
+  arclint domain define aggregate Order --context Ordering
+
+  arclint domain define value_object Money --context Ordering \
     --definition "A monetary amount expressed in a particular currency"
 
-  arclint domain define business-rule OrderMustHaveCustomer \
-    --definition "Every Order must identify its Customer."
+  arclint domain define invariant "Every Order must identify its Customer." \
+    --context Ordering --owner Order
 
-  arclint domain define event OrderPlaced \
+  arclint domain define domain_event OrderPlaced --context Ordering \
     --definition "An Order has been accepted for processing."
 
-  arclint domain define entity Order \
+  arclint domain define entity Order --context Ordering \
     --alias "Purchase Order" \
     --alias "Customer Order"
 
@@ -1311,12 +1624,12 @@ source files.
 Removing an Aggregate removes the Aggregate designation while preserving the
 Entity. Removing an Entity also removes its Aggregate designation.`
 
-const removeExample = `  arclint domain remove aggregate Order
-  arclint domain remove entity LegacyOrder
-  arclint domain remove value-object LegacyOrderID
-  arclint domain remove business-rule ObsoleteOrderRule
-  arclint domain rm event LegacyOrderCreated
-  arclint domain remove value-object LegacyOrderID --format json`
+const removeExample = `  arclint domain remove aggregate Order --context Ordering
+  arclint domain remove entity LegacyOrder --context Ordering
+  arclint domain remove value_object LegacyOrderID --context Ordering
+  arclint domain remove invariant "Obsolete rule" --context Ordering
+  arclint domain rm domain_event LegacyOrderCreated --context Ordering
+  arclint domain remove value_object LegacyOrderID --format json`
 
 const schemaLong = `Print the JSON Schema accepted for ubiquitous-language.yaml.
 
@@ -1324,4 +1637,4 @@ The schema is the machine-readable contract for direct YAML authoring and
 editor completion.`
 
 const schemaExample = `  arclint domain schema
-  arclint domain schema > ubiquitous-language.schema.json`
+  arclint domain schema > .agents/skills/domain-librarian/library.schema.json`

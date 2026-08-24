@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -92,6 +93,9 @@ func translate(c cli.Command) *cobra.Command {
 	if c.CompleteArgs != nil {
 		out.ValidArgsFunction = argsCompletion(c.CompleteArgs, c.MaxArgs)
 	}
+	if fn := aliasCompletion(c.Subcommands, out.ValidArgsFunction); fn != nil {
+		out.ValidArgsFunction = fn
+	}
 	if c.Run != nil {
 		run := c.Run
 		if c.MaxArgs < 0 {
@@ -141,6 +145,40 @@ func translate(c cli.Command) *cobra.Command {
 func staticCompletion(options []string) cobra.CompletionFunc {
 	return func(*cobra.Command, []string, string) ([]cobra.Completion, cobra.ShellCompDirective) {
 		return options, cobra.ShellCompDirectiveNoFileComp
+	}
+}
+
+// aliasCompletion offers subcommand aliases as first-position
+// candidates, each described by its command's Short. Cobra completes
+// only canonical subcommand names; aliases resolve when typed but are
+// never suggested, so the adapter supplies them through the
+// ValidArgsFunction seam Cobra consults in addition to command names.
+// A nil result leaves any existing completion untouched.
+func aliasCompletion(subcommands []cli.Command, prev cobra.CompletionFunc) cobra.CompletionFunc {
+	var aliases []cli.AutoCompleteCandidate
+	for _, sub := range subcommands {
+		for _, alias := range sub.Aliases {
+			aliases = append(aliases, cli.AutoCompleteCandidate{Value: alias, Doc: sub.Short})
+		}
+	}
+	if len(aliases) == 0 {
+		return nil
+	}
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+		completions := []cobra.Completion(nil)
+		directive := cobra.ShellCompDirectiveNoFileComp
+		if prev != nil {
+			completions, directive = prev(cmd, args, toComplete)
+		}
+		if len(args) > 0 {
+			return completions, directive
+		}
+		for _, candidate := range aliases {
+			if strings.HasPrefix(candidate.Value, toComplete) {
+				completions = append(completions, renderCandidates([]cli.AutoCompleteCandidate{candidate})...)
+			}
+		}
+		return completions, directive
 	}
 }
 

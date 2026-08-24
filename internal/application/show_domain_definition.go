@@ -11,11 +11,14 @@ import (
 // and name for the show command.
 type DomainDefinitionView struct {
 	Concept    vocab.Concept
+	Context    string
 	Definition vocab.Definition
 	// Aggregate is meaningful for entity and aggregate concepts:
 	// true when the matched Entity is designated an Aggregate.
 	// An aggregate-concept match implies true by the match itself.
 	Aggregate bool
+	// Owner is set for invariant kinds (statement lives in Name).
+	Owner string
 }
 
 // ShowDomainDefinition shows one recorded domain definition.
@@ -35,13 +38,13 @@ func NewShowDomainDefinition(knowledge vocab.Repository) (ShowDomainDefinition, 
 // Execute resolves one definition by singular concept spelling and
 // exact name. Unknown concepts and empty names are usage errors;
 // missing definitions wrap vocab.ErrDefinitionNotFound.
-func (uc ShowDomainDefinition) Execute(concept, name string) (DomainDefinitionView, error) {
+func (uc ShowDomainDefinition) Execute(concept, context, name string) (DomainDefinitionView, error) {
 	c, err := vocab.ParseConcept(concept)
 	if err != nil {
 		return DomainDefinitionView{}, fmt.Errorf("%w: %v", ErrDomainUsage, err)
 	}
 	name = strings.TrimSpace(name)
-	if name == "" {
+	if name == "" && c != vocab.ConceptBoundedContext {
 		return DomainDefinitionView{}, fmt.Errorf("%w: name is required", ErrDomainUsage)
 	}
 
@@ -49,21 +52,33 @@ func (uc ShowDomainDefinition) Execute(concept, name string) (DomainDefinitionVi
 	if err != nil {
 		return DomainDefinitionView{}, fmt.Errorf("load domain model: %w", err)
 	}
-	def, ok := lang.Find(c, name)
-	if !ok {
-		return DomainDefinitionView{}, fmt.Errorf("no %s named %q is defined in the project domain model: %w", c, name, vocab.ErrDefinitionNotFound)
+
+	ctxName, def, ok, err := findInContexts(lang, c, context, name)
+	if err != nil {
+		return DomainDefinitionView{}, err
 	}
-	view := DomainDefinitionView{Concept: c, Definition: def}
+	if !ok {
+		return DomainDefinitionView{}, definitionNotFound(c, ctxName, name)
+	}
+
+	view := DomainDefinitionView{
+		Concept:    c,
+		Context:    ctxName,
+		Definition: def,
+	}
 	switch c {
-	case vocab.ConceptAggregate:
-		// Aggregate-concept match only succeeds for designated Entities.
+	case vocab.ConceptAggregate, vocab.ConceptAggregateRoot:
 		view.Aggregate = true
 	case vocab.ConceptEntity:
-		if ent, found := lang.FindEntity(name); found {
+		if ent, found := lang.FindEntity(ctxName, name); found {
 			view.Aggregate = ent.Aggregate
 		}
-	default:
-		// The identity-less concepts carry no Aggregate designation.
+	case vocab.ConceptInvariant, vocab.ConceptAssertion, vocab.ConceptBusinessRule:
+		// Domain Find encodes owner in Definition.Definition.
+		view.Owner = def.Definition
+		view.Definition = vocab.Definition{Name: def.Name}
+	case vocab.ConceptValueObject, vocab.ConceptDomainEvent, vocab.ConceptBoundedContext:
+		// The base view already carries everything these kinds record.
 	}
 	return view, nil
 }

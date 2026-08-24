@@ -158,16 +158,56 @@ func TestRuleDetailAndContext(t *testing.T) {
 // TestAgentsBlockCurrent replaces the docs drift test: the installed
 // AGENTS.md block must match what the binary generates from rules.yaml.
 func TestAgentsBlockCurrent(t *testing.T) {
-	stdout, stderr, code := runBin(t, repoRoot(t), os.Environ(), "agents")
+	root := repoRoot(t)
+	stdout, stderr, code := runBin(t, root, os.Environ(), "agents", "md")
 	if code != 0 {
-		t.Fatalf("agents exit %d\nstderr: %s", code, stderr)
+		t.Fatalf("agents md exit %d\nstderr: %s", code, stderr)
 	}
-	installed, err := os.ReadFile(filepath.Join(repoRoot(t), "AGENTS.md"))
+	installed, err := os.ReadFile(filepath.Join(root, "AGENTS.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(installed), strings.TrimSuffix(stdout, "\n")) {
-		t.Errorf("AGENTS.md block is stale; run `arclint agents --write`")
+		t.Errorf("AGENTS.md block is stale; run `arclint agents md --write`")
+	}
+}
+
+// TestAgentsMDAliasesRenderIdenticalBlock checks that agents markdown and
+// agents agentsmd emit the same architecture block as agents md.
+func TestAgentsMDAliasesRenderIdenticalBlock(t *testing.T) {
+	root := repoRoot(t)
+	want, stderr, code := runBin(t, root, os.Environ(), "agents", "md")
+	if code != 0 {
+		t.Fatalf("agents md exit %d\nstderr: %s", code, stderr)
+	}
+	for _, alias := range []string{"markdown", "agentsmd"} {
+		stdout, stderr, code := runBin(t, root, os.Environ(), "agents", alias)
+		if code != 0 {
+			t.Fatalf("agents %s exit %d\nstderr: %s", alias, code, stderr)
+		}
+		if stdout != want {
+			t.Errorf("agents %s stdout differs from agents md", alias)
+		}
+	}
+}
+
+// TestAgentsGroupHelpOnly proves bare `arclint agents` is a command group:
+// it exits cleanly with help text and does not print or install the block.
+func TestAgentsGroupHelpOnly(t *testing.T) {
+	root := repoRoot(t)
+	stdout, stderr, code := runBin(t, root, os.Environ(), "agents")
+	if code != 0 {
+		t.Fatalf("agents exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	out := stdout + stderr
+	if !strings.Contains(out, "Available Commands") && !strings.Contains(out, "Usage:") {
+		t.Errorf("bare agents should show group help, got: %q", out)
+	}
+	if strings.Contains(out, "<!-- arclint:agents:begin -->") {
+		t.Errorf("bare agents must not render the AGENTS.md block")
+	}
+	if strings.Contains(out, "wrote ") || strings.Contains(out, "already current") {
+		t.Errorf("bare agents must not install the AGENTS.md block")
 	}
 }
 
