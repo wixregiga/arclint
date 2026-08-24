@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags:
+      # Broad minimatch gate; exact beta shape is enforced in the job below.
+      # Ordinary pushes never match. Non-beta tags that slip the glob fail
+      # the validate step and never reach GoReleaser.
+      - "v*.*.*-beta.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require exact beta tag
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]]; then
+            echo "Refusing release: tag '${tag}' is not vMAJOR.MINOR.PATCH-beta.N" >&2
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Load authoritative release version
+        run: |
+          version="$(cat cmd/arclint/VERSION)"
+          if [[ "${GITHUB_REF_NAME}" != "v${version}" ]]; then
+            echo "Refusing release: tag '${GITHUB_REF_NAME}' does not match cmd/arclint/VERSION '${version}'" >&2
+            exit 1
+          fi
+          echo "ARCLINT_VERSION=${version}" >> "${GITHUB_ENV}"
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Set up pinned repository tools
+        uses: jdx/mise-action@v4
+
+      # Same full gate as CI: format, GolangCI, vet, tests, selfcheck.
+      - name: Run full repository check
+        run: make ci
+      - name: Verify Docker image version
+        run: |
+          make docker
+          docker run --rm "arclint:${ARCLINT_VERSION}" --version |
+            grep -F "arclint version ${ARCLINT_VERSION}"
+
+      - name: Publish beta release
+        run: goreleaser release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

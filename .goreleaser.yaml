@@ -1,7 +1,7 @@
 # goreleaser configuration for arclint.
-# Mirrors the Makefile release target: CGO-free Linux builds for amd64 and
-# arm64, the grammar subset build tags from the Makefile GRAMMARS variable,
-# -trimpath, and stripped binaries stamped with the release version.
+# Publishes CGO-free Linux amd64/arm64 tarballs and checksums for beta tags
+# (vMAJOR.MINOR.PATCH-beta.N). Local dry-runs use `make release` /
+# `mise run release` (snapshot, no publish).
 version: 2
 
 project_name: arclint
@@ -18,13 +18,14 @@ builds:
       - arm64
     flags:
       - -trimpath
-      - -tags=grammar_subset,grammar_subset_typescript,grammar_subset_tsx,grammar_subset_javascript,grammar_subset_python
+      # Keep in lockstep with Makefile GRAMMARS.
+      - -tags=grammar_subset,grammar_subset_typescript,grammar_subset_tsx,grammar_subset_python
     ldflags:
-      - -s -w -X main.version={{.Version}}
+      - -s -w
 
 archives:
   - formats: ["tar.gz"]
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "{{ .ProjectName }}_{{ .Env.ARCLINT_VERSION }}_{{ .Os }}_{{ .Arch }}"
 
 checksum:
   name_template: "checksums.txt"
@@ -36,8 +37,16 @@ changelog:
       - "^docs"
       - "^chore"
 
+# Snapshot dry-runs (make release) use the authoritative version file.
+snapshot:
+  version_template: "{{ .Env.ARCLINT_VERSION }}-snapshot-{{ .ShortCommit }}"
+
 release:
   github:
     owner: wixregiga
     name: arclint
-  prerelease: auto
+  name_template: "v{{ .Env.ARCLINT_VERSION }}"
+  # Every published tag is a beta; always mark the GitHub release prerelease.
+  prerelease: true
+  # Betas must not become the repository "latest" release.
+  make_latest: false

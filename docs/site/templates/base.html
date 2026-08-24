@@ -37,7 +37,6 @@ header.site {
   padding: 0.9rem 1.4rem; border-bottom: 1px solid var(--line);
 }
 header.site .name { font-weight: 700; color: var(--fg); }
-header.site .version { color: var(--dim); font-family: var(--mono); font-size: 0.85rem; }
 header.site nav { margin-left: auto; display: flex; gap: 1.1rem; }
 .layout { display: flex; max-width: 72rem; margin: 0 auto; }
 aside.toc {
@@ -53,7 +52,6 @@ main { flex: 1; min-width: 0; padding: 1.4rem; }
 <body>
 <header class="site">
   <a class="name" href="{{ get_url(path='/') }}">arclint</a>
-  <span class="version">v{{ config.extra.version }}</span>
   <nav>
     <a href="{{ get_url(path='/docs/') }}">docs</a>
     <a href="{{ config.extra.repo }}">source</a>

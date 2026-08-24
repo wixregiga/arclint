@@ -3,9 +3,13 @@
 // usage error.
 package main
 
-import "os"
+import (
+	_ "embed"
+	"os"
+)
 
-var version = "0.1.0"
+//go:embed VERSION
+var version string
 
 func main() {
 	os.Exit(run(os.Args[1:]))
