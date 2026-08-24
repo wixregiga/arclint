@@ -206,21 +206,37 @@ func (e *Evaluator) host(subjects []string, modules []rule.Module, obs conforman
 // empty slices so JavaScript sees arrays rather than null.
 func emptyDomainInfo() DomainInfo {
 	return DomainInfo{
-		Entities:      []DomainDefinitionInfo{},
-		ValueObjects:  []DomainDefinitionInfo{},
-		BusinessRules: []DomainDefinitionInfo{},
-		Events:        []DomainDefinitionInfo{},
+		Contexts:  []DomainContextInfo{},
+		Relations: []DomainRelationInfo{},
 	}
 }
 
 // domainInfoFrom translates the recorded Language into the SDK wire
-// shape, guaranteeing non-nil slices.
+// shape, guaranteeing non-nil slices (never null in JS).
 func domainInfoFrom(lang vocab.UbiquitousLanguage) DomainInfo {
 	info := emptyDomainInfo()
-	info.Entities = entityInfos(lang.ListEntities())
-	info.ValueObjects = definitionInfos(lang.ValueObjects)
-	info.BusinessRules = definitionInfos(lang.BusinessRules)
-	info.Events = definitionInfos(lang.Events)
+	if len(lang.Contexts) > 0 {
+		info.Contexts = make([]DomainContextInfo, len(lang.Contexts))
+		for i, c := range lang.Contexts {
+			info.Contexts[i] = DomainContextInfo{
+				Name:         c.Name,
+				Entities:     entityInfos(c.Entities),
+				ValueObjects: definitionInfos(c.ValueObjects),
+				Invariants:   invariantInfos(c.Invariants),
+				Events:       definitionInfos(c.Events),
+			}
+		}
+	}
+	if len(lang.Relations) > 0 {
+		info.Relations = make([]DomainRelationInfo, len(lang.Relations))
+		for i, r := range lang.Relations {
+			info.Relations[i] = DomainRelationInfo{
+				From: r.From,
+				To:   r.To,
+				Kind: string(r.Kind),
+			}
+		}
+	}
 	return info
 }
 
@@ -250,7 +266,20 @@ func definitionInfos(defs []vocab.Definition) []DomainDefinitionInfo {
 			Name:       d.Name,
 			Definition: d.Definition,
 			Aliases:    d.Aliases,
-			Aggregate:  false,
+		}
+	}
+	return out
+}
+
+func invariantInfos(invs []vocab.Invariant) []DomainInvariantInfo {
+	if len(invs) == 0 {
+		return []DomainInvariantInfo{}
+	}
+	out := make([]DomainInvariantInfo, len(invs))
+	for i, inv := range invs {
+		out[i] = DomainInvariantInfo{
+			Statement: inv.Statement,
+			Owner:     inv.Owner,
 		}
 	}
 	return out

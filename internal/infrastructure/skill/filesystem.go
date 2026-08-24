@@ -1,0 +1,98 @@
+// Package skillfs writes generated domain-librarian skill artifacts
+// (SKILL.md, VOCAB.yaml, library.schema.json) through the application's
+// SkillArtifactWriter port. Writes are atomic and create the target
+// directory as needed.
+package skillfs
+
+import (
+	"bytes"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/wixregiga/arclint/internal/application"
+)
+
+// Writer implements application.SkillArtifactWriter over a repository
+// root. Paths passed to Write are joined under root when relative.
+type Writer struct {
+	root string
+}
+
+// NewWriter binds the writer to a repository root.
+func NewWriter(root string) (Writer, error) {
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return Writer{}, fmt.Errorf("skill writer root: %w", err)
+	}
+	return Writer{root: abs}, nil
+}
+
+// Write implements application.SkillArtifactWriter. dir may be absolute
+// or relative to the bound root. Returns changed=false when the file
+// already holds identical bytes.
+func (w Writer) Write(dir, filename string, content []byte) (bool, string, error) {
+	if filename == "" {
+		return false, "", fmt.Errorf("skill write: empty filename")
+	}
+	if dir == "" {
+		dir = application.DomainLibrarianSkillDir
+	}
+	targetDir := dir
+	if !filepath.IsAbs(targetDir) {
+		targetDir = filepath.Join(w.root, dir)
+	}
+	target := filepath.Join(targetDir, filename)
+
+	existing, err := os.ReadFile(target)
+	switch {
+	case err == nil:
+		if bytes.Equal(existing, content) {
+			return false, target, nil
+		}
+	case !os.IsNotExist(err):
+		return false, target, fmt.Errorf("read %s: %w", target, err)
+	}
+
+	if err := atomicWrite(target, content); err != nil {
+		return false, target, err
+	}
+	return true, target, nil
+}
+
+// atomicWrite writes data to path via a same-directory temp file and
+// rename, leaving no temp residue on success or failure. Mode 0o600
+// matches the vocab YAML and baseline JSON stores.
+func atomicWrite(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return fmt.Errorf("create %s: %w", dir, err)
+	}
+	tmp, err := os.CreateTemp(dir, ".skill-artifact-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create temp for %s: %w", path, err)
+	}
+	tmpName := tmp.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tmpName)
+		}
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("write temp for %s: %w", path, err)
+	}
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("chmod temp for %s: %w", path, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp for %s: %w", path, err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("rename temp onto %s: %w", path, err)
+	}
+	cleanup = false
+	return nil
+}

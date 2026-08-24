@@ -17,7 +17,7 @@ Plan executed end to end. The `arclint domain` command family is complete per `d
 - `internal/application` — five use cases plus `ErrDomainUsage` sentinel; save skipped on unchanged define; not-found never saves.
 - `internal/delivery/cli` — neutral `Command` gained `Long`/`Example`/`Aliases`, `Flag.Repeat`, `Context.Stdin`/`Strings`/`Changed`; cobra adapter maps them all; `domain.go` implements overview/list/show/explain/define (incl. deterministic `--guided` session)/remove|rm/schema with verbatim doc text and the 0/1/2 exit table.
 - SDK + context — `ctx.domain()` threaded through `conformance.Request.Knowledge` → evaluator → sobek runtime (`types_gen.ts` regenerated); `arclint context` renders the recorded model read-only; declarations alone never produce diagnostics.
-- Artifacts/docs — committed `docs/ubiquitous-language.schema.json` with a drift-guard test; cli.md, concepts.md, extensions.md, README updated.
+- Artifacts/docs — schema published via `arclint domain schema` and generated at `.agents/skills/domain-librarian/library.schema.json` with a drift-guard test; cli.md, concepts.md, extensions.md, README updated.
 
 **Integration fixes I made after the parallel build**: list groups now separate with a leading blank (no trailing blank, matching the doc example); `arclint domain <unknown>` reports `unknown command "x" for "arclint domain"` at exit 2; replaced an unreachable `panic` that tripped the repo's own `no-panic` rule; resolved 23 lint findings (goconst consts + the house-convention schema exclusion in `.golangci.yml`, wrapcheck wraps that preserve the doc's exact user-facing vocabulary, dead nil check, `findMapEntry` unparam, package comment).
 

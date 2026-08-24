@@ -2,9 +2,9 @@
 // vocabulary: the domain definitions a project declares in
 // ubiquitous-language.yaml, the ArcLint-owned concept kinds and their
 // meanings, the mutation semantics for maintaining the vocabulary, its
-// published JSON Schema, and the Repository port that persists it.
-// UbiquitousLanguage is a value with invariants, not a second aggregate
-// root: Rule stays the sole aggregate.
+// published JSON Schema, the domain-librarian skill taxonomy, and the
+// Repository port that persists it. UbiquitousLanguage is a value with
+// invariants, not a second aggregate root: Rule stays the sole aggregate.
 package vocab
 
 import (
@@ -13,31 +13,41 @@ import (
 )
 
 // Concept is one value from the finite ArcLint-owned set of domain
-// concept kinds recorded in a project's Ubiquitous Language.
+// concept kinds. Spellings use underscores (hyphen forms are rejected).
 type Concept string
 
-// The published concept kinds. Aggregate is an Entity designation, not
-// a separate stored object.
+// The published concept kinds. Aggregate and AggregateRoot are Entity
+// designations, not separate stored objects. business_rule and
+// assertion always resolve to an Invariant entry. domain_event records
+// into the events section. bounded_context is the context itself.
 const (
-	ConceptEntity       Concept = "entity"
-	ConceptAggregate    Concept = "aggregate"
-	ConceptValueObject  Concept = "value-object"
-	ConceptBusinessRule Concept = "business-rule"
-	ConceptEvent        Concept = "event"
+	ConceptEntity         Concept = "entity"
+	ConceptValueObject    Concept = "value_object"
+	ConceptInvariant      Concept = "invariant"
+	ConceptAssertion      Concept = "assertion"
+	ConceptAggregate      Concept = "aggregate"
+	ConceptAggregateRoot  Concept = "aggregate_root"
+	ConceptDomainEvent    Concept = "domain_event"
+	ConceptBoundedContext Concept = "bounded_context"
+	ConceptBusinessRule   Concept = "business_rule"
 )
 
 // Concepts returns the published enum in stable explain order.
 func Concepts() []Concept {
 	return []Concept{
 		ConceptEntity,
-		ConceptAggregate,
 		ConceptValueObject,
+		ConceptInvariant,
+		ConceptAssertion,
+		ConceptAggregate,
+		ConceptAggregateRoot,
+		ConceptDomainEvent,
+		ConceptBoundedContext,
 		ConceptBusinessRule,
-		ConceptEvent,
 	}
 }
 
-// ParseConcept accepts a singular concept spelling.
+// ParseConcept accepts a singular concept spelling (underscore form).
 func ParseConcept(s string) (Concept, error) {
 	for _, c := range Concepts() {
 		if Concept(s) == c {
@@ -47,8 +57,7 @@ func ParseConcept(s string) (Concept, error) {
 	return "", fmt.Errorf("domain concept %q: not one of %s", s, joinConcepts(Concepts()))
 }
 
-// ParseListing accepts a plural listing spelling
-// (entities|aggregates|value-objects|business-rules|events).
+// ParseListing accepts a plural listing spelling.
 func ParseListing(s string) (Concept, error) {
 	for _, c := range Concepts() {
 		if Listing(c) == s {
@@ -63,14 +72,22 @@ func Listing(c Concept) string {
 	switch c {
 	case ConceptEntity:
 		return "entities"
+	case ConceptValueObject:
+		return "value_objects"
+	case ConceptInvariant:
+		return "invariants"
+	case ConceptAssertion:
+		return "assertions"
 	case ConceptAggregate:
 		return "aggregates"
-	case ConceptValueObject:
-		return "value-objects"
+	case ConceptAggregateRoot:
+		return "aggregate_roots"
+	case ConceptDomainEvent:
+		return "domain_events"
+	case ConceptBoundedContext:
+		return "bounded_contexts"
 	case ConceptBusinessRule:
-		return "business-rules"
-	case ConceptEvent:
-		return "events"
+		return "business_rules"
 	default:
 		return string(c)
 	}
@@ -85,67 +102,113 @@ type ConceptDoc struct {
 	Meaning   string
 	Questions []string
 	// Supplies is the closer naming what the project records for this
-	// concept ("The project supplies the Entity's name, definition, and aliases.").
+	// concept.
 	Supplies string
 }
 
 // Doc returns the ArcLint-owned documentation for this Concept.
+// Meaning text is the vocabulary term one-liner from VOCAB.yaml.
 func (c Concept) Doc() ConceptDoc {
 	switch c {
 	case ConceptEntity:
 		return ConceptDoc{
 			Concept: ConceptEntity,
 			Title:   "Entity",
-			Meaning: "A domain concept whose identity matters as it changes over time.",
+			Meaning: TermDefinition(TermEntity),
 			Questions: []string{
+				"Does this have an identity that survives attribute changes?",
 				"What must the project distinguish from other similar things?",
-				"What remains the same thing even when its attributes change?",
 			},
 			Supplies: "The project supplies the Entity's name, definition, and aliases.",
-		}
-	case ConceptAggregate:
-		return ConceptDoc{
-			Concept: ConceptAggregate,
-			Title:   "Aggregate",
-			Meaning: "An Entity the project treats as a consistency boundary: it is changed as one unit and other objects reach it through its identity.",
-			Questions: []string{
-				"Which Entity must stay internally consistent when the project changes it?",
-				"Which Entity do other objects reference by identity rather than reach inside?",
-			},
-			Supplies: "The project supplies the Aggregate's name, definition, and aliases.",
 		}
 	case ConceptValueObject:
 		return ConceptDoc{
 			Concept: ConceptValueObject,
 			Title:   "Value Object",
-			Meaning: "A domain value defined entirely by its attributes, with no identity of its own.",
+			Meaning: TermDefinition(TermValueObject),
 			Questions: []string{
-				"Can two occurrences with the same attributes be used interchangeably?",
+				"Are two instances with identical values interchangeable?",
 				"Does replacing it with an equal value change nothing?",
 			},
 			Supplies: "The project supplies the Value Object's name, definition, and aliases.",
+		}
+	case ConceptInvariant:
+		return ConceptDoc{
+			Concept: ConceptInvariant,
+			Title:   "Invariant",
+			Meaning: TermDefinition(TermInvariant),
+			Questions: []string{
+				"What must never be violated, even for an instant?",
+				"What concrete violation does this forbid a naive implementation from doing?",
+			},
+			Supplies: "The project supplies the Invariant's statement and exactly one owner.",
+		}
+	case ConceptAssertion:
+		return ConceptDoc{
+			Concept: ConceptAssertion,
+			Title:   "Assertion",
+			Meaning: TermDefinition(TermAssertion),
+			Questions: []string{
+				"What post-condition must hold after an operation?",
+				"Is this an invariant restated at an operation boundary?",
+			},
+			Supplies: "The project supplies the Assertion as an invariant statement with exactly one owner.",
+		}
+	case ConceptAggregate:
+		return ConceptDoc{
+			Concept: ConceptAggregate,
+			Title:   "Aggregate",
+			Meaning: TermDefinition(TermAggregate),
+			Questions: []string{
+				"What is the smallest cluster that must stay consistent in one transaction?",
+				"Which Entity do other objects reference by identity rather than reach inside?",
+			},
+			Supplies: "The project supplies the Aggregate as an Entity designation (aggregate: true).",
+		}
+	case ConceptAggregateRoot:
+		return ConceptDoc{
+			Concept: ConceptAggregateRoot,
+			Title:   "Aggregate Root",
+			Meaning: TermDefinition(TermAggregateRoot),
+			Questions: []string{
+				"Which single entity is the entry point of the aggregate?",
+				"What must stay internally consistent when the project changes this cluster?",
+			},
+			Supplies: "The project supplies the Aggregate Root as an Entity designation (aggregate: true).",
+		}
+	case ConceptDomainEvent:
+		return ConceptDoc{
+			Concept: ConceptDomainEvent,
+			Title:   "Domain Event",
+			Meaning: TermDefinition(TermDomainEvent),
+			Questions: []string{
+				"What completed occurrence do experts name in past tense?",
+				"What would the project mention in its history of what happened?",
+			},
+			Supplies: "The project supplies the Domain Event's name and definition.",
+		}
+	case ConceptBoundedContext:
+		return ConceptDoc{
+			Concept: ConceptBoundedContext,
+			Title:   "Bounded Context",
+			Meaning: TermDefinition(TermBoundedContext),
+			Questions: []string{
+				"Which people or teams use this term, and do they mean the same thing?",
+				"Is a party that must be informed its own context?",
+			},
+			Supplies: "The project supplies the Bounded Context's name and the terms inside it.",
 		}
 	case ConceptBusinessRule:
 		return ConceptDoc{
 			Concept: ConceptBusinessRule,
 			Title:   "Business Rule",
-			Meaning: "A statement the project requires to always or never be true about its domain.",
+			Meaning: TermDefinition(TermBusinessRule),
 			Questions: []string{
-				"What must always hold for the project's data or behavior?",
-				"What must never happen, regardless of implementation?",
+				"Does this resolve to an invariant or an assertion?",
+				"Which entity, aggregate root, or value object owns enforcement?",
 			},
-			Supplies: "The project supplies the Business Rule's name, definition, and aliases.",
-		}
-	case ConceptEvent:
-		return ConceptDoc{
-			Concept: ConceptEvent,
-			Title:   "Domain Event",
-			Meaning: "Something that has completed in the domain and that the project cares to record.",
-			Questions: []string{
-				"What completed occurrence do other parts of the project react to?",
-				"What would the project mention in its history of what happened?",
-			},
-			Supplies: "The project supplies the Domain Event's name, definition, and aliases.",
+			// business_rule always resolves to invariant or assertion with an owner.
+			Supplies: "The project records a business_rule as an invariant or assertion with exactly one owner; it is never stored as its own section.",
 		}
 	default:
 		return ConceptDoc{Concept: c, Title: string(c)}

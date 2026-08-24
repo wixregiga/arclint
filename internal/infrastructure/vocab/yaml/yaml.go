@@ -16,15 +16,20 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
-// schemaModeline is the editor schema hint written on freshly created
-// ubiquitous-language.yaml files. The raw-GitHub URL pattern matches
-// the rules.schema.json modeline in getting-started.md.
-const schemaModeline = "# yaml-language-server: $schema=https://raw.githubusercontent.com/wixregiga/arclint/main/docs/ubiquitous-language.schema.json"
+const (
+	// localSchemaRel is the in-repo schema path used in the modeline
+	// when that file exists under the repository root.
+	localSchemaRel = ".agents/skills/domain-librarian/library.schema.json"
+	// remoteSchemaURL is the published $id used when the local schema
+	// file is absent under the bound root.
+	remoteSchemaURL = "https://raw.githubusercontent.com/wixregiga/arclint/main/.agents/skills/domain-librarian/library.schema.json"
+)
 
 // Repository implements the domain-owned vocab.Repository port over
 // one ubiquitous-language.yaml beside the resolved ruleset root.
 type Repository struct {
 	path string
+	root string
 }
 
 // NewRepository binds the repository to filepath.Join(root, UbiquitousLanguageFileName).
@@ -32,11 +37,15 @@ func NewRepository(root string) (Repository, error) {
 	if root == "" {
 		return Repository{}, fmt.Errorf("ubiquitous-language root: empty path")
 	}
-	abs, err := filepath.Abs(filepath.Join(root, vocab.UbiquitousLanguageFileName))
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return Repository{}, fmt.Errorf("ubiquitous-language root: %w", err)
+	}
+	abs, err := filepath.Abs(filepath.Join(absRoot, vocab.UbiquitousLanguageFileName))
 	if err != nil {
 		return Repository{}, fmt.Errorf("ubiquitous-language path: %w", err)
 	}
-	return Repository{path: abs}, nil
+	return Repository{path: abs, root: absRoot}, nil
 }
 
 // Path returns the absolute path of the ubiquitous-language.yaml file.
@@ -99,23 +108,49 @@ func parse(data []byte, label string) (vocab.UbiquitousLanguage, error) {
 		)
 	}
 
-	entities := make([]vocab.Entity, len(doc.Entities))
-	for i, e := range doc.Entities {
-		entities[i] = vocab.Entity{
-			Definition: vocab.Definition{
-				Name:       e.Name,
-				Definition: e.Definition,
-				Aliases:    e.Aliases,
-			},
-			Aggregate: e.Aggregate,
+	contexts := make([]vocab.BoundedContext, len(doc.Contexts))
+	for i, c := range doc.Contexts {
+		entities := make([]vocab.Entity, len(c.Entities))
+		for j, e := range c.Entities {
+			entities[j] = vocab.Entity{
+				Definition: vocab.Definition{
+					Name:       e.Name,
+					Definition: e.Definition,
+					Aliases:    e.Aliases,
+				},
+				Aggregate: e.Aggregate,
+			}
+		}
+		invariants := make([]vocab.Invariant, len(c.Invariants))
+		for j, inv := range c.Invariants {
+			invariants[j] = vocab.Invariant{
+				Statement: inv.Statement,
+				Owner:     inv.Owner,
+			}
+		}
+		contexts[i] = vocab.BoundedContext{
+			Name:         c.Name,
+			Entities:     entities,
+			ValueObjects: toDefs(c.ValueObjects),
+			Invariants:   invariants,
+			Events:       toEventDefs(c.Events),
 		}
 	}
-	lang, err := vocab.NewUbiquitousLanguage(
-		entities,
-		toDefs(doc.ValueObjects),
-		toDefs(doc.BusinessRules),
-		toDefs(doc.Events),
-	)
+
+	relations := make([]vocab.ContextRelation, len(doc.Relations))
+	for i, rel := range doc.Relations {
+		kind, err := vocab.ParseRelationKind(rel.Kind)
+		if err != nil {
+			return vocab.UbiquitousLanguage{}, fmt.Errorf("%s: %w", label, err)
+		}
+		relations[i] = vocab.ContextRelation{
+			From: rel.From,
+			To:   rel.To,
+			Kind: kind,
+		}
+	}
+
+	lang, err := vocab.NewUbiquitousLanguage(contexts, relations)
 	if err != nil {
 		return vocab.UbiquitousLanguage{}, fmt.Errorf("%s: %w", label, err)
 	}
@@ -137,12 +172,10 @@ func (r Repository) Record(m vocab.UbiquitousLanguage) error {
 			return fmt.Errorf("%s: %w", r.path, err)
 		}
 		ensureVersion(mapping)
-		syncSection(mapping, "entities", entitiesAsEntries(m.Entities), true)
-		syncSection(mapping, "value_objects", defsAsEntries(m.ValueObjects), false)
-		syncSection(mapping, "business_rules", defsAsEntries(m.BusinessRules), false)
-		syncSection(mapping, "events", defsAsEntries(m.Events), false)
+		syncContexts(mapping, m.Contexts)
+		syncRelations(mapping, m.Relations)
 	case os.IsNotExist(err):
-		root = *freshDocument(m)
+		root = *freshDocument(m, r.schemaModeline())
 	default:
 		return fmt.Errorf("read %s: %w", r.path, err)
 	}
@@ -160,12 +193,29 @@ func (r Repository) Record(m vocab.UbiquitousLanguage) error {
 	return atomicWrite(r.path, buf.Bytes())
 }
 
+// schemaModeline chooses the editor schema hint for a freshly created
+// file: relative local path when library.schema.json exists under the
+// bound root, else the published raw-GitHub $id.
+func (r Repository) schemaModeline() string {
+	local := filepath.Join(r.root, filepath.FromSlash(localSchemaRel))
+	if st, err := os.Stat(local); err == nil && !st.IsDir() {
+		return "# yaml-language-server: $schema=" + localSchemaRel
+	}
+	return "# yaml-language-server: $schema=" + remoteSchemaURL
+}
+
 type documentDoc struct {
-	Version       int         `yaml:"version"`
-	Entities      []entityDoc `yaml:"entities"`
-	ValueObjects  []defDoc    `yaml:"value_objects"`
-	BusinessRules []defDoc    `yaml:"business_rules"`
-	Events        []defDoc    `yaml:"events"`
+	Version   int           `yaml:"version"`
+	Contexts  []contextDoc  `yaml:"contexts"`
+	Relations []relationDoc `yaml:"relations"`
+}
+
+type contextDoc struct {
+	Name         string         `yaml:"name"`
+	Entities     []entityDoc    `yaml:"entities"`
+	ValueObjects []defDoc       `yaml:"value_objects"`
+	Invariants   []invariantDoc `yaml:"invariants"`
+	Events       []eventDoc     `yaml:"events"`
 }
 
 type entityDoc struct {
@@ -181,12 +231,49 @@ type defDoc struct {
 	Aliases    []string `yaml:"aliases"`
 }
 
-// entry is the node-surgery view of one YAML list item.
+// eventDoc intentionally omits aliases: the litmus schema forbids them
+// on events (additionalProperties: false).
+type eventDoc struct {
+	Name       string `yaml:"name"`
+	Definition string `yaml:"definition"`
+}
+
+type invariantDoc struct {
+	Statement string `yaml:"statement"`
+	Owner     string `yaml:"owner"`
+}
+
+type relationDoc struct {
+	From string `yaml:"from"`
+	To   string `yaml:"to"`
+	Kind string `yaml:"kind"`
+}
+
+// entry is the node-surgery view of one named YAML list item
+// (entity, value object, or event).
 type entry struct {
 	Name       string
 	Definition string
 	Aliases    []string
 	Aggregate  bool
+	// withAliases controls whether aliases may appear on the node.
+	// Events never carry aliases in the authored YAML.
+	withAliases bool
+	// entity controls whether aggregate is legal on the node.
+	entity bool
+}
+
+// invEntry is the node-surgery view of one invariant list item.
+type invEntry struct {
+	Statement string
+	Owner     string
+}
+
+// relEntry is the node-surgery view of one relation list item.
+type relEntry struct {
+	From string
+	To   string
+	Kind string
 }
 
 func toDefs(docs []defDoc) []vocab.Definition {
@@ -201,14 +288,27 @@ func toDefs(docs []defDoc) []vocab.Definition {
 	return out
 }
 
+func toEventDefs(docs []eventDoc) []vocab.Definition {
+	out := make([]vocab.Definition, len(docs))
+	for i, d := range docs {
+		out[i] = vocab.Definition{
+			Name:       d.Name,
+			Definition: d.Definition,
+		}
+	}
+	return out
+}
+
 func entitiesAsEntries(entities []vocab.Entity) []entry {
 	out := make([]entry, len(entities))
 	for i, e := range entities {
 		out[i] = entry{
-			Name:       e.Name,
-			Definition: e.Definition.Definition,
-			Aliases:    e.Aliases,
-			Aggregate:  e.Aggregate,
+			Name:        e.Name,
+			Definition:  e.Definition.Definition,
+			Aliases:     e.Aliases,
+			Aggregate:   e.Aggregate,
+			withAliases: true,
+			entity:      true,
 		}
 	}
 	return out
@@ -218,10 +318,38 @@ func defsAsEntries(defs []vocab.Definition) []entry {
 	out := make([]entry, len(defs))
 	for i, d := range defs {
 		out[i] = entry{
+			Name:        d.Name,
+			Definition:  d.Definition,
+			Aliases:     d.Aliases,
+			withAliases: true,
+		}
+	}
+	return out
+}
+
+func eventsAsEntries(defs []vocab.Definition) []entry {
+	out := make([]entry, len(defs))
+	for i, d := range defs {
+		out[i] = entry{
 			Name:       d.Name,
 			Definition: d.Definition,
-			Aliases:    d.Aliases,
 		}
+	}
+	return out
+}
+
+func invariantsAsEntries(invs []vocab.Invariant) []invEntry {
+	out := make([]invEntry, len(invs))
+	for i, inv := range invs {
+		out[i] = invEntry{Statement: inv.Statement, Owner: inv.Owner}
+	}
+	return out
+}
+
+func relationsAsEntries(rels []vocab.ContextRelation) []relEntry {
+	out := make([]relEntry, len(rels))
+	for i, r := range rels {
+		out[i] = relEntry{From: r.From, To: r.To, Kind: string(r.Kind)}
 	}
 	return out
 }
@@ -231,41 +359,78 @@ const (
 	tagStr = "!!str"
 	tagInt = "!!int"
 	tagSeq = "!!seq"
+	tagMap = "!!map"
 )
 
-func freshDocument(m vocab.UbiquitousLanguage) *yaml.Node {
-	mapping := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+func freshDocument(m vocab.UbiquitousLanguage, modeline string) *yaml.Node {
+	mapping := &yaml.Node{Kind: yaml.MappingNode, Tag: tagMap}
 	versionKey := &yaml.Node{
 		Kind:        yaml.ScalarNode,
 		Tag:         tagStr,
 		Value:       "version",
-		HeadComment: schemaModeline,
+		HeadComment: modeline,
 	}
 	versionVal := &yaml.Node{Kind: yaml.ScalarNode, Tag: tagInt, Value: fmt.Sprintf("%d", vocab.UbiquitousLanguageVersion)}
 	mapping.Content = []*yaml.Node{versionKey, versionVal}
 
-	appendSection := func(key string, entries []entry, entity bool) {
-		if len(entries) == 0 {
-			return
-		}
-		seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: tagSeq}
-		for _, e := range entries {
-			seq.Content = append(seq.Content, buildDefNode(e, entity))
-		}
-		mapping.Content = append(mapping.Content,
-			stringScalar(key),
-			seq,
-		)
+	// contexts is required by the schema even when empty.
+	appendKV(mapping, "contexts", buildContextsSeq(m.Contexts))
+	if len(m.Relations) > 0 {
+		appendKV(mapping, "relations", buildRelationsSeq(relationsAsEntries(m.Relations)))
 	}
-	appendSection("entities", entitiesAsEntries(m.Entities), true)
-	appendSection("value_objects", defsAsEntries(m.ValueObjects), false)
-	appendSection("business_rules", defsAsEntries(m.BusinessRules), false)
-	appendSection("events", defsAsEntries(m.Events), false)
 
 	return &yaml.Node{
 		Kind:    yaml.DocumentNode,
 		Content: []*yaml.Node{mapping},
 	}
+}
+
+func buildContextsSeq(contexts []vocab.BoundedContext) *yaml.Node {
+	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: tagSeq}
+	for _, c := range contexts {
+		seq.Content = append(seq.Content, buildContextNode(c))
+	}
+	return seq
+}
+
+func buildContextNode(c vocab.BoundedContext) *yaml.Node {
+	m := &yaml.Node{Kind: yaml.MappingNode, Tag: tagMap}
+	appendKV(m, keyName, stringScalar(c.Name))
+	appendNamedSection(m, "entities", entitiesAsEntries(c.Entities))
+	appendNamedSection(m, "value_objects", defsAsEntries(c.ValueObjects))
+	appendInvariantSection(m, invariantsAsEntries(c.Invariants))
+	appendNamedSection(m, "events", eventsAsEntries(c.Events))
+	return m
+}
+
+func appendNamedSection(mapping *yaml.Node, key string, entries []entry) {
+	if len(entries) == 0 {
+		return
+	}
+	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: tagSeq}
+	for _, e := range entries {
+		seq.Content = append(seq.Content, buildDefNode(e))
+	}
+	appendKV(mapping, key, seq)
+}
+
+func appendInvariantSection(mapping *yaml.Node, entries []invEntry) {
+	if len(entries) == 0 {
+		return
+	}
+	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: tagSeq}
+	for _, e := range entries {
+		seq.Content = append(seq.Content, buildInvNode(e))
+	}
+	appendKV(mapping, "invariants", seq)
+}
+
+func buildRelationsSeq(entries []relEntry) *yaml.Node {
+	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: tagSeq}
+	for _, e := range entries {
+		seq.Content = append(seq.Content, buildRelNode(e))
+	}
+	return seq
 }
 
 func documentMapping(root *yaml.Node) (*yaml.Node, error) {
@@ -296,7 +461,62 @@ func ensureVersion(mapping *yaml.Node) {
 	mapping.Content = append([]*yaml.Node{key, value}, mapping.Content...)
 }
 
-func syncSection(mapping *yaml.Node, key string, entries []entry, entity bool) {
+// syncContexts reconciles the top-level contexts sequence by context
+// name: preserve surviving nodes (and their comments/order), update
+// in place, append new contexts, drop removed ones. Nested sections
+// inside each context are synced by their own keying rules.
+func syncContexts(mapping *yaml.Node, contexts []vocab.BoundedContext) {
+	wanted := make(map[string]vocab.BoundedContext, len(contexts))
+	order := make([]string, 0, len(contexts))
+	for _, c := range contexts {
+		wanted[c.Name] = c
+		order = append(order, c.Name)
+	}
+
+	seq, idx := findMapEntry(mapping, "contexts")
+	if idx < 0 || seq == nil || seq.Kind != yaml.SequenceNode {
+		seq = buildContextsSeq(contexts)
+		// Insert after version when possible.
+		insertField(mapping, "contexts", seq, docKeyOrder)
+		return
+	}
+
+	seen := make(map[string]bool, len(contexts))
+	kept := make([]*yaml.Node, 0, len(contexts))
+	for _, item := range seq.Content {
+		name := mappingName(item)
+		c, ok := wanted[name]
+		if !ok {
+			continue
+		}
+		updateContextNode(item, c)
+		kept = append(kept, item)
+		seen[name] = true
+	}
+	for _, name := range order {
+		if seen[name] {
+			continue
+		}
+		kept = append(kept, buildContextNode(wanted[name]))
+	}
+	seq.Content = kept
+}
+
+func updateContextNode(item *yaml.Node, c vocab.BoundedContext) {
+	if item.Kind != yaml.MappingNode {
+		*item = *buildContextNode(c)
+		return
+	}
+	setStringField(item, keyName, c.Name, contextKeyOrder, false)
+	syncNamedSection(item, "entities", entitiesAsEntries(c.Entities))
+	syncNamedSection(item, "value_objects", defsAsEntries(c.ValueObjects))
+	syncInvariants(item, invariantsAsEntries(c.Invariants))
+	syncNamedSection(item, "events", eventsAsEntries(c.Events))
+}
+
+// syncNamedSection reconciles a named sequence keyed by item name.
+// Empty desired content removes the section key entirely.
+func syncNamedSection(mapping *yaml.Node, key string, entries []entry) {
 	seq, idx := findMapEntry(mapping, key)
 	if len(entries) == 0 {
 		if idx >= 0 {
@@ -308,12 +528,9 @@ func syncSection(mapping *yaml.Node, key string, entries []entry, entity bool) {
 	if idx < 0 || seq == nil || seq.Kind != yaml.SequenceNode {
 		seq = &yaml.Node{Kind: yaml.SequenceNode, Tag: tagSeq}
 		for _, e := range entries {
-			seq.Content = append(seq.Content, buildDefNode(e, entity))
+			seq.Content = append(seq.Content, buildDefNode(e))
 		}
-		mapping.Content = append(mapping.Content,
-			stringScalar(key),
-			seq,
-		)
+		insertField(mapping, key, seq, contextKeyOrder)
 		return
 	}
 
@@ -332,7 +549,7 @@ func syncSection(mapping *yaml.Node, key string, entries []entry, entity bool) {
 		if !ok {
 			continue
 		}
-		updateDefNode(item, e, entity)
+		updateDefNode(item, e)
 		kept = append(kept, item)
 		seen[name] = true
 	}
@@ -340,58 +557,212 @@ func syncSection(mapping *yaml.Node, key string, entries []entry, entity bool) {
 		if seen[name] {
 			continue
 		}
-		kept = append(kept, buildDefNode(wanted[name], entity))
+		kept = append(kept, buildDefNode(wanted[name]))
 	}
 	seq.Content = kept
 }
 
+// syncInvariants reconciles the invariants sequence keyed by statement.
+func syncInvariants(mapping *yaml.Node, entries []invEntry) {
+	const key = "invariants"
+	seq, idx := findMapEntry(mapping, key)
+	if len(entries) == 0 {
+		if idx >= 0 {
+			mapping.Content = append(mapping.Content[:idx], mapping.Content[idx+2:]...)
+		}
+		return
+	}
+
+	if idx < 0 || seq == nil || seq.Kind != yaml.SequenceNode {
+		seq = &yaml.Node{Kind: yaml.SequenceNode, Tag: tagSeq}
+		for _, e := range entries {
+			seq.Content = append(seq.Content, buildInvNode(e))
+		}
+		insertField(mapping, key, seq, contextKeyOrder)
+		return
+	}
+
+	wanted := make(map[string]invEntry, len(entries))
+	order := make([]string, 0, len(entries))
+	for _, e := range entries {
+		wanted[e.Statement] = e
+		order = append(order, e.Statement)
+	}
+
+	seen := make(map[string]bool, len(entries))
+	kept := make([]*yaml.Node, 0, len(entries))
+	for _, item := range seq.Content {
+		stmt := mappingField(item, "statement")
+		e, ok := wanted[stmt]
+		if !ok {
+			continue
+		}
+		updateInvNode(item, e)
+		kept = append(kept, item)
+		seen[stmt] = true
+	}
+	for _, stmt := range order {
+		if seen[stmt] {
+			continue
+		}
+		kept = append(kept, buildInvNode(wanted[stmt]))
+	}
+	seq.Content = kept
+}
+
+// syncRelations reconciles the top-level relations sequence keyed by
+// (from, to). Empty desired content removes the key.
+func syncRelations(mapping *yaml.Node, rels []vocab.ContextRelation) {
+	entries := relationsAsEntries(rels)
+	const key = "relations"
+	seq, idx := findMapEntry(mapping, key)
+	if len(entries) == 0 {
+		if idx >= 0 {
+			mapping.Content = append(mapping.Content[:idx], mapping.Content[idx+2:]...)
+		}
+		return
+	}
+
+	if idx < 0 || seq == nil || seq.Kind != yaml.SequenceNode {
+		insertField(mapping, key, buildRelationsSeq(entries), docKeyOrder)
+		return
+	}
+
+	wanted := make(map[string]relEntry, len(entries))
+	order := make([]string, 0, len(entries))
+	for _, e := range entries {
+		k := relationKey(e.From, e.To)
+		wanted[k] = e
+		order = append(order, k)
+	}
+
+	seen := make(map[string]bool, len(entries))
+	kept := make([]*yaml.Node, 0, len(entries))
+	for _, item := range seq.Content {
+		k := relationKey(mappingField(item, "from"), mappingField(item, "to"))
+		e, ok := wanted[k]
+		if !ok {
+			continue
+		}
+		updateRelNode(item, e)
+		kept = append(kept, item)
+		seen[k] = true
+	}
+	for _, k := range order {
+		if seen[k] {
+			continue
+		}
+		kept = append(kept, buildRelNode(wanted[k]))
+	}
+	seq.Content = kept
+}
+
+func relationKey(from, to string) string {
+	return from + "\x00" + to
+}
+
 func mappingName(item *yaml.Node) string {
+	return mappingField(item, keyName)
+}
+
+func mappingField(item *yaml.Node, key string) string {
 	if item == nil || item.Kind != yaml.MappingNode {
 		return ""
 	}
-	val, idx := findMapEntry(item, "name")
+	val, idx := findMapEntry(item, key)
 	if idx < 0 || val == nil {
 		return ""
 	}
 	return val.Value
 }
 
-func updateDefNode(item *yaml.Node, e entry, entity bool) {
+func updateDefNode(item *yaml.Node, e entry) {
 	if item.Kind != yaml.MappingNode {
-		*item = *buildDefNode(e, entity)
+		*item = *buildDefNode(e)
 		return
 	}
 	order := defKeyOrder
-	if entity {
+	if e.entity {
 		order = entityKeyOrder
+	} else if !e.withAliases {
+		order = eventKeyOrder
 	}
-	setStringField(item, "name", e.Name, order, false)
-	setStringField(item, "definition", e.Definition, order, true)
-	setAliasesField(item, e.Aliases, order)
-	if entity {
+	setStringField(item, keyName, e.Name, order, false)
+	setStringField(item, keyDefinition, e.Definition, order, true)
+	if e.withAliases {
+		setAliasesField(item, e.Aliases, order)
+	} else {
+		removeField(item, "aliases")
+	}
+	if e.entity {
 		setAggregateField(item, e.Aggregate, order)
 	} else {
 		removeField(item, "aggregate")
 	}
 }
 
-var (
-	entityKeyOrder = []string{"name", "definition", "aliases", "aggregate"}
-	defKeyOrder    = []string{"name", "definition", "aliases"}
+func updateInvNode(item *yaml.Node, e invEntry) {
+	if item.Kind != yaml.MappingNode {
+		*item = *buildInvNode(e)
+		return
+	}
+	setStringField(item, "statement", e.Statement, invKeyOrder, false)
+	setStringField(item, "owner", e.Owner, invKeyOrder, false)
+}
+
+func updateRelNode(item *yaml.Node, e relEntry) {
+	if item.Kind != yaml.MappingNode {
+		*item = *buildRelNode(e)
+		return
+	}
+	setStringField(item, "from", e.From, relKeyOrder, false)
+	setStringField(item, "to", e.To, relKeyOrder, false)
+	setStringField(item, "kind", e.Kind, relKeyOrder, false)
+}
+
+// The recurring mapping keys of the contexts document.
+const (
+	keyName       = "name"
+	keyDefinition = "definition"
 )
 
-func buildDefNode(e entry, entity bool) *yaml.Node {
-	m := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
-	appendKV(m, "name", stringScalar(e.Name))
+var (
+	docKeyOrder     = []string{"version", "contexts", "relations"}
+	contextKeyOrder = []string{keyName, "entities", "value_objects", "invariants", "events"}
+	entityKeyOrder  = []string{keyName, keyDefinition, "aliases", "aggregate"}
+	defKeyOrder     = []string{keyName, keyDefinition, "aliases"}
+	eventKeyOrder   = []string{keyName, keyDefinition}
+	invKeyOrder     = []string{"statement", "owner"}
+	relKeyOrder     = []string{"from", "to", "kind"}
+)
+
+func buildDefNode(e entry) *yaml.Node {
+	m := &yaml.Node{Kind: yaml.MappingNode, Tag: tagMap}
+	appendKV(m, keyName, stringScalar(e.Name))
 	if e.Definition != "" {
-		appendKV(m, "definition", stringScalar(e.Definition))
+		appendKV(m, keyDefinition, stringScalar(e.Definition))
 	}
-	if len(e.Aliases) > 0 {
+	if e.withAliases && len(e.Aliases) > 0 {
 		appendKV(m, "aliases", stringSequence(e.Aliases))
 	}
-	if entity && e.Aggregate {
+	if e.entity && e.Aggregate {
 		appendKV(m, "aggregate", boolScalar(true))
 	}
+	return m
+}
+
+func buildInvNode(e invEntry) *yaml.Node {
+	m := &yaml.Node{Kind: yaml.MappingNode, Tag: tagMap}
+	appendKV(m, "statement", stringScalar(e.Statement))
+	appendKV(m, "owner", stringScalar(e.Owner))
+	return m
+}
+
+func buildRelNode(e relEntry) *yaml.Node {
+	m := &yaml.Node{Kind: yaml.MappingNode, Tag: tagMap}
+	appendKV(m, "from", stringScalar(e.From))
+	appendKV(m, "to", stringScalar(e.To))
+	appendKV(m, "kind", stringScalar(e.Kind))
 	return m
 }
 

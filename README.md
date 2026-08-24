@@ -133,7 +133,7 @@ rules schema        print the JSON Schema for rules.yaml (committed at docs/rule
 rules test [name]   run the rule tests under .arclint/tests; failures exit 1
 context [paths...]  the architecture, or everything binding the given paths (--module, --format json)
 domain              inspect and maintain the project's ubiquitous language (init/overview/list/show/explain/define/remove/schema)
-agents [--write]    compile the ruleset into a generated AGENTS.md block
+agents              AGENTS.md block (--write); skill bundle (skill); SKILL.md only (md|agentmd|markdown)
 baseline capture    adopt current findings   ·  baseline refresh: drop stale entries
 patterns            list local pattern packages (.arclint/patterns/<name>/pattern.yaml)
 sdk init            write arclint.d.ts + tsconfig.json for extension authors

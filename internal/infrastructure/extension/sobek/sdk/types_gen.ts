@@ -133,13 +133,39 @@ export interface DomainDefinitionInfo {
   aggregate?: boolean;
 }
 /**
+ * DomainInvariantInfo is one recorded invariant (statement + owner)
+ * inside a bounded context as exposed through ctx.domain().
+ */
+export interface DomainInvariantInfo {
+  statement: string;
+  owner: string;
+}
+/**
+ * DomainContextInfo is one bounded context and its recorded terms as
+ * exposed through ctx.domain().
+ */
+export interface DomainContextInfo {
+  name: string;
+  entities: DomainDefinitionInfo[];
+  valueObjects: DomainDefinitionInfo[];
+  invariants: DomainInvariantInfo[];
+  events: DomainDefinitionInfo[];
+}
+/**
+ * DomainRelationInfo is one context-map edge as exposed through
+ * ctx.domain().
+ */
+export interface DomainRelationInfo {
+  from: string;
+  to: string;
+  kind: string;
+}
+/**
  * DomainInfo is the project's recorded domain model as exposed through
  * ctx.domain(): empty collections when the project records none.
  * Read-only: declaring knowledge never creates a diagnostic by itself.
  */
 export interface DomainInfo {
-  entities: DomainDefinitionInfo[];
-  valueObjects: DomainDefinitionInfo[];
-  businessRules: DomainDefinitionInfo[];
-  events: DomainDefinitionInfo[];
+  contexts: DomainContextInfo[];
+  relations: DomainRelationInfo[];
 }

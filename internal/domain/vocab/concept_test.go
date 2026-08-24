@@ -11,10 +11,14 @@ func TestConceptsOrder(t *testing.T) {
 	got := vocab.Concepts()
 	want := []vocab.Concept{
 		vocab.ConceptEntity,
-		vocab.ConceptAggregate,
 		vocab.ConceptValueObject,
+		vocab.ConceptInvariant,
+		vocab.ConceptAssertion,
+		vocab.ConceptAggregate,
+		vocab.ConceptAggregateRoot,
+		vocab.ConceptDomainEvent,
+		vocab.ConceptBoundedContext,
 		vocab.ConceptBusinessRule,
-		vocab.ConceptEvent,
 	}
 	if len(got) != len(want) {
 		t.Fatalf("Concepts() len = %d, want %d", len(got), len(want))
@@ -39,13 +43,15 @@ func TestParseConceptRoundTrip(t *testing.T) {
 	}
 }
 
-func TestParseConceptRejectsUnknown(t *testing.T) {
-	_, err := vocab.ParseConcept("bounded-context")
-	if err == nil {
-		t.Fatal("ParseConcept(bounded-context) succeeded, want error")
-	}
-	if !strings.Contains(err.Error(), "entity") {
-		t.Errorf("error %q should list accepted concepts", err)
+func TestParseConceptRejectsHyphenAndUnknown(t *testing.T) {
+	for _, s := range []string{"value-object", "business-rule", "domain-event", "bounded-context", "nope"} {
+		_, err := vocab.ParseConcept(s)
+		if err == nil {
+			t.Fatalf("ParseConcept(%q) succeeded, want error", s)
+		}
+		if !strings.Contains(err.Error(), "entity") {
+			t.Errorf("error %q should list accepted concepts", err)
+		}
 	}
 }
 
@@ -72,11 +78,15 @@ func TestParseListingRejectsSingular(t *testing.T) {
 
 func TestListingSpellings(t *testing.T) {
 	cases := map[vocab.Concept]string{
-		vocab.ConceptEntity:       "entities",
-		vocab.ConceptAggregate:    "aggregates",
-		vocab.ConceptValueObject:  "value-objects",
-		vocab.ConceptBusinessRule: "business-rules",
-		vocab.ConceptEvent:        "events",
+		vocab.ConceptEntity:         "entities",
+		vocab.ConceptValueObject:    "value_objects",
+		vocab.ConceptInvariant:      "invariants",
+		vocab.ConceptAssertion:      "assertions",
+		vocab.ConceptAggregate:      "aggregates",
+		vocab.ConceptAggregateRoot:  "aggregate_roots",
+		vocab.ConceptDomainEvent:    "domain_events",
+		vocab.ConceptBoundedContext: "bounded_contexts",
+		vocab.ConceptBusinessRule:   "business_rules",
 	}
 	for c, want := range cases {
 		if got := vocab.Listing(c); got != want {
@@ -111,74 +121,101 @@ func TestConceptDocNonEmpty(t *testing.T) {
 	}
 }
 
-func TestConceptDocMeaningsVerbatim(t *testing.T) {
-	// Fixed ArcLint-owned meanings from the recommendation doc / plan.
-	want := map[vocab.Concept]struct {
-		title     string
-		meaning   string
-		questions []string
-	}{
-		vocab.ConceptEntity: {
-			title:   "Entity",
-			meaning: "A domain concept whose identity matters as it changes over time.",
-			questions: []string{
-				"What must the project distinguish from other similar things?",
-				"What remains the same thing even when its attributes change?",
-			},
-		},
-		vocab.ConceptAggregate: {
-			title:   "Aggregate",
-			meaning: "An Entity the project treats as a consistency boundary: it is changed as one unit and other objects reach it through its identity.",
-			questions: []string{
-				"Which Entity must stay internally consistent when the project changes it?",
-				"Which Entity do other objects reference by identity rather than reach inside?",
-			},
-		},
-		vocab.ConceptValueObject: {
-			title:   "Value Object",
-			meaning: "A domain value defined entirely by its attributes, with no identity of its own.",
-			questions: []string{
-				"Can two occurrences with the same attributes be used interchangeably?",
-				"Does replacing it with an equal value change nothing?",
-			},
-		},
-		vocab.ConceptBusinessRule: {
-			title:   "Business Rule",
-			meaning: "A statement the project requires to always or never be true about its domain.",
-			questions: []string{
-				"What must always hold for the project's data or behavior?",
-				"What must never happen, regardless of implementation?",
-			},
-		},
-		vocab.ConceptEvent: {
-			title:   "Domain Event",
-			meaning: "Something that has completed in the domain and that the project cares to record.",
-			questions: []string{
-				"What completed occurrence do other parts of the project react to?",
-				"What would the project mention in its history of what happened?",
-			},
-		},
+func TestConceptDocMeaningsFromVocabularyTerms(t *testing.T) {
+	// Meanings are the VOCAB.yaml one-liners for the matching term.
+	want := map[vocab.Concept]string{
+		vocab.ConceptEntity:         vocab.TermDefinition(vocab.TermEntity),
+		vocab.ConceptValueObject:    vocab.TermDefinition(vocab.TermValueObject),
+		vocab.ConceptInvariant:      vocab.TermDefinition(vocab.TermInvariant),
+		vocab.ConceptAssertion:      vocab.TermDefinition(vocab.TermAssertion),
+		vocab.ConceptAggregate:      vocab.TermDefinition(vocab.TermAggregate),
+		vocab.ConceptAggregateRoot:  vocab.TermDefinition(vocab.TermAggregateRoot),
+		vocab.ConceptDomainEvent:    vocab.TermDefinition(vocab.TermDomainEvent),
+		vocab.ConceptBoundedContext: vocab.TermDefinition(vocab.TermBoundedContext),
+		vocab.ConceptBusinessRule:   vocab.TermDefinition(vocab.TermBusinessRule),
 	}
-	for c, w := range want {
+	for c, meaning := range want {
 		doc := c.Doc()
-		if doc.Title != w.title {
-			t.Errorf("%s Title = %q, want %q", c, doc.Title, w.title)
+		if doc.Meaning != meaning {
+			t.Errorf("%s Meaning = %q, want %q", c, doc.Meaning, meaning)
 		}
-		if doc.Meaning != w.meaning {
-			t.Errorf("%s Meaning = %q, want %q", c, doc.Meaning, w.meaning)
+	}
+	// business_rule doc must state it always resolves to invariant or assertion with an owner.
+	br := vocab.ConceptBusinessRule.Doc()
+	if !strings.Contains(br.Meaning, "always resolves to invariant or assertion") {
+		t.Errorf("business_rule meaning missing resolve clause: %q", br.Meaning)
+	}
+	if !strings.Contains(br.Supplies, "owner") {
+		t.Errorf("business_rule Supplies should mention owner: %q", br.Supplies)
+	}
+}
+
+func TestRelationKindsOrderAndSharedKernelDivergence(t *testing.T) {
+	kinds := vocab.RelationKinds()
+	want := []vocab.RelationKind{
+		vocab.RelationPartnership,
+		vocab.RelationSharedKernel,
+		vocab.RelationCustomerSupplier,
+		vocab.RelationConformist,
+		vocab.RelationAnticorruptionLayer,
+		vocab.RelationOpenHostService,
+		vocab.RelationPublishedLanguage,
+		vocab.RelationSeparateWays,
+	}
+	if len(kinds) != len(want) {
+		t.Fatalf("RelationKinds len = %d, want %d", len(kinds), len(want))
+	}
+	for i := range want {
+		if kinds[i] != want[i] {
+			t.Errorf("RelationKinds[%d] = %q, want %q", i, kinds[i], want[i])
 		}
-		if len(doc.Questions) != len(w.questions) {
-			t.Errorf("%s Questions len = %d, want %d", c, len(doc.Questions), len(w.questions))
+	}
+
+	docs := vocab.RelationKindDocs()
+	if len(docs) != 8 {
+		t.Fatalf("RelationKindDocs len = %d", len(docs))
+	}
+	for _, d := range docs {
+		if d.Kind == vocab.RelationSharedKernel {
+			if d.Meaning != "small jointly-owned subset" {
+				t.Errorf("shared_kernel Meaning = %q", d.Meaning)
+			}
+			if d.SchemaMeaning != "small jointly-owned model subset" {
+				t.Errorf("shared_kernel SchemaMeaning = %q", d.SchemaMeaning)
+			}
 			continue
 		}
-		for i := range w.questions {
-			if doc.Questions[i] != w.questions[i] {
-				t.Errorf("%s Questions[%d] = %q, want %q", c, i, doc.Questions[i], w.questions[i])
-			}
+		if d.Meaning != d.SchemaMeaning {
+			t.Errorf("%s Meaning %q != SchemaMeaning %q", d.Kind, d.Meaning, d.SchemaMeaning)
 		}
-		wantSupplies := "The project supplies the " + w.title + "'s name, definition, and aliases."
-		if doc.Supplies != wantSupplies {
-			t.Errorf("%s Supplies = %q, want %q", c, doc.Supplies, wantSupplies)
+	}
+
+	flow := vocab.ContextRelationFlowYAML()
+	if !strings.Contains(flow, "shared_kernel: small jointly-owned subset") {
+		t.Errorf("VOCAB flow missing shared_kernel meaning: %s", flow)
+	}
+	if strings.Contains(flow, "jointly-owned model subset") {
+		t.Errorf("VOCAB flow must not use schema-only shared_kernel phrasing: %s", flow)
+	}
+
+	schemaDesc := vocab.SchemaKindDescription()
+	if !strings.Contains(schemaDesc, "shared_kernel = small jointly-owned model subset") {
+		t.Errorf("schema kind description missing model subset: %s", schemaDesc)
+	}
+}
+
+func TestParseRelationKindRoundTrip(t *testing.T) {
+	for _, k := range vocab.RelationKinds() {
+		got, err := vocab.ParseRelationKind(string(k))
+		if err != nil {
+			t.Errorf("ParseRelationKind(%q): %v", k, err)
+			continue
 		}
+		if got != k {
+			t.Errorf("ParseRelationKind(%q) = %q", k, got)
+		}
+	}
+	if _, err := vocab.ParseRelationKind("shared-kernel"); err == nil {
+		t.Fatal("hyphen kind should be rejected")
 	}
 }

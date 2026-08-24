@@ -16,36 +16,64 @@ import (
 	yamlvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/yaml"
 )
 
-// recommendationExample is the Order/Customer ubiquitous-language.yaml
-// from docs/domain-cli-recommendation.md (Initial file shape), copied
-// verbatim as a test literal.
-const recommendationExample = `version: 1
+// multiContextExample is a representative contexts-shaped document with
+// two bounded contexts, nested sections, and one relation.
+const multiContextExample = `version: 1
 
-entities:
-  - name: Order
-    definition: A customer's request to purchase products.
-    aliases:
-      - Purchase Order
-    aggregate: true
+contexts:
+  - name: Ordering
+    entities:
+      - name: Order
+        definition: A customer's request to purchase products.
+        aliases:
+          - Purchase Order
+        aggregate: true
+      - name: Customer
+        definition: A person or organization that places Orders.
+    value_objects:
+      - name: OrderID
+        definition: The stable identity of an Order.
+      - name: Money
+        definition: A monetary amount expressed in a particular currency.
+    invariants:
+      - statement: Every Order must identify its Customer.
+        owner: Order
+    events:
+      - name: OrderPlaced
+        definition: An Order has been accepted for processing.
 
-  - name: Customer
-    definition: A person or organization that places Orders.
+  - name: Billing
+    entities:
+      - name: Invoice
+        definition: A bill issued for an accepted Order.
 
-value_objects:
-  - name: OrderID
-    definition: The stable identity of an Order.
-
-  - name: Money
-    definition: A monetary amount expressed in a particular currency.
-
-business_rules:
-  - name: OrderMustHaveCustomer
-    definition: Every Order must identify its Customer.
-
-events:
-  - name: OrderPlaced
-    definition: An Order has been accepted for processing.
+relations:
+  - from: Ordering
+    to: Billing
+    kind: customer_supplier
 `
+
+// TestLibrarySchemaCompilesAsDraft202012 asserts vocab.Schema() is a
+// valid JSON Schema draft 2020-12 document (santhosh-tekuri), matching
+// the infrastructure differential-test approach.
+func TestLibrarySchemaCompilesAsDraft202012(t *testing.T) {
+	data, err := vocab.Schema()
+	if err != nil {
+		t.Fatalf("vocab.Schema: %v", err)
+	}
+	doc, err := sj.UnmarshalJSON(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+	const url = "https://raw.githubusercontent.com/wixregiga/arclint/main/.agents/skills/domain-librarian/library.schema.json"
+	compiler := sj.NewCompiler()
+	if err := compiler.AddResource(url, doc); err != nil {
+		t.Fatalf("add schema resource: %v", err)
+	}
+	if _, err := compiler.Compile(url); err != nil {
+		t.Fatalf("compile draft 2020-12 schema: %v", err)
+	}
+}
 
 // repoRoot locates the repository root from this source file, keeping
 // the tests independent of the working directory.
@@ -60,21 +88,20 @@ func repoRoot(t *testing.T) string {
 
 // TestPublishedSchemaMatchesDomain is the drift half of the Ubiquitous
 // Language Schema invariant: the committed
-// docs/ubiquitous-language.schema.json is byte-for-byte what
-// vocab.Schema() produces. Regenerate by writing Schema() output
-// over the file.
+// .agents/skills/domain-librarian/library.schema.json is byte-for-byte what
+// vocab.Schema() produces.
 func TestPublishedSchemaMatchesDomain(t *testing.T) {
 	want, err := vocab.Schema()
 	if err != nil {
 		t.Fatalf("vocab.Schema: %v", err)
 	}
-	published := filepath.Join(repoRoot(t), "docs", "ubiquitous-language.schema.json")
+	published := filepath.Join(repoRoot(t), ".agents", "skills", "domain-librarian", "library.schema.json")
 	got, err := os.ReadFile(published)
 	if err != nil {
 		t.Fatalf("read published schema: %v", err)
 	}
 	if !bytes.Equal(want, got) {
-		t.Fatalf("docs/ubiquitous-language.schema.json drifted from vocab.Schema(); regenerate it from vocab.Schema() output")
+		t.Fatalf(".agents/skills/domain-librarian/library.schema.json drifted from vocab.Schema(); regenerate it from vocab.Schema() output")
 	}
 }
 
@@ -90,7 +117,7 @@ func compileUbiquitousSchema(t *testing.T) *sj.Schema {
 	if err != nil {
 		t.Fatalf("unmarshal schema: %v", err)
 	}
-	const url = "https://raw.githubusercontent.com/wixregiga/arclint/main/docs/ubiquitous-language.schema.json"
+	const url = "https://raw.githubusercontent.com/wixregiga/arclint/main/.agents/skills/domain-librarian/library.schema.json"
 	compiler := sj.NewCompiler()
 	if err := compiler.AddResource(url, doc); err != nil {
 		t.Fatalf("add schema resource: %v", err)
@@ -149,14 +176,14 @@ func jsonify(value any) any {
 	}
 }
 
-// TestRecommendationExampleLoadsAndValidates proves the recommendation
-// doc's example file both loads through Repository.RecordedLanguage and
-// validates against vocab.Schema().
-func TestRecommendationExampleLoadsAndValidates(t *testing.T) {
+// TestMultiContextExampleLoadsAndValidates proves the representative
+// multi-context document both loads through Repository.RecordedLanguage
+// and validates against vocab.Schema().
+func TestMultiContextExampleLoadsAndValidates(t *testing.T) {
 	schema := compileUbiquitousSchema(t)
 	dir := t.TempDir()
 	path := filepath.Join(dir, vocab.UbiquitousLanguageFileName)
-	if err := os.WriteFile(path, []byte(recommendationExample), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(multiContextExample), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	repo, err := yamlvocab.NewRepository(dir)
@@ -171,71 +198,126 @@ func TestRecommendationExampleLoadsAndValidates(t *testing.T) {
 		t.Fatal("found = false")
 	}
 	counts := lang.Counts()
-	if counts.Entities != 2 || counts.Aggregates != 1 || counts.ValueObjects != 2 ||
-		counts.BusinessRules != 1 || counts.Events != 1 {
+	if counts.Contexts != 2 || counts.Entities != 3 || counts.Aggregates != 1 ||
+		counts.ValueObjects != 2 || counts.Invariants != 1 || counts.Events != 1 ||
+		counts.Relations != 1 {
 		t.Fatalf("counts = %+v", counts)
 	}
-	if err := validateAgainstSchema(t, schema, []byte(recommendationExample)); err != nil {
-		t.Fatalf("schema rejected recommendation example: %v", err)
+	if err := validateAgainstSchema(t, schema, []byte(multiContextExample)); err != nil {
+		t.Fatalf("schema rejected multi-context example: %v", err)
 	}
 }
 
 // TestSchemaAgreesWithLoader is the agreement half of the Ubiquitous
 // Language Schema invariant: for every covered case the strict loader
 // and JSON-Schema validation of the same document reach the same
-// verdict, and that verdict is the expected one. Duplicate names are
-// a loader-only structural invariant (JSON Schema cannot express
-// unique name-within-section cheaply), so that case only requires the
-// loader to reject.
+// verdict, and that verdict is the expected one. Duplicate names and
+// relation-to-undeclared-context are loader-only structural invariants
+// (JSON Schema cannot express them cheaply), so those cases only
+// require the loader to reject. Missing definition is schema-only:
+// the litmus schema requires definition text, while the domain/loader
+// allow empty definition so the terms-carry-definitions showcase can
+// observe incomplete terms through ctx.domain().
 func TestSchemaAgreesWithLoader(t *testing.T) {
 	schema := compileUbiquitousSchema(t)
 
 	cases := []struct {
-		name           string
-		document       string
-		accepted       bool
-		loaderOnlyFail bool
+		name             string
+		document         string
+		accepted         bool
+		loaderOnlyFail   bool
+		schemaOnlyReject bool
 	}{
-		{"recommendation example", recommendationExample, true, false},
-		{"version 2", "version: 2\nentities: []\n", false, false},
-		{"missing version", "entities:\n  - name: Order\n", false, false},
+		{"multi-context example", multiContextExample, true, false, false},
+		{"version 2", "version: 2\ncontexts: []\n", false, false, false},
+		{"missing version", "contexts:\n  - name: Ordering\n", false, false, false},
 		{
-			"unknown key", `
+			"unknown top-level key", `
 version: 1
 extra: true
-entities:
-  - name: Order
-`, false, false,
+contexts:
+  - name: Ordering
+`, false, false, false,
 		},
 		{
 			"aggregate on value_objects", `
 version: 1
-value_objects:
-  - name: Money
-    aggregate: true
-`, false, false,
+contexts:
+  - name: Ordering
+    value_objects:
+      - name: Money
+        definition: A monetary amount.
+        aggregate: true
+`, false, false, false,
+		},
+		{
+			"missing definition", `
+version: 1
+contexts:
+  - name: Ordering
+    entities:
+      - name: Order
+`, false, false, true,
+		},
+		{
+			"missing owner on invariant", `
+version: 1
+contexts:
+  - name: Ordering
+    entities:
+      - name: Order
+        definition: A customer's request.
+    invariants:
+      - statement: Every Order identifies its Customer.
+`, false, false, false,
+		},
+		{
+			"bad relation kind", `
+version: 1
+contexts:
+  - name: Ordering
+  - name: Billing
+relations:
+  - from: Ordering
+    to: Billing
+    kind: not_a_kind
+`, false, false, false,
 		},
 		{
 			"empty name", `
 version: 1
-entities:
-  - name: ""
-`, false, false,
+contexts:
+  - name: Ordering
+    entities:
+      - name: ""
+        definition: x
+`, false, false, false,
 		},
 		{
-			"duplicate name", `
+			"duplicate context name", `
 version: 1
-entities:
-  - name: Order
-  - name: Order
-`, false, true,
+contexts:
+  - name: Ordering
+  - name: Ordering
+`, false, true, false,
 		},
 		{
-			"minimal entity", `
+			"relation to undeclared context", `
 version: 1
-entities:
-  - name: Order
-`, true, false,
+contexts:
+  - name: Ordering
+relations:
+  - from: Ordering
+    to: Billing
+    kind: customer_supplier
+`, false, true, false,
+		},
+		{
+			"minimal context", `
+version: 1
+contexts:
+  - name: Ordering
+`, true, false, false,
 		},
 	}
 
@@ -257,7 +339,16 @@ entities:
 
 			if tc.loaderOnlyFail {
 				if loaderAccepts {
-					t.Fatalf("loader accepted duplicate-name document")
+					t.Fatalf("loader accepted loader-only-fail document")
+				}
+				return
+			}
+			if tc.schemaOnlyReject {
+				if schemaAccepts {
+					t.Fatalf("schema accepted schema-only-reject document")
+				}
+				if !loaderAccepts {
+					t.Fatalf("loader rejected schema-only-reject document: %v", loaderErr)
 				}
 				return
 			}

@@ -97,12 +97,35 @@ type DomainDefinitionInfo struct {
 	Aggregate  bool     `json:"aggregate,omitempty"`
 }
 
+// DomainInvariantInfo is one recorded invariant (statement + owner)
+// inside a bounded context as exposed through ctx.domain().
+type DomainInvariantInfo struct {
+	Statement string `json:"statement"`
+	Owner     string `json:"owner"`
+}
+
+// DomainContextInfo is one bounded context and its recorded terms as
+// exposed through ctx.domain().
+type DomainContextInfo struct {
+	Name         string                 `json:"name"`
+	Entities     []DomainDefinitionInfo `json:"entities"`
+	ValueObjects []DomainDefinitionInfo `json:"valueObjects"`
+	Invariants   []DomainInvariantInfo  `json:"invariants"`
+	Events       []DomainDefinitionInfo `json:"events"`
+}
+
+// DomainRelationInfo is one context-map edge as exposed through
+// ctx.domain().
+type DomainRelationInfo struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+	Kind string `json:"kind"`
+}
+
 // DomainInfo is the project's recorded domain model as exposed through
 // ctx.domain(): empty collections when the project records none.
 // Read-only: declaring knowledge never creates a diagnostic by itself.
 type DomainInfo struct {
-	Entities      []DomainDefinitionInfo `json:"entities"`
-	ValueObjects  []DomainDefinitionInfo `json:"valueObjects"`
-	BusinessRules []DomainDefinitionInfo `json:"businessRules"`
-	Events        []DomainDefinitionInfo `json:"events"`
+	Contexts  []DomainContextInfo  `json:"contexts"`
+	Relations []DomainRelationInfo `json:"relations"`
 }

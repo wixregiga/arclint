@@ -93,6 +93,43 @@ func TestFactoryRejectsUnknownAdapters(t *testing.T) {
 	}
 }
 
+// TestCompletionOffersSubcommandAliases asserts the hidden __complete
+// machinery suggests subcommand aliases (with the command's Short as
+// description), which Cobra alone never offers, and only at the
+// subcommand position.
+func TestCompletionOffersSubcommandAliases(t *testing.T) {
+	md := cli.Command{
+		Name:    "md",
+		Short:   "manage the block",
+		Aliases: []string{"markdown", "agentsmd"},
+		Run:     func(cli.Context) error { return nil },
+	}
+	group := cli.Command{Name: "agents", Short: "agent artifacts", Subcommands: []cli.Command{md}}
+	root := cli.Root("9.9.9", group)
+
+	outcome, stdout, stderr := runTree(t, root, nil, "__complete", "agents", "")
+	if outcome.ExitCode != 0 {
+		t.Fatalf("__complete exit %d, stderr %q", outcome.ExitCode, stderr)
+	}
+	for _, want := range []string{"md\tmanage the block", "markdown\tmanage the block", "agentsmd\tmanage the block"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("completion missing %q:\n%s", want, stdout)
+		}
+	}
+
+	// Prefix filtering keeps the canonical name out when only an alias matches.
+	_, stdout, _ = runTree(t, root, nil, "__complete", "agents", "mar")
+	if !strings.Contains(stdout, "markdown\tmanage the block") || strings.Contains(stdout, "agentsmd") {
+		t.Errorf("prefix completion wrong:\n%s", stdout)
+	}
+
+	// Aliases are first-position candidates only.
+	_, stdout, _ = runTree(t, root, nil, "__complete", "agents", "md", "")
+	if strings.Contains(stdout, "markdown") {
+		t.Errorf("alias offered past the subcommand position:\n%s", stdout)
+	}
+}
+
 func TestLongExampleAliasesStdinRepeatAndChanged(t *testing.T) {
 	var (
 		gotLong    string

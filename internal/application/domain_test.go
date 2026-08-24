@@ -35,6 +35,24 @@ func (m *memoryKnowledge) Record(lang vocab.UbiquitousLanguage) error {
 	return nil
 }
 
+const testContext = "Ordering"
+
+func mustLang(t *testing.T, contexts []vocab.BoundedContext) vocab.UbiquitousLanguage {
+	t.Helper()
+	lang, err := vocab.NewUbiquitousLanguage(contexts, nil)
+	if err != nil {
+		t.Fatalf("NewUbiquitousLanguage: %v", err)
+	}
+	return lang
+}
+
+func orderContext(entities ...vocab.Entity) []vocab.BoundedContext {
+	return []vocab.BoundedContext{{
+		Name:     testContext,
+		Entities: entities,
+	}}
+}
+
 func TestInitDomainCreatesMissingFile(t *testing.T) {
 	t.Parallel()
 	repo := &memoryKnowledge{}
@@ -56,13 +74,7 @@ func TestInitDomainCreatesMissingFile(t *testing.T) {
 
 func TestInitDomainLeavesExistingFileUnchanged(t *testing.T) {
 	t.Parallel()
-	lang, err := vocab.NewUbiquitousLanguage(
-		[]vocab.Entity{{Definition: vocab.Definition{Name: "Order"}}},
-		nil, nil, nil,
-	)
-	if err != nil {
-		t.Fatalf("NewUbiquitousLanguage: %v", err)
-	}
+	lang := mustLang(t, orderContext(vocab.Entity{Definition: vocab.Definition{Name: "Order"}}))
 	repo := &memoryKnowledge{lang: lang, found: true}
 	uc, err := application.NewInitDomain(repo)
 	if err != nil {
@@ -75,7 +87,7 @@ func TestInitDomainLeavesExistingFileUnchanged(t *testing.T) {
 	if out.Created || repo.saves != 0 {
 		t.Fatalf("result/repository = %+v/%+v", out, repo)
 	}
-	if _, ok := repo.lang.FindEntity("Order"); !ok {
+	if _, ok := repo.lang.FindEntity(testContext, "Order"); !ok {
 		t.Fatal("existing definition was not preserved")
 	}
 }
@@ -127,13 +139,10 @@ func TestGetDomainOverviewMissingFile(t *testing.T) {
 
 func TestGetDomainOverviewFound(t *testing.T) {
 	t.Parallel()
-	lang, err := vocab.NewUbiquitousLanguage(
-		[]vocab.Entity{{Definition: vocab.Definition{Name: "Order"}, Aggregate: true}},
-		nil, nil, nil,
-	)
-	if err != nil {
-		t.Fatalf("NewUbiquitousLanguage: %v", err)
-	}
+	lang := mustLang(t, orderContext(vocab.Entity{
+		Definition: vocab.Definition{Name: "Order"},
+		Aggregate:  true,
+	}))
 	repo := &memoryKnowledge{lang: lang, found: true}
 	uc, err := application.NewGetDomainOverview(repo)
 	if err != nil {
@@ -146,7 +155,7 @@ func TestGetDomainOverviewFound(t *testing.T) {
 	if !out.Found {
 		t.Fatal("expected Found=true")
 	}
-	if out.Counts.Entities != 1 || out.Counts.Aggregates != 1 {
+	if out.Counts.Entities != 1 || out.Counts.Aggregates != 1 || out.Counts.Contexts != 1 {
 		t.Fatalf("Counts = %+v", out.Counts)
 	}
 }
@@ -157,7 +166,7 @@ func TestListDomainDefinitionsUsageError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
-	_, err = uc.Execute("widgets")
+	_, err = uc.Execute("widgets", "")
 	if !errors.Is(err, application.ErrDomainUsage) {
 		t.Fatalf("error = %v, want ErrDomainUsage", err)
 	}
@@ -169,7 +178,7 @@ func TestListDomainDefinitionsMissingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
-	out, err := uc.Execute("")
+	out, err := uc.Execute("", "")
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -183,18 +192,15 @@ func TestListDomainDefinitionsMissingFile(t *testing.T) {
 
 func TestListDomainDefinitionsFiltered(t *testing.T) {
 	t.Parallel()
-	lang, err := vocab.NewUbiquitousLanguage(
-		[]vocab.Entity{{Definition: vocab.Definition{Name: "Order"}, Aggregate: true}},
-		nil, nil, nil,
-	)
-	if err != nil {
-		t.Fatalf("NewUbiquitousLanguage: %v", err)
-	}
+	lang := mustLang(t, orderContext(vocab.Entity{
+		Definition: vocab.Definition{Name: "Order"},
+		Aggregate:  true,
+	}))
 	uc, err := application.NewListDomainDefinitions(&memoryKnowledge{lang: lang, found: true})
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
-	out, err := uc.Execute("aggregates")
+	out, err := uc.Execute("aggregates", "")
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -209,15 +215,15 @@ func TestShowDomainDefinitionUsageAndNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
-	_, err = uc.Execute("widget", "X")
+	_, err = uc.Execute("widget", "", "X")
 	if !errors.Is(err, application.ErrDomainUsage) {
 		t.Fatalf("unknown concept: %v", err)
 	}
-	_, err = uc.Execute("entity", "  ")
+	_, err = uc.Execute("entity", "", "  ")
 	if !errors.Is(err, application.ErrDomainUsage) {
 		t.Fatalf("empty name: %v", err)
 	}
-	_, err = uc.Execute("entity", "Order")
+	_, err = uc.Execute("entity", "", "Order")
 	if !errors.Is(err, vocab.ErrDefinitionNotFound) {
 		t.Fatalf("missing: %v", err)
 	}
@@ -225,25 +231,19 @@ func TestShowDomainDefinitionUsageAndNotFound(t *testing.T) {
 
 func TestShowDomainDefinitionFinds(t *testing.T) {
 	t.Parallel()
-	lang, err := vocab.NewUbiquitousLanguage(
-		[]vocab.Entity{{
-			Definition: vocab.Definition{Name: "Order", Definition: "A purchase request."},
-			Aggregate:  true,
-		}},
-		nil, nil, nil,
-	)
-	if err != nil {
-		t.Fatalf("NewUbiquitousLanguage: %v", err)
-	}
+	lang := mustLang(t, orderContext(vocab.Entity{
+		Definition: vocab.Definition{Name: "Order", Definition: "A purchase request."},
+		Aggregate:  true,
+	}))
 	uc, err := application.NewShowDomainDefinition(&memoryKnowledge{lang: lang, found: true})
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
-	out, err := uc.Execute("aggregate", "Order")
+	out, err := uc.Execute("aggregate", "", "Order")
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	if out.Concept != vocab.ConceptAggregate || out.Definition.Name != "Order" {
+	if out.Concept != vocab.ConceptAggregate || out.Definition.Name != "Order" || out.Context != testContext {
 		t.Fatalf("view = %+v", out)
 	}
 	if !out.Aggregate {
@@ -261,6 +261,7 @@ func TestDefineDomainDefinitionCreatesAndSaves(t *testing.T) {
 	def := "A purchase request."
 	out, err := uc.Execute(application.DefineDomainRequest{
 		Concept:    "entity",
+		Context:    testContext,
 		Name:       "Order",
 		Definition: &def,
 		Aliases:    []string{"Purchase Order"},
@@ -271,27 +272,47 @@ func TestDefineDomainDefinitionCreatesAndSaves(t *testing.T) {
 	if out.Outcome != vocab.OutcomeCreated {
 		t.Fatalf("Outcome = %q, want created", out.Outcome)
 	}
+	if out.Context != testContext {
+		t.Fatalf("Context = %q", out.Context)
+	}
 	if repo.saves != 1 {
 		t.Fatalf("saves = %d, want 1", repo.saves)
 	}
 	if len(out.Aliases) != 1 || out.Aliases[0] != "Purchase Order" {
 		t.Fatalf("Aliases = %v", out.Aliases)
 	}
-	got, ok := repo.lang.Find(vocab.ConceptEntity, "Order")
+	got, ok := repo.lang.Find(vocab.ConceptEntity, testContext, "Order")
 	if !ok || got.Definition != def {
 		t.Fatalf("stored = %+v ok=%v", got, ok)
 	}
 }
 
+func TestDefineDomainDefinitionRequiresContextWhenAmbiguous(t *testing.T) {
+	t.Parallel()
+	lang := mustLang(t, []vocab.BoundedContext{
+		{Name: "A"},
+		{Name: "B"},
+	})
+	uc, err := application.NewDefineDomainDefinition(&memoryKnowledge{lang: lang, found: true})
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	def := "x"
+	_, err = uc.Execute(application.DefineDomainRequest{
+		Concept:    "entity",
+		Name:       "Order",
+		Definition: &def,
+	})
+	if !errors.Is(err, application.ErrDomainUsage) {
+		t.Fatalf("error = %v, want ErrDomainUsage", err)
+	}
+}
+
 func TestDefineDomainDefinitionUnchangedNoSave(t *testing.T) {
 	t.Parallel()
-	lang, err := vocab.NewUbiquitousLanguage(
-		[]vocab.Entity{{Definition: vocab.Definition{Name: "Order", Definition: "A purchase request."}}},
-		nil, nil, nil,
-	)
-	if err != nil {
-		t.Fatalf("NewUbiquitousLanguage: %v", err)
-	}
+	lang := mustLang(t, orderContext(vocab.Entity{
+		Definition: vocab.Definition{Name: "Order", Definition: "A purchase request."},
+	}))
 	repo := &memoryKnowledge{lang: lang, found: true}
 	uc, err := application.NewDefineDomainDefinition(repo)
 	if err != nil {
@@ -320,22 +341,41 @@ func TestDefineDomainDefinitionUsageErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
-	_, err = uc.Execute(application.DefineDomainRequest{Concept: "nope", Name: "X"})
+	_, err = uc.Execute(application.DefineDomainRequest{Concept: "nope", Name: "X", Context: testContext})
 	if !errors.Is(err, application.ErrDomainUsage) {
 		t.Fatalf("bad concept: %v", err)
 	}
-	_, err = uc.Execute(application.DefineDomainRequest{Concept: "entity", Name: ""})
+	_, err = uc.Execute(application.DefineDomainRequest{Concept: "entity", Name: "", Context: testContext})
 	if !errors.Is(err, application.ErrDomainUsage) {
 		t.Fatalf("empty name: %v", err)
 	}
+	def := "x"
 	_, err = uc.Execute(application.DefineDomainRequest{
 		Concept:      "entity",
+		Context:      testContext,
 		Name:         "Order",
+		Definition:   &def,
 		Aliases:      []string{"PO"},
 		ClearAliases: true,
 	})
 	if !errors.Is(err, application.ErrDomainUsage) {
 		t.Fatalf("mutual exclusion: %v", err)
+	}
+	_, err = uc.Execute(application.DefineDomainRequest{
+		Concept: "entity",
+		Context: testContext,
+		Name:    "Order",
+	})
+	if !errors.Is(err, application.ErrDomainUsage) {
+		t.Fatalf("missing definition at create: %v", err)
+	}
+	_, err = uc.Execute(application.DefineDomainRequest{
+		Concept: "invariant",
+		Context: testContext,
+		Name:    "must hold",
+	})
+	if !errors.Is(err, application.ErrDomainUsage) {
+		t.Fatalf("missing owner at create: %v", err)
 	}
 }
 
@@ -350,6 +390,7 @@ func TestDefineDomainDefinitionGuidedAggregate(t *testing.T) {
 	def := "Consistency boundary for a purchase."
 	out, err := uc.Execute(application.DefineDomainRequest{
 		Concept:    "entity",
+		Context:    testContext,
 		Name:       "Order",
 		Definition: &def,
 		Aggregate:  &agg,
@@ -360,9 +401,44 @@ func TestDefineDomainDefinitionGuidedAggregate(t *testing.T) {
 	if out.Outcome != vocab.OutcomeCreated {
 		t.Fatalf("Outcome = %q", out.Outcome)
 	}
-	got, ok := repo.lang.FindEntity("Order")
+	got, ok := repo.lang.FindEntity(testContext, "Order")
 	if !ok || !got.Aggregate {
 		t.Fatalf("stored aggregate = %+v ok=%v", got, ok)
+	}
+}
+
+func TestDefineDomainDefinitionInvariantAndBoundedContext(t *testing.T) {
+	t.Parallel()
+	repo := &memoryKnowledge{}
+	uc, err := application.NewDefineDomainDefinition(repo)
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	out, err := uc.Execute(application.DefineDomainRequest{
+		Concept: "bounded_context",
+		Name:    testContext,
+	})
+	if err != nil {
+		t.Fatalf("define context: %v", err)
+	}
+	if out.Outcome != vocab.OutcomeCreated || out.Context != testContext {
+		t.Fatalf("bounded_context result = %+v", out)
+	}
+	out, err = uc.Execute(application.DefineDomainRequest{
+		Concept: "invariant",
+		Context: testContext,
+		Name:    "Every Order must identify its Customer.",
+		Owner:   "Order",
+	})
+	if err != nil {
+		t.Fatalf("define invariant: %v", err)
+	}
+	if out.Outcome != vocab.OutcomeCreated {
+		t.Fatalf("invariant outcome = %q", out.Outcome)
+	}
+	inv, ok := repo.lang.FindInvariant(testContext, "Every Order must identify its Customer.")
+	if !ok || inv.Owner != "Order" {
+		t.Fatalf("stored invariant = %+v ok=%v", inv, ok)
 	}
 }
 
@@ -373,7 +449,7 @@ func TestRemoveDomainDefinitionMissingNoSave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
-	_, err = uc.Execute("entity", "Order")
+	_, err = uc.Execute("entity", testContext, "Order")
 	if !errors.Is(err, vocab.ErrDefinitionNotFound) {
 		t.Fatalf("error = %v, want ErrDefinitionNotFound", err)
 	}
@@ -384,31 +460,48 @@ func TestRemoveDomainDefinitionMissingNoSave(t *testing.T) {
 
 func TestRemoveDomainDefinitionRemovesAndSaves(t *testing.T) {
 	t.Parallel()
-	lang, err := vocab.NewUbiquitousLanguage(
-		[]vocab.Entity{{Definition: vocab.Definition{Name: "Order"}, Aggregate: true}},
-		nil, nil, nil,
-	)
-	if err != nil {
-		t.Fatalf("NewUbiquitousLanguage: %v", err)
-	}
+	lang := mustLang(t, orderContext(vocab.Entity{
+		Definition: vocab.Definition{Name: "Order"},
+		Aggregate:  true,
+	}))
 	repo := &memoryKnowledge{lang: lang, found: true}
 	uc, err := application.NewRemoveDomainDefinition(repo)
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
-	out, err := uc.Execute("aggregate", "Order")
+	out, err := uc.Execute("aggregate", "", "Order")
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	if !out.EntityPreserved {
-		t.Fatal("expected EntityPreserved")
+	if !out.EntityPreserved || out.Context != testContext {
+		t.Fatalf("result = %+v", out)
 	}
 	if repo.saves != 1 {
 		t.Fatalf("saves = %d, want 1", repo.saves)
 	}
-	got, ok := repo.lang.FindEntity("Order")
+	got, ok := repo.lang.FindEntity(testContext, "Order")
 	if !ok || got.Aggregate {
 		t.Fatalf("entity after clear = %+v ok=%v", got, ok)
+	}
+}
+
+func TestShowRemoveAmbiguousAcrossContexts(t *testing.T) {
+	t.Parallel()
+	lang := mustLang(t, []vocab.BoundedContext{
+		{Name: "A", Entities: []vocab.Entity{{Definition: vocab.Definition{Name: "Order", Definition: "a"}}}},
+		{Name: "B", Entities: []vocab.Entity{{Definition: vocab.Definition{Name: "Order", Definition: "b"}}}},
+	})
+	show, err := application.NewShowDomainDefinition(&memoryKnowledge{lang: lang, found: true})
+	if err != nil {
+		t.Fatalf("construct show: %v", err)
+	}
+	_, err = show.Execute("entity", "", "Order")
+	if !errors.Is(err, application.ErrDomainUsage) {
+		t.Fatalf("ambiguous show: %v", err)
+	}
+	view, err := show.Execute("entity", "B", "Order")
+	if err != nil || view.Context != "B" || view.Definition.Definition != "b" {
+		t.Fatalf("explicit context show = %+v err=%v", view, err)
 	}
 }
 
@@ -418,7 +511,7 @@ func TestRemoveDomainDefinitionUsageError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
-	_, err = uc.Execute("widget", "X")
+	_, err = uc.Execute("widget", "", "X")
 	if !errors.Is(err, application.ErrDomainUsage) {
 		t.Fatalf("error = %v, want ErrDomainUsage", err)
 	}

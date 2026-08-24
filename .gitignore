@@ -5,3 +5,4 @@
 **/.arclint/cache/
 .claude-scratch/
 GNUmakefile
+.omp

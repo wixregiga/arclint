@@ -26,6 +26,7 @@ import (
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
 	"github.com/wixregiga/arclint/internal/infrastructure/ruletest"
 	filesystemscaffold "github.com/wixregiga/arclint/internal/infrastructure/scaffold/filesystem"
+	skillfs "github.com/wixregiga/arclint/internal/infrastructure/skill"
 	yamlvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/yaml"
 )
 
@@ -106,6 +107,22 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
+	skillWriter, err := skillfs.NewWriter(root)
+	if err != nil {
+		return configError(err)
+	}
+	publishSkillProtocol, err := application.NewPublishSkillProtocol(skillWriter)
+	if err != nil {
+		return configError(err)
+	}
+	publishSkillVocabulary, err := application.NewPublishSkillVocabulary(skillWriter)
+	if err != nil {
+		return configError(err)
+	}
+	publishLibrarySchema, err := application.NewPublishLibrarySchema(skillWriter)
+	if err != nil {
+		return configError(err)
+	}
 	sdkWriter, err := sobekextension.NewSDKWriter(root)
 	if err != nil {
 		return configError(err)
@@ -165,7 +182,7 @@ func run(args []string) int {
 		cli.NewRulesCommand(listRules, showRule, ruleTests),
 		cli.NewContextCommand(getContext),
 		cli.NewDomainCommand(initDomain, getDomainOverview, listDomainDefinitions, showDomainDefinition, defineDomainDefinition, removeDomainDefinition),
-		cli.NewAgentsCommand(publishAgents),
+		cli.NewAgentsCommand(publishAgents, publishSkillProtocol, publishSkillVocabulary, publishLibrarySchema),
 		cli.NewBaselineCommand(capture, refresh),
 		cli.NewPatternsCommand(listPatterns),
 		cli.NewSDKCommand(initializeSDK),

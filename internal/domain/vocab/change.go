@@ -11,7 +11,9 @@ var ErrDefinitionNotFound = errors.New("definition not found in the project doma
 // DefinitionText clears the definition. SetAliases replaces the
 // complete alias set. ClearAliases clears aliases and is mutually
 // exclusive with SetAliases. SetAggregate designates or clears the
-// Aggregate flag on an Entity (guided authoring).
+// Aggregate flag on an Entity (guided authoring). SetOwner sets the
+// enforcing owner on an Invariant (required when creating an
+// invariant, assertion, or business_rule).
 type Change struct {
 	SetDefinition  bool
 	DefinitionText string
@@ -20,6 +22,8 @@ type Change struct {
 	ClearAliases   bool
 	SetAggregate   bool
 	Aggregate      bool
+	SetOwner       bool
+	Owner          string
 }
 
 // Outcome is the result classification of a Define call.
@@ -36,7 +40,8 @@ const (
 type DefineResult struct {
 	Outcome Outcome
 	// Changed lists which fields actually differed, in the fixed order
-	// definition, aliases, aggregate.
+	// definition, aliases, aggregate for entities; definition, aliases
+	// for value objects and events; owner for invariants.
 	Changed []string
 }
 

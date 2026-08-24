@@ -15,13 +15,15 @@ weight = 6
 | `arclint domain` | shorthand for `arclint domain overview`; inspect and maintain the project's ubiquitous language |
 | `arclint domain init` | create an empty, schema-hinted `ubiquitous-language.yaml` beside the resolved `rules.yaml`; leave an existing file unchanged |
 | `arclint domain overview` | summarize the project's ubiquitous language for understanding |
-| `arclint domain list [type]` | list domain definitions, optionally filtered to `entities`, `aggregates`, `value-objects`, `business-rules`, or `events` |
+| `arclint domain list [type]` | list domain definitions, optionally filtered to `entities`, `value_objects`, `invariants`, or `events` |
 | `arclint domain show <type> <name>` | show one domain definition by singular type and canonical name |
 | `arclint domain explain [type]` | explain ArcLint's supported domain concepts |
-| `arclint domain define <type> <name>` | create or update a domain definition; `--guided` starts interactive authoring |
+| `arclint domain define <type> <name>` | create or update a domain definition inside a bounded context; `--guided` starts interactive authoring |
 | `arclint domain remove <type> <name>` | remove a domain definition (`rm` alias); never touches source files |
-| `arclint domain schema` | print the JSON Schema accepted for `ubiquitous-language.yaml` |
-| `arclint agents` | print the generated `AGENTS.md` architecture block; `--write` installs or refreshes it between markers without changing surrounding text |
+| `arclint domain schema` | print the JSON Schema accepted for `ubiquitous-language.yaml` (same bytes as `.agents/skills/domain-librarian/library.schema.json`) |
+| `arclint agents` | command group for agent-facing artifacts |
+| `arclint agents md` | print the generated `AGENTS.md` architecture block (`markdown`, `agentsmd` aliases); `--write` installs or refreshes it between markers without changing surrounding text |
+| `arclint agents skill` | write generated `SKILL.md`, `VOCAB.yaml`, and `library.schema.json` to `--dir` (default `.agents/skills/domain-librarian/`) |
 | `arclint rules [selector]` | list configured Rules, or show one complete Rule when the selector has one exact match; broader selectors produce a narrowed list |
 | `arclint rules schema` | print the indented JSON Schema accepted for `rules.yaml` |
 | `arclint rules test [name]` | run all Rule Tests under `.arclint/tests`, or one test selected by name |
@@ -98,7 +100,7 @@ result. A file path, a directory, or a declared module name all
 resolve; an exact module name wins when both match. `--format json`
 emits the machine shape for coding agents.
 
-`arclint agents --write` covers the prompt-time half: it compiles the
+`arclint agents md --write` covers the prompt-time half: it compiles the
 ruleset into a generated block inside `AGENTS.md` (modules, dependency
 policy, repo-wide rules, query commands) so agents see the architecture
 before writing code. The block sits between markers; hand-written
@@ -113,6 +115,9 @@ Completion uses the resolved `rules.yaml` when available: Rule IDs for
 `context --module`, supported languages for `init --languages`, and the
 closed `human` / `json` output-format values. Without a loadable
 repository configuration, repository-derived candidates stay empty.
+Command aliases complete alongside canonical names (`agents mar<TAB>`
+offers `markdown`, `domain r<TAB>` offers both `remove` and `rm`), each
+carrying its command's description.
 
 ## JSON diagnostics
 
@@ -161,6 +166,47 @@ Domain Model in a committed `ubiquitous-language.yaml` beside the
 resolved `rules.yaml`. ArcLint does not search for the model
 independently; `--rules <path>` moves both files' project root together.
 
+The file is organized by bounded context:
+
+```yaml
+version: 1
+contexts:
+  - name: billing
+    entities:
+      - name: Invoice
+        definition: ...
+        aggregate: true
+        aliases: [bill]
+    value_objects:
+      - name: Money
+        definition: ...
+    invariants:
+      - statement: An Invoice total is non-negative
+        owner: Invoice
+    events:
+      - name: InvoiceIssued
+        definition: ...
+relations:
+  - from: billing
+    to: catalog
+    kind: customer_supplier
+```
+
+Relation `kind` is one of `partnership`, `shared_kernel`,
+`customer_supplier`, `conformist`, `anticorruption_layer`,
+`open_host_service`, `published_language`, or `separate_ways`. Concept
+spellings use underscores (`entity`, `value_object`, `invariant`,
+`assertion`, `aggregate`, `aggregate_root`, `domain_event`,
+`bounded_context`, `business_rule`). An aggregate is a designation on an
+entity (`aggregate: true`), not a separate stored object.
+`business_rule` and `assertion` both record as an invariant with exactly
+one owner. Defining a term targets a bounded context.
+
+Fresh files get a YAML language-server modeline pointing at
+`.agents/skills/domain-librarian/library.schema.json` when that path exists
+under the project root, otherwise the raw GitHub URL for the same path
+on `main`.
+
 Running `arclint domain` with no subcommand is the same as
 `arclint domain overview`. Subcommands cover file initialization
 (`init`), summary (`overview`), inventory (`list`), one definition
@@ -173,7 +219,9 @@ an existing model.
 Every domain subcommand except `init` and `schema` accepts `--format text|json`
 (default `text`). Text is for humans; JSON is the stable machine shape
 for agents and scripts. `domain schema` always emits indented JSON, the
-same contract committed as `docs/ubiquitous-language.schema.json`.
+same contract the binary generates and commits as
+`.agents/skills/domain-librarian/library.schema.json` (also written by
+`arclint agents skill`).
 
 Domain command exit codes:
 
@@ -187,3 +235,12 @@ Declaring knowledge never creates a Diagnostic by itself. Domain quality
 findings remain the responsibility of enabled Rules under
 `arclint check`. `arclint context` surfaces the recorded model when
 present; focused path relevance stays with `context`, not `domain`.
+
+## Agent skill artifacts
+
+`arclint agents skill` materializes the domain-librarian skill bundle the
+binary owns: `SKILL.md`, `VOCAB.yaml`, and `library.schema.json` under
+`--dir` (default `.agents/skills/domain-librarian/`). Those committed files
+are generated outputs (and litmus fixtures the generator must reproduce).
+`arclint agents md` (aliases `markdown`, `agentsmd`) prints or installs
+the AGENTS.md architecture block; it does not write skill artifacts.

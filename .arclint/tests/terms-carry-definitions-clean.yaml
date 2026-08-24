@@ -4,11 +4,16 @@ rule: "arclint:vocabulary/terms-carry-definitions"
 files:
   ubiquitous-language.yaml: |
     version: 1
-    entities:
-      - name: Order
-        definition: A customer's request to purchase products.
-        aggregate: true
-    value_objects:
-      - name: Money
-        definition: A monetary amount expressed in a particular currency.
+    contexts:
+      - name: Ordering
+        entities:
+          - name: Order
+            definition: A customer's request to purchase products.
+            aggregate: true
+        value_objects:
+          - name: Money
+            definition: A monetary amount expressed in a particular currency.
+        invariants:
+          - statement: Every Order identifies its Customer.
+            owner: Order
 expect: []
