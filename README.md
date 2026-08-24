@@ -214,6 +214,5 @@ go test -short ./...     # the quick loop, network suite skipped
 make bench               # cold start and large-repo timings
 ```
 
-The docs site under `docs/site` predates the current engine and is
-awaiting a rewrite; this README and the generated
-[AGENTS.md](AGENTS.md) are the current references.
+Product documentation lives under [docs/site](docs/site). The generated
+[AGENTS.md](AGENTS.md) carries the architecture contracts for agents.

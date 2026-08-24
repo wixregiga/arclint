@@ -36,40 +36,8 @@ func TestVersionOutput(t *testing.T) {
 		t.Fatalf("--version: exit %d, stderr %s", code, stderr)
 	}
 	// The e2e binary builds inside the repo, so VCS stamping applies.
-	re := regexp.MustCompile(`arclint version \d+\.\d+\.\d+ \([0-9a-f]{7}(, dirty)?, \d{4}-\d{2}-\d{2}\)`)
+	re := regexp.MustCompile(`arclint version \d+\.\d+\.\d+-beta\.\d+ \([0-9a-f]{7}(, dirty)?, \d{4}-\d{2}-\d{2}\)`)
 	if !re.MatchString(stdout) {
 		t.Errorf("--version output %q does not match %s", strings.TrimSpace(stdout), re)
-	}
-}
-
-// TestVersionSingleSource guards the three hand-set version places until
-// a git tag becomes the single source: main.go's default, the Makefile
-// VERSION, and the docs site config must agree, so a bump cannot go out
-// half-applied.
-func TestVersionSingleSource(t *testing.T) {
-	makefile, err := os.ReadFile("../../Makefile")
-	if err != nil {
-		t.Fatal(err)
-	}
-	mkRe := regexp.MustCompile(`(?m)^VERSION \?= (\S+)$`)
-	mk := mkRe.FindSubmatch(makefile)
-	if mk == nil {
-		t.Fatal("Makefile: no `VERSION ?=` line")
-	}
-	if got := string(mk[1]); got != version {
-		t.Errorf("Makefile VERSION = %q, main.go version = %q", got, version)
-	}
-
-	docsConfig, err := os.ReadFile("../../docs/site/config.toml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	tomlRe := regexp.MustCompile(`(?m)^version = "([^"]+)"$`)
-	tm := tomlRe.FindSubmatch(docsConfig)
-	if tm == nil {
-		t.Fatal("docs/site/config.toml: no version line")
-	}
-	if got := string(tm[1]); got != version {
-		t.Errorf("docs config version = %q, main.go version = %q", got, version)
 	}
 }

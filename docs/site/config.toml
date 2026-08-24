@@ -9,5 +9,4 @@ highlight_code = true
 highlight_theme = "one-dark"
 
 [extra]
-version = "0.1.0"
 repo = "https://github.com/wixregiga/arclint"

@@ -19,12 +19,11 @@ is self-contained; the TypeScript extension runtime is in-process), and
 the default command checks the mounted repository:
 
 ```bash
-make docker                                  # builds arclint:<version>
-docker run --rm -v "$PWD":/repo arclint:0.1.0
+make docker
+docker run --rm -v "$PWD":/repo "arclint:$(cat cmd/arclint/VERSION)"
 ```
 
-`VERSION` defaults to `0.1.0` in the Makefile; tag the run with the same
-value you built.
+The CLI binary and image tag both use `cmd/arclint/VERSION`.
 
 ## Initialize a repository
 

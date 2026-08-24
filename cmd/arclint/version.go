@@ -6,12 +6,11 @@ import (
 	"strings"
 )
 
-// buildVersion renders the version line: the product version stays what
-// -X main.version set (0.1.0 until a compat commitment exists), and the
-// build is distinguished by the VCS settings Go stamps automatically
-// since 1.18: "0.1.0 (abc1234, dirty, 2026-08-14)". Builds without VCS
-// data (source archives, -buildvcs=false, go run) fall back to the bare
-// product version.
+// buildVersion renders the version line: the product version comes from
+// the embedded cmd/arclint/VERSION file, and the build is distinguished
+// by the VCS settings Go stamps automatically since 1.18. Builds without
+// VCS data (source archives, -buildvcs=false, go run) fall back to the
+// bare product version.
 func buildVersion(version string) string {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {

@@ -1,5 +1,5 @@
 GO      ?= go
-VERSION ?= 0.1.0
+VERSION := $(shell cat cmd/arclint/VERSION)
 BIN     ?= ./arclint
 # Embed only the tree-sitter grammars the declaration extractors use:
 # without these tags every grammar embeds and the binary grows ~19 MB.
@@ -7,7 +7,7 @@ GRAMMARS := grammar_subset grammar_subset_typescript grammar_subset_tsx grammar_
 .PHONY: build test vet fmt-check fmt lint lint-fix generate selfcheck verify check check-fix leak-check bench agentbench release ci clean docs docs-serve docker
 
 build:
-	CGO_ENABLED=0 $(GO) build -tags "$(GRAMMARS)" -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o $(BIN) ./cmd/arclint
+	CGO_ENABLED=0 $(GO) build -tags "$(GRAMMARS)" -trimpath -ldflags "-s -w" -o $(BIN) ./cmd/arclint
 
 # The full run includes the toolchain ground truth (network, clones
 # cache under ~/.cache); `go test -short ./...` is the quick loop.
@@ -73,15 +73,18 @@ docs:
 docs-serve:
 	cd docs/site && zola serve
 
-# Container image; the version flows from this file so the Makefile
-# stays the single source. Run a repo check with:
+# Container image; its binary and image tag both use cmd/arclint/VERSION.
+# Run a repo check with:
 #   docker run --rm -v $(PWD):/repo arclint:$(VERSION)
 docker:
-	docker build --build-arg GRAMMARS="$(GRAMMARS)" --build-arg VERSION=$(VERSION) -t arclint:$(VERSION) .
+	docker build --build-arg GRAMMARS="$(GRAMMARS)" -t arclint:$(VERSION) .
 
+# Build the same Linux amd64/arm64 archives and checksums as a beta release,
+# without publishing. Requires goreleaser (mise install / mise run release).
+# Does not need credentials or a git tag.
 release:
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -tags "$(GRAMMARS)" -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o dist/arclint-linux-amd64 ./cmd/arclint
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -tags "$(GRAMMARS)" -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o dist/arclint-linux-arm64 ./cmd/arclint
+	ARCLINT_VERSION=$(VERSION) goreleaser check
+	ARCLINT_VERSION=$(VERSION) goreleaser release --snapshot --clean
 
 ci: check
 

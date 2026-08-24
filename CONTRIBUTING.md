@@ -12,11 +12,41 @@ Write commit messages whose body states the problem the change solves, not only 
 
 Open a pull request with the template filled in; CI must pass before review.
 
-## The agent convergence bench (retired)
+## Publishing a beta release
 
-The bench that measured whether real coding agents repair architecture
-violations from arclint's diagnostics was retired with the legacy
-engine: its scenarios initialized builtin patterns that no longer
-exist. The method and result history remain in
-`docs/research/agent-convergence-bench.md`; rebuild the harness against
-the current engine before the next study.
+Prerequisites: push access; local tools via `mise install` (includes
+goreleaser). Work from a clean tree on the branch you intend to release
+(usually main), with CI green on that commit.
+
+1. Update `cmd/arclint/VERSION` to the beta version, then commit it.
+   This file is the only release-version source used by the CLI binary,
+   Docker image tag, archives, and GitHub release.
+
+2. Create and push the matching tag:
+
+   ```bash
+   version="$(cat cmd/arclint/VERSION)"
+   git tag "v${version}"
+   git push origin "v${version}"
+   ```
+
+3. GitHub Actions workflow `Release` runs on that tag only. It runs
+   `make ci`, then GoReleaser. Result: one GitHub prerelease (not
+   latest) with:
+   - `arclint_<version>_linux_amd64.tar.gz`
+   - `arclint_<version>_linux_arm64.tar.gz`
+   - `checksums.txt`
+
+   The workflow rejects a tag that does not equal `v` plus the exact
+   contents of `cmd/arclint/VERSION`.
+
+Ordinary pushes and non-beta tags never publish.
+
+Local dry-run (same archives and checksums, no credentials, no GitHub
+release):
+
+```bash
+make release
+```
+
+or `mise run release`. Artifacts land under `dist/`.
