@@ -1,0 +1,20 @@
+# Conforming case: every invariant's owner is a term recorded in the
+# same context.
+rule: "arclint:vocabulary/invariants-name-recorded-owners"
+files:
+  ubiquitous-language.yaml: |
+    version: 1
+    contexts:
+      - name: ordering
+        entities:
+          - name: Order
+            definition: A customer's request to purchase products.
+        value_objects:
+          - name: Money
+            definition: An amount and a currency, immutable once constructed.
+        invariants:
+          - statement: An Order's total must never be negative.
+            owner: Order
+          - statement: A Money amount is rejected at construction when its currency is unknown.
+            owner: Money
+expect: []

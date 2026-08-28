@@ -41,6 +41,10 @@ type Host struct {
 	// Domain returns the project's recorded domain model; nil means
 	// the host supplies empty collections.
 	Domain func() DomainInfo
+	// CaseTerm renders a recorded term in one published TermCase —
+	// the same implementation yaml expansion uses, so extensions never
+	// reimplement casing. Errors on unknown cases and wordless terms.
+	CaseTerm func(term, termCase string) (string, error)
 }
 
 // sandboxJS closes the engine's documented determinism gap: Date.now and
@@ -306,6 +310,19 @@ func (rt *RuleType) Check(host Host, params map[string]any) ([]ViolationInput, e
 			return vm.ToValue(emptyDomainInfo())
 		}
 		return vm.ToValue(host.Domain())
+	})
+	mustSet("caseTerm", func(call sobek.FunctionCall) sobek.Value {
+		if len(call.Arguments) < 2 {
+			return fail("ctx.caseTerm: term and case are required")
+		}
+		if host.CaseTerm == nil {
+			return fail("ctx.caseTerm: no term-case capability on this host")
+		}
+		segment, err := host.CaseTerm(call.Arguments[0].String(), call.Arguments[1].String())
+		if err != nil {
+			return fail("ctx.caseTerm: %v", err)
+		}
+		return vm.ToValue(segment)
 	})
 	mustSet("report", func(call sobek.FunctionCall) sobek.Value {
 		if len(call.Arguments) < 1 {

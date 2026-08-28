@@ -1,0 +1,32 @@
+# Violating case: the upstream rule module imports the downstream
+# conformance module, against the recorded conformist relation.
+rule: "arclint:domain-model/contexts-respect-relations"
+files:
+  ubiquitous-language.yaml: |
+    version: 1
+    contexts:
+      - name: rule
+      - name: conformance
+    relations:
+      - from: rule
+        to: conformance
+        kind: conformist
+  go.mod: |
+    module fixture
+
+    go 1.26
+  internal/domain/rule/root.go: |
+    package rule
+
+    import "fixture/internal/domain/conformance"
+
+    type Rule struct{ Check conformance.Check }
+  internal/domain/conformance/check.go: |
+    package conformance
+
+    type Check struct{}
+expect:
+  - kind: violation
+    path: internal/domain/rule/root.go
+    line: 3
+    message: "module \"rule\" must not import module \"conformance\": the recorded conformist relation (\"rule\" -> \"conformance\") forbids it"

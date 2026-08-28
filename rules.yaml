@@ -43,6 +43,15 @@ modules:
   vocabulary:
     paths: ["ubiquitous-language.yaml"]
     description: "The project's recorded Ubiquitous Language vocabulary."
+  # Context-named modules: each bounded context recorded in the
+  # vocabulary binds to the module of the same name, which is how the
+  # contexts-respect-relations rule observes the context map.
+  rule:
+    paths: ["internal/domain/rule/**"]
+    description: "The rule bounded context: the Rule aggregate's home."
+  conformance:
+    paths: ["internal/domain/conformance/**"]
+    description: "The conformance bounded context, downstream conformist of rule."
 
 contracts:
   domain:
@@ -89,6 +98,18 @@ contracts:
         uses: forbid-content
         with:
           pattern: '\bErr(NotFound|Invalid|Failed|Exists)\b'
+      # The vocabulary-expansion showcase: one universally quantified
+      # structure Rule whose globs derive from the recorded aggregates
+      # — every recorded aggregate owns a home declaring its root and
+      # its Repository. Inert until a vocabulary is recorded; warning
+      # because model-code drift is a conversation, not a broken build.
+      - id: "arclint:domain-model/aggregate-skeleton"
+        kind: structure
+        severity: warning
+        each: domain.aggregates
+        require:
+          - "internal/domain/{name:flatcase}/root.go"
+          - "internal/domain/{name:flatcase}/repository.go"
 
   vocabulary:
     invariants:
@@ -100,6 +121,13 @@ contracts:
         kind: extension
         files: "ubiquitous-language.yaml"
         uses: require-defined-terms
+      # A recorded invariant is enforced by exactly one recorded term
+      # of its own context; an owner outside the vocabulary is a hole
+      # in the model.
+      - id: "arclint:vocabulary/invariants-name-recorded-owners"
+        kind: extension
+        files: "ubiquitous-language.yaml"
+        uses: invariants-name-recorded-owners
 
   application:
     consumes:
@@ -182,6 +210,18 @@ contracts:
         kind: naming
         files: "internal/**/*.go"
         case: snake_case
+
+# Repository-scoped domain rules: extensions that consume the recorded
+# Ubiquitous Language through ctx.domain() where enforcement needs more
+# than glob derivation. Inert until a project records vocabulary.
+repository:
+  invariants:
+    # Recorded context-map relations bind to the modules named after
+    # the contexts and become import rules between them.
+    - id: "arclint:domain-model/contexts-respect-relations"
+      kind: extension
+      severity: warning
+      uses: respect-context-relations
 
 dependencies:
   - id: "arclint:dependencies/application-inward"

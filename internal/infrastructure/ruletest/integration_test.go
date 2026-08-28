@@ -77,7 +77,7 @@ func TestRunRuleTestsEndToEnd(t *testing.T) {
 	write(".arclint/tests/consumes_disallowed_import.yaml", consumesTest)
 	write(".arclint/tests/structure_missing_doc.yaml", structureTest)
 
-	repo, err := yamlrule.NewRepository(filepath.Join(root, "rules.yaml"))
+	repo, err := yamlrule.NewRepository(filepath.Join(root, "rules.yaml"), nil)
 	if err != nil {
 		t.Fatalf("NewRepository: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestRuleTestExtensionReadsFixtureContent(t *testing.T) {
 	// Production path exists with clean content — the opposite of the fixture.
 	write("m/a.go", "package m\n// clean production file\n")
 
-	repo, err := yamlrule.NewRepository(filepath.Join(root, "rules.yaml"))
+	repo, err := yamlrule.NewRepository(filepath.Join(root, "rules.yaml"), nil)
 	if err != nil {
 		t.Fatalf("NewRepository: %v", err)
 	}

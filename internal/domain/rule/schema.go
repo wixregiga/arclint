@@ -74,6 +74,10 @@ func (t Type) Schema() TypeSchema {
 		params = []FieldSchema{
 			{Name: "require", Kind: "glob_list", Doc: "each glob must match at least one member file"},
 			{Name: "forbid", Kind: "glob_list", Doc: "no member file may match any glob"},
+			{
+				Name: "each", Kind: "enum", Enum: expansionSourceStrings(),
+				Doc: "derives the globs from a recorded vocabulary collection; {name:<case>} placeholders resolve once per recorded term",
+			},
 		}
 	case TypeNaming:
 		params = []FieldSchema{
@@ -266,16 +270,26 @@ func schemaDefs() map[string]any {
 			"type":        "string",
 			"pattern":     caseSpecPattern(),
 		},
-		"consumes":               consumesSchema(),
-		"invariant":              oneOfRefs("structureInvariant", "namingInvariant", "extensionInvariant"),
-		"structureInvariant":     structureInvariantSchema(),
-		"namingInvariant":        namingInvariantSchema(),
-		"extensionInvariant":     extensionInvariantSchema(),
-		"dependency":             oneOfRefs("layersDependency", "protectedDependency", "independenceDependency", "acyclicDependency"),
-		"layersDependency":       layersDependencySchema(),
-		"protectedDependency":    protectedDependencySchema(),
-		"independenceDependency": independenceDependencySchema(),
-		"acyclicDependency":      acyclicDependencySchema(),
+		"expansionSource": map[string]any{
+			"description": "Recorded Ubiquitous Language collection an expanded structure Rule derives its globs from.",
+			"enum":        expansionSourceStrings(),
+		},
+		"expandedGlob": map[string]any{
+			"description": "Structure glob that may carry {name:<case>} placeholders, each resolving once per recorded term; cases are " + strings.Join(TermCaseNames(), ", ") + ".",
+			"type":        "string",
+			"pattern":     expandedGlobPattern(),
+		},
+		"consumes":                   consumesSchema(),
+		"invariant":                  oneOfRefs("structureInvariant", "expandedStructureInvariant", "namingInvariant", "extensionInvariant"),
+		"structureInvariant":         structureInvariantSchema(),
+		"expandedStructureInvariant": expandedStructureInvariantSchema(),
+		"namingInvariant":            namingInvariantSchema(),
+		"extensionInvariant":         extensionInvariantSchema(),
+		"dependency":                 oneOfRefs("layersDependency", "protectedDependency", "independenceDependency", "acyclicDependency"),
+		"layersDependency":           layersDependencySchema(),
+		"protectedDependency":        protectedDependencySchema(),
+		"independenceDependency":     independenceDependencySchema(),
+		"acyclicDependency":          acyclicDependencySchema(),
 	}
 }
 
@@ -422,6 +436,56 @@ func structureInvariantSchema() map[string]any {
 			},
 		},
 		"id", "kind",
+	)
+	s["anyOf"] = []any{
+		map[string]any{
+			"required":   []string{"require"},
+			"properties": map[string]any{"require": map[string]any{"minItems": 1}},
+		},
+		map[string]any{
+			"required":   []string{"forbid"},
+			"properties": map[string]any{"forbid": map[string]any{"minItems": 1}},
+		},
+	}
+	return s
+}
+
+// expandedGlobPattern derives the expanded-glob grammar from the
+// published term cases: ordinary glob segments interleaved with
+// {name:<case>} placeholders.
+func expandedGlobPattern() string {
+	segment := `([^/{}]|\{name:(` + strings.Join(TermCaseNames(), "|") + `)\})+`
+	return `^` + segment + `(/` + segment + `)*$`
+}
+
+func expansionSourceStrings() []string {
+	out := make([]string, 0, len(ExpansionSources()))
+	for _, s := range ExpansionSources() {
+		out = append(out, string(s))
+	}
+	return out
+}
+
+func expandedStructureInvariantSchema() map[string]any {
+	s := strictObjectSchema(
+		"An expanded structure Rule: one universally quantified claim whose require/forbid globs derive from a recorded Ubiquitous Language collection, {name:<case>} placeholders resolving once per recorded term. A project recording nothing derives no obligations; the Rule exists and says so.",
+		map[string]any{
+			"id":       schemaRef("ruleID"),
+			"kind":     map[string]any{"const": string(TypeStructure)},
+			"each":     schemaRef("expansionSource"),
+			"severity": schemaRef("severity"),
+			"require": map[string]any{
+				"description": "Each derived glob must match at least one member file.",
+				"type":        "array",
+				"items":       schemaRef("expandedGlob"),
+			},
+			"forbid": map[string]any{
+				"description": "No member file may match any derived glob.",
+				"type":        "array",
+				"items":       schemaRef("expandedGlob"),
+			},
+		},
+		"id", "kind", "each",
 	)
 	s["anyOf"] = []any{
 		map[string]any{

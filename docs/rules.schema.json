@@ -106,6 +106,81 @@
         }
       ]
     },
+    "expandedGlob": {
+      "description": "Structure glob that may carry {name:\u003ccase\u003e} placeholders, each resolving once per recorded term; cases are PascalCase, camelCase, flatcase, kebab-case, snake_case.",
+      "pattern": "^([^/{}]|\\{name:(PascalCase|camelCase|flatcase|kebab-case|snake_case)\\})+(/([^/{}]|\\{name:(PascalCase|camelCase|flatcase|kebab-case|snake_case)\\})+)*$",
+      "type": "string"
+    },
+    "expandedStructureInvariant": {
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "properties": {
+            "require": {
+              "minItems": 1
+            }
+          },
+          "required": [
+            "require"
+          ]
+        },
+        {
+          "properties": {
+            "forbid": {
+              "minItems": 1
+            }
+          },
+          "required": [
+            "forbid"
+          ]
+        }
+      ],
+      "description": "An expanded structure Rule: one universally quantified claim whose require/forbid globs derive from a recorded Ubiquitous Language collection, {name:\u003ccase\u003e} placeholders resolving once per recorded term. A project recording nothing derives no obligations; the Rule exists and says so.",
+      "properties": {
+        "each": {
+          "$ref": "#/$defs/expansionSource"
+        },
+        "forbid": {
+          "description": "No member file may match any derived glob.",
+          "items": {
+            "$ref": "#/$defs/expandedGlob"
+          },
+          "type": "array"
+        },
+        "id": {
+          "$ref": "#/$defs/ruleID"
+        },
+        "kind": {
+          "const": "structure"
+        },
+        "require": {
+          "description": "Each derived glob must match at least one member file.",
+          "items": {
+            "$ref": "#/$defs/expandedGlob"
+          },
+          "type": "array"
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "each"
+      ],
+      "type": "object"
+    },
+    "expansionSource": {
+      "description": "Recorded Ubiquitous Language collection an expanded structure Rule derives its globs from.",
+      "enum": [
+        "domain.aggregates",
+        "domain.entities",
+        "domain.value_objects",
+        "domain.events",
+        "domain.contexts"
+      ]
+    },
     "extensionInvariant": {
       "additionalProperties": false,
       "description": "An extension Rule: delegates enforcement to a named Extension through the sandboxed SDK.",
@@ -187,6 +262,9 @@
       "oneOf": [
         {
           "$ref": "#/$defs/structureInvariant"
+        },
+        {
+          "$ref": "#/$defs/expandedStructureInvariant"
         },
         {
           "$ref": "#/$defs/namingInvariant"

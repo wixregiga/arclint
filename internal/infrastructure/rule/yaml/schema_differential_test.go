@@ -13,6 +13,7 @@ import (
 	yamlv3 "gopkg.in/yaml.v3"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
 )
 
@@ -511,12 +512,135 @@ repository:
       uses: vertical/repository-location
 `, false,
 		},
+		{
+			"expanded structure rule", `
+modules:
+  core:
+    paths: ["core/**"]
+contracts:
+  core:
+    invariants:
+      - id: t:core/aggregate-skeleton
+        kind: structure
+        each: domain.aggregates
+        require:
+          - "core/{name:flatcase}/root.go"
+          - "core/{name:snake_case}/repository.go"
+`, true,
+		},
+		{
+			"expanded structure rule with forbid only", `
+modules:
+  core:
+    paths: ["core/**"]
+contracts:
+  core:
+    invariants:
+      - id: t:core/no-promoted-values
+        kind: structure
+        each: domain.value_objects
+        forbid: ["core/{name:flatcase}/**"]
+`, true,
+		},
+		{
+			"expanded rule with unknown source", `
+modules:
+  core:
+    paths: ["core/**"]
+contracts:
+  core:
+    invariants:
+      - id: t:core/everything
+        kind: structure
+        each: domain.everything
+        require: ["core/{name:flatcase}/root.go"]
+`, false,
+		},
+		{
+			"expanded rule with unknown placeholder case", `
+modules:
+  core:
+    paths: ["core/**"]
+contracts:
+  core:
+    invariants:
+      - id: t:core/shouting-homes
+        kind: structure
+        each: domain.aggregates
+        require: ["core/{name:SCREAMING}/root.go"]
+`, false,
+		},
+		{
+			"expanded rule with stray brace", `
+modules:
+  core:
+    paths: ["core/**"]
+contracts:
+  core:
+    invariants:
+      - id: t:core/stray
+        kind: structure
+        each: domain.aggregates
+        require: ["core/{aggregate}/root.go"]
+`, false,
+		},
+		{
+			"expanded rule with no globs", `
+modules:
+  core:
+    paths: ["core/**"]
+contracts:
+  core:
+    invariants:
+      - id: t:core/empty-expansion
+        kind: structure
+        each: domain.aggregates
+`, false,
+		},
+		{
+			"each on a naming rule", `
+modules:
+  core:
+    paths: ["core/**"]
+contracts:
+  core:
+    invariants:
+      - id: t:core/each-naming
+        kind: naming
+        each: domain.aggregates
+        case: snake_case
+`, false,
+		},
+		{
+			"each on an extension rule", `
+modules:
+  core:
+    paths: ["core/**"]
+contracts:
+  core:
+    invariants:
+      - id: t:core/each-extension
+        kind: extension
+        each: domain.aggregates
+        uses: acme/check
+`, false,
+		},
+		{
+			"each on a repository invariant", `
+repository:
+  invariants:
+    - id: t:repos/each
+      kind: structure
+      each: domain.aggregates
+      require: ["core/{name:flatcase}/root.go"]
+`, false,
+		},
 		{"pattern header missing version", "pattern:\n  namespace: acme\n  name: hexagonal\n", false},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, loaderErr := yamlrule.Load([]byte(tc.document), tc.name)
+			_, loaderErr := yamlrule.Load([]byte(tc.document), tc.name, vocab.UbiquitousLanguage{})
 			schemaErr := validateAgainstSchema(t, schema, []byte(tc.document))
 			loaderAccepts := loaderErr == nil
 			schemaAccepts := schemaErr == nil

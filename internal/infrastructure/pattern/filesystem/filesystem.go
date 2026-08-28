@@ -11,6 +11,7 @@ import (
 	"sort"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
 )
 
@@ -59,7 +60,7 @@ func (s Source) Patterns() ([]rule.Pattern, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", file, err)
 		}
-		doc, err := yamlrule.Load(data, file)
+		doc, err := yamlrule.Load(data, file, vocab.UbiquitousLanguage{})
 		if err != nil {
 			return nil, fmt.Errorf("load pattern: %w", err)
 		}

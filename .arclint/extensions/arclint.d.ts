@@ -174,7 +174,18 @@ declare module "arclint" {
     relations: DomainRelationInfo[];
   }
 
+
   export type Capability = "exact" | "structural" | "heuristic" | "advisory";
+
+  /** Published TermCases: renderings of a recorded vocabulary term as a
+   * path or identifier segment. The same closed set rules.yaml accepts in
+   * {name:<case>} placeholders. */
+  export type TermCase =
+    | "flatcase"
+    | "snake_case"
+    | "kebab-case"
+    | "camelCase"
+    | "PascalCase";
 
   export interface Ctx {
     /** Repository files, optionally filtered by a doublestar glob. */
@@ -194,6 +205,11 @@ declare module "arclint" {
      * empty collections when the project records none. Read-only:
      * declaring knowledge never creates a diagnostic by itself. */
     domain(): DomainInfo;
+    /** Render a recorded term in one published TermCase — the host's
+     * one casing implementation, identical to what rules.yaml
+     * {name:<case>} placeholders resolve with. Throws on an unknown
+     * case and on terms without letters or digits. */
+    caseTerm(term: string, termCase: TermCase): string;
     /** Report one violation. */
     report(v: ViolationInput): void;
   }

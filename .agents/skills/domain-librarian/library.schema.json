@@ -32,8 +32,8 @@
               "additionalProperties": false,
               "required": ["name", "definition"],
               "properties": {
-                "name": { "type": "string", "minLength": 1, "description": "Canonical term, exactly as domain experts say it (language-fidelity)." },
-                "definition": { "type": "string", "minLength": 1, "description": "What the term means, grounded in expert language. A term without a definition is rejected, not stored." },
+                "name": { "type": "string", "minLength": 1, "description": "Canonical term, exactly as domain experts say it (language-fidelity). A term that lines up with a code object uses the code's exact spelling (TermCase, RuleID), never a prose-spaced variant." },
+                "definition": { "type": "string", "minLength": 1, "description": "What the term means, grounded in expert language. A term without a definition is rejected, not stored. Written for humans first: plain sentences, no em dashes; anything object-level it names must be recorded in this library or reworded in plain language." },
                 "aggregate": { "type": "boolean", "description": "True only with quoted consistency evidence: an invariant spanning a cluster that must change in one transaction. Never true by default." },
                 "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Synonyms collapsed onto this canonical term (synonym-collapse). Aliases never carry their own definitions." }
               }
@@ -47,8 +47,8 @@
               "additionalProperties": false,
               "required": ["name", "definition"],
               "properties": {
-                "name": { "type": "string", "minLength": 1, "description": "Canonical term, exactly as domain experts say it (language-fidelity)." },
-                "definition": { "type": "string", "minLength": 1, "description": "What the value describes. A term without a definition is rejected, not stored." },
+                "name": { "type": "string", "minLength": 1, "description": "Canonical term, exactly as domain experts say it (language-fidelity). A term that lines up with a code object uses the code's exact spelling (TermCase, RuleID), never a prose-spaced variant." },
+                "definition": { "type": "string", "minLength": 1, "description": "What the value describes. A term without a definition is rejected, not stored. Written for humans first: plain sentences, no em dashes; anything object-level it names must be recorded in this library or reworded in plain language." },
                 "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Synonyms collapsed onto this canonical term. Aliases never carry their own definitions." }
               }
             }
@@ -75,7 +75,7 @@
               "required": ["name", "definition"],
               "properties": {
                 "name": { "type": "string", "minLength": 1, "description": "Past-tense event name, e.g. OrderConfirmed." },
-                "definition": { "type": "string", "minLength": 1, "description": "What happened and who cares, including any party that must be informed." }
+                "definition": { "type": "string", "minLength": 1, "description": "What happened and who cares, including any party that must be informed. Written for humans first: plain sentences, no em dashes; anything object-level it names must be recorded in this library or reworded in plain language." }
               }
             }
           }

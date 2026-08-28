@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
+	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 	sobekextension "github.com/wixregiga/arclint/internal/infrastructure/extension/sobek"
 )
@@ -478,5 +479,90 @@ func TestEvaluatorDomainExposesRecordedModel(t *testing.T) {
 	}
 	if len(empty) != 0 {
 		t.Fatalf("empty model findings = %+v, want none", empty)
+	}
+}
+
+const caseProbeRule = `
+import { defineRule } from "arclint";
+
+export default defineRule({
+  type: "case-probe",
+  check(ctx) {
+    const terms = ["Rule", "Order Line", "OrderLine", "order-line", "HTTP Server", "HTTPServer", "invoice_v2"];
+    const cases = ["flatcase", "snake_case", "kebab-case", "camelCase", "PascalCase"] as const;
+    for (const term of terms) {
+      for (const c of cases) {
+        ctx.report({ path: "probe.txt", message: term + "|" + c + "|" + ctx.caseTerm(term, c) });
+      }
+    }
+  },
+});
+`
+
+// TestCaseTermParity proves ctx.caseTerm IS the casing implementation
+// the yaml expansion uses: every sample rendered through the JS runtime
+// must match rule.CaseTerm exactly. The platform invariant under test:
+// whatever the ruleset grammar can express, the extension SDK can see.
+func TestCaseTermParity(t *testing.T) {
+	root := writeExtensions(t, map[string]string{"case_probe.ts": caseProbeRule})
+	reg, err := sobekextension.LoadDir(root, sobekextension.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt := reg.Get("case-probe")
+	if rt == nil {
+		t.Fatal("rule type not registered")
+	}
+	host := fakeHost(map[string]string{"probe.txt": ""})
+	host.CaseTerm = rule.CaseTerm
+	got, err := rt.Check(host, map[string]any{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 7*5 {
+		t.Fatalf("reported %d renderings, want %d", len(got), 7*5)
+	}
+	for _, v := range got {
+		parts := strings.SplitN(v.Message, "|", 3)
+		if len(parts) != 3 {
+			t.Fatalf("malformed probe message %q", v.Message)
+		}
+		want, err := rule.CaseTerm(parts[0], parts[1])
+		if err != nil {
+			t.Fatalf("rule.CaseTerm(%q, %q): %v", parts[0], parts[1], err)
+		}
+		if parts[2] != want {
+			t.Errorf("ctx.caseTerm(%q, %q) = %q, host wants %q", parts[0], parts[1], parts[2], want)
+		}
+	}
+}
+
+const caseErrorRule = `
+import { defineRule } from "arclint";
+
+export default defineRule({
+  type: "case-error-probe",
+  check(ctx) {
+    ctx.caseTerm("Order", "SCREAMING" as never);
+  },
+});
+`
+
+// TestCaseTermRejectsUnknownCaseInRuntime proves the JS surface fails
+// loudly on cases the host does not publish, never silently guessing.
+func TestCaseTermRejectsUnknownCaseInRuntime(t *testing.T) {
+	root := writeExtensions(t, map[string]string{"case_error.ts": caseErrorRule})
+	reg, err := sobekextension.LoadDir(root, sobekextension.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt := reg.Get("case-error-probe")
+	if rt == nil {
+		t.Fatal("rule type not registered")
+	}
+	host := fakeHost(map[string]string{"probe.txt": ""})
+	host.CaseTerm = rule.CaseTerm
+	if _, err := rt.Check(host, map[string]any{}); err == nil {
+		t.Error("unknown term case accepted by ctx.caseTerm")
 	}
 }
