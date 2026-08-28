@@ -1,0 +1,314 @@
+# yaml-language-server: $schema=.arclint/schemas/rules.arclint.schema.json
+# boxoffice's architecture contracts: Feature-Sliced Design layers
+# on both runtimes, the recorded vocabulary driving structure through
+# expansion, and the technology fences that keep domain logic
+# domain-only.
+
+runtime: [go, ts]
+
+scan:
+  unknown_imports: error
+  exclude:
+    - ".bin/**"
+    - "web/node_modules/**"
+    - "web/dist/**"
+
+modules:
+  composition:
+    paths: ["cmd/**"]
+    description: "Composition root: flags, wiring, the http server."
+  app:
+    paths: ["internal/app/**"]
+    description: "FSD app layer: chi router, handlers, DTOs, the organizer gate, and the in-memory repositories."
+  features:
+    paths: ["internal/features/**"]
+    description: "FSD features layer: use cases that change the world, one slice per use case, technology-free."
+  entities:
+    paths: ["internal/entities/**"]
+    description: "FSD entities layer: the domain aggregates. Domain logic only, enforced."
+  shared:
+    paths: ["internal/shared/**"]
+    description: "FSD shared layer: kit the app layer builds on."
+  server_source:
+    paths: ["internal/**"]
+    description: "Source-wide invariants for the Go server."
+  web_embed:
+    paths: ["web/*.go"]
+    description: "The built web app carried into the single binary behind the embedweb tag."
+  web_app:
+    paths: ["web/src/app/**"]
+    description: "FSD app layer on the web: router, providers, entry."
+  web_pages:
+    paths: ["web/src/pages/**"]
+    description: "FSD pages layer: one slice per screen."
+  web_features:
+    paths: ["web/src/features/**"]
+    description: "FSD features layer: one slice per user interaction."
+  web_shared:
+    paths: ["web/src/shared/**"]
+    description: "FSD shared layer: the api client, per-aggregate api files, and the ui kit."
+  vocabulary:
+    paths: ["ubiquitous-language.yaml"]
+    description: "The recorded Ubiquitous Language of the box office."
+  toolchain:
+    paths: ["Makefile", ".golangci.yml", "go.mod", "web/package.json"]
+    description: "The build and lint surfaces the repo promises to keep."
+
+contracts:
+  entities:
+    consumes:
+      id: "boxoffice:entities/domain-only-imports"
+      internal: []
+      external: forbid
+      stdlib: allow
+    invariants:
+      # The expansion showcase: every recorded aggregate owes a slice
+      # named after it, its repository interface, and its tests.
+      - id: "boxoffice:entities/aggregate-slices"
+        kind: structure
+        severity: warning
+        each: domain.aggregates
+        require:
+          - "internal/entities/{name:flatcase}/{name:flatcase}.go"
+          - "internal/entities/{name:flatcase}/repository.go"
+          - "internal/entities/{name:flatcase}/{name:flatcase}_test.go"
+      # Domain logic is domain logic: no transport, no logging, no
+      # JSON in the entities layer.
+      - id: "boxoffice:entities/technology-free"
+        kind: extension
+        files: "internal/entities/**/*.go"
+        uses: forbid-content
+        with:
+          pattern: '"net/http"|"log/slog"|"encoding/json"'
+      - id: "boxoffice:entities/no-panic"
+        kind: extension
+        files: "internal/entities/**/*.go"
+        uses: forbid-content
+        with:
+          pattern: '\bpanic\('
+      # Domain refusals scream their subject; a bare ErrNotFound the
+      # package name cannot rescue is forbidden.
+      - id: "boxoffice:entities/errors-name-their-subject"
+        kind: extension
+        files: "internal/entities/**/*.go"
+        uses: forbid-content
+        with:
+          pattern: '\bErr(NotFound|Invalid|Failed|Exists)\b'
+      # The domain never reads the clock or rolls dice: now is passed
+      # in, and ids are minted in app.
+      - id: "boxoffice:entities/deterministic"
+        kind: extension
+        files: "internal/entities/**/*.go"
+        uses: forbid-content
+        with:
+          pattern: 'time\.Now\(|math/rand'
+      # Aggregates keep their invariants behind methods: the struct
+      # for a recorded aggregate has no exported fields. The rule
+      # joins the vocabulary (which types are aggregates) with the
+      # code facts (which fields are exported).
+      - id: "boxoffice:entities/aggregates-encapsulate"
+        kind: extension
+        files: "internal/entities/**/*.go"
+        uses: aggregate-encapsulation
+        with:
+          root: "internal/entities"
+      # Tripwire, not proof: repository implementations tend to need
+      # sync, and the entities layer never should. A real
+      # "no repository implementations in entities" check needs type
+      # resolution the facts tier does not do — board note.
+      - id: "boxoffice:entities/no-store-machinery"
+        kind: extension
+        files: "internal/entities/**/*.go"
+        uses: forbid-content
+        with:
+          pattern: '"sync"'
+
+  features:
+    consumes:
+      id: "boxoffice:features/orchestrate-entities-only"
+      internal: [entities]
+      external: forbid
+      stdlib: allow
+    invariants:
+      # Every use-case slice ships with its named file and its tests,
+      # discovered from the tree so a new slice needs no edit here.
+      # Wants to be an each: expansion, but each: draws only on
+      # recorded vocabulary collections, never filesystem collections
+      # like "every slice under this root" — proving-ground finding
+      # for the expansion track; the slice-files extension covers it.
+      - id: "boxoffice:features/use-cases-tested"
+        kind: extension
+        files: "internal/features/**"
+        uses: slice-files
+        with:
+          root: "internal/features"
+          require:
+            - "{slice}.go"
+            - "{slice}_test.go"
+      - id: "boxoffice:features/technology-free"
+        kind: extension
+        files: "internal/features/**/*.go"
+        uses: forbid-content
+        with:
+          pattern: '"net/http"|"log/slog"|"encoding/json"'
+      # Use cases stay deterministic the same way the domain does.
+      - id: "boxoffice:features/deterministic"
+        kind: extension
+        files: "internal/features/**/*.go"
+        uses: forbid-content
+        with:
+          pattern: 'time\.Now\(|math/rand'
+
+  app:
+    consumes:
+      id: "boxoffice:app/wires-the-sides"
+      internal: [features, entities, shared]
+      external: allow
+      stdlib: allow
+    invariants:
+      - id: "boxoffice:app/surface-tested"
+        kind: structure
+        require:
+          - "internal/app/app.go"
+          - "internal/app/app_test.go"
+          - "internal/app/memory/memory.go"
+
+  shared:
+    consumes:
+      id: "boxoffice:shared/kit-stands-alone"
+      internal: []
+      external: forbid
+      stdlib: allow
+
+  composition:
+    consumes:
+      id: "boxoffice:composition/selects-everything"
+      internal: [app, features, entities, shared, web_embed]
+      external: allow
+      stdlib: allow
+    invariants:
+      - id: "boxoffice:composition/main-and-seed-present"
+        kind: structure
+        require:
+          - "cmd/boxoffice/main.go"
+          - "cmd/boxoffice/seed.go"
+          - "cmd/boxoffice/version_test.go"
+
+  web_embed:
+    consumes:
+      id: "boxoffice:web-embed/stdlib-only"
+      internal: []
+      external: forbid
+      stdlib: allow
+
+  server_source:
+    invariants:
+      # slog is the one logging voice of the server.
+      - id: "boxoffice:source/slog-only"
+        kind: extension
+        files: "internal/**/*.go"
+        uses: forbid-content
+        with:
+          pattern: '\bfmt\.Print|\blog\.(Print|Fatal|Panic)'
+      - id: "boxoffice:source/snake-case"
+        kind: naming
+        files: "internal/**/*.go"
+        case: snake_case
+
+  web_shared:
+    consumes:
+      id: "boxoffice:web-shared/kit-stands-alone"
+      internal: []
+      external: allow
+      stdlib: allow
+    invariants:
+      # The expansion showcase on the web: every recorded aggregate
+      # owes its data model and calls one named file in shared/api.
+      # FSD's own guidance homes thin-client models here, not in an
+      # entities layer.
+      - id: "boxoffice:web-shared/aggregates-speak-through-api"
+        kind: structure
+        severity: warning
+        each: domain.aggregates
+        require:
+          - "web/src/shared/api/{name:kebab-case}.ts"
+
+  web_features:
+    consumes:
+      id: "boxoffice:web-features/interactions-downward"
+      internal: [web_shared]
+      external: allow
+      stdlib: allow
+    invariants:
+      # FSD makes a public API mandatory for every slice; discovered
+      # from the tree, so a new slice needs no edit here.
+      - id: "boxoffice:web-features/slices-export-public-api"
+        kind: extension
+        files: "web/src/features/**"
+        uses: slice-files
+        with:
+          root: "web/src/features"
+          require:
+            - "index.ts"
+
+  web_pages:
+    consumes:
+      id: "boxoffice:web-pages/screens-downward"
+      internal: [web_features, web_shared]
+      external: allow
+      stdlib: allow
+    invariants:
+      - id: "boxoffice:web-pages/slices-export-public-api"
+        kind: extension
+        files: "web/src/pages/**"
+        uses: slice-files
+        with:
+          root: "web/src/pages"
+          require:
+            - "index.ts"
+
+  web_app:
+    consumes:
+      id: "boxoffice:web-app/composes-the-web"
+      internal: [web_pages, web_features, web_shared]
+      external: allow
+      stdlib: allow
+
+  # The vocabulary-hygiene rules the parent repo runs (terms carry
+  # definitions, invariants name recorded owners) belong here too,
+  # but there is no way to obtain those extensions except re-authoring
+  # them: proving-ground finding for the pattern-distribution track.
+
+  toolchain:
+    invariants:
+      - id: "boxoffice:toolchain/gates-present"
+        kind: structure
+        require:
+          - "Makefile"
+          - ".golangci.yml"
+          - "go.mod"
+          - "web/package.json"
+
+# Repository-scoped rules: FSD slice isolation across both runtimes.
+repository:
+  invariants:
+    - id: "boxoffice:fsd/slice-isolation"
+      kind: extension
+      uses: fsd-slice-isolation
+      with:
+        layers:
+          - "internal/features"
+          - "internal/entities"
+          - "web/src/pages"
+          - "web/src/features"
+
+dependencies:
+  - id: "boxoffice:dependencies/server-layers"
+    kind: layers
+    layers: [app, features, entities]
+  - id: "boxoffice:dependencies/web-layers"
+    kind: layers
+    layers: [web_app, web_pages, web_features, web_shared]
+  - id: "boxoffice:dependencies/acyclic"
+    kind: acyclic
+    modules: [composition, app, features, entities, shared, web_embed, web_app, web_pages, web_features, web_shared]

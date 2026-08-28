@@ -1,0 +1,13 @@
+# Violating case: a use-case slice without tests is discovered and
+# flagged with no per-slice rule configuration.
+rule: "boxoffice:features/use-cases-tested"
+files:
+  internal/features/holdseats/holdseats.go: |
+    package holdseats
+
+    func Do() {}
+expect:
+  - kind: violation
+    path: internal/features/holdseats/holdseats.go
+    line: 0
+    message: "slice \"holdseats\" under internal/features is missing a required file matching \"internal/features/holdseats/holdseats_test.go\""

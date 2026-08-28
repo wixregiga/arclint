@@ -1,0 +1,15 @@
+# Conforming case: every discovered use-case slice carries its named
+# file and its tests.
+rule: "boxoffice:features/use-cases-tested"
+files:
+  internal/features/holdseats/holdseats.go: |
+    package holdseats
+
+    func Do() {}
+  internal/features/holdseats/holdseats_test.go: |
+    package holdseats
+
+    import "testing"
+
+    func TestDo(t *testing.T) {}
+expect: []
