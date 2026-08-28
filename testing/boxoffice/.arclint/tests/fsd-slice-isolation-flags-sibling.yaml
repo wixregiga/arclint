@@ -1,0 +1,22 @@
+# Violating case: one feature slice imports its sibling.
+rule: "boxoffice:fsd/slice-isolation"
+files:
+  go.mod: |
+    module boxoffice
+
+    go 1.26.4
+  internal/features/placeorder/placeorder.go: |
+    package placeorder
+
+    import "boxoffice/internal/features/holdseats"
+
+    func Do() { holdseats.Do() }
+  internal/features/holdseats/holdseats.go: |
+    package holdseats
+
+    func Do() {}
+expect:
+  - kind: violation
+    path: internal/features/placeorder/placeorder.go
+    line: 3
+    message: "FSD slice isolation: internal/features slice \"placeorder\" imports sibling slice \"holdseats\""

@@ -1,0 +1,27 @@
+# Conforming case: the aggregate's struct keeps every field
+# unexported; value objects may export theirs.
+rule: "boxoffice:entities/aggregates-encapsulate"
+files:
+  ubiquitous-language.yaml: |
+    version: 1
+    contexts:
+      - name: catalog
+        entities:
+          - name: Event
+            definition: One show an organizer puts on sale.
+            aggregate: true
+        value_objects:
+          - name: TicketTier
+            definition: One named offer within an event.
+  internal/entities/event/event.go: |
+    package event
+
+    type TicketTier struct {
+        Name string
+    }
+
+    type Event struct {
+        id    string
+        tiers []TicketTier
+    }
+expect: []

@@ -1,0 +1,19 @@
+# Conforming case: a feature imports an entity (a lower layer) and
+# its own slice; no horizontal imports.
+rule: "boxoffice:fsd/slice-isolation"
+files:
+  go.mod: |
+    module boxoffice
+
+    go 1.26.4
+  internal/features/placeorder/placeorder.go: |
+    package placeorder
+
+    import "boxoffice/internal/entities/order"
+
+    func Do() order.Order { return order.Order{} }
+  internal/entities/order/order.go: |
+    package order
+
+    type Order struct{}
+expect: []

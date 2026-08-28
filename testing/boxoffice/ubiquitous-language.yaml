@@ -1,0 +1,153 @@
+# yaml-language-server: $schema=../../.agents/skills/domain-librarian/library.schema.json
+version: 1
+contexts:
+  - name: catalog
+    entities:
+      - name: Event
+        definition: >-
+          One show an Organizer puts on sale: its title, its story,
+          when and where it happens, and its TicketTiers. An Event
+          stays a draft until its Organizer publishes it, and only a
+          published Event sells. An Organizer who calls a published
+          show off cancels the Event, which takes it off sale for
+          good.
+        aggregate: true
+      - name: Organizer
+        definition: >-
+          The person whose page it is: they create Events, write the
+          stories, price the TicketTiers, decide when a draft is ready
+          to publish, and call a published show off when it cannot
+          happen. Someone who only buys tickets is never an Organizer.
+    value_objects:
+      - name: TicketTier
+        definition: >-
+          One named offer within an Event, like general or front-row:
+          what it buys and its Price. A TicketTier without a Price is
+          not on sale, no matter how big the room is.
+      - name: Price
+        definition: >-
+          What one ticket of a TicketTier costs, in whole cents of one
+          currency. The organizer spells it once; everywhere a deal
+          refers to it, the Price is copied, never recomputed.
+    invariants:
+      - statement: >-
+          An Event sells tickets only while it is published; a draft
+          Event is invisible to ordering and capacity alike.
+        owner: Event
+      - statement: >-
+          Every TicketTier carries a Price before its Event can be
+          published.
+        owner: TicketTier
+      - statement: >-
+          Only the Organizer creates, edits, or publishes an Event,
+          and a draft Event is visible to its Organizer alone;
+          everyone else sees published Events only.
+        owner: Event
+      - statement: >-
+          A draft Event stays the Organizer's to edit: its story, its
+          when and where, and its TicketTiers. Publishing ends that;
+          a published Event never changes.
+        owner: Event
+      - statement: >-
+          Only a published Event can be cancelled, and cancelling is
+          final: the Event goes off sale, sells nothing more, never
+          returns to sale, and every ticket sold for it is refunded.
+        owner: Event
+  - name: ordering
+    entities:
+      - name: Order
+        definition: >-
+          The deal as struck: which TicketTiers, how many of each, and
+          the Price of each at the moment of placement, kept as
+          OrderLines. A placed Order is a promise the box office
+          keeps to its Attendee. Tickets can come back, and when they
+          do the Order records a Refund beside the deal instead of
+          rewriting it.
+        aggregate: true
+    value_objects:
+      - name: OrderLine
+        definition: >-
+          One TicketTier inside an Order: the tier, the quantity, and
+          the Price captured at placement. Later catalog edits never
+          reach a captured OrderLine.
+      - name: Attendee
+        definition: >-
+          The person a placed Order promises seats to: a name and a
+          way to reach them, captured on the Order. An Attendee
+          exists only as part of their Order; there is nothing to
+          sign up for.
+      - name: Refund
+        definition: >-
+          Tickets given back from a placed Order: which TicketTier and
+          how many. The Organizer gives them back, either one buyer's
+          tickets at a time or all of them at once when the Event is
+          cancelled. The deal as struck stays as struck; the Refund is
+          recorded beside it, and the seats it returns stop being
+          spoken for.
+    events:
+      - name: OrderPlaced
+        definition: >-
+          A deal was struck: an Attendee placed an Order. The capacity
+          ledger cares, because this is the moment held seats become
+          seats spoken for. It is a name for that moment, not
+          messaging machinery; in boxoffice it is a plain call from
+          ordering to capacity.
+    invariants:
+      - statement: >-
+          An Order references only TicketTiers of a published Event at
+          placement, and its OrderLines and their Prices never change
+          afterward, not even when tickets are given back.
+        owner: Order
+      - statement: >-
+          A Refund never gives back more tickets of a TicketTier than
+          its Order bought on that tier and has not already had
+          refunded.
+        owner: Refund
+  - name: capacity
+    entities:
+      - name: Capacity
+        definition: >-
+          The seat count for one Event: how many seats each TicketTier
+          has, how many are spoken for, and which Holds are still
+          pending. The seats a TicketTier has are the amount the
+          Organizer published, and they stay put while seats spoken
+          for rise with each Order and fall with each Refund. It has
+          no opinion on stories or Prices, only on whether one more
+          promise fits the room.
+        aggregate: true
+    value_objects:
+      - name: Hold
+        definition: >-
+          Seats set aside for someone still deciding, before any Order
+          exists. A Hold carries a deadline from birth, and an expired
+          Hold frees its seats.
+    invariants:
+      - statement: >-
+          Seats spoken for plus seats held never exceed the seats a
+          TicketTier has; when they are equal, the tier is sold out
+          and new Holds are refused.
+        owner: Capacity
+      - statement: >-
+          An expired Hold frees its seats and can never become part of
+          an Order.
+        owner: Hold
+      - statement: >-
+          Seats spoken for come back only through a Refund, and a
+          Refund never frees more seats of a TicketTier than that tier
+          has spoken for.
+        owner: Capacity
+relations:
+  # ordering and capacity both take the catalog's model of Event and
+  # TicketTier as-is; dependence flows downstream and never back.
+  - from: catalog
+    to: ordering
+    kind: conformist
+  - from: catalog
+    to: capacity
+    kind: conformist
+  # ordering is capacity's customer: it asks for Holds when someone
+  # is deciding and for seats spoken for when an Order is placed, and
+  # capacity answers with seats or a refusal.
+  - from: capacity
+    to: ordering
+    kind: customer_supplier

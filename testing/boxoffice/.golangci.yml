@@ -1,0 +1,28 @@
+version: "2"
+linters:
+  enable:
+    - bodyclose
+    - containedctx
+    - contextcheck
+    - fatcontext
+    - goconst
+    - godot
+    - gosec
+    - misspell
+    - nilerr
+    - noctx
+    - nolintlint
+    - revive
+    - unconvert
+    - unparam
+    - whitespace
+  exclusions:
+    rules:
+      - text: '(slog|log)\.\w+'
+        linters:
+          - noctx
+      # Tests repeat fixture literals on purpose; constants would
+      # obscure what each case exercises.
+      - path: _test\.go$
+        linters:
+          - goconst

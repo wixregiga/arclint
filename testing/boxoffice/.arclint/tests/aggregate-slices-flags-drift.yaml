@@ -1,0 +1,44 @@
+# Violating case: a recorded aggregate misses its tests, another has
+# no home at all.
+rule: "boxoffice:entities/aggregate-slices"
+files:
+  ubiquitous-language.yaml: |
+    version: 1
+    contexts:
+      - name: catalog
+        entities:
+          - name: Event
+            definition: One show an organizer puts on sale.
+            aggregate: true
+      - name: capacity
+        entities:
+          - name: Capacity
+            definition: The seat count for one event.
+            aggregate: true
+  internal/entities/event/event.go: |
+    package event
+
+    type Event struct{}
+  internal/entities/event/repository.go: |
+    package event
+
+    type Repository interface {
+        Find(id string) (Event, error)
+    }
+expect:
+  - kind: violation
+    path: internal/entities/event/event_test.go
+    line: 0
+    message: "Module \"entities\" is missing a required file matching \"internal/entities/event/event_test.go\""
+  - kind: violation
+    path: internal/entities/capacity/capacity.go
+    line: 0
+    message: "Module \"entities\" is missing a required file matching \"internal/entities/capacity/capacity.go\""
+  - kind: violation
+    path: internal/entities/capacity/repository.go
+    line: 0
+    message: "Module \"entities\" is missing a required file matching \"internal/entities/capacity/repository.go\""
+  - kind: violation
+    path: internal/entities/capacity/capacity_test.go
+    line: 0
+    message: "Module \"entities\" is missing a required file matching \"internal/entities/capacity/capacity_test.go\""

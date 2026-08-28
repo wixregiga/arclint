@@ -1,0 +1,23 @@
+# Violating case: the aggregate struct exposes an exported field,
+# letting callers bypass the invariants its methods enforce.
+rule: "boxoffice:entities/aggregates-encapsulate"
+files:
+  ubiquitous-language.yaml: |
+    version: 1
+    contexts:
+      - name: catalog
+        entities:
+          - name: Event
+            definition: One show an organizer puts on sale.
+            aggregate: true
+  internal/entities/event/event.go: |
+    package event
+
+    type Event struct {
+        Title string
+    }
+expect:
+  - kind: violation
+    path: internal/entities/event/event.go
+    line: 4
+    message: "aggregate Event exposes exported field Title; invariants live behind methods"

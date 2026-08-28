@@ -14,6 +14,10 @@ scan:
     - ".wixregiga-ignore/**"
     - "**/generated/**"
     - "**/mock_*.go"
+    # The boxoffice proving ground is its own repository in spirit:
+    # its own go.mod, rules.yaml, and vocabulary. It must not land
+    # in this build or this scan.
+    - "testing/**"
 
 modules:
   domain:

@@ -1,0 +1,603 @@
+{
+  "$defs": {
+    "acyclicDependency": {
+      "additionalProperties": false,
+      "description": "An acyclic Rule: forbids dependency cycles among declared Modules.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ruleID"
+        },
+        "kind": {
+          "const": "acyclic"
+        },
+        "modules": {
+          "description": "Cycle scope; absent means every declared Module.",
+          "items": {
+            "$ref": "#/$defs/moduleName"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "type": "object"
+    },
+    "caseSpec": {
+      "description": "File-name case vocabulary: one or more alternatives of kebab-case, snake_case, camelCase, PascalCase, or regex:PATTERN, combined with | (any-of); applies to the file stem, extension excluded.",
+      "pattern": "^\\s*(PascalCase|camelCase|kebab-case|snake_case|regex:[^|]*)(\\s*\\|\\s*(PascalCase|camelCase|kebab-case|snake_case|regex:[^|]*))*\\s*$",
+      "type": "string"
+    },
+    "consumes": {
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "internal"
+          ]
+        },
+        {
+          "properties": {
+            "external": {
+              "const": "forbid"
+            }
+          },
+          "required": [
+            "external"
+          ]
+        },
+        {
+          "properties": {
+            "stdlib": {
+              "const": "forbid"
+            }
+          },
+          "required": [
+            "stdlib"
+          ]
+        }
+      ],
+      "description": "A consumes Rule: what the contract's Module may import. At least one restriction must be declared — an internal allow-list, external: forbid, or stdlib: forbid.",
+      "properties": {
+        "external": {
+          "$ref": "#/$defs/importPolicy"
+        },
+        "id": {
+          "$ref": "#/$defs/ruleID"
+        },
+        "internal": {
+          "description": "Declared Modules this Module may import; absent means unrestricted, empty means none. The owning Module is always permitted implicitly.",
+          "items": {
+            "$ref": "#/$defs/moduleName"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "stdlib": {
+          "$ref": "#/$defs/importPolicy"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "dependency": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/layersDependency"
+        },
+        {
+          "$ref": "#/$defs/protectedDependency"
+        },
+        {
+          "$ref": "#/$defs/independenceDependency"
+        },
+        {
+          "$ref": "#/$defs/acyclicDependency"
+        }
+      ]
+    },
+    "expandedGlob": {
+      "description": "Structure glob that may carry {name:\u003ccase\u003e} placeholders, each resolving once per recorded term; cases are PascalCase, camelCase, flatcase, kebab-case, snake_case.",
+      "pattern": "^([^/{}]|\\{name:(PascalCase|camelCase|flatcase|kebab-case|snake_case)\\})+(/([^/{}]|\\{name:(PascalCase|camelCase|flatcase|kebab-case|snake_case)\\})+)*$",
+      "type": "string"
+    },
+    "expandedStructureInvariant": {
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "properties": {
+            "require": {
+              "minItems": 1
+            }
+          },
+          "required": [
+            "require"
+          ]
+        },
+        {
+          "properties": {
+            "forbid": {
+              "minItems": 1
+            }
+          },
+          "required": [
+            "forbid"
+          ]
+        }
+      ],
+      "description": "An expanded structure Rule: one universally quantified claim whose require/forbid globs derive from a recorded Ubiquitous Language collection, {name:\u003ccase\u003e} placeholders resolving once per recorded term. A project recording nothing derives no obligations; the Rule exists and says so.",
+      "properties": {
+        "each": {
+          "$ref": "#/$defs/expansionSource"
+        },
+        "forbid": {
+          "description": "No member file may match any derived glob.",
+          "items": {
+            "$ref": "#/$defs/expandedGlob"
+          },
+          "type": "array"
+        },
+        "id": {
+          "$ref": "#/$defs/ruleID"
+        },
+        "kind": {
+          "const": "structure"
+        },
+        "require": {
+          "description": "Each derived glob must match at least one member file.",
+          "items": {
+            "$ref": "#/$defs/expandedGlob"
+          },
+          "type": "array"
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "each"
+      ],
+      "type": "object"
+    },
+    "expansionSource": {
+      "description": "Recorded Ubiquitous Language collection an expanded structure Rule derives its globs from.",
+      "enum": [
+        "domain.aggregates",
+        "domain.entities",
+        "domain.value_objects",
+        "domain.events",
+        "domain.contexts"
+      ]
+    },
+    "extensionInvariant": {
+      "additionalProperties": false,
+      "description": "An extension Rule: delegates enforcement to a named Extension through the sandboxed SDK.",
+      "properties": {
+        "files": {
+          "$ref": "#/$defs/glob",
+          "description": "Narrows the member files judged; absent means all."
+        },
+        "id": {
+          "$ref": "#/$defs/ruleID"
+        },
+        "kind": {
+          "const": "extension"
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "uses": {
+          "description": "The extension rule name registered under .arclint/extensions.",
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "with": {
+          "description": "Parameters validated host-side against the extension's published schema before any extension code runs.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "uses"
+      ],
+      "type": "object"
+    },
+    "glob": {
+      "description": "Repo-relative path pattern: * and ? never cross /, a ** segment matches any number of segments, [...] matches one character. Brace alternation is rejected.",
+      "pattern": "^[^/{}]+(/[^/{}]+)*$",
+      "type": "string"
+    },
+    "importPolicy": {
+      "default": "allow",
+      "description": "Policy for one import class.",
+      "enum": [
+        "allow",
+        "forbid"
+      ]
+    },
+    "independenceDependency": {
+      "additionalProperties": false,
+      "description": "An independence Rule: sibling Folders selected by the globs may not import each other.",
+      "properties": {
+        "folders": {
+          "description": "Globs selecting sibling Folders; at least one, no duplicates.",
+          "items": {
+            "$ref": "#/$defs/glob"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "id": {
+          "$ref": "#/$defs/ruleID"
+        },
+        "kind": {
+          "const": "independence"
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "folders"
+      ],
+      "type": "object"
+    },
+    "invariant": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/structureInvariant"
+        },
+        {
+          "$ref": "#/$defs/expandedStructureInvariant"
+        },
+        {
+          "$ref": "#/$defs/namingInvariant"
+        },
+        {
+          "$ref": "#/$defs/extensionInvariant"
+        }
+      ]
+    },
+    "layersDependency": {
+      "additionalProperties": false,
+      "description": "A layers Rule: orders Modules highest first; a Module may import same or lower layers, never higher.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ruleID"
+        },
+        "kind": {
+          "const": "layers"
+        },
+        "layers": {
+          "description": "Modules ordered highest first; at least two, no duplicates.",
+          "items": {
+            "$ref": "#/$defs/moduleName"
+          },
+          "minItems": 2,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "layers"
+      ],
+      "type": "object"
+    },
+    "moduleName": {
+      "description": "Repository-local Module name: a-z 0-9 _ -.",
+      "pattern": "^[a-z0-9_-]+$",
+      "type": "string"
+    },
+    "namingInvariant": {
+      "additionalProperties": false,
+      "description": "A naming Rule: constrains member file names to a finite case vocabulary.",
+      "properties": {
+        "case": {
+          "$ref": "#/$defs/caseSpec"
+        },
+        "files": {
+          "$ref": "#/$defs/glob",
+          "description": "Narrows the member files judged; absent means all."
+        },
+        "id": {
+          "$ref": "#/$defs/ruleID"
+        },
+        "kind": {
+          "const": "naming"
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "case"
+      ],
+      "type": "object"
+    },
+    "protectedDependency": {
+      "additionalProperties": false,
+      "description": "A protected Rule: restricts which Modules may import one Module.",
+      "properties": {
+        "allow": {
+          "description": "Modules permitted to import it; absent or empty means none.",
+          "items": {
+            "$ref": "#/$defs/moduleName"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "id": {
+          "$ref": "#/$defs/ruleID"
+        },
+        "kind": {
+          "const": "protected"
+        },
+        "module": {
+          "$ref": "#/$defs/moduleName",
+          "description": "The protected Module."
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "module"
+      ],
+      "type": "object"
+    },
+    "ruleID": {
+      "description": "Explicit stable Rule ID: LOCAL or NAMESPACE:LOCAL, each part using a-z 0-9 . _ - /, never starting with . / - and never ending with . or /.",
+      "pattern": "^([a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?:)?[a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?$",
+      "type": "string"
+    },
+    "severity": {
+      "default": "error",
+      "description": "Gate importance of a Violation.",
+      "enum": [
+        "error",
+        "warning",
+        "info"
+      ]
+    },
+    "structureInvariant": {
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "properties": {
+            "require": {
+              "minItems": 1
+            }
+          },
+          "required": [
+            "require"
+          ]
+        },
+        {
+          "properties": {
+            "forbid": {
+              "minItems": 1
+            }
+          },
+          "required": [
+            "forbid"
+          ]
+        }
+      ],
+      "description": "A structure Rule: requires or forbids member files matching globs. At least one non-empty glob list must be declared.",
+      "properties": {
+        "forbid": {
+          "description": "No member file may match any glob.",
+          "items": {
+            "$ref": "#/$defs/glob"
+          },
+          "type": "array"
+        },
+        "id": {
+          "$ref": "#/$defs/ruleID"
+        },
+        "kind": {
+          "const": "structure"
+        },
+        "require": {
+          "description": "Each glob must match at least one member file.",
+          "items": {
+            "$ref": "#/$defs/glob"
+          },
+          "type": "array"
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://raw.githubusercontent.com/wixregiga/arclint/main/docs/rules.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The complete rules.yaml document ArcLint accepts: runtime targets, scan policy, Module declarations, per-Module contracts, repository-scoped Extension invariants, repository-wide dependency Rules, and the Pattern identity header of a distribution file. Unknown keys are rejected everywhere.",
+  "properties": {
+    "contracts": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "description": "Rules bound to one declared Module.",
+        "properties": {
+          "consumes": {
+            "$ref": "#/$defs/consumes"
+          },
+          "invariants": {
+            "description": "Structure, naming, and extension Rules over the Module's member files.",
+            "items": {
+              "$ref": "#/$defs/invariant"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "description": "Per-Module contracts. Every key must name a declared Module; the loader enforces the declaration, the schema validates the name shape.",
+      "propertyNames": {
+        "$ref": "#/$defs/moduleName"
+      },
+      "type": "object"
+    },
+    "dependencies": {
+      "description": "Repository-wide dependency Rules over the Module graph.",
+      "items": {
+        "$ref": "#/$defs/dependency"
+      },
+      "type": "array"
+    },
+    "modules": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "description": "One Module declaration.",
+        "properties": {
+          "description": {
+            "description": "Authoring description of the Module.",
+            "type": "string"
+          },
+          "paths": {
+            "description": "Membership selectors; a glob naming a directory claims its whole subtree.",
+            "items": {
+              "$ref": "#/$defs/glob"
+            },
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "type": "object"
+      },
+      "description": "Declared Modules: named logical groupings of files selected by membership globs. Modules may overlap.",
+      "propertyNames": {
+        "$ref": "#/$defs/moduleName"
+      },
+      "type": "object"
+    },
+    "pattern": {
+      "additionalProperties": false,
+      "description": "Pattern identity header, present only in a Pattern distribution file — never in a repository ruleset.",
+      "properties": {
+        "coverage": {
+          "description": "Languages the Pattern declares coverage for.",
+          "items": {
+            "enum": [
+              "go",
+              "typescript",
+              "python"
+            ]
+          },
+          "type": "array"
+        },
+        "name": {
+          "description": "Pattern name within its namespace.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "namespace": {
+          "description": "Pattern namespace qualifying distributed Rule IDs.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "version": {
+          "description": "Pattern version; never part of Rule identity.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "namespace",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "repository": {
+      "additionalProperties": false,
+      "description": "Repository-scoped Extension invariants that inspect files outside every declared Module.",
+      "properties": {
+        "invariants": {
+          "description": "Extension Rules whose subjects are the whole repository.",
+          "items": {
+            "$ref": "#/$defs/extensionInvariant"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "runtime": {
+      "description": "Language targets whose code facts observation produces.",
+      "items": {
+        "enum": [
+          "go",
+          "ts",
+          "py"
+        ]
+      },
+      "type": "array"
+    },
+    "scan": {
+      "additionalProperties": false,
+      "description": "Repository observation policy: what the walk excludes and how unknown imports are treated.",
+      "properties": {
+        "exclude": {
+          "description": "Globs the repository walk skips entirely.",
+          "items": {
+            "$ref": "#/$defs/glob"
+          },
+          "type": "array"
+        },
+        "include_testdata": {
+          "default": false,
+          "description": "Whether testdata directories are observed.",
+          "type": "boolean"
+        },
+        "unknown_imports": {
+          "default": "warn",
+          "description": "Policy for imports that classify neither stdlib, internal, nor external.",
+          "enum": [
+            "error",
+            "warn",
+            "ignore"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "title": "ArcLint ruleset",
+  "type": "object"
+}

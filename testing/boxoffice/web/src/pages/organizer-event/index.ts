@@ -1,0 +1,1 @@
+export { OrganizerEventPage } from "./ui";

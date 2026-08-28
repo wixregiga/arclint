@@ -1,0 +1,55 @@
+# boxoffice requirements, EARS syntax
+# (ubiquitous / event-driven / state-driven / unwanted-behavior)
+#
+# Every invariant in ubiquitous-language.yaml maps to at least one
+# line here; the owning term is noted in brackets. Lines without a
+# bracket are product promises that have not earned a vocabulary
+# invariant yet.
+
+## catalog
+
+The box office shall sell tickets only for published events. [Event]
+
+While an event is a draft, the box office shall show it to its organizer alone. [Event]
+
+The box office shall let only the organizer create, edit, or publish events. [Event]
+
+If any ticket tier of an event has no price, then the box office shall refuse to publish that event. [TicketTier]
+
+While an event is a draft, the box office shall let its organizer edit the story, the when and where, and the ticket tiers. [Event]
+
+If an event is published, then the box office shall refuse edits to it. [Event]
+
+When the organizer cancels a published event, the box office shall take it off sale and refund every ticket sold for it. [Event]
+
+If an event is a draft or already cancelled, then the box office shall refuse to cancel it. [Event]
+
+While an event is cancelled, the box office shall refuse holds, orders, edits, and publishing on it, and shall leave it off the list of what is on sale. [Event]
+
+## ordering
+
+When an attendee places an order, the box office shall capture each line's tier, quantity, and price as struck. [Order]
+
+The box office shall never change a placed order. [Order]
+
+If an order names a ticket tier of an event that is not published, then the box office shall refuse the order. [Order]
+
+When the organizer refunds tickets on a placed order, the box office shall record the refund beside the deal and leave the order's lines and their prices as struck. [Refund]
+
+If a refund asks for more tickets of a tier than the order bought on it and has not already had refunded, then the box office shall refuse the refund. [Refund]
+
+## capacity
+
+The box office shall never let seats spoken for plus seats held exceed the seats a ticket tier has. [Capacity]
+
+While every seat of a ticket tier is spoken for or held, the box office shall refuse new holds on that tier. [Capacity]
+
+When an order is placed, the box office shall turn that order's held seats into seats spoken for. [Capacity]
+
+When a hold passes its deadline, the box office shall free its seats. [Hold]
+
+If an expired hold is offered toward an order, then the box office shall refuse it. [Hold]
+
+When tickets are refunded, the box office shall stop counting their seats as spoken for. [Capacity]
+
+If a refund asks to free more seats of a ticket tier than that tier has spoken for, then the box office shall refuse the refund. [Capacity]
