@@ -4,7 +4,7 @@ BIN     ?= ./arclint
 # Embed only the tree-sitter grammars the declaration extractors use:
 # without these tags every grammar embeds and the binary grows ~19 MB.
 GRAMMARS := grammar_subset grammar_subset_typescript grammar_subset_tsx grammar_subset_python
-.PHONY: build test vet fmt-check fmt lint lint-fix generate selfcheck verify check check-fix leak-check bench agentbench release ci clean docs docs-serve docker
+.PHONY: build test vet fmt-check fmt lint lint-fix generate selfcheck verify check check-fix check-ro leak-check bench agentbench release ci clean docs docs-serve docker
 
 build:
 	CGO_ENABLED=0 $(GO) build -tags "$(GRAMMARS)" -trimpath -ldflags "-s -w" -o $(BIN) ./cmd/arclint
@@ -55,6 +55,15 @@ check-fix:
 # Canonical full local/CI gate. hk runs the same targets as separate
 # steps so its fix mode can repair formatting and lint findings first.
 check: fmt-check lint verify
+
+# Read-only quick gate: no file writes (selfcheck via go run, no ./arclint
+# rebuild), no network (-short skips the toolchain ground truth). For
+# review sessions and agents that must not mutate the tree.
+check-ro:
+	$(GO) vet ./...
+	golangci-lint run --fix=false ./...
+	$(GO) test -short ./...
+	$(GO) run -tags "$(GRAMMARS)" ./cmd/arclint check .
 
 # M1 gate 4: cold start < 100ms; 5,000 files in low single-digit seconds.
 bench: build

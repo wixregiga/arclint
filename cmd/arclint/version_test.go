@@ -35,9 +35,15 @@ func TestVersionOutput(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("--version: exit %d, stderr %s", code, stderr)
 	}
-	// The e2e binary builds inside the repo, so VCS stamping applies.
+	// The e2e binary builds inside the repo, so VCS stamping applies —
+	// except where the environment's git cannot stamp and TestMain fell
+	// back to an unstamped build, which must still report the plain
+	// product version.
 	re := regexp.MustCompile(`arclint version \d+\.\d+\.\d+-beta\.\d+ \([0-9a-f]{7}(, dirty)?, \d{4}-\d{2}-\d{2}\)`)
+	if !vcsStamped {
+		re = regexp.MustCompile(`arclint version \d+\.\d+\.\d+-beta\.\d+\s*$`)
+	}
 	if !re.MatchString(stdout) {
-		t.Errorf("--version output %q does not match %s", strings.TrimSpace(stdout), re)
+		t.Errorf("--version output %q does not match %s (vcs stamped: %v)", strings.TrimSpace(stdout), re, vcsStamped)
 	}
 }

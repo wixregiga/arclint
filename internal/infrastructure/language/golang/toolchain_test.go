@@ -432,6 +432,18 @@ func ensureClone(t *testing.T, spec repoSpec) string {
 func gitOutput(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
+	// Hook runners export GIT_DIR/GIT_WORK_TREE; inheriting them would
+	// aim every command here at the enclosing repository instead of
+	// the oracle cache clone. Scrub the git location variables so dir
+	// alone decides the target.
+	for _, env := range os.Environ() {
+		name, _, _ := strings.Cut(env, "=")
+		switch name {
+		case "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY":
+			continue
+		}
+		cmd.Env = append(cmd.Env, env)
+	}
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

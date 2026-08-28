@@ -16,6 +16,11 @@ import (
 
 var binPath string
 
+// vcsStamped reports whether the e2e binary carries VCS stamping; some
+// environments (hook runners, bare-config worktrees) have a git that
+// errors during stamping, and the fallback build disables it.
+var vcsStamped = true
+
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "arclint-e2e-*")
 	if err != nil {
@@ -24,7 +29,14 @@ func TestMain(m *testing.M) {
 	binPath = filepath.Join(dir, "arclint")
 	build := exec.Command("go", "build", "-o", binPath, ".")
 	build.Env = append(os.Environ(), "CGO_ENABLED=0")
-	if out, err := build.CombinedOutput(); err != nil {
+	out, err := build.CombinedOutput()
+	if err != nil && strings.Contains(string(out), "error obtaining VCS status") {
+		vcsStamped = false
+		build = exec.Command("go", "build", "-buildvcs=false", "-o", binPath, ".")
+		build.Env = append(os.Environ(), "CGO_ENABLED=0")
+		out, err = build.CombinedOutput()
+	}
+	if err != nil {
 		panic("build: " + err.Error() + "\n" + string(out))
 	}
 	code := m.Run()
