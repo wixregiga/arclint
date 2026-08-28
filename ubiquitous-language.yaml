@@ -1,3 +1,97 @@
 # yaml-language-server: $schema=.agents/skills/domain-librarian/library.schema.json
 version: 1
-contexts: []
+contexts:
+  - name: rule
+    entities:
+      - name: Rule
+        definition: >-
+          One enforceable architecture claim configured in rules.yaml.
+          A Rule keeps its RuleID while everything human-facing about
+          it can be renamed. Aggregate evidence, from the rules.yaml
+          header: "Rule is the sole aggregate". A Rule's identity, its
+          Claim, its scope, and its Severity change together in one
+          edit of rules.yaml.
+        aggregate: true
+    value_objects:
+      - name: RuleID
+        definition: >-
+          The stable, optionally namespace-qualified identity of a
+          Rule, spelled explicitly in rules.yaml. Every record arclint
+          keeps about a Rule over time keys on it, so it outlives
+          renames of anything else about the Rule.
+      - name: Claim
+        definition: >-
+          The architectural proposition a Rule states, either written
+          by the author or derived from the Rule's parameters. The
+          Claim of an expanded Rule says what it derives from, and
+          says plainly when the vocabulary records nothing yet.
+      - name: Severity
+        definition: >-
+          Gate importance of a finding: error, warning, or info.
+          Described entirely by its value and validated at
+          construction. Two equal spellings are interchangeable.
+      - name: Expansion
+        definition: >-
+          How a structure Rule's globs derive from one recorded
+          vocabulary collection: an ExpansionSource plus authored
+          globs whose {name:<case>} placeholders resolve once per
+          recorded term. It is pure substitution, with no predicates,
+          filters, or joins. Logic beyond substitution belongs in an
+          extension. The Rule stays the sole aggregate: an expanded
+          Rule is one Rule stating one universally quantified Claim.
+      - name: ExpansionSource
+        definition: >-
+          The recorded collection an Expansion derives from, one of
+          the closed set domain.aggregates, domain.entities,
+          domain.value_objects, domain.events, domain.contexts. A new
+          source is a deliberate design act, never a syntax feature.
+      - name: TermCase
+        definition: >-
+          One published rendering of a recorded term as a path or
+          identifier segment: flatcase, snake_case, kebab-case,
+          camelCase, or PascalCase. One producing implementation
+          serves both surfaces, the rules.yaml {name:<case>}
+          placeholders and the extension SDK's ctx.caseTerm, so
+          whatever the ruleset grammar expresses an extension can
+          see. A CaseSpec checks names; a TermCase produces them.
+      - name: CaseSpec
+        definition: >-
+          The finite case vocabulary a naming Rule matches file stems
+          against in rules.yaml: kebab-case, snake_case, camelCase,
+          PascalCase, or a regex, combined as alternatives.
+    invariants:
+      - statement: >-
+          A Severity must be one of error, warning, or info; any other
+          spelling is rejected at construction, never stored.
+        owner: Severity
+      - statement: >-
+          An Expansion must name a published ExpansionSource, declare
+          at least one require or forbid glob, and use braces only as
+          {name:<case>} placeholders with a published TermCase.
+          Anything else is rejected at construction, never loaded.
+        owner: Expansion
+      - statement: >-
+          A Rule may carry an Expansion only as a structure Rule, and
+          its parameters must be exactly the Expansion's resolution
+          against the recorded language. When nothing is recorded the
+          parameters are empty and the Claim says so.
+        owner: Rule
+      - statement: >-
+          A TermCase never renders an empty segment: a term without
+          letters or digits is rejected at resolution.
+        owner: TermCase
+  - name: conformance
+    value_objects:
+      - name: Violation
+        definition: >-
+          One suspected breach of a Rule, anchored at a file and line.
+          It has no lifecycle: every assessment derives its Violations
+          fresh, and two Violations with the same values are the same
+          finding.
+relations:
+  # conformance adopts the rule context's model as-is: assessments
+  # consume Rule, Severity, and the rest of the rule model directly,
+  # so dependence flows conformance -> rule and never back.
+  - from: rule
+    to: conformance
+    kind: conformist

@@ -9,6 +9,8 @@ package rule
 import (
 	"fmt"
 	"strings"
+
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 // Rule is the aggregate root. Values are immutable: configuration
@@ -25,6 +27,7 @@ type Rule struct {
 	disablement   *Disablement
 	tests         []Test
 	provenance    *PatternReference
+	expansion     *Expansion
 }
 
 // Spec is the input to validated Rule construction.
@@ -48,6 +51,10 @@ type Spec struct {
 	Tests []Test
 	// Provenance records the distributing Pattern, when any.
 	Provenance *PatternReference
+	// Expansion, on a structure Rule, records that Params derive from
+	// a recorded vocabulary collection; Params must then hold exactly
+	// the Expansion's resolution against the recorded language.
+	Expansion *Expansion
 }
 
 // New constructs a valid Rule or rejects the complete Spec. Every owned
@@ -64,7 +71,18 @@ func New(spec Spec) (Rule, error) {
 	if !spec.Type.Valid() {
 		return fail(fmt.Errorf("type %q: not a published ArcLint Rule Type", spec.Type))
 	}
-	if err := spec.Type.Accepts(spec.Params); err != nil {
+	if spec.Expansion != nil {
+		if spec.Expansion.IsZero() {
+			return fail(fmt.Errorf("unconstructed expansion"))
+		}
+		if spec.Type != TypeStructure {
+			return fail(fmt.Errorf("expansion: only structure rules expand over the recorded vocabulary"))
+		}
+		if _, ok := spec.Params.(StructureParams); !ok {
+			return fail(fmt.Errorf("expansion: structure rule with %T params", spec.Params))
+		}
+	}
+	if err := acceptsParams(spec.Type, spec.Params, spec.Expansion); err != nil {
 		return fail(err)
 	}
 	severity, err := ParseSeverity(spec.Severity)
@@ -84,6 +102,9 @@ func New(spec Spec) (Rule, error) {
 	statement := spec.Claim
 	if strings.TrimSpace(statement) == "" {
 		statement = deriveClaim(spec.Applicability, spec.Params)
+		if spec.Expansion != nil {
+			statement = deriveExpandedClaim(spec.Applicability, spec.Params.(StructureParams), *spec.Expansion)
+		}
 	}
 	claim, err := NewClaim(statement)
 	if err != nil {
@@ -105,6 +126,11 @@ func New(spec Spec) (Rule, error) {
 		ref := *spec.Provenance
 		provenance = &ref
 	}
+	var expansion *Expansion
+	if spec.Expansion != nil {
+		e := *spec.Expansion
+		expansion = &e
+	}
 	return Rule{
 		id:            id,
 		typ:           spec.Type,
@@ -115,7 +141,37 @@ func New(spec Spec) (Rule, error) {
 		enforcement:   enforcement,
 		tests:         append([]Test(nil), spec.Tests...),
 		provenance:    provenance,
+		expansion:     expansion,
 	}, nil
+}
+
+// acceptsParams is Type.Accepts with the one expansion allowance: an
+// expanded structure Rule over an empty recorded collection holds
+// empty parameters — it exists and asserts nothing yet, which its
+// Claim states.
+func acceptsParams(t Type, p Params, e *Expansion) error {
+	if e != nil {
+		sp, ok := p.(StructureParams)
+		if ok && len(sp.Require)+len(sp.Forbid) == 0 {
+			return nil
+		}
+	}
+	return t.Accepts(p)
+}
+
+// deriveExpandedClaim states the universally quantified claim of an
+// expanded structure Rule: the source it ranges over and the globs the
+// recorded language currently derives.
+func deriveExpandedClaim(a Applicability, p StructureParams, e Expansion) string {
+	modules := a.Modules()
+	scope := fmt.Sprintf("Modules %s", moduleList(modules))
+	if len(modules) == 1 {
+		scope = fmt.Sprintf("Module %q", modules[0])
+	}
+	if len(p.Require)+len(p.Forbid) == 0 {
+		return fmt.Sprintf("%s: derives structure obligations from each recorded %s; none recorded yet", scope, e.Source())
+	}
+	return fmt.Sprintf("%s: %s (derived from each recorded %s)", scope, p.proposition(), e.Source())
 }
 
 // validateScope keeps Applicability coherent with the Rule Type:
@@ -193,6 +249,37 @@ func (r Rule) Provenance() (PatternReference, bool) {
 	return *r.provenance, true
 }
 
+// Expansion returns the vocabulary derivation of an expanded structure
+// Rule, when any.
+func (r Rule) Expansion() (Expansion, bool) {
+	if r.expansion == nil {
+		return Expansion{}, false
+	}
+	return *r.expansion, true
+}
+
+// Reexpand re-derives an expanded Rule's parameters and Claim against
+// another recorded language, keeping the identity and every other
+// value. The Rule Test runner uses this to evaluate the Rule against a
+// fixture's own vocabulary; a Rule without an Expansion is returned
+// unchanged.
+func (r Rule) Reexpand(lang vocab.UbiquitousLanguage) (Rule, error) {
+	if r.expansion == nil {
+		return r, nil
+	}
+	params, err := r.expansion.Resolve(lang)
+	if err != nil {
+		return Rule{}, fmt.Errorf("rule %s: %v", r.id, err)
+	}
+	claim, err := NewClaim(deriveExpandedClaim(r.applicability, params, *r.expansion))
+	if err != nil {
+		return Rule{}, fmt.Errorf("rule %s: %v", r.id, err)
+	}
+	r.params = params
+	r.claim = claim
+	return r, nil
+}
+
 // Disabled reports whether evaluation is prevented for the repository.
 func (r Rule) Disabled() bool { return r.disablement != nil }
 
@@ -217,7 +304,7 @@ func (r Rule) Validate() error {
 	if r.id.IsZero() {
 		return fmt.Errorf("rule: unconstructed (zero value)")
 	}
-	if err := r.typ.Accepts(r.params); err != nil {
+	if err := acceptsParams(r.typ, r.params, r.expansion); err != nil {
 		return fmt.Errorf("rule %s: %v", r.id, err)
 	}
 	if !r.severity.Valid() {

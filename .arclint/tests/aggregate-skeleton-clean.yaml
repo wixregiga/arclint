@@ -1,0 +1,23 @@
+# Conforming case: the expanded rule derives its globs from the
+# fixture's recorded aggregates, and every derived file exists.
+rule: "arclint:domain-model/aggregate-skeleton"
+files:
+  ubiquitous-language.yaml: |
+    version: 1
+    contexts:
+      - name: ordering
+        entities:
+          - name: Order
+            definition: A customer's request to purchase products.
+            aggregate: true
+  internal/domain/order/root.go: |
+    package order
+
+    type Order struct{}
+  internal/domain/order/repository.go: |
+    package order
+
+    type Repository interface {
+        Find(id string) (Order, error)
+    }
+expect: []

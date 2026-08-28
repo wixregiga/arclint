@@ -17,21 +17,28 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 // Repository implements the domain-owned rule.Repository port over one
-// ruleset file.
+// ruleset file. The recorded Ubiquitous Language is an input to rule
+// configuration: expanded structure Rules resolve their globs against
+// it at load time, so the engine only ever sees ordinary Rules.
 type Repository struct {
-	path string
+	path      string
+	knowledge vocab.Repository
 }
 
-// NewRepository binds the repository to a ruleset file path.
-func NewRepository(path string) (Repository, error) {
+// NewRepository binds the repository to a ruleset file path and the
+// recorded-vocabulary port expanded Rules resolve against. A nil
+// knowledge port means no recorded vocabulary: expanded Rules then
+// resolve empty, exactly as with an absent ubiquitous-language.yaml.
+func NewRepository(path string, knowledge vocab.Repository) (Repository, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return Repository{}, fmt.Errorf("ruleset path: %w", err)
 	}
-	return Repository{path: abs}, nil
+	return Repository{path: abs, knowledge: knowledge}, nil
 }
 
 // Path returns the absolute ruleset file path.
@@ -42,13 +49,24 @@ func (r Repository) Path() string { return r.path }
 func (r Repository) Root() string { return filepath.Dir(r.path) }
 
 // ConfiguredRules loads, validates, and translates the ruleset into
-// complete Rule aggregates.
+// complete Rule aggregates, resolving expanded Rules against the
+// recorded Ubiquitous Language.
 func (r Repository) ConfiguredRules() (rule.Configured, error) {
 	data, err := os.ReadFile(r.path)
 	if err != nil {
 		return rule.Configured{}, fmt.Errorf("read ruleset: %w", err)
 	}
-	doc, err := Load(data, r.path)
+	lang := vocab.UbiquitousLanguage{}
+	if r.knowledge != nil {
+		recorded, found, err := r.knowledge.RecordedLanguage()
+		if err != nil {
+			return rule.Configured{}, fmt.Errorf("load domain model: %w", err)
+		}
+		if found {
+			lang = recorded
+		}
+	}
+	doc, err := Load(data, r.path, lang)
 	if err != nil {
 		return rule.Configured{}, err
 	}
@@ -123,6 +141,7 @@ type invariantDoc struct {
 	ID       string         `yaml:"id"`
 	Kind     string         `yaml:"kind"`
 	Severity string         `yaml:"severity"`
+	Each     string         `yaml:"each"`
 	Files    string         `yaml:"files"`
 	Case     string         `yaml:"case"`
 	Require  []string       `yaml:"require"`
@@ -144,7 +163,10 @@ type dependencyDoc struct {
 
 // Load parses one target-format ruleset document strictly: unknown
 // keys, unknown kinds, and Rules without explicit IDs are errors.
-func Load(data []byte, source string) (Document, error) {
+// Expanded structure Rules (each:) resolve their globs against the
+// given recorded language; pass an empty UbiquitousLanguage where none
+// is recorded, as for Pattern distribution files.
+func Load(data []byte, source string, lang vocab.UbiquitousLanguage) (Document, error) {
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
 	var doc documentDoc
@@ -213,7 +235,7 @@ func Load(data []byte, source string) (Document, error) {
 		}
 		for i, inv := range contract.Invariants {
 			where := fmt.Sprintf("contracts.%s.invariants[%d]", name, i)
-			spec, err := invariantSpec(name, inv)
+			spec, err := invariantSpec(name, inv, lang)
 			if err != nil {
 				return fail("%s: %v", where, err)
 			}
@@ -356,7 +378,7 @@ func consumesSpec(module string, doc consumesDoc) (rule.Spec, error) {
 	}, nil
 }
 
-func invariantSpec(module string, doc invariantDoc) (rule.Spec, error) {
+func invariantSpec(module string, doc invariantDoc, lang vocab.UbiquitousLanguage) (rule.Spec, error) {
 	moduleName, err := rule.NewModuleName(module)
 	if err != nil {
 		return rule.Spec{}, fmt.Errorf("applicability: %w", err)
@@ -374,16 +396,11 @@ func invariantSpec(module string, doc invariantDoc) (rule.Spec, error) {
 		}); err != nil {
 			return rule.Spec{}, err
 		}
-		require, err := rule.NewGlobs(doc.Require)
-		if err != nil {
-			return rule.Spec{}, fmt.Errorf("require: %v", err)
-		}
-		forbid, err := rule.NewGlobs(doc.Forbid)
-		if err != nil {
-			return rule.Spec{}, fmt.Errorf("forbid: %v", err)
-		}
 		spec.Type = rule.TypeStructure
-		spec.Params = rule.StructureParams{Require: require, Forbid: forbid}
+		spec.Params, spec.Expansion, err = structureParams(doc, lang)
+		if err != nil {
+			return rule.Spec{}, err
+		}
 		spec.Applicability, err = rule.ModuleApplicability([]rule.ModuleName{moduleName})
 		if err != nil {
 			return rule.Spec{}, fmt.Errorf("structure: %w", err)
@@ -398,6 +415,7 @@ func invariantSpec(module string, doc invariantDoc) (rule.Spec, error) {
 		if err := forbidKindFields("naming", map[string]bool{
 			"require": len(doc.Require) > 0, "forbid": len(doc.Forbid) > 0,
 			"uses": doc.Uses != "", "with": len(doc.With) > 0,
+			"each": doc.Each != "",
 		}); err != nil {
 			return rule.Spec{}, err
 		}
@@ -435,7 +453,7 @@ func repositoryInvariantSpec(doc invariantDoc) (rule.Spec, error) {
 func extensionInvariantSpec(scope rule.Applicability, doc invariantDoc) (rule.Spec, error) {
 	if err := forbidKindFields("extension", map[string]bool{
 		"require": len(doc.Require) > 0, "forbid": len(doc.Forbid) > 0,
-		"case": doc.Case != "",
+		"case": doc.Case != "", "each": doc.Each != "",
 	}); err != nil {
 		return rule.Spec{}, err
 	}
@@ -446,6 +464,32 @@ func extensionInvariantSpec(scope rule.Applicability, doc invariantDoc) (rule.Sp
 		Params:        rule.ExtensionParams{Uses: doc.Uses, With: doc.With},
 		Applicability: scope,
 	}, nil
+}
+
+// structureParams builds a structure invariant's parameters: plain
+// globs, or — with each: — an Expansion resolved against the recorded
+// language.
+func structureParams(doc invariantDoc, lang vocab.UbiquitousLanguage) (rule.Params, *rule.Expansion, error) {
+	if doc.Each == "" {
+		require, err := rule.NewGlobs(doc.Require)
+		if err != nil {
+			return nil, nil, fmt.Errorf("require: %v", err)
+		}
+		forbid, err := rule.NewGlobs(doc.Forbid)
+		if err != nil {
+			return nil, nil, fmt.Errorf("forbid: %v", err)
+		}
+		return rule.StructureParams{Require: require, Forbid: forbid}, nil, nil
+	}
+	expansion, err := rule.NewExpansion(doc.Each, doc.Require, doc.Forbid)
+	if err != nil {
+		return nil, nil, fmt.Errorf("expansion: %w", err)
+	}
+	params, err := expansion.Resolve(lang)
+	if err != nil {
+		return nil, nil, fmt.Errorf("expansion: %w", err)
+	}
+	return params, &expansion, nil
 }
 
 func invariantFiles(doc invariantDoc) ([]rule.Glob, error) {

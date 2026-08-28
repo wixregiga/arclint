@@ -1,0 +1,29 @@
+# Conforming case: dependence flows downstream to upstream — the
+# conformance module imports the rule module, exactly as the recorded
+# conformist relation permits.
+rule: "arclint:domain-model/contexts-respect-relations"
+files:
+  ubiquitous-language.yaml: |
+    version: 1
+    contexts:
+      - name: rule
+      - name: conformance
+    relations:
+      - from: rule
+        to: conformance
+        kind: conformist
+  go.mod: |
+    module fixture
+
+    go 1.26
+  internal/domain/rule/root.go: |
+    package rule
+
+    type Rule struct{}
+  internal/domain/conformance/check.go: |
+    package conformance
+
+    import "fixture/internal/domain/rule"
+
+    type Check struct{ Rule rule.Rule }
+expect: []

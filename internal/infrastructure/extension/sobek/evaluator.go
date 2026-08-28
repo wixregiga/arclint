@@ -198,7 +198,8 @@ func (e *Evaluator) host(subjects []string, modules []rule.Module, obs conforman
 			sort.Strings(out)
 			return out
 		},
-		Domain: func() DomainInfo { return domain },
+		Domain:   func() DomainInfo { return domain },
+		CaseTerm: rule.CaseTerm,
 	}
 }
 

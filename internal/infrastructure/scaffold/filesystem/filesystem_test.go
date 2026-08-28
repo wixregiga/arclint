@@ -28,7 +28,7 @@ func TestStarterRulesetRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	repo, err := yamlrule.NewRepository(path)
+	repo, err := yamlrule.NewRepository(path, nil)
 	if err != nil {
 		t.Fatalf("NewRepository: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestVerticalRulesetRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	repo, err := yamlrule.NewRepository(path)
+	repo, err := yamlrule.NewRepository(path, nil)
 	if err != nil {
 		t.Fatalf("NewRepository: %v", err)
 	}

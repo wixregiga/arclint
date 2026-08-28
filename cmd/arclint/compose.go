@@ -44,11 +44,22 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	repository, err := yamlrule.NewRepository(rulesPath)
+	// The recorded vocabulary is an input to rule configuration —
+	// expanded Rules resolve against it — so the vocabulary repository
+	// composes before the rule repository that consumes it.
+	absRulesPath, err := filepath.Abs(rulesPath)
 	if err != nil {
 		return configError(err)
 	}
-	root := repository.Root()
+	root := filepath.Dir(absRulesPath)
+	knowledge, err := yamlvocab.NewRepository(root)
+	if err != nil {
+		return configError(err)
+	}
+	repository, err := yamlrule.NewRepository(absRulesPath, knowledge)
+	if err != nil {
+		return configError(err)
+	}
 	observations, err := filesystemobservation.NewSource(root,
 		golangfacts.NewProducer(), typescriptfacts.NewProducer(), pythonfacts.NewProducer())
 	if err != nil {
@@ -63,10 +74,6 @@ func run(args []string) int {
 		return configError(err)
 	}
 	patterns, err := filesystempattern.NewSource(filepath.Join(root, ".arclint", "patterns"))
-	if err != nil {
-		return configError(err)
-	}
-	knowledge, err := yamlvocab.NewRepository(root)
 	if err != nil {
 		return configError(err)
 	}

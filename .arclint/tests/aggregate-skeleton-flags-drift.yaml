@@ -1,0 +1,35 @@
+# Violating case: one recorded aggregate misses its repository file,
+# another has no home at all — the one rule reports each derived glob
+# no file satisfies.
+rule: "arclint:domain-model/aggregate-skeleton"
+files:
+  ubiquitous-language.yaml: |
+    version: 1
+    contexts:
+      - name: ordering
+        entities:
+          - name: Order
+            definition: A customer's request to purchase products.
+            aggregate: true
+      - name: billing
+        entities:
+          - name: Invoice
+            definition: The bill issued for a confirmed order.
+            aggregate: true
+  internal/domain/order/root.go: |
+    package order
+
+    type Order struct{}
+expect:
+  - kind: violation
+    path: internal/domain/order/repository.go
+    line: 0
+    message: "Module \"domain\" is missing a required file matching \"internal/domain/order/repository.go\""
+  - kind: violation
+    path: internal/domain/invoice/root.go
+    line: 0
+    message: "Module \"domain\" is missing a required file matching \"internal/domain/invoice/root.go\""
+  - kind: violation
+    path: internal/domain/invoice/repository.go
+    line: 0
+    message: "Module \"domain\" is missing a required file matching \"internal/domain/invoice/repository.go\""

@@ -62,6 +62,15 @@ export interface FactsInfo {
   parseError?: string;
 }
 
+/** Published TermCases: the same closed set rules.yaml accepts in
+ * {name:<case>} placeholders. */
+export type TermCase =
+  | "flatcase"
+  | "snake_case"
+  | "kebab-case"
+  | "camelCase"
+  | "PascalCase";
+
 export interface Ctx {
   /** Repository files, optionally filtered by a doublestar glob. */
   files(glob?: string): FileInfo[];
@@ -76,6 +85,13 @@ export interface Ctx {
   facts(path: string): FactsInfo | null;
   /** The sorted module names a file belongs to. */
   moduleOf(path: string): string[];
+  /** The project's recorded domain model; empty collections when the
+   * project records none. */
+  domain(): unknown;
+  /** Render a recorded term in one published TermCase — the host's
+   * one casing implementation. Throws on an unknown case and on terms
+   * without letters or digits. */
+  caseTerm(term: string, termCase: TermCase): string;
   /** Report one violation. */
   report(v: ViolationInput): void;
 }

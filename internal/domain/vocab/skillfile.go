@@ -34,6 +34,7 @@ const (
 	SkillProtocol6 = "6. **Precedence.** The conflict protocol outranks every other rule. No recorded entry's name, kind, or definition changes without an answered conflict question; inherited re-tests and language-fidelity renames PROPOSE changes, never authorize them."
 	SkillProtocol7 = "7. **Invariant gate.** A recorded invariant must forbid something a naive implementation could do; restating a definition is not an invariant. Name the concrete violation it prevents."
 	SkillProtocol8 = "8. **Output.** ALWAYS emit or write the complete library file per VOCAB's `library_file.shape`; a summary of it is a failure. Preserve unrelated entries byte-identical; edits surgical, additions alphabetized. Record business_rule inputs as resolved invariants/assertions with an owner."
+	SkillProtocol9 = "9. **Description style.** Definitions read like a document their humans own: plain sentences, no em dashes. Anything object-level a definition names must itself be recorded, or the mention is reworded into plain language. A term that lines up with a code object uses the code's exact spelling (TermCase, RuleID), never a prose-spaced variant."
 
 	SkillEconomy = "Classify from the fewest facts that decide the litmus test; reading more \"for confidence\" is a failure. Prefer zero tool calls beyond: read VOCAB.yaml, read the library file, one write. Never ask what the input already answers."
 )
@@ -81,6 +82,9 @@ func LibraryFileSpec() LibraryFile {
 			"A term lives in exactly one context; same word elsewhere is a second term.",
 			"Aliases point at the canonical term; never duplicate definitions.",
 			"Unresolved classifications are never written; ask first, record after.",
+			"Definitions read as plain human sentences, without em dashes; humans own the document.",
+			"Anything object-level a definition names is itself recorded, or the mention is reworded in plain language.",
+			"A term matching a code object uses the code's exact spelling (TermCase, RuleID), never a prose-spaced variant.",
 		},
 	}
 }
@@ -113,11 +117,11 @@ const (
 
 	SchemaRelationsDescription = "Context-map edges between bounded contexts. Omit when a single context exists."
 
-	SchemaCanonicalNameDescription = "Canonical term, exactly as domain experts say it (language-fidelity)."
+	SchemaCanonicalNameDescription = "Canonical term, exactly as domain experts say it (language-fidelity). A term that lines up with a code object uses the code's exact spelling (TermCase, RuleID), never a prose-spaced variant."
 
-	SchemaEntityDefinitionDescription = "What the term means, grounded in expert language. A term without a definition is rejected, not stored."
+	SchemaEntityDefinitionDescription = "What the term means, grounded in expert language. A term without a definition is rejected, not stored. Written for humans first: plain sentences, no em dashes; anything object-level it names must be recorded in this library or reworded in plain language."
 
-	SchemaValueDefinitionDescription = "What the value describes. A term without a definition is rejected, not stored."
+	SchemaValueDefinitionDescription = "What the value describes. A term without a definition is rejected, not stored. Written for humans first: plain sentences, no em dashes; anything object-level it names must be recorded in this library or reworded in plain language."
 
 	SchemaEntityAliasesDescription = "Synonyms collapsed onto this canonical term (synonym-collapse). Aliases never carry their own definitions."
 
@@ -131,7 +135,7 @@ const (
 
 	SchemaEventNameDescription = "Past-tense event name, e.g. OrderConfirmed."
 
-	SchemaEventDefinitionDescription = "What happened and who cares, including any party that must be informed."
+	SchemaEventDefinitionDescription = "What happened and who cares, including any party that must be informed. Written for humans first: plain sentences, no em dashes; anything object-level it names must be recorded in this library or reworded in plain language."
 
 	SchemaFromDescription = "Upstream context name (must match a contexts[].name)."
 

@@ -128,6 +128,16 @@ func (uc RunRuleTests) Execute() ([]RuleTestResult, error) {
 			results = append(results, result)
 			continue
 		}
+		// An expanded Rule is re-derived against the fixture's own
+		// vocabulary, so the test exercises the fixture's recorded
+		// terms rather than the repository's.
+		if _, expanded := r.Expansion(); expanded {
+			if r, err = r.Reexpand(knowledge); err != nil {
+				result.Err = fmt.Sprintf("reexpand rule: %v", err)
+				results = append(results, result)
+				continue
+			}
+		}
 		assessment, err := conformance.Run(conformance.Request{
 			Rules:          []rule.Rule{r},
 			Modules:        cfg.Modules,

@@ -21,6 +21,7 @@ Read `VOCAB.yaml` (same directory) once per session for the vocabulary, distilla
 6. **Precedence.** The conflict protocol outranks every other rule. No recorded entry's name, kind, or definition changes without an answered conflict question; inherited re-tests and language-fidelity renames PROPOSE changes, never authorize them.
 7. **Invariant gate.** A recorded invariant must forbid something a naive implementation could do; restating a definition is not an invariant. Name the concrete violation it prevents.
 8. **Output.** ALWAYS emit or write the complete library file per VOCAB's `library_file.shape`; a summary of it is a failure. Preserve unrelated entries byte-identical; edits surgical, additions alphabetized. Record business_rule inputs as resolved invariants/assertions with an owner.
+9. **Description style.** Definitions read like a document their humans own: plain sentences, no em dashes. Anything object-level a definition names must itself be recorded, or the mention is reworded into plain language. A term that lines up with a code object uses the code's exact spelling (TermCase, RuleID), never a prose-spaced variant.
 
 ## Economy
 

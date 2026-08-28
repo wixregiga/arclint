@@ -6,13 +6,27 @@ import (
 	"testing"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
+	yamlvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/yaml"
 )
+
+// repoVocabulary is this repository's recorded Ubiquitous Language:
+// the loader resolves expanded Rules against it, so the target-ruleset
+// test must load it exactly as production composition does.
+func repoVocabulary(t *testing.T) vocab.Repository {
+	t.Helper()
+	repo, err := yamlvocab.NewRepository("../../../..")
+	if err != nil {
+		t.Fatalf("vocabulary repository: %v", err)
+	}
+	return repo
+}
 
 // TestLoadTargetRuleset proves the loader against the real target
 // ruleset of this repository.
 func TestLoadTargetRuleset(t *testing.T) {
-	repo, err := yamlrule.NewRepository("../../../../rules.yaml")
+	repo, err := yamlrule.NewRepository("../../../../rules.yaml", repoVocabulary(t))
 	if err != nil {
 		t.Fatalf("NewRepository: %v", err)
 	}
@@ -20,11 +34,11 @@ func TestLoadTargetRuleset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConfiguredRules: %v", err)
 	}
-	if len(cfg.Modules) != 9 {
-		t.Errorf("modules = %d, want 9", len(cfg.Modules))
+	if len(cfg.Modules) != 11 {
+		t.Errorf("modules = %d, want 11", len(cfg.Modules))
 	}
-	if len(cfg.Rules) != 21 {
-		t.Errorf("rules = %d, want 21", len(cfg.Rules))
+	if len(cfg.Rules) != 24 {
+		t.Errorf("rules = %d, want 24", len(cfg.Rules))
 	}
 	if len(cfg.Languages) != 2 || cfg.Languages[0] != rule.LanguageGo || cfg.Languages[1] != rule.LanguageTypeScript {
 		t.Errorf("languages = %v, want [go typescript]", cfg.Languages)
@@ -56,6 +70,19 @@ func TestLoadTargetRuleset(t *testing.T) {
 	} else if table.Type() != rule.TypeStructure {
 		t.Errorf("stdlib-table rule type = %q, want structure", table.Type())
 	}
+	skeleton, ok := byID["arclint:domain-model/aggregate-skeleton"]
+	if !ok {
+		t.Fatalf("missing arclint:domain-model/aggregate-skeleton")
+	}
+	if _, expanded := skeleton.Expansion(); !expanded {
+		t.Errorf("aggregate-skeleton carries no expansion")
+	}
+	params, ok := skeleton.Params().(rule.StructureParams)
+	if !ok || len(params.Require) != 2 {
+		// The repository records one aggregate (Rule), so the two
+		// authored globs resolve to exactly two obligations.
+		t.Errorf("aggregate-skeleton params = %#v", skeleton.Params())
+	}
 }
 
 func keys(m map[string]rule.Rule) []string {
@@ -68,7 +95,7 @@ func keys(m map[string]rule.Rule) []string {
 
 func loadString(t *testing.T, content string) (yamlrule.Document, error) {
 	t.Helper()
-	return yamlrule.Load([]byte(content), "test.yaml")
+	return yamlrule.Load([]byte(content), "test.yaml", vocab.UbiquitousLanguage{})
 }
 
 func TestLoadRejectsInvalidDocuments(t *testing.T) {
@@ -166,14 +193,14 @@ contracts:
 	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	repo, err := yamlrule.NewRepository(file)
+	repo, err := yamlrule.NewRepository(file, nil)
 	if err != nil {
 		t.Fatalf("NewRepository: %v", err)
 	}
 	if _, err := repo.ConfiguredRules(); err == nil {
 		t.Errorf("a pattern distribution file must not load as a repository ruleset")
 	}
-	doc, err := yamlrule.Load([]byte(content), file)
+	doc, err := yamlrule.Load([]byte(content), file, vocab.UbiquitousLanguage{})
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}

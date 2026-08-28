@@ -38,6 +38,8 @@ func SkillMarkdown() string {
 	b.WriteString(SkillProtocol7)
 	b.WriteString("\n")
 	b.WriteString(SkillProtocol8)
+	b.WriteString("\n")
+	b.WriteString(SkillProtocol9)
 	b.WriteString("\n\n")
 	b.WriteString("## Economy\n\n")
 	b.WriteString(SkillEconomy)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
 )
 
@@ -112,7 +113,7 @@ func (s Source) Patterns() ([]rule.Pattern, error) {
 			return nil, err
 		}
 		path := "embedded/" + name + "/rules.yaml"
-		doc, err := yamlrule.Load([]byte(b.ruleset), path)
+		doc, err := yamlrule.Load([]byte(b.ruleset), path, vocab.UbiquitousLanguage{})
 		if err != nil {
 			return nil, fmt.Errorf("load pattern: %w", err)
 		}

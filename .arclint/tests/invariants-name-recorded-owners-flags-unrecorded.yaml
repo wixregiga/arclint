@@ -1,0 +1,26 @@
+# Violating case: one invariant names an owner the context never
+# records, another names an alias instead of the canonical term.
+rule: "arclint:vocabulary/invariants-name-recorded-owners"
+files:
+  ubiquitous-language.yaml: |
+    version: 1
+    contexts:
+      - name: ordering
+        entities:
+          - name: Order
+            definition: A customer's request to purchase products.
+            aliases: [Purchase]
+        invariants:
+          - statement: An Order's total must never be negative.
+            owner: Ledger
+          - statement: An Order must reference at least one product.
+            owner: Purchase
+expect:
+  - kind: violation
+    path: ubiquitous-language.yaml
+    line: 1
+    message: "invariant owner \"Ledger\" in context \"ordering\" is not a recorded entity or value object of that context"
+  - kind: violation
+    path: ubiquitous-language.yaml
+    line: 1
+    message: "invariant owner \"Purchase\" in context \"ordering\" is not a recorded entity or value object of that context"
