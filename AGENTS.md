@@ -48,3 +48,10 @@ or the same pair through mise:
 ```bash
 mise run check-fix
 ```
+
+For read-only sessions (reviews, audits, anything that must not mutate
+the tree), the gate is the non-mutating, network-free variant:
+
+```bash
+make check-ro
+```

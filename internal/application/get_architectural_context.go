@@ -323,7 +323,13 @@ func appliesToScope(r rule.Rule, path string, owning []rule.ModuleName) (string,
 	case rule.ConsumesParams, rule.StructureParams, rule.NamingParams, rule.ExtensionParams:
 		_ = params
 		if r.AppliesToFile(path, owning) {
-			return fmt.Sprintf("selects the file through Module(s) %s", joinNames(sharedModules(r, owning))), true
+			shared := sharedModules(r, owning)
+			if len(shared) == 0 {
+				// Repository-scoped extension Rules select every file
+				// without any Module in common.
+				return "selects the file repository-wide", true
+			}
+			return fmt.Sprintf("selects the file through Module(s) %s", joinNames(shared)), true
 		}
 		if r.Applicability().ExcludedFile(path) && r.Applicability().WouldSelectFile(path, owning) {
 			return "excluded from this Rule's Applicability", true
