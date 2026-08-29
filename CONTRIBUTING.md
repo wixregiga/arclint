@@ -14,39 +14,83 @@ Open a pull request with the template filled in; CI must pass before review.
 
 ## Publishing a beta release
 
-Prerequisites: push access; local tools via `mise install` (includes
-goreleaser). Work from a clean tree on the branch you intend to release
-(usually main), with CI green on that commit.
+This checklist covers the release arclint ships today: a GitHub prerelease
+containing CGO-free Linux amd64 and arm64 archives plus checksums. It does not
+include package managers, stable releases, or container publishing.
 
-1. Update `cmd/arclint/VERSION` to the beta version, then commit it.
-   This file is the only release-version source used by the CLI binary,
-   Docker image tag, archives, and GitHub release.
+### Prepare the release
 
-2. Create and push the matching tag:
+- [ ] Choose the next `MAJOR.MINOR.PATCH-beta.N` version. Follow semantic
+  versioning, and never reuse a version that has been published.
+- [ ] Review the changes since the previous release. Write a short summary of
+  what changed, who should care, and any known limitations. GoReleaser builds
+  its changelog from commit subjects and omits `docs` and `chore` commits, so
+  check that the remaining subjects make sense to a user.
+- [ ] Confirm the README installation instructions match the archives and
+  platforms this release will actually publish.
+- [ ] Work from the commit intended for release, normally current `main`.
+  Install the pinned tools with `mise install`, and start with a clean tree.
+- [ ] Update `cmd/arclint/VERSION` and commit that version change by itself.
+  This file is the version source for the CLI binary, Docker image tag,
+  archives, and GitHub release.
 
-   ```bash
-   version="$(cat cmd/arclint/VERSION)"
-   git tag "v${version}"
-   git push origin "v${version}"
-   ```
+### Prove the release locally
 
-3. GitHub Actions workflow `Release` runs on that tag only. It runs
-   `make ci`, then GoReleaser. Result: one GitHub prerelease (not
-   latest) with:
-   - `arclint_<version>_linux_amd64.tar.gz`
-   - `arclint_<version>_linux_arm64.tar.gz`
-   - `checksums.txt`
+- [ ] Run `make ci`. This checks formatting, lint, vet, tests, the compiled
+  CLI, and arclint's own architecture rules.
+- [ ] Run `make leak-check`.
+- [ ] Run `make release`. This validates `.goreleaser.yaml` and creates the
+  Linux amd64 and arm64 archives plus `dist/checksums.txt` without publishing.
+- [ ] Verify the snapshot checksums:
 
-   The workflow rejects a tag that does not equal `v` plus the exact
-   contents of `cmd/arclint/VERSION`.
+  ```bash
+  pushd dist >/dev/null
+  sha256sum -c checksums.txt
+  popd >/dev/null
+  ```
 
-Ordinary pushes and non-beta tags never publish.
+- [ ] Extract the archive for the current host into a temporary directory.
+  Run the packaged `arclint --version`, then use that binary to run
+  `arclint check .` against this repository. Remove the temporary directory.
+- [ ] When Docker is available locally, build and smoke the release container.
+  The release workflow always performs the version check; the second command
+  below also exercises the container against this repository:
 
-Local dry-run (same archives and checksums, no credentials, no GitHub
-release):
+  ```bash
+  version="$(cat cmd/arclint/VERSION)"
+  make docker
+  docker run --rm "arclint:${version}" --version
+  docker run --rm -v "$PWD:/repo" "arclint:${version}" check .
+  ```
 
-```bash
-make release
-```
+### Publish
 
-or `mise run release`. Artifacts land under `dist/`.
+- [ ] Push the release commit and wait for its `CI` workflow to pass.
+- [ ] Confirm the tree is still clean and `cmd/arclint/VERSION` still names
+  the intended beta, then create and push its matching tag:
+
+  ```bash
+  version="$(cat cmd/arclint/VERSION)"
+  git tag "v${version}"
+  git push origin "v${version}"
+  ```
+
+  The `Release` workflow rejects any tag that is not exactly
+  `vMAJOR.MINOR.PATCH-beta.N` or does not match `cmd/arclint/VERSION`. It reruns
+  `make ci`, verifies the Docker image version, and publishes through
+  GoReleaser.
+
+### Verify the published release
+
+- [ ] Wait for the `Release` workflow to pass.
+- [ ] Confirm the GitHub release is marked as a prerelease, is not marked
+  latest, and contains exactly `arclint_<version>_linux_amd64.tar.gz`,
+  `arclint_<version>_linux_arm64.tar.gz`, and `checksums.txt`.
+- [ ] Download the amd64 archive and checksums into a clean temporary
+  directory. Verify the checksum, run `arclint --version`, and run
+  `arclint check` against a small real repository.
+- [ ] Replace raw generated notes with the prepared release summary when they
+  are incomplete or unclear.
+- [ ] If publishing or the smoke check fails, do not move the tag or replace
+  its artifacts. Fix the problem, increment `beta.N`, and repeat the
+  checklist.
