@@ -33,6 +33,10 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 
 Relations: rule → conformance (conformist). Full text: `arclint domain`.
 
+### Changing the language
+
+If your change speaks about something new, or changes what a recorded term means, record it in `ubiquitous-language.yaml` before writing code. Invoke the domain-librarian skill for that work: it decides how a concept is classified, what evidence a recording needs, and when an open question is recorded instead of a guess. If your harness does not have the skill, `arclint agents skill` writes it to `.agents/skills/domain-librarian/`.
+
 ### Modules and their rules
 
 - **application** — Action-named use cases coordinating domain objects through ports. (paths internal/application/**)

@@ -1,0 +1,1 @@
+export { CompPanel } from "./ui";

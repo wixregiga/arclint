@@ -40,6 +40,67 @@ func TestHoldsNeverOutrunTheRoom(t *testing.T) {
 	}
 }
 
+func TestCommitSpeaksForSeatsWithoutAHold(t *testing.T) {
+	c := openRoom(t)
+	if err := c.Commit("general", 2, t0); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+	count, err := c.Count("general", t0)
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	if count.SpokenFor != 2 || count.Held != 0 || count.Remaining != 1 {
+		t.Fatalf("count after committing straight = %+v, want 2 spoken for, none held, 1 left", count)
+	}
+	// Those seats come back the one way seats ever do.
+	if err := c.Refund("general", 2); err != nil {
+		t.Fatalf("Refund: %v", err)
+	}
+	if left, err := c.Remaining("general", t0); err != nil || left != 3 {
+		t.Fatalf("Remaining = %d, %v; want the room whole again", left, err)
+	}
+}
+
+func TestCommitNeverOutrunsTheRoom(t *testing.T) {
+	c := openRoom(t)
+	if err := c.PlaceHold("h1", "general", 2, t0.Add(5*time.Minute), t0); err != nil {
+		t.Fatalf("PlaceHold: %v", err)
+	}
+	// Held seats are already promised to someone deciding.
+	if err := c.Commit("general", 2, t0); !errors.Is(err, capacity.ErrSeatsExhausted) {
+		t.Fatalf("committing into held seats = %v, want ErrSeatsExhausted", err)
+	}
+	if err := c.Commit("general", 1, t0); err != nil {
+		t.Fatalf("committing the free seat: %v", err)
+	}
+	if err := c.Commit("balcony", 1, t0); !errors.Is(err, capacity.ErrTierNotOpen) {
+		t.Fatalf("committing an unopened tier = %v, want ErrTierNotOpen", err)
+	}
+	if err := c.Commit("general", 0, t0); !errors.Is(err, capacity.ErrSeatsInvalid) {
+		t.Fatalf("committing no seats = %v, want ErrSeatsInvalid", err)
+	}
+	count, err := c.Count("general", t0)
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	if count.SpokenFor != 1 || count.Held != 2 || count.Remaining != 0 {
+		t.Fatalf("count = %+v, want 1 spoken for, 2 held, none left", count)
+	}
+}
+
+func TestCommitTakesSeatsAnExpiredHoldGaveUp(t *testing.T) {
+	c := openRoom(t)
+	if err := c.PlaceHold("h1", "general", 3, t0.Add(time.Minute), t0); err != nil {
+		t.Fatalf("PlaceHold: %v", err)
+	}
+	if err := c.Commit("general", 1, t0); !errors.Is(err, capacity.ErrSeatsExhausted) {
+		t.Fatalf("committing while the hold stands = %v, want ErrSeatsExhausted", err)
+	}
+	if err := c.Commit("general", 3, t0.Add(2*time.Minute)); err != nil {
+		t.Fatalf("committing after the hold expired: %v", err)
+	}
+}
+
 func TestExpiredHoldFreesItsSeats(t *testing.T) {
 	c := openRoom(t)
 	deadline := t0.Add(5 * time.Minute)

@@ -23,18 +23,21 @@ export function BuyerCard({ order, eventId }: { order: Order; eventId: string })
     },
   });
 
-  const fullyRefunded = order.outstandingCents === 0;
+  // Counted in tickets, not cents: a comped order owes nothing from
+  // the start, so an empty balance never meant it came back.
+  const fullyRefunded = order.lines.every((line) => outstanding(line) === 0);
   return (
     <li className="card">
       <div className="tier-row">
         <span className="tier-name">{order.attendee.name}</span>
         <span className="muted">{order.attendee.email}</span>
+        {order.comped && <span className="chip">comped</span>}
         {fullyRefunded && <span className="chip cancelled">fully refunded</span>}
       </div>
       {order.lines.map((line) => (
         <div key={line.tier} className="tier-row">
           <span className="tier-name">{line.tier}</span>
-          <span className="chip">{formatPrice(line.unitCents)}</span>
+          <span className="chip">{line.unitCents === 0 ? "free" : formatPrice(line.unitCents)}</span>
           <span className="muted">
             {outstanding(line)} of {line.quantity} held
             {line.refunded > 0 && `, ${line.refunded} refunded`}
@@ -50,8 +53,14 @@ export function BuyerCard({ order, eventId }: { order: Order; eventId: string })
         </div>
       ))}
       <p className="muted">
-        Struck at {formatPrice(order.totalCents)} · still owed{" "}
-        {formatPrice(order.outstandingCents)}
+        {order.comped ? (
+          <>Comped, so nothing was ever owed</>
+        ) : (
+          <>
+            Struck at {formatPrice(order.totalCents)} · still owed{" "}
+            {formatPrice(order.outstandingCents)}
+          </>
+        )}
       </p>
       <ErrorNote error={refund.error} />
     </li>

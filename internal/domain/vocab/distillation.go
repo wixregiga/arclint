@@ -60,7 +60,7 @@ func DistillationRules() []DistillationRule {
 		{
 			ID:      "repository-gate",
 			Rule:    "Repositories only for aggregate roots; inner entity wanting one = wrong boundary.",
-			Example: "reject OrderLineRepository",
+			Example: "reject OrderLineRepository; reject \"we must list comps, so Comp is a root\"",
 		},
 		{
 			ID:      "minimal-evidence",

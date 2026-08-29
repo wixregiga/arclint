@@ -36,7 +36,7 @@ distillation_rules:
   - {id: context-split, rule: "Same word, materially different meaning per team -> separate bounded_contexts + relation.", example: "Product: price in Catalog, weight in Shipping"}
   - {id: language-fidelity, rule: "Record terms exactly as experts say them; reject developer jargon.", example: "policy renewal, not ContractUpdateManager"}
   - {id: synonym-collapse, rule: "One meaning, one canonical term per context; synonyms become aliases.", example: "client/customer/account -> customer"}
-  - {id: repository-gate, rule: "Repositories only for aggregate roots; inner entity wanting one = wrong boundary.", example: "reject OrderLineRepository"}
+  - {id: repository-gate, rule: "Repositories only for aggregate roots; inner entity wanting one = wrong boundary.", example: "reject OrderLineRepository; reject \"we must list comps, so Comp is a root\""}
   - {id: minimal-evidence, rule: "Classify on the fewest deciding facts; two plausible kinds -> ask, never guess.", example: "'we track shipments' alone decides nothing -> ask"}
 
 clarification_questions:

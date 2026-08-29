@@ -216,6 +216,27 @@ func (c Capacity) CommitAll(ids []string, now time.Time) ([]Hold, error) {
 	return committed, nil
 }
 
+// Commit speaks seats for right away, without anyone having decided
+// first. Comping takes this door: the Organizer is not deciding, so
+// there is no Hold to make and none to commit. The room is counted
+// the same either way, so seats that do not fit are refused. Expired
+// Holds are gone before the room is measured.
+func (c Capacity) Commit(tier string, seats int, now time.Time) error {
+	c.prune(now)
+	if seats <= 0 {
+		return ErrSeatsInvalid
+	}
+	ts, ok := c.tiers[tier]
+	if !ok {
+		return ErrTierNotOpen
+	}
+	if ts.total-ts.spokenFor-c.held(tier) < seats {
+		return ErrSeatsExhausted
+	}
+	ts.spokenFor += seats
+	return nil
+}
+
 // Release lets one Hold go early.
 func (c Capacity) Release(id string) {
 	delete(c.holds, id)

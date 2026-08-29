@@ -16,6 +16,8 @@ export interface OrderLine {
   unitCents: number;
 }
 
+// comped says the organizer gave this order away rather than an
+// attendee buying it, so every ticket on it cost nothing.
 export interface Order {
   id: string;
   eventId: string;
@@ -23,6 +25,7 @@ export interface Order {
   lines: OrderLine[];
   totalCents: number;
   outstandingCents: number;
+  comped: boolean;
 }
 
 // outstanding is how many tickets of one line the buyer still holds.
@@ -48,4 +51,22 @@ export function getOrder(id: string): Promise<Order> {
 // as struck stays as struck; the refund is recorded beside it.
 export function refundTicket(orderId: string, tier: string, quantity: number): Promise<Order> {
   return api.post(`/api/organizer/orders/${orderId}/refunds`, { tier, quantity });
+}
+
+// CompTicket is how many tickets of one tier the organizer is giving
+// away. No price is sent, because a comped ticket is free.
+export interface CompTicket {
+  tier: string;
+  quantity: number;
+}
+
+// compTickets gives tickets away on the organizer's say-so. The
+// answer is an order like any other, costing its attendee nothing,
+// with the seats already spoken for.
+export function compTickets(
+  eventId: string,
+  attendee: Attendee,
+  tickets: CompTicket[],
+): Promise<Order> {
+  return api.post(`/api/organizer/events/${eventId}/comps`, { attendee, tickets });
 }

@@ -99,6 +99,18 @@ type refundInput struct {
 	Quantity int    `json:"quantity"`
 }
 
+// compTicketInput is how many tickets of one tier the Organizer is
+// giving away. No price is asked for: a comped ticket is free.
+type compTicketInput struct {
+	Tier     string `json:"tier"`
+	Quantity int    `json:"quantity"`
+}
+
+type compInput struct {
+	Attendee attendeeShape     `json:"attendee"`
+	Tickets  []compTicketInput `json:"tickets"`
+}
+
 // lineView is one line of the deal as struck, with the tickets of it
 // that have since come back. Quantity is what was bought and never
 // moves; Refunded is what was given back.
@@ -109,6 +121,9 @@ type lineView struct {
 	UnitCents int64  `json:"unitCents"`
 }
 
+// orderView is one Order as JSON. Comped says the Organizer gave
+// this one away instead of an Attendee buying it, which is the
+// organizer's answer to "what tickets did I comp?".
 type orderView struct {
 	ID               string        `json:"id"`
 	EventID          string        `json:"eventId"`
@@ -116,6 +131,7 @@ type orderView struct {
 	Lines            []lineView    `json:"lines"`
 	TotalCents       int64         `json:"totalCents"`
 	OutstandingCents int64         `json:"outstandingCents"`
+	Comped           bool          `json:"comped"`
 }
 
 // viewEvent renders one Event with the seats remaining per tier.
@@ -198,6 +214,7 @@ func viewOrder(o order.Order) orderView {
 		Lines:            []lineView{},
 		TotalCents:       o.TotalCents(),
 		OutstandingCents: o.OutstandingCents(),
+		Comped:           o.Comped(),
 	}
 	for _, l := range o.Lines() {
 		view.Lines = append(view.Lines, lineView{
