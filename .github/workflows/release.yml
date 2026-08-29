@@ -48,11 +48,13 @@ jobs:
       # Same full gate as CI: format, GolangCI, vet, tests, selfcheck.
       - name: Run full repository check
         run: make ci
-      - name: Verify Docker image version
+      - name: Verify Docker image
         run: |
           make docker
           docker run --rm "arclint:${ARCLINT_VERSION}" --version |
             grep -F "arclint version ${ARCLINT_VERSION}"
+          docker run --rm -v "${GITHUB_WORKSPACE}:/repo" \
+            "arclint:${ARCLINT_VERSION}" check .
 
       - name: Publish beta release
         run: goreleaser release --clean
