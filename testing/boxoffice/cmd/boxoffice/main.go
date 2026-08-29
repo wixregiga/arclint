@@ -46,7 +46,11 @@ func main() {
 			slog.Error("seeding orders", "error", err)
 			os.Exit(1)
 		}
-		slog.Info("seeded Priya's shows and the deals struck for them")
+		if err := seedComps(orders, capacities, time.Now()); err != nil {
+			slog.Error("seeding comps", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("seeded Priya's shows, the deals struck for them, and one comp")
 	}
 	if *token == "" {
 		slog.Warn("no -organizer-token given: the organizer side stays locked")

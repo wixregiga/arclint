@@ -7,6 +7,7 @@ import (
 	"boxoffice/internal/entities/capacity"
 	"boxoffice/internal/entities/event"
 	"boxoffice/internal/entities/order"
+	"boxoffice/internal/features/comptickets"
 	"boxoffice/internal/features/editevent"
 	"boxoffice/internal/features/holdseats"
 	"boxoffice/internal/features/placeorder"
@@ -185,6 +186,28 @@ func (s *server) refundTicket(w http.ResponseWriter, r *http.Request) {
 	httpkit.Respond(w, http.StatusOK, viewOrder(o))
 }
 
+// compTickets gives tickets away on the organizer's say-so: an Order
+// that costs its Attendee nothing, with the seats spoken for like
+// any other promise.
+func (s *server) compTickets(w http.ResponseWriter, r *http.Request) {
+	var in compInput
+	if err := httpkit.Decode(r, &in); err != nil {
+		httpkit.Error(w, http.StatusBadRequest, "malformed request: "+err.Error())
+		return
+	}
+	tickets := make([]comptickets.Ticket, 0, len(in.Tickets))
+	for _, t := range in.Tickets {
+		tickets = append(tickets, comptickets.Ticket{TierName: t.Tier, Quantity: t.Quantity})
+	}
+	o, err := s.comp.Do(newID(), chi.URLParam(r, "eventID"),
+		order.Attendee{Name: in.Attendee.Name, Email: in.Attendee.Email}, tickets, s.cfg.Now())
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	httpkit.Respond(w, http.StatusCreated, viewOrder(o))
+}
+
 func (s *server) createHold(w http.ResponseWriter, r *http.Request) {
 	var in holdInput
 	if err := httpkit.Decode(r, &in); err != nil {
@@ -250,7 +273,8 @@ func (s *server) fail(w http.ResponseWriter, err error) {
 		errors.Is(err, event.ErrTierDuplicate),
 		errors.Is(err, order.ErrRefundTooMany),
 		errors.Is(err, holdseats.ErrEventNotOnSale),
-		errors.Is(err, placeorder.ErrEventNotOnSale):
+		errors.Is(err, placeorder.ErrEventNotOnSale),
+		errors.Is(err, comptickets.ErrEventNotOnSale):
 		httpkit.Error(w, http.StatusConflict, err.Error())
 	case errors.Is(err, event.ErrIdentityMissing),
 		errors.Is(err, event.ErrNothingToSell),
@@ -269,7 +293,9 @@ func (s *server) fail(w http.ResponseWriter, err error) {
 		errors.Is(err, capacity.ErrSeatsInvalid),
 		errors.Is(err, capacity.ErrHoldIDMissing),
 		errors.Is(err, capacity.ErrDeadlinePassed),
-		errors.Is(err, placeorder.ErrTierNotSold):
+		errors.Is(err, placeorder.ErrTierNotSold),
+		errors.Is(err, comptickets.ErrTierNotSold),
+		errors.Is(err, comptickets.ErrNothingToComp):
 		httpkit.Error(w, http.StatusUnprocessableEntity, err.Error())
 	default:
 		slog.Error("unexpected failure", "error", err)

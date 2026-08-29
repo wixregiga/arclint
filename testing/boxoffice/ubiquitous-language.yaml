@@ -62,7 +62,12 @@ contexts:
           OrderLines. A placed Order is a promise the box office
           keeps to its Attendee. Tickets can come back, and when they
           do the Order records a Refund beside the deal instead of
-          rewriting it.
+          rewriting it. Most Orders are placed by the Attendee who
+          wants the seats. An Organizer can comp one instead, which
+          places an Order whose tickets cost its Attendee nothing. A
+          comped Order is an Order like any other: it promises the
+          same seats, the room counts them the same way, and tickets
+          come back from it through a Refund.
         aggregate: true
     value_objects:
       - name: OrderLine
@@ -103,6 +108,11 @@ contexts:
           its Order bought on that tier and has not already had
           refunded.
         owner: Refund
+      - statement: >-
+          Only an Organizer comps, and comping is the only way an
+          Order's tickets cost nothing. An Attendee placing their own
+          Order always pays the Price of every TicketTier on it.
+        owner: Order
   - name: capacity
     entities:
       - name: Capacity

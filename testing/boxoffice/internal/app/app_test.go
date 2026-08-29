@@ -394,6 +394,186 @@ func TestRefundRefusals(t *testing.T) {
 	}
 }
 
+func TestOrganizerCompsTicketsAndSeesWhoGotThem(t *testing.T) {
+	e := start(t)
+	e.sellJazzTrio(t, "Sam", "sam@example.com", "general", 1)
+
+	status, comped := e.call("POST", "/api/organizer/events/jazz-trio/comps", organizerToken, map[string]any{
+		"attendee": map[string]any{"name": "Rae Mensah", "email": "rae@example.com"},
+		"tickets":  []map[string]any{{"tier": "general", "quantity": 1}, {"tier": "front-row", "quantity": 2}},
+	})
+	if status != http.StatusCreated {
+		t.Fatalf("comp: %d %v", status, comped)
+	}
+	gift := obj(t, comped)
+	if gift["comped"] != true {
+		t.Errorf("comped = %v, want true", gift["comped"])
+	}
+	if num(t, gift, "totalCents") != 0 || num(t, gift, "outstandingCents") != 0 {
+		t.Errorf("a comped order costs %v and owes %v, want nothing", gift["totalCents"], gift["outstandingCents"])
+	}
+
+	// The seats are promised like any other: spoken for, not held.
+	_, view := e.call("GET", "/api/organizer/events/jazz-trio", organizerToken, nil)
+	general := tierOf(t, obj(t, view), "general")
+	if num(t, general, "spokenFor") != 2 || num(t, general, "held") != 0 || num(t, general, "remaining") != 1 {
+		t.Errorf("general after comping = %v, want 2 spoken for and 1 left", general)
+	}
+	front := tierOf(t, obj(t, view), "front-row")
+	if num(t, front, "spokenFor") != 2 || num(t, front, "remaining") != 0 {
+		t.Errorf("front-row after comping = %v, want both seats spoken for", front)
+	}
+
+	// The organizer can tell who was comped from who bought.
+	comps := map[string]bool{}
+	for _, raw := range list(t, obj(t, view)["orders"]) {
+		o := obj(t, raw)
+		comps[obj(t, o["attendee"])["name"].(string)] = o["comped"] == true
+	}
+	if len(comps) != 2 || !comps["Rae Mensah"] || comps["Sam"] {
+		t.Errorf("the organizer's list of who was comped = %v", comps)
+	}
+
+	// Buyers see none of it: the public page shows seats and prices,
+	// never who holds them or what anyone paid.
+	_, page := e.call("GET", "/api/events/jazz-trio", "", nil)
+	public := obj(t, page)
+	if _, leaked := public["orders"]; leaked {
+		t.Errorf("the public page lists orders: %v", public)
+	}
+	if got := num(t, tierOf(t, public, "general"), "remaining"); got != 1 {
+		t.Errorf("public remaining = %v, want the 1 left", got)
+	}
+	if got := num(t, tierOf(t, public, "general"), "priceCents"); got != 2200 {
+		t.Errorf("comping moved the tier's price to %v, want 2200 for everyone else", got)
+	}
+	// And the next buyer still pays.
+	nextOrder := e.sellJazzTrio(t, "Ada", "ada@example.com", "general", 1)
+	_, bought := e.call("GET", "/api/orders/"+nextOrder, "", nil)
+	if num(t, obj(t, bought), "totalCents") != 2200 || obj(t, bought)["comped"] != false {
+		t.Errorf("the buyer after a comp = %v, want a paid order", bought)
+	}
+}
+
+func TestCompedTicketsAreRefundedLikeAnyOther(t *testing.T) {
+	e := start(t)
+	e.sellJazzTrio(t, "Sam", "sam@example.com", "general", 1)
+	_, comped := e.call("POST", "/api/organizer/events/jazz-trio/comps", organizerToken, map[string]any{
+		"attendee": map[string]any{"name": "Rae Mensah", "email": "rae@example.com"},
+		"tickets":  []map[string]any{{"tier": "general", "quantity": 2}},
+	})
+	compID := obj(t, comped)["id"].(string)
+
+	// No comp-shaped door: the ordinary refund gives the seats back.
+	status, body := e.call("POST", "/api/organizer/orders/"+compID+"/refunds", organizerToken,
+		map[string]any{"tier": "general", "quantity": 1})
+	if status != http.StatusOK {
+		t.Fatalf("refunding a comped ticket: %d %v", status, body)
+	}
+	line := obj(t, list(t, obj(t, body)["lines"])[0])
+	if num(t, line, "refunded") != 1 || num(t, line, "quantity") != 2 {
+		t.Errorf("comped line after refund = %v, want 2 given and 1 back", line)
+	}
+	_, view := e.call("GET", "/api/organizer/events/jazz-trio", organizerToken, nil)
+	tier := tierOf(t, obj(t, view), "general")
+	if num(t, tier, "spokenFor") != 2 || num(t, tier, "remaining") != 1 {
+		t.Errorf("general after the comp refund = %v, want 2 spoken for and 1 free", tier)
+	}
+
+	// Cancelling the show gives back comped tickets with the rest.
+	if status, cancelled := e.call("POST", "/api/organizer/events/jazz-trio/cancel", organizerToken, nil); status != http.StatusOK {
+		t.Fatalf("cancel: %d %v", status, cancelled)
+	}
+	_, after := e.call("GET", "/api/orders/"+compID, "", nil)
+	compLine := obj(t, list(t, obj(t, after)["lines"])[0])
+	if num(t, compLine, "refunded") != 2 {
+		t.Errorf("cancelling left comped tickets outstanding: %v", compLine)
+	}
+	_, whole := e.call("GET", "/api/organizer/events/jazz-trio", organizerToken, nil)
+	if got := num(t, tierOf(t, obj(t, whole), "general"), "spokenFor"); got != 0 {
+		t.Errorf("spokenFor after cancelling = %v, want the room whole", got)
+	}
+}
+
+func TestCompRefusals(t *testing.T) {
+	e := start(t)
+	e.sellJazzTrio(t, "Sam", "sam@example.com", "general", 1)
+	guest := map[string]any{"name": "Rae Mensah", "email": "rae@example.com"}
+	cases := []struct {
+		name  string
+		path  string
+		token string
+		body  map[string]any
+		want  int
+	}{
+		{
+			"without the organizer token", "/api/organizer/events/jazz-trio/comps", "",
+			map[string]any{"attendee": guest, "tickets": []map[string]any{{"tier": "general", "quantity": 1}}},
+			http.StatusUnauthorized,
+		},
+		{
+			"an event nobody created", "/api/organizer/events/nope/comps", organizerToken,
+			map[string]any{"attendee": guest, "tickets": []map[string]any{{"tier": "general", "quantity": 1}}},
+			http.StatusNotFound,
+		},
+		{
+			"no tickets at all", "/api/organizer/events/jazz-trio/comps", organizerToken,
+			map[string]any{"attendee": guest, "tickets": []map[string]any{}},
+			http.StatusUnprocessableEntity,
+		},
+		{
+			"a tier the show never sold", "/api/organizer/events/jazz-trio/comps", organizerToken,
+			map[string]any{"attendee": guest, "tickets": []map[string]any{{"tier": "balcony", "quantity": 1}}},
+			http.StatusUnprocessableEntity,
+		},
+		{
+			"nobody to comp them for", "/api/organizer/events/jazz-trio/comps", organizerToken,
+			map[string]any{"attendee": map[string]any{"name": ""}, "tickets": []map[string]any{{"tier": "general", "quantity": 1}}},
+			http.StatusUnprocessableEntity,
+		},
+		{
+			"more than the room has", "/api/organizer/events/jazz-trio/comps", organizerToken,
+			map[string]any{"attendee": guest, "tickets": []map[string]any{{"tier": "general", "quantity": 3}}},
+			http.StatusConflict,
+		},
+	}
+	for _, c := range cases {
+		if status, body := e.call("POST", c.path, c.token, c.body); status != c.want {
+			t.Errorf("%s = %d %v, want %d", c.name, status, body, c.want)
+		}
+	}
+	// None of the refused comps reached the counts or the order book.
+	_, view := e.call("GET", "/api/organizer/events/jazz-trio", organizerToken, nil)
+	tier := tierOf(t, obj(t, view), "general")
+	if num(t, tier, "spokenFor") != 1 || num(t, tier, "remaining") != 2 {
+		t.Errorf("a refused comp stuck: %v", tier)
+	}
+	if got := len(list(t, obj(t, view)["orders"])); got != 1 {
+		t.Errorf("orders after refused comps = %d, want the one real sale", got)
+	}
+}
+
+func TestDraftsAndCancelledShowsCannotBeComped(t *testing.T) {
+	e := start(t)
+	guest := map[string]any{"name": "Rae Mensah", "email": "rae@example.com"}
+	body := map[string]any{"attendee": guest, "tickets": []map[string]any{{"tier": "general", "quantity": 1}}}
+
+	if status, created := e.call("POST", "/api/organizer/events", organizerToken, jazzTrio); status != http.StatusCreated {
+		t.Fatalf("create: %d %v", status, created)
+	}
+	if status, refused := e.call("POST", "/api/organizer/events/jazz-trio/comps", organizerToken, body); status != http.StatusConflict {
+		t.Fatalf("comping a draft = %d %v, want 409", status, refused)
+	}
+	e.call("POST", "/api/organizer/events/jazz-trio/publish", organizerToken, nil)
+	if status, ok := e.call("POST", "/api/organizer/events/jazz-trio/comps", organizerToken, body); status != http.StatusCreated {
+		t.Fatalf("comping a published show = %d %v, want 201", status, ok)
+	}
+	e.call("POST", "/api/organizer/events/jazz-trio/cancel", organizerToken, nil)
+	if status, refused := e.call("POST", "/api/organizer/events/jazz-trio/comps", organizerToken, body); status != http.StatusConflict {
+		t.Fatalf("comping a cancelled show = %d %v, want 409", status, refused)
+	}
+}
+
 func TestOrganizerCancelsAPublishedEvent(t *testing.T) {
 	e := start(t)
 	samOrder := e.sellJazzTrio(t, "Sam", "sam@example.com", "general", 2)

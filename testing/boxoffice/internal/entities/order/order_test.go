@@ -24,7 +24,7 @@ func TestNewRefusesIncompleteDeals(t *testing.T) {
 		{"unreachable attendee", "ord-1", "open-mic-night", order.Attendee{Name: "Sam"}, lines, order.ErrAttendeeMissing},
 		{"no lines", "ord-1", "open-mic-night", attendee, nil, order.ErrLinesMissing},
 		{"zero quantity", "ord-1", "open-mic-night", attendee, []order.Line{{TierName: "general", Quantity: 0, UnitCents: 1500}}, order.ErrLineInvalid},
-		{"unstruck price", "ord-1", "open-mic-night", attendee, []order.Line{{TierName: "general", Quantity: 1, UnitCents: 0}}, order.ErrLineInvalid},
+		{"price below nothing", "ord-1", "open-mic-night", attendee, []order.Line{{TierName: "general", Quantity: 1, UnitCents: -1}}, order.ErrLineInvalid},
 	}
 	for _, c := range cases {
 		if _, err := order.New(c.id, c.eventID, c.a, c.lines); !errors.Is(err, c.want) {
@@ -40,6 +40,48 @@ func TestNewRefusesTheSameTierTwice(t *testing.T) {
 	}
 	if _, err := order.New("ord-1", "jazz-trio", attendee, lines); !errors.Is(err, order.ErrLineDuplicate) {
 		t.Fatalf("New with a repeated tier = %v, want ErrLineDuplicate", err)
+	}
+}
+
+func TestCompedReadsTheDealNotAMarking(t *testing.T) {
+	comped, err := order.New("comp-1", "jazz-trio", attendee, []order.Line{
+		{TierName: "general", Quantity: 2},
+		{TierName: "front-row", Quantity: 1},
+	})
+	if err != nil {
+		t.Fatalf("New with free lines: %v", err)
+	}
+	if !comped.Comped() {
+		t.Errorf("an order whose tickets all cost nothing does not read as comped")
+	}
+	if comped.TotalCents() != 0 || comped.OutstandingCents() != 0 {
+		t.Errorf("a comped order costs %d and owes %d, want nothing either way",
+			comped.TotalCents(), comped.OutstandingCents())
+	}
+
+	if placed(t).Comped() {
+		t.Errorf("a bought order reads as comped")
+	}
+	// Half free is not a giveaway: the attendee still owes something.
+	part, err := order.New("ord-2", "jazz-trio", attendee, []order.Line{
+		{TierName: "general", Quantity: 1},
+		{TierName: "front-row", Quantity: 1, UnitCents: 3000},
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if part.Comped() {
+		t.Errorf("an order with a priced line reads as comped")
+	}
+	if part.OutstandingCents() != 3000 {
+		t.Errorf("outstanding = %d, want the 3000 still owed", part.OutstandingCents())
+	}
+}
+
+func TestZeroValueOrderIsNotComped(t *testing.T) {
+	var none order.Order
+	if none.Comped() {
+		t.Errorf("an order that was never placed reads as comped")
 	}
 }
 

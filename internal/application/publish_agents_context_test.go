@@ -114,6 +114,13 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 		"- **catalog**: Event [aggregate], Organizer; value objects Price; events EventPublished",
 		"- **ordering**: Order [aggregate]",
 		"Relations: catalog → ordering (conformist). Full text: `arclint domain`.",
+		"### Changing the language",
+		"If your change speaks about something new, or changes what a recorded term means, " +
+			"record it in `ubiquitous-language.yaml` before writing code. " +
+			"Invoke the domain-librarian skill for that work: it decides how a concept is classified, " +
+			"what evidence a recording needs, and when an open question is recorded instead of a guess. " +
+			"If your harness does not have the skill, `arclint agents skill` writes it to " +
+			"`.agents/skills/domain-librarian/`.",
 		"### Modules and their rules",
 		"- **m** — test module (paths m/**)",
 		"  - imports no other module; external imports forbidden",
@@ -128,6 +135,15 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 		if !strings.Contains(block, want) {
 			t.Errorf("block lacks %q:\n%s", want, block)
 		}
+	}
+	// The changing-the-language section sits between the recorded domain
+	// and the module rules.
+	domainAt := strings.Index(block, "### The recorded domain")
+	changingAt := strings.Index(block, "### Changing the language")
+	modulesAt := strings.Index(block, "### Modules and their rules")
+	if !(domainAt >= 0 && domainAt < changingAt && changingAt < modulesAt) {
+		t.Errorf("section order wrong: recorded domain at %d, changing the language at %d, modules at %d:\n%s",
+			domainAt, changingAt, modulesAt, block)
 	}
 	// The command surface renders every entry as an invocable bullet.
 	for _, c := range application.AgentCommandSurface() {
@@ -168,7 +184,12 @@ func TestPublishAgentsContextOmitsAbsentSections(t *testing.T) {
 			t.Errorf("block must omit %q without its data:\n%s", reject, block)
 		}
 	}
-	for _, want := range []string{"### Ask arclint first", "### Modules and their rules", "- **m**"} {
+	// Changing the language is unconditional: it renders even without a
+	// recorded domain, and never gates on installed skill files.
+	for _, want := range []string{
+		"### Ask arclint first", "### Changing the language",
+		"### Modules and their rules", "- **m**",
+	} {
 		if !strings.Contains(block, want) {
 			t.Errorf("block lacks %q:\n%s", want, block)
 		}

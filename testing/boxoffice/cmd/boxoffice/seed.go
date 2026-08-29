@@ -139,3 +139,32 @@ func seedOrders(orders order.Repository, capacities capacity.Repository, now tim
 	}
 	return capacities.Save(c)
 }
+
+// seedComps gives one guest tickets to the jazz trio, so the
+// organizer's side opens with a comp to see beside the deals. The
+// seats are spoken for straight away, the way comping promises them,
+// and the tickets cost their attendee nothing.
+func seedComps(orders order.Repository, capacities capacity.Repository, now time.Time) error {
+	c, err := capacities.Find("jazz-trio")
+	if err != nil {
+		return err
+	}
+	lines := []order.Line{
+		{TierName: generalTier, Quantity: 2},
+		{TierName: frontRowTier, Quantity: 1},
+	}
+	for _, l := range lines {
+		if err := c.Commit(l.TierName, l.Quantity, now); err != nil {
+			return err
+		}
+	}
+	o, err := order.New("seed-comp-rae", "jazz-trio",
+		order.Attendee{Name: "Rae Mensah", Email: "rae@example.com"}, lines)
+	if err != nil {
+		return err
+	}
+	if err := orders.Save(o); err != nil {
+		return err
+	}
+	return capacities.Save(c)
+}

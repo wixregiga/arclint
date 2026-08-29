@@ -15,7 +15,8 @@ type Attendee struct {
 
 // Line is one TicketTier inside an Order: the tier, the quantity,
 // and the price captured at placement, in whole cents. Later catalog
-// edits never reach a captured Line.
+// edits never reach a captured Line. A line an Organizer comped
+// costs nothing, so UnitCents is zero there and nowhere else.
 type Line struct {
 	TierName  string
 	Quantity  int
@@ -46,7 +47,7 @@ var (
 	ErrIdentityMissing      = errors.New("order: an order needs an id and its event")
 	ErrAttendeeMissing      = errors.New("order: an attendee needs a name and a way to be reached")
 	ErrLinesMissing         = errors.New("order: an order needs at least one line")
-	ErrLineInvalid          = errors.New("order: a line needs a tier, a positive quantity, and a struck price")
+	ErrLineInvalid          = errors.New("order: a line needs a tier, a positive quantity, and a price that is not negative")
 	ErrLineDuplicate        = errors.New("order: a ticket tier appears twice in one order")
 	ErrRefundQuantityUnreal = errors.New("order: a refund needs a positive number of tickets")
 	ErrRefundTierUnsold     = errors.New("order: this order bought no tickets on that tier")
@@ -54,7 +55,8 @@ var (
 )
 
 // New places the Order. There is no other way to make one and no way
-// to change one afterwards.
+// to change one afterwards. A line priced at nothing is how a comped
+// Order is placed; a line priced below nothing is never a deal.
 func New(id, eventID string, a Attendee, lines []Line) (Order, error) {
 	if id == "" || eventID == "" {
 		return Order{}, ErrIdentityMissing
@@ -72,7 +74,7 @@ func New(id, eventID string, a Attendee, lines []Line) (Order, error) {
 	// tickets it bought are countable without ambiguity.
 	seen := make(map[string]bool, len(cp))
 	for _, l := range cp {
-		if l.TierName == "" || l.Quantity <= 0 || l.UnitCents <= 0 {
+		if l.TierName == "" || l.Quantity <= 0 || l.UnitCents < 0 {
 			return Order{}, ErrLineInvalid
 		}
 		if seen[l.TierName] {
@@ -91,6 +93,22 @@ func (o Order) EventID() string { return o.eventID }
 
 // Attendee is who the promise was made to.
 func (o Order) Attendee() Attendee { return o.attendee }
+
+// Comped reports whether an Organizer gave this Order away rather
+// than an Attendee buying it: every ticket on it costs nothing.
+// Comping is the only way an Order's tickets cost nothing, so this
+// is read from the deal itself and never stored beside it.
+func (o Order) Comped() bool {
+	if len(o.lines) == 0 {
+		return false
+	}
+	for _, l := range o.lines {
+		if l.UnitCents != 0 {
+			return false
+		}
+	}
+	return true
+}
 
 // Lines returns the OrderLines as a copy; the deal itself never
 // changes.

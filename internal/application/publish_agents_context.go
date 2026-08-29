@@ -142,6 +142,7 @@ func renderAgentsBlock(cfg rule.Configured, lang vocab.UbiquitousLanguage,
 	if recorded && !lang.Empty() {
 		writeRecordedDomain(&b, lang)
 	}
+	writeChangingLanguage(&b)
 	writeModuleRules(&b, cfg)
 	writeRepositoryRules(&b, cfg)
 	writeExtensionInventory(&b, registered)
@@ -206,6 +207,21 @@ func writeRecordedDomain(b *strings.Builder, lang vocab.UbiquitousLanguage) {
 		return
 	}
 	b.WriteString("Full text: `arclint domain`.\n\n")
+}
+
+// writeChangingLanguage is the fixed obligation to evolve the recorded
+// vocabulary before the code, through the domain-librarian skill. It is
+// emitted unconditionally — the obligation stands whether or not the
+// skill files are installed, and it is how an unrecorded domain gets
+// its first entry.
+func writeChangingLanguage(b *strings.Builder) {
+	b.WriteString("### Changing the language\n\n")
+	fmt.Fprintf(b, "If your change speaks about something new, or changes what a recorded term means, "+
+		"record it in `%s` before writing code. Invoke the %s skill for that work: "+
+		"it decides how a concept is classified, what evidence a recording needs, "+
+		"and when an open question is recorded instead of a guess. "+
+		"If your harness does not have the skill, `arclint agents skill` writes it to `%s/`.\n\n",
+		vocab.UbiquitousLanguageFileName, vocab.SkillName, vocab.SkillDirectory)
 }
 
 func joinDefinitionNames(defs []vocab.Definition) string {

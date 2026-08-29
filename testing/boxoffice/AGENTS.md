@@ -13,10 +13,6 @@ IMPORTANT: ask arclint before reading around. `make arclint` builds the arclint 
 - No messaging machinery, ever: contexts meet inside features as plain calls (see placeorder).
 - The organizer gate is one bearer token from config; an empty token keeps that side locked.
 
-## Changing the language
-
-If your change speaks about something new, or changes what a recorded term means, record it in `ubiquitous-language.yaml` before writing code. Prefer the domain-librarian skill for that work: it decides how a concept is classified, what evidence a recording needs, and when an open question is recorded instead of a guess.
-
 <!-- arclint:agents:begin -->
 ## Architecture contracts (arclint)
 
@@ -38,13 +34,17 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 
 ### The recorded domain
 
-3 contexts, 3 aggregates, 10 invariants (ubiquitous-language.yaml).
+3 contexts, 3 aggregates, 11 invariants (ubiquitous-language.yaml).
 
 - **catalog**: Event [aggregate], Organizer; value objects TicketTier, Price
 - **ordering**: Order [aggregate]; value objects OrderLine, Attendee, Refund; events OrderPlaced
 - **capacity**: Capacity [aggregate]; value objects Hold
 
 Relations: catalog → ordering (conformist); catalog → capacity (conformist); capacity → ordering (customer_supplier). Full text: `arclint domain`.
+
+### Changing the language
+
+If your change speaks about something new, or changes what a recorded term means, record it in `ubiquitous-language.yaml` before writing code. Invoke the domain-librarian skill for that work: it decides how a concept is classified, what evidence a recording needs, and when an open question is recorded instead of a guess. If your harness does not have the skill, `arclint agents skill` writes it to `.agents/skills/domain-librarian/`.
 
 ### Modules and their rules
 

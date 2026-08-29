@@ -7,6 +7,7 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { CancelButton } from "../../features/cancel-event";
+import { CompPanel } from "../../features/comp-tickets";
 import { DraftEditor } from "../../features/edit-event";
 import { PublishButton } from "../../features/publish-event";
 import { BuyerCard } from "../../features/refund-ticket";
@@ -94,6 +95,7 @@ function asDraft(event: OrganizerEventDetail): EventDetail {
 // the seat counts as they stand, and the buyers.
 function SoldDetails({ event }: { event: OrganizerEventDetail }) {
   const cancelled = event.status === "cancelled";
+  const comped = event.orders.filter((order) => order.comped).length;
   return (
     <>
       <p>{event.story}</p>
@@ -126,15 +128,23 @@ function SoldDetails({ event }: { event: OrganizerEventDetail }) {
         </p>
       </div>
 
-      <h3>Who bought tickets</h3>
+      {!cancelled && <CompPanel eventId={event.id} tiers={event.tiers} />}
+
+      <h3>Who holds tickets</h3>
       {event.orders.length === 0 ? (
-        <p className="muted">Nobody has bought a ticket yet.</p>
+        <p className="muted">Nobody holds a ticket yet.</p>
       ) : (
-        <ul>
-          {event.orders.map((order) => (
-            <BuyerCard key={order.id} order={order} eventId={event.id} />
-          ))}
-        </ul>
+        <>
+          <p className="muted">
+            Everyone promised a seat, whether they bought it or you comped it. {comped} of{" "}
+            {event.orders.length} were comped.
+          </p>
+          <ul>
+            {event.orders.map((order) => (
+              <BuyerCard key={order.id} order={order} eventId={event.id} />
+            ))}
+          </ul>
+        </>
       )}
 
       <div className="card">

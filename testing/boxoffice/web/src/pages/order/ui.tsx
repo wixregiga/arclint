@@ -29,7 +29,9 @@ export function OrderPage() {
               <span className="tier-name">
                 {line.quantity} × {line.tier}
               </span>
-              <span className="chip">{formatPrice(line.unitCents)}</span>
+              <span className="chip">
+                {line.unitCents === 0 ? "free" : formatPrice(line.unitCents)}
+              </span>
               {line.refunded > 0 && (
                 <span className="chip cancelled">
                   {line.refunded} refunded, {outstanding(line)} left
@@ -38,8 +40,10 @@ export function OrderPage() {
             </li>
           ))}
         </ul>
-        <p className="total">Total {formatPrice(o.totalCents)}</p>
-        {o.outstandingCents !== o.totalCents && (
+        <p className="total">
+          {o.comped ? "These tickets are on the house" : `Total ${formatPrice(o.totalCents)}`}
+        </p>
+        {!o.comped && o.outstandingCents !== o.totalCents && (
           <p className="muted">
             Tickets came back on this order. What you bought stays here at the prices you paid;
             after the refunds, {formatPrice(o.outstandingCents)} of it still stands.

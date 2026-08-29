@@ -1,6 +1,9 @@
 package vocab
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // SkillMarkdown returns the domain-librarian SKILL.md content
 // byte-exact to the litmus skill protocol file.
@@ -23,24 +26,13 @@ func SkillMarkdown() string {
 	b.WriteString(SkillReference)
 	b.WriteString("\n\n")
 	b.WriteString("## Protocol\n\n")
-	b.WriteString(SkillProtocol1)
+	for i, rule := range SkillProtocolRules() {
+		b.WriteString(strconv.Itoa(i + 1))
+		b.WriteString(". ")
+		b.WriteString(rule)
+		b.WriteString("\n")
+	}
 	b.WriteString("\n")
-	b.WriteString(SkillProtocol2)
-	b.WriteString("\n")
-	b.WriteString(SkillProtocol3)
-	b.WriteString("\n")
-	b.WriteString(SkillProtocol4)
-	b.WriteString("\n")
-	b.WriteString(SkillProtocol5)
-	b.WriteString("\n")
-	b.WriteString(SkillProtocol6)
-	b.WriteString("\n")
-	b.WriteString(SkillProtocol7)
-	b.WriteString("\n")
-	b.WriteString(SkillProtocol8)
-	b.WriteString("\n")
-	b.WriteString(SkillProtocol9)
-	b.WriteString("\n\n")
 	b.WriteString("## Economy\n\n")
 	b.WriteString(SkillEconomy)
 	b.WriteString("\n")

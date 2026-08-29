@@ -8,6 +8,7 @@ import (
 	"boxoffice/internal/entities/event"
 	"boxoffice/internal/entities/order"
 	"boxoffice/internal/features/cancelevent"
+	"boxoffice/internal/features/comptickets"
 	"boxoffice/internal/features/editevent"
 	"boxoffice/internal/features/holdseats"
 	"boxoffice/internal/features/placeorder"
@@ -54,6 +55,7 @@ type server struct {
 	hold    holdseats.Feature
 	place   placeorder.Feature
 	refund  refundticket.Feature
+	comp    comptickets.Feature
 }
 
 // New assembles the router.
@@ -73,6 +75,7 @@ func New(cfg Config, deps Deps) http.Handler {
 		hold:    holdseats.Feature{Events: deps.Events, Capacities: deps.Capacities, HoldFor: cfg.HoldFor},
 		place:   placeorder.Feature{Events: deps.Events, Orders: deps.Orders, Capacities: deps.Capacities},
 		refund:  refundticket.Feature{Orders: deps.Orders, Capacities: deps.Capacities},
+		comp:    comptickets.Feature{Events: deps.Events, Orders: deps.Orders, Capacities: deps.Capacities},
 	}
 
 	r := chi.NewRouter()
@@ -91,6 +94,7 @@ func New(cfg Config, deps Deps) http.Handler {
 			r.Put("/events/{eventID}", s.editEvent)
 			r.Post("/events/{eventID}/publish", s.publishEvent)
 			r.Post("/events/{eventID}/cancel", s.cancelEvent)
+			r.Post("/events/{eventID}/comps", s.compTickets)
 			r.Post("/orders/{orderID}/refunds", s.refundTicket)
 		})
 	})
