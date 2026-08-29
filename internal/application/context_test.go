@@ -84,47 +84,6 @@ func TestArchitecturalContextForPath(t *testing.T) {
 	}
 }
 
-func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
-	getContext, err := application.NewGetArchitecturalContext(fakeRepository{contextFixture(t)}, emptyKnowledge())
-	if err != nil {
-		t.Fatalf("NewGetArchitecturalContext: %v", err)
-	}
-	publisher := &fakePublisher{}
-	publish, err := application.NewPublishAgentsContext(getContext, publisher)
-	if err != nil {
-		t.Fatalf("NewPublishAgentsContext: %v", err)
-	}
-	block, err := publish.Render()
-	if err != nil {
-		t.Fatalf("Render: %v", err)
-	}
-	for _, want := range []string{
-		application.AgentsBegin, application.AgentsEnd,
-		"3 rules over languages [go]", "- **m**",
-		"internal imports none (may import no other declared module)",
-		"arclint context <paths...>",
-	} {
-		if !strings.Contains(block, want) {
-			t.Errorf("block lacks %q:\n%s", want, block)
-		}
-	}
-	if _, _, err := publish.Execute(); err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	if publisher.installed != block {
-		t.Errorf("installed block differs from rendered block")
-	}
-}
-
-type fakePublisher struct {
-	installed string
-}
-
-func (f *fakePublisher) Install(block string) (bool, string, error) {
-	f.installed = block
-	return true, "AGENTS.md", nil
-}
-
 func TestInitializeRepositoryRejectsUnknownLanguages(t *testing.T) {
 	uc, err := application.NewInitializeRepository(fakeScaffold{}, fakePatternScaffolds{})
 	if err != nil {

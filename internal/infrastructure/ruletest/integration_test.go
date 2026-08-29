@@ -1,8 +1,10 @@
 package ruletest_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/wixregiga/arclint/internal/application"
@@ -227,4 +229,130 @@ func TestRuleTestExtensionReadsFixtureContent(t *testing.T) {
 	if !got.Passed() {
 		t.Fatalf("result = %+v, want pass from fixture-driven ctx.read", got)
 	}
+}
+
+const vocabularyRuleset = `runtime: [go]
+modules:
+  vocabulary:
+    paths: ["ubiquitous-language.yaml"]
+contracts:
+  vocabulary:
+    invariants:
+      - id: "t:vocabulary/terms-carry-definitions"
+        kind: extension
+        files: "ubiquitous-language.yaml"
+        uses: require-defined-terms
+`
+
+// fixtureVocabulary records one term without a definition. Its two
+// multi-line definitions are what a line-1 anchor hides: the undefined
+// term is nowhere near the top of the file.
+const fixtureVocabulary = `version: 1
+contexts:
+  - name: catalog
+    entities:
+      - name: Event
+        definition: >-
+          One show an Organizer puts on sale: its title, when and
+          where it happens, and its TicketTiers.
+        aggregate: true
+      - name: Organizer
+        definition: |
+          The person whose page it is: they create Events, price the
+          TicketTiers, and publish a draft when it is ready.
+      - name: Venue
+`
+
+// requireDefinedTermsExtension anchors each finding at the line the
+// term is written on, which is what ctx.domain() term lines are for.
+const requireDefinedTermsExtension = `import { defineRule } from "arclint";
+
+export default defineRule({
+  type: "require-defined-terms",
+  description: "every recorded vocabulary term carries a definition",
+  check(ctx) {
+    for (const bound of ctx.domain().contexts) {
+      for (const term of bound.entities) {
+        if (!term.definition) {
+          ctx.report({
+            path: "ubiquitous-language.yaml",
+            line: term.line,
+            message: 'entity "' + term.name + '" has no definition recorded',
+          });
+        }
+      }
+    }
+  },
+});
+`
+
+// TestVocabularyFindingAnchorsAtTheRecordedTerm proves the whole
+// reporting path — fixture vocabulary bytes, the production parser,
+// the extension host, the conformance run, the authored expectation —
+// puts the finding on the line the term is written on rather than at
+// the top of the file.
+func TestVocabularyFindingAnchorsAtTheRecordedTerm(t *testing.T) {
+	root := t.TempDir()
+	write := func(rel, content string) {
+		t.Helper()
+		target := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
+			t.Fatalf("MkdirAll %s: %v", rel, err)
+		}
+		if err := os.WriteFile(target, []byte(content), 0o600); err != nil {
+			t.Fatalf("WriteFile %s: %v", rel, err)
+		}
+	}
+	wantLine := 0
+	for i, line := range strings.Split(fixtureVocabulary, "\n") {
+		if strings.TrimSpace(line) == "- name: Venue" {
+			wantLine = i + 1
+		}
+	}
+	if wantLine < 2 {
+		t.Fatalf("fixture writes Venue on line %d; it must sit below line 1 to prove anything", wantLine)
+	}
+
+	write("rules.yaml", vocabularyRuleset)
+	write(".arclint/extensions/require_defined_terms.ts", requireDefinedTermsExtension)
+	write(".arclint/tests/vocabulary_term_anchor.yaml",
+		"rule: \"t:vocabulary/terms-carry-definitions\"\nfiles:\n"+
+			"  ubiquitous-language.yaml: |\n"+nestFixture(fixtureVocabulary)+
+			"expect:\n  - path: ubiquitous-language.yaml\n"+
+			fmt.Sprintf("    line: %d\n", wantLine)+
+			"    message: 'entity \"Venue\" has no definition recorded'\n")
+
+	repo, err := yamlrule.NewRepository(filepath.Join(root, "rules.yaml"), nil)
+	if err != nil {
+		t.Fatalf("NewRepository: %v", err)
+	}
+	extensions, err := sobekextension.NewEvaluator(root)
+	if err != nil {
+		t.Fatalf("NewEvaluator: %v", err)
+	}
+	uc, err := application.NewRunRuleTests(repo, ruletest.NewSource(root),
+		ruletest.NewObserver(golang.NewProducer()), extensions, yamlvocab.Parser{})
+	if err != nil {
+		t.Fatalf("NewRunRuleTests: %v", err)
+	}
+	results, err := uc.Execute()
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("results = %d, want 1", len(results))
+	}
+	if got := results[0]; !got.Passed() {
+		t.Fatalf("result = %+v, want the finding anchored at line %d, where Venue is written",
+			got, wantLine)
+	}
+}
+
+// nestFixture indents fixture content under a rule test's files block.
+func nestFixture(content string) string {
+	var b strings.Builder
+	for _, line := range strings.Split(strings.TrimSuffix(content, "\n"), "\n") {
+		b.WriteString("    " + line + "\n")
+	}
+	return b.String()
 }

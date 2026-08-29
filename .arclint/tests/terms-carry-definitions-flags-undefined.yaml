@@ -14,11 +14,13 @@ files:
         events:
           - name: OrderPlaced
 expect:
+  # Lines are the fixture vocabulary's own: Customer is written on
+  # line 7 of the file above, OrderPlaced on line 9.
   - kind: violation
     path: ubiquitous-language.yaml
-    line: 1
+    line: 7
     message: "entity \"Customer\" has no definition recorded in the project vocabulary"
   - kind: violation
     path: ubiquitous-language.yaml
-    line: 1
+    line: 9
     message: "domain event \"OrderPlaced\" has no definition recorded in the project vocabulary"

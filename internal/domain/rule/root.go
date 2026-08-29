@@ -206,7 +206,12 @@ func deriveClaim(a Applicability, p Params) string {
 		// Module-scoped Types: the Claim carries the Modules below.
 	}
 	modules := a.Modules()
-	if len(modules) == 1 {
+	switch len(modules) {
+	case 0:
+		// Only extension Rules reach here without Modules: repository
+		// applicability, so the proposition stands alone.
+		return proposition
+	case 1:
 		return fmt.Sprintf("Module %q: %s", modules[0], proposition)
 	}
 	return fmt.Sprintf("Modules %s: %s", moduleList(modules), proposition)

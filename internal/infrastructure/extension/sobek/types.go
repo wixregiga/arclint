@@ -89,37 +89,46 @@ type ViolationInput struct {
 }
 
 // DomainDefinitionInfo is one recorded project domain definition as
-// exposed through ctx.domain().
+// exposed through ctx.domain(). Line is where the term is written in
+// ubiquitous-language.yaml, so a finding about the term can anchor at
+// the term; 0 when the vocabulary was not read from a file.
 type DomainDefinitionInfo struct {
 	Name       string   `json:"name"`
 	Definition string   `json:"definition,omitempty"`
 	Aliases    []string `json:"aliases,omitempty"`
 	Aggregate  bool     `json:"aggregate,omitempty"`
+	Line       int      `json:"line"`
 }
 
 // DomainInvariantInfo is one recorded invariant (statement + owner)
-// inside a bounded context as exposed through ctx.domain().
+// inside a bounded context as exposed through ctx.domain(). Line is
+// where the invariant is written in ubiquitous-language.yaml.
 type DomainInvariantInfo struct {
 	Statement string `json:"statement"`
 	Owner     string `json:"owner"`
+	Line      int    `json:"line"`
 }
 
 // DomainContextInfo is one bounded context and its recorded terms as
-// exposed through ctx.domain().
+// exposed through ctx.domain(). Line is where the context is written
+// in ubiquitous-language.yaml.
 type DomainContextInfo struct {
 	Name         string                 `json:"name"`
 	Entities     []DomainDefinitionInfo `json:"entities"`
 	ValueObjects []DomainDefinitionInfo `json:"valueObjects"`
 	Invariants   []DomainInvariantInfo  `json:"invariants"`
 	Events       []DomainDefinitionInfo `json:"events"`
+	Line         int                    `json:"line"`
 }
 
 // DomainRelationInfo is one context-map edge as exposed through
-// ctx.domain().
+// ctx.domain(). Line is where the relation is written in
+// ubiquitous-language.yaml.
 type DomainRelationInfo struct {
 	From string `json:"from"`
 	To   string `json:"to"`
 	Kind string `json:"kind"`
+	Line int    `json:"line"`
 }
 
 // DomainInfo is the project's recorded domain model as exposed through

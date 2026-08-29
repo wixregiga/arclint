@@ -5,13 +5,18 @@
 // the ctx.domain() showcase test case.
 import { defineRule } from "arclint";
 
+const VOCABULARY = "ubiquitous-language.yaml";
+
 export default defineRule({
   type: "require-defined-terms",
   description: "every recorded vocabulary term carries a definition",
   check(ctx) {
     const domain = ctx.domain();
     for (const bound of domain.contexts ?? []) {
-      const groups: [string, { name: string; definition?: string }[]][] = [
+      const groups: [
+        string,
+        { name: string; definition?: string; line: number }[],
+      ][] = [
         ["entity", bound.entities ?? []],
         ["value object", bound.valueObjects ?? []],
         ["domain event", bound.events ?? []],
@@ -20,8 +25,8 @@ export default defineRule({
         for (const term of terms) {
           if (!term.definition) {
             ctx.report({
-              path: "ubiquitous-language.yaml",
-              line: 1,
+              path: VOCABULARY,
+              line: term.line,
               message: `${kind} "${term.name}" has no definition recorded in the project vocabulary`,
               fixHint: "arclint domain define <type> <name> --definition <text>",
             });
@@ -31,16 +36,16 @@ export default defineRule({
       for (const inv of bound.invariants ?? []) {
         if (!inv.statement) {
           ctx.report({
-            path: "ubiquitous-language.yaml",
-            line: 1,
+            path: VOCABULARY,
+            line: inv.line,
             message: `invariant in context "${bound.name}" has no statement recorded in the project vocabulary`,
             fixHint: "record the invariant statement and its owner",
           });
         }
         if (!inv.owner) {
           ctx.report({
-            path: "ubiquitous-language.yaml",
-            line: 1,
+            path: VOCABULARY,
+            line: inv.line,
             message: `invariant in context "${bound.name}" has no owner recorded in the project vocabulary`,
             fixHint: "record exactly one owner term for the invariant",
           });

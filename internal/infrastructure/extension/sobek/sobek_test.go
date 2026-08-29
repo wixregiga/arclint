@@ -482,6 +482,89 @@ func TestEvaluatorDomainExposesRecordedModel(t *testing.T) {
 	}
 }
 
+const domainLineProbeRule = `
+import { defineRule } from "arclint";
+
+export default defineRule({
+  type: "domain-line-probe",
+  check(ctx) {
+    const domain = ctx.domain();
+    for (const bound of domain.contexts) {
+      ctx.report({ path: "m/a.go", line: bound.line, message: "context " + bound.name });
+      for (const e of bound.entities) {
+        ctx.report({ path: "m/a.go", line: e.line, message: "entity " + e.name });
+      }
+      for (const v of bound.valueObjects) {
+        ctx.report({ path: "m/a.go", line: v.line, message: "value object " + v.name });
+      }
+      for (const i of bound.invariants) {
+        ctx.report({ path: "m/a.go", line: i.line, message: "invariant owned by " + i.owner });
+      }
+    }
+    for (const r of domain.relations) {
+      ctx.report({ path: "m/a.go", line: r.line, message: "relation " + r.from + " -> " + r.to });
+    }
+  },
+});
+`
+
+// Every recorded entry carries its line across the JS boundary, so an
+// extension can anchor a finding at the context, term, invariant, or
+// relation it is about.
+func TestEvaluatorDomainCarriesRecordedLines(t *testing.T) {
+	root := writeExtensions(t, map[string]string{"lines.ts": domainLineProbeRule})
+	eval, err := sobekextension.NewEvaluator(root)
+	if err != nil {
+		t.Fatalf("NewEvaluator: %v", err)
+	}
+	obs, err := conformance.NewObservations([]conformance.ObservedFile{
+		{Path: "m/a.go", Size: 1},
+	}, nil)
+	if err != nil {
+		t.Fatalf("NewObservations: %v", err)
+	}
+	lang, err := vocab.NewUbiquitousLanguage([]vocab.BoundedContext{
+		{
+			Name:         "catalog",
+			Line:         3,
+			Entities:     []vocab.Entity{{Definition: vocab.Definition{Name: "Event", Line: 5}}},
+			ValueObjects: []vocab.Definition{{Name: "Price", Line: 12}},
+			Invariants:   []vocab.Invariant{{Statement: "An Event sells only once published.", Owner: "Event", Line: 18}},
+		},
+		{Name: "ordering", Line: 24},
+	}, []vocab.ContextRelation{
+		{From: "catalog", To: "ordering", Kind: vocab.RelationCustomerSupplier, Line: 31},
+	})
+	if err != nil {
+		t.Fatalf("NewUbiquitousLanguage: %v", err)
+	}
+	findings, err := eval.Evaluate("domain-line-probe", nil, []string{"m/a.go"}, nil, obs, lang)
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	want := map[string]int{
+		"context catalog":              3,
+		"entity Event":                 5,
+		"value object Price":           12,
+		"invariant owned by Event":     18,
+		"context ordering":             24,
+		"relation catalog -> ordering": 31,
+	}
+	if len(findings) != len(want) {
+		t.Fatalf("findings = %+v, want one per recorded entry", findings)
+	}
+	for _, f := range findings {
+		line, known := want[f.Message]
+		if !known {
+			t.Errorf("unexpected finding %+v", f)
+			continue
+		}
+		if f.Line != line {
+			t.Errorf("%s: line = %d, want %d", f.Message, f.Line, line)
+		}
+	}
+}
+
 const caseProbeRule = `
 import { defineRule } from "arclint";
 

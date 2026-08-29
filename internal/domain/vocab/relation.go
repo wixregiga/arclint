@@ -22,11 +22,14 @@ const (
 )
 
 // ContextRelation is one context-map edge: From is upstream, To is
-// downstream, Kind is the relationship pattern.
+// downstream, Kind is the relationship pattern. Line is where the
+// relation is written down in the recorded Ubiquitous Language file,
+// 0 for a relation that is not written down yet.
 type ContextRelation struct {
 	From string
 	To   string
 	Kind RelationKind
+	Line int
 }
 
 // RelationKindDoc is the ArcLint-owned meaning of one RelationKind.

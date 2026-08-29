@@ -16,11 +16,14 @@ files:
           - statement: An Order must reference at least one product.
             owner: Purchase
 expect:
+  # Each finding anchors at the invariant it is about: the Ledger-owned
+  # statement is written on line 9 of the file above, the Purchase-owned
+  # one on line 11.
   - kind: violation
     path: ubiquitous-language.yaml
-    line: 1
+    line: 9
     message: "invariant owner \"Ledger\" in context \"ordering\" is not a recorded entity or value object of that context"
   - kind: violation
     path: ubiquitous-language.yaml
-    line: 1
+    line: 11
     message: "invariant owner \"Purchase\" in context \"ordering\" is not a recorded entity or value object of that context"

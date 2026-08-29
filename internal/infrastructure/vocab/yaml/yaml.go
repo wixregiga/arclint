@@ -96,6 +96,11 @@ func parse(data []byte, label string) (vocab.UbiquitousLanguage, error) {
 	if err := decoder.Decode(&doc); err != nil {
 		return vocab.UbiquitousLanguage{}, fmt.Errorf("%s: %v", label, err)
 	}
+	// A second pass over the same bytes, as a node tree, so every
+	// recorded entry keeps the line it is written on. The strict
+	// decode above stays the one that rejects unknown keys: decoding
+	// through yaml.Node would drop that strictness.
+	lines := readEntryLines(data)
 
 	if doc.Version != vocab.UbiquitousLanguageVersion {
 		version := fmt.Sprintf("%d", doc.Version)
@@ -110,6 +115,7 @@ func parse(data []byte, label string) (vocab.UbiquitousLanguage, error) {
 
 	contexts := make([]vocab.BoundedContext, len(doc.Contexts))
 	for i, c := range doc.Contexts {
+		at := lines.context(i)
 		entities := make([]vocab.Entity, len(c.Entities))
 		for j, e := range c.Entities {
 			entities[j] = vocab.Entity{
@@ -117,6 +123,7 @@ func parse(data []byte, label string) (vocab.UbiquitousLanguage, error) {
 					Name:       e.Name,
 					Definition: e.Definition,
 					Aliases:    e.Aliases,
+					Line:       lineAt(at.entities, j),
 				},
 				Aggregate: e.Aggregate,
 			}
@@ -126,14 +133,16 @@ func parse(data []byte, label string) (vocab.UbiquitousLanguage, error) {
 			invariants[j] = vocab.Invariant{
 				Statement: inv.Statement,
 				Owner:     inv.Owner,
+				Line:      lineAt(at.invariants, j),
 			}
 		}
 		contexts[i] = vocab.BoundedContext{
 			Name:         c.Name,
 			Entities:     entities,
-			ValueObjects: toDefs(c.ValueObjects),
+			ValueObjects: toDefs(c.ValueObjects, at.valueObjects),
 			Invariants:   invariants,
-			Events:       toEventDefs(c.Events),
+			Events:       toEventDefs(c.Events, at.events),
+			Line:         at.line,
 		}
 	}
 
@@ -147,6 +156,7 @@ func parse(data []byte, label string) (vocab.UbiquitousLanguage, error) {
 			From: rel.From,
 			To:   rel.To,
 			Kind: kind,
+			Line: lineAt(lines.relations, i),
 		}
 	}
 
@@ -276,24 +286,26 @@ type relEntry struct {
 	Kind string
 }
 
-func toDefs(docs []defDoc) []vocab.Definition {
+func toDefs(docs []defDoc, lines []int) []vocab.Definition {
 	out := make([]vocab.Definition, len(docs))
 	for i, d := range docs {
 		out[i] = vocab.Definition{
 			Name:       d.Name,
 			Definition: d.Definition,
 			Aliases:    d.Aliases,
+			Line:       lineAt(lines, i),
 		}
 	}
 	return out
 }
 
-func toEventDefs(docs []eventDoc) []vocab.Definition {
+func toEventDefs(docs []eventDoc, lines []int) []vocab.Definition {
 	out := make([]vocab.Definition, len(docs))
 	for i, d := range docs {
 		out[i] = vocab.Definition{
 			Name:       d.Name,
 			Definition: d.Definition,
+			Line:       lineAt(lines, i),
 		}
 	}
 	return out

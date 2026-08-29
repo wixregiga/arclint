@@ -128,25 +128,31 @@ declare module "arclint" {
   }
   /**
    * DomainDefinitionInfo is one recorded project domain definition as
-   * exposed through ctx.domain().
+   * exposed through ctx.domain(). Line is where the term is written in
+   * ubiquitous-language.yaml, so a finding about the term can anchor at
+   * the term; 0 when the vocabulary was not read from a file.
    */
   export interface DomainDefinitionInfo {
     name: string;
     definition?: string;
     aliases?: string[];
     aggregate?: boolean;
+    line: number /* int */;
   }
   /**
    * DomainInvariantInfo is one recorded invariant (statement + owner)
-   * inside a bounded context as exposed through ctx.domain().
+   * inside a bounded context as exposed through ctx.domain(). Line is
+   * where the invariant is written in ubiquitous-language.yaml.
    */
   export interface DomainInvariantInfo {
     statement: string;
     owner: string;
+    line: number /* int */;
   }
   /**
    * DomainContextInfo is one bounded context and its recorded terms as
-   * exposed through ctx.domain().
+   * exposed through ctx.domain(). Line is where the context is written
+   * in ubiquitous-language.yaml.
    */
   export interface DomainContextInfo {
     name: string;
@@ -154,15 +160,18 @@ declare module "arclint" {
     valueObjects: DomainDefinitionInfo[];
     invariants: DomainInvariantInfo[];
     events: DomainDefinitionInfo[];
+    line: number /* int */;
   }
   /**
    * DomainRelationInfo is one context-map edge as exposed through
-   * ctx.domain().
+   * ctx.domain(). Line is where the relation is written in
+   * ubiquitous-language.yaml.
    */
   export interface DomainRelationInfo {
     from: string;
     to: string;
     kind: string;
+    line: number /* int */;
   }
   /**
    * DomainInfo is the project's recorded domain model as exposed through

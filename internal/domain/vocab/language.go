@@ -53,6 +53,9 @@ func validateContexts(contexts []BoundedContext) error {
 		if _, dup := seen[c.Name]; dup {
 			return fmt.Errorf("contexts: duplicate name %q", c.Name)
 		}
+		if c.Line < 0 {
+			return fmt.Errorf("contexts %q: negative line", c.Name)
+		}
 		seen[c.Name] = struct{}{}
 		if err := validateEntities(c.Name, c.Entities); err != nil {
 			return err
@@ -79,6 +82,9 @@ func validateEntities(contextName string, entities []Entity) error {
 		if _, dup := seen[e.Name]; dup {
 			return fmt.Errorf("contexts %q entities: duplicate name %q", contextName, e.Name)
 		}
+		if e.Line < 0 {
+			return fmt.Errorf("contexts %q entities: negative line on %q", contextName, e.Name)
+		}
 		seen[e.Name] = struct{}{}
 	}
 	return nil
@@ -92,6 +98,9 @@ func validateSection(contextName, section string, defs []Definition) error {
 		}
 		if _, dup := seen[d.Name]; dup {
 			return fmt.Errorf("contexts %q %s: duplicate name %q", contextName, section, d.Name)
+		}
+		if d.Line < 0 {
+			return fmt.Errorf("contexts %q %s: negative line on %q", contextName, section, d.Name)
 		}
 		seen[d.Name] = struct{}{}
 	}
@@ -109,6 +118,9 @@ func validateInvariants(contextName string, invs []Invariant) error {
 		}
 		if _, dup := seen[inv.Statement]; dup {
 			return fmt.Errorf("contexts %q invariants: duplicate statement %q", contextName, inv.Statement)
+		}
+		if inv.Line < 0 {
+			return fmt.Errorf("contexts %q invariants: negative line on %q", contextName, inv.Statement)
 		}
 		seen[inv.Statement] = struct{}{}
 	}
@@ -135,6 +147,9 @@ func validateRelations(contexts []BoundedContext, relations []ContextRelation) e
 		}
 		if _, err := ParseRelationKind(string(r.Kind)); err != nil {
 			return fmt.Errorf("relations: %w", err)
+		}
+		if r.Line < 0 {
+			return fmt.Errorf("relations: negative line on %q -> %q", r.From, r.To)
 		}
 	}
 	return nil
@@ -494,11 +509,11 @@ func (l UbiquitousLanguage) FindInvariant(contextName, statement string) (Invari
 // case-sensitive and does not trim.
 func (l UbiquitousLanguage) Find(c Concept, contextName, name string) (Definition, bool) {
 	if c == ConceptBoundedContext {
-		if _, ok := l.contextIndex(name); ok {
-			return Definition{Name: name}, true
+		if i, ok := l.contextIndex(name); ok {
+			return Definition{Name: name, Line: l.Contexts[i].Line}, true
 		}
-		if _, ok := l.contextIndex(contextName); ok && (name == "" || name == contextName) {
-			return Definition{Name: contextName}, true
+		if i, ok := l.contextIndex(contextName); ok && (name == "" || name == contextName) {
+			return Definition{Name: contextName, Line: l.Contexts[i].Line}, true
 		}
 		return Definition{}, false
 	}
@@ -532,7 +547,7 @@ func (l UbiquitousLanguage) Find(c Concept, contextName, name string) (Definitio
 		return Definition{}, false
 	case ConceptInvariant, ConceptAssertion, ConceptBusinessRule:
 		if inv, ok := l.FindInvariant(contextName, name); ok {
-			return Definition{Name: inv.Statement, Definition: inv.Owner}, true
+			return Definition{Name: inv.Statement, Definition: inv.Owner, Line: inv.Line}, true
 		}
 		return Definition{}, false
 	default:
@@ -589,12 +604,12 @@ func (l UbiquitousLanguage) List(c Concept, contextName string) []Definition {
 		if contextName == "" {
 			out := make([]Definition, len(l.Contexts))
 			for i, ctx := range l.Contexts {
-				out[i] = Definition{Name: ctx.Name}
+				out[i] = Definition{Name: ctx.Name, Line: ctx.Line}
 			}
 			return out
 		}
-		if _, ok := l.contextIndex(contextName); ok {
-			return []Definition{{Name: contextName}}
+		if i, ok := l.contextIndex(contextName); ok {
+			return []Definition{{Name: contextName, Line: l.Contexts[i].Line}}
 		}
 		return nil
 	}
@@ -625,7 +640,7 @@ func (l UbiquitousLanguage) List(c Concept, contextName string) []Definition {
 	case ConceptInvariant, ConceptAssertion, ConceptBusinessRule:
 		out := make([]Definition, len(ctx.Invariants))
 		for i, inv := range ctx.Invariants {
-			out[i] = Definition{Name: inv.Statement, Definition: inv.Owner}
+			out[i] = Definition{Name: inv.Statement, Definition: inv.Owner, Line: inv.Line}
 		}
 		return out
 	default:

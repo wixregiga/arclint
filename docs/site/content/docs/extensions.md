@@ -154,26 +154,32 @@ ignored if present.
       definition?: string;
       aliases?: string[];
       aggregate?: boolean;
+      line: number;
     }>;
     valueObjects: Array<{
       name: string;
       definition?: string;
       aliases?: string[];
+      line: number;
     }>;
     invariants: Array<{
       statement: string;
       owner: string;
+      line: number;
     }>;
     events: Array<{
       name: string;
       definition?: string;
       aliases?: string[];
+      line: number;
     }>;
+    line: number;
   }>;
   relations: Array<{
     from: string;
     to: string;
     kind: string; // partnership | shared_kernel | customer_supplier | ...
+    line: number;
   }>;
 }
 ```
@@ -181,9 +187,22 @@ ignored if present.
 Collections are always arrays (empty when the project records none or
 the file is absent). Each term lives inside a named bounded context.
 `aggregate` is an entity designation, never a separate collection.
-Invariants carry a statement and exactly one owner. Declaring knowledge
-never creates a Diagnostic by itself; an Extension only surfaces
-findings when its `check` calls `ctx.report`.
+Invariants carry a statement and exactly one owner. Every entry carries
+the `line` it is written on in `ubiquitous-language.yaml`, so a finding
+about a context, term, invariant, or relation anchors at the entry
+instead of at the top of the file:
+
+```ts
+ctx.report({
+  path: "ubiquitous-language.yaml",
+  line: term.line,
+  message: `entity "${term.name}" has no definition recorded`,
+});
+```
+
+`line` is 0 for a vocabulary that was not read from a file. Declaring
+knowledge never creates a Diagnostic by itself; an Extension only
+surfaces findings when its `check` calls `ctx.report`.
 
 Rule Tests exercise `ctx.domain()` the same way they exercise files: a
 fixture that authors `ubiquitous-language.yaml` at its tree root is

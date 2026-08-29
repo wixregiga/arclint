@@ -13,7 +13,7 @@ What arclint cannot answer lives in exactly two other places: [README.md](README
 0. **Ask first.** Run `.bin/arclint context` on the paths you expect to touch and `.bin/arclint domain`. You MUST do this before opening source files; the answers replace surveying the tree. Read only the files you will change.
 1. **Language first.** If the feature speaks about something new, record the term in [ubiquitous-language.yaml](ubiquitous-language.yaml) before writing code: human voice, no em dashes, and anything object-level a definition mentions must itself be recorded or reworded in plain language. New invariants get an EARS line with their owner. Then run `.bin/arclint check`: a new aggregate makes the expansion rules derive the homes it is owed in both runtimes, and those findings are the structural to-do list.
 2. **Place code where `arclint context` says it belongs.** The few things the contracts cannot express: features fetch and pass facts, aggregates decide — cross-aggregate rules live in the aggregate, fed values by the feature; reads do not get feature slices, the app layer serves them straight from entities; new domain refusals are mapped in `internal/app`'s `fail()` (404 unknown, 409 promise-cannot-be-kept-now, 422 never-valid); on the web, an aggregate's data model and calls live in one `web/src/shared/api/<kebab-case>.ts` file, and every feature or page slice exports its public API through `index.ts`.
-3. **Rules move with structure — but slices are discovered.** New use-case, feature, and page slices are found from the tree (the slice-files rules), so adding one needs no rules.yaml edit; the yaml changes only for genuinely new structure or fences. Any new or changed rule gets fixture pairs (clean and violating) under `.arclint/tests`, proven by `.bin/arclint rules test`. Update the architecture block at the bottom of this file afterwards, by hand: read the note above its marker before reaching for `arclint agents md --write`. A new or changed vocabulary term lands in that block's recorded-domain line the same way.
+3. **Rules move with structure — but slices are discovered.** New use-case, feature, and page slices are found from the tree (the slice-files rules), so adding one needs no rules.yaml edit; the yaml changes only for genuinely new structure or fences. Any new or changed rule gets fixture pairs (clean and violating) under `.arclint/tests`, proven by `.bin/arclint rules test`. Refresh the architecture block at the bottom of this file afterwards with `arclint agents md --write`; a new or changed vocabulary term lands in its recorded-domain section the same way.
 4. **Gates.** `make check` runs vet, golangci-lint, the Go tests, `arclint check`, and `arclint rules test`. The web side: `make web` (install, typecheck, vite build); `make build-full` embeds the result in the single binary.
 
 ## Fixing a bug
@@ -35,15 +35,11 @@ What arclint cannot answer lives in exactly two other places: [README.md](README
 
 That is data, not an obstacle: this repo exists to surface it. Record the friction where you hit it (a comment in rules.yaml beside the workaround, like the extension-distribution note) and carry it to the parent repo's board. Never silently work around the tool this repo exists to prove.
 
-<!-- The block below is hand-maintained. `arclint agents md --write`
-     emits a strictly thinner version of it: modules with their import
-     contracts and three query commands, dropping the per-module
-     invariant rules, the recorded-domain summary, the repository-wide
-     rules, the local extension list, and the "ask arclint first"
-     directive this guide leans on. Regenerating therefore deletes
-     guidance rather than refreshing it, so keep this block by hand
-     until the generator carries the same content. Proving-ground
-     finding for the agents-md track; carry it to the parent board. -->
+<!-- The block below is generated: refresh it with `arclint agents md
+     --write` after changing rules.yaml, the vocabulary, or the
+     extensions. It once had to be kept by hand because the generator
+     emitted a thinner version; that gap was a proving-ground finding
+     here and the generator now carries the full content. -->
 <!-- arclint:agents:begin -->
 ## Architecture contracts (arclint)
 
@@ -59,42 +55,49 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 - `arclint check .` — evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings
 - `arclint rules test` — run the rule fixtures under `.arclint/tests` after changing any rule
 - `arclint sdk init` — regenerate the extension SDK artifacts under `.arclint/extensions`
-- `arclint agents md --write` — refresh this block after changing rules.yaml (see the note above it first)
+- `arclint agents md --write` — refresh this block after changing rules.yaml or the vocabulary
 - `arclint baseline` — manage the committed baseline of adopted findings
 - `arclint patterns` — list available Pattern distribution packages
 
 ### The recorded domain
 
-Three contexts, three aggregates. catalog: Event [aggregate], Organizer; TicketTier, Price. ordering: Order [aggregate]; OrderLine, Attendee, Refund; OrderPlaced. capacity: Capacity [aggregate]; Hold. Ten invariants. Relations: catalog upstream of ordering and of capacity (conformist); capacity supplies ordering (customer_supplier). Full text: `arclint domain`.
+3 contexts, 3 aggregates, 10 invariants (ubiquitous-language.yaml).
+
+- **catalog**: Event [aggregate], Organizer; value objects TicketTier, Price
+- **ordering**: Order [aggregate]; value objects OrderLine, Attendee, Refund; events OrderPlaced
+- **capacity**: Capacity [aggregate]; value objects Hold
+
+Relations: catalog → ordering (conformist); catalog → capacity (conformist); capacity → ordering (customer_supplier). Full text: `arclint domain`.
 
 ### Modules and their rules
 
 - **app** — FSD app layer: chi router, handlers, DTOs, the organizer gate, and the in-memory repositories. (paths internal/app/**)
   - imports only: features, entities, shared
-  - surface-tested: internal/app/app.go, app_test.go, and memory/memory.go stay present
+  - surface-tested: contains files matching ["internal/app/app.go", "internal/app/app_test.go", "internal/app/memory/memory.go"]
 - **composition** — Composition root: flags, wiring, the http server. (paths cmd/**)
   - imports only: app, features, entities, shared, web_embed
-  - main-and-seed-present: cmd/boxoffice/main.go, seed.go, version_test.go stay present
+  - main-and-seed-present: contains files matching ["cmd/boxoffice/main.go", "cmd/boxoffice/seed.go", "cmd/boxoffice/version_test.go"]
 - **entities** — FSD entities layer: the domain aggregates. Domain logic only, enforced. (paths internal/entities/**)
   - imports no other module; external imports forbidden
-  - aggregate-slices (warning, derived from each recorded aggregate): `<slice>/<slice>.go`, `repository.go`, `<slice>_test.go` per aggregate
-  - technology-free: no net/http, log/slog, or encoding/json
-  - no-panic
-  - errors-name-their-subject: no bare ErrNotFound/ErrInvalid/ErrFailed/ErrExists
-  - deterministic: no time.Now or math/rand
-  - aggregates-encapsulate: no exported fields on a recorded aggregate's struct
-  - no-store-machinery: no "sync" import
-- **features** — FSD features layer: use cases that change the world, one slice per use case. (paths internal/features/**)
+  - aggregate-slices (warning): contains files matching ["internal/entities/event/event.go", "internal/entities/event/repository.go", "internal/entities/event/event_test.go", "internal/entities/order/order.go", "internal/entities/order/repository.go", "internal/entities/order/order_test.go", "internal/entities/capacity/capacity.go", "internal/entities/capacity/repository.go", "internal/entities/capacity/capacity_test.go"] (derived from each recorded domain.aggregates)
+  - technology-free: satisfies extension rule "forbid-content" (pattern: "net/http"|"log/slog"|"encoding/json")
+  - no-panic: satisfies extension rule "forbid-content" (pattern: \bpanic\()
+  - errors-name-their-subject: satisfies extension rule "forbid-content" (pattern: \bErr(NotFound|Invalid|Failed|Exists)\b)
+  - deterministic: satisfies extension rule "forbid-content" (pattern: time\.Now\(|math/rand)
+  - aggregates-encapsulate: satisfies extension rule "aggregate-encapsulation" (root: internal/entities)
+  - no-store-machinery: satisfies extension rule "forbid-content" (pattern: "sync")
+- **features** — FSD features layer: use cases that change the world, one slice per use case, technology-free. (paths internal/features/**)
   - imports only: entities; external imports forbidden
-  - use-cases-tested: every discovered slice has `<slice>.go` and `<slice>_test.go`
-  - technology-free · deterministic (same fences as entities)
+  - use-cases-tested: satisfies extension rule "slice-files" (require: [{slice}.go, {slice}_test.go], root: internal/features)
+  - technology-free: satisfies extension rule "forbid-content" (pattern: "net/http"|"log/slog"|"encoding/json")
+  - deterministic: satisfies extension rule "forbid-content" (pattern: time\.Now\(|math/rand)
 - **server_source** — Source-wide invariants for the Go server. (paths internal/**)
-  - slog-only: no fmt.Print or log.Print/Fatal/Panic
-  - snake_case file names
+  - slog-only: satisfies extension rule "forbid-content" (pattern: \bfmt\.Print|\blog\.(Print|Fatal|Panic))
+  - snake-case: file names use snake_case
 - **shared** — FSD shared layer: kit the app layer builds on. (paths internal/shared/**)
   - imports no other module; external imports forbidden
 - **toolchain** — The build and lint surfaces the repo promises to keep. (paths Makefile .golangci.yml go.mod web/package.json)
-  - gates-present: all four files stay present
+  - gates-present: contains files matching ["Makefile", ".golangci.yml", "go.mod", "web/package.json"]
 - **vocabulary** — The recorded Ubiquitous Language of the box office. (paths ubiquitous-language.yaml)
 - **web_app** — FSD app layer on the web: router, providers, entry. (paths web/src/app/**)
   - imports only: web_pages, web_features, web_shared
@@ -102,20 +105,20 @@ Three contexts, three aggregates. catalog: Event [aggregate], Organizer; TicketT
   - imports no other module; external imports forbidden
 - **web_features** — FSD features layer: one slice per user interaction. (paths web/src/features/**)
   - imports only: web_shared
-  - slices-export-public-api: every discovered slice has index.ts
+  - slices-export-public-api: satisfies extension rule "slice-files" (require: [index.ts], root: web/src/features)
 - **web_pages** — FSD pages layer: one slice per screen. (paths web/src/pages/**)
   - imports only: web_features, web_shared
-  - slices-export-public-api: every discovered slice has index.ts
+  - slices-export-public-api: satisfies extension rule "slice-files" (require: [index.ts], root: web/src/pages)
 - **web_shared** — FSD shared layer: the api client, per-aggregate api files, and the ui kit. (paths web/src/shared/**)
   - imports no other module
-  - aggregates-speak-through-api (warning, derived from each recorded aggregate): `web/src/shared/api/<kebab-case>.ts` per aggregate
+  - aggregates-speak-through-api (warning): contains files matching ["web/src/shared/api/event.ts", "web/src/shared/api/order.ts", "web/src/shared/api/capacity.ts"] (derived from each recorded domain.aggregates)
 
 ### Repository-wide rules
 
-- fsd/slice-isolation: slices on the same layer never import each other, across internal/features, internal/entities, web/src/pages, web/src/features
-- server layers: app → features → entities; a module never imports a higher layer
-- web layers: web_app → web_pages → web_features → web_shared
-- acyclic: no dependency cycles among the ten code modules
+- fsd/slice-isolation: satisfies extension rule "fsd-slice-isolation" (layers: [internal/features, internal/entities, web/src/pages, web/src/features])
+- dependencies/server-layers: Modules layer highest first as ["app", "features", "entities"]; a Module never imports a higher layer
+- dependencies/web-layers: Modules layer highest first as ["web_app", "web_pages", "web_features", "web_shared"]; a Module never imports a higher layer
+- dependencies/acyclic: dependencies among ["composition", "app", "features", "entities", "shared", "web_embed", "web_app", "web_pages", "web_features", "web_shared"] contain no cycle
 
 ### Local extension rules
 
