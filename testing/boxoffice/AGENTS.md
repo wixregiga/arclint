@@ -34,7 +34,7 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 
 ### The recorded domain
 
-3 contexts, 3 aggregates, 11 invariants (ubiquitous-language.yaml).
+3 contexts, 3 aggregates, 21 invariants (ubiquitous-language.yaml).
 
 - **catalog**: Event [aggregate], Organizer; value objects TicketTier, Price
 - **ordering**: Order [aggregate]; value objects OrderLine, Attendee, Refund; events OrderPlaced

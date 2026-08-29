@@ -31,27 +31,35 @@ contexts:
           refers to it, the Price is copied, never recomputed.
     invariants:
       - statement: >-
-          An Event sells tickets only while it is published; a draft
-          Event is invisible to ordering and capacity alike.
+          An Event sells tickets only while it is published.
+        owner: Event
+      - statement: >-
+          A draft Event is invisible to ordering and capacity alike.
         owner: Event
       - statement: >-
           Every TicketTier carries a Price before its Event can be
           published.
         owner: TicketTier
       - statement: >-
-          Only the Organizer creates, edits, or publishes an Event,
-          and a draft Event is visible to its Organizer alone;
-          everyone else sees published Events only.
+          An Organizer alone creates, edits, publishes, and cancels
+          Events.
+        owner: Organizer
+      - statement: >-
+          A draft Event is visible to its Organizer alone.
         owner: Event
       - statement: >-
-          A draft Event stays the Organizer's to edit: its story, its
-          when and where, and its TicketTiers. Publishing ends that;
-          a published Event never changes.
+          A published Event's story, its when and where, and its
+          TicketTiers never change.
         owner: Event
       - statement: >-
-          Only a published Event can be cancelled, and cancelling is
-          final: the Event goes off sale, sells nothing more, never
-          returns to sale, and every ticket sold for it is refunded.
+          Only a published Event can be cancelled.
+        owner: Event
+      - statement: >-
+          A cancelled Event never returns to sale.
+        owner: Event
+      - statement: >-
+          When an Event is cancelled, every ticket sold for it is
+          refunded.
         owner: Event
   - name: ordering
     entities:
@@ -99,9 +107,12 @@ contexts:
           ordering to capacity.
     invariants:
       - statement: >-
-          An Order references only TicketTiers of a published Event at
-          placement, and its OrderLines and their Prices never change
-          afterward, not even when tickets are given back.
+          An Order references only TicketTiers of a published Event
+          at placement.
+        owner: Order
+      - statement: >-
+          A placed Order's OrderLines and their Prices never change,
+          not even when tickets are given back.
         owner: Order
       - statement: >-
           A Refund never gives back more tickets of a TicketTier than
@@ -109,9 +120,15 @@ contexts:
           refunded.
         owner: Refund
       - statement: >-
-          Only an Organizer comps, and comping is the only way an
-          Order's tickets cost nothing. An Attendee placing their own
-          Order always pays the Price of every TicketTier on it.
+          An Order is comped only by its Event's Organizer.
+        owner: Order
+      - statement: >-
+          An Order placed by its Attendee pays the Price of every
+          TicketTier on it.
+        owner: Order
+      - statement: >-
+          A comped Order shows it was comped only on its own page and
+          to its Organizer.
         owner: Order
   - name: capacity
     entities:
@@ -123,7 +140,8 @@ contexts:
           Organizer published, and they stay put while seats spoken
           for rise with each Order and fall with each Refund. It has
           no opinion on stories or Prices, only on whether one more
-          promise fits the room.
+          promise fits the room; when nothing more fits, the
+          TicketTier is sold out.
         aggregate: true
     value_objects:
       - name: Hold
@@ -133,18 +151,26 @@ contexts:
           Hold frees its seats.
     invariants:
       - statement: >-
-          Seats spoken for plus seats held never exceed the seats a
-          TicketTier has; when they are equal, the tier is sold out
-          and new Holds are refused.
+          A Capacity never lets seats spoken for plus seats held
+          exceed the seats a TicketTier has.
         owner: Capacity
       - statement: >-
-          An expired Hold frees its seats and can never become part of
-          an Order.
+          While every seat of a TicketTier is spoken for or held, a
+          Capacity refuses new Holds on it.
+        owner: Capacity
+      - statement: >-
+          An expired Hold frees its seats.
         owner: Hold
       - statement: >-
-          Seats spoken for come back only through a Refund, and a
-          Refund never frees more seats of a TicketTier than that tier
-          has spoken for.
+          An expired Hold never becomes part of an Order.
+        owner: Hold
+      - statement: >-
+          A Capacity's seats spoken for come back only through a
+          Refund.
+        owner: Capacity
+      - statement: >-
+          A Capacity frees no more seats of a TicketTier than that
+          tier has spoken for.
         owner: Capacity
 relations:
   # ordering and capacity both take the catalog's model of Event and
