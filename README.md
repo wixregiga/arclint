@@ -1,15 +1,47 @@
 # arclint
 
-A repository linter and architectural-conformance system. One static
-Go binary evaluates **Rules** against Files, Folders, and Modules, then
-reports what it could prove, what it suspects, and what it could not
-determine — silence never reads as conformance.
+A repository linter and architectural-conformance system.
 
-Rules are plain YAML. Every Rule has an explicit stable id, states one
-claim, and declares how it is enforced: evidence, assurance, and
-limitations are reported alongside every finding.
+**Problem:** llm code is super long and annoying to read, and after a
+few updates over a couple of weeks it's unmaintainable. You end up
+asking yourself, "what does this thing even do?"
 
-## Install a beta
+Current solutions:
+
+- Throw your hands up
+- Give up
+- Read a million lines of code a day
+- Pray
+
+A good senior dev is unreasonable and lazy. They want the codebase a
+certain way, and they know not everyone shares their passion for
+vertically sliced, GoF, DDD, dependency inverted, Dijkstra approved,
+dodecahedron architectural patterns. Especially not the agents.
+
+So don't hope everyone's on the same page. Check for it. Throw an error
+when it's not up to your standards. And when you find a pattern worth
+keeping, write a rule for it.
+
+Use arclint for that check. Or not. It's up to you.
+
+- Already use linters? Sick. This is one. Config it up in `rules.yaml`.
+- Got weird house rules? Dope. Write a small TypeScript extension. No
+  npm, no Node, no toolchain to install; the binary transpiles and
+  sandboxes it.
+- Want to know which rules govern a file or directory? Tubular. Run
+  `arclint context <path>`.
+- DDD crazy? Rad. Keep your terms in a committed
+  `ubiquitous-language.yaml`, then write rules like "each aggregate
+  lives in `internal/<snake_case>/`, imports no third-party code, and
+  declares a repository interface."
+- Want vertically sliced hexagons? Write a rule for it.
+- Want features to live in a certain file? Write a rule for it.
+- Want to test your rule out first? Write a test for it in
+  `.arclint/tests/name-features-the-way-i-want.yaml` and run
+  `arclint rules test`.
+- It does other things too. They're below.
+
+## Install
 
 Beta releases currently provide static Linux binaries for amd64 and arm64.
 Choose a version from [GitHub Releases](https://github.com/wixregiga/arclint/releases),
@@ -115,8 +147,9 @@ The loop is schema-guided, trialed live, then pinned:
    evaluates just that rule; patterns like `arclint:domain/*` work,
    and observation narrows to the facts the selected rules declare.
 
-3. **Pin it.** A rule test is one YAML file under `.arclint/tests/`:
-   fixture files plus the complete expected findings, run through the
+3. **Write a test for it.** A rule test is one YAML file under
+   `.arclint/tests/`: a set of inline example files plus the complete
+   findings you expect the rule to produce on them, run through the
    real parsers by `arclint rules test`. Start with an empty
    `expect: []` — failures print ready-to-paste entries; adopt the
    intended ones. An empty list that stays empty asserts complete
@@ -136,53 +169,6 @@ The loop is schema-guided, trialed live, then pinned:
        path: internal/domain/pattern/pattern.go
        message: "path forbidden by structure rule \"internal/domain/pattern/**\" of Module \"domain\""
    ```
-
-## Honest reporting
-
-Every evaluation ends in exactly one outcome: `conforms`, `violates`,
-`suspected_violation`, `undetermined`, `unsupported`, `not_applicable`,
-or `failed`. Severity (does it gate?) is independent from assurance
-(how sure is the evidence?). Unsupported and failed evaluations surface
-as coverage and operational diagnostics instead of disappearing.
-
-Exit codes: `0` clean, `1` error-severity findings, `2` configuration
-or usage error.
-
-Adopted debt lives in a committed, reviewable baseline
-(`.arclint/baseline.v2.json`): `baseline capture` adopts current
-findings, `check` reports only new ones and counts the covered rest,
-`baseline refresh` drops entries that no longer occur.
-
-## Commands
-
-```
-check [path]        evaluate the repository (--format human|json, --no-baseline, --only/--exclude <selectors>)
-rules [selector]    list the configured rules; one match shows the complete rule
-rules schema        print the JSON Schema for rules.yaml (committed at docs/rules.schema.json)
-rules test [name]   run the rule tests under .arclint/tests; failures exit 1
-context [paths...]  the architecture, or everything binding the given paths (--module, --format json)
-domain              inspect and maintain the project's ubiquitous language (init/overview/list/show/explain/define/remove/schema)
-agents              AGENTS.md block (--write); skill bundle (skill); SKILL.md only (md|agentmd|markdown)
-baseline capture    adopt current findings   ·  baseline refresh: drop stale entries
-patterns            list local pattern packages (.arclint/patterns/<name>/pattern.yaml)
-sdk init            write arclint.d.ts + tsconfig.json for extension authors
-init                draft a starter rules.yaml (--languages go,ts,py --force)
-completion <shell>  shell completion with live rule ids and module names (bash|zsh|fish|powershell)
-```
-
-A selector is an exact rule id, an id prefix, or a `path.Match`
-pattern (`arclint:domain/*`); an exact id wins over expansion, and a
-selector matching nothing is a loud error, never a silent no-op.
-`--only` and `--exclude` take several, comma or space separated, with
-exclusion winning.
-
-`context` is the worksite call: give it any number of paths and/or
-`--module <names>` and one payload answers what governs the set — each
-path mapped to its owning modules, each involved module once, and the
-union of applicable rules with the scope parts that pulled them in,
-boundary rules included. Bare `arclint context` explains the
-repository instead: every module and its import policy, the rule kinds
-in use with their meanings, and the unknown-imports posture.
 
 ## Extensions
 
@@ -215,10 +201,89 @@ tags), deterministic everywhere. Extension evidence is treated as heuristic:
 findings gate as suspected violations, and absence of findings is
 undetermined, never proof of conformance.
 
-## Self-hosting
+## Working with agents
+
+Three commands do the agent-facing work:
+
+- `arclint context <paths...>` — give it the files an agent touched
+  (and/or `--module <names>`) and one payload answers what governs the
+  set: each path mapped to its owning modules, each involved module
+  once, and the union of applicable rules with the scope parts that
+  pulled them in, boundary rules included. Bare `arclint context`
+  explains the repository instead: every module and its import policy,
+  the rule kinds in use with their meanings, and the unknown-imports
+  posture.
+- `arclint agents --write` — generates the AGENTS.md block from the
+  ruleset (this repository's [AGENTS.md](AGENTS.md) is produced this
+  way), so the agent-facing context cannot drift from the enforced
+  contract. `arclint agents skill` emits a skill bundle.
+- `arclint domain` — inspects and maintains the project's ubiquitous
+  language in a committed `ubiquitous-language.yaml`: bounded contexts,
+  entities, aggregates, value objects, invariants, and events, with a
+  published JSON Schema (`arclint domain schema`).
+
+## Outcomes and exit codes
+
+A good linter answers some basic questions about its rules:
+
+- Can I ignore this? Severity is configured per rule and decides
+  whether a finding gates: `error`, `warning`, or `info`.
+- Is this a false positive? Every rule type states its assurance.
+  Builtin import and tree rules are `exact`. Extension findings are
+  always treated as `heuristic` and gate as suspected violations.
+- Does it check what it says it checks? Every evaluation ends in
+  exactly one outcome: `conforms`, `violates`, `suspected_violation`,
+  `undetermined`, `unsupported`, `not_applicable`, or `failed`. What
+  wasn't checked shows up as `undetermined` or `unsupported` instead
+  of passing quietly.
+
+These questions are answered on every run, for every rule. Severity
+and assurance are independent.
+
+Exit codes: `0` clean, `1` error-severity findings, `2` configuration
+or usage error.
+
+## Baseline
+
+Adopted debt lives in a committed, reviewable baseline
+(`.arclint/baseline.v2.json`): `baseline capture` adopts current
+findings, `check` reports only new ones and counts the covered rest,
+`baseline refresh` drops entries that no longer occur.
+
+## Commands
+
+```
+check [path]        evaluate the repository (--format human|json, --no-baseline, --only/--exclude <selectors>)
+rules [selector]    list the configured rules; one match shows the complete rule
+rules schema        print the JSON Schema for rules.yaml (committed at docs/rules.schema.json)
+rules test [name]   run the rule tests under .arclint/tests; failures exit 1
+context [paths...]  the architecture, or everything binding the given paths (--module, --format json)
+domain              inspect and maintain the project's ubiquitous language (init/overview/list/show/explain/define/remove/schema)
+agents              AGENTS.md block (--write); skill bundle (skill); SKILL.md only (md|agentmd|markdown)
+baseline capture    adopt current findings   ·  baseline refresh: drop stale entries
+patterns            list local pattern packages (.arclint/patterns/<name>/pattern.yaml)
+sdk init            write arclint.d.ts + tsconfig.json for extension authors
+init                draft a starter rules.yaml (--languages go,ts,py --force)
+completion <shell>  shell completion with live rule ids and module names (bash|zsh|fish|powershell)
+```
+
+A selector is an exact rule id, an id prefix, or a `path.Match`
+pattern (`arclint:domain/*`); an exact id wins over expansion, and a
+selector matching nothing is a loud error, never a silent no-op.
+`--only` and `--exclude` take several, comma or space separated, with
+exclusion winning.
+
+## Developing
+
+```bash
+make ci                  # format + lint + vet + tests + selfcheck
+go test -short ./...     # the quick loop, network suite skipped
+make bench               # cold start and large-repo timings
+```
 
 This repository is checked by its own ruleset on every CI run
-(`make selfcheck`). The codebase follows the architecture it enforces:
+(`make selfcheck`), so the architecture below is enforced, not just
+described. The codebase follows the rules it ships:
 
 - `internal/domain` — the Rule aggregate, conformance check, and
   baseline model; stdlib-only, invalid values unconstructible.
@@ -234,14 +299,6 @@ This repository is checked by its own ruleset on every CI run
   pinned real repositories (part of the normal test run, skipped under
   `-short`), and the domain glob matcher carries a committed reference
   truth table.
-
-## Developing
-
-```bash
-make ci                  # format + lint + vet + tests + selfcheck
-go test -short ./...     # the quick loop, network suite skipped
-make bench               # cold start and large-repo timings
-```
 
 Product documentation lives under [docs/site](docs/site). The generated
 [AGENTS.md](AGENTS.md) carries the architecture contracts for agents.
