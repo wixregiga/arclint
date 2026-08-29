@@ -46,7 +46,7 @@ release:
     owner: wixregiga
     name: arclint
   name_template: "v{{ .Env.ARCLINT_VERSION }}"
-  # Every published tag is a beta; always mark the GitHub release prerelease.
-  prerelease: true
+  # The workflow accepts only beta tags; derive prerelease status from the tag.
+  prerelease: auto
   # Betas must not become the repository "latest" release.
   make_latest: false
