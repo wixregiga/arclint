@@ -1,0 +1,103 @@
+{
+  "$id": "https://raw.githubusercontent.com/wixregiga/arclint/main/.agents/skills/domain-librarian/library.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "domain-librarian ubiquitous-language library",
+  "description": "The project's recorded Ubiquitous Language, organized by bounded context. The domain-librarian has sole write custody; humans review and edit under the same rules: every term carries a definition, a term lives in exactly one context, aliases point at the canonical term, and unresolved classifications are never written.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "contexts"],
+  "properties": {
+    "version": {
+      "const": 1,
+      "description": "Document version. This library accepts version 1 only."
+    },
+    "contexts": {
+      "type": "array",
+      "description": "One entry per bounded context: an explicit boundary within which one model applies and every term has exactly one meaning.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The bounded context's name. A party that must be informed or notified is its own context, recorded even while empty."
+          },
+          "entities": {
+            "type": "array",
+            "description": "Domain concepts defined by identity that persists across attribute change (identity-test: it stays the same thing when its attributes change).",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "definition"],
+              "properties": {
+                "name": { "type": "string", "minLength": 1, "description": "Canonical term, exactly as domain experts say it (language-fidelity). A term that lines up with a code object uses the code's exact spelling (TermCase, RuleID), never a prose-spaced variant." },
+                "definition": { "type": "string", "minLength": 1, "description": "What the term means, grounded in expert language. A term without a definition is rejected, not stored. Written for humans first: plain sentences, no em dashes; anything object-level it names must be recorded in this library or reworded in plain language." },
+                "aggregate": { "type": "boolean", "description": "True only with quoted consistency evidence: an invariant spanning a cluster that must change in one transaction. Never true by default." },
+                "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Synonyms collapsed onto this canonical term (synonym-collapse). Aliases never carry their own definitions." }
+              }
+            }
+          },
+          "value_objects": {
+            "type": "array",
+            "description": "Immutable, identity-less concepts described entirely by their values (value-test: two with identical values are interchangeable). Measurements, units, and amounts belong here.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "definition"],
+              "properties": {
+                "name": { "type": "string", "minLength": 1, "description": "Canonical term, exactly as domain experts say it (language-fidelity). A term that lines up with a code object uses the code's exact spelling (TermCase, RuleID), never a prose-spaced variant." },
+                "definition": { "type": "string", "minLength": 1, "description": "What the value describes. A term without a definition is rejected, not stored. Written for humans first: plain sentences, no em dashes; anything object-level it names must be recorded in this library or reworded in plain language." },
+                "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "Synonyms collapsed onto this canonical term. Aliases never carry their own definitions." }
+              }
+            }
+          },
+          "invariants": {
+            "type": "array",
+            "description": "Must-always/must-never rules that hold at all times within this context. A valid invariant forbids something a naive implementation could do; restating a definition is not an invariant.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["statement", "owner"],
+              "properties": {
+                "statement": { "type": "string", "minLength": 1, "description": "The rule, phrased so the concrete forbidden violation is clear." },
+                "owner": { "type": "string", "minLength": 1, "description": "Exactly one enforcing term in this context: an entity/aggregate root (enforced in behavior) or a value_object (enforced at construction)." }
+              }
+            }
+          },
+          "events": {
+            "type": "array",
+            "description": "Domain events: things that happened that experts care about, named in past-tense expert language (event-detection). Technical changes are not events.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "definition"],
+              "properties": {
+                "name": { "type": "string", "minLength": 1, "description": "Past-tense event name, e.g. OrderConfirmed." },
+                "definition": { "type": "string", "minLength": 1, "description": "What happened and who cares, including any party that must be informed. Written for humans first: plain sentences, no em dashes; anything object-level it names must be recorded in this library or reworded in plain language." }
+              }
+            }
+          }
+        }
+      }
+    },
+    "relations": {
+      "type": "array",
+      "description": "Context-map edges between bounded contexts. Omit when a single context exists.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to", "kind"],
+        "properties": {
+          "from": { "type": "string", "minLength": 1, "description": "Upstream context name (must match a contexts[].name)." },
+          "to": { "type": "string", "minLength": 1, "description": "Downstream context name (must match a contexts[].name)." },
+          "kind": {
+            "enum": ["partnership", "shared_kernel", "customer_supplier", "conformist", "anticorruption_layer", "open_host_service", "published_language", "separate_ways"],
+            "description": "Relationship kind: partnership = succeed/fail together; shared_kernel = small jointly-owned model subset; customer_supplier = upstream plans for downstream; conformist = downstream adopts upstream model; anticorruption_layer = downstream translates defensively; open_host_service = upstream exposes one protocol; published_language = shared interchange language; separate_ways = no integration."
+          }
+        }
+      }
+    }
+  }
+}

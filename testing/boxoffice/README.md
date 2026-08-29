@@ -22,12 +22,6 @@ Anyone can walk up. The front page lists what's on sale — published events onl
 
 Priya's side of the counter is hers alone. As the organizer she also sees her drafts, writes the stories, prices the tiers, publishes when ready, and watches the counts. Each published show opens its own page for her: the seats every tier went on sale with, next to how many are sold, held, and left, and the list of who bought tickets. From there she refunds a single buyer's ticket or calls the whole show off. Someone who only buys tickets can't create events and never sees a draft — for them, boxoffice is simply what's on sale, and a show that was called off says so instead of vanishing.
 
-## The shape
-
-One Feature-Sliced Design grammar governs both runtimes. On the Go side, `cmd/boxoffice` composes, `internal/app` speaks HTTP (chi, DTOs, the organizer gate), `internal/features` holds one use-case slice per thing that changes the world (publishevent, cancelevent, holdseats, placeorder, refundticket), `internal/entities` holds the aggregates — Event, Order, Capacity — as pure domain logic, and `internal/shared` is kit. On the web, `web/src/app` routes (TanStack Router), `web/src/pages` are screens, `web/src/features` are interactions, and `web/src/shared` carries the api client with one file per aggregate plus the ui kit. The domain is recorded in `ubiquitous-language.yaml`, its invariants map line for line into `requirements.ears`, and `rules.yaml` enforces the whole arrangement — including deriving required structure from the recorded aggregates in both runtimes.
-
-How to work in here — adding a feature, fixing a bug, moving a rule — is written down in [AGENTS.md](AGENTS.md).
-
 ## Running
 
 ```bash
@@ -36,8 +30,3 @@ make run
 
 rebuilds everything — npm install, typecheck, vite build, then the single binary with the web app embedded — replaces any running instance, and serves on `:8080`, seeded with Priya's shows and the deals already struck for them, organizer token `dev-organizer`. Run it again after any change; the port always carries the latest build. While working on the web side, `npm --prefix web run dev` serves it on `:5173` with `/api` proxied to the Go server.
 
-The gates: `make check` runs vet, golangci-lint, the Go tests, `arclint check`, and `arclint rules test`. `make web` is the web side on its own — npm install, `tsc --noEmit`, vite build — and `make build-full` embeds that build in the single binary.
-
-## Why this repo exists
-
-boxoffice is also the end-to-end proving ground for [arclint](../../README.md): a real two-runtime app (Go server, React web) whose architecture is governed by arclint throughout — its bounded contexts recorded in `ubiquitous-language.yaml`, its structure and dependencies enforced by `rules.yaml`. The app comes first; the governance demonstrates itself on top of it.
