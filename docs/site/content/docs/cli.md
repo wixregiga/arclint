@@ -101,11 +101,15 @@ resolve; an exact module name wins when both match. `--format json`
 emits the machine shape for coding agents.
 
 `arclint agents md --write` covers the prompt-time half: it compiles the
-ruleset into a generated block inside `AGENTS.md` (modules, dependency
-policy, repo-wide rules, query commands) so agents see the architecture
-before writing code. The block sits between markers; hand-written
-content around it survives regeneration, and the block never carries
-timestamps, so regeneration is idempotent for an unchanged ruleset.
+ruleset, the recorded vocabulary, and the local extension registry into
+a generated block inside `AGENTS.md` — an ask-arclint-first directive,
+the full command surface with when-to-use guidance, a recorded-domain
+snapshot, every module with its rule claims, repository-wide rules, and
+the local extension inventory — so agents see the architecture before
+writing code. The block sits between markers; hand-written content
+around it survives regeneration, and the block never carries
+timestamps, so regeneration is idempotent for an unchanged ruleset and
+vocabulary.
 
 ## Shell completion
 
