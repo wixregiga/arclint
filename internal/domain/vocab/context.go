@@ -2,12 +2,15 @@ package vocab
 
 // BoundedContext is one explicit model boundary: a name plus the four
 // file-recordable sections (entities, value_objects, invariants, events).
+// Line is where the context is written down in the recorded Ubiquitous
+// Language file, 0 for a context that is not written down yet.
 type BoundedContext struct {
 	Name         string
 	Entities     []Entity
 	ValueObjects []Definition
 	Invariants   []Invariant
 	Events       []Definition
+	Line         int
 }
 
 func cloneContext(c BoundedContext) BoundedContext {
@@ -17,6 +20,7 @@ func cloneContext(c BoundedContext) BoundedContext {
 		ValueObjects: cloneDefs(c.ValueObjects),
 		Invariants:   cloneInvariants(c.Invariants),
 		Events:       cloneDefs(c.Events),
+		Line:         c.Line,
 	}
 }
 

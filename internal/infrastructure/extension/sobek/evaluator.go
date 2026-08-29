@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
@@ -71,6 +72,22 @@ func (e *Evaluator) Evaluate(extension string, params map[string]any, subjects [
 		})
 	}
 	return findings, nil
+}
+
+// RegisteredExtensionRules implements the application's
+// ExtensionInventory port: every rule definition the repository's
+// extensions register, with its source file, in registration order.
+func (e *Evaluator) RegisteredExtensionRules() ([]application.RegisteredExtensionRule, error) {
+	e.once.Do(func() { e.registry, e.loadErr = LoadDir(e.root, e.opts) })
+	if e.loadErr != nil {
+		return nil, e.loadErr
+	}
+	types := e.registry.Types()
+	out := make([]application.RegisteredExtensionRule, 0, len(types))
+	for _, t := range types {
+		out = append(out, application.RegisteredExtensionRule{Name: t.Name, Source: t.SourcePath})
+	}
+	return out, nil
 }
 
 // host lends the read-only capability surface, scoped to the selected
@@ -225,6 +242,7 @@ func domainInfoFrom(lang vocab.UbiquitousLanguage) DomainInfo {
 				ValueObjects: definitionInfos(c.ValueObjects),
 				Invariants:   invariantInfos(c.Invariants),
 				Events:       definitionInfos(c.Events),
+				Line:         c.Line,
 			}
 		}
 	}
@@ -235,6 +253,7 @@ func domainInfoFrom(lang vocab.UbiquitousLanguage) DomainInfo {
 				From: r.From,
 				To:   r.To,
 				Kind: string(r.Kind),
+				Line: r.Line,
 			}
 		}
 	}
@@ -252,6 +271,7 @@ func entityInfos(entities []vocab.Entity) []DomainDefinitionInfo {
 			Definition: e.Definition.Definition,
 			Aliases:    e.Aliases,
 			Aggregate:  e.Aggregate,
+			Line:       e.Line,
 		}
 	}
 	return out
@@ -267,6 +287,7 @@ func definitionInfos(defs []vocab.Definition) []DomainDefinitionInfo {
 			Name:       d.Name,
 			Definition: d.Definition,
 			Aliases:    d.Aliases,
+			Line:       d.Line,
 		}
 	}
 	return out
@@ -281,6 +302,7 @@ func invariantInfos(invs []vocab.Invariant) []DomainInvariantInfo {
 		out[i] = DomainInvariantInfo{
 			Statement: inv.Statement,
 			Owner:     inv.Owner,
+			Line:      inv.Line,
 		}
 	}
 	return out

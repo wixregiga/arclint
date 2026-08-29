@@ -29,7 +29,7 @@ export default defineRule({
         const resolved = aliased[invariant.owner];
         ctx.report({
           path: VOCABULARY,
-          line: 1,
+          line: invariant.line,
           message: `invariant owner "${invariant.owner}" in context "${bound.name}" is not a recorded entity or value object of that context`,
           fixHint: resolved
             ? `"${invariant.owner}" is an alias: name the canonical term "${resolved}"`

@@ -110,7 +110,7 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	publishAgents, err := application.NewPublishAgentsContext(getContext, publisher)
+	publishAgents, err := application.NewPublishAgentsContext(repository, knowledge, extensions, publisher)
 	if err != nil {
 		return configError(err)
 	}
