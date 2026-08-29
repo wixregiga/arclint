@@ -1,28 +1,10 @@
 # boxoffice — agent guide
 
-boxoffice is a small box office for live events ([README.md](README.md) tells the app's story), governed end to end by arclint.
+boxoffice is a small box office for live events, governed end to end by arclint.
 
 ## Orientation
 
 IMPORTANT: ask arclint before reading around. `make arclint` builds the arclint binary at `.bin/arclint` and runs the check. The command surface, the contracts, and the recorded domain live in the architecture block at the bottom of this file.
-
-What arclint cannot answer lives in exactly two other places: [README.md](README.md) for what the app is, and [requirements.ears](requirements.ears) for the domain invariants as EARS lines with their owning term in brackets. Keep requirements.ears in step with the vocabulary: a new invariant lands in both files or in neither.
-
-## Adding a feature
-
-0. **Ask first.** Run `.bin/arclint context` on the paths you expect to touch and `.bin/arclint domain`. You MUST do this before opening source files; the answers replace surveying the tree. Read only the files you will change.
-1. **Language first.** If the feature speaks about something new, record the term in [ubiquitous-language.yaml](ubiquitous-language.yaml) before writing code: human voice, no em dashes, and anything object-level a definition mentions must itself be recorded or reworded in plain language. New invariants get an EARS line with their owner. Then run `.bin/arclint check`: a new aggregate makes the expansion rules derive the homes it is owed in both runtimes, and those findings are the structural to-do list.
-2. **Place code where `arclint context` says it belongs.** The few things the contracts cannot express: features fetch and pass facts, aggregates decide — cross-aggregate rules live in the aggregate, fed values by the feature; reads do not get feature slices, the app layer serves them straight from entities; new domain refusals are mapped in `internal/app`'s `fail()` (404 unknown, 409 promise-cannot-be-kept-now, 422 never-valid); on the web, an aggregate's data model and calls live in one `web/src/shared/api/<kebab-case>.ts` file, and every feature or page slice exports its public API through `index.ts`.
-3. **Rules move with structure — but slices are discovered.** New use-case, feature, and page slices are found from the tree (the slice-files rules), so adding one needs no rules.yaml edit; the yaml changes only for genuinely new structure or fences. Any new or changed rule gets fixture pairs (clean and violating) under `.arclint/tests`, proven by `.bin/arclint rules test`. Refresh the architecture block at the bottom of this file afterwards with `arclint agents md --write`; a new or changed vocabulary term lands in its recorded-domain section the same way.
-4. **Gates.** `make check` runs vet, golangci-lint, the Go tests, `arclint check`, and `arclint rules test`. The web side: `make web` (install, typecheck, vite build); `make build-full` embeds the result in the single binary.
-
-## Fixing a bug
-
-0. **Ask first.** Run `.bin/arclint context` on the paths the symptom implicates. You MUST do this before reading around; then read only what you will change.
-1. **Reproduce it as a test first**, at the lowest layer that shows it: a broken invariant is an entity test; wrong orchestration is a feature test with in-test fakes; wiring or HTTP behavior is `internal/app/app_test.go` through httptest with the fake clock. The failing test outlives the fix.
-2. **Fix where the rule lives.** If a promise was broken, the enforcement belongs in the aggregate, never in a handler-side check.
-3. **If the architecture allowed the bug, that is a second bug.** Tighten rules.yaml or the extensions and add the fixture that would have caught it.
-4. `make check` green before done.
 
 ## Conventions the rules don't spell out
 
@@ -31,15 +13,10 @@ What arclint cannot answer lives in exactly two other places: [README.md](README
 - No messaging machinery, ever: contexts meet inside features as plain calls (see placeorder).
 - The organizer gate is one bearer token from config; an empty token keeps that side locked.
 
-## When arclint gets in your way
+## Changing the language
 
-That is data, not an obstacle: this repo exists to surface it. Record the friction where you hit it (a comment in rules.yaml beside the workaround, like the extension-distribution note) and carry it to the parent repo's board. Never silently work around the tool this repo exists to prove.
+If your change speaks about something new, or changes what a recorded term means, record it in `ubiquitous-language.yaml` before writing code. Prefer the domain-librarian skill for that work: read `.agents/skills/domain-librarian/SKILL.md` and follow its protocol. It decides how a concept is classified, what evidence a recording needs, and when an open question is recorded instead of a guess.
 
-<!-- The block below is generated: refresh it with `arclint agents md
-     --write` after changing rules.yaml, the vocabulary, or the
-     extensions. It once had to be kept by hand because the generator
-     emitted a thinner version; that gap was a proving-ground finding
-     here and the generator now carries the full content. -->
 <!-- arclint:agents:begin -->
 ## Architecture contracts (arclint)
 
