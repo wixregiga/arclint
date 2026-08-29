@@ -9,12 +9,41 @@ Rules are plain YAML. Every Rule has an explicit stable id, states one
 claim, and declares how it is enforced: evidence, assurance, and
 limitations are reported alongside every finding.
 
+## Install a beta
+
+Beta releases currently provide static Linux binaries for amd64 and arm64.
+Choose a version from [GitHub Releases](https://github.com/wixregiga/arclint/releases),
+then download and verify the archive for the current machine:
+
+```bash
+version="0.1.0-beta.1"
+case "$(uname -m)" in
+  x86_64) arch="amd64" ;;
+  aarch64 | arm64) arch="arm64" ;;
+  *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+
+base="https://github.com/wixregiga/arclint/releases/download/v${version}"
+archive="arclint_${version}_linux_${arch}.tar.gz"
+curl -fLO "${base}/${archive}"
+curl -fLO "${base}/checksums.txt"
+sha256sum --ignore-missing -c checksums.txt
+
+mkdir -p "$HOME/.local/bin"
+tar -xzf "$archive"
+install -m 0755 arclint "$HOME/.local/bin/arclint"
+rm arclint "$archive" checksums.txt
+arclint --version
+```
+
+`$HOME/.local/bin` must be on `PATH`. Beta releases are prereleases and may
+change before arclint reaches a stable version.
+
 ## Quickstart
 
 ```bash
-make build          # CGO_ENABLED=0, single static binary
-./arclint init      # draft a commented starter rules.yaml
-./arclint check .   # evaluate it
+arclint init       # draft a commented starter rules.yaml
+arclint check .    # evaluate it
 ```
 
 Grow the starter module by module. A real contract set looks like:
