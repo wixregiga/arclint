@@ -15,7 +15,7 @@ IMPORTANT: ask arclint before reading around. `make arclint` builds the arclint 
 
 ## Changing the language
 
-If your change speaks about something new, or changes what a recorded term means, record it in `ubiquitous-language.yaml` before writing code. Prefer the domain-librarian skill for that work: read `.agents/skills/domain-librarian/SKILL.md` and follow its protocol. It decides how a concept is classified, what evidence a recording needs, and when an open question is recorded instead of a guess.
+If your change speaks about something new, or changes what a recorded term means, record it in `ubiquitous-language.yaml` before writing code. Prefer the domain-librarian skill for that work: it decides how a concept is classified, what evidence a recording needs, and when an open question is recorded instead of a guess.
 
 <!-- arclint:agents:begin -->
 ## Architecture contracts (arclint)
