@@ -72,12 +72,15 @@ func (c Context) Changed(name string) bool {
 
 // Command is one framework-neutral command description.
 type Command struct {
-	Name        string
-	Short       string
-	Long        string
-	Example     string
-	Aliases     []string
-	Version     string // root command only
+	Name    string
+	Short   string
+	Long    string
+	Example string
+	Aliases []string
+	Version string // root command only; not a root discriminator
+	// Root marks the process root command. The Cobra translator uses
+	// this explicit state (not Version) when deciding persistent flags.
+	Root        bool
 	Flags       []Flag
 	Subcommands []Command
 	// MaxArgs bounds positional arguments; negative means unlimited.
@@ -110,12 +113,30 @@ func ConfigError(err error) error {
 // ViolationsExit is the silent exit for gating findings.
 func ViolationsExit() error { return &ExitError{Code: ExitViolations} }
 
-// Root assembles the arclint command tree.
+// Root assembles the arclint command tree. Process-level presentation
+// flags (--format, --no-color) are declared here so help and completion
+// advertise them; the composition root peels them before the adapter
+// runs and selects the sealed Renderer. They are inert on the command
+// tree itself — handlers never read them.
 func Root(version string, subcommands ...Command) Command {
 	return Command{
-		Name:        "arclint",
-		Short:       "architecture conformance for repositories (target engine)",
-		Version:     version,
+		Name:    "arclint",
+		Short:   "architecture conformance for repositories (target engine)",
+		Version: version,
+		Root:    true,
+		Flags: []Flag{
+			{
+				Name:    "format",
+				Default: "human",
+				Doc:     "output format: human, json",
+				Options: []string{"human", "json"},
+			},
+			{
+				Name: "no-color",
+				Bool: true,
+				Doc:  "disable color output",
+			},
+		},
 		Subcommands: subcommands,
 	}
 }

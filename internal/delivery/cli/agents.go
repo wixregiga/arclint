@@ -8,25 +8,28 @@ import (
 
 // NewAgentsCommand is the agents command group: md installs or prints the
 // AGENTS.md architecture block; skill emits domain-librarian artifacts.
+// Status lines for write operations use the injected Renderer; raw
+// markdown remains a raw byte product.
 func NewAgentsCommand(
 	publish application.PublishAgentsContext,
 	publishProtocol application.PublishSkillProtocol,
 	publishVocabulary application.PublishSkillVocabulary,
 	publishSchema application.PublishLibrarySchema,
+	render Renderer,
 ) Command {
 	return Command{
 		Name:  "agents",
 		Short: "AGENTS.md architecture block and domain-librarian skill artifacts",
 		Subcommands: []Command{
-			newAgentsMDCommand(publish),
-			newAgentsSkillCommand(publishProtocol, publishVocabulary, publishSchema),
+			newAgentsMDCommand(publish, render),
+			newAgentsSkillCommand(publishProtocol, publishVocabulary, publishSchema, render),
 		},
 	}
 }
 
 // newAgentsMDCommand renders the AGENTS.md architecture block to stdout,
 // or installs it under --write.
-func newAgentsMDCommand(publish application.PublishAgentsContext) Command {
+func newAgentsMDCommand(publish application.PublishAgentsContext, render Renderer) Command {
 	return Command{
 		Name:    "md",
 		Aliases: []string{"markdown", "agentsmd"},
@@ -49,7 +52,12 @@ func newAgentsMDCommand(publish application.PublishAgentsContext) Command {
 			if err != nil {
 				return ConfigError(err)
 			}
-			return reportArtifactWrite(ctx, changed, path)
+			if err := render.Render(ctx.Stdout, AgentsStatusReport{
+				Writes: []ArtifactWrite{{Changed: changed, Path: path}},
+			}); err != nil {
+				return fmt.Errorf("write output: %w", err)
+			}
+			return nil
 		},
 	}
 }
@@ -60,6 +68,7 @@ func newAgentsSkillCommand(
 	protocol application.PublishSkillProtocol,
 	vocabulary application.PublishSkillVocabulary,
 	schema application.PublishLibrarySchema,
+	render Renderer,
 ) Command {
 	return Command{
 		Name:  "skill",
@@ -73,47 +82,30 @@ func newAgentsSkillCommand(
 		},
 		Run: func(ctx Context) error {
 			dir := ctx.String("dir")
-			out := &printer{w: ctx.Stdout}
+			writes := make([]ArtifactWrite, 0, 3)
 
 			changed, path, err := protocol.Execute(dir)
 			if err != nil {
 				return ConfigError(err)
 			}
-			reportArtifactWriteTo(out, changed, path)
+			writes = append(writes, ArtifactWrite{Changed: changed, Path: path})
 
 			changed, path, err = vocabulary.Execute(dir)
 			if err != nil {
 				return ConfigError(err)
 			}
-			reportArtifactWriteTo(out, changed, path)
+			writes = append(writes, ArtifactWrite{Changed: changed, Path: path})
 
 			changed, path, err = schema.Execute(dir)
 			if err != nil {
 				return ConfigError(err)
 			}
-			reportArtifactWriteTo(out, changed, path)
+			writes = append(writes, ArtifactWrite{Changed: changed, Path: path})
 
-			if out.err != nil {
-				return fmt.Errorf("write output: %w", out.err)
+			if err := render.Render(ctx.Stdout, AgentsStatusReport{Writes: writes}); err != nil {
+				return fmt.Errorf("write output: %w", err)
 			}
 			return nil
 		},
 	}
-}
-
-func reportArtifactWrite(ctx Context, changed bool, path string) error {
-	out := &printer{w: ctx.Stdout}
-	reportArtifactWriteTo(out, changed, path)
-	if out.err != nil {
-		return fmt.Errorf("write output: %w", out.err)
-	}
-	return nil
-}
-
-func reportArtifactWriteTo(out *printer, changed bool, path string) {
-	if changed {
-		out.printf("wrote %s\n", path)
-		return
-	}
-	out.printf("%s already current\n", path)
 }

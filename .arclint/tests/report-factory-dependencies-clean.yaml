@@ -1,0 +1,30 @@
+# Conforming case: report_factory selects the three report adapters and
+# the delivery-owned Report port; no external imports.
+rule: "arclint:delivery/report-factory-dependencies"
+files:
+  go.mod: |
+    module fixture
+
+    go 1.26
+  internal/delivery/cli/report.go: |
+    package cli
+
+    type Renderer interface{}
+  internal/delivery/cli/reportfactory/factory.go: |
+    package reportfactory
+
+    import (
+        "fixture/internal/delivery/cli"
+        _ "fixture/internal/delivery/cli/adapters/report/json"
+        _ "fixture/internal/delivery/cli/adapters/report/lipgloss"
+        _ "fixture/internal/delivery/cli/adapters/report/plain"
+    )
+
+    var _ cli.Renderer
+  internal/delivery/cli/adapters/report/plain/plain.go: |
+    package plain
+  internal/delivery/cli/adapters/report/json/json.go: |
+    package json
+  internal/delivery/cli/adapters/report/lipgloss/lipgloss.go: |
+    package lipgloss
+expect: []

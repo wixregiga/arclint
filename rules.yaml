@@ -1,8 +1,9 @@
 # yaml-language-server: $schema=./docs/rules.schema.json
 # ArcLint's own architecture contracts, self-hosted on the target
 # domain model: Rule is the sole aggregate, use cases coordinate
-# through ports, adapters stay outbound or inbound, and Cobra stays
-# sealed behind the factory.
+# through ports, adapters stay outbound or inbound, Cobra stays
+# sealed behind the CLI factory, and report renderers stay sealed
+# behind the report factory — two distinct delivery seams.
 
 # go for the engine itself; ts for the embedded extension SDK sources.
 runtime: [go, ts]
@@ -31,13 +32,28 @@ modules:
     description: "Outbound technology adapters implementing inward-owned ports."
   delivery:
     paths: ["internal/delivery/**"]
-    description: "Inbound adapters translating external input into application requests."
+    description: "CLI adapters for inbound command translation and outbound Report rendering."
+  cli_interface:
+    paths: ["internal/delivery/cli/*.go"]
+    description: "Framework-neutral CLI commands, reports, and adapter ports."
   cli_factory:
     paths: ["internal/delivery/cli/factory/**"]
     description: "Sealed CLI factory selecting an adapter by ArcLint-owned identity."
   cobra_adapter:
     paths: ["internal/delivery/cli/adapters/cobra/**"]
     description: "The only package permitted to import Cobra."
+  report_factory:
+    paths: ["internal/delivery/cli/reportfactory/**"]
+    description: "Sealed report factory selecting a renderer by ArcLint-owned identity."
+  plain_report:
+    paths: ["internal/delivery/cli/adapters/report/plain/**"]
+    description: "Plain-text report renderer adapter."
+  json_report:
+    paths: ["internal/delivery/cli/adapters/report/json/**"]
+    description: "JSON report renderer adapter."
+  lipgloss_report:
+    paths: ["internal/delivery/cli/adapters/report/lipgloss/**"]
+    description: "The only package permitted to import Lipgloss."
   composition:
     paths: ["cmd/**"]
     description: "Composition roots selecting and connecting concrete adapters."
@@ -166,7 +182,7 @@ contracts:
 
   delivery:
     consumes:
-      id: "arclint:delivery/inbound-only"
+      id: "arclint:delivery/dependencies"
       internal: [application, domain]
       external: allow
       stdlib: allow
@@ -177,6 +193,18 @@ contracts:
           - "internal/delivery/cli/cli.go"
           - "internal/delivery/cli/factory/factory.go"
           - "internal/delivery/cli/adapters/cobra/cobra.go"
+          - "internal/delivery/cli/report.go"
+          - "internal/delivery/cli/reportfactory/factory.go"
+          - "internal/delivery/cli/adapters/report/plain/plain.go"
+          - "internal/delivery/cli/adapters/report/json/json.go"
+          - "internal/delivery/cli/adapters/report/lipgloss/lipgloss.go"
+
+  cli_interface:
+    consumes:
+      id: "arclint:delivery/cli-interface-dependencies"
+      internal: [application, domain]
+      external: forbid
+      stdlib: allow
 
   cli_factory:
     consumes:
@@ -197,10 +225,47 @@ contracts:
       external: allow
       stdlib: allow
 
+  report_factory:
+    consumes:
+      id: "arclint:delivery/report-factory-dependencies"
+      # delivery is allowed because the sealed Report/Renderer port the
+      # factory selects for lives in the delivery module.
+      internal: [delivery, plain_report, json_report, lipgloss_report]
+      external: forbid
+      stdlib: allow
+
+  plain_report:
+    consumes:
+      id: "arclint:delivery/plain-report-dependencies"
+      # Renderers consume the delivery-owned Report wrappers and their
+      # inward application/domain values.
+      internal: [delivery, application, domain]
+      external: forbid
+      stdlib: allow
+
+  json_report:
+    consumes:
+      id: "arclint:delivery/json-report-dependencies"
+      internal: [delivery, application, domain]
+      external: forbid
+      stdlib: allow
+
+  lipgloss_report:
+    consumes:
+      id: "arclint:delivery/lipgloss-sealed"
+      # The adapter consumes delivery-owned Reports and their inward
+      # application/domain values. The protected rule seals imports to
+      # report_factory; external allow is the Lipgloss framework edge.
+      internal: [delivery, application, domain]
+      external: allow
+      stdlib: allow
+
   composition:
     consumes:
       id: "arclint:composition/selects-adapters"
-      internal: [delivery, infrastructure, application, domain, cli_factory, cobra_adapter]
+      # report adapters are deliberately absent: composition selects
+      # them only through report_factory by RendererName.
+      internal: [delivery, infrastructure, application, domain, cli_factory, cobra_adapter, report_factory]
       external: allow
       stdlib: allow
     invariants:
@@ -238,10 +303,23 @@ dependencies:
   - id: "arclint:delivery/cobra-factory-only"
     kind: protected
     module: cobra_adapter
-    allow: [cli_factory, composition]
+    allow: [cli_factory]
+  - id: "arclint:delivery/plain-report-factory-only"
+    kind: protected
+    module: plain_report
+    allow: [report_factory]
+  - id: "arclint:delivery/json-report-factory-only"
+    kind: protected
+    module: json_report
+    allow: [report_factory]
+  - id: "arclint:delivery/lipgloss-report-factory-only"
+    kind: protected
+    module: lipgloss_report
+    allow: [report_factory]
   - id: "arclint:dependencies/acyclic"
     kind: acyclic
-    # cli_factory and cobra_adapter are excluded: their paths nest
-    # inside delivery's, and overlapping membership lifts intra-delivery
+    # cli_interface, cli_factory, cobra_adapter, report_factory, and
+    # the report adapters are excluded: their paths nest inside
+    # delivery's, and overlapping membership lifts intra-delivery
     # imports into artificial module cycles.
     modules: [composition, delivery, infrastructure, application, domain]

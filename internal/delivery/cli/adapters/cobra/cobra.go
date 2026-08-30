@@ -65,13 +65,21 @@ func translate(c cli.Command) *cobra.Command {
 	bools := map[string]*bool{}
 	lists := map[string]*[]string{}
 	flagNames := make([]string, 0, len(c.Flags))
+	// Root process flags register as persistent so subcommand help and
+	// `__complete check --format` inherit them. Root is explicit state,
+	// independent of Version content.
+	rootPersistent := c.Root
 	for _, f := range c.Flags {
 		flagNames = append(flagNames, f.Name)
+		fs := out.Flags()
+		if rootPersistent {
+			fs = out.PersistentFlags()
+		}
 		switch {
 		case f.Bool:
-			bools[f.Name] = out.Flags().Bool(f.Name, f.Default == "true", f.Doc)
+			bools[f.Name] = fs.Bool(f.Name, f.Default == "true", f.Doc)
 		case f.Repeat:
-			lists[f.Name] = out.Flags().StringArray(f.Name, nil, f.Doc)
+			lists[f.Name] = fs.StringArray(f.Name, nil, f.Doc)
 			switch {
 			case f.Complete != nil:
 				_ = out.RegisterFlagCompletionFunc(f.Name, dynamicFlagCompletion(f.Complete))
@@ -79,7 +87,7 @@ func translate(c cli.Command) *cobra.Command {
 				_ = out.RegisterFlagCompletionFunc(f.Name, staticCompletion(f.Options))
 			}
 		default:
-			values[f.Name] = out.Flags().String(f.Name, f.Default, f.Doc)
+			values[f.Name] = fs.String(f.Name, f.Default, f.Doc)
 			// Registration fails only for an unknown flag name; the
 			// flag was defined on the line above.
 			switch {

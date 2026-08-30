@@ -2,14 +2,13 @@ package cli
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/wixregiga/arclint/internal/application"
 )
 
 // NewPatternsCommand adapts the Pattern listing use case into the
 // patterns command.
-func NewPatternsCommand(list application.ListPatterns) Command {
+func NewPatternsCommand(list application.ListPatterns, render Renderer) Command {
 	return Command{
 		Name:  "patterns",
 		Short: "list available Pattern distribution packages",
@@ -18,20 +17,8 @@ func NewPatternsCommand(list application.ListPatterns) Command {
 			if err != nil {
 				return ConfigError(err)
 			}
-			p := &printer{w: ctx.Stdout}
-			if len(rows) == 0 {
-				p.println("no patterns available")
-			}
-			for _, row := range rows {
-				coverage := ""
-				if len(row.Coverage) > 0 {
-					coverage = "  coverage [" + strings.Join(row.Coverage, ", ") + "]"
-				}
-				p.printf("%s/%s@%s  %d rule(s)  %d extension(s)%s\n",
-					row.Namespace, row.Name, row.Version, row.Rules, row.Extensions, coverage)
-			}
-			if p.err != nil {
-				return fmt.Errorf("write output: %w", p.err)
+			if err := render.Render(ctx.Stdout, PatternsReport{Patterns: rows}); err != nil {
+				return fmt.Errorf("write output: %w", err)
 			}
 			return nil
 		},

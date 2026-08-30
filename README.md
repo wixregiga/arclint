@@ -253,11 +253,11 @@ findings, `check` reports only new ones and counts the covered rest,
 ## Commands
 
 ```
-check [path]        evaluate the repository (--format human|json, --no-baseline, --only/--exclude <selectors>)
+check [path]        evaluate the repository (--no-baseline, --only/--exclude <selectors>)
 rules [selector]    list the configured rules; one match shows the complete rule
 rules schema        print the JSON Schema for rules.yaml (committed at docs/rules.schema.json)
 rules test [name]   run the rule tests under .arclint/tests; failures exit 1
-context [paths...]  the architecture, or everything binding the given paths (--module, --format json)
+context [paths...]  the architecture, or everything binding the given paths (--module)
 domain              inspect and maintain the project's ubiquitous language (init/overview/list/show/explain/define/remove/schema)
 agents              AGENTS.md block (--write); skill bundle (skill); SKILL.md only (md|agentmd|markdown)
 baseline capture    adopt current findings   ·  baseline refresh: drop stale entries
@@ -266,6 +266,11 @@ sdk init            write arclint.d.ts + tsconfig.json for extension authors
 init                draft a starter rules.yaml (--languages go,ts,py --force)
 completion <shell>  shell completion with live rule ids and module names (bash|zsh|fish|powershell)
 ```
+
+`--format human|json` selects one renderer for every semantic command
+report. Human output uses color only on a terminal; `--no-color` or
+`NO_COLOR` selects the byte-stable plain renderer. Schema and generated
+markdown commands keep their raw output contracts.
 
 A selector is an exact rule id, an id prefix, or a `path.Match`
 pattern (`arclint:domain/*`); an exact id wins over expansion, and a

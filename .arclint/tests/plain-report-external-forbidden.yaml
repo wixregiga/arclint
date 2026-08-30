@@ -1,0 +1,21 @@
+# Violating case: the plain report adapter imports an external package;
+# only the Lipgloss adapter may take external dependencies.
+rule: "arclint:delivery/plain-report-dependencies"
+files:
+  go.mod: |
+    module fixture
+
+    go 1.26
+
+    require github.com/charmbracelet/lipgloss v1.0.0
+  internal/delivery/cli/adapters/report/plain/plain.go: |
+    package plain
+
+    import "github.com/charmbracelet/lipgloss"
+
+    var _ = lipgloss.NewStyle
+expect:
+  - kind: violation
+    path: internal/delivery/cli/adapters/report/plain/plain.go
+    line: 3
+    message: "external import \"github.com/charmbracelet/lipgloss\" is forbidden for Module \"plain_report\""

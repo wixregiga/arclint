@@ -130,13 +130,16 @@ func TestRulesListsRuleset(t *testing.T) {
 		t.Fatalf("rules exit %d\nstderr: %s", code, stderr)
 	}
 	lines := strings.Split(strings.TrimSpace(stdout), "\n")
-	if len(lines) != 24 {
-		t.Errorf("rules listed = %d, want 24\n%s", len(lines), stdout)
+	if len(lines) != 32 {
+		t.Errorf("rules listed = %d, want 32\n%s", len(lines), stdout)
 	}
 	for _, want := range []string{
 		"arclint:domain/stdlib-only", "arclint:domain/no-panic",
 		"arclint:domain-model/aggregate-skeleton",
 		"arclint:domain-model/contexts-respect-relations",
+		"arclint:delivery/report-factory-dependencies",
+		"arclint:delivery/lipgloss-sealed",
+		"arclint:delivery/cli-interface-dependencies",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("missing %s in listing", want)

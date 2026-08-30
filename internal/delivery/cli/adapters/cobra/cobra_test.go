@@ -18,11 +18,11 @@ func tree() cli.Command {
 		Short:   "echo parsed input",
 		MaxArgs: 1,
 		Flags: []cli.Flag{
-			{Name: "format", Default: "human", Doc: "format"},
+			{Name: "mode", Default: "human", Doc: "mode"},
 			{Name: "loud", Bool: true, Doc: "loud"},
 		},
 		Run: func(ctx cli.Context) error {
-			ctx.Stdout.Write([]byte("format=" + ctx.String("format")))
+			ctx.Stdout.Write([]byte("mode=" + ctx.String("mode")))
 			if ctx.Bool("loud") {
 				ctx.Stdout.Write([]byte(" loud"))
 			}
@@ -62,15 +62,26 @@ func runTree(t *testing.T, root cli.Command, stdin io.Reader, args ...string) (c
 }
 
 func TestTranslatesFlagsAndArgs(t *testing.T) {
-	outcome, stdout, _ := run(t, "echo", "--format", "json", "--loud", "x")
+	outcome, stdout, _ := run(t, "echo", "--mode", "json", "--loud", "x")
 	if outcome.ExitCode != cli.ExitClean {
 		t.Fatalf("exit = %d, want 0", outcome.ExitCode)
 	}
-	if stdout != "format=json loud arg=x" {
+	if stdout != "mode=json loud arg=x" {
 		t.Errorf("stdout = %q", stdout)
 	}
 	if outcome, _, _ := run(t, "echo", "a", "b"); outcome.ExitCode != cli.ExitConfigError {
 		t.Errorf("excess arguments must exit 2, got %d", outcome.ExitCode)
+	}
+}
+
+func TestRootFlagsStayPersistentWithoutVersion(t *testing.T) {
+	root := cli.Root("", cli.Command{
+		Name: "child",
+		Run:  func(cli.Context) error { return nil },
+	})
+	outcome, _, stderr := runTree(t, root, nil, "child", "--format", "json")
+	if outcome.ExitCode != cli.ExitClean {
+		t.Fatalf("exit = %d, stderr = %q", outcome.ExitCode, stderr)
 	}
 }
 

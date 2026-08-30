@@ -8,10 +8,10 @@ weight = 6
 |---|---|
 | `arclint init` | draft a starter `rules.yaml`; `--pattern bare` (default) or a built-in Pattern (`vertical`), which also copies Pattern extension entries into `.arclint/extensions`; `--languages go,ts,py` selects runtime targets and `--force` permits replacing existing targets |
 | `arclint patterns` | list visible Pattern distribution packages, including built-in packages such as `arclint/vertical@0.1.0` |
-| `arclint check [path]` | evaluate configured Rules; accepts `--format human\|json`, `--no-baseline`, and `--only` / `--exclude` Rule selectors |
+| `arclint check [path]` | evaluate configured Rules; accepts `--no-baseline` and `--only` / `--exclude` Rule selectors |
 | `arclint baseline capture` | replace `.arclint/baseline.v2.json` with the active findings from one complete assessment |
 | `arclint baseline refresh` | reassess and replace the Baseline, dropping stale entries |
-| `arclint context [paths...]` | explain the repository or everything binding the selected paths; `--module` adds named Modules and `--format json` emits the machine form |
+| `arclint context [paths...]` | explain the repository or everything binding the selected paths; `--module` adds named Modules |
 | `arclint domain` | shorthand for `arclint domain overview`; inspect and maintain the project's ubiquitous language |
 | `arclint domain init` | create an empty, schema-hinted `ubiquitous-language.yaml` beside the resolved `rules.yaml`; leave an existing file unchanged |
 | `arclint domain overview` | summarize the project's ubiquitous language for understanding |
@@ -28,6 +28,11 @@ weight = 6
 | `arclint rules schema` | print the indented JSON Schema accepted for `rules.yaml` |
 | `arclint rules test [name]` | run all Rule Tests under `.arclint/tests`, or one test selected by name |
 | `arclint sdk init` | write `arclint.d.ts` and `tsconfig.json` under `.arclint/extensions` |
+
+`--format human|json` selects one renderer for every semantic command
+report. Human output is styled when stdout is a terminal. `--no-color`
+or a non-empty `NO_COLOR` environment variable selects the byte-stable
+plain renderer. Raw schema and generated markdown commands are unchanged.
 
 Exit codes are `0` for a clean command, `1` when the gate fails or a
 Rule Test does not match its expectation, and `2` for configuration or
@@ -220,10 +225,10 @@ published schema (`schema`). `domain init` is idempotent: it creates a
 versioned, schema-hinted empty file when none exists and never replaces
 an existing model.
 
-Every domain subcommand except `init` and `schema` accepts `--format text|json`
-(default `text`). Text is for humans; JSON is the stable machine shape
-for agents and scripts. `domain schema` always emits indented JSON, the
-same contract the binary generates and commits as
+The process-level `--format human|json` option applies to domain reports
+as well as the other semantic command outputs. JSON is the stable machine
+shape for agents and scripts. `domain schema` always emits indented JSON,
+the same contract the binary generates and commits as
 `.agents/skills/domain-librarian/library.schema.json` (also written by
 `arclint agents skill`).
 

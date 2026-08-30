@@ -9,7 +9,7 @@ import (
 
 // NewInitCommand adapts the repository-initialization use case: draft
 // a commented starter ruleset from explicit choices.
-func NewInitCommand(initialize application.InitializeRepository) Command {
+func NewInitCommand(initialize application.InitializeRepository, render Renderer) Command {
 	return Command{
 		Name:  commandInit,
 		Short: "draft a starter rules.yaml for this repository",
@@ -33,7 +33,7 @@ func NewInitCommand(initialize application.InitializeRepository) Command {
 			if err != nil {
 				return ConfigError(err)
 			}
-			if _, err := fmt.Fprintf(ctx.Stdout, "wrote %s\nnext: declare your modules, then run `arclint check .`\n", path); err != nil {
+			if err := render.Render(ctx.Stdout, InitReport{Path: path}); err != nil {
 				return fmt.Errorf("write output: %w", err)
 			}
 			return nil

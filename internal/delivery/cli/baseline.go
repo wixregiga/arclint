@@ -9,7 +9,7 @@ import (
 // NewBaselineCommand adapts the Baseline lifecycle use cases into the
 // baseline command group: capture adopts current findings, refresh
 // replaces the snapshot after comparison with a later assessment.
-func NewBaselineCommand(capture application.CaptureBaseline, refresh application.RefreshBaseline) Command {
+func NewBaselineCommand(capture application.CaptureBaseline, refresh application.RefreshBaseline, render Renderer) Command {
 	return Command{
 		Name:  "baseline",
 		Short: "manage the committed baseline of adopted findings",
@@ -22,8 +22,7 @@ func NewBaselineCommand(capture application.CaptureBaseline, refresh application
 					if err != nil {
 						return ConfigError(err)
 					}
-					if _, err := fmt.Fprintf(ctx.Stdout, "baseline captured: %d finding(s) across %d applied rule(s)\n",
-						result.Findings, result.Rules); err != nil {
+					if err := render.Render(ctx.Stdout, BaselineCaptureReport{Result: result}); err != nil {
 						return fmt.Errorf("write output: %w", err)
 					}
 					return nil
@@ -37,8 +36,7 @@ func NewBaselineCommand(capture application.CaptureBaseline, refresh application
 					if err != nil {
 						return ConfigError(err)
 					}
-					if _, err := fmt.Fprintf(ctx.Stdout, "baseline refreshed: %d finding(s) across %d applied rule(s), %d stale entr(ies) dropped\n",
-						result.Findings, result.Rules, result.RemovedStale); err != nil {
+					if err := render.Render(ctx.Stdout, BaselineRefreshReport{Result: result}); err != nil {
 						return fmt.Errorf("write output: %w", err)
 					}
 					return nil

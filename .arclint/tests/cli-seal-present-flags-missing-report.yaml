@@ -1,0 +1,24 @@
+# Violating case: the report outbound port is absent while the rest of
+# the dual CLI/report seal is present; the structure rule must report
+# the missing report.go.
+rule: "arclint:delivery/cli-seal-present"
+files:
+  internal/delivery/cli/cli.go: |
+    package cli
+  internal/delivery/cli/factory/factory.go: |
+    package factory
+  internal/delivery/cli/adapters/cobra/cobra.go: |
+    package cobra
+  internal/delivery/cli/reportfactory/factory.go: |
+    package reportfactory
+  internal/delivery/cli/adapters/report/plain/plain.go: |
+    package plain
+  internal/delivery/cli/adapters/report/json/json.go: |
+    package json
+  internal/delivery/cli/adapters/report/lipgloss/lipgloss.go: |
+    package lipgloss
+expect:
+  - kind: violation
+    path: internal/delivery/cli/report.go
+    line: 0
+    message: "Module \"delivery\" is missing a required file matching \"internal/delivery/cli/report.go\""

@@ -8,7 +8,7 @@ import (
 
 // NewSDKCommand adapts the extension-SDK use case: install the typed
 // SDK declarations beside the repository's extensions.
-func NewSDKCommand(initialize application.InitializeExtensionSDK) Command {
+func NewSDKCommand(initialize application.InitializeExtensionSDK, render Renderer) Command {
 	return Command{
 		Name:  "sdk",
 		Short: "extension SDK utilities",
@@ -21,12 +21,8 @@ func NewSDKCommand(initialize application.InitializeExtensionSDK) Command {
 					if err != nil {
 						return ConfigError(err)
 					}
-					out := &printer{w: ctx.Stdout}
-					for _, p := range paths {
-						out.printf("wrote %s\n", p)
-					}
-					if out.err != nil {
-						return fmt.Errorf("write output: %w", out.err)
+					if err := render.Render(ctx.Stdout, SDKInitReport{Paths: paths}); err != nil {
+						return fmt.Errorf("write output: %w", err)
 					}
 					return nil
 				},
