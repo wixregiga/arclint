@@ -11,9 +11,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/x/term"
+
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/delivery/cli"
 	clifactory "github.com/wixregiga/arclint/internal/delivery/cli/factory"
+	"github.com/wixregiga/arclint/internal/delivery/cli/reportfactory"
 	markdownagents "github.com/wixregiga/arclint/internal/infrastructure/agents/markdown"
 	jsonbaseline "github.com/wixregiga/arclint/internal/infrastructure/baseline/json"
 	sobekextension "github.com/wixregiga/arclint/internal/infrastructure/extension/sobek"
@@ -35,10 +38,20 @@ func run(args []string) int {
 		fmt.Fprintln(os.Stderr, "arclint: "+err.Error())
 		return cli.ExitConfigError
 	}
+	// Process presentation is resolved before any other pre-Cobra
+	// peeling so every command shares one Renderer selection.
+	rendererName, args, err := resolvePresentation(args, os.Getenv("NO_COLOR"), term.IsTerminal(os.Stdout.Fd()))
+	if err != nil {
+		return configError(err)
+	}
+	renderer, err := reportfactory.Select(rendererName)
+	if err != nil {
+		return configError(err)
+	}
 	// init runs before any ruleset exists, so it composes against the
 	// working directory instead of a discovered repository root.
 	if firstPositional(args) == "init" {
-		return runInit(args, configError)
+		return runInit(args, renderer, configError)
 	}
 	rulesPath, rest, err := resolveRulesPath(args)
 	if err != nil {
@@ -184,15 +197,15 @@ func run(args []string) int {
 		return configError(err)
 	}
 	rootCommand := cli.Root(buildVersion(version),
-		cli.NewCheckCommand(assess, listRules),
-		cli.NewInitCommand(initialize),
-		cli.NewRulesCommand(listRules, showRule, ruleTests),
-		cli.NewContextCommand(getContext),
-		cli.NewDomainCommand(initDomain, getDomainOverview, listDomainDefinitions, showDomainDefinition, defineDomainDefinition, removeDomainDefinition),
-		cli.NewAgentsCommand(publishAgents, publishSkillProtocol, publishSkillVocabulary, publishLibrarySchema),
-		cli.NewBaselineCommand(capture, refresh),
-		cli.NewPatternsCommand(listPatterns),
-		cli.NewSDKCommand(initializeSDK),
+		cli.NewCheckCommand(assess, listRules, renderer),
+		cli.NewInitCommand(initialize, renderer),
+		cli.NewRulesCommand(listRules, showRule, ruleTests, renderer),
+		cli.NewContextCommand(getContext, renderer),
+		cli.NewDomainCommand(initDomain, getDomainOverview, listDomainDefinitions, showDomainDefinition, defineDomainDefinition, removeDomainDefinition, renderer),
+		cli.NewAgentsCommand(publishAgents, publishSkillProtocol, publishSkillVocabulary, publishLibrarySchema, renderer),
+		cli.NewBaselineCommand(capture, refresh, renderer),
+		cli.NewPatternsCommand(listPatterns, renderer),
+		cli.NewSDKCommand(initializeSDK, renderer),
 	)
 	adapter, err := clifactory.Select(cli.AdapterCobra)
 	if err != nil {
@@ -202,16 +215,27 @@ func run(args []string) int {
 	return outcome.ExitCode
 }
 
-// firstPositional returns the first non-flag argument, skipping the
-// composition-level --rules value.
+// firstPositional returns the first non-flag argument, skipping
+// composition-level process flags (--rules, --format, --no-color).
 func firstPositional(args []string) string {
 	skipNext := false
-	for _, a := range args {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			if i+1 < len(args) {
+				return args[i+1]
+			}
+			return ""
+		}
 		switch {
 		case skipNext:
 			skipNext = false
-		case a == "--rules":
+		case a == "--rules" || a == "--format":
 			skipNext = true
+		case strings.HasPrefix(a, "--rules="),
+			strings.HasPrefix(a, "--format="),
+			a == "--no-color",
+			strings.HasPrefix(a, "--no-color="):
 		case strings.HasPrefix(a, "-"):
 		default:
 			return a
@@ -222,7 +246,7 @@ func firstPositional(args []string) string {
 
 // runInit composes the initialization use case against the working
 // directory.
-func runInit(args []string, configError func(error) int) int {
+func runInit(args []string, renderer cli.Renderer, configError func(error) int) int {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return configError(err)
@@ -239,7 +263,7 @@ func runInit(args []string, configError func(error) int) int {
 	if err != nil {
 		return configError(err)
 	}
-	rootCommand := cli.Root(buildVersion(version), cli.NewInitCommand(initialize))
+	rootCommand := cli.Root(buildVersion(version), cli.NewInitCommand(initialize, renderer))
 	outcome := adapter.Run(rootCommand, cli.Invocation{Args: args, Stdout: os.Stdout, Stderr: os.Stderr})
 	return outcome.ExitCode
 }

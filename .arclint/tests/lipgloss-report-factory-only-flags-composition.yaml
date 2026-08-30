@@ -1,0 +1,21 @@
+# Violating case: composition imports the Lipgloss adapter directly
+# instead of selecting it through report_factory.
+rule: "arclint:delivery/lipgloss-report-factory-only"
+files:
+  go.mod: |
+    module fixture
+
+    go 1.26
+  cmd/arclint/main.go: |
+    package main
+
+    import _ "fixture/internal/delivery/cli/adapters/report/lipgloss"
+
+    func main() {}
+  internal/delivery/cli/adapters/report/lipgloss/lipgloss.go: |
+    package lipgloss
+expect:
+  - kind: violation
+    path: cmd/arclint/main.go
+    line: 3
+    message: "Module \"lipgloss_report\" is protected (importable only by [\"report_factory\"]); import of \"fixture/internal/delivery/cli/adapters/report/lipgloss\" from Module(s) [\"composition\"]"

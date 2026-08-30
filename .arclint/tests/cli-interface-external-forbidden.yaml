@@ -1,0 +1,21 @@
+# Violating case: the framework-neutral CLI package imports Lipgloss;
+# presentation frameworks belong only in their concrete adapter.
+rule: "arclint:delivery/cli-interface-dependencies"
+files:
+  go.mod: |
+    module fixture
+
+    go 1.26
+
+    require github.com/charmbracelet/lipgloss v1.0.0
+  internal/delivery/cli/command.go: |
+    package cli
+
+    import "github.com/charmbracelet/lipgloss"
+
+    var _ = lipgloss.NewStyle
+expect:
+  - kind: violation
+    path: internal/delivery/cli/command.go
+    line: 3
+    message: "external import \"github.com/charmbracelet/lipgloss\" is forbidden for Module \"cli_interface\""
