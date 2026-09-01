@@ -1,0 +1,9 @@
+# Conforming case: the Rule and Pattern aggregate roots exist and no
+# retired aggregate directory does, so the structure Rule stays silent.
+rule: "arclint:domain/aggregate-boundaries"
+files:
+  internal/domain/rule/root.go: |
+    package rule
+  internal/domain/pattern/root.go: |
+    package pattern
+expect: []

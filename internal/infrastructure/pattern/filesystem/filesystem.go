@@ -1,7 +1,6 @@
 // Package filesystempattern supplies local Pattern distribution
-// packages from a directory: each subdirectory holding a pattern.yaml
-// — a target-format ruleset file with a pattern identity header — is
-// one distributable Pattern, returned as a validated domain value.
+// packages from a directory. Each immediate subdirectory holding a
+// pattern.yaml is one distributable Pattern tree.
 package filesystempattern
 
 import (
@@ -10,9 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/wixregiga/arclint/internal/domain/rule"
-	"github.com/wixregiga/arclint/internal/domain/vocab"
-	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
+	"github.com/wixregiga/arclint/internal/domain/pattern"
+	patternyaml "github.com/wixregiga/arclint/internal/infrastructure/pattern/yaml"
 )
 
 // FileName is the Pattern distribution file inside each Pattern
@@ -38,7 +36,7 @@ func NewSource(dir string) (Source, error) {
 // Patterns loads every Pattern package under the directory, in
 // deterministic reference order. An invalid Pattern file is an error,
 // never a silently skipped entry.
-func (s Source) Patterns() ([]rule.Pattern, error) {
+func (s Source) Patterns() ([]pattern.Pattern, error) {
 	entries, err := os.ReadDir(s.dir)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -46,76 +44,25 @@ func (s Source) Patterns() ([]rule.Pattern, error) {
 	if err != nil {
 		return nil, fmt.Errorf("patterns: %w", err)
 	}
-	var out []rule.Pattern
+	fileSystem := os.DirFS(s.dir)
+	var out []pattern.Pattern
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
 		}
-		pkgDir := filepath.Join(s.dir, e.Name())
-		file := filepath.Join(pkgDir, FileName)
-		data, err := os.ReadFile(file)
-		if os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(s.dir, e.Name(), FileName)); os.IsNotExist(err) {
 			continue
+		} else if err != nil {
+			return nil, fmt.Errorf("pattern package %s: %w", e.Name(), err)
 		}
+		p, err := patternyaml.Load(fileSystem, e.Name())
 		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", file, err)
-		}
-		doc, err := yamlrule.Load(data, file, vocab.UbiquitousLanguage{})
-		if err != nil {
-			return nil, fmt.Errorf("load pattern: %w", err)
-		}
-		if doc.Pattern == nil {
-			return nil, fmt.Errorf("%s: missing pattern identity header (namespace, name, version)", file)
-		}
-		exts, err := loadPatternExtensions(pkgDir)
-		if err != nil {
-			return nil, err
-		}
-		p, err := rule.NewPattern(doc.Pattern.Namespace, doc.Pattern.Name, doc.Pattern.Version,
-			doc.Configured.Rules, exts, doc.Pattern.Coverage)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %v", file, err)
+			return nil, fmt.Errorf("load pattern %s: %w", e.Name(), err)
 		}
 		out = append(out, p)
 	}
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].Reference().String() < out[j].Reference().String()
 	})
-	return out, nil
-}
-
-func loadPatternExtensions(pkgDir string) ([]rule.PatternExtension, error) {
-	dir := filepath.Join(pkgDir, "extensions")
-	entries, err := os.ReadDir(dir)
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("extensions: %w", err)
-	}
-	var names []string
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		names = append(names, e.Name())
-	}
-	sort.Strings(names)
-	var out []rule.PatternExtension
-	for _, name := range names {
-		if !rule.InstallableExtensionFileName(name) {
-			continue
-		}
-		path := filepath.Join(dir, name)
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("read %s: %w", path, err)
-		}
-		ext, err := rule.NewPatternExtension(name, string(data))
-		if err != nil {
-			return nil, fmt.Errorf("%s: %v", path, err)
-		}
-		out = append(out, ext)
-	}
 	return out, nil
 }

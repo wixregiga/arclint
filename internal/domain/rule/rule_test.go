@@ -249,88 +249,66 @@ func TestCaseSpec(t *testing.T) {
 	}
 }
 
-func TestPatternStampsProvenance(t *testing.T) {
+func TestRuleProvenanceCannotBeRewritten(t *testing.T) {
 	r, err := rule.New(validConsumesSpec(t))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	p, err := rule.NewPattern("arclint", "ddd-flat", "1.0.0",
-		[]rule.Rule{r}, nil, []rule.Language{rule.LanguageGo})
+	origin, err := rule.NewPatternOrigin("arclint", "ddd-flat", "1.0.0")
 	if err != nil {
-		t.Fatalf("NewPattern: %v", err)
+		t.Fatalf("NewPatternOrigin: %v", err)
 	}
-	carried := p.Rules()[0]
-	ref, ok := carried.Provenance()
-	if !ok || ref.String() != "arclint/ddd-flat@1.0.0" {
-		t.Errorf("provenance = %v %v", ref, ok)
+	stamped, err := r.WithProvenance(origin)
+	if err != nil {
+		t.Fatalf("WithProvenance: %v", err)
 	}
-	if _, err := rule.NewPattern("arclint", "ddd-flat", "1.0.0", []rule.Rule{r, r}, nil, nil); err == nil {
-		t.Errorf("duplicate rule ids in a pattern must be rejected")
+	got, ok := stamped.Provenance()
+	if !ok || got != origin {
+		t.Fatalf("Provenance = %v, %v", got, ok)
 	}
-	if _, err := rule.NewPattern("arclint", "ddd-flat", "latest", []rule.Rule{r}, nil, nil); err == nil {
-		t.Errorf("inexact pattern version must be rejected")
+	other, _ := rule.NewPatternOrigin("arclint", "ddd-flat", "2.0.0")
+	if _, err := stamped.WithProvenance(other); err == nil {
+		t.Errorf("rewriting Rule origin must be rejected")
+	}
+	if _, ok := r.Provenance(); ok {
+		t.Errorf("WithProvenance must not mutate the original Rule")
 	}
 }
 
-func TestPatternExtensionValidation(t *testing.T) {
-	if _, err := rule.NewPatternExtension("", "export default {}"); err == nil {
-		t.Errorf("empty file name must be rejected")
-	}
-	for _, name := range []string{"a/b.ts", `a\b.ts`, ".", "..", ".hidden.ts", "types.d.ts", "readme.md"} {
-		if _, err := rule.NewPatternExtension(name, "export default {}"); err == nil {
-			t.Errorf("NewPatternExtension(%q): expected error", name)
+func TestExtensionValidationAndDefensiveBytes(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		entry string
+	}{
+		{"", "extensions/check.ts"},
+		{"check", ""},
+		{"check", `extensions\check.ts`},
+		{"check", "/extensions/check.ts"},
+		{"check", "../check.ts"},
+		{"check", "extensions/.hidden.ts"},
+		{"check", "extensions/types.d.ts"},
+		{"check", "extensions/readme.md"},
+	} {
+		if _, err := rule.NewExtension(tc.name, tc.entry, []byte("export default {}")); err == nil {
+			t.Errorf("NewExtension(%q, %q): expected error", tc.name, tc.entry)
 		}
 	}
-	if _, err := rule.NewPatternExtension("ok.ts", ""); err == nil {
+	if _, err := rule.NewExtension("check", "extensions/check.ts", []byte(" \n")); err == nil {
 		t.Errorf("blank source must be rejected")
 	}
-	if _, err := rule.NewPatternExtension("ok.ts", "   \n"); err == nil {
-		t.Errorf("whitespace-only source must be rejected")
-	}
-	e, err := rule.NewPatternExtension("ok.ts", "export default {}")
+	source := []byte("export default {}")
+	extension, err := rule.NewExtension("check", "extensions/check.ts", source)
 	if err != nil {
-		t.Fatalf("NewPatternExtension: %v", err)
+		t.Fatalf("NewExtension: %v", err)
 	}
-	if e.FileName() != "ok.ts" || e.Source() != "export default {}" {
-		t.Errorf("extension = %+v", e)
+	source[0] = 'X'
+	got := extension.Bytes()
+	got[0] = 'Y'
+	if string(extension.Bytes()) != "export default {}" {
+		t.Errorf("Extension must preserve defensive source bytes")
 	}
-}
-
-func TestPatternRejectsDuplicateExtensions(t *testing.T) {
-	r, err := rule.New(validConsumesSpec(t))
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	e, err := rule.NewPatternExtension("ok.ts", "export default {}")
-	if err != nil {
-		t.Fatalf("NewPatternExtension: %v", err)
-	}
-	if _, err := rule.NewPattern("arclint", "ddd-flat", "1.0.0", []rule.Rule{r}, []rule.PatternExtension{e, e}, nil); err == nil {
-		t.Errorf("duplicate extension filenames in a pattern must be rejected")
-	}
-}
-
-func TestPatternExtensionsReturnsCopy(t *testing.T) {
-	r, err := rule.New(validConsumesSpec(t))
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	e, err := rule.NewPatternExtension("ok.ts", "export default {}")
-	if err != nil {
-		t.Fatalf("NewPatternExtension: %v", err)
-	}
-	p, err := rule.NewPattern("arclint", "ddd-flat", "1.0.0", []rule.Rule{r}, []rule.PatternExtension{e}, nil)
-	if err != nil {
-		t.Fatalf("NewPattern: %v", err)
-	}
-	got := p.Extensions()
-	if len(got) != 1 || got[0].FileName() != "ok.ts" {
-		t.Fatalf("Extensions = %+v", got)
-	}
-	got[0] = rule.PatternExtension{}
-	again := p.Extensions()
-	if len(again) != 1 || again[0].FileName() != "ok.ts" {
-		t.Errorf("Extensions must return a copy; got %+v", again)
+	if extension.Name() != "check" || extension.Entry() != "extensions/check.ts" || extension.FileName() != "check.ts" {
+		t.Errorf("Extension accessors returned unexpected values")
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/domain/baseline"
 	"github.com/wixregiga/arclint/internal/domain/conformance"
+	"github.com/wixregiga/arclint/internal/domain/pattern"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
@@ -340,18 +341,23 @@ func TestRefreshBaselineDropsStaleEntries(t *testing.T) {
 }
 
 type fakePatternSource struct {
-	patterns []rule.Pattern
+	patterns []pattern.Pattern
 }
 
-func (f fakePatternSource) Patterns() ([]rule.Pattern, error) { return f.patterns, nil }
+func (f fakePatternSource) Patterns() ([]pattern.Pattern, error) { return f.patterns, nil }
 
 func TestListPatternsSummarizes(t *testing.T) {
 	cfg, _ := fixture(t, "m/ok.go")
-	p, err := rule.NewPattern("arclint", "ddd-flat", "1.2.3", cfg.Rules, nil, []rule.Language{rule.LanguageGo})
+	ref, _ := pattern.NewReference("arclint", "ddd-flat", "1.2.3")
+	manifest, _ := pattern.NewFile("pattern.yaml", []byte("pattern: ddd-flat\n"))
+	p, err := pattern.New(pattern.Spec{
+		Reference: ref, Modules: cfg.Modules, Rules: cfg.Rules,
+		Coverage: []rule.Language{rule.LanguageGo}, Files: []pattern.File{manifest},
+	})
 	if err != nil {
-		t.Fatalf("NewPattern: %v", err)
+		t.Fatalf("New Pattern: %v", err)
 	}
-	uc, err := application.NewListPatterns(fakePatternSource{[]rule.Pattern{p}})
+	uc, err := application.NewListPatterns(fakePatternSource{[]pattern.Pattern{p}})
 	if err != nil {
 		t.Fatalf("NewListPatterns: %v", err)
 	}

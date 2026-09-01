@@ -33,9 +33,9 @@ func (m ModuleName) validate() error {
 
 func (m ModuleName) String() string { return string(m) }
 
-// Module is a named logical grouping of Files and Folders, defined by
-// the Pattern Consumer through membership globs. Modules may overlap;
-// membership does not imply exclusive ownership.
+// Module is a named logical grouping of files and directories selected by
+// membership globs. Modules may overlap; membership does not imply exclusive
+// ownership.
 type Module struct {
 	name        ModuleName
 	description string
@@ -69,6 +69,9 @@ func (m Module) Description() string { return m.description }
 
 // Paths returns the membership selectors.
 func (m Module) Paths() []Glob { return append([]Glob(nil), m.paths...) }
+
+// IsZero reports an unconstructed Module.
+func (m Module) IsZero() bool { return m.name == "" }
 
 // Contains determines membership of a repo-relative file path: a
 // selector matches the path directly, or names a directory whose whole

@@ -36,8 +36,8 @@ type writeTarget struct {
 // to overwrite existing targets unless forced. Extension files are
 // written before the ruleset so a new repository never references
 // uninstalled entries.
-func (w Writer) Write(content string, extensions []rule.PatternExtension, force bool) (string, error) {
-	exts := append([]rule.PatternExtension(nil), extensions...)
+func (w Writer) Write(content string, extensions []rule.Extension, force bool) (string, error) {
+	exts := append([]rule.Extension(nil), extensions...)
 	sort.Slice(exts, func(i, j int) bool {
 		return exts[i].FileName() < exts[j].FileName()
 	})

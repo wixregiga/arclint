@@ -12,6 +12,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -55,7 +56,21 @@ type expectDoc struct {
 // fixture-less test are loud errors; a representation that cannot
 // become a valid Rule Test never loads partially.
 func (s Source) Tests() ([]rule.Test, error) {
-	entries, err := os.ReadDir(s.dir)
+	return LoadFS(os.DirFS(s.dir), ".", s.dir)
+}
+
+// LoadFS loads Rule Test documents rooted at dir from any fs.FS. It is
+// the shared representation parser used by repository-authored tests
+// and tests carried inside Pattern distributions. source is the
+// human-facing root prepended to manifest locations in errors.
+func LoadFS(fileSystem fs.FS, dir, source string) ([]rule.Test, error) {
+	if fileSystem == nil {
+		return nil, fmt.Errorf("rule tests: missing filesystem")
+	}
+	if !fs.ValidPath(dir) {
+		return nil, fmt.Errorf("rule tests: invalid root %q", dir)
+	}
+	entries, err := fs.ReadDir(fileSystem, dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
@@ -72,7 +87,9 @@ func (s Source) Tests() ([]rule.Test, error) {
 	sort.Strings(names)
 	tests := make([]rule.Test, 0, len(names))
 	for _, name := range names {
-		t, err := s.load(filepath.Join(s.dir, name), strings.TrimSuffix(name, ".yaml"))
+		file := path.Join(dir, name)
+		location := filepath.Join(source, filepath.FromSlash(name))
+		t, err := Load(fileSystem, file, location, strings.TrimSuffix(name, ".yaml"))
 		if err != nil {
 			return nil, err
 		}
@@ -81,9 +98,11 @@ func (s Source) Tests() ([]rule.Test, error) {
 	return tests, nil
 }
 
-// load parses one test file strictly and constructs the domain value.
-func (s Source) load(path, name string) (rule.Test, error) {
-	data, err := os.ReadFile(path)
+// Load parses one Rule Test file strictly and constructs the domain
+// value. file is an fs.ValidPath within fileSystem; source is the
+// manifest location reported to authors.
+func Load(fileSystem fs.FS, file, source, name string) (rule.Test, error) {
+	data, err := fs.ReadFile(fileSystem, file)
 	if err != nil {
 		return rule.Test{}, fmt.Errorf("rule test: %w", err)
 	}
@@ -92,15 +111,15 @@ func (s Source) load(path, name string) (rule.Test, error) {
 	var doc testDoc
 	if err := decoder.Decode(&doc); err != nil {
 		if errors.Is(err, io.EOF) {
-			return rule.Test{}, fmt.Errorf("%s: empty rule test file", path)
+			return rule.Test{}, fmt.Errorf("%s: empty rule test file", source)
 		}
-		return rule.Test{}, fmt.Errorf("%s: %w", path, err)
+		return rule.Test{}, fmt.Errorf("%s: %w", source, err)
 	}
 	if strings.TrimSpace(doc.Rule) == "" {
-		return rule.Test{}, fmt.Errorf("%s: missing rule (every Rule Test identifies its Rule)", path)
+		return rule.Test{}, fmt.Errorf("%s: missing rule (every Rule Test identifies its Rule)", source)
 	}
 	if len(doc.Files) == 0 {
-		return rule.Test{}, fmt.Errorf("%s: missing files (a Rule Test supplies its complete fixture)", path)
+		return rule.Test{}, fmt.Errorf("%s: missing files (a Rule Test supplies its complete fixture)", source)
 	}
 	paths := make([]string, 0, len(doc.Files))
 	for p := range doc.Files {
@@ -122,7 +141,7 @@ func (s Source) load(path, name string) (rule.Test, error) {
 	}
 	t, err := rule.NewTest(name, doc.Rule, files, expect)
 	if err != nil {
-		return rule.Test{}, fmt.Errorf("%s: %w", path, err)
+		return rule.Test{}, fmt.Errorf("%s: %w", source, err)
 	}
 	return t, nil
 }

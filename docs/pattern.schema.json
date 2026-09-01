@@ -1,0 +1,510 @@
+{
+  "$id": "https://raw.githubusercontent.com/wixregiga/arclint/main/docs/pattern.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The complete source-neutral pattern.yaml distribution contract. Unknown keys are rejected everywhere.",
+  "properties": {
+    "coverage": {
+      "items": {
+        "enum": [
+          "go",
+          "typescript",
+          "python"
+        ]
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "extensions": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "entry": {
+            "anyOf": [
+              {
+                "not": {
+                  "pattern": "\\.d\\.ts$"
+                },
+                "pattern": "\\.ts$"
+              },
+              {
+                "pattern": "\\.js$"
+              }
+            ],
+            "not": {
+              "pattern": "(^|/)\\.{1,2}(/|$)"
+            },
+            "pattern": "^[^/\\\\](?:[^\\\\]*[^/\\\\])?$",
+            "type": "string"
+          },
+          "name": {
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "entry"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "modules": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "pattern": "^[a-z0-9_-]+$",
+            "type": "string"
+          },
+          "paths": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "name",
+          "paths"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "pattern": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "pattern": "^[^/@\\s]+$",
+          "type": "string"
+        },
+        "namespace": {
+          "minLength": 1,
+          "pattern": "^[^/@\\s]+$",
+          "type": "string"
+        },
+        "version": {
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?(\\+[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "namespace",
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "rules": {
+      "items": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "anyOf": [
+              {
+                "required": [
+                  "allow"
+                ]
+              },
+              {
+                "required": [
+                  "forbid"
+                ]
+              }
+            ],
+            "properties": {
+              "allow": {
+                "items": {
+                  "pattern": "^[a-z0-9_-]+$",
+                  "type": "string"
+                },
+                "minItems": 0,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "claim": {
+                "type": "string"
+              },
+              "forbid": {
+                "items": {
+                  "enum": [
+                    "external",
+                    "stdlib"
+                  ]
+                },
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "id": {
+                "pattern": "^([a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?:)?[a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?$",
+                "type": "string"
+              },
+              "kind": {
+                "const": "consumes"
+              },
+              "module": {
+                "pattern": "^[a-z0-9_-]+$",
+                "type": "string"
+              },
+              "severity": {
+                "enum": [
+                  "error",
+                  "warning",
+                  "info"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "module"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "anyOf": [
+              {
+                "required": [
+                  "require"
+                ]
+              },
+              {
+                "required": [
+                  "forbid"
+                ]
+              }
+            ],
+            "properties": {
+              "claim": {
+                "type": "string"
+              },
+              "each": {
+                "enum": [
+                  "domain.aggregates",
+                  "domain.entities",
+                  "domain.value_objects",
+                  "domain.events",
+                  "domain.contexts"
+                ]
+              },
+              "forbid": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "id": {
+                "pattern": "^([a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?:)?[a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?$",
+                "type": "string"
+              },
+              "kind": {
+                "const": "structure"
+              },
+              "module": {
+                "pattern": "^[a-z0-9_-]+$",
+                "type": "string"
+              },
+              "require": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "severity": {
+                "enum": [
+                  "error",
+                  "warning",
+                  "info"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "module"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "case": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "claim": {
+                "type": "string"
+              },
+              "files": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "id": {
+                "pattern": "^([a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?:)?[a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?$",
+                "type": "string"
+              },
+              "kind": {
+                "const": "naming"
+              },
+              "module": {
+                "pattern": "^[a-z0-9_-]+$",
+                "type": "string"
+              },
+              "severity": {
+                "enum": [
+                  "error",
+                  "warning",
+                  "info"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "module",
+              "case"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "claim": {
+                "type": "string"
+              },
+              "id": {
+                "pattern": "^([a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?:)?[a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?$",
+                "type": "string"
+              },
+              "kind": {
+                "const": "layers"
+              },
+              "layers": {
+                "items": {
+                  "pattern": "^[a-z0-9_-]+$",
+                  "type": "string"
+                },
+                "minItems": 2,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "severity": {
+                "enum": [
+                  "error",
+                  "warning",
+                  "info"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "layers"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "allow": {
+                "items": {
+                  "pattern": "^[a-z0-9_-]+$",
+                  "type": "string"
+                },
+                "minItems": 0,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "claim": {
+                "type": "string"
+              },
+              "id": {
+                "pattern": "^([a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?:)?[a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?$",
+                "type": "string"
+              },
+              "kind": {
+                "const": "protected"
+              },
+              "module": {
+                "pattern": "^[a-z0-9_-]+$",
+                "type": "string"
+              },
+              "severity": {
+                "enum": [
+                  "error",
+                  "warning",
+                  "info"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "module"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "claim": {
+                "type": "string"
+              },
+              "folders": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "id": {
+                "pattern": "^([a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?:)?[a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?$",
+                "type": "string"
+              },
+              "kind": {
+                "const": "independence"
+              },
+              "severity": {
+                "enum": [
+                  "error",
+                  "warning",
+                  "info"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "folders"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "claim": {
+                "type": "string"
+              },
+              "id": {
+                "pattern": "^([a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?:)?[a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?$",
+                "type": "string"
+              },
+              "kind": {
+                "const": "acyclic"
+              },
+              "modules": {
+                "items": {
+                  "pattern": "^[a-z0-9_-]+$",
+                  "type": "string"
+                },
+                "minItems": 0,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "severity": {
+                "enum": [
+                  "error",
+                  "warning",
+                  "info"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "kind"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "claim": {
+                "type": "string"
+              },
+              "files": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "id": {
+                "pattern": "^([a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?:)?[a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?$",
+                "type": "string"
+              },
+              "kind": {
+                "const": "extension"
+              },
+              "module": {
+                "pattern": "^[a-z0-9_-]+$",
+                "type": "string"
+              },
+              "severity": {
+                "enum": [
+                  "error",
+                  "warning",
+                  "info"
+                ]
+              },
+              "uses": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "with": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "uses"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "tests": {
+      "additionalProperties": false,
+      "properties": {
+        "root": {
+          "not": {
+            "pattern": "(^|/)\\.{1,2}(/|$)"
+          },
+          "pattern": "^[^/\\\\](?:[^\\\\]*[^/\\\\])?$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "root"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "pattern",
+    "modules",
+    "rules"
+  ],
+  "title": "ArcLint Pattern manifest",
+  "type": "object"
+}

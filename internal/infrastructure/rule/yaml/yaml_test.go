@@ -34,8 +34,8 @@ func TestLoadTargetRuleset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConfiguredRules: %v", err)
 	}
-	if len(cfg.Modules) != 16 {
-		t.Errorf("modules = %d, want 16", len(cfg.Modules))
+	if len(cfg.Modules) != 17 {
+		t.Errorf("modules = %d, want 17", len(cfg.Modules))
 	}
 	if len(cfg.Rules) != 32 {
 		t.Errorf("rules = %d, want 32", len(cfg.Rules))
@@ -57,7 +57,7 @@ func TestLoadTargetRuleset(t *testing.T) {
 	if stdlibOnly.Type() != rule.TypeConsumes {
 		t.Errorf("stdlib-only type = %q", stdlibOnly.Type())
 	}
-	if !strings.Contains(stdlibOnly.Claim().Statement(), "no other declared Module") {
+	if !strings.Contains(stdlibOnly.Claim().Statement(), "declared Modules [\"rule\"]") {
 		t.Errorf("stdlib-only claim = %q", stdlibOnly.Claim())
 	}
 	if acyclic, ok := byID["arclint:dependencies/acyclic"]; !ok {
@@ -78,9 +78,9 @@ func TestLoadTargetRuleset(t *testing.T) {
 		t.Errorf("aggregate-skeleton carries no expansion")
 	}
 	params, ok := skeleton.Params().(rule.StructureParams)
-	if !ok || len(params.Require) != 2 {
-		// The repository records one aggregate (Rule), so the two
-		// authored globs resolve to exactly two obligations.
+	if !ok || len(params.Require) != 4 {
+		// The repository records two aggregates (Rule and Pattern), so
+		// the two authored globs resolve to exactly four obligations.
 		t.Errorf("aggregate-skeleton params = %#v", skeleton.Params())
 	}
 }
@@ -200,12 +200,8 @@ contracts:
 	if _, err := repo.ConfiguredRules(); err == nil {
 		t.Errorf("a pattern distribution file must not load as a repository ruleset")
 	}
-	doc, err := yamlrule.Load([]byte(content), file, vocab.UbiquitousLanguage{})
-	if err != nil {
-		t.Fatalf("Load: %v", err)
-	}
-	if doc.Pattern == nil || doc.Pattern.Namespace != "arclint" || doc.Pattern.Version != "1.0.0" {
-		t.Errorf("pattern header = %+v", doc.Pattern)
+	if _, err := yamlrule.Load([]byte(content), file, vocab.UbiquitousLanguage{}); err == nil {
+		t.Errorf("the repository loader must reject the pattern distribution header")
 	}
 }
 

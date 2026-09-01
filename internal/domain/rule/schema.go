@@ -159,8 +159,8 @@ func typeStrings() []string {
 // Schema returns the published Rule Schema: a deterministic, indented
 // JSON Schema (draft 2020-12) document describing the complete
 // rules.yaml grammar — the document shape, runtime targets, scan
-// settings, Module declarations, every Rule Type parameter shape, and
-// the Pattern identity header. Runtime validation and this published
+// settings, Module declarations, and every Rule Type parameter shape.
+// Runtime validation and this published
 // editor schema accept the same values; the committed
 // docs/rules.schema.json holds exactly these bytes, and a differential
 // test proves both properties against the real loader.
@@ -214,11 +214,10 @@ func schemaDocument() map[string]any {
 		"$schema":              "https://json-schema.org/draft/2020-12/schema",
 		"$id":                  "https://raw.githubusercontent.com/wixregiga/arclint/main/docs/rules.schema.json",
 		"title":                "ArcLint ruleset",
-		"description":          "The complete rules.yaml document ArcLint accepts: runtime targets, scan policy, Module declarations, per-Module contracts, repository-scoped Extension invariants, repository-wide dependency Rules, and the Pattern identity header of a distribution file. Unknown keys are rejected everywhere.",
+		"description":          "The complete rules.yaml document ArcLint accepts: runtime targets, scan policy, Module declarations, per-Module contracts, repository-scoped Extension invariants, and repository-wide dependency Rules. Unknown keys are rejected everywhere.",
 		"type":                 "object",
 		"additionalProperties": false,
 		"properties": map[string]any{
-			"pattern": patternHeaderSchema(),
 			"runtime": map[string]any{
 				"description": "Language targets whose code facts observation produces.",
 				"type":        "array",
@@ -303,23 +302,6 @@ func repositorySchema() map[string]any {
 				"items":       schemaRef("extensionInvariant"),
 			},
 		},
-	)
-}
-
-func patternHeaderSchema() map[string]any {
-	return strictObjectSchema(
-		"Pattern identity header, present only in a Pattern distribution file — never in a repository ruleset.",
-		map[string]any{
-			"namespace": map[string]any{"description": "Pattern namespace qualifying distributed Rule IDs.", "type": "string", "minLength": 1},
-			"name":      map[string]any{"description": "Pattern name within its namespace.", "type": "string", "minLength": 1},
-			"version":   map[string]any{"description": "Pattern version; never part of Rule identity.", "type": "string", "minLength": 1},
-			"coverage": map[string]any{
-				"description": "Languages the Pattern declares coverage for.",
-				"type":        "array",
-				"items":       map[string]any{"enum": languageStrings()},
-			},
-		},
-		"namespace", "name", "version",
 	)
 }
 
@@ -647,12 +629,4 @@ func oneOfRefs(names ...string) map[string]any {
 		refs = append(refs, schemaRef(name))
 	}
 	return map[string]any{"oneOf": refs}
-}
-
-func languageStrings() []string {
-	out := make([]string, 0, len(Languages()))
-	for _, l := range Languages() {
-		out = append(out, string(l))
-	}
-	return out
 }

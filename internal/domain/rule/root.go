@@ -1,9 +1,8 @@
 // Package rule holds the Rule aggregate and the domain values ArcLint
-// uses to evaluate repository conformance. Rule is the sole aggregate
-// root: one independently identifiable lint rule stating a Claim and
-// defining where and how ArcLint attempts to evaluate it. Invalid
-// Rules cannot be constructed, and no code outside the aggregate
-// enforces its invariants.
+// uses to evaluate repository conformance. A Rule is one independently
+// identifiable architecture claim defining where and how ArcLint attempts
+// to evaluate it. Invalid Rules cannot be constructed, and no code outside
+// the aggregate enforces its invariants.
 package rule
 
 import (
@@ -26,7 +25,7 @@ type Rule struct {
 	suppressions  []Suppression
 	disablement   *Disablement
 	tests         []Test
-	provenance    *PatternReference
+	provenance    *PatternOrigin
 	expansion     *Expansion
 }
 
@@ -50,7 +49,7 @@ type Spec struct {
 	// Tests carry the Rule's deterministic scenarios.
 	Tests []Test
 	// Provenance records the distributing Pattern, when any.
-	Provenance *PatternReference
+	Provenance *PatternOrigin
 	// Expansion, on a structure Rule, records that Params derive from
 	// a recorded vocabulary collection; Params must then hold exactly
 	// the Expansion's resolution against the recorded language.
@@ -118,7 +117,7 @@ func New(spec Spec) (Rule, error) {
 			return fail(fmt.Errorf("rule test %q identifies %q, not this rule", t.Name(), t.RuleID()))
 		}
 	}
-	var provenance *PatternReference
+	var provenance *PatternOrigin
 	if spec.Provenance != nil {
 		if spec.Provenance.IsZero() {
 			return fail(fmt.Errorf("unconstructed pattern provenance"))
@@ -247,11 +246,28 @@ func (r Rule) Suppressions() []Suppression {
 func (r Rule) Tests() []Test { return append([]Test(nil), r.tests...) }
 
 // Provenance returns the distributing Pattern reference, when any.
-func (r Rule) Provenance() (PatternReference, bool) {
+func (r Rule) Provenance() (PatternOrigin, bool) {
 	if r.provenance == nil {
-		return PatternReference{}, false
+		return PatternOrigin{}, false
 	}
 	return *r.provenance, true
+}
+
+// WithProvenance returns the same Rule stamped with its distributing Pattern
+// origin. Existing origin may be confirmed but never rewritten.
+func (r Rule) WithProvenance(origin PatternOrigin) (Rule, error) {
+	if err := r.Validate(); err != nil {
+		return Rule{}, err
+	}
+	if origin.IsZero() {
+		return Rule{}, fmt.Errorf("rule %s: unconstructed pattern origin", r.id)
+	}
+	if r.provenance != nil && *r.provenance != origin {
+		return Rule{}, fmt.Errorf("rule %s: pattern origin %s cannot be rewritten as %s", r.id, r.provenance, origin)
+	}
+	originCopy := origin
+	r.provenance = &originCopy
+	return r, nil
 }
 
 // Expansion returns the vocabulary derivation of an expanded structure

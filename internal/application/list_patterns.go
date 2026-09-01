@@ -3,13 +3,13 @@ package application
 import (
 	"fmt"
 
-	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/pattern"
 )
 
 // PatternSource supplies available Pattern distribution packages as
 // validated domain values.
 type PatternSource interface {
-	Patterns() ([]rule.Pattern, error)
+	Patterns() ([]pattern.Pattern, error)
 }
 
 // PatternSummary is the plain result value describing one available
