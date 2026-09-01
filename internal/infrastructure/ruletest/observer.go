@@ -70,5 +70,5 @@ func (o Observer) Observe(files []rule.TestFile, languages []rule.Language,
 	for _, f := range files {
 		content[f.Path] = f.Content
 	}
-	return obs.WithContent(conformance.MapContent(content)), nil
+	return obs.WithContent(conformance.NewMapContent(content)), nil
 }

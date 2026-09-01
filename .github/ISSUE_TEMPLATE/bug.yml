@@ -2,6 +2,41 @@ name: Bug report
 description: Report a defect in arclint
 labels: ["bug"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Smallest repro wins. If this bug *adds or restores* a capability users will
+        notice, say so — those still belong in release notes even with the `bug` label.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: "Prefix the eventual PR title with this area, for example `rules: …`, `cli: …`, or `vocabulary: …`."
+      options:
+        - cli
+        - rules
+        - patterns
+        - vocabulary
+        - output
+        - config
+        - extensions
+        - agents
+        - docs
+        - ci
+    validations:
+      required: true
+
+  - type: dropdown
+    id: user_facing
+    attributes:
+      label: Will a user notice this?
+      options:
+        - "Yes — wrong diagnostic, crash, bad CLI/output, accepted invalid rules.yaml, broken pattern contract, or incorrect vocabulary behavior"
+        - "No — internal only. Skip release notes."
+    validations:
+      required: true
+
   - type: input
     id: version
     attributes:
@@ -10,6 +45,7 @@ body:
       placeholder: arclint version 0.1.0
     validations:
       required: true
+
   - type: textarea
     id: rules
     attributes:
@@ -18,6 +54,7 @@ body:
       render: yaml
     validations:
       required: true
+
   - type: textarea
     id: expected-actual
     attributes:
@@ -25,10 +62,22 @@ body:
       description: What you expected arclint to report, and what it reported instead.
     validations:
       required: true
+
   - type: textarea
     id: tree
     attributes:
       label: Minimal tree
-      description: If possible, the smallest directory layout that reproduces the problem, for example `tree` output or a short file list with relevant contents.
+      description: Smallest directory layout that reproduces the problem (`tree` output or a short file list with contents).
+    validations:
+      required: false
+
+  - type: textarea
+    id: release_note
+    attributes:
+      label: Release note draft (only if user-facing)
+      description: |
+        Write the user-visible correction, not the stack trace.
+        Example — "Report a clear error when a rule references an unknown fact."
+      placeholder: Fix …
     validations:
       required: false

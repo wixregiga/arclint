@@ -1,0 +1,89 @@
+name: Test plan
+description: Soak a shipped feature or fix before a Stable cut
+labels: ["testplan"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Link the feature or bug this tests. Write for someone who did not implement it.
+        Do not paste implementation notes. If the steps disagree with the release note
+        draft on the parent issue, the note is wrong — update the parent issue.
+
+  - type: input
+    id: refs
+    attributes:
+      label: Refs
+      description: Parent issue(s), e.g. #42
+      placeholder: "#42"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: "Prefix the eventual PR title with this area, for example `rules: …`, `cli: …`, or `vocabulary: …`."
+      options:
+        - cli
+        - rules
+        - patterns
+        - vocabulary
+        - output
+        - config
+        - extensions
+        - agents
+        - docs
+        - ci
+    validations:
+      required: true
+
+  - type: dropdown
+    id: complexity
+    attributes:
+      label: Complexity
+      description: 1 = five minutes, 5 = messy fixture + several commands.
+      options: ["1", "2", "3", "4", "5"]
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: platforms
+    attributes:
+      label: Platforms to check
+      options:
+        - label: Linux
+        - label: macOS
+        - label: Windows
+        - label: Whatever the PR CI already covers is enough
+
+  - type: textarea
+    id: setup
+    attributes:
+      label: Set up
+      description: Install this build, this rules.yaml, this tree. No theory.
+      placeholder: |
+        cargo install --path .   # or download the release candidate
+        use the rules.yaml and tree from #42
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps and expected results
+      description: Numbered. Each step is an action plus what arclint must print or do.
+      placeholder: |
+        1. Run `arclint check`.
+           Expect exit 1 and a diagnostic on line 4 naming fact `depends_on`.
+        2. Comment out the unknown fact and run again.
+           Expect exit 0.
+    validations:
+      required: true
+
+  - type: textarea
+    id: note_check
+    attributes:
+      label: Release note check
+      description: Paste the parent issue's release note draft. After the soak, say pass or rewrite it here.
+    validations:
+      required: true

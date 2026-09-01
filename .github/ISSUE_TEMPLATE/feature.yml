@@ -1,21 +1,86 @@
 name: Feature request
-description: Propose a new rule kind, fact, or CLI capability
+description: Propose a new rule kind, pattern contract, vocabulary fact, CLI capability, or user-visible behavior
 labels: ["enhancement"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        One issue = one capability. The issue is the source of truth for review,
+        the squash commit, and the release note. Do not file a kitchen-sink request.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: "Prefix the eventual PR title with this area, for example `rules: …`, `cli: …`, or `vocabulary: …`."
+      options:
+        - cli
+        - rules
+        - patterns
+        - vocabulary
+        - output
+        - config
+        - extensions
+        - agents
+        - docs
+        - ci
+    validations:
+      required: true
+
+  - type: dropdown
+    id: user_facing
+    attributes:
+      label: Will a user notice this?
+      description: Only user-facing work goes in release notes. Internal engine refactors do not.
+      options:
+        - "Yes — new or changed user-visible behavior (CLI, rule schema, patterns, vocabulary, output, docs a user follows)"
+        - "No — internal only (engine, perf, plumbing). Do not put this in release notes."
+    validations:
+      required: true
+
   - type: textarea
     id: problem
     attributes:
       label: Problem
-      description: What architectural constraint or workflow can you not express or check today?
+      description: What architectural constraint, repository contract, or workflow cannot you express or check today?
+      placeholder: I cannot write a rule that… because the pattern contract, vocabulary, or CLI does not expose…
     validations:
       required: true
+
   - type: textarea
     id: proposal
     attributes:
       label: Proposed solution
-      description: What should arclint do? A rules.yaml sketch of the desired syntax helps.
+      description: What should arclint do? A rules.yaml sketch of the desired syntax helps, and so does a pattern or vocabulary example if relevant.
+      render: yaml
     validations:
       required: true
+
+  - type: textarea
+    id: success
+    attributes:
+      label: Success looks like
+      description: Concrete, testable outcomes. These become the test plan and keep the release note honest.
+      placeholder: |
+        - `arclint check` reports X on this tree
+        - this rules.yaml snippet is valid
+        - `arclint context` exposes the new pattern or vocabulary contract
+        - `arclint --help` documents the new flag
+    validations:
+      required: true
+
+  - type: textarea
+    id: release_note
+    attributes:
+      label: Release note draft
+      description: |
+        One or two sentences a user can read. Imperative, no "now".
+        Example — "Add `vocabulary` support so rules can describe recorded domain terms and invariants."
+        Leave blank only if you marked this internal-only.
+      placeholder: Add support for …
+    validations:
+      required: false
+
   - type: textarea
     id: alternatives
     attributes:
@@ -23,3 +88,21 @@ body:
       description: Workarounds you tried and why they fall short.
     validations:
       required: false
+
+  - type: checkboxes
+    id: definition_of_done
+    attributes:
+      label: Definition of done (owner fills as work lands)
+      description: Do not close the issue until these are true. The release-note checkbox is the notes inclusion gate.
+      options:
+        - label: Behavior matches "Success looks like"
+          required: true
+        - label: Tests cover the happy path and the failure in Expected vs actual terms
+          required: true
+        - label: User-facing docs/help text updated if the CLI, rule schema, output, or pattern/vocabulary contract changed
+          required: true
+        - label: "PR title is `area: imperative summary` and the PR body has `Fixes #<this issue>`"
+          required: true
+        - label: Release note draft above is accurate (or this is marked internal-only)
+          required: true
+        - label: Needs a soak test plan (file a Test plan issue and link it here)
