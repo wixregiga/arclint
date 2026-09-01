@@ -152,25 +152,28 @@ type Content interface {
 	Read(path string) (string, error)
 }
 
-// mapContent is Content backed by an in-memory path-to-bytes map.
-type mapContent map[string]string
+// MapContent is Content backed by an immutable in-memory path-to-bytes map.
+type MapContent struct {
+	files map[string]string
+}
 
-func (m mapContent) Read(path string) (string, error) {
-	s, ok := m[path]
+// Read returns the content recorded for path.
+func (m MapContent) Read(path string) (string, error) {
+	s, ok := m.files[path]
 	if !ok {
 		return "", fmt.Errorf("file not found")
 	}
 	return s, nil
 }
 
-// MapContent returns Content from an in-memory path-to-bytes map.
+// NewMapContent returns MapContent from an in-memory path-to-bytes map.
 // The returned capability holds an independent copy of the map.
-func MapContent(files map[string]string) Content {
-	cp := make(mapContent, len(files))
+func NewMapContent(files map[string]string) MapContent {
+	cp := make(map[string]string, len(files))
 	for k, v := range files {
 		cp[k] = v
 	}
-	return cp
+	return MapContent{files: cp}
 }
 
 // Observations is the immutable normalized input to one Conformance

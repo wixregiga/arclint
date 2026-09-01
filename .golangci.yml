@@ -25,6 +25,10 @@ linters:
     - unparam
     - whitespace
     - wrapcheck
+    - iface
+    - containedctx
+    - contextcheck
+    - nolintlint
   exclusions:
     rules:
       - text: '(slog|log)\.\w+'
@@ -51,6 +55,17 @@ linters:
   settings:
     exhaustive:
       default-signifies-exhaustive: true
+    iface:
+      enable:
+        - identical # Identifies interfaces in the same package that have identical method sets.
+        - unused # Identifies interfaces that are not used anywhere in the same package where the interface is defined.
+        - opaque # Identifies functions that return interfaces, but the actual returned value is always a single concrete implementation.
+        - unexported # Identifies interfaces that are not exported but are used in exported functions or methods.
+        - unusedmethod # Detects interface methods that are never used anywhere in the same package where they are defined.
+    nolintlint:
+      allow-unused: false
+      require-explanation: true
+      require-specific: true
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0

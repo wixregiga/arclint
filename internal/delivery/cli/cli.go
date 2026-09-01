@@ -35,6 +35,6 @@ type AdapterName string
 const AdapterCobra AdapterName = "cobra"
 
 // Adapter runs a neutral command tree for one Invocation.
-type Adapter interface {
+type Adapter interface { //nolint:iface // Framework-neutral port is intentionally consumed across package boundaries.
 	Run(root Command, invocation Invocation) Outcome
 }

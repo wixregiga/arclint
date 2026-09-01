@@ -50,6 +50,6 @@ type Configured struct {
 // aggregates. Implementations return complete valid Rules, never
 // representation structs; a representation that cannot become a valid
 // Rule is an error, not a partial value.
-type Repository interface {
+type Repository interface { //nolint:iface // Domain-owned persistence port is consumed by application use cases.
 	ConfiguredRules() (Configured, error)
 }

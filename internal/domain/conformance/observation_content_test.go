@@ -6,9 +6,9 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 )
 
-func TestMapContentReadsIndependentCopy(t *testing.T) {
+func TestNewMapContentReadsIndependentCopy(t *testing.T) {
 	src := map[string]string{"m/a.go": "package m\n"}
-	content := conformance.MapContent(src)
+	content := conformance.NewMapContent(src)
 	src["m/a.go"] = "mutated"
 	got, err := content.Read("m/a.go")
 	if err != nil {
@@ -32,7 +32,7 @@ func TestObservationsWithContent(t *testing.T) {
 	if obs.Content() != nil {
 		t.Fatalf("Content() = %v, want nil before WithContent", obs.Content())
 	}
-	with := obs.WithContent(conformance.MapContent(map[string]string{
+	with := obs.WithContent(conformance.NewMapContent(map[string]string{
 		"m/a.go": "fixture bytes",
 	}))
 	if obs.Content() != nil {

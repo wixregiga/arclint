@@ -6,3 +6,6 @@
 .claude-scratch/
 GNUmakefile
 .omp
+.github/agents/local-*md
+.vscode/settings.json
+.tmp/

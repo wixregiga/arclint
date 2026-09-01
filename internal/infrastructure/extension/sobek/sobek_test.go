@@ -382,7 +382,7 @@ func TestEvaluatorReadUsesObservationContent(t *testing.T) {
 		t.Fatalf("NewObservations: %v", err)
 	}
 	// Fixture-shaped content that the production file does not have.
-	obs = obs.WithContent(conformance.MapContent(map[string]string{
+	obs = obs.WithContent(conformance.NewMapContent(map[string]string{
 		"m/a.go": "package m\nfunc f() { panic(\"x\") }\n",
 	}))
 
