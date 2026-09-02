@@ -237,12 +237,14 @@ func domainInfoFrom(lang vocab.UbiquitousLanguage) DomainInfo {
 		info.Contexts = make([]DomainContextInfo, len(lang.Contexts))
 		for i, c := range lang.Contexts {
 			info.Contexts[i] = DomainContextInfo{
-				Name:         c.Name,
-				Entities:     entityInfos(c.Entities),
-				ValueObjects: definitionInfos(c.ValueObjects),
-				Invariants:   invariantInfos(c.Invariants),
-				Events:       definitionInfos(c.Events),
-				Line:         c.Line,
+				Name:           c.Name,
+				Entities:       entityInfos(c.Entities),
+				ValueObjects:   definitionInfos(c.ValueObjects),
+				Invariants:     invariantInfos(c.Invariants),
+				Assertions:     assertionInfos(c.Assertions),
+				Specifications: specificationInfos(c.Specifications),
+				Events:         definitionInfos(c.Events),
+				Line:           c.Line,
 			}
 		}
 	}
@@ -302,7 +304,40 @@ func invariantInfos(invs []vocab.Invariant) []DomainInvariantInfo {
 		out[i] = DomainInvariantInfo{
 			Statement: inv.Statement,
 			Owner:     inv.Owner,
+			ID:        inv.ID,
 			Line:      inv.Line,
+		}
+	}
+	return out
+}
+
+func assertionInfos(assertions []vocab.Assertion) []DomainAssertionInfo {
+	if len(assertions) == 0 {
+		return []DomainAssertionInfo{}
+	}
+	out := make([]DomainAssertionInfo, len(assertions))
+	for i, a := range assertions {
+		out[i] = DomainAssertionInfo{
+			Statement: a.Statement,
+			Owner:     a.Owner,
+			ID:        a.ID,
+			On:        a.On,
+			Line:      a.Line,
+		}
+	}
+	return out
+}
+
+func specificationInfos(specs []vocab.Specification) []DomainSpecificationInfo {
+	if len(specs) == 0 {
+		return []DomainSpecificationInfo{}
+	}
+	out := make([]DomainSpecificationInfo, len(specs))
+	for i, s := range specs {
+		out[i] = DomainSpecificationInfo{
+			Name:       s.Name,
+			Definition: s.Definition,
+			Line:       s.Line,
 		}
 	}
 	return out

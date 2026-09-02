@@ -1,12 +1,13 @@
 package lipgloss
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/delivery/cli/adapters/report/internal/out"
 )
+
+const contractSourceMissing = "missing"
 
 func writeContext(p *out.Printer, th Theme, c application.ArchitecturalContext) {
 	p.Printf("%s %s\n", th.Bold.Render("scope:"), c.Scope)
@@ -77,9 +78,11 @@ func writeDomainKnowledge(p *out.Printer, th Theme, d *application.DomainKnowled
 	if counts.Aggregates > 0 {
 		p.Printf(" (%s)", domainCountPhrase(counts.Aggregates, "aggregate", "aggregates"))
 	}
-	p.Printf(", %s, %s, %s\n",
+	p.Printf(", %s, %s, %s, %s, %s\n",
 		domainCountPhrase(counts.ValueObjects, "value object", "value objects"),
 		domainCountPhrase(counts.Invariants, "invariant", "invariants"),
+		domainCountPhrase(counts.Assertions, "assertion", "assertions"),
+		domainCountPhrase(counts.Specifications, "specification", "specifications"),
 		domainCountPhrase(counts.Events, "event", "events"),
 	)
 	for _, ctx := range d.Contexts {
@@ -99,11 +102,38 @@ func writeDomainKnowledge(p *out.Printer, th Theme, d *application.DomainKnowled
 			p.Printf("    value objects: %s\n", strings.Join(ctx.ValueObjects, ", "))
 		}
 		if len(ctx.Invariants) > 0 {
-			parts := make([]string, len(ctx.Invariants))
-			for i, inv := range ctx.Invariants {
-				parts[i] = fmt.Sprintf("%s (owner: %s)", inv.Statement, inv.Owner)
+			p.Println("    invariants:")
+			for _, inv := range ctx.Invariants {
+				src := inv.Source
+				if src == "" {
+					src = contractSourceMissing
+				}
+				if inv.ID != "" {
+					p.Printf("      %s (owner: %s, id: %s) %s\n", inv.Statement, inv.Owner, inv.ID, src)
+					continue
+				}
+				p.Printf("      %s (owner: %s) %s\n", inv.Statement, inv.Owner, src)
 			}
-			p.Printf("    invariants: %s\n", strings.Join(parts, "; "))
+		}
+		if len(ctx.Assertions) > 0 {
+			p.Println("    assertions:")
+			for _, a := range ctx.Assertions {
+				src := a.Source
+				if src == "" {
+					src = contractSourceMissing
+				}
+				p.Printf("      %s (owner: %s, id: %s, on: %s) %s\n", a.Statement, a.Owner, a.ID, a.On, src)
+			}
+		}
+		if len(ctx.Specifications) > 0 {
+			p.Println("    specifications:")
+			for _, s := range ctx.Specifications {
+				src := s.Source
+				if src == "" {
+					src = contractSourceMissing
+				}
+				p.Printf("      %s %s\n", s.Name, src)
+			}
 		}
 		if len(ctx.Events) > 0 {
 			p.Printf("    events: %s\n", strings.Join(ctx.Events, ", "))

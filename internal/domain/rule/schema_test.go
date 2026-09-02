@@ -70,6 +70,7 @@ func TestSchemaCoversEveryRuleType(t *testing.T) {
 	kindDefs := map[rule.Type]string{
 		rule.TypeStructure:    "structureInvariant",
 		rule.TypeNaming:       "namingInvariant",
+		rule.TypeInvariants:   "invariantsInvariant",
 		rule.TypeExtension:    "extensionInvariant",
 		rule.TypeLayers:       "layersDependency",
 		rule.TypeProtected:    "protectedDependency",
@@ -104,7 +105,7 @@ func TestSchemaRejectsUnknownKeys(t *testing.T) {
 		t.Errorf("document additionalProperties = %v, want false", got)
 	}
 	ruleShapes := []string{
-		"consumes", "structureInvariant", "namingInvariant", "extensionInvariant",
+		"consumes", "structureInvariant", "namingInvariant", "invariantsInvariant", "extensionInvariant",
 		"layersDependency", "protectedDependency", "acyclicDependency",
 	}
 	for _, name := range ruleShapes {

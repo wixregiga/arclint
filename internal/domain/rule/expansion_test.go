@@ -18,6 +18,16 @@ func recordedLanguage() vocab.UbiquitousLanguage {
 			},
 			ValueObjects: []vocab.Definition{{Name: "Money"}},
 			Events:       []vocab.Definition{{Name: "OrderPlaced"}},
+			Invariants: []vocab.Invariant{
+				{Statement: "Lines never change.", Owner: "Order", ID: "lines-frozen"},
+				{Statement: "Money is never negative.", Owner: "Money"},
+			},
+			Assertions: []vocab.Assertion{
+				{Statement: "Priced before place.", Owner: "Order", ID: "lines-priced", On: "Place"},
+			},
+			Specifications: []vocab.Specification{
+				{Name: "PreferredCustomer", Definition: "A named predicate."},
+			},
 		},
 		{
 			Name:     "billing",
@@ -54,11 +64,14 @@ func TestExpansionResolvesPerSourceTerm(t *testing.T) {
 func TestExpansionSourcesSelectTheRecordedCollections(t *testing.T) {
 	lang := recordedLanguage()
 	counts := map[string]int{
-		"domain.aggregates":    2, // Order, Invoice
-		"domain.entities":      3, // + Order Line
-		"domain.value_objects": 1, // Money
-		"domain.events":        1, // OrderPlaced
-		"domain.contexts":      2, // ordering, billing
+		"domain.aggregates":     2, // Order, Invoice
+		"domain.entities":       3, // + Order Line
+		"domain.value_objects":  1, // Money
+		"domain.events":         1, // OrderPlaced
+		"domain.contexts":       2, // ordering, billing
+		"domain.invariants":     2, // lines-frozen, Money
+		"domain.assertions":     1, // lines-priced
+		"domain.specifications": 1, // PreferredCustomer
 	}
 	for source, want := range counts {
 		e, err := rule.NewExpansion(source, []string{"{name:flatcase}/present.go"}, nil)

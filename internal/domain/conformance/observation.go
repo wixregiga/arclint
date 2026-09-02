@@ -97,6 +97,15 @@ type Declaration struct {
 	Results []string
 }
 
+// Call is one source call at the syntactic tier: the callee
+// identifier as written, the line of the call, and the enclosing
+// function or method name. Types are unresolved.
+type Call struct {
+	Callee    string
+	Line      int
+	Enclosing string
+}
+
 // LanguageFacts is the immutable normalized description of one file's
 // code facts available to Rule enforcement. Facts describe observed
 // code, never intended architecture, and a parse failure is
@@ -123,6 +132,12 @@ type LanguageFacts struct {
 	// Declarations is the normalized declaration view, valid when
 	// DeclarationsAvailable and no ParseFailure.
 	Declarations []Declaration
+	// CallsAvailable records whether the language can honestly supply
+	// calls for this file, and whether they were requested.
+	CallsAvailable bool
+	// Calls is the normalized call view, valid when CallsAvailable
+	// and no ParseFailure.
+	Calls []Call
 }
 
 // Supports states whether a requested fact class is available.
@@ -132,6 +147,8 @@ func (f LanguageFacts) Supports(fact rule.Fact) bool {
 		return f.ImportsAvailable && f.ParseFailure == ""
 	case rule.FactDeclarations:
 		return f.DeclarationsAvailable && f.ParseFailure == ""
+	case rule.FactCalls:
+		return f.CallsAvailable && f.ParseFailure == ""
 	default:
 		return false
 	}
@@ -148,6 +165,8 @@ type ObservedFile struct {
 // bytes for Extension evaluation (ctx.read). Production supplies a
 // lazy repository reader; Rule Tests supply fixture content directly
 // so temporary fixture materialization cannot invalidate later reads.
+//
+//nolint:iface // Implementation capability provided and consumed outside package.
 type Content interface {
 	Read(path string) (string, error)
 }
@@ -219,6 +238,7 @@ func NewObservations(files []ObservedFile, facts map[string]LanguageFacts) (Obse
 		}
 		f.Imports = append([]Import(nil), f.Imports...)
 		f.Declarations = append([]Declaration(nil), f.Declarations...)
+		f.Calls = append([]Call(nil), f.Calls...)
 		copied[path] = f
 	}
 	return Observations{files: sorted, facts: copied}, nil

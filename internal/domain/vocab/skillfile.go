@@ -15,7 +15,7 @@ const (
 // Skill frontmatter (SKILL.md).
 const (
 	SkillName        = "domain-librarian"
-	SkillDescription = "Distill domain concepts from user input or analysis into a bounded-context-organized ubiquitous-language library file. Use when categorizing domain terms (entity, value_object, invariant, event), recording or maintaining a project's ubiquitous language, or resolving term conflicts across bounded contexts."
+	SkillDescription = "Distill domain concepts from user input or analysis into a bounded-context-organized ubiquitous-language library file. Use when categorizing domain terms (entity, value_object, invariant, assertion, specification, event), recording or maintaining a project's ubiquitous language, or resolving term conflicts across bounded contexts."
 )
 
 // Skill protocol body constants (SKILL.md), char-exact to the litmus file.
@@ -43,9 +43,9 @@ func SkillProtocolRules() []string {
 		"**Boundaries.** A party that must be informed or notified is a second bounded_context: record it and its relation even when empty. Decisions ABOUT other terms (exclude, suppress, disable, override, snapshot) form their own governance context. Collapse synonyms to one canonical term with aliases. Mark `aggregate: true` only with quoted consistency evidence.",
 		"**Ask or record — never guess.** One question per blocked concept, chosen from VOCAB's question banks by what it decides. A structural fork among surviving candidates — new aggregate versus value on an existing term, a new context, bypassing existing machinery — is a question for the domain expert regardless of partial evidence. Asking is always possible: the harness's question tool reaches the domain expert, and a subagent's question routes through its parent session — never assume nobody can answer. Zero unresolved terms is a red flag: re-scan definition-only evidence and skipped re-tests before finalizing. Having tools changes nothing — a write tool does not authorize resolving what the evidence cannot.",
 		"**Precedence.** The conflict protocol outranks every other rule; routing around a conflict is a conflict. The conflict question fires when any CANDIDATE model would change a recorded entry's meaning, not only when an edit is made; choosing a different candidate to avoid the change while the question is unanswered is a protocol violation. No recorded entry's name, kind, or definition changes without an answered conflict question; inherited re-tests and language-fidelity renames PROPOSE changes, never authorize them.",
-		"**Invariant gate.** A recorded invariant must forbid something a naive implementation could do, and it is one violation, one complete sentence in the domain's own voice, with the owning term as its subject, in exactly one shape: a truth that always holds, what happens when something occurs, what holds while a state lasts, or what is refused. An \"and\" joining independently violable clauses is several invariants; the narrative that connects them belongs in the owning term's definition. Restating a definition is not an invariant, and \"the system shall\" is not the domain speaking.",
+		"**Invariant gate.** A recorded invariant must forbid something a naive implementation could do, and it is one violation, one complete sentence in the domain's own voice, with the owning term as its subject. Always-true rules belong in invariants[]; a post-condition of a named operation belongs in assertions[] with id and on; a predicate experts pass around as a thing belongs in specifications[], never as a flag on a value object. Value integrity is an invariant whose owner is a value object (no id, constructor only); a cluster invariant's owner is an aggregate and requires id. Never record a programming-only guard. Would you say this to an expert who never saw the language? An \"and\" joining independently violable clauses is several entries; the narrative that connects them belongs in the owning term's definition. Restating a definition is not an invariant, and \"the system shall\" is not the domain speaking.",
 		"**Completeness sweep.** Before finishing, re-scan the source text for must/never promises no recorded invariant carries; record each under its owner or raise it as a question. A promise living only in tests or views is unrecorded.",
-		"**Output.** ALWAYS emit or write the complete library file per VOCAB's `library_file.shape`; a summary of it is a failure. Preserve unrelated entries byte-identical; edits surgical, additions alphabetized. Record business_rule inputs as resolved invariants/assertions with an owner.",
+		"**Output.** ALWAYS emit or write the complete library file per VOCAB's `library_file.shape`; a summary of it is a failure. Preserve unrelated entries byte-identical; edits surgical, additions alphabetized. Record business_rule inputs as resolved invariants or assertions with an owner; never as a specification.",
 		"**Description style.** Definitions read like a document their humans own: plain sentences, no em dashes. Anything object-level a definition names must itself be recorded, or the mention is reworded into plain language. A term that lines up with a code object uses the code's exact spelling (TermCase, RuleID), never a prose-spaced variant.",
 	}
 }
@@ -83,7 +83,9 @@ func LibraryFileSpec() LibraryFile {
       - name: <context>
         entities: [{name, definition, aggregate: true?, aliases: []?}]
         value_objects: [{name, definition, aliases: []?}]
-        invariants: [{statement, owner}]
+        invariants: [{statement, owner, id?}]
+        assertions: [{statement, owner, id, on}]
+        specifications: [{name, definition}]
         events: [{name, definition}]
     relations: [{from, to, kind}]   # kind = one context_relation key; omit when single context
 `,
@@ -122,7 +124,11 @@ const (
 
 	SchemaValueObjectsDescription = "Immutable, identity-less concepts described entirely by their values (value-test: two with identical values are interchangeable). Measurements, units, and amounts belong here."
 
-	SchemaInvariantsDescription = "Must-always/must-never rules that hold at all times within this context. A valid invariant forbids something a naive implementation could do; restating a definition is not an invariant."
+	SchemaInvariantsDescription = "Must-always/must-never rules that hold at all times within this context.\n\nA valid invariant forbids something a naive implementation could do. Restating a definition is not an invariant.\n\nOwner:\n- value object: value integrity. No id. Enforced at that type's constructor.\n- aggregate with id: cluster invariant. Method named from id, called from the constructor and every exported command."
+
+	SchemaAssertionsDescription = "Post-conditions of a named operation.\n\nUnlike an invariant, an assertion holds when that operation occurs, not at all times.\n\nFields:\n- id: method that checks the post-condition\n- on: operation that must call that method"
+
+	SchemaSpecificationsDescription = "Named predicates experts pass around as a thing.\n\nA type of this name carries an Evans satisfaction method:\n- SatisfiedBy\n- satisfiedBy\n- satisfied_by\n\nA specification is not an invariant and is not a flag on a value object. A name may not appear in both value_objects and specifications."
 
 	SchemaEventsDescription = "Domain events: things that happened that experts care about, named in past-tense expert language (event-detection). Technical changes are not events."
 
@@ -142,7 +148,19 @@ const (
 
 	SchemaStatementDescription = "The rule, phrased so the concrete forbidden violation is clear."
 
-	SchemaOwnerDescription = "Exactly one enforcing term in this context: an entity/aggregate root (enforced in behavior) or a value_object (enforced at construction)."
+	SchemaOwnerDescription = "Exactly one enforcing term in this context.\n\n- aggregate: cluster invariant. id required for a named contract.\n- value object: value integrity. No id. Enforced at construction."
+
+	SchemaAssertionOwnerDescription = "The entity whose named operation must satisfy this post-condition. Must be a recorded entity in this context."
+
+	SchemaInvariantIDDescription = "Stable identity of a cluster invariant, unique within the bounded context.\n\n- Required when the owner is an aggregate and this is a named cluster contract.\n- Forbidden when the owner is a value object.\n\nThe enforcing method is this id rendered in the language's method case: PascalCase, camelCase, or snake_case."
+
+	SchemaAssertionIDDescription = "Stable identity of the assertion, unique within the bounded context. Names the method that checks the post-condition, rendered in the language's method case."
+
+	SchemaAssertionOnDescription = "The operation that must call the assertion's method.\n\nWrite the operation's method name: Publish, not publishEvent."
+
+	SchemaSpecificationNameDescription = "Canonical name of the specification, exactly as domain experts say it. A type of this name in source carries the satisfaction method."
+
+	SchemaSpecificationDefinitionDescription = "What the predicate means, grounded in expert language. A term without a definition is rejected, not stored. Written for humans first: plain sentences, no em dashes; anything object-level it names must be recorded in this library or reworded in plain language."
 
 	SchemaEventNameDescription = "Past-tense event name, e.g. OrderConfirmed."
 

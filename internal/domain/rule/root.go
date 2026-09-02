@@ -179,7 +179,7 @@ func deriveExpandedClaim(a Applicability, p StructureParams, e Expansion) string
 // over the repository's Module graph.
 func validateScope(t Type, a Applicability) error {
 	switch t {
-	case TypeConsumes, TypeStructure, TypeNaming:
+	case TypeConsumes, TypeStructure, TypeNaming, TypeInvariants:
 		if len(a.Modules()) == 0 {
 			return fmt.Errorf("%s rule requires module applicability", t)
 		}
@@ -202,7 +202,7 @@ func deriveClaim(a Applicability, p Params) string {
 	switch p.Type() {
 	case TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic:
 		return proposition
-	case TypeConsumes, TypeStructure, TypeNaming, TypeExtension:
+	case TypeConsumes, TypeStructure, TypeNaming, TypeInvariants, TypeExtension:
 		// Module-scoped Types: the Claim carries the Modules below.
 	}
 	modules := a.Modules()

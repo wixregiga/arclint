@@ -22,6 +22,8 @@ type DefineDomainRequest struct {
 	ClearAliases bool
 	Aggregate    *bool
 	Owner        string
+	ID           string
+	On           string
 }
 
 // DomainDefineResult is the plain result of a define operation.
@@ -109,12 +111,24 @@ func (uc DefineDomainDefinition) Execute(req DefineDomainRequest) (DomainDefineR
 		ch.SetOwner = true
 		ch.Owner = owner
 	}
+	id := strings.TrimSpace(req.ID)
+	if id != "" {
+		ch.SetID = true
+		ch.ID = id
+	}
+	on := strings.TrimSpace(req.On)
+	if on != "" {
+		ch.SetOn = true
+		ch.On = on
+	}
 
 	next, result, err := lang.Define(c, contextName, name, ch)
 	if err != nil {
 		// Surface domain create-time owner/name failures as usage.
 		msg := err.Error()
 		if strings.Contains(msg, "owner must be non-empty") ||
+			strings.Contains(msg, "id must be non-empty") ||
+			strings.Contains(msg, "on must be non-empty") ||
 			strings.Contains(msg, "name must be non-empty") ||
 			strings.Contains(msg, "context name must be non-empty") {
 			return DomainDefineResult{}, fmt.Errorf("%w: %v", ErrDomainUsage, err)
@@ -188,17 +202,32 @@ func validateDefineUsage(c vocab.Concept, exists bool, existing vocab.Definition
 		}
 	}
 	if isInvariantKind(c) {
-		if !exists && strings.TrimSpace(req.Owner) == "" {
-			return fmt.Errorf("%w: --owner is required when creating a %s", ErrDomainUsage, c)
-		}
-		if req.Definition != nil {
-			return fmt.Errorf("%w: %s uses the name argument as its statement; --definition is not accepted", ErrDomainUsage, c)
-		}
-		if len(req.Aliases) > 0 || req.ClearAliases {
-			return fmt.Errorf("%w: aliases are not accepted for %s", ErrDomainUsage, c)
+		if err := requireInvariantFields(c, exists, req); err != nil {
+			return err
 		}
 	}
 	_ = existing
+	return nil
+}
+
+func requireInvariantFields(c vocab.Concept, exists bool, req DefineDomainRequest) error {
+	if !exists && strings.TrimSpace(req.Owner) == "" {
+		return fmt.Errorf("%w: --owner is required when creating a %s", ErrDomainUsage, c)
+	}
+	if c == vocab.ConceptAssertion && !exists {
+		if strings.TrimSpace(req.ID) == "" {
+			return fmt.Errorf("%w: --id is required when creating a %s", ErrDomainUsage, c)
+		}
+		if strings.TrimSpace(req.On) == "" {
+			return fmt.Errorf("%w: --on is required when creating a %s", ErrDomainUsage, c)
+		}
+	}
+	if req.Definition != nil {
+		return fmt.Errorf("%w: %s uses the name argument as its statement; --definition is not accepted", ErrDomainUsage, c)
+	}
+	if len(req.Aliases) > 0 || req.ClearAliases {
+		return fmt.Errorf("%w: aliases are not accepted for %s", ErrDomainUsage, c)
+	}
 	return nil
 }
 

@@ -23,6 +23,8 @@ const (
 // Concrete report types live in this package and implement report();
 // adapters type-switch the closed set. Raw schema bytes and agents
 // markdown bypass Renderer entirely.
+//
+//nolint:iface // Sealed interface for type-switching; report() is an intentional marker method.
 type Report interface {
 	report()
 }

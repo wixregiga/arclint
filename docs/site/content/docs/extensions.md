@@ -167,6 +167,18 @@ ignored if present.
       owner: string;
       line: number;
     }>;
+    assertions: Array<{
+      statement: string;
+      owner: string;
+      id: string;
+      on: string;
+      line: number;
+    }>;
+    specifications: Array<{
+      name: string;
+      definition?: string;
+      line: number;
+    }>;
     events: Array<{
       name: string;
       definition?: string;

@@ -32,11 +32,14 @@ type ExpansionSource string
 
 // The published Expansion sources.
 const (
-	SourceAggregates   ExpansionSource = "domain.aggregates"
-	SourceEntities     ExpansionSource = "domain.entities"
-	SourceValueObjects ExpansionSource = "domain.value_objects"
-	SourceEvents       ExpansionSource = "domain.events"
-	SourceContexts     ExpansionSource = "domain.contexts"
+	SourceAggregates     ExpansionSource = "domain.aggregates"
+	SourceEntities       ExpansionSource = "domain.entities"
+	SourceValueObjects   ExpansionSource = "domain.value_objects"
+	SourceEvents         ExpansionSource = "domain.events"
+	SourceContexts       ExpansionSource = "domain.contexts"
+	SourceInvariants     ExpansionSource = "domain.invariants"
+	SourceAssertions     ExpansionSource = "domain.assertions"
+	SourceSpecifications ExpansionSource = "domain.specifications"
 )
 
 // ExpansionSources returns the published sources in declaration order.
@@ -44,6 +47,7 @@ func ExpansionSources() []ExpansionSource {
 	return []ExpansionSource{
 		SourceAggregates, SourceEntities, SourceValueObjects,
 		SourceEvents, SourceContexts,
+		SourceInvariants, SourceAssertions, SourceSpecifications,
 	}
 }
 
@@ -206,6 +210,22 @@ func sourceTerms(source ExpansionSource, lang vocab.UbiquitousLanguage) []string
 		case SourceEvents:
 			for _, d := range c.Events {
 				out = append(out, d.Name)
+			}
+		case SourceInvariants:
+			for _, inv := range c.Invariants {
+				if inv.ID != "" {
+					out = append(out, inv.ID)
+					continue
+				}
+				out = append(out, inv.Owner)
+			}
+		case SourceAssertions:
+			for _, a := range c.Assertions {
+				out = append(out, a.ID)
+			}
+		case SourceSpecifications:
+			for _, s := range c.Specifications {
+				out = append(out, s.Name)
 			}
 		}
 	}

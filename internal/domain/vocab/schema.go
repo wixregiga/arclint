@@ -125,6 +125,35 @@ func writeSchema(buf *bytes.Buffer) error {
 								"properties", o(
 									"statement", str(SchemaStatementDescription),
 									"owner", str(SchemaOwnerDescription),
+									"id", str(SchemaInvariantIDDescription),
+								),
+							),
+						),
+						"assertions", o(
+							"type", "array",
+							"description", SchemaAssertionsDescription,
+							"items", o(
+								"type", "object",
+								"additionalProperties", false,
+								"required", a("statement", "owner", "id", "on"),
+								"properties", o(
+									"statement", str(SchemaStatementDescription),
+									"owner", str(SchemaAssertionOwnerDescription),
+									"id", str(SchemaAssertionIDDescription),
+									"on", str(SchemaAssertionOnDescription),
+								),
+							),
+						),
+						"specifications", o(
+							"type", "array",
+							"description", SchemaSpecificationsDescription,
+							"items", o(
+								"type", "object",
+								"additionalProperties", false,
+								"required", a("name", "definition"),
+								"properties", o(
+									"name", str(SchemaSpecificationNameDescription),
+									"definition", str(SchemaSpecificationDefinitionDescription),
 								),
 							),
 						),

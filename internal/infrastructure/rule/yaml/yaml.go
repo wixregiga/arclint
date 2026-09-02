@@ -378,6 +378,16 @@ func consumesSpec(module string, doc consumesDoc) (rule.Spec, error) {
 	}, nil
 }
 
+const (
+	fieldFiles   = "files"
+	fieldCase    = "case"
+	fieldUses    = "uses"
+	fieldWith    = "with"
+	fieldRequire = "require"
+	fieldForbid  = "forbid"
+	fieldEach    = "each"
+)
+
 func invariantSpec(module string, doc invariantDoc, lang vocab.UbiquitousLanguage) (rule.Spec, error) {
 	moduleName, err := rule.NewModuleName(module)
 	if err != nil {
@@ -391,8 +401,8 @@ func invariantSpec(module string, doc invariantDoc, lang vocab.UbiquitousLanguag
 	switch doc.Kind {
 	case "structure":
 		if err := forbidKindFields("structure", map[string]bool{
-			"files": doc.Files != "", "case": doc.Case != "",
-			"uses": doc.Uses != "", "with": len(doc.With) > 0,
+			fieldFiles: doc.Files != "", fieldCase: doc.Case != "",
+			fieldUses: doc.Uses != "", fieldWith: len(doc.With) > 0,
 		}); err != nil {
 			return rule.Spec{}, err
 		}
@@ -411,11 +421,29 @@ func invariantSpec(module string, doc invariantDoc, lang vocab.UbiquitousLanguag
 			return rule.Spec{}, fmt.Errorf("extension: %w", err)
 		}
 		return extensionInvariantSpec(scope, doc)
+	case "invariants":
+		if err := forbidKindFields("invariants", map[string]bool{
+			fieldRequire: len(doc.Require) > 0, fieldForbid: len(doc.Forbid) > 0,
+			fieldFiles: doc.Files != "", fieldCase: doc.Case != "",
+			fieldUses: doc.Uses != "", fieldEach: doc.Each != "",
+		}); err != nil {
+			return rule.Spec{}, err
+		}
+		closed, err := invariantsClosed(doc.With)
+		if err != nil {
+			return rule.Spec{}, err
+		}
+		spec.Type = rule.TypeInvariants
+		spec.Params = rule.InvariantsParams{Closed: closed}
+		spec.Applicability, err = rule.ModuleApplicability([]rule.ModuleName{moduleName})
+		if err != nil {
+			return rule.Spec{}, fmt.Errorf("invariants: %w", err)
+		}
 	case "naming":
 		if err := forbidKindFields("naming", map[string]bool{
-			"require": len(doc.Require) > 0, "forbid": len(doc.Forbid) > 0,
-			"uses": doc.Uses != "", "with": len(doc.With) > 0,
-			"each": doc.Each != "",
+			fieldRequire: len(doc.Require) > 0, fieldForbid: len(doc.Forbid) > 0,
+			fieldUses: doc.Uses != "", fieldWith: len(doc.With) > 0,
+			fieldEach: doc.Each != "",
 		}); err != nil {
 			return rule.Spec{}, err
 		}
@@ -452,8 +480,8 @@ func repositoryInvariantSpec(doc invariantDoc) (rule.Spec, error) {
 
 func extensionInvariantSpec(scope rule.Applicability, doc invariantDoc) (rule.Spec, error) {
 	if err := forbidKindFields("extension", map[string]bool{
-		"require": len(doc.Require) > 0, "forbid": len(doc.Forbid) > 0,
-		"case": doc.Case != "", "each": doc.Each != "",
+		fieldRequire: len(doc.Require) > 0, fieldForbid: len(doc.Forbid) > 0,
+		fieldCase: doc.Case != "", fieldEach: doc.Each != "",
 	}); err != nil {
 		return rule.Spec{}, err
 	}
@@ -501,6 +529,24 @@ func invariantFiles(doc invariantDoc) ([]rule.Glob, error) {
 		return nil, fmt.Errorf("files: %w", err)
 	}
 	return []rule.Glob{g}, nil
+}
+
+func invariantsClosed(with map[string]any) (bool, error) {
+	if len(with) == 0 {
+		return false, nil
+	}
+	closed := false
+	for k, v := range with {
+		if k != "closed" {
+			return false, fmt.Errorf("kind invariants does not accept with.%s", k)
+		}
+		b, ok := v.(bool)
+		if !ok {
+			return false, fmt.Errorf("kind invariants with.closed must be a boolean")
+		}
+		closed = b
+	}
+	return closed, nil
 }
 
 func forbidKindFields(kind string, fields map[string]bool) error {

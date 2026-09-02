@@ -119,6 +119,7 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
+	getContext = getContext.WithObservations(observations)
 	publisher, err := markdownagents.NewPublisher(root)
 	if err != nil {
 		return configError(err)
@@ -180,6 +181,7 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
+	getDomainOverview = getDomainOverview.WithObservations(repository, observations)
 	listDomainDefinitions, err := application.NewListDomainDefinitions(knowledge)
 	if err != nil {
 		return configError(err)

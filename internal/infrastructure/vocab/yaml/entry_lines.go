@@ -15,13 +15,15 @@ type documentLines struct {
 }
 
 // contextLines is where one bounded context is written, plus where the
-// entries of its four sections are written, in file order.
+// entries of its sections are written, in file order.
 type contextLines struct {
-	line         int
-	entities     []int
-	valueObjects []int
-	invariants   []int
-	events       []int
+	line           int
+	entities       []int
+	valueObjects   []int
+	invariants     []int
+	assertions     []int
+	specifications []int
+	events         []int
 }
 
 // context returns the lines of the i-th recorded context. An index the
@@ -81,7 +83,9 @@ func readContextLines(item *yaml.Node) contextLines {
 	}{
 		{"entities", keyName, &at.entities},
 		{"value_objects", keyName, &at.valueObjects},
-		{"invariants", "statement", &at.invariants},
+		{"invariants", keyStatement, &at.invariants},
+		{"assertions", keyStatement, &at.assertions},
+		{"specifications", keyName, &at.specifications},
 		{"events", keyName, &at.events},
 	} {
 		_, seq := mappingEntry(body, section.key)

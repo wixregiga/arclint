@@ -43,8 +43,10 @@ contexts:
         definition: >-
           The recorded collection an Expansion derives from, one of
           the closed set domain.aggregates, domain.entities,
-          domain.value_objects, domain.events, domain.contexts. A new
-          source is a deliberate design act, never a syntax feature.
+          domain.value_objects, domain.events, domain.contexts,
+          domain.invariants, domain.assertions,
+          domain.specifications. A new source is a deliberate design
+          act, never a syntax feature.
       - name: TermCase
         definition: >-
           One published rendering of a recorded term as a path or

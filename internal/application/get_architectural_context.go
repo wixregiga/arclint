@@ -95,6 +95,26 @@ type DomainEntityRef struct {
 type DomainInvariantRef struct {
 	Statement string `json:"statement"`
 	Owner     string `json:"owner"`
+	ID        string `json:"id,omitempty"`
+	// Source is file:line of the contract method or constructor, or
+	// "missing" when source does not show it.
+	Source string `json:"source,omitempty"`
+}
+
+// DomainAssertionRef is one assertion with its operation.
+type DomainAssertionRef struct {
+	Statement string `json:"statement"`
+	Owner     string `json:"owner"`
+	ID        string `json:"id"`
+	On        string `json:"on"`
+	Source    string `json:"source,omitempty"`
+}
+
+// DomainSpecificationRef is one specification name with its source
+// location.
+type DomainSpecificationRef struct {
+	Name   string `json:"name"`
+	Source string `json:"source,omitempty"`
 }
 
 // DomainRelationRef is one context-map edge.
@@ -107,11 +127,13 @@ type DomainRelationRef struct {
 // DomainContextKnowledge is one bounded context projected into
 // architectural context: canonical names only, aggregates marked.
 type DomainContextKnowledge struct {
-	Name         string               `json:"name"`
-	Entities     []DomainEntityRef    `json:"entities,omitempty"`
-	ValueObjects []string             `json:"valueObjects,omitempty"`
-	Invariants   []DomainInvariantRef `json:"invariants,omitempty"`
-	Events       []string             `json:"events,omitempty"`
+	Name           string                   `json:"name"`
+	Entities       []DomainEntityRef        `json:"entities,omitempty"`
+	ValueObjects   []string                 `json:"valueObjects,omitempty"`
+	Invariants     []DomainInvariantRef     `json:"invariants,omitempty"`
+	Assertions     []DomainAssertionRef     `json:"assertions,omitempty"`
+	Specifications []DomainSpecificationRef `json:"specifications,omitempty"`
+	Events         []string                 `json:"events,omitempty"`
 }
 
 // DomainKnowledge is the project's recorded domain model summary as
@@ -127,8 +149,9 @@ type DomainKnowledge struct {
 // GetArchitecturalContext projects Rules, Modules, and applicability
 // reasons for a selected scope.
 type GetArchitecturalContext struct {
-	rules     rule.Repository
-	knowledge vocab.Repository
+	rules        rule.Repository
+	knowledge    vocab.Repository
+	observations ObservationSource
 }
 
 // NewGetArchitecturalContext requires the Rule and domain-model
@@ -141,6 +164,13 @@ func NewGetArchitecturalContext(rules rule.Repository, knowledge vocab.Repositor
 		return GetArchitecturalContext{}, fmt.Errorf("architectural context: missing domain model repository")
 	}
 	return GetArchitecturalContext{rules: rules, knowledge: knowledge}, nil
+}
+
+// WithObservations lends the observation source used to locate
+// recorded contracts in source (file:line or missing).
+func (uc GetArchitecturalContext) WithObservations(observations ObservationSource) GetArchitecturalContext {
+	uc.observations = observations
+	return uc
 }
 
 // Execute projects the context for one scope: an empty request means
@@ -163,6 +193,13 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 	}
 	if found {
 		out.Domain = domainKnowledgeOf(lang)
+		if uc.observations != nil {
+			obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, []rule.Fact{rule.FactDeclarations})
+			if err != nil {
+				return ArchitecturalContext{}, fmt.Errorf("observe contracts: %w", err)
+			}
+			locateDomainContracts(out.Domain, lang, obs)
+		}
 	}
 	if len(req.Paths) == 0 && len(req.Modules) == 0 {
 		for _, m := range cfg.Modules {
@@ -442,7 +479,19 @@ func domainKnowledgeOf(lang vocab.UbiquitousLanguage) *DomainKnowledge {
 			summary.Invariants = append(summary.Invariants, DomainInvariantRef{
 				Statement: inv.Statement,
 				Owner:     inv.Owner,
+				ID:        inv.ID,
 			})
+		}
+		for _, a := range ctx.Assertions {
+			summary.Assertions = append(summary.Assertions, DomainAssertionRef{
+				Statement: a.Statement,
+				Owner:     a.Owner,
+				ID:        a.ID,
+				On:        a.On,
+			})
+		}
+		for _, s := range ctx.Specifications {
+			summary.Specifications = append(summary.Specifications, DomainSpecificationRef{Name: s.Name})
 		}
 		for _, e := range ctx.Events {
 			summary.Events = append(summary.Events, e.Name)

@@ -9,3 +9,6 @@ GNUmakefile
 .github/agents/local-*md
 .vscode/settings.json
 .tmp/
+coverage.out
+coverage.html
+.codex/config.toml

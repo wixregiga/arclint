@@ -53,7 +53,7 @@ func TestJSONDomainOverviewMissing(t *testing.T) {
 	if !ok {
 		t.Fatalf("counts missing: %v", doc)
 	}
-	for _, key := range []string{"contexts", "entities", "aggregates", "valueObjects", "invariants", "events", "relations"} {
+	for _, key := range []string{"contexts", "entities", "aggregates", "valueObjects", "invariants", "assertions", "specifications", "events", "relations"} {
 		if _, ok := counts[key]; !ok {
 			t.Fatalf("counts missing %s: %v", key, counts)
 		}

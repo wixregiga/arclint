@@ -24,6 +24,18 @@ export default defineRule({
           aliased[alias] = term.name;
         }
       }
+      for (const a of bound.assertions ?? []) {
+        if (!a.owner || canonical.has(a.owner)) continue;
+        const resolved = aliased[a.owner];
+        ctx.report({
+          path: VOCABULARY,
+          line: a.line,
+          message: `assertion owner "${a.owner}" in context "${bound.name}" is not a recorded entity or value object of that context`,
+          fixHint: resolved
+            ? `"${a.owner}" is an alias: name the canonical term "${resolved}"`
+            : "record the owner as an entity or value object, or name a recorded term",
+        });
+      }
       for (const invariant of bound.invariants) {
         if (!invariant.owner || canonical.has(invariant.owner)) continue;
         const resolved = aliased[invariant.owner];

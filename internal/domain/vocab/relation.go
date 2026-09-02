@@ -97,11 +97,15 @@ func (k RelationKind) Doc() RelationKindDoc {
 // seven identical meanings (shared_kernel uses SchemaMeaning).
 func SchemaKindDescription() string {
 	docs := RelationKindDocs()
-	parts := make([]string, len(docs))
-	for i, d := range docs {
-		parts[i] = string(d.Kind) + " = " + d.SchemaMeaning
+	var b strings.Builder
+	b.WriteString("Relationship kind.")
+	for _, d := range docs {
+		b.WriteString("\n- ")
+		b.WriteString(string(d.Kind))
+		b.WriteString(": ")
+		b.WriteString(d.SchemaMeaning)
 	}
-	return "Relationship kind: " + strings.Join(parts, "; ") + "."
+	return b.String()
 }
 
 // ContextRelationFlowYAML builds the VOCAB.yaml context_relation flow

@@ -8,7 +8,7 @@ import (
 
 // Type is one value from the finite ArcLint-owned set of supported Rule
 // shapes: consumes, structure, naming, layers, protected, independence,
-// acyclic, and extension. Pattern and Extension authors configure
+// acyclic, invariants, and extension. Pattern and Extension authors configure
 // existing values; they do not add new ones — custom logic plugs into
 // the extension kind through the SDK, it never grows this enum.
 type Type string
@@ -33,6 +33,9 @@ const (
 	TypeIndependence Type = "independence"
 	// TypeAcyclic forbids dependency cycles among declared Modules.
 	TypeAcyclic Type = "acyclic"
+	// TypeInvariants requires recorded domain contracts to be visible
+	// in source as named methods called from their join points.
+	TypeInvariants Type = "invariants"
 	// TypeExtension delegates enforcement to a named Extension through
 	// the sandboxed SDK; parameters are validated host-side against the
 	// extension's published schema before any extension code runs.
@@ -43,7 +46,7 @@ const (
 func Types() []Type {
 	return []Type{
 		TypeConsumes, TypeStructure, TypeNaming,
-		TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic, TypeExtension,
+		TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic, TypeInvariants, TypeExtension,
 	}
 }
 
@@ -86,6 +89,8 @@ func (t Type) Meaning() string {
 		return "forbids imports between sibling Folders selected by globs"
 	case TypeAcyclic:
 		return "forbids dependency cycles among declared Modules"
+	case TypeInvariants:
+		return "requires recorded domain contracts to be visible in source as named methods called from their join points"
 	case TypeExtension:
 		return "delegates enforcement to a named Extension through the sandboxed SDK"
 	}
@@ -391,6 +396,26 @@ func (p IndependenceParams) validate() error {
 
 func (p IndependenceParams) proposition() string {
 	return fmt.Sprintf("sibling Folders matching %s may not import each other", globList(p.Folders))
+}
+
+// InvariantsParams configure an invariants Rule. Closed, default false,
+// additionally requires every exported error-returning function in the
+// owner's files to call the cluster method; child constructors that
+// return errors are then extra failures.
+type InvariantsParams struct {
+	Closed bool
+}
+
+// Type returns TypeInvariants.
+func (p InvariantsParams) Type() Type { return TypeInvariants }
+
+func (p InvariantsParams) validate() error { return nil }
+
+func (p InvariantsParams) proposition() string {
+	if p.Closed {
+		return "recorded domain contracts are visible in source as named methods called from their join points (closed)"
+	}
+	return "recorded domain contracts are visible in source as named methods called from their join points"
 }
 
 func uniqueValidModules(what string, modules []ModuleName) error {

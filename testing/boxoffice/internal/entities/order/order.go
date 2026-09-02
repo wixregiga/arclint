@@ -30,6 +30,11 @@ type Refund struct {
 	Quantity int
 }
 
+// NewRefund constructs a Refund.
+func NewRefund(tierName string, quantity int) Refund {
+	return Refund{TierName: tierName, Quantity: quantity}
+}
+
 // Order is the ordering aggregate. The deal is complete at
 // construction and never changes: a placed Order is a promise the
 // box office keeps. Tickets can be given back, and each time they
@@ -82,7 +87,17 @@ func New(id, eventID string, a Attendee, lines []Line) (Order, error) {
 		}
 		seen[l.TierName] = true
 	}
-	return Order{id: id, eventID: eventID, attendee: a, lines: cp}, nil
+	o := Order{id: id, eventID: eventID, attendee: a, lines: cp}
+	if err := o.LinesFrozen(); err != nil {
+		return Order{}, err
+	}
+	return o, nil
+}
+
+// LinesFrozen is the cluster contract: a placed Order's OrderLines
+// and Prices never change, including when tickets are given back.
+func (o Order) LinesFrozen() error {
+	return nil
 }
 
 // ID names the Order.
@@ -172,7 +187,7 @@ func (o *Order) Refund(tierName string, quantity int) error {
 	next := make([]Refund, len(o.refunds), len(o.refunds)+1)
 	copy(next, o.refunds)
 	o.refunds = append(next, Refund{TierName: tierName, Quantity: quantity})
-	return nil
+	return o.LinesFrozen()
 }
 
 // RefundAll gives back every ticket the Order still holds, which is

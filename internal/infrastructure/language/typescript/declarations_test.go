@@ -167,6 +167,35 @@ const bare = x => x;
 	diffDecls(t, got.Decls, want)
 }
 
+func TestTypeScriptextractCalls(t *testing.T) {
+	src := []byte(`export class Event {
+  constructor() {
+    this.publishedFrozen();
+  }
+  publishedFrozen(): Error | null { return null; }
+  publish(): Error | null {
+    return this.publishedFrozen();
+  }
+}
+`)
+	got := extractDeclarations("src/event.ts", src)
+	if got.ParseError != "" {
+		t.Fatal(got.ParseError)
+	}
+	seen := map[string]bool{}
+	for _, c := range got.Calls {
+		if c.Line == 0 {
+			t.Errorf("call %q has no line", c.Callee)
+		}
+		seen[c.Callee+"@"+c.Enclosing] = true
+	}
+	for _, k := range []string{"publishedFrozen@constructor", "publishedFrozen@publish"} {
+		if !seen[k] {
+			t.Errorf("missing call %s; have %v", k, seen)
+		}
+	}
+}
+
 func diffDecls(t *testing.T, got, want []conformance.Declaration) {
 	t.Helper()
 	if reflect.DeepEqual(got, want) {

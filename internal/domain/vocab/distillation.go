@@ -8,7 +8,7 @@ type DistillationRule struct {
 	Example string
 }
 
-// DistillationRules returns the 11 rules in VOCAB.yaml order with
+// DistillationRules returns the rules in VOCAB.yaml order with
 // char-exact id/rule/example strings.
 func DistillationRules() []DistillationRule {
 	return []DistillationRule{
@@ -24,8 +24,18 @@ func DistillationRules() []DistillationRule {
 		},
 		{
 			ID:      "invariant-ownership",
-			Rule:    "Every must-always/must-never statement -> invariant (or assertion); assign exactly one owner.",
-			Example: "total = sum of lines -> owner Order root",
+			Rule:    "Every must-always/must-never statement -> invariant (or assertion); assign exactly one owner. Always-true -> invariants[]; named operation -> assertions[] with id and on. Value-object owner, no id; aggregate owner of a named cluster contract requires id.",
+			Example: "total = sum of lines -> owner Order root; every tier priced before Publish -> assertion on Publish",
+		},
+		{
+			ID:      "specification-as-thing",
+			Rule:    "Experts pass the predicate around as a thing -> specifications[], a type with SatisfiedBy; never a flag on a value object and never an invariant.",
+			Example: "preferred customer is handed to pricing as a spec, not inlined as a must-always",
+		},
+		{
+			ID:      "language-not-guards",
+			Rule:    "Record only what you would say to an expert who never saw the language; programming-only guards are not domain contracts.",
+			Example: "nil receiver check is not an invariant; a Price is never negative is",
 		},
 		{
 			ID:      "transaction-boundary",

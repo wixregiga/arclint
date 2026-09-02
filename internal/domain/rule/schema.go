@@ -110,6 +110,13 @@ func (t Type) Schema() TypeSchema {
 		params = []FieldSchema{
 			{Name: "modules", Kind: "module_list", Doc: "cycle scope; absent = every declared Module"},
 		}
+	case TypeInvariants:
+		params = []FieldSchema{
+			{
+				Name: "with", Kind: "object",
+				Doc: "optional closed: true additionally requires every exported error-returning function in the owner's files to call the cluster method; default false",
+			},
+		}
 	case TypeExtension:
 		params = []FieldSchema{
 			{
@@ -280,10 +287,11 @@ func schemaDefs() map[string]any {
 			"pattern":     expandedGlobPattern(),
 		},
 		"consumes":                   consumesSchema(),
-		"invariant":                  oneOfRefs("structureInvariant", "expandedStructureInvariant", "namingInvariant", "extensionInvariant"),
+		"invariant":                  oneOfRefs("structureInvariant", "expandedStructureInvariant", "namingInvariant", "invariantsInvariant", "extensionInvariant"),
 		"structureInvariant":         structureInvariantSchema(),
 		"expandedStructureInvariant": expandedStructureInvariantSchema(),
 		"namingInvariant":            namingInvariantSchema(),
+		"invariantsInvariant":        invariantsInvariantSchema(),
 		"extensionInvariant":         extensionInvariantSchema(),
 		"dependency":                 oneOfRefs("layersDependency", "protectedDependency", "independenceDependency", "acyclicDependency"),
 		"layersDependency":           layersDependencySchema(),
@@ -377,7 +385,7 @@ func contractsSchema() map[string]any {
 			map[string]any{
 				"consumes": schemaRef("consumes"),
 				"invariants": map[string]any{
-					"description": "Structure, naming, and extension Rules over the Module's member files.",
+					"description": "Structure, naming, invariants, and extension Rules over the Module's member files.",
 					"type":        "array",
 					"items":       schemaRef("invariant"),
 				},
@@ -498,6 +506,32 @@ func expandedStructureInvariantSchema() map[string]any {
 		},
 	}
 	return s
+}
+
+func invariantsInvariantSchema() map[string]any {
+	return strictObjectSchema(
+		"An invariants Rule: recorded domain contracts are visible in source as named methods called from their join points.",
+		map[string]any{
+			"id":       schemaRef("ruleID"),
+			"kind":     map[string]any{"const": string(TypeInvariants)},
+			"severity": schemaRef("severity"),
+			"with": map[string]any{
+				"description": "Optional evaluation posture.\n\n" +
+					"- closed: false (default): child constructors may return errors.\n" +
+					"- closed: true: every exported error-returning function in the owner's files must call the cluster method.",
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]any{
+					"closed": map[string]any{
+						"description": "When true, extra exported error-returning functions that do not call the cluster method fail.\n\nDefault: false.",
+						"type":        "boolean",
+						"default":     false,
+					},
+				},
+			},
+		},
+		"id", "kind",
+	)
 }
 
 func namingInvariantSchema() map[string]any {

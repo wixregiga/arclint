@@ -16,6 +16,7 @@ import (
 // honest fact absence without poisoning the import view.
 type declarationFacts struct {
 	Decls      []conformance.Declaration
+	Calls      []conformance.Call
 	ParseError string
 }
 
@@ -44,6 +45,7 @@ func extractDeclarations(src []byte) *declarationFacts {
 	}
 	w := &pyWalker{lang: pyLang, src: src, out: out}
 	w.walk(tree.RootNode(), "", false)
+	w.walkCalls(tree.RootNode(), "")
 	return out
 }
 
@@ -197,4 +199,42 @@ func (w *pyWalker) walk(n *gotreesitter.Node, owner string, inFunction bool) {
 			w.walk(n.NamedChild(i), owner, inFunction)
 		}
 	}
+}
+
+func (w *pyWalker) walkCalls(n *gotreesitter.Node, enclosing string) {
+	t := n.Type(w.lang)
+	next := enclosing
+	switch t {
+	case "function_definition":
+		if name := w.name(n); name != "" {
+			next = name
+		}
+	case "call":
+		if callee := w.callCallee(n); callee != "" && enclosing != "" {
+			w.out.Calls = append(w.out.Calls, conformance.Call{
+				Callee:    callee,
+				Line:      int(n.StartPoint().Row) + 1,
+				Enclosing: enclosing,
+			})
+		}
+	}
+	for i := 0; i < n.NamedChildCount(); i++ {
+		w.walkCalls(n.NamedChild(i), next)
+	}
+}
+
+func (w *pyWalker) callCallee(n *gotreesitter.Node) string {
+	fn := n.ChildByFieldName("function", w.lang)
+	if fn == nil {
+		return ""
+	}
+	switch fn.Type(w.lang) {
+	case nodeIdentifier:
+		return fn.Text(w.src)
+	case "attribute":
+		if attr := fn.ChildByFieldName("attribute", w.lang); attr != nil {
+			return attr.Text(w.src)
+		}
+	}
+	return ""
 }

@@ -14,13 +14,15 @@ const (
 )
 
 type domainCountsJSON struct {
-	Contexts     int `json:"contexts"`
-	Entities     int `json:"entities"`
-	Aggregates   int `json:"aggregates"`
-	ValueObjects int `json:"valueObjects"`
-	Invariants   int `json:"invariants"`
-	Events       int `json:"events"`
-	Relations    int `json:"relations"`
+	Contexts       int `json:"contexts"`
+	Entities       int `json:"entities"`
+	Aggregates     int `json:"aggregates"`
+	ValueObjects   int `json:"valueObjects"`
+	Invariants     int `json:"invariants"`
+	Assertions     int `json:"assertions"`
+	Specifications int `json:"specifications"`
+	Events         int `json:"events"`
+	Relations      int `json:"relations"`
 }
 
 type domainDefJSON struct {
@@ -33,14 +35,24 @@ type domainDefJSON struct {
 type domainInvariantJSON struct {
 	Statement string `json:"statement"`
 	Owner     string `json:"owner"`
+	ID        string `json:"id,omitempty"`
+}
+
+type domainAssertionJSON struct {
+	Statement string `json:"statement"`
+	Owner     string `json:"owner"`
+	ID        string `json:"id"`
+	On        string `json:"on"`
 }
 
 type domainContextJSON struct {
-	Name         string                `json:"name"`
-	Entities     []domainDefJSON       `json:"entities,omitempty"`
-	ValueObjects []domainDefJSON       `json:"valueObjects,omitempty"`
-	Invariants   []domainInvariantJSON `json:"invariants,omitempty"`
-	Events       []domainDefJSON       `json:"events,omitempty"`
+	Name           string                `json:"name"`
+	Entities       []domainDefJSON       `json:"entities,omitempty"`
+	ValueObjects   []domainDefJSON       `json:"valueObjects,omitempty"`
+	Invariants     []domainInvariantJSON `json:"invariants,omitempty"`
+	Assertions     []domainAssertionJSON `json:"assertions,omitempty"`
+	Specifications []domainDefJSON       `json:"specifications,omitempty"`
+	Events         []domainDefJSON       `json:"events,omitempty"`
 	// Filtered listing keys when only one concept is requested.
 	Aggregates []domainDefJSON `json:"aggregates,omitempty"`
 }
@@ -65,13 +77,15 @@ func overviewJSONDoc(result application.DomainOverview) domainOverviewJSON {
 		Source: result.Source,
 		Found:  result.Found,
 		Counts: domainCountsJSON{
-			Contexts:     counts.Contexts,
-			Entities:     counts.Entities,
-			Aggregates:   counts.Aggregates,
-			ValueObjects: counts.ValueObjects,
-			Invariants:   counts.Invariants,
-			Events:       counts.Events,
-			Relations:    counts.Relations,
+			Contexts:       counts.Contexts,
+			Entities:       counts.Entities,
+			Aggregates:     counts.Aggregates,
+			ValueObjects:   counts.ValueObjects,
+			Invariants:     counts.Invariants,
+			Assertions:     counts.Assertions,
+			Specifications: counts.Specifications,
+			Events:         counts.Events,
+			Relations:      counts.Relations,
 		},
 	}
 	if !result.Found {
@@ -93,11 +107,15 @@ func contextsToJSON(contexts []vocab.BoundedContext, namesOnly bool) []domainCon
 			item.Entities = entityNamesJSON(ctx.Entities)
 			item.ValueObjects = defNamesJSON(ctx.ValueObjects)
 			item.Invariants = invariantJSON(ctx.Invariants)
+			item.Assertions = assertionJSON(ctx.Assertions)
+			item.Specifications = specNamesJSON(ctx.Specifications)
 			item.Events = defNamesJSON(ctx.Events)
 		} else {
 			item.Entities = entitiesToJSON(ctx.Entities, true)
 			item.ValueObjects = defsToJSON(ctx.ValueObjects)
 			item.Invariants = invariantJSON(ctx.Invariants)
+			item.Assertions = assertionJSON(ctx.Assertions)
+			item.Specifications = specsToJSON(ctx.Specifications)
 			item.Events = defsToJSON(ctx.Events)
 		}
 		out = append(out, item)
@@ -182,7 +200,44 @@ func invariantJSON(invs []vocab.Invariant) []domainInvariantJSON {
 	}
 	out := make([]domainInvariantJSON, 0, len(invs))
 	for _, inv := range invs {
-		out = append(out, domainInvariantJSON{Statement: inv.Statement, Owner: inv.Owner})
+		out = append(out, domainInvariantJSON{Statement: inv.Statement, Owner: inv.Owner, ID: inv.ID})
+	}
+	return out
+}
+
+func assertionJSON(assertions []vocab.Assertion) []domainAssertionJSON {
+	if len(assertions) == 0 {
+		return nil
+	}
+	out := make([]domainAssertionJSON, 0, len(assertions))
+	for _, a := range assertions {
+		out = append(out, domainAssertionJSON{
+			Statement: a.Statement, Owner: a.Owner, ID: a.ID, On: a.On,
+		})
+	}
+	return out
+}
+
+func specsToJSON(specs []vocab.Specification) []domainDefJSON {
+	if len(specs) == 0 {
+		return nil
+	}
+	out := make([]domainDefJSON, 0, len(specs))
+	for _, s := range specs {
+		out = append(out, domainDefJSON{Name: s.Name, Definition: s.Definition})
+	}
+	return out
+}
+
+func specNamesJSON(specs []vocab.Specification) []domainDefJSON {
+	if len(specs) == 0 {
+		return nil
+	}
+	out := make([]domainDefJSON, 0, len(specs))
+	sorted := append([]vocab.Specification(nil), specs...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
+	for _, s := range sorted {
+		out = append(out, domainDefJSON{Name: s.Name})
 	}
 	return out
 }
@@ -232,9 +287,17 @@ func addFilteredListEntry(entry map[string]any, ctx vocab.BoundedContext, c voca
 		if v := defNamesJSON(ctx.ValueObjects); len(v) > 0 {
 			entry["valueObjects"] = v
 		}
-	case vocab.ConceptInvariant, vocab.ConceptAssertion, vocab.ConceptBusinessRule:
+	case vocab.ConceptInvariant, vocab.ConceptBusinessRule:
 		if v := invariantJSON(ctx.Invariants); len(v) > 0 {
 			entry[listJSONKey(c)] = v
+		}
+	case vocab.ConceptAssertion:
+		if v := assertionJSON(ctx.Assertions); len(v) > 0 {
+			entry["assertions"] = v
+		}
+	case vocab.ConceptSpecification:
+		if v := specNamesJSON(ctx.Specifications); len(v) > 0 {
+			entry["specifications"] = v
 		}
 	case vocab.ConceptDomainEvent:
 		if v := defNamesJSON(ctx.Events); len(v) > 0 {
@@ -256,6 +319,12 @@ func addFullListEntry(entry map[string]any, ctx vocab.BoundedContext) {
 	if v := invariantJSON(ctx.Invariants); len(v) > 0 {
 		entry["invariants"] = v
 	}
+	if v := assertionJSON(ctx.Assertions); len(v) > 0 {
+		entry["assertions"] = v
+	}
+	if v := specNamesJSON(ctx.Specifications); len(v) > 0 {
+		entry["specifications"] = v
+	}
 	if v := defNamesJSON(ctx.Events); len(v) > 0 {
 		entry["events"] = v
 	}
@@ -275,6 +344,8 @@ func listJSONKey(c vocab.Concept) string {
 		return "invariants"
 	case vocab.ConceptAssertion:
 		return "assertions"
+	case vocab.ConceptSpecification:
+		return "specifications"
 	case vocab.ConceptBusinessRule:
 		return "businessRules"
 	case vocab.ConceptDomainEvent:
@@ -300,6 +371,12 @@ func showJSONDoc(result application.DomainDefinitionView) map[string]any {
 	if isInvariantShow(result.Concept) {
 		if result.Owner != "" {
 			doc["owner"] = result.Owner
+		}
+		if result.ID != "" {
+			doc["id"] = result.ID
+		}
+		if result.On != "" {
+			doc["on"] = result.On
 		}
 		return doc
 	}

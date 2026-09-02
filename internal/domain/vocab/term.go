@@ -1,6 +1,6 @@
 package vocab
 
-// Term is one of the 23 domain-librarian vocabulary entries from
+// Term is one of the 24 domain-librarian vocabulary entries from
 // VOCAB.yaml (context_relation is exposed via RelationKindDocs, not as
 // a single string definition).
 type Term string
@@ -21,6 +21,7 @@ const (
 	TermValueObject        Term = "value_object"
 	TermInvariant          Term = "invariant"
 	TermAssertion          Term = "assertion"
+	TermSpecification      Term = "specification"
 	TermAggregate          Term = "aggregate"
 	TermAggregateRoot      Term = "aggregate_root"
 	TermRepository         Term = "repository"
@@ -40,7 +41,7 @@ type TermDef struct {
 	Definition string
 }
 
-// VocabularyTerms returns the 23 terms in VOCAB.yaml order with
+// VocabularyTerms returns the 24 terms in VOCAB.yaml order with
 // char-exact one-line definitions.
 func VocabularyTerms() []TermDef {
 	return []TermDef{
@@ -57,7 +58,8 @@ func VocabularyTerms() []TermDef {
 		{Term: TermEntity, Definition: "Object defined by identity that persists across attribute change."},
 		{Term: TermValueObject, Definition: "Immutable, identity-less object describing a characteristic."},
 		{Term: TermInvariant, Definition: "Consistency rule that must hold at all times within its owner's boundary."},
-		{Term: TermAssertion, Definition: "Statement of a post-condition of an operation or an invariant."},
+		{Term: TermAssertion, Definition: "Post-condition of a named operation, not a truth that holds at all times."},
+		{Term: TermSpecification, Definition: "Named predicate experts pass around as a thing: a type with a satisfaction method, never an invariant."},
 		{Term: TermAggregate, Definition: "Cluster of entities + value_objects changed as one unit."},
 		{Term: TermAggregateRoot, Definition: "The single entry-point entity of an aggregate."},
 		{Term: TermRepository, Definition: "Collection-like abstraction over storage/retrieval of aggregate roots."},
@@ -66,7 +68,7 @@ func VocabularyTerms() []TermDef {
 		{Term: TermApplicationService, Definition: "Use-case orchestration + transaction boundary; no domain rules."},
 		{Term: TermDomainEvent, Definition: "Record of something that happened, past-tense expert language."},
 		{Term: TermModule, Definition: "Cohesive package telling the story of one model area."},
-		{Term: TermBusinessRule, Definition: "Umbrella term; always resolves to invariant or assertion, owned by entity/aggregate root (behavior) or value_object (construction)."},
+		{Term: TermBusinessRule, Definition: "Umbrella term; always resolves to invariant or assertion, never specification, owned by entity/aggregate root (behavior) or value_object (construction)."},
 	}
 }
 

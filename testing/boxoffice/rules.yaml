@@ -62,6 +62,8 @@ contracts:
       external: forbid
       stdlib: allow
     invariants:
+      - id: "boxoffice:entities/contracts-visible"
+        kind: invariants
       # The expansion showcase: every recorded aggregate owes a slice
       # named after it, its repository interface, and its tests.
       - id: "boxoffice:entities/aggregate-slices"

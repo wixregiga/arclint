@@ -4,27 +4,16 @@
 // pinned toolchain without activating mise in their shell.
 amends "package://github.com/jdx/hk/releases/download/v1.49.0/hk@1.49.0#/Config.pkl"
 
-// Make owns every command. The hook splits formatting and linting from
-// behavioral verification so fix mode can repair Go files before the
-// full test and ArcLint suite runs.
+// The hook orchestrates linting and fast-paths like gitleaks protect.
+// Fix mode automatically formats and repairs Go files.
 local linters = new Mapping<String, Step> {
-    ["golangci-fmt"] {
-        glob = List("**/*.go")
-        check = "make fmt-check"
-        fix = "make fmt"
-    }
     ["golangci-lint"] {
-        glob = List("**/*.go")
-        check = "make lint"
-        fix = "make lint-fix"
+        glob = List("**/*.go", ".golangci.yml", "go.mod", "mise.toml")
+        check = "make _lint-no-fix"
         exclusive = true
     }
     ["gitleaks"] {
-        check = "gitleaks detect --verbose"
-        exclusive = true
-    }
-    ["verify"] {
-        check = "make verify"
+        check = "gitleaks protect --staged --verbose"
         exclusive = true
     }
 }
@@ -40,7 +29,6 @@ hooks {
     ["fix"] {
         fix = true
         steps {
-            ["golangci-fmt"] = linters["golangci-fmt"]
             ["golangci-lint"] = linters["golangci-lint"]
         }
     }

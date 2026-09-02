@@ -15,7 +15,7 @@ weight = 6
 | `arclint domain` | shorthand for `arclint domain overview`; inspect and maintain the project's ubiquitous language |
 | `arclint domain init` | create an empty, schema-hinted `ubiquitous-language.yaml` beside the resolved `rules.yaml`; leave an existing file unchanged |
 | `arclint domain overview` | summarize the project's ubiquitous language for understanding |
-| `arclint domain list [type]` | list domain definitions, optionally filtered to `entities`, `value_objects`, `invariants`, or `events` |
+| `arclint domain list [type]` | list domain definitions, optionally filtered to `entities`, `value_objects`, `invariants`, `assertions`, `specifications`, or `events` |
 | `arclint domain show <type> <name>` | show one domain definition by singular type and canonical name |
 | `arclint domain explain [type]` | explain ArcLint's supported domain concepts |
 | `arclint domain define <type> <name>` | create or update a domain definition inside a bounded context; `--guided` starts interactive authoring |
@@ -192,6 +192,14 @@ contexts:
     invariants:
       - statement: An Invoice total is non-negative
         owner: Invoice
+    assertions:
+      - statement: "A processed Invoice marks payment received"
+        owner: "Invoice"
+        id: "payment-received"
+        on: "Process"
+    specifications:
+      - name: "PaidInvoice"
+        definition: "An invoice fully paid."
     events:
       - name: InvoiceIssued
         definition: ...
@@ -205,11 +213,10 @@ Relation `kind` is one of `partnership`, `shared_kernel`,
 `customer_supplier`, `conformist`, `anticorruption_layer`,
 `open_host_service`, `published_language`, or `separate_ways`. Concept
 spellings use underscores (`entity`, `value_object`, `invariant`,
-`assertion`, `aggregate`, `aggregate_root`, `domain_event`,
+`assertion`, `specification`, `aggregate`, `aggregate_root`, `domain_event`,
 `bounded_context`, `business_rule`). An aggregate is a designation on an
 entity (`aggregate: true`), not a separate stored object.
-`business_rule` and `assertion` both record as an invariant with exactly
-one owner. Defining a term targets a bounded context.
+`business_rule` records as an invariant. `assertion` and `specification` record in their own separate collections. Defining a term targets a bounded context.
 
 Fresh files get a YAML language-server modeline pointing at
 `.agents/skills/domain-librarian/library.schema.json` when that path exists

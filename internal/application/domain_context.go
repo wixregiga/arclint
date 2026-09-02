@@ -113,7 +113,7 @@ func isEntityKind(c vocab.Concept) bool {
 func requiresDefinition(c vocab.Concept) bool {
 	switch c {
 	case vocab.ConceptEntity, vocab.ConceptAggregate, vocab.ConceptAggregateRoot,
-		vocab.ConceptValueObject, vocab.ConceptDomainEvent:
+		vocab.ConceptValueObject, vocab.ConceptDomainEvent, vocab.ConceptSpecification:
 		return true
 	default:
 		return false

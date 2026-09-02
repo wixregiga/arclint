@@ -116,6 +116,67 @@ contexts:
 	})
 }
 
+func TestLoadRejectsValueObjectInvariantID(t *testing.T) {
+	dir := t.TempDir()
+	writeModel(t, dir, `version: 1
+contexts:
+  - name: Ordering
+    value_objects:
+      - name: Price
+        definition: Whole cents.
+    invariants:
+      - statement: A Price is never negative.
+        owner: Price
+        id: never-negative
+`)
+	repo := newRepo(t, dir)
+	if _, _, err := repo.RecordedLanguage(); err == nil {
+		t.Fatal("RecordedLanguage accepted id on a value-object invariant")
+	} else if !strings.Contains(err.Error(), "forbidden") {
+		t.Fatalf("error = %v, want forbidden", err)
+	}
+}
+
+func TestLoadRejectsAssertionWithoutOn(t *testing.T) {
+	dir := t.TempDir()
+	writeModel(t, dir, `version: 1
+contexts:
+  - name: Ordering
+    entities:
+      - name: Order
+        definition: A deal.
+        aggregate: true
+    assertions:
+      - statement: Every line is priced.
+        owner: Order
+        id: lines-priced
+`)
+	repo := newRepo(t, dir)
+	if _, _, err := repo.RecordedLanguage(); err == nil {
+		t.Fatal("RecordedLanguage accepted assertion without on")
+	}
+}
+
+func TestLoadRejectsNameInValueObjectAndSpecification(t *testing.T) {
+	dir := t.TempDir()
+	writeModel(t, dir, `version: 1
+contexts:
+  - name: Ordering
+    value_objects:
+      - name: Preferred
+        definition: A marking.
+    specifications:
+      - name: Preferred
+        definition: A named predicate.
+`)
+	repo := newRepo(t, dir)
+	if _, _, err := repo.RecordedLanguage(); err == nil {
+		t.Fatal("RecordedLanguage accepted the same name as value object and specification")
+	} else if !strings.Contains(err.Error(), "both a value object and a specification") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestLoadRejectsAggregateOnValueObject(t *testing.T) {
 	dir := t.TempDir()
 	writeModel(t, dir, `version: 1
@@ -182,7 +243,14 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 					{Name: "OrderID", Definition: "Order identity."},
 				},
 				Invariants: []vocab.Invariant{
-					{Statement: "Every Order identifies its Customer.", Owner: "Order"},
+					{Statement: "Every Order identifies its Customer.", Owner: "Order", ID: "identifies-customer"},
+					{Statement: "Money is never negative.", Owner: "Money"},
+				},
+				Assertions: []vocab.Assertion{
+					{Statement: "Every line is priced before place.", Owner: "Order", ID: "lines-priced", On: "Place"},
+				},
+				Specifications: []vocab.Specification{
+					{Name: "PreferredCustomer", Definition: "An attendee the house treats as preferred."},
 				},
 				Events: []vocab.Definition{
 					{Name: "OrderPlaced", Definition: "An Order was accepted."},
@@ -258,6 +326,51 @@ func TestFreshModelineUsesLocalSchemaWhenPresent(t *testing.T) {
 	}
 	if strings.Contains(raw, remoteSchemaHint) {
 		t.Fatalf("fresh file used remote modeline despite local schema:\n%s", raw)
+	}
+}
+
+func TestRecordUpdatesAssertionAndSpecification(t *testing.T) {
+	dir := t.TempDir()
+	writeModel(t, dir, `version: 1
+contexts:
+  - name: Ordering
+    entities:
+      - name: Order
+        definition: A deal as struck.
+        aggregate: true
+    assertions:
+      - statement: Every line is priced before place.
+        owner: Order
+        id: lines-priced
+        on: Place
+    specifications:
+      - name: PreferredCustomer
+        definition: An attendee the house treats as preferred.
+`)
+	repo := newRepo(t, dir)
+	lang, _, err := repo.RecordedLanguage()
+	if err != nil {
+		t.Fatalf("RecordedLanguage: %v", err)
+	}
+	c := lang.Contexts[0]
+	c.Assertions[0].On = "Confirm"
+	c.Specifications[0].Definition = "Updated preferred attendee."
+	lang, err = vocab.NewUbiquitousLanguage([]vocab.BoundedContext{c}, nil)
+	if err != nil {
+		t.Fatalf("NewUbiquitousLanguage: %v", err)
+	}
+	if err := repo.Record(lang); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	got, _, err := repo.RecordedLanguage()
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if got.Contexts[0].Assertions[0].On != "Confirm" {
+		t.Fatalf("assertion on = %q, want Confirm after Record", got.Contexts[0].Assertions[0].On)
+	}
+	if got.Contexts[0].Specifications[0].Definition != "Updated preferred attendee." {
+		t.Fatalf("specification definition = %q after Record", got.Contexts[0].Specifications[0].Definition)
 	}
 }
 
@@ -651,6 +764,8 @@ func assertContexts(t *testing.T, got, want []vocab.BoundedContext) {
 		assertEntities(t, want[i].Name+".entities", got[i].Entities, want[i].Entities)
 		assertDefs(t, want[i].Name+".value_objects", got[i].ValueObjects, want[i].ValueObjects)
 		assertInvariants(t, want[i].Name+".invariants", got[i].Invariants, want[i].Invariants)
+		assertAssertions(t, want[i].Name+".assertions", got[i].Assertions, want[i].Assertions)
+		assertSpecifications(t, want[i].Name+".specifications", got[i].Specifications, want[i].Specifications)
 		assertDefs(t, want[i].Name+".events", got[i].Events, want[i].Events)
 	}
 }
@@ -702,7 +817,32 @@ func assertInvariants(t *testing.T, section string, got, want []vocab.Invariant)
 		t.Fatalf("%s: len=%d, want %d", section, len(got), len(want))
 	}
 	for i := range want {
-		if got[i].Statement != want[i].Statement || got[i].Owner != want[i].Owner {
+		if got[i].Statement != want[i].Statement || got[i].Owner != want[i].Owner || got[i].ID != want[i].ID {
+			t.Fatalf("%s[%d] = %#v, want %#v", section, i, got[i], want[i])
+		}
+	}
+}
+
+func assertAssertions(t *testing.T, section string, got, want []vocab.Assertion) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("%s: len=%d, want %d", section, len(got), len(want))
+	}
+	for i := range want {
+		if got[i].Statement != want[i].Statement || got[i].Owner != want[i].Owner ||
+			got[i].ID != want[i].ID || got[i].On != want[i].On {
+			t.Fatalf("%s[%d] = %#v, want %#v", section, i, got[i], want[i])
+		}
+	}
+}
+
+func assertSpecifications(t *testing.T, section string, got, want []vocab.Specification) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("%s: len=%d, want %d", section, len(got), len(want))
+	}
+	for i := range want {
+		if got[i].Name != want[i].Name || got[i].Definition != want[i].Definition {
 			t.Fatalf("%s[%d] = %#v, want %#v", section, i, got[i], want[i])
 		}
 	}

@@ -113,6 +113,59 @@ func TestDeclarationsOnlyWhenRequested(t *testing.T) {
 	}
 }
 
+func TestCallsExtractedFromParsedGo(t *testing.T) {
+	root := t.TempDir()
+	src := `package sample
+
+func NewStore() (Store, error) {
+	s := Store{}
+	if err := s.PublishedFrozen(); err != nil {
+		return Store{}, err
+	}
+	return s, nil
+}
+
+func (s *Store) PublishedFrozen() error { return nil }
+
+func (s *Store) Save() error {
+	return s.PublishedFrozen()
+}
+
+func Reopen() (Store, error) {
+	return NewStore()
+}
+`
+	files := []conformance.ObservedFile{
+		write(t, root, "go.mod", "module example.com/x\n\ngo 1.22\n"),
+		write(t, root, "sample/sample.go", src),
+	}
+	facts, err := golang.NewProducer().Facts(root, files, []rule.Fact{rule.FactCalls})
+	if err != nil {
+		t.Fatalf("Facts: %v", err)
+	}
+	got := facts["sample/sample.go"]
+	if !got.CallsAvailable || !got.Supports(rule.FactCalls) {
+		t.Fatalf("calls must be available when requested: %+v", got)
+	}
+	want := map[string]bool{
+		"PublishedFrozen@NewStore": true,
+		"PublishedFrozen@Save":     true,
+		"NewStore@Reopen":          true,
+	}
+	seen := map[string]bool{}
+	for _, c := range got.Calls {
+		if c.Line == 0 {
+			t.Errorf("call %q has no line", c.Callee)
+		}
+		seen[c.Callee+"@"+c.Enclosing] = true
+	}
+	for k := range want {
+		if !seen[k] {
+			t.Errorf("missing call %s; have %v", k, seen)
+		}
+	}
+}
+
 func keysOf(m map[string]conformance.Declaration) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {

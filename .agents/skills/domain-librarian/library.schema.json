@@ -55,14 +55,43 @@
           },
           "invariants": {
             "type": "array",
-            "description": "Must-always/must-never rules that hold at all times within this context. A valid invariant forbids something a naive implementation could do; restating a definition is not an invariant.",
+            "description": "Must-always/must-never rules that hold at all times within this context.\n\nA valid invariant forbids something a naive implementation could do. Restating a definition is not an invariant.\n\nOwner:\n- value object: value integrity. No id. Enforced at that type's constructor.\n- aggregate with id: cluster invariant. Method named from id, called from the constructor and every exported command.",
             "items": {
               "type": "object",
               "additionalProperties": false,
               "required": ["statement", "owner"],
               "properties": {
                 "statement": { "type": "string", "minLength": 1, "description": "The rule, phrased so the concrete forbidden violation is clear." },
-                "owner": { "type": "string", "minLength": 1, "description": "Exactly one enforcing term in this context: an entity/aggregate root (enforced in behavior) or a value_object (enforced at construction)." }
+                "owner": { "type": "string", "minLength": 1, "description": "Exactly one enforcing term in this context.\n\n- aggregate: cluster invariant. id required for a named contract.\n- value object: value integrity. No id. Enforced at construction." },
+                "id": { "type": "string", "minLength": 1, "description": "Stable identity of a cluster invariant, unique within the bounded context.\n\n- Required when the owner is an aggregate and this is a named cluster contract.\n- Forbidden when the owner is a value object.\n\nThe enforcing method is this id rendered in the language's method case: PascalCase, camelCase, or snake_case." }
+              }
+            }
+          },
+          "assertions": {
+            "type": "array",
+            "description": "Post-conditions of a named operation.\n\nUnlike an invariant, an assertion holds when that operation occurs, not at all times.\n\nFields:\n- id: method that checks the post-condition\n- on: operation that must call that method",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["statement", "owner", "id", "on"],
+              "properties": {
+                "statement": { "type": "string", "minLength": 1, "description": "The rule, phrased so the concrete forbidden violation is clear." },
+                "owner": { "type": "string", "minLength": 1, "description": "The entity whose named operation must satisfy this post-condition. Must be a recorded entity in this context." },
+                "id": { "type": "string", "minLength": 1, "description": "Stable identity of the assertion, unique within the bounded context. Names the method that checks the post-condition, rendered in the language's method case." },
+                "on": { "type": "string", "minLength": 1, "description": "The operation that must call the assertion's method.\n\nWrite the operation's method name: Publish, not publishEvent." }
+              }
+            }
+          },
+          "specifications": {
+            "type": "array",
+            "description": "Named predicates experts pass around as a thing.\n\nA type of this name carries an Evans satisfaction method:\n- SatisfiedBy\n- satisfiedBy\n- satisfied_by\n\nA specification is not an invariant and is not a flag on a value object. A name may not appear in both value_objects and specifications.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "definition"],
+              "properties": {
+                "name": { "type": "string", "minLength": 1, "description": "Canonical name of the specification, exactly as domain experts say it. A type of this name in source carries the satisfaction method." },
+                "definition": { "type": "string", "minLength": 1, "description": "What the predicate means, grounded in expert language. A term without a definition is rejected, not stored. Written for humans first: plain sentences, no em dashes; anything object-level it names must be recorded in this library or reworded in plain language." }
               }
             }
           },
@@ -94,7 +123,7 @@
           "to": { "type": "string", "minLength": 1, "description": "Downstream context name (must match a contexts[].name)." },
           "kind": {
             "enum": ["partnership", "shared_kernel", "customer_supplier", "conformist", "anticorruption_layer", "open_host_service", "published_language", "separate_ways"],
-            "description": "Relationship kind: partnership = succeed/fail together; shared_kernel = small jointly-owned model subset; customer_supplier = upstream plans for downstream; conformist = downstream adopts upstream model; anticorruption_layer = downstream translates defensively; open_host_service = upstream exposes one protocol; published_language = shared interchange language; separate_ways = no integration."
+            "description": "Relationship kind.\n- partnership: succeed/fail together\n- shared_kernel: small jointly-owned model subset\n- customer_supplier: upstream plans for downstream\n- conformist: downstream adopts upstream model\n- anticorruption_layer: downstream translates defensively\n- open_host_service: upstream exposes one protocol\n- published_language: shared interchange language\n- separate_ways: no integration"
           }
         }
       }

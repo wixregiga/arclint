@@ -221,6 +221,8 @@ func defineFlags() []Flag {
 		{Name: "alias", Repeat: true, Doc: "recognized alternative name; may be repeated"},
 		{Name: "clear-aliases", Bool: true, Doc: "remove every alias from the definition"},
 		{Name: "owner", Doc: "enforcing owner for invariant, assertion, or business_rule"},
+		{Name: "id", Doc: "cluster or assertion identity; required when creating an assertion"},
+		{Name: "on", Doc: "operation an assertion is checked on; required when creating an assertion"},
 		{Name: "guided", Bool: true, Doc: "start an interactive authoring session"},
 	}
 }
@@ -229,7 +231,8 @@ func defineRunner(define application.DefineDomainDefinition, render Renderer) fu
 	return func(ctx Context) error {
 		if ctx.Bool("guided") {
 			if len(ctx.Args) > 0 || ctx.Changed("definition") || ctx.Changed("alias") ||
-				ctx.Changed("clear-aliases") || ctx.Changed("owner") || ctx.Changed("context") {
+				ctx.Changed("clear-aliases") || ctx.Changed("owner") || ctx.Changed("id") ||
+				ctx.Changed("on") || ctx.Changed("context") {
 				return ConfigError(fmt.Errorf("--guided cannot be combined with a type, name, or mutation flags"))
 			}
 			return runGuidedDefine(ctx, define, render)
@@ -244,6 +247,8 @@ func defineRunner(define application.DefineDomainDefinition, render Renderer) fu
 			Aliases:      ctx.Strings("alias"),
 			ClearAliases: ctx.Bool("clear-aliases"),
 			Owner:        ctx.String("owner"),
+			ID:           ctx.String("id"),
+			On:           ctx.String("on"),
 		}
 		if ctx.Changed("definition") {
 			def := ctx.String("definition")
@@ -653,9 +658,17 @@ func definitionNameCandidates(list application.ListDomainDefinitions, conceptArg
 			for _, d := range ctx.Events {
 				names = append(names, d.Name)
 			}
-		case vocab.ConceptInvariant, vocab.ConceptAssertion, vocab.ConceptBusinessRule:
+		case vocab.ConceptInvariant, vocab.ConceptBusinessRule:
 			for _, inv := range ctx.Invariants {
 				names = append(names, inv.Statement)
+			}
+		case vocab.ConceptAssertion:
+			for _, a := range ctx.Assertions {
+				names = append(names, a.Statement)
+			}
+		case vocab.ConceptSpecification:
+			for _, s := range ctx.Specifications {
+				names = append(names, s.Name)
 			}
 		case vocab.ConceptBoundedContext:
 			names = append(names, ctx.Name)
