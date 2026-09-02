@@ -133,16 +133,37 @@ func parse(data []byte, label string) (vocab.UbiquitousLanguage, error) {
 			invariants[j] = vocab.Invariant{
 				Statement: inv.Statement,
 				Owner:     inv.Owner,
+				ID:        inv.ID,
 				Line:      lineAt(at.invariants, j),
 			}
 		}
+		assertions := make([]vocab.Assertion, len(c.Assertions))
+		for j, a := range c.Assertions {
+			assertions[j] = vocab.Assertion{
+				Statement: a.Statement,
+				Owner:     a.Owner,
+				ID:        a.ID,
+				On:        a.On,
+				Line:      lineAt(at.assertions, j),
+			}
+		}
+		specifications := make([]vocab.Specification, len(c.Specifications))
+		for j, s := range c.Specifications {
+			specifications[j] = vocab.Specification{
+				Name:       s.Name,
+				Definition: s.Definition,
+				Line:       lineAt(at.specifications, j),
+			}
+		}
 		contexts[i] = vocab.BoundedContext{
-			Name:         c.Name,
-			Entities:     entities,
-			ValueObjects: toDefs(c.ValueObjects, at.valueObjects),
-			Invariants:   invariants,
-			Events:       toEventDefs(c.Events, at.events),
-			Line:         at.line,
+			Name:           c.Name,
+			Entities:       entities,
+			ValueObjects:   toDefs(c.ValueObjects, at.valueObjects),
+			Invariants:     invariants,
+			Assertions:     assertions,
+			Specifications: specifications,
+			Events:         toEventDefs(c.Events, at.events),
+			Line:           at.line,
 		}
 	}
 
@@ -221,11 +242,13 @@ type documentDoc struct {
 }
 
 type contextDoc struct {
-	Name         string         `yaml:"name"`
-	Entities     []entityDoc    `yaml:"entities"`
-	ValueObjects []defDoc       `yaml:"value_objects"`
-	Invariants   []invariantDoc `yaml:"invariants"`
-	Events       []eventDoc     `yaml:"events"`
+	Name           string             `yaml:"name"`
+	Entities       []entityDoc        `yaml:"entities"`
+	ValueObjects   []defDoc           `yaml:"value_objects"`
+	Invariants     []invariantDoc     `yaml:"invariants"`
+	Assertions     []assertionDoc     `yaml:"assertions"`
+	Specifications []specificationDoc `yaml:"specifications"`
+	Events         []eventDoc         `yaml:"events"`
 }
 
 type entityDoc struct {
@@ -251,6 +274,19 @@ type eventDoc struct {
 type invariantDoc struct {
 	Statement string `yaml:"statement"`
 	Owner     string `yaml:"owner"`
+	ID        string `yaml:"id"`
+}
+
+type assertionDoc struct {
+	Statement string `yaml:"statement"`
+	Owner     string `yaml:"owner"`
+	ID        string `yaml:"id"`
+	On        string `yaml:"on"`
+}
+
+type specificationDoc struct {
+	Name       string `yaml:"name"`
+	Definition string `yaml:"definition"`
 }
 
 type relationDoc struct {
@@ -277,6 +313,21 @@ type entry struct {
 type invEntry struct {
 	Statement string
 	Owner     string
+	ID        string
+}
+
+// assertionEntry is the node-surgery view of one assertion list item.
+type assertionEntry struct {
+	Statement string
+	Owner     string
+	ID        string
+	On        string
+}
+
+// specEntry is the node-surgery view of one specification list item.
+type specEntry struct {
+	Name       string
+	Definition string
 }
 
 // relEntry is the node-surgery view of one relation list item.
@@ -353,7 +404,23 @@ func eventsAsEntries(defs []vocab.Definition) []entry {
 func invariantsAsEntries(invs []vocab.Invariant) []invEntry {
 	out := make([]invEntry, len(invs))
 	for i, inv := range invs {
-		out[i] = invEntry{Statement: inv.Statement, Owner: inv.Owner}
+		out[i] = invEntry{Statement: inv.Statement, Owner: inv.Owner, ID: inv.ID}
+	}
+	return out
+}
+
+func assertionsAsEntries(assertions []vocab.Assertion) []assertionEntry {
+	out := make([]assertionEntry, len(assertions))
+	for i, a := range assertions {
+		out[i] = assertionEntry{Statement: a.Statement, Owner: a.Owner, ID: a.ID, On: a.On}
+	}
+	return out
+}
+
+func specificationsAsEntries(specs []vocab.Specification) []specEntry {
+	out := make([]specEntry, len(specs))
+	for i, s := range specs {
+		out[i] = specEntry{Name: s.Name, Definition: s.Definition}
 	}
 	return out
 }
@@ -411,6 +478,8 @@ func buildContextNode(c vocab.BoundedContext) *yaml.Node {
 	appendNamedSection(m, "entities", entitiesAsEntries(c.Entities))
 	appendNamedSection(m, "value_objects", defsAsEntries(c.ValueObjects))
 	appendInvariantSection(m, invariantsAsEntries(c.Invariants))
+	appendAssertionSection(m, assertionsAsEntries(c.Assertions))
+	appendSpecificationSection(m, specificationsAsEntries(c.Specifications))
 	appendNamedSection(m, "events", eventsAsEntries(c.Events))
 	return m
 }
@@ -435,6 +504,28 @@ func appendInvariantSection(mapping *yaml.Node, entries []invEntry) {
 		seq.Content = append(seq.Content, buildInvNode(e))
 	}
 	appendKV(mapping, "invariants", seq)
+}
+
+func appendAssertionSection(mapping *yaml.Node, entries []assertionEntry) {
+	if len(entries) == 0 {
+		return
+	}
+	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: tagSeq}
+	for _, e := range entries {
+		seq.Content = append(seq.Content, buildAssertionNode(e))
+	}
+	appendKV(mapping, "assertions", seq)
+}
+
+func appendSpecificationSection(mapping *yaml.Node, entries []specEntry) {
+	if len(entries) == 0 {
+		return
+	}
+	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: tagSeq}
+	for _, e := range entries {
+		seq.Content = append(seq.Content, buildSpecNode(e))
+	}
+	appendKV(mapping, "specifications", seq)
 }
 
 func buildRelationsSeq(entries []relEntry) *yaml.Node {
@@ -523,6 +614,8 @@ func updateContextNode(item *yaml.Node, c vocab.BoundedContext) {
 	syncNamedSection(item, "entities", entitiesAsEntries(c.Entities))
 	syncNamedSection(item, "value_objects", defsAsEntries(c.ValueObjects))
 	syncInvariants(item, invariantsAsEntries(c.Invariants))
+	syncAssertions(item, assertionsAsEntries(c.Assertions))
+	syncSpecifications(item, specificationsAsEntries(c.Specifications))
 	syncNamedSection(item, "events", eventsAsEntries(c.Events))
 }
 
@@ -604,7 +697,7 @@ func syncInvariants(mapping *yaml.Node, entries []invEntry) {
 	seen := make(map[string]bool, len(entries))
 	kept := make([]*yaml.Node, 0, len(entries))
 	for _, item := range seq.Content {
-		stmt := mappingField(item, "statement")
+		stmt := mappingField(item, keyStatement)
 		e, ok := wanted[stmt]
 		if !ok {
 			continue
@@ -618,6 +711,102 @@ func syncInvariants(mapping *yaml.Node, entries []invEntry) {
 			continue
 		}
 		kept = append(kept, buildInvNode(wanted[stmt]))
+	}
+	seq.Content = kept
+}
+
+// syncAssertions reconciles the assertions sequence keyed by statement.
+func syncAssertions(mapping *yaml.Node, entries []assertionEntry) {
+	const key = "assertions"
+	seq, idx := findMapEntry(mapping, key)
+	if len(entries) == 0 {
+		if idx >= 0 {
+			mapping.Content = append(mapping.Content[:idx], mapping.Content[idx+2:]...)
+		}
+		return
+	}
+
+	if idx < 0 || seq == nil || seq.Kind != yaml.SequenceNode {
+		seq = &yaml.Node{Kind: yaml.SequenceNode, Tag: tagSeq}
+		for _, e := range entries {
+			seq.Content = append(seq.Content, buildAssertionNode(e))
+		}
+		insertField(mapping, key, seq, contextKeyOrder)
+		return
+	}
+
+	wanted := make(map[string]assertionEntry, len(entries))
+	order := make([]string, 0, len(entries))
+	for _, e := range entries {
+		wanted[e.Statement] = e
+		order = append(order, e.Statement)
+	}
+
+	seen := make(map[string]bool, len(entries))
+	kept := make([]*yaml.Node, 0, len(entries))
+	for _, item := range seq.Content {
+		stmt := mappingField(item, keyStatement)
+		e, ok := wanted[stmt]
+		if !ok {
+			continue
+		}
+		updateAssertionNode(item, e)
+		kept = append(kept, item)
+		seen[stmt] = true
+	}
+	for _, stmt := range order {
+		if seen[stmt] {
+			continue
+		}
+		kept = append(kept, buildAssertionNode(wanted[stmt]))
+	}
+	seq.Content = kept
+}
+
+// syncSpecifications reconciles the specifications sequence keyed by name.
+func syncSpecifications(mapping *yaml.Node, entries []specEntry) {
+	const key = "specifications"
+	seq, idx := findMapEntry(mapping, key)
+	if len(entries) == 0 {
+		if idx >= 0 {
+			mapping.Content = append(mapping.Content[:idx], mapping.Content[idx+2:]...)
+		}
+		return
+	}
+
+	if idx < 0 || seq == nil || seq.Kind != yaml.SequenceNode {
+		seq = &yaml.Node{Kind: yaml.SequenceNode, Tag: tagSeq}
+		for _, e := range entries {
+			seq.Content = append(seq.Content, buildSpecNode(e))
+		}
+		insertField(mapping, key, seq, contextKeyOrder)
+		return
+	}
+
+	wanted := make(map[string]specEntry, len(entries))
+	order := make([]string, 0, len(entries))
+	for _, e := range entries {
+		wanted[e.Name] = e
+		order = append(order, e.Name)
+	}
+
+	seen := make(map[string]bool, len(entries))
+	kept := make([]*yaml.Node, 0, len(entries))
+	for _, item := range seq.Content {
+		name := mappingName(item)
+		e, ok := wanted[name]
+		if !ok {
+			continue
+		}
+		updateSpecNode(item, e)
+		kept = append(kept, item)
+		seen[name] = true
+	}
+	for _, name := range order {
+		if seen[name] {
+			continue
+		}
+		kept = append(kept, buildSpecNode(wanted[name]))
 	}
 	seq.Content = kept
 }
@@ -718,8 +907,29 @@ func updateInvNode(item *yaml.Node, e invEntry) {
 		*item = *buildInvNode(e)
 		return
 	}
-	setStringField(item, "statement", e.Statement, invKeyOrder, false)
-	setStringField(item, "owner", e.Owner, invKeyOrder, false)
+	setStringField(item, keyStatement, e.Statement, invKeyOrder, false)
+	setStringField(item, keyOwner, e.Owner, invKeyOrder, false)
+	setStringField(item, keyID, e.ID, invKeyOrder, true)
+}
+
+func updateAssertionNode(item *yaml.Node, e assertionEntry) {
+	if item.Kind != yaml.MappingNode {
+		*item = *buildAssertionNode(e)
+		return
+	}
+	setStringField(item, keyStatement, e.Statement, assertionKeyOrder, false)
+	setStringField(item, keyOwner, e.Owner, assertionKeyOrder, false)
+	setStringField(item, keyID, e.ID, assertionKeyOrder, false)
+	setStringField(item, keyOn, e.On, assertionKeyOrder, false)
+}
+
+func updateSpecNode(item *yaml.Node, e specEntry) {
+	if item.Kind != yaml.MappingNode {
+		*item = *buildSpecNode(e)
+		return
+	}
+	setStringField(item, keyName, e.Name, specKeyOrder, false)
+	setStringField(item, keyDefinition, e.Definition, specKeyOrder, false)
 }
 
 func updateRelNode(item *yaml.Node, e relEntry) {
@@ -736,16 +946,22 @@ func updateRelNode(item *yaml.Node, e relEntry) {
 const (
 	keyName       = "name"
 	keyDefinition = "definition"
+	keyStatement  = "statement"
+	keyOwner      = "owner"
+	keyID         = "id"
+	keyOn         = "on"
 )
 
 var (
-	docKeyOrder     = []string{"version", "contexts", "relations"}
-	contextKeyOrder = []string{keyName, "entities", "value_objects", "invariants", "events"}
-	entityKeyOrder  = []string{keyName, keyDefinition, "aliases", "aggregate"}
-	defKeyOrder     = []string{keyName, keyDefinition, "aliases"}
-	eventKeyOrder   = []string{keyName, keyDefinition}
-	invKeyOrder     = []string{"statement", "owner"}
-	relKeyOrder     = []string{"from", "to", "kind"}
+	docKeyOrder       = []string{"version", "contexts", "relations"}
+	contextKeyOrder   = []string{keyName, "entities", "value_objects", "invariants", "assertions", "specifications", "events"}
+	entityKeyOrder    = []string{keyName, keyDefinition, "aliases", "aggregate"}
+	defKeyOrder       = []string{keyName, keyDefinition, "aliases"}
+	eventKeyOrder     = []string{keyName, keyDefinition}
+	invKeyOrder       = []string{keyStatement, keyOwner, keyID}
+	assertionKeyOrder = []string{keyStatement, keyOwner, keyID, keyOn}
+	specKeyOrder      = []string{keyName, keyDefinition}
+	relKeyOrder       = []string{"from", "to", "kind"}
 )
 
 func buildDefNode(e entry) *yaml.Node {
@@ -765,8 +981,29 @@ func buildDefNode(e entry) *yaml.Node {
 
 func buildInvNode(e invEntry) *yaml.Node {
 	m := &yaml.Node{Kind: yaml.MappingNode, Tag: tagMap}
-	appendKV(m, "statement", stringScalar(e.Statement))
-	appendKV(m, "owner", stringScalar(e.Owner))
+	appendKV(m, keyStatement, stringScalar(e.Statement))
+	appendKV(m, keyOwner, stringScalar(e.Owner))
+	if e.ID != "" {
+		appendKV(m, keyID, stringScalar(e.ID))
+	}
+	return m
+}
+
+func buildAssertionNode(e assertionEntry) *yaml.Node {
+	m := &yaml.Node{Kind: yaml.MappingNode, Tag: tagMap}
+	appendKV(m, keyStatement, stringScalar(e.Statement))
+	appendKV(m, keyOwner, stringScalar(e.Owner))
+	appendKV(m, keyID, stringScalar(e.ID))
+	appendKV(m, keyOn, stringScalar(e.On))
+	return m
+}
+
+func buildSpecNode(e specEntry) *yaml.Node {
+	m := &yaml.Node{Kind: yaml.MappingNode, Tag: tagMap}
+	appendKV(m, keyName, stringScalar(e.Name))
+	if e.Definition != "" {
+		appendKV(m, keyDefinition, stringScalar(e.Definition))
+	}
 	return m
 }
 

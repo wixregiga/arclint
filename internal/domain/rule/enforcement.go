@@ -68,6 +68,9 @@ const (
 	FactImports Fact = "imports"
 	// FactDeclarations is the normalized per-file declaration view.
 	FactDeclarations Fact = "declarations"
+	// FactCalls is the normalized per-file call view: callee
+	// identifier, line, and enclosing func, parser-exact.
+	FactCalls Fact = "calls"
 )
 
 // Assurance is the strength of conclusion justified by Enforcement
@@ -210,6 +213,12 @@ func BuiltinEnforcement(t Type) Enforcement {
 	case TypeNaming:
 		e, _ := NewEnforcement(nil, []Fact{FactFileTree},
 			"file name matching against the case vocabulary", AssuranceExact, nil, true)
+		return e
+	case TypeInvariants:
+		e, _ := NewEnforcement([]Language{LanguageGo, LanguageTypeScript, LanguagePython},
+			[]Fact{FactDeclarations, FactCalls},
+			"declaration and call matching against recorded domain contracts",
+			AssuranceExact, nil, true)
 		return e
 	case TypeExtension:
 		e, _ := NewEnforcement(nil, []Fact{FactFileTree, FactImports, FactDeclarations},

@@ -4,7 +4,9 @@ package vocab
 // recorded Ubiquitous Language vocabulary. Implementations live in
 // infrastructure; this port is owned by the domain so use cases depend
 // on the UbiquitousLanguage value, never on a file format.
-type Repository interface { //nolint:iface // Domain-owned vocabulary port is consumed and implemented across package boundaries.
+//
+//nolint:iface // Domain-owned vocabulary port is consumed and implemented across package boundaries.
+type Repository interface {
 	// RecordedLanguage returns the vocabulary and whether the file
 	// exists. A file that cannot become a valid UbiquitousLanguage is
 	// an error, never a partial value.

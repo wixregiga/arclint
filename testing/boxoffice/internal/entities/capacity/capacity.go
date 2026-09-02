@@ -19,6 +19,11 @@ type Hold struct {
 	Deadline time.Time
 }
 
+// NewHold constructs a Hold.
+func NewHold(id, tier string, seats int, deadline time.Time) Hold {
+	return Hold{ID: id, TierName: tier, Seats: seats, Deadline: deadline}
+}
+
 type tierSeats struct {
 	total     int
 	spokenFor int
@@ -62,11 +67,26 @@ func New(eventID string) (Capacity, error) {
 	if eventID == "" {
 		return Capacity{}, ErrEventMissing
 	}
-	return Capacity{
+	c := Capacity{
 		eventID: eventID,
 		tiers:   map[string]*tierSeats{},
 		holds:   map[string]Hold{},
-	}, nil
+	}
+	if err := c.SeatBudget(); err != nil {
+		return Capacity{}, err
+	}
+	return c, nil
+}
+
+// SeatBudget is the cluster contract: seats spoken for plus seats held
+// never exceed the seats a TicketTier has.
+func (c Capacity) SeatBudget() error {
+	for name, ts := range c.tiers {
+		if ts.spokenFor+c.held(name) > ts.total {
+			return ErrSeatsExhausted
+		}
+	}
+	return nil
 }
 
 // EventID names the Event this count belongs to.
@@ -84,7 +104,7 @@ func (c Capacity) OpenTier(name string, seats int) error {
 		return ErrTierOpenTwice
 	}
 	c.tiers[name] = &tierSeats{total: seats}
-	return nil
+	return c.SeatBudget()
 }
 
 // prune drops expired Holds, freeing their seats.
@@ -115,6 +135,9 @@ func (c Capacity) Count(tier string, now time.Time) (Count, error) {
 	if !ok {
 		return Count{}, ErrTierNotOpen
 	}
+	if err := c.SeatBudget(); err != nil {
+		return Count{}, err
+	}
 	held := c.held(tier)
 	return Count{
 		Seats:     ts.total,
@@ -126,6 +149,9 @@ func (c Capacity) Count(tier string, now time.Time) (Count, error) {
 
 // Remaining is the seats neither spoken for nor held on one tier.
 func (c Capacity) Remaining(tier string, now time.Time) (int, error) {
+	if err := c.SeatBudget(); err != nil {
+		return 0, err
+	}
 	count, err := c.Count(tier, now)
 	if err != nil {
 		return 0, err
@@ -149,7 +175,7 @@ func (c Capacity) Refund(tier string, seats int) error {
 		return ErrSeatsNotSpokenFor
 	}
 	ts.spokenFor -= seats
-	return nil
+	return c.SeatBudget()
 }
 
 // ReleaseHolds lets every pending Hold go at once. Cancelling an
@@ -185,7 +211,7 @@ func (c Capacity) PlaceHold(id, tier string, seats int, deadline, now time.Time)
 		return ErrSeatsExhausted
 	}
 	c.holds[id] = Hold{ID: id, TierName: tier, Seats: seats, Deadline: deadline}
-	return nil
+	return c.SeatBudget()
 }
 
 // CommitAll turns the held seats of every named Hold into seats
@@ -213,6 +239,9 @@ func (c Capacity) CommitAll(ids []string, now time.Time) ([]Hold, error) {
 		c.tiers[h.TierName].spokenFor += h.Seats
 		delete(c.holds, h.ID)
 	}
+	if err := c.SeatBudget(); err != nil {
+		return nil, err
+	}
 	return committed, nil
 }
 
@@ -234,7 +263,7 @@ func (c Capacity) Commit(tier string, seats int, now time.Time) error {
 		return ErrSeatsExhausted
 	}
 	ts.spokenFor += seats
-	return nil
+	return c.SeatBudget()
 }
 
 // Release lets one Hold go early.

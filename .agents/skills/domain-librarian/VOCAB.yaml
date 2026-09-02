@@ -15,7 +15,8 @@ vocabulary:
   entity: Object defined by identity that persists across attribute change.
   value_object: Immutable, identity-less object describing a characteristic.
   invariant: Consistency rule that must hold at all times within its owner's boundary.
-  assertion: Statement of a post-condition of an operation or an invariant.
+  assertion: Post-condition of a named operation, not a truth that holds at all times.
+  specification: Named predicate experts pass around as a thing: a type with a satisfaction method, never an invariant.
   aggregate: Cluster of entities + value_objects changed as one unit.
   aggregate_root: The single entry-point entity of an aggregate.
   repository: Collection-like abstraction over storage/retrieval of aggregate roots.
@@ -24,12 +25,14 @@ vocabulary:
   application_service: Use-case orchestration + transaction boundary; no domain rules.
   domain_event: Record of something that happened, past-tense expert language.
   module: Cohesive package telling the story of one model area.
-  business_rule: Umbrella term; always resolves to invariant or assertion, owned by entity/aggregate root (behavior) or value_object (construction).
+  business_rule: Umbrella term; always resolves to invariant or assertion, never specification, owned by entity/aggregate root (behavior) or value_object (construction).
 
 distillation_rules:
   - {id: identity-test, rule: "Concept keeps its business identity while attributes change -> entity.", example: "order keeps its number when status changes"}
   - {id: value-test, rule: "Two instances with identical values are interchangeable -> value_object.", example: "any two USD 10 amounts are the same money"}
-  - {id: invariant-ownership, rule: "Every must-always/must-never statement -> invariant (or assertion); assign exactly one owner.", example: "total = sum of lines -> owner Order root"}
+  - {id: invariant-ownership, rule: "Every must-always/must-never statement -> invariant (or assertion); assign exactly one owner. Always-true -> invariants[]; named operation -> assertions[] with id and on. Value-object owner, no id; aggregate owner of a named cluster contract requires id.", example: "total = sum of lines -> owner Order root; every tier priced before Publish -> assertion on Publish"}
+  - {id: specification-as-thing, rule: "Experts pass the predicate around as a thing -> specifications[], a type with SatisfiedBy; never a flag on a value object and never an invariant.", example: "preferred customer is handed to pricing as a spec, not inlined as a must-always"}
+  - {id: language-not-guards, rule: "Record only what you would say to an expert who never saw the language; programming-only guards are not domain contracts.", example: "nil receiver check is not an invariant; a Price is never negative is"}
   - {id: transaction-boundary, rule: "Smallest cluster consistent in one transaction -> one aggregate; everything else by ID, eventually.", example: "reject: customer and all orders save together"}
   - {id: homeless-operation, rule: "Logic spanning aggregates or needing external domain knowledge -> domain_service.", example: "DiscountCalculator over Order+Customer"}
   - {id: event-detection, rule: "State change experts say in past tense -> domain_event; technical changes are not events.", example: "OrderConfirmed yes, RowUpdated no"}
@@ -43,6 +46,10 @@ clarification_questions:
   insufficient_info:
     - {q: "Does <X> have an identity that survives attribute changes, or are two <X> with the same values interchangeable?", decides: entity vs value_object}
     - {q: "What must never be violated about <X>, even for an instant?", decides: invariants and owner}
+    - {q: "Does this hold at all times, or only when a named operation occurs?", decides: invariant vs assertion}
+    - {q: "Do experts pass this predicate around as a thing they name, rather than as a rule that simply holds?", decides: specifications[] vs invariant or assertion}
+    - {q: "Is this a property of the value itself (constructor) or of the cluster that must stay consistent on every command?", decides: value integrity vs cluster invariant}
+    - {q: "Would you say this to an expert who never saw the language?", decides: domain contract vs programming-only guard}
     - {q: "When <X> changes, what else must change in the same transaction?", decides: aggregate boundary}
     - {q: "Does the business care about <X>'s lifecycle (created, changed, closed)?", decides: entity vs value_object vs domain_event}
     - {q: "Which people/teams use the term <X>, and do they mean the same thing?", decides: bounded_context assignment}
@@ -61,7 +68,9 @@ library_file:
       - name: <context>
         entities: [{name, definition, aggregate: true?, aliases: []?}]
         value_objects: [{name, definition, aliases: []?}]
-        invariants: [{statement, owner}]
+        invariants: [{statement, owner, id?}]
+        assertions: [{statement, owner, id, on}]
+        specifications: [{name, definition}]
         events: [{name, definition}]
     relations: [{from, to, kind}]   # kind = one context_relation key; omit when single context
   rules:

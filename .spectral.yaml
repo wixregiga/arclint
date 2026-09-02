@@ -1,0 +1,275 @@
+# Spectral ruleset for ArcLint's generated JSON Schemas (Draft 2020-12).
+#
+# Usage:
+#   spectral lint docs/rules.schema.json
+#   spectral lint "**/*.schema.json"
+functionsDir: "./scripts/validation/schema"
+functions:
+  - one-of-ref-description-match
+  - no-whitespace-drift
+  - prevent-doubles
+  - ref-description-match
+  - array-unique-items
+  - description-formatting
+  - property-description
+  - no-orphaned-defs
+  - property-type
+  - required-no-default
+  - properties-object
+  - combinators
+  - dynamic-maps
+
+overrides:
+  - files:
+      - "docs/**/*.schema.json"
+      - "docs/*.schema.json"
+      - "./docs/**/*.schema.json"
+      - "./docs/*.schema.json"
+      - "**/.arclint/**/*.schema.json"
+      - "**/.arclint/*.schema.json"
+      - "**/.agents/**/*.schema.json"
+      - "**/.agents/*.schema.json"
+      - ".agents/**/*.schema.json"
+      - ".agents/*.schema.json"
+    rules:
+      no-whitespace-drift:
+        description: Ensure titles, descriptions, consts, and enum strings are cleanly formatted without whitespace drift.
+        severity: error
+        given:
+          - "$..title"
+          - "$..description"
+          - "$..const"
+          - "$..enum.*"
+        then:
+          function: no-whitespace-drift
+          
+      one-of-ref-must-match-target-description:
+        description: "Every oneOf branch referencing a $def must supply a sibling description matching the target definition's description."
+        message: "{{error}}"
+        severity: error
+        resolved: false
+        given: "$..oneOf.*"
+        then:
+          function: one-of-ref-description-match
+          
+      schema-declares-dialect:
+        description: A published schema must declare its $schema dialect.
+        message: "Schema must declare a $schema dialect"
+        severity: error
+        given: "$"
+        then:
+          field: "$schema"
+          function: truthy
+
+      schema-declares-id:
+        description: A published schema must declare a stable $id.
+        message: "Schema must declare an $id"
+        severity: error
+        given: "$"
+        then:
+          field: "$id"
+          function: truthy
+
+      schema-describes-itself:
+        description: The root of a published schema must carry a title and a description.
+        message: "Schema root must define {{property}}"
+        severity: error
+        given: "$"
+        then:
+          - field: title
+            function: truthy
+          - field: description
+            function: truthy
+
+      definition-describes-itself:
+        description: Every named $defs entry must carry a description for VS Code hover hints.
+        message: "$defs.{{property}} must define a description"
+        severity: error
+        given: "$.$defs.*"
+        then:
+          field: description
+          function: truthy
+
+      property-describes-itself:
+        description: "Every declared property under properties should define a description for hover hints and documentation."
+        message: "{{error}}"
+        severity: warn
+        resolved: false
+        given: "$..properties.*"
+        then:
+          function: property-description
+          functionOptions:
+            skipRefs: true
+
+      ref-requires-description:
+        description: "Every $ref usage must supply a sibling description matching the target definition's description."
+        message: "{{error}}"
+        severity: error
+        resolved: false
+        given: "$..*"
+        then:
+          function: ref-description-match
+          functionOptions:
+            skipOneOf: true
+
+      set-arrays-must-set-unique-items:
+        description: "Array schemas representing sets (such as globs, paths, identifiers, and rules) must declare uniqueItems: true."
+        message: "{{error}}"
+        severity: error
+        resolved: false
+        given: "$..[?(@.type === 'array')]"
+        then:
+          function: array-unique-items
+          functionOptions:
+            skipEnumItems: true
+
+      enum-arrays-must-set-unique-items:
+        description: "Arrays with enum items must declare uniqueItems: true."
+        message: "Array at {{path}} contains enum items and must set uniqueItems: true"
+        severity: error
+        given: "$..[?(@.type === 'array' && @.items && @.items.enum)]"
+        then:
+          field: uniqueItems
+          function: truthy
+
+      schema-arrays-prevent-doubles:
+        description: "Array literals in schemas (such as enum, required, examples, and defaults) must not contain duplicate items."
+        message: "{{error}}"
+        severity: error
+        given:
+          - "$..enum"
+          - "$..required"
+          - "$..examples"
+        then:
+          function: prevent-doubles
+
+      no-whitespace-drift-descriptions:
+        description: Descriptions must not have leading/trailing whitespace or multiple consecutive horizontal spaces.
+        message: "Description contains trailing whitespace or consecutive spaces"
+        severity: error
+        given: "$..description"
+        then:
+          function: pattern
+          functionOptions:
+            # Rejects:
+            # - Leading whitespace on the overall description: ^\s+
+            # - Trailing whitespace on the overall description: \s+$
+            # - Two or more consecutive horizontal spaces: [ ]{2,}
+            # - Trailing spaces right before an internal newline: [ ]+\r?\n
+            notMatch: '(^\s+|\s+$|[ ]{2,}|[ ]+\r?\n)'
+
+      description-formatting:
+        description: "Descriptions must be well-formatted (capitalized, properly punctuated, clean lists, no run-on sentences or glitched punctuation)."
+        message: "{{error}}"
+        severity: error
+        given: "$..description"
+        then:
+          function: description-formatting
+
+      enum-values-non-empty:
+        description: "Enum values must not be empty strings or whitespace-only."
+        message: "Enum element at {{path}} must not be empty or whitespace-only"
+        severity: error
+        given: "$..enum.*"
+        then:
+          function: pattern
+          functionOptions:
+            notMatch: '^\s*$'
+
+      object-additional-properties-defined:
+        description: "Object schemas should declare additionalProperties: false unless intended as an open dictionary."
+        message: "Object schema at {{path}} lacks additionalProperties. Note: this may not be possible to do for this application's use case. If this must not be set in order for the application to work properly, surface this with a human for the final verdict."
+        severity: warn
+        given: "$..[?(@.type === 'object')]"
+        then:
+          field: additionalProperties
+          function: defined
+
+      no-orphaned-defs:
+        description: "Every named entry under $defs must be referenced at least once in the schema."
+        message: "{{error}}"
+        severity: warn
+        resolved: false
+        given: "$.$defs"
+        then:
+          function: no-orphaned-defs
+
+      pattern-requires-string-type:
+        description: "Any schema declaring a pattern constraint must explicitly declare type: string."
+        message: "Schema declaring pattern at {{path}} must declare type: string"
+        severity: error
+        given: "$..[?(@.pattern)]"
+        then:
+          field: type
+          function: pattern
+          functionOptions:
+            match: '^string$'
+
+      string-fields-min-length:
+        description: "Free-form string properties should define minLength >= 1 to prevent unintentional empty strings."
+        message: "String property at {{path}} should define minLength: 1 (info: app may permit empty strings if required)"
+        severity: info
+        given: "$..properties[?(@.type === 'string' && !@.enum && !@.pattern && !@.const)]"
+        then:
+          field: minLength
+          function: truthy
+
+      properties-require-type:
+        description: "Property definitions must explicitly declare a type unless using composition keywords or refs."
+        message: "{{error}}"
+        severity: error
+        resolved: false
+        given: "$..properties.*"
+        then:
+          function: property-type
+
+      properties-parent-must-declare-object-type:
+        description: "Schemas declaring properties must explicitly declare type: object."
+        message: "{{error}}"
+        severity: warn
+        resolved: false
+        given: "$..*"
+        then:
+          function: properties-object
+
+      required-properties-no-default:
+        description: "Required properties should not define default fallback values."
+        message: "{{error}}"
+        severity: info
+        resolved: false
+        given: "$..*"
+        then:
+          function: required-no-default
+
+      dynamic-maps-require-property-names:
+        description: "Dynamic map objects defining additionalProperties as a subschema should define propertyNames."
+        message: "{{error}}"
+        severity: info
+        resolved: false
+        given: "$..*"
+        then:
+          function: dynamic-maps
+
+      combinators-min-items:
+        description: "Combinators (oneOf, anyOf) must declare at least 2 subschemas."
+        message: "{{error}}"
+        severity: error
+        resolved: false
+        given:
+          - "$..oneOf"
+          - "$..anyOf"
+        then:
+          function: combinators
+          functionOptions:
+            min: 2
+
+      schema-missing-examples:
+        description: Root schema and $defs entries should provide examples.
+        message: "{{property}} is missing examples"
+        severity: info
+        given:
+          - "$"
+          - "$.$defs.*"
+        then:
+          field: examples
+          function: truthy

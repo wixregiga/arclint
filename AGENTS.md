@@ -104,13 +104,13 @@ If your change speaks about something new, or changes what a recorded term means
 Before yielding a completed session or goal, run:
 
 ```bash
-make check-fix
+make check
 ```
 
 or the same pair through mise:
 
 ```bash
-mise run check-fix
+mise run check
 ```
 
 For read-only sessions (reviews, audits, anything that must not mutate

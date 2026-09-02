@@ -37,12 +37,14 @@ func writeDomainOverview(p *out.Printer, th Theme, result application.DomainOver
 	p.Println(th.Bold.Render("Project domain"))
 	p.Printf("%s %s\n", th.Muted.Render("Source:"), result.Source)
 	p.Println()
-	p.Printf("%s · %s · %s · %s · %s · %s\n",
+	p.Printf("%s · %s · %s · %s · %s · %s · %s · %s\n",
 		countPhrase(counts.Contexts, "Context", "Contexts"),
 		countPhrase(counts.Entities, "Entity", "Entities"),
 		countPhrase(counts.Aggregates, "Aggregate", "Aggregates"),
 		countPhrase(counts.ValueObjects, "Value Object", "Value Objects"),
 		countPhrase(counts.Invariants, "Invariant", "Invariants"),
+		countPhrase(counts.Assertions, "Assertion", "Assertions"),
+		countPhrase(counts.Specifications, "Specification", "Specifications"),
 		countPhrase(counts.Events, "Event", "Events"),
 	)
 
@@ -84,6 +86,34 @@ func writeDomainOverview(p *out.Printer, th Theme, result application.DomainOver
 				}
 				p.Printf("    %s\n", inv.Statement)
 				p.Printf("    %s %s\n", th.Muted.Render("owner:"), inv.Owner)
+				if inv.ID != "" {
+					p.Printf("    %s %s\n", th.Muted.Render("id:"), inv.ID)
+				}
+			}
+		}
+		if len(ctx.Assertions) > 0 {
+			p.Println()
+			p.Println(th.Bold.Render("  Assertions"))
+			p.Println()
+			for i, a := range ctx.Assertions {
+				if i > 0 {
+					p.Println()
+				}
+				p.Printf("    %s\n", a.Statement)
+				p.Printf("    %s %s\n", th.Muted.Render("owner:"), a.Owner)
+				p.Printf("    %s %s\n", th.Muted.Render("id:"), a.ID)
+				p.Printf("    %s %s\n", th.Muted.Render("on:"), a.On)
+			}
+		}
+		if len(ctx.Specifications) > 0 {
+			p.Println()
+			p.Println(th.Bold.Render("  Specifications"))
+			p.Println()
+			for _, s := range ctx.Specifications {
+				p.Printf("    %s\n", s.Name)
+				if s.Definition != "" {
+					p.Printf("    %s\n", s.Definition)
+				}
 			}
 		}
 		if len(ctx.ValueObjects) > 0 {
@@ -130,8 +160,12 @@ func writeDomainList(p *out.Printer, th Theme, result application.DomainListing)
 				writeEntityListGroup(p, th, "  "+listGroupHeader(result.Concept), aggs, false)
 			case vocab.ConceptValueObject:
 				writeListGroup(p, th, "  Value objects", ctx.ValueObjects)
-			case vocab.ConceptInvariant, vocab.ConceptAssertion, vocab.ConceptBusinessRule:
+			case vocab.ConceptInvariant, vocab.ConceptBusinessRule:
 				writeInvariantListGroup(p, th, "  "+listGroupHeader(result.Concept), ctx.Invariants)
+			case vocab.ConceptAssertion:
+				writeAssertionListGroup(p, th, "  "+listGroupHeader(result.Concept), ctx.Assertions)
+			case vocab.ConceptSpecification:
+				writeSpecificationListGroup(p, th, "  "+listGroupHeader(result.Concept), ctx.Specifications)
 			case vocab.ConceptDomainEvent:
 				writeListGroup(p, th, "  Domain events", ctx.Events)
 			case vocab.ConceptBoundedContext:
@@ -148,6 +182,8 @@ func writeDomainList(p *out.Printer, th Theme, result application.DomainListing)
 		writeEntityListGroup(p, th, "  Entities", ctx.Entities, true)
 		writeListGroup(p, th, "  Value objects", ctx.ValueObjects)
 		writeInvariantListGroup(p, th, "  Invariants", ctx.Invariants)
+		writeAssertionListGroup(p, th, "  Assertions", ctx.Assertions)
+		writeSpecificationListGroup(p, th, "  Specifications", ctx.Specifications)
 		writeListGroup(p, th, "  Domain events", ctx.Events)
 	}
 	if result.Context == "" && len(result.Language.Relations) > 0 {
@@ -192,7 +228,37 @@ func writeInvariantListGroup(p *out.Printer, th Theme, header string, invs []voc
 	sorted := append([]vocab.Invariant(nil), invs...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Statement < sorted[j].Statement })
 	for _, inv := range sorted {
+		if inv.ID != "" {
+			p.Printf("    %s (owner: %s, id: %s)\n", inv.Statement, inv.Owner, inv.ID)
+			continue
+		}
 		p.Printf("    %s (owner: %s)\n", inv.Statement, inv.Owner)
+	}
+}
+
+func writeAssertionListGroup(p *out.Printer, th Theme, header string, assertions []vocab.Assertion) {
+	if len(assertions) == 0 {
+		return
+	}
+	p.Println()
+	p.Println(th.Bold.Render(header))
+	sorted := append([]vocab.Assertion(nil), assertions...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Statement < sorted[j].Statement })
+	for _, a := range sorted {
+		p.Printf("    %s (owner: %s, id: %s, on: %s)\n", a.Statement, a.Owner, a.ID, a.On)
+	}
+}
+
+func writeSpecificationListGroup(p *out.Printer, th Theme, header string, specs []vocab.Specification) {
+	if len(specs) == 0 {
+		return
+	}
+	p.Println()
+	p.Println(th.Bold.Render(header))
+	sorted := append([]vocab.Specification(nil), specs...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
+	for _, s := range sorted {
+		p.Printf("    %s\n", s.Name)
 	}
 }
 
@@ -227,6 +293,12 @@ func writeDomainShow(p *out.Printer, th Theme, result application.DomainDefiniti
 	if isInvariantShow(result.Concept) {
 		if result.Owner != "" {
 			p.Printf("%s %s\n", th.Bold.Render("Owner:"), result.Owner)
+		}
+		if result.ID != "" {
+			p.Printf("%s %s\n", th.Bold.Render("ID:"), result.ID)
+		}
+		if result.On != "" {
+			p.Printf("%s %s\n", th.Bold.Render("On:"), result.On)
 		}
 		return
 	}
@@ -389,6 +461,8 @@ func listGroupHeader(c vocab.Concept) string {
 		return "Invariants"
 	case vocab.ConceptAssertion:
 		return "Assertions"
+	case vocab.ConceptSpecification:
+		return "Specifications"
 	case vocab.ConceptBusinessRule:
 		return "Business rules"
 	case vocab.ConceptDomainEvent:

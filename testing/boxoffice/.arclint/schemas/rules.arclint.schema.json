@@ -178,7 +178,10 @@
         "domain.entities",
         "domain.value_objects",
         "domain.events",
-        "domain.contexts"
+        "domain.contexts",
+        "domain.invariants",
+        "domain.assertions",
+        "domain.specifications"
       ]
     },
     "extensionInvariant": {
@@ -270,9 +273,44 @@
           "$ref": "#/$defs/namingInvariant"
         },
         {
+          "$ref": "#/$defs/invariantsInvariant"
+        },
+        {
           "$ref": "#/$defs/extensionInvariant"
         }
       ]
+    },
+    "invariantsInvariant": {
+      "additionalProperties": false,
+      "description": "An invariants Rule: recorded domain contracts are visible in source as named methods called from their join points.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/ruleID"
+        },
+        "kind": {
+          "const": "invariants"
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "with": {
+          "additionalProperties": false,
+          "description": "Optional evaluation posture.\n\n- closed: false (default): child constructors may return errors.\n- closed: true: every exported error-returning function in the owner's files must call the cluster method.",
+          "properties": {
+            "closed": {
+              "default": false,
+              "description": "When true, extra exported error-returning functions that do not call the cluster method fail.\n\nDefault: false.",
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "type": "object"
     },
     "layersDependency": {
       "additionalProperties": false,
@@ -455,7 +493,7 @@
             "$ref": "#/$defs/consumes"
           },
           "invariants": {
-            "description": "Structure, naming, and extension Rules over the Module's member files.",
+            "description": "Structure, naming, invariants, and extension Rules over the Module's member files.",
             "items": {
               "$ref": "#/$defs/invariant"
             },

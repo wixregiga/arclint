@@ -88,6 +88,8 @@ func Run(req Request) (Assessment, error) {
 			es, ruleDiags, err = evaluateExtensionRule(r, mem, req.Observations, req.Extensions, req.Modules, req.Knowledge)
 		case r.Type() == rule.TypeLayers, r.Type() == rule.TypeProtected, r.Type() == rule.TypeIndependence, r.Type() == rule.TypeAcyclic:
 			es, err = evaluateGraph(r, mem, req.Observations)
+		case r.Type() == rule.TypeInvariants:
+			es, err = evaluateInvariants(r, mem, req.Observations, req.Knowledge)
 		default:
 			es, err = evaluateUnsupported(r, mem)
 		}

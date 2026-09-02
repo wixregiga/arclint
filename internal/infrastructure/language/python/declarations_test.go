@@ -112,6 +112,35 @@ def top(x: int) -> dict[str, int]:
 	diffDecls(t, got.Decls, want)
 }
 
+func TestPythonextractCalls(t *testing.T) {
+	src := []byte(`class Event:
+    def __init__(self):
+        self.published_frozen()
+
+    def published_frozen(self):
+        return None
+
+    def publish(self):
+        return self.published_frozen()
+`)
+	got := extractDeclarations(src)
+	if got.ParseError != "" {
+		t.Fatal(got.ParseError)
+	}
+	seen := map[string]bool{}
+	for _, c := range got.Calls {
+		if c.Line == 0 {
+			t.Errorf("call %q has no line", c.Callee)
+		}
+		seen[c.Callee+"@"+c.Enclosing] = true
+	}
+	for _, k := range []string{"published_frozen@__init__", "published_frozen@publish"} {
+		if !seen[k] {
+			t.Errorf("missing call %s; have %v", k, seen)
+		}
+	}
+}
+
 func diffDecls(t *testing.T, got, want []conformance.Declaration) {
 	t.Helper()
 	if reflect.DeepEqual(got, want) {

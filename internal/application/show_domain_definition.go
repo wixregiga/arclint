@@ -19,6 +19,10 @@ type DomainDefinitionView struct {
 	Aggregate bool
 	// Owner is set for invariant kinds (statement lives in Name).
 	Owner string
+	// ID is the cluster or assertion identity when recorded.
+	ID string
+	// On is the assertion's operation when recorded.
+	On string
 }
 
 // ShowDomainDefinition shows one recorded domain definition.
@@ -73,11 +77,21 @@ func (uc ShowDomainDefinition) Execute(concept, context, name string) (DomainDef
 		if ent, found := lang.FindEntity(ctxName, name); found {
 			view.Aggregate = ent.Aggregate
 		}
-	case vocab.ConceptInvariant, vocab.ConceptAssertion, vocab.ConceptBusinessRule:
+	case vocab.ConceptInvariant, vocab.ConceptBusinessRule:
 		// Domain Find encodes owner in Definition.Definition.
 		view.Owner = def.Definition
 		view.Definition = vocab.Definition{Name: def.Name}
-	case vocab.ConceptValueObject, vocab.ConceptDomainEvent, vocab.ConceptBoundedContext:
+		if inv, ok := lang.FindInvariant(ctxName, name); ok {
+			view.ID = inv.ID
+		}
+	case vocab.ConceptAssertion:
+		view.Owner = def.Definition
+		view.Definition = vocab.Definition{Name: def.Name}
+		if a, ok := lang.FindAssertion(ctxName, name); ok {
+			view.ID = a.ID
+			view.On = a.On
+		}
+	case vocab.ConceptValueObject, vocab.ConceptDomainEvent, vocab.ConceptBoundedContext, vocab.ConceptSpecification:
 		// The base view already carries everything these kinds record.
 	}
 	return view, nil

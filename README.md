@@ -33,7 +33,7 @@ Use arclint for that check. Or not. It's up to you.
 - DDD crazy? Rad. Keep your terms in a committed
   `ubiquitous-language.yaml`, then write rules like "each aggregate
   lives in `internal/<snake_case>/`, imports no third-party code, and
-  declares a repository interface."
+  declares a repository interface." You can even enforce [Visible Domain Contracts](docs/site/content/docs/contracts.md) that ensure your code implements your documented invariants and specifications.
 - Want vertically sliced hexagons? Write a rule for it.
 - Want features to live in a certain file? Write a rule for it.
 - Want to test your rule out first? Write a test for it in

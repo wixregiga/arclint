@@ -1,92 +1,61 @@
 GO      ?= go
 VERSION := $(shell cat cmd/arclint/VERSION)
 BIN     ?= ./arclint
-# Embed only the tree-sitter grammars the declaration extractors use:
-# without these tags every grammar embeds and the binary grows ~19 MB.
 GRAMMARS := grammar_subset grammar_subset_typescript grammar_subset_tsx grammar_subset_python
-.PHONY: build test vet fmt-check fmt lint lint-fix generate selfcheck verify check check-fix check-ro leak-check bench agentbench release ci clean docs docs-serve docker
+
+.DEFAULT_GOAL := check
+
+# ==============================================================================
+# Core SDLC Workflow
+# These are the primary commands for daily development and CI.
+# ==============================================================================
+.PHONY: build test vet fmt lint generate check check-fix check-ro ci release clean
 
 build:
 	CGO_ENABLED=0 $(GO) build -tags "$(GRAMMARS)" -trimpath -ldflags "-s -w" -o $(BIN) ./cmd/arclint
 
-# The full run includes the toolchain ground truth (network, clones
-# cache under ~/.cache); `go test -short ./...` is the quick loop.
 test:
-	$(GO) test -timeout 30m ./...
+	$(GO) test -race -timeout 30m -coverprofile=coverage.out -covermode=atomic ./...
 
 vet:
 	$(GO) vet ./...
 	$(GO) vet -tags bench ./internal/bench/
 
-fmt-check:
+fmt:
 	golangci-lint fmt --diff
 
-fmt:
-	golangci-lint fmt
-
 lint:
-	golangci-lint run --fix=false ./...
-
-lint-fix:
 	golangci-lint run --fix ./...
 
 generate:
 	$(GO) generate ./...
 
-# M1 gate 3: arclint's own rules.yaml runs clean, CI-style.
-selfcheck: build
-	$(BIN) check .
+clean:
+	rm -rf $(BIN) dist
 
-# Behavioral and architecture verification after format and lint pass.
-verify: vet test selfcheck
+# ------------------------------------------------------------------------------
+# CI and Check Gates
+# ------------------------------------------------------------------------------
 
-# hk pre-commit secret scan. Not a Make-owned linter; gitleaks is the hook.
-leak-check:
-	gitleaks detect --verbose
+# Variables for the check gate so CI can override them cleanly.
+CHECK_LINT ?= lint
+CHECK_LEAK ?= _leak
+CHECK_VERIFY ?= _quick-verify
 
-# hk pre-commit Make half: format, lint with fixes, then verify.
-# Pair with check-leak. Run sequentially so verify sees the repaired tree.
-check-fix:
-	$(MAKE) fmt
-	$(MAKE) lint-fix
-	$(MAKE) verify
-	$(MAKE) leak-check
+# Canonical local check: auto-fixes lint errors, runs fast tests, and checks staged secrets.
+check: $(CHECK_LINT) $(CHECK_VERIFY) $(CHECK_LEAK)
 
-# Canonical full local/CI gate. hk runs the same targets as separate
-# steps so its fix mode can repair formatting and lint findings first.
-check: fmt-check lint verify
 
-# Read-only quick gate: no file writes (selfcheck via go run, no ./arclint
-# rebuild), no network (-short skips the toolchain ground truth). For
-# review sessions and agents that must not mutate the tree.
+# check-fix is required by the AGENTS.md contract. It aliases to check.
+check-fix: check
+
+# Read-only quick gate for review sessions and agents. Must not mutate the tree.
 check-ro:
-	$(GO) vet ./...
-	golangci-lint run --fix=false ./...
-	$(GO) test -short ./...
-	$(GO) run -tags "$(GRAMMARS)" ./cmd/arclint check .
+	$(MAKE) check CHECK_LINT=_lint-no-fix CHECK_VERIFY=_verify-ro CHECK_LEAK=_noop
 
-# M1 gate 4: cold start < 100ms; 5,000 files in low single-digit seconds.
-bench: build
-	ARCLINT_BIN=$(abspath $(BIN)) $(GO) test -tags bench -count=1 -v ./internal/bench/
-
-# Agent convergence measurement: violations + diagnostics -> real coding
-# agent -> re-check, with and without prompt-time context. Requires an
-# agent CLI (default codex; override AGENTBENCH_AGENT_CMD) and network.
-agentbench: build
-	ARCLINT_BIN=$(abspath $(BIN)) $(GO) test -tags agentbench -timeout 60m -count=1 -v ./internal/agentbench/
-
-# Docs site (docs/site): markdown content, one zola binary to build.
-docs:
-	cd docs/site && zola build
-
-docs-serve:
-	cd docs/site && zola serve
-
-# Container image; its binary and image tag both use cmd/arclint/VERSION.
-# Run a repo check with:
-#   docker run --rm -v $(PWD):/repo arclint:$(VERSION)
-docker:
-	docker build --build-arg GRAMMARS="$(GRAMMARS)" -t arclint:$(VERSION) .
+# CI gate: calls check but overrides steps to be CI-appropriate and full.
+ci:
+	$(MAKE) check CHECK_LINT=_lint-no-fix CHECK_VERIFY=_verify CHECK_LEAK=_leak-ci
 
 # Build the same Linux amd64/arm64 archives and checksums as a beta release,
 # without publishing. Requires goreleaser (mise install / mise run release).
@@ -95,7 +64,94 @@ release:
 	ARCLINT_VERSION=$(VERSION) goreleaser check
 	ARCLINT_VERSION=$(VERSION) goreleaser release --snapshot --clean
 
-ci: check
+# ==============================================================================
+# Internal / One-Off / Hidden Targets
+# ==============================================================================
+# Hiding targets from shell auto-completion is done by defining them via variables
+# or prefixing with an underscore.
 
-clean:
-	rm -rf $(BIN) dist
+.PHONY: _quick-verify _verify _verify-ro _lint-no-fix _leak _leak-ci _leak-check _noop
+
+_quick-verify:
+	$(GO) vet ./...
+	$(GO) test -short ./...
+
+_verify: vet test
+	$(MAKE) build
+	$(BIN) check .
+
+_verify-ro: _quick-verify
+	$(GO) run -tags "$(GRAMMARS)" ./cmd/arclint check .
+
+_noop:
+	@true
+
+_lint-no-fix:
+	golangci-lint run --fix=false ./...
+
+_leak:
+	gitleaks protect --staged --verbose 
+
+_leak-ci:
+	gitleaks detect --no-git --verbose
+
+_leak-check:
+	gitleaks detect --verbose
+
+
+# --- Hidden One-Offs ---
+# We define these via variables so bash/zsh `make <tab>` auto-completion ignores them,
+# keeping the main API clean, while still allowing them to be run explicitly.
+DOCS_BUILD := docs-build
+DOCS_SERVE := docs-serve
+BENCH      := bench
+AGENTBENCH := agentbench
+DOCKER     := docker
+COV_REP    := coverage-report
+COV_HTML   := coverage-html
+LINT_SCH_R := lint-schema-rule
+LINT_SCH   := lint-schema
+
+.PHONY: $(DOCS_BUILD) $(DOCS_SERVE) $(BENCH) $(AGENTBENCH) $(DOCKER) $(COV_REP) $(COV_HTML) $(LINT_SCH_R) $(LINT_SCH)
+
+$(DOCS_BUILD):
+	cd docs/site && zola build
+
+$(DOCS_SERVE):
+	cd docs/site && zola serve
+
+$(BENCH): build
+	ARCLINT_BIN=$(abspath $(BIN)) $(GO) test -tags bench -count=1 -v ./internal/bench/
+
+$(AGENTBENCH): build
+	ARCLINT_BIN=$(abspath $(BIN)) $(GO) test -tags agentbench -timeout 60m -count=1 -v ./internal/agentbench/
+
+$(DOCKER):
+	docker build --build-arg GRAMMARS="$(GRAMMARS)" -t arclint:$(VERSION) .
+
+$(COV_REP):
+	@if [ -f coverage.out ]; then \
+		echo "Coverage summary:"; \
+		$(GO) tool cover -func=coverage.out | tail -1; \
+	else \
+		echo "No coverage.out found. Run 'make test' first."; \
+	fi
+
+$(COV_HTML):
+	@if [ -f coverage.out ]; then \
+		$(GO) tool cover -html=coverage.out -o coverage.html; \
+		echo "Coverage report generated: coverage.html"; \
+	else \
+		echo "No coverage.out found. Run 'make test' first."; \
+	fi
+
+SCHEMA_FILES := ./docs/rules.schema.json \
+	.agents/skills/domain-librarian/library.schema.json \
+	testing/boxoffice/.arclint/schemas/rules.arclint.schema.json
+
+$(LINT_SCH_R):
+	@spectral lint -F error -D --ruleset .spectral.yaml ./docs/rules.schema.json
+
+$(LINT_SCH):
+	@spectral lint -F error -D --ruleset .spectral.yaml $(SCHEMA_FILES)
+	@echo "All schema files linted successfully."

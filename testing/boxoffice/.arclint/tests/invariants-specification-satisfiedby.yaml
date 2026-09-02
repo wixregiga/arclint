@@ -1,0 +1,31 @@
+# Specification is proved here, not by inventing a spec term in
+# boxoffice's recorded language. The fixture's own vocabulary records
+# a specification; source shows the type and Evans SatisfiedBy.
+rule: "boxoffice:entities/contracts-visible"
+files:
+  ubiquitous-language.yaml: |
+    version: 1
+    contexts:
+      - name: catalog
+        entities:
+          - name: Event
+            definition: One show an Organizer puts on sale.
+            aggregate: true
+        specifications:
+          - name: HighValueOrder
+            definition: A named predicate experts pass around as a thing.
+  internal/entities/event/event.go: |
+    package event
+
+    type Event struct{}
+
+    func New(id, title string) (Event, error) {
+    	return Event{}, nil
+    }
+
+    type HighValueOrder struct{}
+
+    func (HighValueOrder) SatisfiedBy(candidate Event) bool {
+    	return true
+    }
+expect: []

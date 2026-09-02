@@ -19,6 +19,7 @@ export default defineRule({
       ][] = [
         ["entity", bound.entities ?? []],
         ["value object", bound.valueObjects ?? []],
+        ["specification", bound.specifications ?? []],
         ["domain event", bound.events ?? []],
       ];
       for (const [kind, terms] of groups) {
@@ -31,6 +32,24 @@ export default defineRule({
               fixHint: "arclint domain define <type> <name> --definition <text>",
             });
           }
+        }
+      }
+      for (const a of bound.assertions ?? []) {
+        if (!a.statement) {
+          ctx.report({
+            path: VOCABULARY,
+            line: a.line,
+            message: `assertion in context "${bound.name}" has no statement recorded in the project vocabulary`,
+            fixHint: "record the assertion statement, owner, id, and on",
+          });
+        }
+        if (!a.owner) {
+          ctx.report({
+            path: VOCABULARY,
+            line: a.line,
+            message: `assertion in context "${bound.name}" has no owner recorded in the project vocabulary`,
+            fixHint: "record exactly one owner term for the assertion",
+          });
         }
       }
       for (const inv of bound.invariants ?? []) {

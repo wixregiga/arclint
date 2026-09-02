@@ -16,6 +16,7 @@ import (
 // honest fact absence without poisoning the import view.
 type declarationFacts struct {
 	Decls      []conformance.Declaration
+	Calls      []conformance.Call
 	ParseError string
 }
 
@@ -44,6 +45,7 @@ func extractDeclarations(path string, src []byte) *declarationFacts {
 	}
 	w := &tsWalker{lang: tsLang, src: src, out: out}
 	w.walk(tree.RootNode(), "", false)
+	w.walkCalls(tree.RootNode(), "")
 	return out
 }
 
@@ -83,6 +85,13 @@ type tsWalker struct {
 	src  []byte
 	out  *declarationFacts
 }
+
+const (
+	tsIdentifier         = "identifier"
+	tsArrowFunction      = "arrow_function"
+	tsFunction           = "function"
+	tsFunctionExpression = "function_expression"
+)
 
 func (w *tsWalker) text(n *gotreesitter.Node) string { return n.Text(w.src) }
 
@@ -138,7 +147,7 @@ func (w *tsWalker) param(pn *gotreesitter.Node) conformance.DeclarationParam {
 		}
 	}
 	switch pattern.Type(w.lang) {
-	case "identifier", "this":
+	case tsIdentifier, "this":
 		p.Name = w.text(pattern)
 	case "rest_pattern":
 		p.Variadic = true
@@ -261,7 +270,7 @@ func (w *tsWalker) walk(n *gotreesitter.Node, owner string, exported bool) {
 			var fnNode *gotreesitter.Node
 			if v := d.ChildByFieldName("value", w.lang); v != nil {
 				switch v.Type(w.lang) {
-				case "arrow_function", "function_expression", "function":
+				case tsArrowFunction, tsFunctionExpression, tsFunction:
 					kind = "func"
 					fnNode = v
 				}
@@ -280,4 +289,53 @@ func (w *tsWalker) walk(n *gotreesitter.Node, owner string, exported bool) {
 			w.walk(n.NamedChild(i), owner, exported)
 		}
 	}
+}
+
+func (w *tsWalker) walkCalls(n *gotreesitter.Node, enclosing string) {
+	t := n.Type(w.lang)
+	next := enclosing
+	switch t {
+	case "function_declaration", "generator_function_declaration", "method_definition", "method_signature":
+		if name := w.name(n); name != "" {
+			next = name
+		}
+	case tsArrowFunction, tsFunctionExpression, tsFunction:
+		// Keep the enclosing name from the declarator / method.
+	case "variable_declarator":
+		if v := n.ChildByFieldName("value", w.lang); v != nil {
+			switch v.Type(w.lang) {
+			case tsArrowFunction, tsFunctionExpression, tsFunction:
+				if name := w.name(n); name != "" {
+					next = name
+				}
+			}
+		}
+	case "call_expression":
+		if callee := w.callCallee(n); callee != "" && enclosing != "" {
+			w.out.Calls = append(w.out.Calls, conformance.Call{
+				Callee:    callee,
+				Line:      int(n.StartPoint().Row) + 1,
+				Enclosing: enclosing,
+			})
+		}
+	}
+	for i := 0; i < n.NamedChildCount(); i++ {
+		w.walkCalls(n.NamedChild(i), next)
+	}
+}
+
+func (w *tsWalker) callCallee(n *gotreesitter.Node) string {
+	fn := n.ChildByFieldName("function", w.lang)
+	if fn == nil {
+		return ""
+	}
+	switch fn.Type(w.lang) {
+	case tsIdentifier:
+		return w.text(fn)
+	case "member_expression":
+		if prop := fn.ChildByFieldName("property", w.lang); prop != nil {
+			return w.text(prop)
+		}
+	}
+	return ""
 }

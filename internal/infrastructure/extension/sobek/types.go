@@ -102,23 +102,47 @@ type DomainDefinitionInfo struct {
 
 // DomainInvariantInfo is one recorded invariant (statement + owner)
 // inside a bounded context as exposed through ctx.domain(). Line is
-// where the invariant is written in ubiquitous-language.yaml.
+// where the invariant is written in ubiquitous-language.yaml. ID is
+// the cluster identity when the owner is an aggregate named contract.
 type DomainInvariantInfo struct {
 	Statement string `json:"statement"`
 	Owner     string `json:"owner"`
+	ID        string `json:"id,omitempty"`
 	Line      int    `json:"line"`
+}
+
+// DomainAssertionInfo is one recorded assertion as exposed through
+// ctx.domain(). ID names the checking method; On names the operation
+// that must call it.
+type DomainAssertionInfo struct {
+	Statement string `json:"statement"`
+	Owner     string `json:"owner"`
+	ID        string `json:"id"`
+	On        string `json:"on"`
+	Line      int    `json:"line"`
+}
+
+// DomainSpecificationInfo is one recorded specification as exposed
+// through ctx.domain(): a named predicate, never a flag on a value
+// object.
+type DomainSpecificationInfo struct {
+	Name       string `json:"name"`
+	Definition string `json:"definition,omitempty"`
+	Line       int    `json:"line"`
 }
 
 // DomainContextInfo is one bounded context and its recorded terms as
 // exposed through ctx.domain(). Line is where the context is written
 // in ubiquitous-language.yaml.
 type DomainContextInfo struct {
-	Name         string                 `json:"name"`
-	Entities     []DomainDefinitionInfo `json:"entities"`
-	ValueObjects []DomainDefinitionInfo `json:"valueObjects"`
-	Invariants   []DomainInvariantInfo  `json:"invariants"`
-	Events       []DomainDefinitionInfo `json:"events"`
-	Line         int                    `json:"line"`
+	Name           string                    `json:"name"`
+	Entities       []DomainDefinitionInfo    `json:"entities"`
+	ValueObjects   []DomainDefinitionInfo    `json:"valueObjects"`
+	Invariants     []DomainInvariantInfo     `json:"invariants"`
+	Assertions     []DomainAssertionInfo     `json:"assertions"`
+	Specifications []DomainSpecificationInfo `json:"specifications"`
+	Events         []DomainDefinitionInfo    `json:"events"`
+	Line           int                       `json:"line"`
 }
 
 // DomainRelationInfo is one context-map edge as exposed through

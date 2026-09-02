@@ -24,9 +24,13 @@ type UbiquitousLanguage struct {
 // NewUbiquitousLanguage validates and returns a UbiquitousLanguage.
 // Every context name, term name, invariant statement, and owner must be
 // non-empty after TrimSpace. Context names are unique. Term names are
-// unique within their section within their context. Invariant
-// statements are unique within a context. Relation From/To must name
-// declared contexts; Kind must be a valid RelationKind.
+// unique within their section within their context. Invariant and
+// assertion statements are unique within a context. Cluster and
+// assertion ids are unique within a context. A name may not appear in
+// both value_objects and specifications. An invariant id is forbidden
+// when the owner is a value object and is rejected when the owner is
+// not an aggregate. Assertion requires id and on. Relation From/To
+// must name declared contexts; Kind must be a valid RelationKind.
 func NewUbiquitousLanguage(contexts []BoundedContext, relations []ContextRelation) (UbiquitousLanguage, error) {
 	if err := validateContexts(contexts); err != nil {
 		return UbiquitousLanguage{}, err
@@ -63,7 +67,16 @@ func validateContexts(contexts []BoundedContext) error {
 		if err := validateSection(c.Name, "value_objects", c.ValueObjects); err != nil {
 			return err
 		}
-		if err := validateInvariants(c.Name, c.Invariants); err != nil {
+		if err := validateInvariants(c.Name, c); err != nil {
+			return err
+		}
+		if err := validateAssertions(c.Name, c.Assertions); err != nil {
+			return err
+		}
+		if err := validateSpecifications(c.Name, c); err != nil {
+			return err
+		}
+		if err := validateContractIDs(c.Name, c); err != nil {
 			return err
 		}
 		if err := validateSection(c.Name, "events", c.Events); err != nil {
@@ -107,9 +120,9 @@ func validateSection(contextName, section string, defs []Definition) error {
 	return nil
 }
 
-func validateInvariants(contextName string, invs []Invariant) error {
-	seen := make(map[string]struct{}, len(invs))
-	for _, inv := range invs {
+func validateInvariants(contextName string, ctx BoundedContext) error {
+	seen := make(map[string]struct{}, len(ctx.Invariants))
+	for _, inv := range ctx.Invariants {
 		if strings.TrimSpace(inv.Statement) == "" {
 			return fmt.Errorf("contexts %q invariants: statement must be non-empty", contextName)
 		}
@@ -122,9 +135,112 @@ func validateInvariants(contextName string, invs []Invariant) error {
 		if inv.Line < 0 {
 			return fmt.Errorf("contexts %q invariants: negative line on %q", contextName, inv.Statement)
 		}
+		id := strings.TrimSpace(inv.ID)
+		if id != inv.ID {
+			return fmt.Errorf("contexts %q invariants: id must be non-empty", contextName)
+		}
+		agg, vo := classifyOwner(ctx, inv.Owner)
+		if vo && id != "" {
+			return fmt.Errorf("contexts %q invariants: id is forbidden when owner %q is a value object", contextName, inv.Owner)
+		}
+		if id != "" && !agg {
+			return fmt.Errorf("contexts %q invariants: id is only legal when owner %q is an aggregate", contextName, inv.Owner)
+		}
 		seen[inv.Statement] = struct{}{}
 	}
 	return nil
+}
+
+func validateAssertions(contextName string, assertions []Assertion) error {
+	seen := make(map[string]struct{}, len(assertions))
+	for _, a := range assertions {
+		if strings.TrimSpace(a.Statement) == "" {
+			return fmt.Errorf("contexts %q assertions: statement must be non-empty", contextName)
+		}
+		if strings.TrimSpace(a.Owner) == "" {
+			return fmt.Errorf("contexts %q assertions: owner must be non-empty", contextName)
+		}
+		if strings.TrimSpace(a.ID) == "" {
+			return fmt.Errorf("contexts %q assertions: id must be non-empty", contextName)
+		}
+		if strings.TrimSpace(a.On) == "" {
+			return fmt.Errorf("contexts %q assertions: on must be non-empty", contextName)
+		}
+		if _, dup := seen[a.Statement]; dup {
+			return fmt.Errorf("contexts %q assertions: duplicate statement %q", contextName, a.Statement)
+		}
+		if a.Line < 0 {
+			return fmt.Errorf("contexts %q assertions: negative line on %q", contextName, a.Statement)
+		}
+		seen[a.Statement] = struct{}{}
+	}
+	return nil
+}
+
+func validateSpecifications(contextName string, ctx BoundedContext) error {
+	seen := make(map[string]struct{}, len(ctx.Specifications))
+	vo := make(map[string]struct{}, len(ctx.ValueObjects))
+	for _, d := range ctx.ValueObjects {
+		vo[d.Name] = struct{}{}
+	}
+	for _, s := range ctx.Specifications {
+		if strings.TrimSpace(s.Name) == "" {
+			return fmt.Errorf("contexts %q specifications: name must be non-empty", contextName)
+		}
+		if strings.TrimSpace(s.Definition) == "" {
+			return fmt.Errorf("contexts %q specifications: definition must be non-empty", contextName)
+		}
+		if _, dup := seen[s.Name]; dup {
+			return fmt.Errorf("contexts %q specifications: duplicate name %q", contextName, s.Name)
+		}
+		if _, clash := vo[s.Name]; clash {
+			return fmt.Errorf("contexts %q: %q is both a value object and a specification", contextName, s.Name)
+		}
+		if s.Line < 0 {
+			return fmt.Errorf("contexts %q specifications: negative line on %q", contextName, s.Name)
+		}
+		seen[s.Name] = struct{}{}
+	}
+	return nil
+}
+
+func validateContractIDs(contextName string, ctx BoundedContext) error {
+	seen := make(map[string]string)
+	for _, inv := range ctx.Invariants {
+		id := strings.TrimSpace(inv.ID)
+		if id == "" {
+			continue
+		}
+		if prev, ok := seen[id]; ok {
+			return fmt.Errorf("contexts %q: duplicate id %q (%s and invariants)", contextName, id, prev)
+		}
+		seen[id] = "invariants"
+	}
+	for _, a := range ctx.Assertions {
+		id := strings.TrimSpace(a.ID)
+		if id == "" {
+			continue
+		}
+		if prev, ok := seen[id]; ok {
+			return fmt.Errorf("contexts %q: duplicate id %q (%s and assertions)", contextName, id, prev)
+		}
+		seen[id] = "assertions"
+	}
+	return nil
+}
+
+func classifyOwner(ctx BoundedContext, owner string) (aggregate, valueObject bool) {
+	for _, e := range ctx.Entities {
+		if e.Name == owner {
+			return e.Aggregate, false
+		}
+	}
+	for _, v := range ctx.ValueObjects {
+		if v.Name == owner {
+			return false, true
+		}
+	}
+	return false, false
 }
 
 func validateRelations(contexts []BoundedContext, relations []ContextRelation) error {
@@ -160,11 +276,13 @@ func validateRelations(contexts []BoundedContext, relations []ContextRelation) e
 // ConceptAggregate and ConceptAggregateRoot operate on Entities and
 // force Aggregate designation on. ConceptEntity never clears an
 // existing Aggregate designation unless Change.SetAggregate is set.
-// ConceptInvariant, ConceptAssertion, and ConceptBusinessRule resolve
-// into the invariants section (name is the statement) and require an
-// owner on create. ConceptBoundedContext ensures the named context
-// exists (name is the context name; contextName should match name).
-// ConceptDomainEvent records into events. New definitions append.
+// ConceptInvariant and ConceptBusinessRule resolve into the invariants
+// section (name is the statement) and require an owner on create.
+// ConceptAssertion records into assertions and requires owner, id, and
+// on at create. ConceptSpecification records into specifications.
+// ConceptBoundedContext ensures the named context exists (name is the
+// context name; contextName should match name). ConceptDomainEvent
+// records into events. New definitions append.
 // Unchanged compares final field values and reports OutcomeUnchanged
 // when nothing differs.
 func (l UbiquitousLanguage) Define(c Concept, contextName, name string, ch Change) (UbiquitousLanguage, DefineResult, error) {
@@ -215,8 +333,12 @@ func (l UbiquitousLanguage) Define(c Concept, contextName, name string, ch Chang
 		return out.defineEntity(ci, name, ch)
 	case ConceptValueObject, ConceptDomainEvent:
 		return out.defineInSection(ci, c, name, ch)
-	case ConceptInvariant, ConceptAssertion, ConceptBusinessRule:
+	case ConceptSpecification:
+		return out.defineSpecification(ci, name, ch)
+	case ConceptInvariant, ConceptBusinessRule:
 		return out.defineInvariant(ci, name, ch)
+	case ConceptAssertion:
+		return out.defineAssertion(ci, name, ch)
 	default:
 		return l, DefineResult{}, fmt.Errorf("unsupported domain concept %q", c)
 	}
@@ -333,24 +455,17 @@ func (l UbiquitousLanguage) defineInvariant(ci int, statement string, ch Change)
 		before = ctx.Invariants[idx]
 	}
 
-	after := before
-	if created {
-		owner := strings.TrimSpace(ch.Owner)
-		if owner == "" {
-			return l, DefineResult{}, fmt.Errorf("owner must be non-empty")
-		}
-		after.Owner = owner
-	} else if ch.SetOwner {
-		owner := strings.TrimSpace(ch.Owner)
-		if owner == "" {
-			return l, DefineResult{}, fmt.Errorf("owner must be non-empty")
-		}
-		after.Owner = owner
+	after, err := applyInvariantChange(before, created, ch)
+	if err != nil {
+		return l, DefineResult{}, err
 	}
 
 	var changed []string
 	if before.Owner != after.Owner {
 		changed = append(changed, "owner")
+	}
+	if before.ID != after.ID {
+		changed = append(changed, "id")
 	}
 
 	var outcome Outcome
@@ -363,6 +478,152 @@ func (l UbiquitousLanguage) defineInvariant(ci int, statement string, ch Change)
 	default:
 		outcome = OutcomeUpdated
 		ctx.Invariants[idx] = after
+	}
+	return l, DefineResult{Outcome: outcome, Changed: changed}, nil
+}
+
+func (l UbiquitousLanguage) defineAssertion(ci int, statement string, ch Change) (UbiquitousLanguage, DefineResult, error) {
+	ctx := &l.Contexts[ci]
+	idx := indexOfAssertion(ctx.Assertions, statement)
+
+	var before Assertion
+	created := idx < 0
+	if created {
+		before = Assertion{Statement: statement}
+	} else {
+		before = ctx.Assertions[idx]
+	}
+
+	after, err := applyAssertionChange(before, created, ch)
+	if err != nil {
+		return l, DefineResult{}, err
+	}
+
+	var changed []string
+	if before.Owner != after.Owner {
+		changed = append(changed, "owner")
+	}
+	if before.ID != after.ID {
+		changed = append(changed, "id")
+	}
+	if before.On != after.On {
+		changed = append(changed, "on")
+	}
+
+	var outcome Outcome
+	switch {
+	case created:
+		outcome = OutcomeCreated
+		ctx.Assertions = append(ctx.Assertions, after)
+	case len(changed) == 0:
+		outcome = OutcomeUnchanged
+	default:
+		outcome = OutcomeUpdated
+		ctx.Assertions[idx] = after
+	}
+	return l, DefineResult{Outcome: outcome, Changed: changed}, nil
+}
+
+func applyInvariantChange(before Invariant, created bool, ch Change) (Invariant, error) {
+	after := before
+	if created {
+		owner := strings.TrimSpace(ch.Owner)
+		if owner == "" {
+			return Invariant{}, fmt.Errorf("owner must be non-empty")
+		}
+		after.Owner = owner
+		after.ID = strings.TrimSpace(ch.ID)
+		return after, nil
+	}
+	if ch.SetOwner {
+		owner := strings.TrimSpace(ch.Owner)
+		if owner == "" {
+			return Invariant{}, fmt.Errorf("owner must be non-empty")
+		}
+		after.Owner = owner
+	}
+	if ch.SetID {
+		after.ID = strings.TrimSpace(ch.ID)
+	}
+	return after, nil
+}
+
+func applyAssertionChange(before Assertion, created bool, ch Change) (Assertion, error) {
+	after := before
+	if created {
+		owner := strings.TrimSpace(ch.Owner)
+		if owner == "" {
+			return Assertion{}, fmt.Errorf("owner must be non-empty")
+		}
+		id := strings.TrimSpace(ch.ID)
+		if id == "" {
+			return Assertion{}, fmt.Errorf("id must be non-empty")
+		}
+		on := strings.TrimSpace(ch.On)
+		if on == "" {
+			return Assertion{}, fmt.Errorf("on must be non-empty")
+		}
+		after.Owner = owner
+		after.ID = id
+		after.On = on
+		return after, nil
+	}
+	if ch.SetOwner {
+		owner := strings.TrimSpace(ch.Owner)
+		if owner == "" {
+			return Assertion{}, fmt.Errorf("owner must be non-empty")
+		}
+		after.Owner = owner
+	}
+	if ch.SetID {
+		id := strings.TrimSpace(ch.ID)
+		if id == "" {
+			return Assertion{}, fmt.Errorf("id must be non-empty")
+		}
+		after.ID = id
+	}
+	if ch.SetOn {
+		on := strings.TrimSpace(ch.On)
+		if on == "" {
+			return Assertion{}, fmt.Errorf("on must be non-empty")
+		}
+		after.On = on
+	}
+	return after, nil
+}
+
+func (l UbiquitousLanguage) defineSpecification(ci int, name string, ch Change) (UbiquitousLanguage, DefineResult, error) {
+	ctx := &l.Contexts[ci]
+	idx := indexOfSpecification(ctx.Specifications, name)
+
+	var before Specification
+	created := idx < 0
+	if created {
+		before = Specification{Name: name}
+	} else {
+		before = ctx.Specifications[idx]
+	}
+
+	after := before
+	if ch.SetDefinition {
+		after.Definition = ch.DefinitionText
+	}
+
+	var changed []string
+	if before.Definition != after.Definition {
+		changed = append(changed, "definition")
+	}
+
+	var outcome Outcome
+	switch {
+	case created:
+		outcome = OutcomeCreated
+		ctx.Specifications = append(ctx.Specifications, after)
+	case len(changed) == 0:
+		outcome = OutcomeUnchanged
+	default:
+		outcome = OutcomeUpdated
+		ctx.Specifications[idx] = after
 	}
 	return l, DefineResult{Outcome: outcome, Changed: changed}, nil
 }
@@ -459,12 +720,26 @@ func (l UbiquitousLanguage) Remove(c Concept, contextName, name string) (Ubiquit
 		}
 		*section = append((*section)[:idx], (*section)[idx+1:]...)
 		return out, RemoveResult{}, nil
-	case ConceptInvariant, ConceptAssertion, ConceptBusinessRule:
+	case ConceptInvariant, ConceptBusinessRule:
 		idx := indexOfInvariant(ctx.Invariants, name)
 		if idx < 0 {
 			return l, RemoveResult{}, notFound()
 		}
 		ctx.Invariants = append(ctx.Invariants[:idx], ctx.Invariants[idx+1:]...)
+		return out, RemoveResult{}, nil
+	case ConceptAssertion:
+		idx := indexOfAssertion(ctx.Assertions, name)
+		if idx < 0 {
+			return l, RemoveResult{}, notFound()
+		}
+		ctx.Assertions = append(ctx.Assertions[:idx], ctx.Assertions[idx+1:]...)
+		return out, RemoveResult{}, nil
+	case ConceptSpecification:
+		idx := indexOfSpecification(ctx.Specifications, name)
+		if idx < 0 {
+			return l, RemoveResult{}, notFound()
+		}
+		ctx.Specifications = append(ctx.Specifications[:idx], ctx.Specifications[idx+1:]...)
 		return out, RemoveResult{}, nil
 	default:
 		return l, RemoveResult{}, fmt.Errorf("unsupported domain concept %q", c)
@@ -545,9 +820,21 @@ func (l UbiquitousLanguage) Find(c Concept, contextName, name string) (Definitio
 			}
 		}
 		return Definition{}, false
-	case ConceptInvariant, ConceptAssertion, ConceptBusinessRule:
+	case ConceptInvariant, ConceptBusinessRule:
 		if inv, ok := l.FindInvariant(contextName, name); ok {
 			return Definition{Name: inv.Statement, Definition: inv.Owner, Line: inv.Line}, true
+		}
+		return Definition{}, false
+	case ConceptAssertion:
+		if a, ok := l.FindAssertion(contextName, name); ok {
+			return Definition{Name: a.Statement, Definition: a.Owner, Line: a.Line}, true
+		}
+		return Definition{}, false
+	case ConceptSpecification:
+		for _, s := range ctx.Specifications {
+			if s.Name == name {
+				return Definition{Name: s.Name, Definition: s.Definition, Line: s.Line}, true
+			}
 		}
 		return Definition{}, false
 	default:
@@ -591,6 +878,54 @@ func (l UbiquitousLanguage) ListInvariants(contextName string) []Invariant {
 		return nil
 	}
 	return cloneInvariants(l.Contexts[ci].Invariants)
+}
+
+// FindAssertion returns the Assertion with the exact statement inside
+// contextName. Matching is case-sensitive and does not trim.
+func (l UbiquitousLanguage) FindAssertion(contextName, statement string) (Assertion, bool) {
+	ci, ok := l.contextIndex(contextName)
+	if !ok {
+		return Assertion{}, false
+	}
+	for _, a := range l.Contexts[ci].Assertions {
+		if a.Statement == statement {
+			return a, true
+		}
+	}
+	return Assertion{}, false
+}
+
+// ListAssertions returns assertions in contextName in file order.
+func (l UbiquitousLanguage) ListAssertions(contextName string) []Assertion {
+	ci, ok := l.contextIndex(contextName)
+	if !ok {
+		return nil
+	}
+	return cloneAssertions(l.Contexts[ci].Assertions)
+}
+
+// FindSpecification returns the Specification with the exact name
+// inside contextName. Matching is case-sensitive and does not trim.
+func (l UbiquitousLanguage) FindSpecification(contextName, name string) (Specification, bool) {
+	ci, ok := l.contextIndex(contextName)
+	if !ok {
+		return Specification{}, false
+	}
+	for _, s := range l.Contexts[ci].Specifications {
+		if s.Name == name {
+			return s, true
+		}
+	}
+	return Specification{}, false
+}
+
+// ListSpecifications returns specifications in contextName in file order.
+func (l UbiquitousLanguage) ListSpecifications(contextName string) []Specification {
+	ci, ok := l.contextIndex(contextName)
+	if !ok {
+		return nil
+	}
+	return cloneSpecifications(l.Contexts[ci].Specifications)
 }
 
 // List returns definitions for the concept in contextName in file order.
@@ -637,10 +972,22 @@ func (l UbiquitousLanguage) List(c Concept, contextName string) []Definition {
 		return out
 	case ConceptValueObject, ConceptDomainEvent:
 		return cloneDefs(ctx.sectionRef(c))
-	case ConceptInvariant, ConceptAssertion, ConceptBusinessRule:
+	case ConceptInvariant, ConceptBusinessRule:
 		out := make([]Definition, len(ctx.Invariants))
 		for i, inv := range ctx.Invariants {
 			out[i] = Definition{Name: inv.Statement, Definition: inv.Owner, Line: inv.Line}
+		}
+		return out
+	case ConceptAssertion:
+		out := make([]Definition, len(ctx.Assertions))
+		for i, a := range ctx.Assertions {
+			out[i] = Definition{Name: a.Statement, Definition: a.Owner, Line: a.Line}
+		}
+		return out
+	case ConceptSpecification:
+		out := make([]Definition, len(ctx.Specifications))
+		for i, s := range ctx.Specifications {
+			out[i] = Definition{Name: s.Name, Definition: s.Definition, Line: s.Line}
 		}
 		return out
 	default:
@@ -650,7 +997,7 @@ func (l UbiquitousLanguage) List(c Concept, contextName string) []Definition {
 
 // Counts returns the tallies for this UbiquitousLanguage.
 func (l UbiquitousLanguage) Counts() Counts {
-	var entities, aggregates, valueObjects, invariants, events int
+	var entities, aggregates, valueObjects, invariants, assertions, specifications, events int
 	for _, c := range l.Contexts {
 		entities += len(c.Entities)
 		for _, e := range c.Entities {
@@ -660,16 +1007,20 @@ func (l UbiquitousLanguage) Counts() Counts {
 		}
 		valueObjects += len(c.ValueObjects)
 		invariants += len(c.Invariants)
+		assertions += len(c.Assertions)
+		specifications += len(c.Specifications)
 		events += len(c.Events)
 	}
 	return Counts{
-		Contexts:     len(l.Contexts),
-		Entities:     entities,
-		Aggregates:   aggregates,
-		ValueObjects: valueObjects,
-		Invariants:   invariants,
-		Events:       events,
-		Relations:    len(l.Relations),
+		Contexts:       len(l.Contexts),
+		Entities:       entities,
+		Aggregates:     aggregates,
+		ValueObjects:   valueObjects,
+		Invariants:     invariants,
+		Assertions:     assertions,
+		Specifications: specifications,
+		Events:         events,
+		Relations:      len(l.Relations),
 	}
 }
 
@@ -729,6 +1080,24 @@ func indexOf(defs []Definition, name string) int {
 func indexOfInvariant(invs []Invariant, statement string) int {
 	for i, inv := range invs {
 		if inv.Statement == statement {
+			return i
+		}
+	}
+	return -1
+}
+
+func indexOfAssertion(assertions []Assertion, statement string) int {
+	for i, a := range assertions {
+		if a.Statement == statement {
+			return i
+		}
+	}
+	return -1
+}
+
+func indexOfSpecification(specs []Specification, name string) int {
+	for i, s := range specs {
+		if s.Name == name {
 			return i
 		}
 	}

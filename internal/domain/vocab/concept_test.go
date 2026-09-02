@@ -14,6 +14,7 @@ func TestConceptsOrder(t *testing.T) {
 		vocab.ConceptValueObject,
 		vocab.ConceptInvariant,
 		vocab.ConceptAssertion,
+		vocab.ConceptSpecification,
 		vocab.ConceptAggregate,
 		vocab.ConceptAggregateRoot,
 		vocab.ConceptDomainEvent,
@@ -82,6 +83,7 @@ func TestListingSpellings(t *testing.T) {
 		vocab.ConceptValueObject:    "value_objects",
 		vocab.ConceptInvariant:      "invariants",
 		vocab.ConceptAssertion:      "assertions",
+		vocab.ConceptSpecification:  "specifications",
 		vocab.ConceptAggregate:      "aggregates",
 		vocab.ConceptAggregateRoot:  "aggregate_roots",
 		vocab.ConceptDomainEvent:    "domain_events",
@@ -128,6 +130,7 @@ func TestConceptDocMeaningsFromVocabularyTerms(t *testing.T) {
 		vocab.ConceptValueObject:    vocab.TermDefinition(vocab.TermValueObject),
 		vocab.ConceptInvariant:      vocab.TermDefinition(vocab.TermInvariant),
 		vocab.ConceptAssertion:      vocab.TermDefinition(vocab.TermAssertion),
+		vocab.ConceptSpecification:  vocab.TermDefinition(vocab.TermSpecification),
 		vocab.ConceptAggregate:      vocab.TermDefinition(vocab.TermAggregate),
 		vocab.ConceptAggregateRoot:  vocab.TermDefinition(vocab.TermAggregateRoot),
 		vocab.ConceptDomainEvent:    vocab.TermDefinition(vocab.TermDomainEvent),
@@ -199,7 +202,7 @@ func TestRelationKindsOrderAndSharedKernelDivergence(t *testing.T) {
 	}
 
 	schemaDesc := vocab.SchemaKindDescription()
-	if !strings.Contains(schemaDesc, "shared_kernel = small jointly-owned model subset") {
+	if !strings.Contains(schemaDesc, "shared_kernel: small jointly-owned model subset") {
 		t.Errorf("schema kind description missing model subset: %s", schemaDesc)
 	}
 }

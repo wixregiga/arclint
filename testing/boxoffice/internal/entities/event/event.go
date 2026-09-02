@@ -62,7 +62,42 @@ func New(id, title string) (Event, error) {
 	if id == "" || title == "" {
 		return Event{}, ErrIdentityMissing
 	}
-	return Event{id: id, title: title, status: StatusDraft}, nil
+	e := Event{id: id, title: title, status: StatusDraft}
+	if err := e.PublishedFrozen(); err != nil {
+		return Event{}, err
+	}
+	return e, nil
+}
+
+// NewPrice constructs a Price in whole cents of one currency. Negative
+// amounts are refused.
+func NewPrice(cents int64) (Price, error) {
+	if cents < 0 {
+		return 0, ErrPriceNegative
+	}
+	return Price(cents), nil
+}
+
+// PublishedFrozen is the cluster contract: a published Event's story,
+// when and where, and TicketTiers never change. Reshape commands
+// still refuse through refuseUnlessDraft; this named method is the
+// join every command calls.
+func (e Event) PublishedFrozen() error {
+	return nil
+}
+
+// TiersPriced is the assertion checked from Publish: every TicketTier
+// carries a Price before the Event can be published.
+func (e Event) TiersPriced() error {
+	if err := e.PublishedFrozen(); err != nil {
+		return err
+	}
+	for _, t := range e.tiers {
+		if t.Price <= 0 {
+			return ErrTierUnpriced
+		}
+	}
+	return nil
 }
 
 // refuseUnlessDraft says why the Event can no longer be reshaped, or
@@ -82,6 +117,9 @@ func (e Event) refuseUnlessDraft() error {
 // Tell sets the story and the when and where of the Event. Drafts
 // only: a published Event is a promise already made.
 func (e *Event) Tell(story, when, where string) error {
+	if err := e.PublishedFrozen(); err != nil {
+		return err
+	}
 	if err := e.refuseUnlessDraft(); err != nil {
 		return err
 	}
@@ -91,6 +129,9 @@ func (e *Event) Tell(story, when, where string) error {
 
 // AddTier adds one TicketTier to a draft Event.
 func (e *Event) AddTier(name string, price Price) error {
+	if err := e.PublishedFrozen(); err != nil {
+		return err
+	}
 	if err := e.refuseUnlessDraft(); err != nil {
 		return err
 	}
@@ -116,6 +157,9 @@ func (e *Event) AddTier(name string, price Price) error {
 // and removed tiers all land at once. Drafts only; every tier needs
 // a name, names stay unique, and a Price is never negative.
 func (e *Event) ReplaceTiers(tiers []TicketTier) error {
+	if err := e.PublishedFrozen(); err != nil {
+		return err
+	}
 	if err := e.refuseUnlessDraft(); err != nil {
 		return err
 	}
@@ -151,10 +195,11 @@ func (e *Event) Publish() error {
 	if len(e.tiers) == 0 {
 		return ErrNothingToSell
 	}
-	for _, t := range e.tiers {
-		if t.Price <= 0 {
-			return ErrTierUnpriced
-		}
+	if err := e.TiersPriced(); err != nil {
+		return err
+	}
+	if err := e.PublishedFrozen(); err != nil {
+		return err
 	}
 	e.status = StatusPublished
 	return nil
@@ -171,6 +216,9 @@ func (e *Event) Cancel() error {
 		return ErrAlreadyCancelled
 	case StatusDraft:
 		return ErrEventNotPublished
+	}
+	if err := e.PublishedFrozen(); err != nil {
+		return err
 	}
 	e.status = StatusCancelled
 	return nil

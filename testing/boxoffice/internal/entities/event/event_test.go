@@ -61,6 +61,19 @@ func TestDuplicateTierRefused(t *testing.T) {
 	}
 }
 
+func TestNewPriceRefusesNegative(t *testing.T) {
+	if _, err := event.NewPrice(-1); !errors.Is(err, event.ErrPriceNegative) {
+		t.Fatalf("NewPrice(-1) = %v, want ErrPriceNegative", err)
+	}
+	got, err := event.NewPrice(1500)
+	if err != nil {
+		t.Fatalf("NewPrice(1500): %v", err)
+	}
+	if got != 1500 {
+		t.Fatalf("NewPrice(1500) = %d", got)
+	}
+}
+
 func TestNegativePriceRefused(t *testing.T) {
 	ev := draftWithTier(t, 1500)
 	if err := ev.AddTier("front-row", -1); !errors.Is(err, event.ErrPriceNegative) {

@@ -17,14 +17,17 @@ import (
 type Concept string
 
 // The published concept kinds. Aggregate and AggregateRoot are Entity
-// designations, not separate stored objects. business_rule and
-// assertion always resolve to an Invariant entry. domain_event records
-// into the events section. bounded_context is the context itself.
+// designations, not separate stored objects. assertion records into
+// the assertions section. specification records into specifications.
+// business_rule always resolves to an invariant or an assertion, never
+// to its own section. domain_event records into the events section.
+// bounded_context is the context itself.
 const (
 	ConceptEntity         Concept = "entity"
 	ConceptValueObject    Concept = "value_object"
 	ConceptInvariant      Concept = "invariant"
 	ConceptAssertion      Concept = "assertion"
+	ConceptSpecification  Concept = "specification"
 	ConceptAggregate      Concept = "aggregate"
 	ConceptAggregateRoot  Concept = "aggregate_root"
 	ConceptDomainEvent    Concept = "domain_event"
@@ -39,6 +42,7 @@ func Concepts() []Concept {
 		ConceptValueObject,
 		ConceptInvariant,
 		ConceptAssertion,
+		ConceptSpecification,
 		ConceptAggregate,
 		ConceptAggregateRoot,
 		ConceptDomainEvent,
@@ -78,6 +82,8 @@ func Listing(c Concept) string {
 		return "invariants"
 	case ConceptAssertion:
 		return "assertions"
+	case ConceptSpecification:
+		return "specifications"
 	case ConceptAggregate:
 		return "aggregates"
 	case ConceptAggregateRoot:
@@ -149,10 +155,21 @@ func (c Concept) Doc() ConceptDoc {
 			Title:   "Assertion",
 			Meaning: TermDefinition(TermAssertion),
 			Questions: []string{
-				"What post-condition must hold after an operation?",
-				"Is this an invariant restated at an operation boundary?",
+				"Does this hold when a named operation occurs, rather than at all times?",
+				"Which operation must call the method that checks it?",
 			},
-			Supplies: "The project supplies the Assertion as an invariant statement with exactly one owner.",
+			Supplies: "The project supplies the Assertion's statement, owner, id, and the operation it is on.",
+		}
+	case ConceptSpecification:
+		return ConceptDoc{
+			Concept: ConceptSpecification,
+			Title:   "Specification",
+			Meaning: TermDefinition(TermSpecification),
+			Questions: []string{
+				"Do experts pass this predicate around as a thing, not just a rule that holds?",
+				"Would you say this to an expert who never saw the language?",
+			},
+			Supplies: "The project supplies the Specification's name and definition; source shows a type of that name with a satisfaction method.",
 		}
 	case ConceptAggregate:
 		return ConceptDoc{
@@ -207,8 +224,8 @@ func (c Concept) Doc() ConceptDoc {
 				"Does this resolve to an invariant or an assertion?",
 				"Which entity, aggregate root, or value object owns enforcement?",
 			},
-			// business_rule always resolves to invariant or assertion with an owner.
-			Supplies: "The project records a business_rule as an invariant or assertion with exactly one owner; it is never stored as its own section.",
+			// business_rule always resolves to invariant or assertion; never specification.
+			Supplies: "The project records a business_rule as an invariant or assertion with exactly one owner; it is never stored as its own section, and it never becomes a specification.",
 		}
 	default:
 		return ConceptDoc{Concept: c, Title: string(c)}

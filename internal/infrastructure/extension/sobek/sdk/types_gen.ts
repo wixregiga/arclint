@@ -138,11 +138,35 @@ export interface DomainDefinitionInfo {
 /**
  * DomainInvariantInfo is one recorded invariant (statement + owner)
  * inside a bounded context as exposed through ctx.domain(). Line is
- * where the invariant is written in ubiquitous-language.yaml.
+ * where the invariant is written in ubiquitous-language.yaml. ID is
+ * the cluster identity when the owner is an aggregate named contract.
  */
 export interface DomainInvariantInfo {
   statement: string;
   owner: string;
+  id?: string;
+  line: number /* int */;
+}
+/**
+ * DomainAssertionInfo is one recorded assertion as exposed through
+ * ctx.domain(). ID names the checking method; On names the operation
+ * that must call it.
+ */
+export interface DomainAssertionInfo {
+  statement: string;
+  owner: string;
+  id: string;
+  on: string;
+  line: number /* int */;
+}
+/**
+ * DomainSpecificationInfo is one recorded specification as exposed
+ * through ctx.domain(): a named predicate, never a flag on a value
+ * object.
+ */
+export interface DomainSpecificationInfo {
+  name: string;
+  definition?: string;
   line: number /* int */;
 }
 /**
@@ -155,6 +179,8 @@ export interface DomainContextInfo {
   entities: DomainDefinitionInfo[];
   valueObjects: DomainDefinitionInfo[];
   invariants: DomainInvariantInfo[];
+  assertions: DomainAssertionInfo[];
+  specifications: DomainSpecificationInfo[];
   events: DomainDefinitionInfo[];
   line: number /* int */;
 }

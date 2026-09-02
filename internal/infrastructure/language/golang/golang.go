@@ -37,9 +37,13 @@ func (Producer) Language() rule.Language { return rule.LanguageGo }
 func (Producer) Facts(root string, files []conformance.ObservedFile, requested []rule.Fact) (map[string]conformance.LanguageFacts, error) {
 	res := newResolver(root, files)
 	wantDeclarations := false
+	wantCalls := false
 	for _, f := range requested {
 		if f == rule.FactDeclarations {
 			wantDeclarations = true
+		}
+		if f == rule.FactCalls {
+			wantCalls = true
 		}
 	}
 	out := map[string]conformance.LanguageFacts{}
@@ -48,7 +52,7 @@ func (Producer) Facts(root string, files []conformance.ObservedFile, requested [
 		if !analyzable(f.Path) {
 			continue
 		}
-		out[f.Path] = analyzeFile(fset, res, root, f.Path, wantDeclarations)
+		out[f.Path] = analyzeFile(fset, res, root, f.Path, wantDeclarations, wantCalls)
 	}
 	return out, nil
 }
@@ -67,7 +71,7 @@ func analyzable(rel string) bool {
 	return true
 }
 
-func analyzeFile(fset *token.FileSet, res *resolver, root, rel string, wantDeclarations bool) conformance.LanguageFacts {
+func analyzeFile(fset *token.FileSet, res *resolver, root, rel string, wantDeclarations, wantCalls bool) conformance.LanguageFacts {
 	facts := conformance.LanguageFacts{Language: rule.LanguageGo, ImportsAvailable: true}
 	src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
 	if err != nil {
@@ -75,7 +79,7 @@ func analyzeFile(fset *token.FileSet, res *resolver, root, rel string, wantDecla
 		return facts
 	}
 	mode := parser.ImportsOnly
-	if wantDeclarations {
+	if wantDeclarations || wantCalls {
 		mode = parser.SkipObjectResolution
 	}
 	parsed, err := parser.ParseFile(fset, rel, src, mode)
@@ -87,6 +91,10 @@ func analyzeFile(fset *token.FileSet, res *resolver, root, rel string, wantDecla
 	if wantDeclarations {
 		facts.DeclarationsAvailable = true
 		facts.Declarations = extractDeclarations(fset, parsed)
+	}
+	if wantCalls {
+		facts.CallsAvailable = true
+		facts.Calls = extractCalls(fset, parsed)
 	}
 	owner := res.ownerOf(path.Dir(rel))
 	for _, spec := range parsed.Imports {

@@ -209,6 +209,55 @@ contracts:
 	}
 }
 
+func TestLoadInvariantsKind(t *testing.T) {
+	content := []byte(`
+modules:
+  domain:
+    paths: ["internal/domain/**"]
+contracts:
+  domain:
+    invariants:
+      - id: t:domain/contracts-visible
+        kind: invariants
+      - id: t:domain/contracts-closed
+        kind: invariants
+        with:
+          closed: true
+`)
+	doc, err := yamlrule.Load(content, "rules.yaml", vocab.UbiquitousLanguage{})
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(doc.Configured.Rules) != 2 {
+		t.Fatalf("rules = %d, want 2", len(doc.Configured.Rules))
+	}
+	var foundOpen, foundClosed bool
+	for _, r := range doc.Configured.Rules {
+		if r.Type() != rule.TypeInvariants {
+			t.Errorf("type = %s, want invariants", r.Type())
+		}
+		p, ok := r.Params().(rule.InvariantsParams)
+		if !ok {
+			t.Fatalf("params %T", r.Params())
+		}
+		switch r.ID().Qualified() {
+		case "t:domain/contracts-visible":
+			foundOpen = true
+			if p.Closed {
+				t.Errorf("visible rule should default closed off")
+			}
+		case "t:domain/contracts-closed":
+			foundClosed = true
+			if !p.Closed {
+				t.Errorf("closed rule should be closed")
+			}
+		}
+	}
+	if !foundOpen || !foundClosed {
+		t.Fatalf("missing invariants rules: open=%v closed=%v", foundOpen, foundClosed)
+	}
+}
+
 func TestDiscoverPath(t *testing.T) {
 	root := t.TempDir()
 	nested := root + "/a/b"

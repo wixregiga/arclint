@@ -33,9 +33,13 @@ func (Producer) Language() rule.Language { return rule.LanguagePython }
 // tree-sitter grammar, deterministic) only when asked for.
 func (Producer) Facts(root string, files []conformance.ObservedFile, requested []rule.Fact) (map[string]conformance.LanguageFacts, error) {
 	wantDeclarations := false
+	wantCalls := false
 	for _, f := range requested {
 		if f == rule.FactDeclarations {
 			wantDeclarations = true
+		}
+		if f == rule.FactCalls {
+			wantCalls = true
 		}
 	}
 	res := newResolver(root, files)
@@ -44,12 +48,12 @@ func (Producer) Facts(root string, files []conformance.ObservedFile, requested [
 		if rule.LanguageOf(f.Path) != rule.LanguagePython {
 			continue
 		}
-		out[f.Path] = analyzeFile(res, root, f.Path, wantDeclarations)
+		out[f.Path] = analyzeFile(res, root, f.Path, wantDeclarations, wantCalls)
 	}
 	return out, nil
 }
 
-func analyzeFile(res *resolver, root, rel string, wantDeclarations bool) conformance.LanguageFacts {
+func analyzeFile(res *resolver, root, rel string, wantDeclarations, wantCalls bool) conformance.LanguageFacts {
 	facts := conformance.LanguageFacts{Language: rule.LanguagePython, ImportsAvailable: true}
 	src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
 	if err != nil {
@@ -62,13 +66,22 @@ func analyzeFile(res *resolver, root, rel string, wantDeclarations bool) conform
 		imp.Class, imp.TargetDir, imp.TargetFile = res.classify(dir, ri.module)
 		facts.Imports = append(facts.Imports, imp)
 	}
+	if !wantDeclarations && !wantCalls {
+		return facts
+	}
+	// A strict-parse failure yields honest fact absence without
+	// poisoning the scanner import view.
+	df := extractDeclarations(src)
+	if df.ParseError != "" {
+		return facts
+	}
 	if wantDeclarations {
-		// A strict-parse failure yields honest fact absence without
-		// poisoning the scanner import view.
-		if df := extractDeclarations(src); df.ParseError == "" {
-			facts.DeclarationsAvailable = true
-			facts.Declarations = df.Decls
-		}
+		facts.DeclarationsAvailable = true
+		facts.Declarations = df.Decls
+	}
+	if wantCalls {
+		facts.CallsAvailable = true
+		facts.Calls = df.Calls
 	}
 	return facts
 }

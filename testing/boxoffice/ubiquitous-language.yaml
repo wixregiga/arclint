@@ -37,9 +37,8 @@ contexts:
           A draft Event is invisible to ordering and capacity alike.
         owner: Event
       - statement: >-
-          Every TicketTier carries a Price before its Event can be
-          published.
-        owner: TicketTier
+          A Price is whole cents of one currency, never negative.
+        owner: Price
       - statement: >-
           An Organizer alone creates, edits, publishes, and cancels
           Events.
@@ -51,6 +50,7 @@ contexts:
           A published Event's story, its when and where, and its
           TicketTiers never change.
         owner: Event
+        id: published-frozen
       - statement: >-
           Only a published Event can be cancelled.
         owner: Event
@@ -61,6 +61,13 @@ contexts:
           When an Event is cancelled, every ticket sold for it is
           refunded.
         owner: Event
+    assertions:
+      - statement: >-
+          Every TicketTier carries a Price before its Event can be
+          published.
+        owner: Event
+        id: tiers-priced
+        on: Publish
   - name: ordering
     entities:
       - name: Order
@@ -114,6 +121,7 @@ contexts:
           A placed Order's OrderLines and their Prices never change,
           not even when tickets are given back.
         owner: Order
+        id: lines-frozen
       - statement: >-
           A Refund never gives back more tickets of a TicketTier than
           its Order bought on that tier and has not already had
@@ -154,6 +162,7 @@ contexts:
           A Capacity never lets seats spoken for plus seats held
           exceed the seats a TicketTier has.
         owner: Capacity
+        id: seat-budget
       - statement: >-
           While every seat of a TicketTier is spoken for or held, a
           Capacity refuses new Holds on it.

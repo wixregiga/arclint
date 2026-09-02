@@ -194,6 +194,32 @@ contracts:
 `, true,
 		},
 		{
+			"minimal invariants rule", `
+modules:
+  core:
+    paths: ["core/**"]
+contracts:
+  core:
+    invariants:
+      - id: t:core/contracts-visible
+        kind: invariants
+`, true,
+		},
+		{
+			"invariants rule with closed", `
+modules:
+  core:
+    paths: ["core/**"]
+contracts:
+  core:
+    invariants:
+      - id: t:core/contracts-visible
+        kind: invariants
+        with:
+          closed: true
+`, true,
+		},
+		{
 			"minimal extension rule", `
 modules:
   core:

@@ -300,15 +300,27 @@ func TestDefineInvariantAndBusinessRule(t *testing.T) {
 		t.Fatalf("FindInvariant = %+v ok=%v", inv, ok)
 	}
 
-	// assertion same section
+	// assertion is its own section and requires owner, id, and on
+	_, _, err = l.Define(vocab.ConceptAssertion, ctx, "post: shipped implies paid", vocab.Change{
+		Owner: "Order",
+	})
+	if err == nil {
+		t.Fatal("expected assertion id required error")
+	}
 	l, res, err = l.Define(vocab.ConceptAssertion, ctx, "post: shipped implies paid", vocab.Change{
 		Owner: "Order",
+		ID:    "tiers-priced",
+		On:    "Publish",
 	})
 	if err != nil {
 		t.Fatalf("define assertion: %v", err)
 	}
 	if res.Outcome != vocab.OutcomeCreated {
 		t.Fatalf("assertion outcome = %q", res.Outcome)
+	}
+	a, ok := l.FindAssertion(ctx, "post: shipped implies paid")
+	if !ok || a.Owner != "Order" || a.ID != "tiers-priced" || a.On != "Publish" {
+		t.Fatalf("FindAssertion = %+v ok=%v", a, ok)
 	}
 
 	// update owner
@@ -339,8 +351,39 @@ func TestDefineInvariantAndBusinessRule(t *testing.T) {
 		t.Fatalf("unchanged outcome = %q", res.Outcome)
 	}
 
-	if got := l.ListInvariants(ctx); len(got) != 2 {
+	if got := l.ListInvariants(ctx); len(got) != 1 {
 		t.Fatalf("ListInvariants len = %d", len(got))
+	}
+	if got := l.ListAssertions(ctx); len(got) != 1 {
+		t.Fatalf("ListAssertions len = %d", len(got))
+	}
+
+	l, res, err = l.Define(vocab.ConceptSpecification, ctx, "PreferredCustomer", vocab.Change{
+		SetDefinition:  true,
+		DefinitionText: "An attendee the house treats as preferred.",
+	})
+	if err != nil {
+		t.Fatalf("define specification: %v", err)
+	}
+	if res.Outcome != vocab.OutcomeCreated {
+		t.Fatalf("specification outcome = %q", res.Outcome)
+	}
+	spec, ok := l.FindSpecification(ctx, "PreferredCustomer")
+	if !ok || spec.Definition != "An attendee the house treats as preferred." {
+		t.Fatalf("FindSpecification = %+v ok=%v", spec, ok)
+	}
+	l, res, err = l.Define(vocab.ConceptSpecification, ctx, "PreferredCustomer", vocab.Change{
+		SetDefinition:  true,
+		DefinitionText: "Updated preferred attendee.",
+	})
+	if err != nil {
+		t.Fatalf("update specification: %v", err)
+	}
+	if res.Outcome != vocab.OutcomeUpdated {
+		t.Fatalf("specification update outcome = %q", res.Outcome)
+	}
+	if got := l.ListSpecifications(ctx); len(got) != 1 || got[0].Definition != "Updated preferred attendee." {
+		t.Fatalf("ListSpecifications = %+v", got)
 	}
 }
 
@@ -729,6 +772,76 @@ func TestDefineAliasUnchangedElementWise(t *testing.T) {
 	}
 	if res.Outcome != vocab.OutcomeUpdated {
 		t.Fatalf("reorder outcome = %q, want updated", res.Outcome)
+	}
+}
+
+func TestNewUbiquitousLanguageRejectsValueObjectInvariantID(t *testing.T) {
+	_, err := vocab.NewUbiquitousLanguage([]vocab.BoundedContext{{
+		Name:         ctx,
+		ValueObjects: []vocab.Definition{{Name: "Price", Definition: "Whole cents."}},
+		Invariants:   []vocab.Invariant{{Statement: "A Price is never negative.", Owner: "Price", ID: "never-negative"}},
+	}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "forbidden") {
+		t.Fatalf("expected value-object id forbidden, got %v", err)
+	}
+}
+
+func TestNewUbiquitousLanguageRejectsAssertionWithoutOn(t *testing.T) {
+	_, err := vocab.NewUbiquitousLanguage([]vocab.BoundedContext{{
+		Name:     ctx,
+		Entities: []vocab.Entity{entity("Order", true)},
+		Assertions: []vocab.Assertion{{
+			Statement: "Every line is priced.",
+			Owner:     "Order",
+			ID:        "lines-priced",
+		}},
+	}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "on must be non-empty") {
+		t.Fatalf("expected assertion on required, got %v", err)
+	}
+}
+
+func TestNewUbiquitousLanguageRejectsNameInValueObjectAndSpecification(t *testing.T) {
+	_, err := vocab.NewUbiquitousLanguage([]vocab.BoundedContext{{
+		Name:           ctx,
+		ValueObjects:   []vocab.Definition{{Name: "Preferred", Definition: "A marking."}},
+		Specifications: []vocab.Specification{{Name: "Preferred", Definition: "A named predicate."}},
+	}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "both a value object and a specification") {
+		t.Fatalf("expected name clash, got %v", err)
+	}
+}
+
+func TestNewUbiquitousLanguageRejectsDuplicateContractIDs(t *testing.T) {
+	_, err := vocab.NewUbiquitousLanguage([]vocab.BoundedContext{{
+		Name:     ctx,
+		Entities: []vocab.Entity{entity("Order", true)},
+		Invariants: []vocab.Invariant{{
+			Statement: "Lines never change.", Owner: "Order", ID: "lines-frozen",
+		}},
+		Assertions: []vocab.Assertion{{
+			Statement: "Priced before place.", Owner: "Order", ID: "lines-frozen", On: "Place",
+		}},
+	}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "duplicate id") {
+		t.Fatalf("expected duplicate id, got %v", err)
+	}
+}
+
+func TestNewUbiquitousLanguageAcceptsClusterAndValueIntegrity(t *testing.T) {
+	l := mustLang(t, []vocab.BoundedContext{{
+		Name: ctx,
+		Entities: []vocab.Entity{
+			entity("Order", true),
+		},
+		ValueObjects: []vocab.Definition{{Name: "Price", Definition: "Whole cents."}},
+		Invariants: []vocab.Invariant{
+			{Statement: "A placed Order's lines never change.", Owner: "Order", ID: "lines-frozen"},
+			{Statement: "A Price is never negative.", Owner: "Price"},
+		},
+	}}, nil)
+	if l.Counts().Invariants != 2 {
+		t.Fatalf("invariants = %d", l.Counts().Invariants)
 	}
 }
 

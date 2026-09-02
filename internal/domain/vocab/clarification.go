@@ -8,7 +8,7 @@ type ClarificationQuestion struct {
 	Decides  string
 }
 
-// InsufficientInfoQuestions returns the five insufficient_info bank
+// InsufficientInfoQuestions returns the insufficient_info bank
 // entries in VOCAB.yaml order (char-exact).
 func InsufficientInfoQuestions() []ClarificationQuestion {
 	return []ClarificationQuestion{
@@ -19,6 +19,22 @@ func InsufficientInfoQuestions() []ClarificationQuestion {
 		{
 			Question: "What must never be violated about <X>, even for an instant?",
 			Decides:  "invariants and owner",
+		},
+		{
+			Question: "Does this hold at all times, or only when a named operation occurs?",
+			Decides:  "invariant vs assertion",
+		},
+		{
+			Question: "Do experts pass this predicate around as a thing they name, rather than as a rule that simply holds?",
+			Decides:  "specifications[] vs invariant or assertion",
+		},
+		{
+			Question: "Is this a property of the value itself (constructor) or of the cluster that must stay consistent on every command?",
+			Decides:  "value integrity vs cluster invariant",
+		},
+		{
+			Question: "Would you say this to an expert who never saw the language?",
+			Decides:  "domain contract vs programming-only guard",
 		},
 		{
 			Question: "When <X> changes, what else must change in the same transaction?",

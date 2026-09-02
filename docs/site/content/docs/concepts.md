@@ -111,7 +111,7 @@ The project's Ubiquitous Language lives in a committed
 `ubiquitous-language.yaml` beside `rules.yaml`. It is first-class
 project knowledge, not hidden ArcLint machinery. The file is organized
 by bounded context: each context holds entities, value objects,
-invariants, and events; top-level relations name how contexts connect.
+invariants, assertions, specifications, and events; top-level relations name how contexts connect.
 ArcLint owns the meanings of the supported concepts; the project
 supplies names, definitions, aliases, invariant statements, and owners.
 
@@ -120,7 +120,6 @@ supplies names, definitions, aliases, invariant statements, and owners.
 | Entity | `entity` | A domain concept whose identity matters as it changes over time. |
 | Aggregate | `aggregate` / `aggregate_root` | An Entity designation (`aggregate: true`): a consistency boundary reached through its identity. |
 | Value Object | `value_object` | A domain value defined entirely by its attributes, with no identity of its own. |
-| Invariant | `invariant` | A statement that must always hold; `business_rule` and `assertion` both record here with exactly one owner. |
 | Domain Event | `domain_event` | Something that has completed in the domain and that the project cares to record (file section: `events`). |
 | Bounded Context | `bounded_context` | A linguistic boundary; terms are defined inside one context. |
 
@@ -131,7 +130,7 @@ printed by `arclint domain schema`). Inspect and maintain the model with
 Initialization leaves an existing file untouched. `arclint domain explain`
 prints the same ArcLint meanings used by help, guided authoring, JSON
 output, and the extension SDK. Declaring knowledge never creates a
-Diagnostic by itself—enabled Rules under `arclint check` decide whether
+Diagnostic by itself—enabled Rules under `arclint check` (such as [Visible Domain Contracts](/docs/contracts/)) decide whether
 the model is enforced.
 
 ## Validation layers
