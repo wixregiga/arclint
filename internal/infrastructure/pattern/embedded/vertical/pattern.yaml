@@ -1,0 +1,108 @@
+# ArcLint's built-in vertical-slice architecture Pattern.
+pattern:
+  namespace: arclint
+  name: vertical
+  version: 0.1.0
+coverage: [go]
+modules:
+  - name: domain
+    paths: ["internal/*/domain/**"]
+    description: "Pure domain model per feature; stdlib-only."
+  - name: application
+    paths: ["internal/*/application/**"]
+    description: "Use cases and ports per feature."
+  - name: infra
+    paths: ["internal/*/infra/**"]
+    description: "Driven adapters implementing the feature's ports."
+  - name: app
+    paths: ["internal/app/**"]
+    description: "Driving adapters and wiring, organized by transport."
+  - name: shared
+    paths: ["internal/shared/**"]
+    description: "Cross-cutting mechanisms with no product meaning."
+  - name: composition
+    paths: ["cmd/**"]
+    description: "Entrypoints; each main.go builds a binary."
+rules:
+  - id: vertical:domain/stdlib-only
+    kind: consumes
+    module: domain
+    allow: []
+    forbid: [external]
+  - id: vertical:domain/no-context
+    kind: extension
+    module: domain
+    uses: vertical/forbid-imports
+    with:
+      packages: [context]
+  - id: vertical:domain/no-io
+    kind: extension
+    module: domain
+    uses: vertical/forbid-imports
+    with:
+      packages: [bufio, database/sql, io, log, net, os, syscall]
+  - id: vertical:application/use-cases-through-ports
+    kind: consumes
+    module: application
+    allow: [domain]
+    forbid: [external]
+  - id: vertical:application/repository-context
+    kind: extension
+    module: application
+    uses: vertical/repository-context
+  - id: vertical:application/usecase-contract
+    kind: extension
+    module: application
+    uses: vertical/usecase
+  - id: vertical:infra/outbound-only
+    kind: consumes
+    module: infra
+    allow: [application, domain, shared]
+  - id: vertical:app/driving-and-wiring
+    kind: consumes
+    module: app
+    allow: [application, domain, infra, shared]
+  - id: vertical:shared/mechanism-only
+    kind: consumes
+    module: shared
+    allow: []
+  - id: vertical:shared/concerns
+    kind: extension
+    module: shared
+    uses: vertical/shared-concerns
+    with:
+      concerns: [logging, tracing, metrics, config, security, errors, cache, db, validation, events]
+  - id: vertical:composition/selects-adapters
+    kind: consumes
+    module: composition
+    allow: [app, infra, application, domain, shared]
+  - id: vertical:repositories/application-only
+    kind: extension
+    uses: vertical/repository-location
+    with:
+      module: application
+  - id: vertical:dependencies/inward
+    kind: layers
+    layers: [app, application, domain]
+  - id: vertical:infra/app-and-composition-only
+    kind: protected
+    module: infra
+    allow: [app, composition]
+  - id: vertical:features/independent
+    kind: independence
+    folders: ["internal/*"]
+  - id: vertical:dependencies/acyclic
+    kind: acyclic
+extensions:
+  - name: vertical/forbid-imports
+    entry: extensions/vertical_forbid_imports.ts
+  - name: vertical/repository-context
+    entry: extensions/vertical_repository_context.ts
+  - name: vertical/repository-location
+    entry: extensions/vertical_repository_location.ts
+  - name: vertical/shared-concerns
+    entry: extensions/vertical_shared_concerns.ts
+  - name: vertical/usecase
+    entry: extensions/vertical_usecase.ts
+tests:
+  root: tests

@@ -2,8 +2,7 @@
 // representations of the target ruleset format. The accepted grammar
 // is exactly what rules.yaml uses — runtime, scan, modules,
 // contracts (consumes plus structure, naming, and extension invariants),
-// and dependencies (layers, protected, independence, acyclic) — plus the pattern
-// identity header used by Pattern distribution files. A representation
+// and dependencies (layers, protected, independence, acyclic). A representation
 // that cannot become a valid Rule is an error, never a partial value.
 package yamlrule
 
@@ -70,30 +69,15 @@ func (r Repository) ConfiguredRules() (rule.Configured, error) {
 	if err != nil {
 		return rule.Configured{}, err
 	}
-	if doc.Pattern != nil {
-		return rule.Configured{}, fmt.Errorf("%s: a pattern distribution file is not a repository ruleset", r.path)
-	}
 	return doc.Configured, nil
-}
-
-// PatternIdentity is the identity header of a Pattern distribution
-// file.
-type PatternIdentity struct {
-	Namespace string
-	Name      string
-	Version   string
-	Coverage  []rule.Language
 }
 
 // Document is one parsed and translated ruleset file.
 type Document struct {
 	Configured rule.Configured
-	// Pattern is non-nil for Pattern distribution files.
-	Pattern *PatternIdentity
 }
 
 type documentDoc struct {
-	Pattern      *patternDoc            `yaml:"pattern"`
 	Runtime      []string               `yaml:"runtime"`
 	Scan         scanDoc                `yaml:"scan"`
 	Modules      map[string]moduleDoc   `yaml:"modules"`
@@ -104,13 +88,6 @@ type documentDoc struct {
 
 type repositoryDoc struct {
 	Invariants []invariantDoc `yaml:"invariants"`
-}
-
-type patternDoc struct {
-	Namespace string   `yaml:"namespace"`
-	Name      string   `yaml:"name"`
-	Version   string   `yaml:"version"`
-	Coverage  []string `yaml:"coverage"`
 }
 
 type scanDoc struct {
@@ -273,13 +250,6 @@ func Load(data []byte, source string, lang vocab.UbiquitousLanguage) (Document, 
 		Languages: languages,
 		Scan:      scan,
 	}}
-	if doc.Pattern != nil {
-		identity, err := translatePattern(*doc.Pattern)
-		if err != nil {
-			return fail("pattern: %v", err)
-		}
-		out.Pattern = &identity
-	}
 	return out, nil
 }
 
@@ -627,26 +597,6 @@ func dependencySpec(doc dependencyDoc) (rule.Spec, error) {
 		return rule.Spec{}, fmt.Errorf("dependency kind %q is not part of the target ruleset format", doc.Kind)
 	}
 	return spec, nil
-}
-
-func translatePattern(doc patternDoc) (PatternIdentity, error) {
-	if doc.Namespace == "" || doc.Name == "" || doc.Version == "" {
-		return PatternIdentity{}, fmt.Errorf("namespace, name, and version are required")
-	}
-	coverage := make([]rule.Language, 0, len(doc.Coverage))
-	for _, c := range doc.Coverage {
-		l, err := rule.ParseLanguage(c)
-		if err != nil {
-			return PatternIdentity{}, fmt.Errorf("coverage: %w", err)
-		}
-		coverage = append(coverage, l)
-	}
-	return PatternIdentity{
-		Namespace: doc.Namespace,
-		Name:      doc.Name,
-		Version:   doc.Version,
-		Coverage:  coverage,
-	}, nil
 }
 
 // DiscoverPath locates the ruleset file: from a starting directory

@@ -5,20 +5,30 @@ contexts:
     entities:
       - name: Rule
         definition: >-
-          One enforceable architecture claim configured in rules.yaml.
-          A Rule keeps its RuleID while everything human-facing about
-          it can be renamed. Aggregate evidence, from the rules.yaml
-          header: "Rule is the sole aggregate". A Rule's identity, its
-          Claim, its scope, and its Severity change together in one
-          edit of rules.yaml.
+          One enforceable architecture claim that may originate in a
+          pattern or rules.yaml. Applying a Pattern preserves its RuleID
+          and origin. A Rule keeps its RuleID while everything
+          human-facing about it can be renamed. A Rule's identity, its
+          Claim, its scope, and its Severity change together.
         aggregate: true
+      - name: Module
+        definition: >-
+          A named logical grouping of files and directories to which
+          Rules are applied.
     value_objects:
+      - name: Extension
+        definition: >-
+          Executable enforcement code a Rule names through uses. An
+          Extension may be repository-local or carried by one Pattern
+          version. A Pattern-carried Extension belongs to that version.
+          Extension enforcement applies to every language ArcLint
+          supports.
       - name: RuleID
         definition: >-
           The stable, optionally namespace-qualified identity of a
-          Rule, spelled explicitly in rules.yaml. Every record arclint
-          keeps about a Rule over time keys on it, so it outlives
-          renames of anything else about the Rule.
+          Rule, spelled explicitly in its pattern or rules.yaml source.
+          Every record arclint keeps about a Rule over time keys on it,
+          so it outlives renames of anything else about the Rule.
       - name: Claim
         definition: >-
           The architectural proposition a Rule states, either written
@@ -82,6 +92,36 @@ contexts:
           A TermCase never renders an empty segment: a term without
           letters or digits is rejected at resolution.
         owner: TermCase
+  - name: pattern
+    entities:
+      - name: Pattern
+        definition: >-
+          A named and namespaced architecture distributed across
+          versions for use in other projects. A Pattern carries Modules,
+          Rules, optional Extensions, optional tests, and declared
+          language coverage, which may be empty. It remains the same
+          Pattern when those contents change in a new version.
+        aggregate: true
+    invariants:
+      - statement: >-
+          A published Pattern version never changes any byte in its
+          full distribution tree.
+        owner: Pattern
+      - statement: >-
+          A Pattern does not create files or directories that it governs.
+        owner: Pattern
+      - statement: >-
+          The order of Rules in a Pattern never gives one Rule
+          precedence over another.
+        owner: Pattern
+      - statement: >-
+          A Pattern version's digest covers every byte in its full
+          distribution tree.
+        owner: Pattern
+      - statement: >-
+          A Pattern refuses a declared test root whose tests are
+          missing or invalid.
+        owner: Pattern
   - name: conformance
     value_objects:
       - name: Violation
@@ -91,6 +131,12 @@ contexts:
           fresh, and two Violations with the same values are the same
           finding.
 relations:
+  # Pattern adopts the rule context's model as-is. Its Modules, Rules,
+  # and Extensions keep the meanings defined by rule, so dependence
+  # flows pattern -> rule and never back.
+  - from: rule
+    to: pattern
+    kind: conformist
   # conformance adopts the rule context's model as-is: assessments
   # consume Rule, Severity, and the rest of the rule model directly,
   # so dependence flows conformance -> rule and never back.

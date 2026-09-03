@@ -170,6 +170,16 @@ The loop is schema-guided, trialed live, then pinned:
        message: "path forbidden by structure rule \"internal/domain/pattern/**\" of Module \"domain\""
    ```
 
+## Authoring Patterns
+
+`pattern.yaml` is the validated distribution contract for a named,
+versioned, namespaced collection of Modules and Rules, with optional
+language coverage, Extensions, and packaged Rule Tests. See the
+[Pattern authoring guide](docs/site/content/docs/patterns.md) and
+[Pattern JSON Schema](docs/pattern.schema.json) for the canonical
+manifest and package layout. ArcLint validates embedded and local
+packages through the same loader and digests the full package tree.
+
 ## Extensions
 
 Custom enforcement is TypeScript under `.arclint/extensions/`,
@@ -261,7 +271,7 @@ context [paths...]  the architecture, or everything binding the given paths (--m
 domain              inspect and maintain the project's ubiquitous language (init/overview/list/show/explain/define/remove/schema)
 agents              AGENTS.md block (--write); skill bundle (skill); SKILL.md only (md|agentmd|markdown)
 baseline capture    adopt current findings   ·  baseline refresh: drop stale entries
-patterns            list local pattern packages (.arclint/patterns/<name>/pattern.yaml)
+patterns            list embedded and local pattern packages (.arclint/patterns/<name>/pattern.yaml)
 sdk init            write arclint.d.ts + tsconfig.json for extension authors
 init                draft a starter rules.yaml (--languages go,ts,py --force)
 completion <shell>  shell completion with live rule ids and module names (bash|zsh|fish|powershell)

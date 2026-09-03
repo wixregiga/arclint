@@ -282,23 +282,6 @@ scan:
   include_testdata: true
 `, true,
 		},
-		{
-			"pattern distribution header", `
-pattern:
-  namespace: acme
-  name: hexagonal
-  version: 1.2.0
-  coverage: [go, typescript]
-modules:
-  core:
-    paths: ["core/**"]
-contracts:
-  core:
-    consumes:
-      id: acme:core/clean
-      external: forbid
-`, true,
-		},
 		{"unknown top-level key", "rules: []\n", false},
 		{
 			"unknown rule kind", `
@@ -661,7 +644,7 @@ repository:
       require: ["core/{name:flatcase}/root.go"]
 `, false,
 		},
-		{"pattern header missing version", "pattern:\n  namespace: acme\n  name: hexagonal\n", false},
+		{"pattern distribution header", "pattern:\n  namespace: acme\n  name: hexagonal\n  version: 1.2.0\n", false},
 	}
 
 	for _, tc := range cases {

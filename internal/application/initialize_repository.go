@@ -16,13 +16,13 @@ const (
 // optional Extension sources to materialize together.
 type PatternScaffold struct {
 	Ruleset    string
-	Extensions []rule.PatternExtension
+	Extensions []rule.Extension
 }
 
 // RulesetScaffold persists a drafted repository ruleset and any Pattern
 // Extension entries. Write refuses to overwrite existing targets unless forced.
 type RulesetScaffold interface {
-	Write(content string, extensions []rule.PatternExtension, force bool) (path string, err error)
+	Write(content string, extensions []rule.Extension, force bool) (path string, err error)
 }
 
 // PatternScaffolds supplies built-in Pattern packages as cohesive
@@ -111,7 +111,7 @@ func (uc InitializeRepository) Execute(req InitializeRepositoryRequest) (string,
 	return path, nil
 }
 
-func (uc InitializeRepository) rulesetContent(pattern string, languages []string) (string, []rule.PatternExtension, error) {
+func (uc InitializeRepository) rulesetContent(pattern string, languages []string) (string, []rule.Extension, error) {
 	if pattern == "" {
 		pattern = BarePattern
 	}

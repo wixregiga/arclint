@@ -1,0 +1,14 @@
+# Violating case: a retired aggregate directory appears beside the Rule
+# and Pattern aggregates; the structure Rule reports the forbidden file.
+rule: "arclint:domain/aggregate-boundaries"
+files:
+  internal/domain/rule/root.go: |
+    package rule
+  internal/domain/pattern/root.go: |
+    package pattern
+  internal/domain/architecture/root.go: |
+    package architecture
+expect:
+  - kind: violation
+    path: internal/domain/architecture/root.go
+    message: "path forbidden by structure rule \"internal/domain/architecture/**\" of Module \"domain\""

@@ -26,12 +26,13 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 
 ### The recorded domain
 
-2 contexts, 1 aggregates, 4 invariants (ubiquitous-language.yaml).
+3 contexts, 2 aggregates, 9 invariants (ubiquitous-language.yaml).
 
-- **rule**: Rule [aggregate]; value objects RuleID, Claim, Severity, Expansion, ExpansionSource, TermCase, CaseSpec
+- **rule**: Rule [aggregate], Module; value objects Extension, RuleID, Claim, Severity, Expansion, ExpansionSource, TermCase, CaseSpec
+- **pattern**: Pattern [aggregate]
 - **conformance**: value objects Violation
 
-Relations: rule → conformance (conformist). Full text: `arclint domain`.
+Relations: rule → pattern (conformist); rule → conformance (conformist). Full text: `arclint domain`.
 
 ### Changing the language
 
@@ -55,13 +56,13 @@ If your change speaks about something new, or changes what a recorded term means
 - **delivery** — CLI adapters for inbound command translation and outbound Report rendering. (paths internal/delivery/**)
   - imports only: application, domain
   - cli-seal-present: contains files matching ["internal/delivery/cli/cli.go", "internal/delivery/cli/factory/factory.go", "internal/delivery/cli/adapters/cobra/cobra.go", "internal/delivery/cli/report.go", "internal/delivery/cli/reportfactory/factory.go", "internal/delivery/cli/adapters/report/plain/plain.go", "internal/delivery/cli/adapters/report/json/json.go", "internal/delivery/cli/adapters/report/lipgloss/lipgloss.go"]
-- **domain** — Rule aggregate and domain values; stdlib-only. (paths internal/domain/**)
-  - imports no other module; external imports forbidden
-  - rule-is-sole-aggregate: contains files matching ["internal/domain/rule/root.go"] and contains no files matching ["internal/domain/architecture/**", "internal/domain/pattern/**", "internal/domain/baseline/root.go", "internal/domain/conformance/root.go"]
+- **domain** — Rule and Pattern aggregates and domain values; stdlib-only. (paths internal/domain/**)
+  - imports only: rule; external imports forbidden
+  - aggregate-boundaries: contains files matching ["internal/domain/rule/root.go", "internal/domain/pattern/root.go"] and contains no files matching ["internal/domain/architecture/**", "internal/domain/baseline/root.go", "internal/domain/conformance/root.go"]
   - no-panic: satisfies extension rule "forbid-content" (pattern: \bpanic\()
   - files-speak-the-vocabulary: contains no files matching ["internal/domain/**/model.go", "internal/domain/**/types.go", "internal/domain/**/util.go", "internal/domain/**/utils.go", "internal/domain/**/helpers.go", "internal/domain/**/common.go"]
   - errors-name-their-subject: satisfies extension rule "forbid-content" (pattern: \bErr(NotFound|Invalid|Failed|Exists)\b)
-  - aggregate-skeleton (warning): contains files matching ["internal/domain/rule/root.go", "internal/domain/rule/repository.go"] (derived from each recorded domain.aggregates)
+  - aggregate-skeleton (warning): contains files matching ["internal/domain/rule/root.go", "internal/domain/rule/repository.go", "internal/domain/pattern/root.go", "internal/domain/pattern/repository.go"] (derived from each recorded domain.aggregates)
 - **infrastructure** — Outbound technology adapters implementing inward-owned ports. (paths internal/infrastructure/**)
   - imports only: application, domain
   - stdlib-table-present: contains files matching ["internal/infrastructure/language/golang/stdlib_gen.go"]
@@ -69,6 +70,7 @@ If your change speaks about something new, or changes what a recorded term means
   - imports only: delivery, application, domain; external imports forbidden
 - **lipgloss_report** — The only package permitted to import Lipgloss. (paths internal/delivery/cli/adapters/report/lipgloss/**)
   - imports only: delivery, application, domain
+- **pattern** — The pattern bounded context: the Pattern aggregate's home. (paths internal/domain/pattern/**)
 - **plain_report** — Plain-text report renderer adapter. (paths internal/delivery/cli/adapters/report/plain/**)
   - imports only: delivery, application, domain; external imports forbidden
 - **report_factory** — Sealed report factory selecting a renderer by ArcLint-owned identity. (paths internal/delivery/cli/reportfactory/**)

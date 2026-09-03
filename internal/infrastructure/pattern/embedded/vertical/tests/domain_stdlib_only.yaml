@@ -1,0 +1,12 @@
+# A Pattern may package Rule Tests; Pattern authors choose what they test.
+rule: vertical:domain/stdlib-only
+files:
+  go.mod: |
+    module fixture
+
+    go 1.26
+  internal/orders/domain/order.go: |
+    package domain
+
+    type Order struct{}
+expect: []

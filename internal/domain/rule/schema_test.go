@@ -54,12 +54,6 @@ func TestSchemaPublishesDomainEnums(t *testing.T) {
 		dig(t, doc, "properties", "scan", "properties", "unknown_imports", "enum"), wantUnknown)
 	assertStrings(t, "runtime enum",
 		dig(t, doc, "properties", "runtime", "items", "enum"), []string{"go", "ts", "py"})
-	languages := make([]string, 0, len(rule.Languages()))
-	for _, l := range rule.Languages() {
-		languages = append(languages, string(l))
-	}
-	assertStrings(t, "pattern coverage enum",
-		dig(t, doc, "properties", "pattern", "properties", "coverage", "items", "enum"), languages)
 }
 
 // TestSchemaCoversEveryRuleType proves each published Rule Type owns
@@ -117,7 +111,7 @@ func TestSchemaRejectsUnknownKeys(t *testing.T) {
 			t.Errorf("%s required = %v, want id first", name, required)
 		}
 	}
-	for _, name := range []string{"pattern", "scan", "repository"} {
+	for _, name := range []string{"scan", "repository"} {
 		if got := dig(t, doc, "properties", name, "additionalProperties"); got != false {
 			t.Errorf("properties.%s additionalProperties = %v, want false", name, got)
 		}

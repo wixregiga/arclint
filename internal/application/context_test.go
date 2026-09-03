@@ -111,7 +111,7 @@ func TestInitializeRepositoryRejectsUnknownPatterns(t *testing.T) {
 
 type fakeScaffold struct{}
 
-func (fakeScaffold) Write(string, []rule.PatternExtension, bool) (string, error) {
+func (fakeScaffold) Write(string, []rule.Extension, bool) (string, error) {
 	return "rules.yaml", nil
 }
 

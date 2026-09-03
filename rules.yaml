@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=./docs/rules.schema.json
 # ArcLint's own architecture contracts, self-hosted on the target
-# domain model: Rule is the sole aggregate, use cases coordinate
+# domain model: Rule and Pattern are the aggregates, use cases coordinate
 # through ports, adapters stay outbound or inbound, Cobra stays
 # sealed behind the CLI factory, and report renderers stay sealed
 # behind the report factory — two distinct delivery seams.
@@ -23,7 +23,7 @@ scan:
 modules:
   domain:
     paths: ["internal/domain/**"]
-    description: "Rule aggregate and domain values; stdlib-only."
+    description: "Rule and Pattern aggregates and domain values; stdlib-only."
   application:
     paths: ["internal/application/**"]
     description: "Action-named use cases coordinating domain objects through ports."
@@ -69,6 +69,9 @@ modules:
   rule:
     paths: ["internal/domain/rule/**"]
     description: "The rule bounded context: the Rule aggregate's home."
+  pattern:
+    paths: ["internal/domain/pattern/**"]
+    description: "The pattern bounded context: the Pattern aggregate's home."
   conformance:
     paths: ["internal/domain/conformance/**"]
     description: "The conformance bounded context, downstream conformist of rule."
@@ -77,17 +80,17 @@ contracts:
   domain:
     consumes:
       id: "arclint:domain/stdlib-only"
-      internal: []
+      internal: [rule]
       external: forbid
       stdlib: allow
     invariants:
-      - id: "arclint:domain/rule-is-sole-aggregate"
+      - id: "arclint:domain/aggregate-boundaries"
         kind: structure
         require:
           - "internal/domain/rule/root.go"
+          - "internal/domain/pattern/root.go"
         forbid:
           - "internal/domain/architecture/**"
-          - "internal/domain/pattern/**"
           - "internal/domain/baseline/root.go"
           - "internal/domain/conformance/root.go"
       # The SDK showcase: content enforcement supplied by the

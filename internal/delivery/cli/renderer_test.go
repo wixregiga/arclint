@@ -6,12 +6,12 @@ import (
 	"testing"
 
 	"github.com/wixregiga/arclint/internal/application"
-	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/pattern"
 )
 
 type emptyPatternSource struct{}
 
-func (emptyPatternSource) Patterns() ([]rule.Pattern, error) { return nil, nil }
+func (emptyPatternSource) Patterns() ([]pattern.Pattern, error) { return nil, nil }
 
 type recordingRenderer struct {
 	reports []Report

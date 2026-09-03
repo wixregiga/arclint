@@ -5,10 +5,35 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/infrastructure/ruletest"
 )
+
+func TestLoadFSUsesTheRepositoryRuleTestGrammar(t *testing.T) {
+	fileSystem := fstest.MapFS{
+		"tests/works.yaml": {Data: []byte("rule: \"t:m/r\"\nfiles:\n  m/a.go: \"package m\"\n")},
+	}
+	tests, err := ruletest.LoadFS(fileSystem, "tests", "pattern.yaml: tests.root")
+	if err != nil {
+		t.Fatalf("LoadFS: %v", err)
+	}
+	if len(tests) != 1 || tests[0].Name() != "works" || tests[0].RuleID() != "t:m/r" {
+		t.Fatalf("tests = %#v, want one parsed Rule Test", tests)
+	}
+}
+
+func TestLoadFSReportsPatternTestLocation(t *testing.T) {
+	fileSystem := fstest.MapFS{
+		"tests/bad.yaml": {Data: []byte("unknown: true\n")},
+	}
+	_, err := ruletest.LoadFS(fileSystem, "tests", "pattern.yaml: tests.root")
+	if err == nil || !strings.Contains(err.Error(), "pattern.yaml: tests.root/bad.yaml") ||
+		!strings.Contains(err.Error(), "unknown") {
+		t.Fatalf("err = %v, want shared strict grammar and manifest location", err)
+	}
+}
 
 // writeTest writes one file under root/.arclint/tests.
 func writeTest(t *testing.T, root, name, content string) {
