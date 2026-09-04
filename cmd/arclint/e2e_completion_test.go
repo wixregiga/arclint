@@ -2,8 +2,8 @@ package main
 
 // End-to-end shell completion tests: the compiled binary is driven
 // through cobra's hidden __complete command exactly as a shell would
-// on TAB. Candidates end with the ":4" directive line — the numeric
-// form of ShellCompDirectiveNoFileComp — which the shell parses and
+// on TAB. Candidates end with the ":4" directive line (the numeric
+// form of ShellCompDirectiveNoFileComp), which the shell parses and
 // never displays.
 
 import (
@@ -122,7 +122,7 @@ func TestCompletionListsInitPatterns(t *testing.T) {
 
 // TestCompletionDegradesWithoutRuleset pins the contract: with no
 // rules.yaml anywhere, completion exits 0 with no dynamic candidates
-// and no error text — the shell must never see a failure on TAB.
+// and no error text; the shell must never see a failure on TAB.
 // Static subcommand names (schema, test) still complete: they need no
 // ruleset.
 func TestCompletionDegradesWithoutRuleset(t *testing.T) {

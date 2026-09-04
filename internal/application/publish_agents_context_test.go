@@ -122,7 +122,7 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 			"If your harness does not have the skill, `arclint agents skill` writes it to " +
 			"`.agents/skills/domain-librarian/`.",
 		"### Modules and their rules",
-		"- **m** — test module (paths m/**)",
+		"- **m**: test module (paths m/**)",
 		"  - imports no other module; external imports forbidden",
 		"  - snake: file names use snake_case",
 		`  - technology-free (warning): satisfies extension rule "forbid-content" (pattern: "net/http")`,
@@ -147,7 +147,7 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 	}
 	// The command surface renders every entry as an invocable bullet.
 	for _, c := range application.AgentCommandSurface() {
-		if !strings.Contains(block, "- `arclint "+c.Usage+"` — ") {
+		if !strings.Contains(block, "- `arclint "+c.Usage+"`: ") {
 			t.Errorf("block lacks the %q command bullet:\n%s", c.Command, block)
 		}
 	}

@@ -91,7 +91,7 @@ import app.generated
 		{".", conformance.ImportInternal, ""},
 		{".helpers", conformance.ImportInternal, "app/helpers.py"},
 		// PyYAML provides yaml: the dist/module name mismatch is the
-		// documented limitation — unknown, never silently external.
+		// documented limitation: unknown, never silently external.
 		{"yaml", conformance.ImportUnknown, ""},
 		// In-repo top-level package with an unresolvable submodule.
 		{"app.generated", conformance.ImportInternal, ""},

@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Smallest repro wins. If this bug *adds or restores* a capability users will
-        notice, say so — those still belong in release notes even with the `bug` label.
+        notice, say so; those still belong in release notes even with the `bug` label.
 
   - type: dropdown
     id: area
@@ -32,8 +32,8 @@ body:
     attributes:
       label: Will a user notice this?
       options:
-        - "Yes — wrong diagnostic, crash, bad CLI/output, accepted invalid rules.yaml, broken pattern contract, or incorrect vocabulary behavior"
-        - "No — internal only. Skip release notes."
+        - "Yes: wrong diagnostic, crash, bad CLI/output, accepted invalid rules.yaml, broken pattern contract, or incorrect vocabulary behavior"
+        - "No: internal only. Skip release notes."
     validations:
       required: true
 
@@ -77,7 +77,7 @@ body:
       label: Release note draft (only if user-facing)
       description: |
         Write the user-visible correction, not the stack trace.
-        Example — "Report a clear error when a rule references an unknown fact."
+        Example: "Report a clear error when a rule references an unknown fact."
       placeholder: Fix …
     validations:
       required: false

@@ -14,15 +14,15 @@ Enforced from rules.yaml: 32 rules over languages [go, typescript].
 
 IMPORTANT: you MUST ask arclint before reading around. The architecture, the rules, and the recorded domain are queryable; run `arclint context` on the paths you expect to touch BEFORE opening source files, and do NOT learn the architecture by reading file after file or guessing from folder names.
 
-- `arclint context [paths...]` — run before editing under any path: the owning modules, their import contracts, and the recorded domain in one answer (`--module <names>`, `--format json`)
-- `arclint domain` — the ubiquitous language: contexts, aggregates, value objects, invariants, relations
-- `arclint rules [selector]` — every configured rule with its claim; one match prints the complete rule
-- `arclint check .` — evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings
-- `arclint rules test` — run the rule fixtures under `.arclint/tests` after changing any rule
-- `arclint sdk init` — regenerate the extension SDK artifacts under `.arclint/extensions`
-- `arclint agents md --write` — refresh this block after changing rules.yaml or the vocabulary
-- `arclint baseline` — manage the committed baseline of adopted findings
-- `arclint patterns` — list available Pattern distribution packages
+- `arclint context [paths...]`: run before editing under any path: the owning modules, their import contracts, and the recorded domain in one answer (`--module <names>`, `--format json`)
+- `arclint domain`: the ubiquitous language: contexts, aggregates, value objects, invariants, relations
+- `arclint rules [selector]`: every configured rule with its claim; one match prints the complete rule
+- `arclint check .`: evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings
+- `arclint rules test`: run the rule fixtures under `.arclint/tests` after changing any rule
+- `arclint sdk init`: regenerate the extension SDK artifacts under `.arclint/extensions`
+- `arclint agents md --write`: refresh this block after changing rules.yaml or the vocabulary
+- `arclint baseline`: manage the committed baseline of adopted findings
+- `arclint patterns`: list available Pattern distribution packages
 
 ### The recorded domain
 
@@ -40,46 +40,46 @@ If your change speaks about something new, or changes what a recorded term means
 
 ### Modules and their rules
 
-- **domain** — Rule aggregate and domain values; stdlib-only. (paths internal/domain/**)
+- **domain**: Rule aggregate and domain values; stdlib-only. (paths internal/domain/**)
   - imports no other module; external imports forbidden
   - rule-is-sole-aggregate: Rule is the only aggregate: it has a root, and no other aggregate root exists.
   - no-panic: Domain code never panics; a representation that cannot become a value is an error.
   - files-speak-the-vocabulary: Domain files are named for the concept they hold, never for a generic container.
   - errors-name-their-subject: Domain errors name their subject; a bare ErrNotFound or ErrInvalid is forbidden.
   - aggregate-skeleton (warning): Every recorded aggregate owns a home declaring its root and its Repository.
-- **application** — Action-named use cases coordinating domain objects through ports. (paths internal/application/**)
+- **application**: Action-named use cases coordinating domain objects through ports. (paths internal/application/**)
   - imports only: domain; external imports forbidden
   - core-actions-present: The core use cases exist under their action names.
-- **infrastructure** — Outbound technology adapters implementing inward-owned ports. (paths internal/infrastructure/**)
+- **infrastructure**: Outbound technology adapters implementing inward-owned ports. (paths internal/infrastructure/**)
   - imports only: application, domain
   - stdlib-table-present: The Go language adapter embeds its generated stdlib table.
-- **delivery** — CLI adapters for inbound command translation and outbound Report rendering. (paths internal/delivery/**)
+- **delivery**: CLI adapters for inbound command translation and outbound Report rendering. (paths internal/delivery/**)
   - imports only: application, domain
   - cli-seal-present: The CLI seal and the report seal are both complete.
-- **cli_interface** — Framework-neutral CLI commands, reports, and adapter ports. (paths internal/delivery/cli/*.go)
+- **cli_interface**: Framework-neutral CLI commands, reports, and adapter ports. (paths internal/delivery/cli/*.go)
   - imports only: application, domain; external imports forbidden
-- **cli_factory** — Sealed CLI factory selecting an adapter by ArcLint-owned identity. (paths internal/delivery/cli/factory/**)
+- **cli_factory**: Sealed CLI factory selecting an adapter by ArcLint-owned identity. (paths internal/delivery/cli/factory/**)
   - imports only: application, domain, cobra_adapter, delivery; external imports forbidden
-- **cobra_adapter** — The only package permitted to import Cobra. (paths internal/delivery/cli/adapters/cobra/**)
+- **cobra_adapter**: The only package permitted to import Cobra. (paths internal/delivery/cli/adapters/cobra/**)
   - imports only: application, domain, delivery
-- **report_factory** — Sealed report factory selecting a renderer by ArcLint-owned identity. (paths internal/delivery/cli/reportfactory/**)
+- **report_factory**: Sealed report factory selecting a renderer by ArcLint-owned identity. (paths internal/delivery/cli/reportfactory/**)
   - imports only: delivery, plain_report, json_report, lipgloss_report; external imports forbidden
-- **plain_report** — Plain-text report renderer adapter. (paths internal/delivery/cli/adapters/report/plain/**)
+- **plain_report**: Plain-text report renderer adapter. (paths internal/delivery/cli/adapters/report/plain/**)
   - imports only: delivery, application, domain; external imports forbidden
-- **json_report** — JSON report renderer adapter. (paths internal/delivery/cli/adapters/report/json/**)
+- **json_report**: JSON report renderer adapter. (paths internal/delivery/cli/adapters/report/json/**)
   - imports only: delivery, application, domain; external imports forbidden
-- **lipgloss_report** — The only package permitted to import Lipgloss. (paths internal/delivery/cli/adapters/report/lipgloss/**)
+- **lipgloss_report**: The only package permitted to import Lipgloss. (paths internal/delivery/cli/adapters/report/lipgloss/**)
   - imports only: delivery, application, domain
-- **composition** — Composition roots selecting and connecting concrete adapters. (paths cmd/**)
+- **composition**: Composition roots selecting and connecting concrete adapters. (paths cmd/**)
   - imports only: delivery, infrastructure, application, domain, cli_factory, cobra_adapter, report_factory
   - main-present: The arclint binary has a main.
-- **source** — Common source invariants for internal packages. (paths internal/**)
+- **source**: Common source invariants for internal packages. (paths internal/**)
   - snake-case: Go file names use snake_case.
-- **vocabulary** — The project's recorded Ubiquitous Language vocabulary. (paths ubiquitous-language.yaml)
+- **vocabulary**: The project's recorded Ubiquitous Language vocabulary. (paths ubiquitous-language.yaml)
   - terms-carry-definitions: Every recorded term carries a definition.
   - invariants-name-recorded-owners: Every recorded invariant names a recorded term of its own context as its owner.
-- **rule** — The rule bounded context: the Rule aggregate's home. (paths internal/domain/rule/**)
-- **conformance** — The conformance bounded context, downstream conformist of rule. (paths internal/domain/conformance/**)
+- **rule**: The rule bounded context: the Rule aggregate's home. (paths internal/domain/rule/**)
+- **conformance**: The conformance bounded context, downstream conformist of rule. (paths internal/domain/conformance/**)
 
 ### Repository-wide rules
 

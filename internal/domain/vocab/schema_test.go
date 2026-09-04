@@ -53,7 +53,7 @@ func TestSchemaIsDeterministicIndentedJSON(t *testing.T) {
 // committed litmus library.schema.json byte-for-byte.
 //
 // On failure: regenerate the committed skill artifacts via arclint
-// agents skill, or fix the generator — never edit fixtures by hand.
+// agents skill, or fix the generator; never edit fixtures by hand.
 func TestSchemaMatchesLitmusLibrarySchema(t *testing.T) {
 	wantPath := filepath.Join(repoRoot(t), ".agents", "skills", "domain-librarian", "library.schema.json")
 	want, err := os.ReadFile(wantPath)
@@ -65,7 +65,7 @@ func TestSchemaMatchesLitmusLibrarySchema(t *testing.T) {
 		t.Fatalf("vocab.Schema: %v", err)
 	}
 	if !bytes.Equal(got, want) {
-		t.Fatalf("vocab.Schema() drifted from litmus library.schema.json; regenerate the committed skill artifacts via arclint agents skill, or fix the generator — never edit fixtures by hand\n--- got (%d bytes) ---\n%s\n--- want (%d bytes) ---\n%s",
+		t.Fatalf("vocab.Schema() drifted from litmus library.schema.json; regenerate the committed skill artifacts via arclint agents skill, or fix the generator; never edit fixtures by hand\n--- got (%d bytes) ---\n%s\n--- want (%d bytes) ---\n%s",
 			len(got), truncate(got, 400), len(want), truncate(want, 400))
 	}
 }

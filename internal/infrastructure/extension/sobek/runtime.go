@@ -41,7 +41,7 @@ type Host struct {
 	// Domain returns the project's recorded domain model; nil means
 	// the host supplies empty collections.
 	Domain func() DomainInfo
-	// CaseTerm renders a recorded term in one published TermCase —
+	// CaseTerm renders a recorded term in one published TermCase,
 	// the same implementation yaml expansion uses, so extensions never
 	// reimplement casing. Errors on unknown cases and wordless terms.
 	CaseTerm func(term, termCase string) (string, error)

@@ -89,7 +89,7 @@ func evaluateExtensionRule(r rule.Rule, mem membership, obs Observations,
 // containExtensionApplicabilityBreach discards untrustworthy Extension
 // findings and records failed selected subjects plus operational
 // Diagnostics. When nothing was selected, only the Diagnostics are
-// returned — no fabricated Evaluation.
+// returned, no fabricated Evaluation.
 func containExtensionApplicabilityBreach(r rule.Rule, extension string,
 	selected, excluded []string, breaches []ExtensionFinding,
 ) ([]Evaluation, []Diagnostic, error) {

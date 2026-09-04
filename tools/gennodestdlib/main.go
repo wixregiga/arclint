@@ -1,6 +1,6 @@
 // Command gennodestdlib generates the embedded Node.js builtin-module
 // table from `node -p require('module').builtinModules` of the toolchain
-// running go:generate — the authoritative source, not a curated list.
+// running go:generate: the authoritative source, not a curated list.
 package main
 
 import (

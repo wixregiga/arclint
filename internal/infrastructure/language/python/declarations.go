@@ -121,7 +121,7 @@ const nodeIdentifier = "identifier"
 
 // param maps one node under parameters to the neutral shape. Splat
 // parameters keep their prefix in Name ("*args", "**kwargs") so the two
-// flavors stay distinguishable; `self` and `cls` stay in the list —
+// flavors stay distinguishable; `self` and `cls` stay in the list;
 // dropping them would be interpretation, not syntax.
 func (w *pyWalker) param(pn *gotreesitter.Node) (conformance.DeclarationParam, bool) {
 	p := conformance.DeclarationParam{}

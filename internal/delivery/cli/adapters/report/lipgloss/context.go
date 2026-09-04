@@ -26,12 +26,12 @@ func writeContext(p *out.Printer, th Theme, c application.ArchitecturalContext) 
 		p.Printf("%s %s\n", th.Bold.Render("unknown imports:"), c.UnknownImports)
 	}
 	if len(c.Modules) == 0 && c.Scope != "repository" {
-		p.Println(th.Muted.Render("modules: none — the scope binds no declared module"))
+		p.Println(th.Muted.Render("modules: none (the scope binds no declared module)"))
 	}
 	for _, m := range c.Modules {
 		p.Printf("\n%s %s", th.Bold.Render("module"), th.Bold.Render(m.Name))
 		if m.Description != "" {
-			p.Printf(" — %s", m.Description)
+			p.Printf(": %s", m.Description)
 		}
 		p.Printf("\n  paths: %s\n", strings.Join(m.Paths, ", "))
 		if m.InternalRestricted {
@@ -54,7 +54,7 @@ func writeContext(p *out.Printer, th Theme, c application.ArchitecturalContext) 
 	if len(c.Kinds) > 0 {
 		p.Println("\n" + th.Bold.Render("rule types in use:"))
 		for _, k := range c.Kinds {
-			p.Printf("  %s — %s\n", th.Bold.Render(k.Kind), k.Meaning)
+			p.Printf("  %s: %s\n", th.Bold.Render(k.Kind), k.Meaning)
 		}
 	}
 	if len(c.Rules) > 0 {
@@ -66,7 +66,7 @@ func writeContext(p *out.Printer, th Theme, c application.ArchitecturalContext) 
 			}
 			sev := th.severity(r.Summary.Severity).Render(r.Summary.Severity)
 			meta := "[" + r.Summary.Type + "/" + sev + "]"
-			p.Printf("  %s %s — %s%s\n", th.Bold.Render(r.Summary.ID), meta, r.Reason, via)
+			p.Printf("  %s %s: %s%s\n", th.Bold.Render(r.Summary.ID), meta, r.Reason, via)
 		}
 	}
 }

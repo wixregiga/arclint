@@ -13,7 +13,7 @@ import (
 // Observer implements the application's FixtureObserver port by
 // materializing the fixture in a temporary directory and running the
 // real filesystem observation source over it with the supplied fact
-// producers — the fixture passes through the same parsers production
+// producers: the fixture passes through the same parsers production
 // uses, never simulated facts. Content for Extension ctx.read is the
 // authored TestFile bytes, not the temporary tree, so reads stay valid
 // after the materialization is removed.

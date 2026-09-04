@@ -29,12 +29,12 @@ func writeContext(w io.Writer, c application.ArchitecturalContext) error {
 		p.Printf("unknown imports: %s\n", c.UnknownImports)
 	}
 	if len(c.Modules) == 0 && c.Scope != "repository" {
-		p.Println("modules: none — the scope binds no declared module")
+		p.Println("modules: none (the scope binds no declared module)")
 	}
 	for _, m := range c.Modules {
 		p.Printf("\nmodule %s", m.Name)
 		if m.Description != "" {
-			p.Printf(" — %s", m.Description)
+			p.Printf(": %s", m.Description)
 		}
 		p.Printf("\n  paths: %s\n", strings.Join(m.Paths, ", "))
 		if m.InternalRestricted {
@@ -57,7 +57,7 @@ func writeContext(w io.Writer, c application.ArchitecturalContext) error {
 	if len(c.Kinds) > 0 {
 		p.Println("\nrule types in use:")
 		for _, k := range c.Kinds {
-			p.Printf("  %s — %s\n", k.Kind, k.Meaning)
+			p.Printf("  %s: %s\n", k.Kind, k.Meaning)
 		}
 	}
 	if len(c.Rules) > 0 {
@@ -67,7 +67,7 @@ func writeContext(w io.Writer, c application.ArchitecturalContext) error {
 			if len(r.Via) > 0 {
 				via = " (via " + strings.Join(r.Via, ", ") + ")"
 			}
-			p.Printf("  %s [%s/%s] — %s%s\n", r.Summary.ID, r.Summary.Type, r.Summary.Severity, r.Reason, via)
+			p.Printf("  %s [%s/%s]: %s%s\n", r.Summary.ID, r.Summary.Type, r.Summary.Severity, r.Reason, via)
 		}
 	}
 	return p.Err

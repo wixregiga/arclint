@@ -88,7 +88,7 @@ export interface Ctx {
   /** The project's recorded domain model; empty collections when the
    * project records none. */
   domain(): unknown;
-  /** Render a recorded term in one published TermCase — the host's
+  /** Render a recorded term in one published TermCase, the host's
    * one casing implementation. Throws on an unknown case and on terms
    * without letters or digits. */
   caseTerm(term: string, termCase: TermCase): string;

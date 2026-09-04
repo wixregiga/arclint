@@ -408,7 +408,7 @@ func writePaddedOneLiners(p *out.Printer, defs []vocab.Definition, indent string
 			p.Printf("%s  %s\n", indent, d.Name)
 			continue
 		}
-		p.Printf("%s  %-*s — %s\n", indent, width, d.Name, d.Definition)
+		p.Printf("%s  %-*s  %s\n", indent, width, d.Name, d.Definition)
 	}
 }
 
@@ -424,7 +424,7 @@ func writePaddedEntityOneLiners(p *out.Printer, entities []vocab.Entity, indent 
 			p.Printf("%s  %s\n", indent, e.Name)
 			continue
 		}
-		p.Printf("%s  %-*s — %s\n", indent, width, e.Name, e.Definition.Definition)
+		p.Printf("%s  %-*s  %s\n", indent, width, e.Name, e.Definition.Definition)
 	}
 }
 

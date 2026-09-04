@@ -9,8 +9,8 @@ import (
 // The extractor is lexer-grade by design (multi-language-rule-engines.md
 // §4): comments are blanked, string and template literal bodies are masked
 // so no keyword can fire inside them, then the static import forms are
-// matched structurally. Computed specifiers — import(expr), require(v),
-// template-literal specifiers — are the documented false-negative class:
+// matched structurally. Computed specifiers (import(expr), require(v),
+// template-literal specifiers) are the documented false-negative class:
 // they never match a masked literal and are intentionally not extracted.
 
 // maskedSource is the scan buffer: comments blanked with spaces, string

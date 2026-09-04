@@ -103,7 +103,7 @@ expect: []
 		t.Fatalf("rules test: exit %d, want findings exit 1\nstdout:\n%s\nstderr:\n%s", code, stdout, stderr)
 	}
 	// Exact Diagnostic text the consumes evaluator emits for a
-	// disallowed internal import into Module adapters — exposed
+	// disallowed internal import into Module adapters, exposed
 	// verbatim so authors paste it into expect.message.
 	wantMessage := `import "example.com/app/adapters" resolves to Module(s) ["adapters"], not in the allow-list of Module "core"`
 	for _, want := range []string{

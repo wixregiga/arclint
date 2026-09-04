@@ -8,7 +8,7 @@ import (
 
 // selectorHits returns the qualified Rule ids one selector matches. A
 // selector is an exact qualified id, an id prefix, or a path.Match
-// pattern — and an exact id wins completely: when the selector names a
+// pattern, and an exact id wins completely: when the selector names a
 // configured id, prefix and pattern expansion never widen it. The
 // same semantics serve rules and check --only/--exclude.
 func selectorHits(selector string, ids []string) ([]string, error) {

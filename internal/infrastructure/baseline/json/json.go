@@ -55,7 +55,7 @@ func (s Store) filePath() string {
 }
 
 // Load reads the committed Baseline. No file means no Baseline; a
-// malformed or wrong-version file is a configuration error — a
+// malformed or wrong-version file is a configuration error; a
 // corrupted policy file must not silently disable itself.
 func (s Store) Load() (baseline.Snapshot, bool, error) {
 	data, err := os.ReadFile(s.filePath())

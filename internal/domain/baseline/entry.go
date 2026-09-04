@@ -7,7 +7,7 @@ import (
 )
 
 // Entry is the stable fingerprint of one Violation captured in a
-// Baseline: Rule identity, subject identity, and message identity —
+// Baseline: Rule identity, subject identity, and message identity,
 // never source line, so a finding does not reopen when it moves.
 // Count carries identical duplicate findings so each baselines
 // independently.

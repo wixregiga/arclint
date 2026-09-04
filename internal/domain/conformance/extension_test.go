@@ -177,7 +177,7 @@ func TestExtensionOutOfApplicabilityIsContained(t *testing.T) {
 
 func TestExtensionOutOfApplicabilityWithNoSelectedSubjects(t *testing.T) {
 	// Declared module has no observed members: nothing is selected, yet
-	// the Extension still reported a path. Diagnostics only — no
+	// the Extension still reported a path. Diagnostics only, no
 	// fabricated Evaluation.
 	outside := &fakeExtensions{findings: []conformance.ExtensionFinding{
 		{Path: "missing/registry.go", Line: 1, Message: "where is registry"},

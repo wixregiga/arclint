@@ -170,7 +170,7 @@ func (s TypeSchema) Describe() string {
 			if f.Configurable {
 				cfg = " (configurable)"
 			}
-			fmt.Fprintf(&b, "  %s.%s: %s%s%s — %s\n", section.title, f.Name, f.Kind, req, cfg, f.Doc)
+			fmt.Fprintf(&b, "  %s.%s: %s%s%s  %s\n", section.title, f.Name, f.Kind, req, cfg, f.Doc)
 		}
 	}
 	return b.String()

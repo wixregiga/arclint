@@ -8,7 +8,7 @@ import (
 )
 
 // NewContextCommand adapts the architectural-context use case: with no
-// scope it explains the repository — every Module, the Rule kinds in
+// scope it explains the repository: every Module, the Rule kinds in
 // use, the enforcement posture; with paths or named Modules it is the
 // worksite call, answering in one payload what governs the given set.
 func NewContextCommand(context application.GetArchitecturalContext, render Renderer) Command {

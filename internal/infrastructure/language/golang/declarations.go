@@ -10,7 +10,7 @@ import (
 
 // extractDeclarations maps one fully parsed file onto the shared
 // cross-language declaration vocabulary. Go emits its honest subset:
-// struct, interface, type, func, method, field, const, var — parser
+// struct, interface, type, func, method, field, const, var, parser
 // exact, types never resolved.
 func extractDeclarations(fset *token.FileSet, file *ast.File) []conformance.Declaration {
 	var out []conformance.Declaration

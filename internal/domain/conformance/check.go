@@ -1,6 +1,6 @@
-// Package conformance holds the Conformance Check — the deterministic
+// Package conformance holds the Conformance Check (the deterministic
 // domain operation evaluating applicable enabled Rules over supplied
-// Observations — and its immutable results: Rule Evaluations,
+// Observations) and its immutable results: Rule Evaluations,
 // Diagnostics, Violations, and the complete Conformance Assessment.
 // The check never reports conformance when evaluation was unsupported,
 // undetermined, or failed.

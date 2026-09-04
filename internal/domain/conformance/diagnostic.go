@@ -114,7 +114,7 @@ func (d Diagnostic) Explain() string {
 	var b strings.Builder
 	b.WriteString(d.message)
 	if d.remediation != "" {
-		b.WriteString(" — ")
+		b.WriteString(": ")
 		b.WriteString(d.remediation)
 	}
 	if d.status == StatusSuppressed && d.suppressionReason != "" {

@@ -45,7 +45,7 @@ import third, \
 }
 
 // TestDocumentedFalseNegatives: computed imports stay invisible at this
-// tier — the documented contract.
+// tier, the documented contract.
 func TestDocumentedFalseNegatives(t *testing.T) {
 	src := `import importlib
 mod = importlib.import_module("boto3")

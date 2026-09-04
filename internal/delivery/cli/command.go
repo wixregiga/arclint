@@ -91,7 +91,7 @@ type Command struct {
 	// argument; nil keeps the adapter's default (file) completion.
 	// Completion callbacks run when the shell re-executes the binary
 	// on TAB, so they must be fast, silent, and degrade to an empty
-	// candidate list on any failure — never an error and never output
+	// candidate list on any failure, never an error and never output
 	// to stderr.
 	CompleteArgs func(args []string, toComplete string) []AutoCompleteCandidate
 }
@@ -117,7 +117,7 @@ func ViolationsExit() error { return &ExitError{Code: ExitViolations} }
 // flags (--format, --no-color) are declared here so help and completion
 // advertise them; the composition root peels them before the adapter
 // runs and selects the sealed Renderer. They are inert on the command
-// tree itself — handlers never read them.
+// tree itself; handlers never read them.
 func Root(version string, subcommands ...Command) Command {
 	return Command{
 		Name:    "arclint",

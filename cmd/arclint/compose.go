@@ -1,7 +1,7 @@
 // The ARCLINT_V2 feature flag routes the process into the target
 // architecture. This composition root selects the concrete outbound
 // Adapters, constructs the use cases, selects the Cobra CLI through
-// the sealed factory, and runs — no Rule behavior, no use-case
+// the sealed factory, and runs: no Rule behavior, no use-case
 // orchestration.
 package main
 
@@ -58,8 +58,8 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	// The recorded vocabulary is an input to rule configuration —
-	// expanded Rules resolve against it — so the vocabulary repository
+	// The recorded vocabulary is an input to rule configuration
+	// (expanded Rules resolve against it), so the vocabulary repository
 	// composes before the rule repository that consumes it.
 	absRulesPath, err := filepath.Abs(rulesPath)
 	if err != nil {
@@ -327,7 +327,7 @@ func resolveRulesPath(args []string) (string, []string, error) {
 	if err != nil {
 		// No subcommand means --version or --help: neither needs a
 		// repository, and construction alone never loads the ruleset.
-		// The completion machinery must answer without one too — the
+		// The completion machinery must answer without one too: the
 		// shell re-executes the binary on TAB in arbitrary directories,
 		// and completion callbacks degrade to no candidates when the
 		// ruleset fails to load.

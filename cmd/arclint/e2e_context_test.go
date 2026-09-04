@@ -106,7 +106,7 @@ func TestContextRepositoryTeaches(t *testing.T) {
 	}
 	for _, want := range []string{
 		"rule types in use:",
-		"protected — restricts which Modules may import one Module",
+		"protected: restricts which Modules may import one Module",
 		"unknown imports: error",
 	} {
 		if !strings.Contains(stdout, want) {

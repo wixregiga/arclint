@@ -11,7 +11,7 @@ import (
 )
 
 // On failure of any litmus drift test below: regenerate the committed
-// skill artifacts via arclint agents skill, or fix the generator —
+// skill artifacts via arclint agents skill, or fix the generator;
 // never edit fixtures by hand.
 
 func TestSkillMarkdownMatchesLitmus(t *testing.T) {
@@ -22,7 +22,7 @@ func TestSkillMarkdownMatchesLitmus(t *testing.T) {
 	}
 	got := []byte(vocab.SkillMarkdown())
 	if !bytes.Equal(got, want) {
-		t.Fatalf("vocab.SkillMarkdown() drifted from litmus SKILL.md; regenerate the committed skill artifacts via arclint agents skill, or fix the generator — never edit fixtures by hand\n--- first diff hint ---\n%s", firstDiff(got, want))
+		t.Fatalf("vocab.SkillMarkdown() drifted from litmus SKILL.md; regenerate the committed skill artifacts via arclint agents skill, or fix the generator; never edit fixtures by hand\n--- first diff hint ---\n%s", firstDiff(got, want))
 	}
 }
 
@@ -34,7 +34,7 @@ func TestVocabularyYAMLMatchesLitmus(t *testing.T) {
 	}
 	got := []byte(vocab.VocabularyYAML())
 	if !bytes.Equal(got, want) {
-		t.Fatalf("vocab.VocabularyYAML() drifted from litmus VOCAB.yaml; regenerate the committed skill artifacts via arclint agents skill, or fix the generator — never edit fixtures by hand\n--- first diff hint ---\n%s", firstDiff(got, want))
+		t.Fatalf("vocab.VocabularyYAML() drifted from litmus VOCAB.yaml; regenerate the committed skill artifacts via arclint agents skill, or fix the generator; never edit fixtures by hand\n--- first diff hint ---\n%s", firstDiff(got, want))
 	}
 }
 

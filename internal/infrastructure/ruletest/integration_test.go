@@ -196,7 +196,7 @@ func TestRuleTestExtensionReadsFixtureContent(t *testing.T) {
 	write("rules.yaml", extensionRuleset)
 	write(".arclint/extensions/lines_matching.ts", linesMatchingExtension)
 	write(".arclint/tests/fixture_reads_panic.yaml", extensionFixtureTest)
-	// Production path exists with clean content — the opposite of the fixture.
+	// Production path exists with clean content, the opposite of the fixture.
 	write("m/a.go", "package m\n// clean production file\n")
 
 	repo, err := yamlrule.NewRepository(filepath.Join(root, "rules.yaml"), nil)
@@ -278,8 +278,8 @@ export default defineRule({
 `
 
 // TestVocabularyFindingAnchorsAtTheRecordedTerm proves the whole
-// reporting path — fixture vocabulary bytes, the production parser,
-// the extension host, the conformance run, the authored expectation —
+// reporting path (fixture vocabulary bytes, the production parser,
+// the extension host, the conformance run, the authored expectation)
 // puts the finding on the line the term is written on rather than at
 // the top of the file.
 func TestVocabularyFindingAnchorsAtTheRecordedTerm(t *testing.T) {
