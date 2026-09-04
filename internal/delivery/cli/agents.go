@@ -14,7 +14,7 @@ func NewAgentsCommand(
 	publish application.PublishAgentsContext,
 	publishProtocol application.PublishSkillProtocol,
 	publishVocabulary application.PublishSkillVocabulary,
-	publishSchema application.PublishLibrarySchema,
+	publishSchema application.PublishDomainSchema,
 	render Renderer,
 ) Command {
 	return Command{
@@ -52,7 +52,7 @@ func newAgentsMDCommand(publish application.PublishAgentsContext, render Rendere
 			if err != nil {
 				return ConfigError(err)
 			}
-			if err := render.Render(ctx.Stdout, AgentsStatusReport{
+			if err := render.Render(ctx.Stdout, ArtifactStatusReport{
 				Writes: []ArtifactWrite{{Changed: changed, Path: path}},
 			}); err != nil {
 				return fmt.Errorf("write output: %w", err)
@@ -62,22 +62,23 @@ func newAgentsMDCommand(publish application.PublishAgentsContext, render Rendere
 	}
 }
 
-// newAgentsSkillCommand writes SKILL.md, VOCAB.yaml, and
-// library.schema.json into --dir (default DomainLibrarianSkillDir).
+// newAgentsSkillCommand writes SKILL.md and VOCAB.yaml into --dir
+// (default DomainLibrarianSkillDir) and the Ubiquitous Language schema
+// the skill points at into the project's schema directory.
 func newAgentsSkillCommand(
 	protocol application.PublishSkillProtocol,
 	vocabulary application.PublishSkillVocabulary,
-	schema application.PublishLibrarySchema,
+	schema application.PublishDomainSchema,
 	render Renderer,
 ) Command {
 	return Command{
 		Name:  "skill",
-		Short: "write domain-librarian skill artifacts (SKILL.md, VOCAB.yaml, library.schema.json)",
+		Short: "write domain-librarian skill artifacts (SKILL.md, VOCAB.yaml) and the domain schema they point at",
 		Flags: []Flag{
 			{
 				Name:    "dir",
 				Default: application.DomainLibrarianSkillDir,
-				Doc:     "directory to write skill artifacts into",
+				Doc:     "directory to write skill artifacts into; the schema always lands under " + application.SchemaDirectory,
 			},
 		},
 		Run: func(ctx Context) error {
@@ -96,13 +97,13 @@ func newAgentsSkillCommand(
 			}
 			writes = append(writes, ArtifactWrite{Changed: changed, Path: path})
 
-			changed, path, err = schema.Execute(dir)
+			changed, path, err = schema.Execute(application.SchemaDirectory)
 			if err != nil {
 				return ConfigError(err)
 			}
 			writes = append(writes, ArtifactWrite{Changed: changed, Path: path})
 
-			if err := render.Render(ctx.Stdout, AgentsStatusReport{Writes: writes}); err != nil {
+			if err := render.Render(ctx.Stdout, ArtifactStatusReport{Writes: writes}); err != nil {
 				return fmt.Errorf("write output: %w", err)
 			}
 			return nil

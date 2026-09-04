@@ -24,14 +24,14 @@ keeping, write a rule for it.
 
 Use arclint for that check. Or not. It's up to you.
 
-- Already use linters? Sick. This is one. Config it up in `rules.yaml`.
+- Already use linters? Sick. This is one. Config it up in `rules.arclint.yaml`.
 - Got weird house rules? Dope. Write a small TypeScript extension. No
   npm, no Node, no toolchain to install; the binary transpiles and
   sandboxes it.
 - Want to know which rules govern a file or directory? Tubular. Run
   `arclint context <path>`.
 - DDD crazy? Rad. Keep your terms in a committed
-  `ubiquitous-language.yaml`, then write rules like "each aggregate
+  `domain.arclint.yaml`, then write rules like "each aggregate
   lives in `internal/<snake_case>/`, imports no third-party code, and
   declares a repository interface." You can even enforce [Visible Domain Contracts](docs/site/content/docs/contracts.md) that ensure your code implements your documented invariants and specifications.
 - Want vertically sliced hexagons? Write a rule for it.
@@ -78,7 +78,7 @@ change before arclint reaches a stable version.
 ## Quickstart
 
 ```bash
-arclint init       # draft a commented starter rules.yaml
+arclint init       # draft a commented starter rules.arclint.yaml
 arclint check .    # evaluate it
 ```
 
@@ -185,14 +185,16 @@ table, an obligation the ruleset itself enforces.
 
 The loop is schema-guided, trialed live, then pinned:
 
-1. **Edit with the schema.** [docs/rules.schema.json](docs/rules.schema.json)
-   describes the complete accepted rules.yaml grammar. It is also
+1. **Edit with the schema.** [docs/schemas/rules.arclint.schema.json](docs/schemas/rules.arclint.schema.json)
+   describes the complete accepted rules.arclint.yaml grammar. It is also
    printed by `arclint rules schema`, and drift-tested so runtime
-   validation and the published schema accept the same documents. Point
-   your editor at it:
+   validation and the published schema accept the same documents.
+   `arclint rules schema --write` puts a local copy at
+   `.arclint/schemas/rules.arclint.schema.json`, and `arclint init`
+   points a fresh ruleset's modeline at whichever copy exists:
 
    ```yaml
-   # yaml-language-server: $schema=https://raw.githubusercontent.com/wixregiga/arclint/main/docs/rules.schema.json
+   # yaml-language-server: $schema=.arclint/schemas/rules.arclint.schema.json
    ```
 
 2. **Trial it on the real repository.** `arclint check --only <id>`
@@ -234,7 +236,7 @@ host-side against the schema the extension publishes, before any
 extension code runs. The complete showcase lives in this repository:
 [.arclint/extensions/require_defined_terms.ts](.arclint/extensions/require_defined_terms.ts)
 reads the recorded vocabulary through `ctx.domain()` and enforces
-`vocabulary/terms-carry-definitions` from rules.yaml:
+`vocabulary/terms-carry-definitions` from rules.arclint.yaml:
 
 ```yaml
 vocabulary/terms-carry-definitions:
@@ -275,7 +277,7 @@ Three commands do the agent-facing work:
   way), so the agent-facing context cannot drift from the enforced
   contract. `arclint agents skill` emits a skill bundle.
 - `arclint domain`: inspects and maintains the project's ubiquitous
-  language in a committed `ubiquitous-language.yaml`: bounded contexts,
+  language in a committed `domain.arclint.yaml`: bounded contexts,
   entities, aggregates, value objects, invariants, and events, with a
   published JSON Schema (`arclint domain schema`).
 
@@ -312,18 +314,18 @@ findings, `check` reports only new ones and counts the covered rest,
 ```
 check [path]        evaluate the repository (--no-baseline, --only/--exclude <selectors>)
 rules [selector]    list the configured rules; one match shows the complete rule
-rules schema        print the JSON Schema for rules.yaml (committed at docs/rules.schema.json)
+rules schema        print the JSON Schema for rules.arclint.yaml; --write puts it under .arclint/schemas (--dir)
 rules test [name]   run the rule tests under .arclint/tests; failures exit 1
 context [paths...]  the architecture, or everything binding the given paths (--module)
 domain              inspect and maintain the project's ubiquitous language (init/overview/list/show/explain/define/remove/schema)
 agents              AGENTS.md block (--write); skill bundle (skill); SKILL.md only (md|agentmd|markdown)
 baseline capture    adopt current findings   ·  baseline refresh: drop stale entries
 patterns            list the patterns that resolve offline: embedded, vendored, authored (--remote lists a registry)
-patterns install    extend rules.yaml with one pattern; vendors it first when it came from the registry
+patterns install    extend rules.arclint.yaml with one pattern; vendors it first when it came from the registry
 patterns vendor     copy one pattern under .arclint/patterns/<namespace>/<name>/ with its manifest
 patterns export     publish one pattern into a registry tree on disk (--dir)
 sdk init            write arclint.d.ts + tsconfig.json for extension authors
-init                draft a starter rules.yaml (--pattern bare|<reference> --languages go,ts,py --force)
+init                draft a starter rules.arclint.yaml (--pattern bare|<reference> --languages go,ts,py --force)
 completion <shell>  shell completion with live rule ids and module names (bash|zsh|fish|powershell)
 ```
 

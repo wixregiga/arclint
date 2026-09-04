@@ -86,7 +86,12 @@ func NewExpansion(source string, require, forbid []string) (Expansion, error) {
 		forbid:  append([]string(nil), forbid...),
 	}
 	for _, list := range [][]string{e.require, e.forbid} {
+		seen := make(map[string]struct{}, len(list))
 		for _, g := range list {
+			if _, dup := seen[g]; dup {
+				return Expansion{}, fmt.Errorf("each %s: glob %q listed twice", s, g)
+			}
+			seen[g] = struct{}{}
 			if err := validateExpandedGlob(g); err != nil {
 				return Expansion{}, err
 			}

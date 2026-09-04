@@ -2,7 +2,7 @@
 #
 # Each feature folder under internal/ owns its domain, application, and
 # infra; internal/app wires transports, internal/shared holds
-# cross-cutting mechanisms. Adopt it from rules.yaml:
+# cross-cutting mechanisms. Adopt it from rules.arclint.yaml:
 #
 #   extends:
 #     - pattern: arclint/vertical@0.1.0

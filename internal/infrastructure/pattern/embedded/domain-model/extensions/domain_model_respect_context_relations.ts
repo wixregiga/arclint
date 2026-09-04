@@ -8,7 +8,7 @@
 // nothing. A context with no Module of the same name is unobservable
 // here and is skipped. Inert while the project records no vocabulary.
 // Context names bind to module names through the host's TermCase
-// capability (flatcase): the same casing rules.yaml placeholders
+// capability (flatcase): the same casing rules.arclint.yaml placeholders
 // resolve with, never a local reimplementation.
 import { defineRule } from "arclint";
 

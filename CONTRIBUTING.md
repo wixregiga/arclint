@@ -2,7 +2,9 @@
 
 Build the binary with `make build`; it produces `./arclint`, a single static binary.
 
-Run the full check suite with `make ci`; it checks formatting with GolangCI-Lint, runs GolangCI-Lint and `go vet`, executes `go test ./...`, and selfchecks the repository against its own `rules.yaml`. The installed hk pre-commit hook runs the same Make targets and fixes supported formatting and lint findings first.
+Run the full check suite with `make ci`; it checks formatting with GolangCI-Lint, runs GolangCI-Lint and `go vet`, executes `go test ./...`, lints every committed JSON Schema with Spectral (`make lint-schema`, ruleset `.spectral.yaml`), and selfchecks the repository against its own `rules.arclint.yaml`. The installed hk pre-commit hook runs the same Make targets and fixes supported formatting and lint findings first.
+
+The committed schemas are generated, never hand-edited: `docs/schemas/<name>.arclint.schema.json` are the published copies (each schema's `$id`), and `.arclint/schemas/` holds the dogfood copies the modelines of `rules.arclint.yaml` and `domain.arclint.yaml` point at. After changing a schema generator run `make schemas`, which rewrites every copy through `arclint rules schema --write` and `arclint domain schema --write`, then lints them; drift tests fail on any stale copy.
 
 Rule behavior is verified by the unit suites beside each layer and by the end-to-end suite in `cmd/arclint`, which drives the compiled binary over real fixture repositories; the Go adapter's toolchain suite proves classification against `go list` over pinned real repositories and runs with the normal `go test ./...` (skipped under `-short`).
 

@@ -3,7 +3,7 @@
 # and reports each undefined term.
 rule: "arclint/domain-model:vocabulary/terms-carry-definitions"
 files:
-  ubiquitous-language.yaml: |
+  domain.arclint.yaml: |
     version: 1
     contexts:
       - name: Ordering
@@ -17,10 +17,10 @@ expect:
   # Lines are the fixture vocabulary's own: Customer is written on
   # line 7 of the file above, OrderPlaced on line 9.
   - kind: violation
-    path: ubiquitous-language.yaml
+    path: domain.arclint.yaml
     line: 7
     message: "entity \"Customer\" has no definition recorded in the project vocabulary"
   - kind: violation
-    path: ubiquitous-language.yaml
+    path: domain.arclint.yaml
     line: 9
     message: "domain event \"OrderPlaced\" has no definition recorded in the project vocabulary"

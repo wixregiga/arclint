@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -21,9 +23,10 @@ jobs:
       - name: Set up pinned repository tools
         uses: jdx/mise-action@v4
         with:
-          install_args: "aqua:golangci/golangci-lint gitleaks"
+          install_args: "aqua:golangci/golangci-lint aqua:stoplightio/spectral gitleaks"
 
       # make ci is the same full gate used locally and by hk: formatting,
-      # GolangCI, vet, tests, and ArcLint's repository selfcheck.
+      # GolangCI, vet, tests, the Spectral schema gate, and ArcLint's
+      # repository selfcheck.
       - name: Run full repository check
         run: make ci

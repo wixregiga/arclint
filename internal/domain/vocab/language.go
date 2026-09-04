@@ -6,8 +6,9 @@ import (
 )
 
 // UbiquitousLanguageFileName is the committed filename of the project's
-// recorded Ubiquitous Language, resolved beside rules.yaml.
-const UbiquitousLanguageFileName = "ubiquitous-language.yaml"
+// recorded Ubiquitous Language, resolved beside the repository ruleset
+// and named for the command group that owns it: arclint domain.
+const UbiquitousLanguageFileName = "domain.arclint.yaml"
 
 // UbiquitousLanguageVersion is the only document version this package
 // accepts.
@@ -98,7 +99,24 @@ func validateEntities(contextName string, entities []Entity) error {
 		if e.Line < 0 {
 			return fmt.Errorf("contexts %q entities: negative line on %q", contextName, e.Name)
 		}
+		if err := validateAliases(contextName, "entities", e.Definition); err != nil {
+			return err
+		}
 		seen[e.Name] = struct{}{}
+	}
+	return nil
+}
+
+// validateAliases rejects the same alias recorded twice on one term:
+// aliases are a set of synonyms, and a repetition is a slip, not a
+// second synonym.
+func validateAliases(contextName, section string, d Definition) error {
+	seen := make(map[string]struct{}, len(d.Aliases))
+	for _, alias := range d.Aliases {
+		if _, dup := seen[alias]; dup {
+			return fmt.Errorf("contexts %q %s: %q lists alias %q twice", contextName, section, d.Name, alias)
+		}
+		seen[alias] = struct{}{}
 	}
 	return nil
 }
@@ -114,6 +132,9 @@ func validateSection(contextName, section string, defs []Definition) error {
 		}
 		if d.Line < 0 {
 			return fmt.Errorf("contexts %q %s: negative line on %q", contextName, section, d.Name)
+		}
+		if err := validateAliases(contextName, section, d); err != nil {
+			return err
 		}
 		seen[d.Name] = struct{}{}
 	}
@@ -248,6 +269,7 @@ func validateRelations(contexts []BoundedContext, relations []ContextRelation) e
 	for _, c := range contexts {
 		names[c.Name] = struct{}{}
 	}
+	seen := make(map[ContextRelation]struct{}, len(relations))
 	for _, r := range relations {
 		if strings.TrimSpace(r.From) == "" {
 			return fmt.Errorf("relations: from must be non-empty")
@@ -267,6 +289,11 @@ func validateRelations(contexts []BoundedContext, relations []ContextRelation) e
 		if r.Line < 0 {
 			return fmt.Errorf("relations: negative line on %q -> %q", r.From, r.To)
 		}
+		edge := ContextRelation{From: r.From, To: r.To, Kind: r.Kind}
+		if _, dup := seen[edge]; dup {
+			return fmt.Errorf("relations: %q -> %q (%s) is recorded twice", r.From, r.To, r.Kind)
+		}
+		seen[edge] = struct{}{}
 	}
 	return nil
 }

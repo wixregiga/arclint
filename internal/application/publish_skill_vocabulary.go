@@ -11,13 +11,13 @@ import (
 // in the domain so comments and flow-style lines match the litmus file;
 // yaml.Marshal is never used.
 type PublishSkillVocabulary struct {
-	writer SkillArtifactWriter
+	writer ArtifactWriter
 }
 
-// NewPublishSkillVocabulary requires the skill artifact writer port.
-func NewPublishSkillVocabulary(writer SkillArtifactWriter) (PublishSkillVocabulary, error) {
+// NewPublishSkillVocabulary requires the artifact writer port.
+func NewPublishSkillVocabulary(writer ArtifactWriter) (PublishSkillVocabulary, error) {
 	if writer == nil {
-		return PublishSkillVocabulary{}, fmt.Errorf("publish skill vocabulary: missing skill artifact writer")
+		return PublishSkillVocabulary{}, fmt.Errorf("publish skill vocabulary: missing artifact writer")
 	}
 	return PublishSkillVocabulary{writer: writer}, nil
 }

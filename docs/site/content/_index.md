@@ -13,7 +13,7 @@ arclint init --languages go,ts
 arclint check .
 ```
 
-`init` drafts a starter `rules.yaml`. Define Modules, then add Rules that
+`init` drafts a starter `rules.arclint.yaml`. Define Modules, then add Rules that
 state what those Modules may import and which invariants their Files must
 satisfy:
 

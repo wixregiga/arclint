@@ -9,13 +9,13 @@ import (
 // PublishSkillProtocol renders and writes the domain-librarian SKILL.md
 // protocol file from domain-owned skill taxonomy constants.
 type PublishSkillProtocol struct {
-	writer SkillArtifactWriter
+	writer ArtifactWriter
 }
 
-// NewPublishSkillProtocol requires the skill artifact writer port.
-func NewPublishSkillProtocol(writer SkillArtifactWriter) (PublishSkillProtocol, error) {
+// NewPublishSkillProtocol requires the artifact writer port.
+func NewPublishSkillProtocol(writer ArtifactWriter) (PublishSkillProtocol, error) {
 	if writer == nil {
-		return PublishSkillProtocol{}, fmt.Errorf("publish skill protocol: missing skill artifact writer")
+		return PublishSkillProtocol{}, fmt.Errorf("publish skill protocol: missing artifact writer")
 	}
 	return PublishSkillProtocol{writer: writer}, nil
 }

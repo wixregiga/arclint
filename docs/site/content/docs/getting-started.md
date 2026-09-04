@@ -32,7 +32,7 @@ cd ~/projects/your-repo
 arclint init
 ```
 
-`init` drafts a `rules.yaml` from explicit language choices. It does not
+`init` drafts a `rules.arclint.yaml` from explicit language choices. It does not
 scan the tree. The no-flag default is `--pattern bare`: a commented
 single-module draft. Default languages is `go`. Pass others with
 `--languages`:
@@ -47,20 +47,20 @@ Adopt a Pattern instead of starting bare:
 arclint init --pattern arclint/vertical@0.1.0   # or --pattern vertical
 ```
 
-That writes a `rules.yaml` whose `extends` block pins the Pattern by
+That writes a `rules.arclint.yaml` whose `extends` block pins the Pattern by
 exact reference and binds each Pattern Module to the paths the Pattern
 suggests; edit the bindings to match your tree. Nothing is copied into
 `.arclint/extensions`: the Pattern's Rules and Extensions load by
 reference on every run. `--pattern bare` writes only the draft ruleset.
-An existing `rules.yaml` is refused unless you pass `--force`.
+An existing `rules.arclint.yaml` is refused unless you pass `--force`.
 
-A repository that already has a `rules.yaml` adds a Pattern with
+A repository that already has a `rules.arclint.yaml` adds a Pattern with
 `install` instead, which extends the file in place and keeps its
 comments:
 
 ```bash
 arclint patterns                      # what resolves offline
-arclint patterns install domain-model # extend rules.yaml with it
+arclint patterns install domain-model # extend rules.arclint.yaml with it
 arclint patterns install acme/layers  # fetched from the Registry, vendored, then extended
 ```
 
@@ -76,7 +76,7 @@ Accepted values for `--languages` are `go`, `ts`, and `py`
 On success:
 
 ```
-wrote /path/to/rules.yaml
+wrote /path/to/rules.arclint.yaml
 next: declare your modules, then run `arclint check .`
 ```
 
@@ -218,7 +218,7 @@ arclint baseline refresh   # drops stale entries after comparison
 
 ## Adjust the modules
 
-Module boundaries are yours. Edit the `modules:` block in `rules.yaml`,
+Module boundaries are yours. Edit the `modules:` block in `rules.arclint.yaml`,
 then inspect what binds where:
 
 ```bash
@@ -236,15 +236,26 @@ paths and import allow-list, and the Rules that apply. Re-run
 ```bash
 arclint rules                          # one line per configured Rule
 arclint rules source/dependencies      # full detail for one Rule
-arclint rules schema                   # JSON Schema for rules.yaml
+arclint rules schema                   # JSON Schema for rules.arclint.yaml
 ```
 
-For editor completion, point a YAML language server at the committed
-schema (kept identical to `arclint rules schema` by a drift test):
+For editor completion, write a local copy of the schema and point a YAML
+language server at it:
+
+```bash
+arclint rules schema --write           # .arclint/schemas/rules.arclint.schema.json
+```
 
 ```yaml
-# yaml-language-server: $schema=https://raw.githubusercontent.com/wixregiga/arclint/main/docs/rules.schema.json
+# yaml-language-server: $schema=.arclint/schemas/rules.arclint.schema.json
 ```
 
-If that URL does not resolve yet, use `docs/rules.schema.json` from an
-arclint checkout, or the live output of `arclint rules schema`.
+`arclint init` writes that modeline when the local copy exists;
+otherwise it names the published copy, kept identical to
+`arclint rules schema` by a drift test:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/wixregiga/arclint/main/docs/schemas/rules.arclint.schema.json
+```
+
+`arclint domain schema --write` does the same for `domain.arclint.yaml`.

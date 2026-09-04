@@ -1,8 +1,8 @@
 # Spectral ruleset for ArcLint's generated JSON Schemas (Draft 2020-12).
 #
 # Usage:
-#   spectral lint docs/rules.schema.json
-#   spectral lint "**/*.schema.json"
+#   make lint-schema                         # every committed schema copy
+#   spectral lint --ruleset .spectral.yaml docs/schemas/rules.arclint.schema.json
 functionsDir: "./scripts/validation/schema"
 functions:
   - one-of-ref-description-match

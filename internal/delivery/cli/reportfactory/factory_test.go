@@ -46,7 +46,7 @@ func TestSelectRenderersShortWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := r.Render(&shortWriter{n: 1}, cli.InitReport{Path: "rules.yaml"}); err == nil {
+	if err := r.Render(&shortWriter{n: 1}, cli.InitReport{Path: "rules.arclint.yaml"}); err == nil {
 		t.Fatal("expected short-write error")
 	} else if !errors.Is(err, io.ErrShortWrite) {
 		t.Fatalf("err = %v, want ErrShortWrite", err)

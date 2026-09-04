@@ -85,7 +85,7 @@ func activeVerticalIDs(t *testing.T, root string) (code int, ids []string, messa
 // repository because the Pattern supplies its own extensions in memory.
 func TestVerticalInitExtendsThePattern(t *testing.T) {
 	root := initVertical(t)
-	ruleset, err := os.ReadFile(filepath.Join(root, "rules.yaml"))
+	ruleset, err := os.ReadFile(filepath.Join(root, "rules.arclint.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +243,7 @@ func TestVerticalSharedDirectFile(t *testing.T) {
 func TestPatternExtensionsSuppliedOnlyWhenExtended(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "go.mod", "module fixture\n\ngo 1.22\n")
-	write(t, root, "rules.yaml", `runtime: [go]
+	write(t, root, "rules.arclint.yaml", `runtime: [go]
 modules:
   application: internal/*/application/**
 rules:

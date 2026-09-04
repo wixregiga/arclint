@@ -6,7 +6,7 @@ import (
 )
 
 // RelationKind is one context-map edge kind between bounded contexts.
-// Values match library.schema.json's kind enum order exactly.
+// Values match domain.arclint.schema.json's kind enum order exactly.
 type RelationKind string
 
 // The eight context_relation kinds in schema-enum order.
@@ -34,7 +34,7 @@ type ContextRelation struct {
 
 // RelationKindDoc is the ArcLint-owned meaning of one RelationKind.
 // Meaning is the VOCAB.yaml one-liner; SchemaMeaning is the phrase used
-// in library.schema.json's kind description. They match for every kind
+// in domain.arclint.schema.json's kind description. They match for every kind
 // except shared_kernel (VOCAB omits "model"; schema includes it).
 type RelationKindDoc struct {
 	Kind          RelationKind
@@ -61,7 +61,7 @@ func RelationKindDocs() []RelationKindDoc {
 	return []RelationKindDoc{
 		{Kind: RelationPartnership, Meaning: "succeed/fail together", SchemaMeaning: "succeed/fail together"},
 		// VOCAB.yaml: "small jointly-owned subset"
-		// library.schema.json: "small jointly-owned model subset"
+		// domain.arclint.schema.json: "small jointly-owned model subset"
 		{Kind: RelationSharedKernel, Meaning: "small jointly-owned subset", SchemaMeaning: "small jointly-owned model subset"},
 		{Kind: RelationCustomerSupplier, Meaning: "upstream plans for downstream", SchemaMeaning: "upstream plans for downstream"},
 		{Kind: RelationConformist, Meaning: "downstream adopts upstream model", SchemaMeaning: "downstream adopts upstream model"},
@@ -92,19 +92,22 @@ func (k RelationKind) Doc() RelationKindDoc {
 	return RelationKindDoc{Kind: k}
 }
 
-// SchemaKindDescription builds the library.schema.json kind.description
+// SchemaKindDescription builds the domain.arclint.schema.json kind.description
 // text from RelationKindDocs so schema and VOCAB cannot drift on the
 // seven identical meanings (shared_kernel uses SchemaMeaning).
 func SchemaKindDescription() string {
 	docs := RelationKindDocs()
 	var b strings.Builder
-	b.WriteString("Relationship kind.")
-	for _, d := range docs {
-		b.WriteString("\n- ")
+	b.WriteString("Relationship kind. ")
+	for i, d := range docs {
+		if i > 0 {
+			b.WriteString("; ")
+		}
 		b.WriteString(string(d.Kind))
 		b.WriteString(": ")
 		b.WriteString(d.SchemaMeaning)
 	}
+	b.WriteString(".")
 	return b.String()
 }
 

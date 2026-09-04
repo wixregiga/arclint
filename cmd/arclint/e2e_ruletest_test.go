@@ -27,7 +27,7 @@ rules:
 
 func TestRuleTestsRunThroughBinary(t *testing.T) {
 	dir := t.TempDir()
-	write(t, dir, "rules.yaml", ruleTestRules)
+	write(t, dir, "rules.arclint.yaml", ruleTestRules)
 	write(t, dir, "core/keep.go", "package core\n")
 	write(t, dir, ".arclint/tests/clean.yaml",
 		"rule: \"core/no-extra\"\nfiles:\n  core/keep.go: |\n    package core\nexpect: []\n")
@@ -76,7 +76,7 @@ func TestRuleTestsRunThroughBinary(t *testing.T) {
 // Author can copy Module(s) ["adapters"] without reading check_imports.
 func TestRuleTestEmptyExpectPrintsExactConsumesMessage(t *testing.T) {
 	dir := t.TempDir()
-	write(t, dir, "rules.yaml", `runtime: [go]
+	write(t, dir, "rules.arclint.yaml", `runtime: [go]
 scan:
   unknown_imports: error
 modules:
@@ -122,7 +122,7 @@ expect: []
 
 func TestRuleSchemaCommand(t *testing.T) {
 	dir := t.TempDir()
-	write(t, dir, "rules.yaml", ruleTestRules)
+	write(t, dir, "rules.arclint.yaml", ruleTestRules)
 	stdout, stderr, code := runBin(t, dir, os.Environ(), "rules", "schema")
 	if code != 0 {
 		t.Fatalf("rules schema: exit %d, stderr %s", code, stderr)
@@ -136,11 +136,32 @@ func TestRuleSchemaCommand(t *testing.T) {
 	}
 	// The committed editor schema and the binary's output are the same
 	// bytes; the byte-level drift test lives beside the yaml loader.
-	committed, err := os.ReadFile(filepath.Join(repoRoot(t), "docs", "rules.schema.json"))
+	committed, err := os.ReadFile(filepath.Join(repoRoot(t), filepath.FromSlash(ruleSchemaLitmus)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if stdout != string(committed) {
-		t.Errorf("rules schema output differs from docs/rules.schema.json")
+		t.Errorf("rules schema output differs from %s", ruleSchemaLitmus)
+	}
+
+	// --write lands the schema under the project's schema directory by
+	// default, byte-identical to the printed form.
+	if _, stderr, code := runBin(t, dir, os.Environ(), "rules", "schema", "--write"); code != 0 {
+		t.Fatalf("rules schema --write: exit %d, stderr %s", code, stderr)
+	}
+	written, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(ruleSchemaProjectPath)))
+	if err != nil {
+		t.Fatalf("rules schema --write did not create %s: %v", ruleSchemaProjectPath, err)
+	}
+	if string(written) != string(committed) {
+		t.Errorf("rules schema --write bytes differ from %s", ruleSchemaLitmus)
 	}
 }
+
+const (
+	// ruleSchemaProjectPath is where rules schema --write lands the
+	// schema relative to the project root; the litmus is the release
+	// copy under docs/schemas.
+	ruleSchemaProjectPath = ".arclint/schemas/rules.arclint.schema.json"
+	ruleSchemaLitmus      = "docs/schemas/rules.arclint.schema.json"
+)

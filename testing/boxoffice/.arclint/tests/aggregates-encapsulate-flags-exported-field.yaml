@@ -2,7 +2,7 @@
 # letting callers bypass the invariants its methods enforce.
 rule: "entities/aggregates-encapsulate"
 files:
-  ubiquitous-language.yaml: |
+  domain.arclint.yaml: |
     version: 1
     contexts:
       - name: catalog

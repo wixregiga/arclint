@@ -180,7 +180,7 @@ func TestRuleDetailAndContext(t *testing.T) {
 }
 
 // TestAgentsBlockCurrent replaces the docs drift test: the installed
-// AGENTS.md block must match what the binary generates from rules.yaml.
+// AGENTS.md block must match what the binary generates from rules.arclint.yaml.
 func TestAgentsBlockCurrent(t *testing.T) {
 	root := repoRoot(t)
 	stdout, stderr, code := runBin(t, root, os.Environ(), "agents", "md")
@@ -240,7 +240,7 @@ func TestAgentsGroupHelpOnly(t *testing.T) {
 // repository, no extension required.
 func TestContentRuleGates(t *testing.T) {
 	root := t.TempDir()
-	write(t, root, "rules.yaml", `runtime: [go]
+	write(t, root, "rules.arclint.yaml", `runtime: [go]
 modules:
   src: src/**
 rules:
@@ -306,7 +306,7 @@ func TestInitVerticalLoads(t *testing.T) {
 // fixture repository.
 func TestBaselineLifecycle(t *testing.T) {
 	root := t.TempDir()
-	write(t, root, "rules.yaml", `runtime: [go]
+	write(t, root, "rules.arclint.yaml", `runtime: [go]
 modules:
   src: src/**
 rules:
@@ -352,7 +352,7 @@ rules:
 // ruleset constructs fail loudly as configuration errors.
 func TestLegacyFormatRejected(t *testing.T) {
 	root := t.TempDir()
-	write(t, root, "rules.yaml", `runtime: [go]
+	write(t, root, "rules.arclint.yaml", `runtime: [go]
 modules:
   src: ["src/**"]
 contracts:
@@ -369,7 +369,7 @@ contracts:
 
 func TestSDKInitWritesTyping(t *testing.T) {
 	root := t.TempDir()
-	write(t, root, "rules.yaml", "runtime: [go]\n")
+	write(t, root, "rules.arclint.yaml", "runtime: [go]\n")
 	stdout, stderr, code := runBin(t, root, os.Environ(), "sdk", "init")
 	if code != 0 || strings.Count(stdout, "wrote ") != 2 {
 		t.Fatalf("sdk init exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
@@ -406,7 +406,7 @@ export default defineRule({
   },
 });
 `)
-	write(t, root, "rules.yaml", `runtime: [go, ts]
+	write(t, root, "rules.arclint.yaml", `runtime: [go, ts]
 modules:
   src: src/**
 rules:

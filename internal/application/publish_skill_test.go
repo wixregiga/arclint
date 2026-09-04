@@ -24,7 +24,7 @@ func repoRoot(t *testing.T) string {
 // agents skill, or fix the generator; never edit fixtures by hand.
 
 func TestPublishSkillProtocolRenderMatchesLitmus(t *testing.T) {
-	uc, err := application.NewPublishSkillProtocol(stubSkillWriter{})
+	uc, err := application.NewPublishSkillProtocol(stubArtifactWriter{})
 	if err != nil {
 		t.Fatalf("NewPublishSkillProtocol: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestPublishSkillProtocolRenderMatchesLitmus(t *testing.T) {
 }
 
 func TestPublishSkillVocabularyRenderMatchesLitmus(t *testing.T) {
-	uc, err := application.NewPublishSkillVocabulary(stubSkillWriter{})
+	uc, err := application.NewPublishSkillVocabulary(stubArtifactWriter{})
 	if err != nil {
 		t.Fatalf("NewPublishSkillVocabulary: %v", err)
 	}
@@ -53,26 +53,8 @@ func TestPublishSkillVocabularyRenderMatchesLitmus(t *testing.T) {
 	}
 }
 
-func TestPublishLibrarySchemaRenderMatchesLitmus(t *testing.T) {
-	uc, err := application.NewPublishLibrarySchema(stubSkillWriter{})
-	if err != nil {
-		t.Fatalf("NewPublishLibrarySchema: %v", err)
-	}
-	want, err := os.ReadFile(filepath.Join(repoRoot(t), ".agents", "skills", "domain-librarian", "library.schema.json"))
-	if err != nil {
-		t.Fatalf("read litmus library.schema.json: %v", err)
-	}
-	got, err := uc.Render()
-	if err != nil {
-		t.Fatalf("Render: %v", err)
-	}
-	if !bytes.Equal(got, want) {
-		t.Fatalf("PublishLibrarySchema.Render drifted from litmus library.schema.json; regenerate the committed skill artifacts via arclint agents skill, or fix the generator; never edit fixtures by hand")
-	}
-}
+type stubArtifactWriter struct{}
 
-type stubSkillWriter struct{}
-
-func (stubSkillWriter) Write(dir, filename string, content []byte) (bool, string, error) {
+func (stubArtifactWriter) Write(dir, filename string, content []byte) (bool, string, error) {
 	return false, filepath.Join(dir, filename), nil
 }

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/wixregiga/arclint/internal/application"
+	"github.com/wixregiga/arclint/internal/domain/rule"
 	embeddedpattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/embedded"
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
 	filesystemscaffold "github.com/wixregiga/arclint/internal/infrastructure/scaffold/filesystem"
@@ -120,5 +121,49 @@ func TestVerticalRulesetRoundTrips(t *testing.T) {
 	}
 	if len(cfg.Languages) != 2 {
 		t.Errorf("languages = %v, want go and typescript", cfg.Languages)
+	}
+}
+
+// TestStarterRulesetNamesItsSchema proves the drafted file lands under
+// the published ruleset name and opens with an editor modeline: the
+// published $id when the project holds no schema copy, the project's
+// copy under .arclint/schemas once one exists.
+func TestStarterRulesetNamesItsSchema(t *testing.T) {
+	dir := t.TempDir()
+	writer, err := filesystemscaffold.NewWriter(dir)
+	if err != nil {
+		t.Fatalf("NewWriter: %v", err)
+	}
+	path, err := writer.Write("runtime: [go]\n", false)
+	if err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if filepath.Base(path) != rule.RulesetFileName {
+		t.Fatalf("path = %q, want base %q", path, rule.RulesetFileName)
+	}
+	remote, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if want := "# yaml-language-server: $schema=" + rule.SchemaID + "\nruntime: [go]\n"; string(remote) != want {
+		t.Fatalf("fresh draft =\n%s\nwant\n%s", remote, want)
+	}
+
+	local := filepath.Join(dir, filepath.FromSlash(application.SchemaDirectory), rule.SchemaFileName)
+	if err := os.MkdirAll(filepath.Dir(local), 0o750); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(local, []byte("{}\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile schema: %v", err)
+	}
+	if _, err := writer.Write("runtime: [go]\n", true); err != nil {
+		t.Fatalf("forced Write: %v", err)
+	}
+	project, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if want := "# yaml-language-server: $schema=" + application.SchemaDirectory + "/" + rule.SchemaFileName + "\nruntime: [go]\n"; string(project) != want {
+		t.Fatalf("draft beside a project schema =\n%s\nwant\n%s", project, want)
 	}
 }

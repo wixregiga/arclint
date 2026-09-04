@@ -196,7 +196,7 @@ func compileParamsSchema(name string, raw map[string]any) (*sj.Schema, error) {
 	return schema, nil
 }
 
-// ValidateParams checks a rules.yaml instance's params against the rule
+// ValidateParams checks a rules.arclint.yaml instance's params against the rule
 // type's declared schema, BEFORE any extension code runs, and returns the
 // params with top-level schema defaults applied.
 func (rt *RuleType) ValidateParams(params map[string]any) (map[string]any, error) {

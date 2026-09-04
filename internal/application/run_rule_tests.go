@@ -23,7 +23,7 @@ type FixtureObserver interface {
 }
 
 // VocabularySource is the port through which the use case turns a
-// fixture's authored ubiquitous-language.yaml content into the
+// fixture's authored domain.arclint.yaml content into the
 // recorded vocabulary that extension rules under test observe through
 // ctx.domain().
 type VocabularySource interface {
@@ -120,7 +120,7 @@ func (uc RunRuleTests) Execute() ([]RuleTestResult, error) {
 			return nil, fmt.Errorf("rule test %q: observe fixture: %w", t.Name(), err)
 		}
 		// A fixture authors its recorded vocabulary as
-		// ubiquitous-language.yaml at the tree root; extension rules
+		// domain.arclint.yaml at the tree root; extension rules
 		// under test observe it through ctx.domain().
 		knowledge, err := uc.fixtureVocabulary(t.Files())
 		if err != nil {
@@ -162,7 +162,7 @@ func (uc RunRuleTests) Execute() ([]RuleTestResult, error) {
 }
 
 // fixtureVocabulary parses the vocabulary a fixture authors as
-// ubiquitous-language.yaml at its tree root; fixtures without one see
+// domain.arclint.yaml at its tree root; fixtures without one see
 // an empty vocabulary.
 func (uc RunRuleTests) fixtureVocabulary(files []rule.TestFile) (vocab.UbiquitousLanguage, error) {
 	for _, f := range files {

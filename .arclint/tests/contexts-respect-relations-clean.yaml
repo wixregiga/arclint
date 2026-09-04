@@ -3,7 +3,7 @@
 # conformist relation permits.
 rule: "arclint/domain-model:contexts/respect-relations"
 files:
-  ubiquitous-language.yaml: |
+  domain.arclint.yaml: |
     version: 1
     contexts:
       - name: rule

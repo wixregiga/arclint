@@ -14,11 +14,11 @@ import (
 
 func TestPlainInitBytes(t *testing.T) {
 	var buf bytes.Buffer
-	err := New().Render(&buf, cli.InitReport{Path: "rules.yaml"})
+	err := New().Render(&buf, cli.InitReport{Path: "rules.arclint.yaml"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "wrote rules.yaml\nnext: declare your modules, then run `arclint check .`\n"
+	want := "wrote rules.arclint.yaml\nnext: declare your modules, then run `arclint check .`\n"
 	if buf.String() != want {
 		t.Fatalf("bytes = %q, want %q", buf.String(), want)
 	}
@@ -40,7 +40,7 @@ func TestPlainBaselineCaptureBytes(t *testing.T) {
 
 func TestPlainAgentsStatusBytes(t *testing.T) {
 	var buf bytes.Buffer
-	err := New().Render(&buf, cli.AgentsStatusReport{
+	err := New().Render(&buf, cli.ArtifactStatusReport{
 		Writes: []cli.ArtifactWrite{
 			{Changed: true, Path: "AGENTS.md"},
 			{Changed: false, Path: "SKILL.md"},
@@ -73,7 +73,7 @@ func TestPlainDomainMissingBytes(t *testing.T) {
 }
 
 func TestPlainShortWrite(t *testing.T) {
-	err := New().Render(&shortWriter{n: 3}, cli.InitReport{Path: "rules.yaml"})
+	err := New().Render(&shortWriter{n: 3}, cli.InitReport{Path: "rules.arclint.yaml"})
 	if err == nil {
 		t.Fatal("expected short-write error")
 	}

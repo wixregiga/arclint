@@ -83,8 +83,8 @@ func (r renderer) Render(w io.Writer, rep cli.Report) error {
 		writeDomainDefine(p, th, x)
 	case cli.DomainRemoveReport:
 		writeDomainRemove(p, th, x.Result)
-	case cli.AgentsStatusReport:
-		writeAgentsStatus(p, th, x.Writes)
+	case cli.ArtifactStatusReport:
+		writeArtifactStatus(p, th, x.Writes)
 	case cli.BaselineCaptureReport:
 		writeBaselineCapture(p, th, x.Result)
 	case cli.BaselineRefreshReport:

@@ -1,5 +1,5 @@
 // Package yamlvocab loads and stores the project's recorded
-// Ubiquitous Language vocabulary from ubiquitous-language.yaml.
+// Ubiquitous Language vocabulary from the project's domain file.
 // RecordedLanguage is strict (unknown keys are errors). Record
 // preserves human authoring of untouched entries (comments and
 // ordering) and writes atomically.
@@ -16,17 +16,8 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
-const (
-	// localSchemaRel is the in-repo schema path used in the modeline
-	// when that file exists under the repository root.
-	localSchemaRel = ".agents/skills/domain-librarian/library.schema.json"
-	// remoteSchemaURL is the published $id used when the local schema
-	// file is absent under the bound root.
-	remoteSchemaURL = "https://raw.githubusercontent.com/wixregiga/arclint/main/.agents/skills/domain-librarian/library.schema.json"
-)
-
 // Repository implements the domain-owned vocab.Repository port over
-// one ubiquitous-language.yaml beside the resolved ruleset root.
+// one domain file (vocab.UbiquitousLanguageFileName) beside the resolved ruleset root.
 type Repository struct {
 	path string
 	root string
@@ -35,20 +26,20 @@ type Repository struct {
 // NewRepository binds the repository to filepath.Join(root, UbiquitousLanguageFileName).
 func NewRepository(root string) (Repository, error) {
 	if root == "" {
-		return Repository{}, fmt.Errorf("ubiquitous-language root: empty path")
+		return Repository{}, fmt.Errorf("domain file root: empty path")
 	}
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
-		return Repository{}, fmt.Errorf("ubiquitous-language root: %w", err)
+		return Repository{}, fmt.Errorf("domain file root: %w", err)
 	}
 	abs, err := filepath.Abs(filepath.Join(absRoot, vocab.UbiquitousLanguageFileName))
 	if err != nil {
-		return Repository{}, fmt.Errorf("ubiquitous-language path: %w", err)
+		return Repository{}, fmt.Errorf("domain file path: %w", err)
 	}
 	return Repository{path: abs, root: absRoot}, nil
 }
 
-// Path returns the absolute path of the ubiquitous-language.yaml file.
+// Path returns the absolute path of the domain file.
 func (r Repository) Path() string { return r.path }
 
 // RecordedLanguage returns the vocabulary and whether the file exists.
@@ -70,7 +61,7 @@ func (r Repository) RecordedLanguage() (vocab.UbiquitousLanguage, bool, error) {
 	return lang, true, nil
 }
 
-// Parse turns authored ubiquitous-language.yaml content into the
+// Parse turns authored domain file content into the
 // recorded vocabulary, applying the same strict decoding and domain
 // invariants as RecordedLanguage. Callers that hold fixture bytes
 // rather than a repository file, such as the rule-test harness
@@ -225,14 +216,14 @@ func (r Repository) Record(m vocab.UbiquitousLanguage) error {
 }
 
 // schemaModeline chooses the editor schema hint for a freshly created
-// file: relative local path when library.schema.json exists under the
-// bound root, else the published raw-GitHub $id.
+// file: the project's schema copy when it exists under the bound root,
+// else the published $id.
 func (r Repository) schemaModeline() string {
-	local := filepath.Join(r.root, filepath.FromSlash(localSchemaRel))
+	local := filepath.Join(r.root, filepath.FromSlash(vocab.SchemaPath))
 	if st, err := os.Stat(local); err == nil && !st.IsDir() {
-		return "# yaml-language-server: $schema=" + localSchemaRel
+		return "# yaml-language-server: $schema=" + vocab.SchemaPath
 	}
-	return "# yaml-language-server: $schema=" + remoteSchemaURL
+	return "# yaml-language-server: $schema=" + vocab.SchemaID
 }
 
 type documentDoc struct {
@@ -1137,7 +1128,7 @@ func atomicWrite(path string, data []byte) error {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("create %s: %w", dir, err)
 	}
-	tmp, err := os.CreateTemp(dir, ".ubiquitous-language-*.yaml")
+	tmp, err := os.CreateTemp(dir, ".domain-*.yaml")
 	if err != nil {
 		return fmt.Errorf("create temp for %s: %w", path, err)
 	}

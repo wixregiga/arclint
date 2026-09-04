@@ -60,7 +60,7 @@ func installationFixture(t *testing.T, version string) rule.Installation {
 
 func writeRuleset(t *testing.T, content string) yamlrule.Editor {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "rules.yaml")
+	path := filepath.Join(t.TempDir(), "rules.arclint.yaml")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -336,7 +336,7 @@ func TestExtendRefusesInvalidAndPatternFiles(t *testing.T) {
 	if _, err := editor.Extend(inst); err == nil {
 		t.Error("an invalid ruleset must not be edited")
 	}
-	missing, err := yamlrule.NewEditor(filepath.Join(t.TempDir(), "rules.yaml"))
+	missing, err := yamlrule.NewEditor(filepath.Join(t.TempDir(), "rules.arclint.yaml"))
 	if err != nil {
 		t.Fatalf("NewEditor: %v", err)
 	}

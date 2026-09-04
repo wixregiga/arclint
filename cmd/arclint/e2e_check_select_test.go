@@ -29,7 +29,7 @@ rules:
 
 func TestCheckOnlyAndExclude(t *testing.T) {
 	dir := t.TempDir()
-	write(t, dir, "rules.yaml", selectRules)
+	write(t, dir, "rules.arclint.yaml", selectRules)
 	write(t, dir, "core/keep.go", "package core\n")
 	write(t, dir, "core/extra/x.go", "package extra\n")
 
@@ -75,7 +75,7 @@ func TestCheckOnlyAndExclude(t *testing.T) {
 
 func TestRulesSelectors(t *testing.T) {
 	dir := t.TempDir()
-	write(t, dir, "rules.yaml", selectRules)
+	write(t, dir, "rules.arclint.yaml", selectRules)
 	write(t, dir, "core/keep.go", "package core\n")
 
 	// A pattern narrows the listing to its matches.
@@ -106,7 +106,7 @@ func TestRulesSelectors(t *testing.T) {
 
 func TestCompletionRuleSelectors(t *testing.T) {
 	dir := t.TempDir()
-	write(t, dir, "rules.yaml", selectRules)
+	write(t, dir, "rules.arclint.yaml", selectRules)
 
 	// --only completes rule ids.
 	stdout, _, code := runBin(t, dir, os.Environ(), "__complete", "check", "--only", "")

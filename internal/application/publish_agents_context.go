@@ -58,9 +58,9 @@ func AgentCommandSurface() []AgentCommandDoc {
 		{"check", "check .", "evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings"},
 		{"rules test", "rules test", "run the rule fixtures under `.arclint/tests` after changing any rule"},
 		{"sdk init", "sdk init", "regenerate the extension SDK artifacts under `.arclint/extensions`"},
-		{"agents md", "agents md --write", "refresh this block after changing rules.yaml or the vocabulary"},
+		{"agents md", "agents md --write", "refresh this block after changing " + rule.RulesetFileName + " or the vocabulary"},
 		{"baseline", "baseline", "manage the committed baseline of adopted findings"},
-		{"patterns", "patterns", "list the Patterns that resolve offline (embedded, vendored, authored); `patterns install <pattern>` extends rules.yaml with one, `patterns vendor` copies one under `.arclint/patterns`"},
+		{"patterns", "patterns", "list the Patterns that resolve offline (embedded, vendored, authored); `patterns install <pattern>` extends " + rule.RulesetFileName + " with one, `patterns vendor` copies one under `.arclint/patterns`"},
 	}
 }
 
@@ -136,7 +136,8 @@ func renderAgentsBlock(cfg rule.Configured, lang vocab.UbiquitousLanguage,
 	for _, l := range cfg.Languages {
 		languages = append(languages, string(l))
 	}
-	fmt.Fprintf(&b, "Enforced from rules.yaml: %d rules over languages [%s].\n\n",
+	fmt.Fprintf(&b, "Enforced from %s: %d rules over languages [%s].\n\n",
+		rule.RulesetFileName,
 		len(cfg.Rules), strings.Join(languages, ", "))
 	writeExtendedPatterns(&b, cfg)
 	writeAskFirst(&b)
@@ -153,7 +154,7 @@ func renderAgentsBlock(cfg rule.Configured, lang vocab.UbiquitousLanguage,
 // writeExtendedPatterns names every Pattern the ruleset extends with
 // the number of Rules it distributes, so an agent reading a qualified
 // Rule ID below knows which Pattern owns it and that the Rule is
-// changed through an Override in rules.yaml, never by editing the
+// changed through an Override in rules.arclint.yaml, never by editing the
 // Pattern.
 func writeExtendedPatterns(b *strings.Builder, cfg rule.Configured) {
 	var refs []rule.PatternReference
@@ -177,7 +178,7 @@ func writeExtendedPatterns(b *strings.Builder, cfg rule.Configured) {
 		parts = append(parts, fmt.Sprintf("`%s` (%d rules, ids qualified `%s:`)", ref, counts[ref.String()], ref.Qualifier()))
 	}
 	fmt.Fprintf(b, "Extended Patterns: %s. A Pattern Rule is listed and reported under its qualified id; "+
-		"change it through an Override under that id in rules.yaml (`arclint rules <id>` prints it), never by editing the Pattern.\n\n",
+		"change it through an Override under that id in "+rule.RulesetFileName+" (`arclint rules <id>` prints it), never by editing the Pattern.\n\n",
 		strings.Join(parts, "; "))
 }
 

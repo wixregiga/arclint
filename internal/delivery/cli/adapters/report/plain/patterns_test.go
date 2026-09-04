@@ -11,10 +11,14 @@ import (
 
 func samplePatterns() []application.PatternSummary {
 	return []application.PatternSummary{
-		{Namespace: "arclint", Name: "domain-model", Version: "0.1.0", Source: distribution.SourceEmbedded,
-			Digest: "sha256:3f2a9c1e5b7d0000", Rules: 3, Extensions: 3, Coverage: []string{"go", "ts"}},
-		{Namespace: "acme", Name: "layers", Version: "1.2.0", Source: distribution.SourceLocal, Authored: true,
-			Digest: "sha256:9b1c2d3e4f5a6666", Rules: 12, Extensions: 0, Coverage: []string{"go"}},
+		{
+			Namespace: "arclint", Name: "domain-model", Version: "0.1.0", Source: distribution.SourceEmbedded,
+			Digest: "sha256:3f2a9c1e5b7d0000", Rules: 3, Extensions: 3, Coverage: []string{"go", "ts"},
+		},
+		{
+			Namespace: "acme", Name: "layers", Version: "1.2.0", Source: distribution.SourceLocal, Authored: true,
+			Digest: "sha256:9b1c2d3e4f5a6666", Rules: 12, Extensions: 0, Coverage: []string{"go"},
+		},
 	}
 }
 
@@ -43,7 +47,7 @@ func TestPlainPatternInstallBytes(t *testing.T) {
 	err := New().Render(&buf, cli.PatternInstallReport{Result: application.InstallPatternResult{
 		Reference: "acme/layers@1.2.0", Digest: "sha256:9b1c2d3e4f5a6666", Source: distribution.SourceRegistry,
 		VendoredPath: ".arclint/patterns/acme/layers", VendorReplaced: "1.1.0",
-		RulesetPath: "rules.yaml", RulesetReplaced: "1.1.0",
+		RulesetPath: "rules.arclint.yaml", RulesetReplaced: "1.1.0",
 		Bound:   []application.BoundModule{{Module: "domain", Paths: []string{"internal/domain/**", "pkg/domain/**"}}},
 		Unbound: []string{"app"},
 		Adopted: []string{"domain"},
@@ -53,7 +57,7 @@ func TestPlainPatternInstallBytes(t *testing.T) {
 	}
 	want := "installed acme/layers@1.2.0 (registry, 9b1c2d3e4f5a)\n" +
 		"vendored to .arclint/patterns/acme/layers, replacing 1.1.0\n" +
-		"extended rules.yaml, moving the entry from 1.1.0\n" +
+		"extended rules.arclint.yaml, moving the entry from 1.1.0\n" +
 		"bound:\n" +
 		"  domain: internal/domain/**, pkg/domain/**\n" +
 		"adopted declared module(s): domain\n" +
@@ -67,14 +71,14 @@ func TestPlainPatternInstallBytes(t *testing.T) {
 	buf.Reset()
 	err = New().Render(&buf, cli.PatternInstallReport{Result: application.InstallPatternResult{
 		Reference: "arclint/vertical@0.1.0", Digest: "sha256:3f2a9c1e5b7d0000", Source: distribution.SourceEmbedded,
-		RulesetPath: "rules.yaml", RulesetCreated: true,
+		RulesetPath: "rules.arclint.yaml", RulesetCreated: true,
 		Bound: []application.BoundModule{{Module: "domain", Paths: []string{"internal/*/domain/**"}}},
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want = "installed arclint/vertical@0.1.0 (embedded, 3f2a9c1e5b7d)\n" +
-		"wrote rules.yaml\n" +
+		"wrote rules.arclint.yaml\n" +
 		"bound:\n" +
 		"  domain: internal/*/domain/**\n" +
 		"next: run `arclint check .`\n"

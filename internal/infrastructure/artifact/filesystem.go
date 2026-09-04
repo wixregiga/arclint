@@ -1,20 +1,18 @@
-// Package skillfs writes generated domain-librarian skill artifacts
-// (SKILL.md, VOCAB.yaml, library.schema.json) through the application's
-// SkillArtifactWriter port. Writes are atomic and create the target
+// Package artifactfs writes generated artifacts (the domain-librarian
+// skill files, the published JSON Schemas) through the application's
+// ArtifactWriter port. Writes are atomic and create the target
 // directory as needed.
-package skillfs
+package artifactfs
 
 import (
 	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/wixregiga/arclint/internal/application"
 )
 
-// Writer implements application.SkillArtifactWriter over a repository
-// root. Paths passed to Write are joined under root when relative.
+// Writer implements application.ArtifactWriter over a repository root.
+// Paths passed to Write are joined under root when relative.
 type Writer struct {
 	root string
 }
@@ -23,20 +21,21 @@ type Writer struct {
 func NewWriter(root string) (Writer, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
-		return Writer{}, fmt.Errorf("skill writer root: %w", err)
+		return Writer{}, fmt.Errorf("artifact writer root: %w", err)
 	}
 	return Writer{root: abs}, nil
 }
 
-// Write implements application.SkillArtifactWriter. dir may be absolute
-// or relative to the bound root. Returns changed=false when the file
+// Write implements application.ArtifactWriter. dir may be absolute or
+// relative to the bound root; the use case chooses the default, so an
+// empty dir is a caller error. Returns changed=false when the file
 // already holds identical bytes.
 func (w Writer) Write(dir, filename string, content []byte) (bool, string, error) {
 	if filename == "" {
-		return false, "", fmt.Errorf("skill write: empty filename")
+		return false, "", fmt.Errorf("artifact write: empty filename")
 	}
 	if dir == "" {
-		dir = application.DomainLibrarianSkillDir
+		return false, "", fmt.Errorf("artifact write %s: empty directory", filename)
 	}
 	targetDir := dir
 	if !filepath.IsAbs(targetDir) {
@@ -68,7 +67,7 @@ func atomicWrite(path string, data []byte) error {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("create %s: %w", dir, err)
 	}
-	tmp, err := os.CreateTemp(dir, ".skill-artifact-*.tmp")
+	tmp, err := os.CreateTemp(dir, ".artifact-*.tmp")
 	if err != nil {
 		return fmt.Errorf("create temp for %s: %w", path, err)
 	}

@@ -1,4 +1,4 @@
-// Package yamlrule loads complete Rule aggregates from rules.yaml. The
+// Package yamlrule loads complete Rule aggregates from rules.arclint.yaml. The
 // accepted grammar is one document shape for both file kinds: a
 // repository ruleset carries runtime, scan, extends, modules, and
 // rules; a Pattern distribution file carries the pattern header,
@@ -55,7 +55,7 @@ type Repository struct {
 // recorded-vocabulary port expanded Rules resolve against, and the
 // Pattern sources extends resolves through. A nil knowledge port means
 // no recorded vocabulary: expanded Rules then resolve empty, exactly as
-// with an absent ubiquitous-language.yaml. No Pattern source means a
+// with an absent domain.arclint.yaml. No Pattern source means a
 // ruleset that extends anything fails to load.
 func NewRepository(path string, knowledge vocab.Repository, patterns ...PatternSource) (*Repository, error) {
 	abs, err := filepath.Abs(path)

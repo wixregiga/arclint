@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/wixregiga/arclint/internal/application"
+	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
@@ -24,6 +25,7 @@ func NewDomainCommand(
 	show application.ShowDomainDefinition,
 	define application.DefineDomainDefinition,
 	remove application.RemoveDomainDefinition,
+	publishSchema application.PublishDomainSchema,
 	render Renderer,
 ) Command {
 	runOverview := overviewRunner(overview, render)
@@ -105,14 +107,13 @@ func NewDomainCommand(
 				CompleteArgs: completeShowArgs(list),
 				Run:          removeRunner(remove, render),
 			},
-			{
-				Name:    "schema",
-				Short:   "print the JSON Schema accepted for ubiquitous-language.yaml",
-				Long:    schemaLong,
-				Example: schemaExample,
-				MaxArgs: 0,
-				Run:     domainSchemaRunner(),
-			},
+			newSchemaCommand(
+				"print or write the JSON Schema accepted for "+vocab.UbiquitousLanguageFileName,
+				schemaLong,
+				schemaExample,
+				publishSchema,
+				render,
+			),
 		},
 	}
 }
@@ -275,19 +276,6 @@ func removeRunner(remove application.RemoveDomainDefinition, render Renderer) fu
 			return domainError(err)
 		}
 		if err := render.Render(ctx.Stdout, DomainRemoveReport{Result: result}); err != nil {
-			return fmt.Errorf("write output: %w", err)
-		}
-		return nil
-	}
-}
-
-func domainSchemaRunner() func(Context) error {
-	return func(ctx Context) error {
-		data, err := vocab.Schema()
-		if err != nil {
-			return fmt.Errorf("domain schema: %w", err)
-		}
-		if _, err := ctx.Stdout.Write(data); err != nil {
 			return fmt.Errorf("write output: %w", err)
 		}
 		return nil
@@ -705,11 +693,11 @@ extensions, and agent integrations.
 Running arclint domain without a subcommand is the same as:
   arclint domain overview`
 
-const initDomainLong = `Initialize the project's ubiquitous language file.
+const initDomainLong = `Initialize the project's ubiquitous language file, ` + vocab.UbiquitousLanguageFileName + `.
 
-The file is created beside the resolved rules.yaml with the current document
-version and an editor schema hint. If it already exists, ArcLint leaves it
-unchanged.`
+The file is created beside the resolved ` + rule.RulesetFileName + ` with the current
+document version and an editor schema hint. If it already exists, ArcLint leaves
+it unchanged.`
 
 const initDomainExample = `  arclint domain init`
 
@@ -816,10 +804,13 @@ const removeExample = `  arclint domain remove aggregate Order --context Orderin
   arclint domain rm domain_event LegacyOrderCreated --context Ordering
   arclint domain remove value_object LegacyOrderID --format json`
 
-const schemaLong = `Print the JSON Schema accepted for ubiquitous-language.yaml.
+const schemaLong = `Print the JSON Schema accepted for ` + vocab.UbiquitousLanguageFileName + `, or write
+it under the project's schema directory with --write so the file's modeline
+can name a local copy.
 
 The schema is the machine-readable contract for direct YAML authoring and
 editor completion.`
 
 const schemaExample = `  arclint domain schema
-  arclint domain schema > .agents/skills/domain-librarian/library.schema.json`
+  arclint domain schema --write
+  arclint domain schema --write --dir docs/schemas`

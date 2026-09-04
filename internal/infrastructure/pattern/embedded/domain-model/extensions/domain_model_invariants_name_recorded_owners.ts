@@ -7,15 +7,15 @@
 // records no vocabulary.
 import { defineRule } from "arclint";
 
-const VOCABULARY = "ubiquitous-language.yaml";
-
 export default defineRule({
   type: "domain-model/invariants-name-recorded-owners",
   description:
     "every recorded invariant is owned by a term recorded in its context",
   capability: "structural",
   check(ctx) {
-    for (const bound of ctx.domain().contexts) {
+    const domain = ctx.domain();
+    const VOCABULARY = domain.source;
+    for (const bound of domain.contexts) {
       const canonical = new Set<string>();
       const aliased: Record<string, string> = {};
       for (const term of [...bound.entities, ...bound.valueObjects]) {

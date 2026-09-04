@@ -2,6 +2,11 @@ package rule
 
 import "fmt"
 
+// RulesetFileName is the repository ruleset file: the one document
+// arclint discovers upward from the working directory, drafts on
+// init, and evaluates on check.
+const RulesetFileName = "rules.arclint.yaml"
+
 // UnknownImportPolicy is the repository policy for imports that
 // classify neither stdlib, internal, nor external.
 type UnknownImportPolicy string
@@ -42,7 +47,7 @@ type Scan struct {
 type Configured struct {
 	Rules   []Rule
 	Modules []Module
-	// Languages are the configured language targets (rules.yaml
+	// Languages are the configured language targets (rules.arclint.yaml
 	// runtime) whose facts observation should produce.
 	Languages []Language
 	Scan      Scan

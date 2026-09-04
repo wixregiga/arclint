@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=./docs/rules.schema.json
+# yaml-language-server: $schema=.arclint/schemas/rules.arclint.schema.json
 # ArcLint's own architecture contracts, self-hosted on the target
 # domain model: Rule is the sole aggregate, use cases coordinate
 # through ports, adapters stay outbound or inbound, Cobra stays
@@ -21,7 +21,7 @@ scan:
     - "**/generated/**"
     - "**/mock_*.go"
     # The boxoffice proving ground is its own repository in spirit:
-    # its own go.mod, rules.yaml, and vocabulary. It must not land
+    # its own go.mod, rules.arclint.yaml, and vocabulary. It must not land
     # in this build or this scan.
     - "testing/**"
 
@@ -36,7 +36,7 @@ scan:
 extends:
   - pattern: arclint/domain-model@0.1.0
     bind:
-      vocabulary: "ubiquitous-language.yaml"
+      vocabulary: "domain.arclint.yaml"
 
 modules:
   domain:
