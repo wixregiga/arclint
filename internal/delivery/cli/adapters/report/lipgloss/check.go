@@ -7,11 +7,12 @@ import (
 
 func writeCheck(p *out.Printer, th Theme, a conformance.Assessment) {
 	for _, v := range a.ActiveViolations() {
-		// Grammar: path[:line]: [sev] rule [(pattern)] msg
+		// Grammar: path[:line]: [sev] rule [(@version)] msg; the id
+		// already names the distributing Pattern, the tag adds its version.
 		anchor := th.pathAnchor(v.Path(), v.Line())
 		id := v.Rule().Qualified()
 		if ref, ok := v.Provenance(); ok {
-			id += " (" + ref.String() + ")"
+			id += " (@" + ref.Version() + ")"
 		}
 		line := anchor + ": " + th.severityBracket(string(v.Severity())) + " " +
 			th.Muted.Render(id) + " " + v.Message()

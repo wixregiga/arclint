@@ -45,7 +45,7 @@ func emptyAllowList(t *testing.T) *rule.AllowList {
 func validConsumesSpec(t *testing.T) rule.Spec {
 	t.Helper()
 	return rule.Spec{
-		ID:            "arclint:domain/stdlib-only",
+		ID:            "arclint/ddd-flat:domain/stdlib-only",
 		Type:          rule.TypeConsumes,
 		Params:        rule.ConsumesParams{Internal: emptyAllowList(t), External: rule.ImportForbid},
 		Applicability: mustModuleApplicability(t, "domain"),
@@ -69,6 +69,15 @@ func TestInvalidRulesCannotBeConstructed(t *testing.T) {
 			return s
 		}()},
 		{"invalid severity", func() rule.Spec { s := validConsumesSpec(t); s.Severity = "warn"; return s }()},
+		{"provenance that does not qualify the id", func() rule.Spec {
+			s := validConsumesSpec(t)
+			ref, err := rule.ParsePatternReference("arclint/other@1.0.0")
+			if err != nil {
+				t.Fatalf("ParsePatternReference: %v", err)
+			}
+			s.Provenance = &ref
+			return s
+		}()},
 		{"consumes without restriction", func() rule.Spec {
 			s := validConsumesSpec(t)
 			s.Params = rule.ConsumesParams{}
@@ -80,43 +89,43 @@ func TestInvalidRulesCannotBeConstructed(t *testing.T) {
 			return s
 		}()},
 		{"layers with one layer", rule.Spec{
-			ID:            "t:one-layer",
+			ID:            "t/p:one-layer",
 			Type:          rule.TypeLayers,
 			Params:        rule.LayersParams{Layers: []rule.ModuleName{"a"}},
 			Applicability: mustRepoApplicability(t),
 		}},
 		{"layers with module scope", rule.Spec{
-			ID:            "t:layers-scope",
+			ID:            "t/p:layers-scope",
 			Type:          rule.TypeLayers,
 			Params:        rule.LayersParams{Layers: []rule.ModuleName{"a", "b"}},
 			Applicability: mustModuleApplicability(t, "a"),
 		}},
 		{"structure without globs", rule.Spec{
-			ID:            "t:structure-empty",
+			ID:            "t/p:structure-empty",
 			Type:          rule.TypeStructure,
 			Params:        rule.StructureParams{},
 			Applicability: mustModuleApplicability(t, "a"),
 		}},
 		{"naming without case", rule.Spec{
-			ID:            "t:naming-empty",
+			ID:            "t/p:naming-empty",
 			Type:          rule.TypeNaming,
 			Params:        rule.NamingParams{},
 			Applicability: mustModuleApplicability(t, "a"),
 		}},
 		{"independence without folders", rule.Spec{
-			ID:            "t:independence-empty",
+			ID:            "t/p:independence-empty",
 			Type:          rule.TypeIndependence,
 			Params:        rule.IndependenceParams{},
 			Applicability: mustRepoApplicability(t),
 		}},
 		{"independence with duplicate folders", rule.Spec{
-			ID:            "t:independence-dup",
+			ID:            "t/p:independence-dup",
 			Type:          rule.TypeIndependence,
 			Params:        rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*"), mustGlob(t, "internal/*")}},
 			Applicability: mustRepoApplicability(t),
 		}},
 		{"independence with module scope", rule.Spec{
-			ID:            "t:independence-scope",
+			ID:            "t/p:independence-scope",
 			Type:          rule.TypeIndependence,
 			Params:        rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*")}},
 			Applicability: mustModuleApplicability(t, "a"),
@@ -204,24 +213,41 @@ func TestConfigurationPreservesIdentity(t *testing.T) {
 }
 
 func TestIDQualification(t *testing.T) {
-	id, err := rule.NewID("arclint:domain/stdlib-only")
+	id, err := rule.NewID("arclint/ddd-flat:domain/stdlib-only")
 	if err != nil {
 		t.Fatalf("NewID: %v", err)
 	}
-	if id.Namespace() != "arclint" || id.Local() != "domain/stdlib-only" {
-		t.Errorf("parsed id = %q/%q", id.Namespace(), id.Local())
+	if id.Namespace() != "arclint" || id.PatternName() != "ddd-flat" || id.Local() != "domain/stdlib-only" {
+		t.Errorf("parsed id = %q/%q:%q", id.Namespace(), id.PatternName(), id.Local())
 	}
-	if id.Qualified() != "arclint:domain/stdlib-only" {
-		t.Errorf("Qualified = %q", id.Qualified())
+	if id.Qualifier() != "arclint/ddd-flat" || id.Qualified() != "arclint/ddd-flat:domain/stdlib-only" {
+		t.Errorf("Qualifier = %q, Qualified = %q", id.Qualifier(), id.Qualified())
+	}
+	ref, err := rule.ParsePatternReference("arclint/ddd-flat@1.0.0")
+	if err != nil {
+		t.Fatalf("ParsePatternReference: %v", err)
+	}
+	built, err := rule.QualifiedID(ref, "domain/stdlib-only")
+	if err != nil || !built.Equals(id) {
+		t.Errorf("QualifiedID = %s, %v; want %s", built, err, id)
+	}
+	// Two Patterns sharing a namespace distribute the same local
+	// identity under distinct RuleIDs.
+	sibling, err := rule.NewID("arclint/other:domain/stdlib-only")
+	if err != nil {
+		t.Fatalf("NewID: %v", err)
+	}
+	if sibling.Equals(id) || sibling.Local() != id.Local() {
+		t.Errorf("%s and %s must share a local identity and differ as RuleIDs", sibling, id)
 	}
 	local, err := rule.NewID("repo-rule")
 	if err != nil {
 		t.Fatalf("NewID: %v", err)
 	}
-	if local.Qualified() != "repo-rule" {
-		t.Errorf("local Qualified = %q", local.Qualified())
+	if local.Qualifier() != "" || local.Qualified() != "repo-rule" {
+		t.Errorf("local Qualifier = %q, Qualified = %q", local.Qualifier(), local.Qualified())
 	}
-	for _, bad := range []string{"", ":x", "a:", "a:b:c", "UPPER", "a b", ".start"} {
+	for _, bad := range []string{"", ":x", "a:", "a:b:c", "a:b", "a/b/c:d", "/b:x", "a/:x", "UPPER", "a b", ".start"} {
 		if _, err := rule.NewID(bad); err == nil {
 			t.Errorf("NewID(%q): expected error", bad)
 		}
@@ -384,7 +410,16 @@ func TestPatternRejectsMalformedSpecs(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 	foreign, err := rule.New(rule.Spec{
-		ID:            "other:domain/stdlib-only",
+		ID:            "other/ddd-flat:domain/stdlib-only",
+		Type:          rule.TypeConsumes,
+		Params:        rule.ConsumesParams{Internal: emptyAllowList(t), External: rule.ImportForbid},
+		Applicability: mustModuleApplicability(t, "domain"),
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	sibling, err := rule.New(rule.Spec{
+		ID:            "arclint/other:domain/stdlib-only",
 		Type:          rule.TypeConsumes,
 		Params:        rule.ConsumesParams{Internal: emptyAllowList(t), External: rule.ImportForbid},
 		Applicability: mustModuleApplicability(t, "domain"),
@@ -398,6 +433,7 @@ func TestPatternRejectsMalformedSpecs(t *testing.T) {
 		"no rules":                       func(s *rule.PatternSpec) { s.Rules = nil },
 		"unconstructed rule":             func(s *rule.PatternSpec) { s.Rules = []rule.Rule{{}} },
 		"rule outside the namespace":     func(s *rule.PatternSpec) { s.Rules = []rule.Rule{foreign} },
+		"rule of a sibling pattern":      func(s *rule.PatternSpec) { s.Rules = []rule.Rule{sibling} },
 		"rule naming an unlisted module": func(s *rule.PatternSpec) { s.Modules = nil },
 		"duplicate module":               func(s *rule.PatternSpec) { s.Modules = append(s.Modules, s.Modules[0]) },
 		"unconstructed module":           func(s *rule.PatternSpec) { s.Modules = []rule.PatternModule{{}} },
@@ -665,13 +701,13 @@ func TestRuleTestCompare(t *testing.T) {
 	files := []rule.TestFile{{Path: "a/x.go", Content: "package a"}}
 	// The vocabulary's duplicate-Diagnostics concern is settled at
 	// construction: an expectation listed twice is unconstructible.
-	if _, err := rule.NewTest("duplicates", "t:a/b", files, []rule.ExpectedFinding{
+	if _, err := rule.NewTest("duplicates", "t/p:a/b", files, []rule.ExpectedFinding{
 		{Path: "a/x.go", Message: "broken"},
 		{Path: "a/x.go", Message: "broken"},
 	}); err == nil {
 		t.Errorf("duplicate expected findings must be unconstructible")
 	}
-	rt, err := rule.NewTest("compare", "t:a/b", files, []rule.ExpectedFinding{
+	rt, err := rule.NewTest("compare", "t/p:a/b", files, []rule.ExpectedFinding{
 		{Path: "a/x.go", Line: 3, Message: "broken"},
 	})
 	if err != nil {

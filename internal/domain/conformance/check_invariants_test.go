@@ -17,7 +17,7 @@ func invariantsModule(t *testing.T) rule.Module {
 func invariantsRule(t *testing.T, closed bool) rule.Rule {
 	t.Helper()
 	return mustRule(t, rule.Spec{
-		ID:            "t:domain/contracts-visible",
+		ID:            "t/p:domain/contracts-visible",
 		Type:          rule.TypeInvariants,
 		Params:        rule.InvariantsParams{Closed: closed},
 		Applicability: moduleScope(t, "domain"),

@@ -110,7 +110,7 @@ func TestVerticalInitExtendsThePattern(t *testing.T) {
 	if lines := strings.Split(strings.TrimSpace(stdout), "\n"); len(lines) != 16 {
 		t.Errorf("rules listed = %d, want the 16 the pattern distributes\n%s", len(lines), stdout)
 	}
-	if !strings.Contains(stdout, "arclint:application/usecase-contract") {
+	if !strings.Contains(stdout, "arclint/vertical:application/usecase-contract") {
 		t.Errorf("distributed rules carry the pattern namespace:\n%s", stdout)
 	}
 }
@@ -129,8 +129,8 @@ func TestVerticalDomainNoContext(t *testing.T) {
 	writeCompliantVertical(t, root)
 	write(t, root, "internal/order/domain/model.go", "package domain\n\nimport \"context\"\n\nfunc unused(_ context.Context) {}\n")
 	code, ids, _, stdout := activeVerticalIDs(t, root)
-	if code != 1 || len(ids) != 1 || ids[0] != "arclint:domain/no-context" {
-		t.Errorf("exit %d ids %v, want only arclint:domain/no-context\n%s", code, ids, stdout)
+	if code != 1 || len(ids) != 1 || ids[0] != "arclint/vertical:domain/no-context" {
+		t.Errorf("exit %d ids %v, want only arclint/vertical:domain/no-context\n%s", code, ids, stdout)
 	}
 }
 
@@ -139,8 +139,8 @@ func TestVerticalDomainNoIO(t *testing.T) {
 	writeCompliantVertical(t, root)
 	write(t, root, "internal/order/domain/model.go", "package domain\n\nimport \"os\"\n")
 	code, ids, _, stdout := activeVerticalIDs(t, root)
-	if code != 1 || len(ids) != 1 || ids[0] != "arclint:domain/no-io" {
-		t.Errorf("exit %d ids %v, want only arclint:domain/no-io\n%s", code, ids, stdout)
+	if code != 1 || len(ids) != 1 || ids[0] != "arclint/vertical:domain/no-io" {
+		t.Errorf("exit %d ids %v, want only arclint/vertical:domain/no-io\n%s", code, ids, stdout)
 	}
 }
 
@@ -154,8 +154,8 @@ type CustomerRepository interface {
 }
 `)
 	code, ids, _, stdout := activeVerticalIDs(t, root)
-	if code != 1 || len(ids) != 1 || ids[0] != "arclint:repositories/application-only" {
-		t.Errorf("exit %d ids %v, want only arclint:repositories/application-only\n%s", code, ids, stdout)
+	if code != 1 || len(ids) != 1 || ids[0] != "arclint/vertical:repositories/application-only" {
+		t.Errorf("exit %d ids %v, want only arclint/vertical:repositories/application-only\n%s", code, ids, stdout)
 	}
 }
 
@@ -169,8 +169,8 @@ type OrderRepository interface {
 }
 `)
 	code, ids, messages, stdout := activeVerticalIDs(t, root)
-	if code != 1 || len(ids) != 1 || ids[0] != "arclint:application/repository-context" {
-		t.Errorf("exit %d ids %v, want only arclint:application/repository-context\n%s", code, ids, stdout)
+	if code != 1 || len(ids) != 1 || ids[0] != "arclint/vertical:application/repository-context" {
+		t.Errorf("exit %d ids %v, want only arclint/vertical:application/repository-context\n%s", code, ids, stdout)
 	}
 	if len(messages) != 1 || !strings.Contains(messages[0], `Repository method "OrderRepository.Find" must take ctx context.Context as its first parameter`) {
 		t.Errorf("message = %v", messages)
@@ -192,8 +192,8 @@ func CreateOrder(ctx context.Context, cmd CreateOrderCommand) error {
 }
 `)
 	code, ids, messages, stdout := activeVerticalIDs(t, root)
-	if code != 1 || len(ids) != 1 || ids[0] != "arclint:application/usecase-contract" {
-		t.Errorf("exit %d ids %v, want only arclint:application/usecase-contract\n%s", code, ids, stdout)
+	if code != 1 || len(ids) != 1 || ids[0] != "arclint/vertical:application/usecase-contract" {
+		t.Errorf("exit %d ids %v, want only arclint/vertical:application/usecase-contract\n%s", code, ids, stdout)
 	}
 	if len(messages) != 1 || messages[0] != `Use case "CreateOrder" must be declared in "create_order.go"` {
 		t.Errorf("messages = %v", messages)
@@ -208,8 +208,8 @@ func TestVerticalUseCaseBadSignature(t *testing.T) {
 func CreateOrder() error { return nil }
 `)
 	code, ids, messages, stdout := activeVerticalIDs(t, root)
-	if code != 1 || len(ids) != 1 || ids[0] != "arclint:application/usecase-contract" {
-		t.Errorf("exit %d ids %v, want only arclint:application/usecase-contract\n%s", code, ids, stdout)
+	if code != 1 || len(ids) != 1 || ids[0] != "arclint/vertical:application/usecase-contract" {
+		t.Errorf("exit %d ids %v, want only arclint/vertical:application/usecase-contract\n%s", code, ids, stdout)
 	}
 	if len(messages) != 1 || messages[0] != `Use case "CreateOrder" must have signature CreateOrder(ctx context.Context, cmd CreateOrderCommand) error` {
 		t.Errorf("messages = %v", messages)
@@ -221,8 +221,8 @@ func TestVerticalSharedUnknownConcern(t *testing.T) {
 	writeCompliantVertical(t, root)
 	write(t, root, "internal/shared/utils/x.go", "package utils\n")
 	code, ids, _, stdout := activeVerticalIDs(t, root)
-	if code != 1 || len(ids) != 1 || ids[0] != "arclint:shared/concerns" {
-		t.Errorf("exit %d ids %v, want only arclint:shared/concerns\n%s", code, ids, stdout)
+	if code != 1 || len(ids) != 1 || ids[0] != "arclint/vertical:shared/concerns" {
+		t.Errorf("exit %d ids %v, want only arclint/vertical:shared/concerns\n%s", code, ids, stdout)
 	}
 }
 
@@ -231,8 +231,8 @@ func TestVerticalSharedDirectFile(t *testing.T) {
 	writeCompliantVertical(t, root)
 	write(t, root, "internal/shared/x.go", "package shared\n")
 	code, ids, _, stdout := activeVerticalIDs(t, root)
-	if code != 1 || len(ids) != 1 || ids[0] != "arclint:shared/concerns" {
-		t.Errorf("exit %d ids %v, want only arclint:shared/concerns\n%s", code, ids, stdout)
+	if code != 1 || len(ids) != 1 || ids[0] != "arclint/vertical:shared/concerns" {
+		t.Errorf("exit %d ids %v, want only arclint/vertical:shared/concerns\n%s", code, ids, stdout)
 	}
 }
 

@@ -1,6 +1,6 @@
 # Conforming case: every recorded vocabulary term carries a
 # definition, so the ctx.domain()-consuming extension stays silent.
-rule: "arclint:vocabulary/terms-carry-definitions"
+rule: "arclint/domain-model:vocabulary/terms-carry-definitions"
 files:
   ubiquitous-language.yaml: |
     version: 1

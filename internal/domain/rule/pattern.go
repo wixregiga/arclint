@@ -25,13 +25,8 @@ func NewPatternReference(namespace, name, version string) (PatternReference, err
 	if namespace == "" || name == "" {
 		return PatternReference{}, fmt.Errorf("pattern reference: namespace and name required")
 	}
-	for _, part := range []struct{ label, value string }{{namespacePart, namespace}, {"name", name}} {
-		if strings.Contains(part.value, "/") {
-			return PatternReference{}, fmt.Errorf("pattern reference: %s %q contains \"/\"", part.label, part.value)
-		}
-		if err := validateIDPart(part.value); err != nil {
-			return PatternReference{}, fmt.Errorf("pattern reference: %s %q %v", part.label, part.value, err)
-		}
+	if err := validateQualifierParts(namespace, name); err != nil {
+		return PatternReference{}, fmt.Errorf("pattern reference: %v", err)
 	}
 	if !patternVersion.MatchString(version) {
 		return PatternReference{}, fmt.Errorf("pattern reference %s/%s: version %q is not exact semver", namespace, name, version)
@@ -64,6 +59,25 @@ func (r PatternReference) Name() string { return r.name }
 
 // Version is the exact published version.
 func (r PatternReference) Version() string { return r.version }
+
+// validateQualifierParts checks the namespace and name of a Pattern
+// qualifier: each is an id part that also excludes "/", the separator
+// between them.
+func validateQualifierParts(namespace, name string) error {
+	for _, part := range []struct{ label, value string }{{namespacePart, namespace}, {namePart, name}} {
+		if strings.Contains(part.value, "/") {
+			return fmt.Errorf("%s %q contains \"/\"", part.label, part.value)
+		}
+		if err := validateIDPart(part.value); err != nil {
+			return fmt.Errorf("%s %q %v", part.label, part.value, err)
+		}
+	}
+	return nil
+}
+
+// Qualifier is the namespace/name that qualifies every Rule ID this
+// Pattern distributes; it never carries the version.
+func (r PatternReference) Qualifier() string { return r.namespace + "/" + r.name }
 
 // IsZero reports an unconstructed reference.
 func (r PatternReference) IsZero() bool { return r.name == "" }
@@ -199,8 +213,8 @@ func NewPattern(spec PatternSpec) (Pattern, error) {
 		if r.id.IsZero() {
 			return Pattern{}, fmt.Errorf("pattern %s: unconstructed rule", ref)
 		}
-		if r.id.Namespace() != ref.namespace {
-			return Pattern{}, fmt.Errorf("pattern %s: rule %s must carry the pattern namespace %q", ref, r.id, ref.namespace)
+		if r.id.Qualifier() != ref.Qualifier() {
+			return Pattern{}, fmt.Errorf("pattern %s: rule %s must carry the pattern qualifier %q", ref, r.id, ref.Qualifier())
 		}
 		qualified := r.id.Qualified()
 		if seen[qualified] {

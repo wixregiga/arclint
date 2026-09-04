@@ -151,9 +151,9 @@ extends:
       composition: "cmd/**"
 
 rules:
-  arclint:shared/concerns:
+  arclint/vertical:shared/concerns:
     severity: warning
-  arclint:domain/no-context:
+  arclint/vertical:domain/no-context:
     disable: "context is threaded through domain services on purpose"
 ```
 
@@ -196,9 +196,10 @@ The loop is schema-guided, trialed live, then pinned:
    ```
 
 2. **Trial it on the real repository.** `arclint check --only <id>`
-   evaluates just that rule; patterns like `domain/*` work (and
-   the prefix `arclint:` narrows to what an extended pattern distributes), and
-   observation narrows to the facts the selected rules declare.
+   evaluates just that rule; patterns like `domain/*` work (and the
+   prefix `arclint/vertical:` narrows to what that extended pattern
+   distributes), and observation narrows to the facts the selected
+   rules declare.
 
 3. **Write a test for it.** A rule test is one YAML file under
    `.arclint/tests/`: a set of inline example files plus the complete
@@ -332,8 +333,9 @@ report. Human output uses color only on a terminal; `--no-color` or
 markdown commands keep their raw output contracts.
 
 A selector is an exact rule id, an id prefix, or a `path.Match`
-pattern (`domain/*`, or the prefix `arclint:`); an exact id wins over expansion, and a
-selector matching nothing is a loud error, never a silent no-op.
+pattern (`domain/*`, or the prefix `arclint/vertical:`); an exact id
+wins over expansion, and a selector matching nothing is a loud error,
+never a silent no-op.
 `--only` and `--exclude` take several, comma or space separated, with
 exclusion winning.
 

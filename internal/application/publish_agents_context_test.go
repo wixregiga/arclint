@@ -20,7 +20,7 @@ func agentsFixture(t *testing.T) rule.Configured {
 		t.Fatalf("ModuleApplicability: %v", err)
 	}
 	bound, err := rule.New(rule.Spec{
-		ID:            "t:m/technology-free",
+		ID:            "t/p:m/technology-free",
 		Type:          rule.TypeExtension,
 		Severity:      "warning",
 		Params:        rule.ExtensionParams{Uses: "forbid-content", With: map[string]any{"pattern": `"net/http"`}},
@@ -34,7 +34,7 @@ func agentsFixture(t *testing.T) rule.Configured {
 		t.Fatalf("RepositoryApplicability: %v", err)
 	}
 	isolation, err := rule.New(rule.Spec{
-		ID:            "t:fsd/slice-isolation",
+		ID:            "t/p:fsd/slice-isolation",
 		Type:          rule.TypeExtension,
 		Params:        rule.ExtensionParams{Uses: "fsd-slice-isolation", With: map[string]any{"layers": []any{"a", "b"}}},
 		Applicability: repo,
@@ -215,7 +215,7 @@ func TestPublishAgentsContextSpellsPatternRulesQualified(t *testing.T) {
 		t.Fatalf("NewGlob: %v", err)
 	}
 	bound, err := rule.New(rule.Spec{
-		ID:            "acme:m/has-root",
+		ID:            "acme/layers:m/has-root",
 		Type:          rule.TypeStructure,
 		Params:        rule.StructureParams{Require: []rule.Glob{glob}},
 		Applicability: scope,
@@ -225,7 +225,7 @@ func TestPublishAgentsContextSpellsPatternRulesQualified(t *testing.T) {
 		t.Fatalf("rule.New: %v", err)
 	}
 	wide, err := rule.New(rule.Spec{
-		ID:            "acme:deps/acyclic",
+		ID:            "acme/layers:deps/acyclic",
 		Type:          rule.TypeAcyclic,
 		Params:        rule.AcyclicParams{},
 		Applicability: repo,
@@ -248,10 +248,10 @@ func TestPublishAgentsContextSpellsPatternRulesQualified(t *testing.T) {
 	// distributes keeps the qualified id an Override or `arclint rules`
 	// takes; local Rules keep their short spelling.
 	for _, want := range []string{
-		"Extended Patterns: `acme/layers@1.2.0` (2 rules, ids qualified `acme:`).",
+		"Extended Patterns: `acme/layers@1.2.0` (2 rules, ids qualified `acme/layers:`).",
 		"never by editing the Pattern.",
-		"  - acme:m/has-root: ",
-		"- acme:deps/acyclic: ",
+		"  - acme/layers:m/has-root: ",
+		"- acme/layers:deps/acyclic: ",
 		"  - snake: file names use snake_case",
 		`- deps/protected-m: Module "m" is imported by no other Module`,
 	} {

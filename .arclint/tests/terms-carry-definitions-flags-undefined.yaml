@@ -1,7 +1,7 @@
 # Violating case: recorded terms without definition text; the
 # extension observes the fixture's vocabulary through ctx.domain()
 # and reports each undefined term.
-rule: "arclint:vocabulary/terms-carry-definitions"
+rule: "arclint/domain-model:vocabulary/terms-carry-definitions"
 files:
   ubiquitous-language.yaml: |
     version: 1

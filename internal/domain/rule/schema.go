@@ -199,8 +199,8 @@ const (
 	// idPartJSONPattern mirrors validateIDPart: a-z 0-9 . _ - /, never
 	// starting with . / - and never ending with . or /.
 	idPartJSONPattern = `[a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?`
-	// ruleIDJSONPattern mirrors NewID: LOCAL or NAMESPACE:LOCAL.
-	ruleIDJSONPattern = `^(` + idPartJSONPattern + `:)?` + idPartJSONPattern + `$`
+	// ruleIDJSONPattern mirrors NewID: LOCAL or NAMESPACE/NAME:LOCAL.
+	ruleIDJSONPattern = `^(` + patternPartJSONPattern + `/` + patternPartJSONPattern + `:)?` + idPartJSONPattern + `$`
 	// patternPartJSONPattern is an id part that also excludes "/", the
 	// separator inside a PatternReference.
 	patternPartJSONPattern = `[a-z0-9_]([a-z0-9._-]*[a-z0-9_-])?`
@@ -306,7 +306,7 @@ func schemaDocument() map[string]any {
 func schemaDefs() map[string]any {
 	defs := map[string]any{
 		"ruleID": map[string]any{
-			"description": "Explicit stable Rule ID: LOCAL or NAMESPACE:LOCAL, each part using a-z 0-9 . _ - /, never starting with . / - and never ending with . or /. Inside a Pattern file the Rule ID is local; the loader qualifies it with the Pattern namespace.",
+			"description": "Explicit stable Rule ID: LOCAL for a repository Rule, or NAMESPACE/NAME:LOCAL for a Rule an extended Pattern distributes. LOCAL uses a-z 0-9 . _ - /, never starting with . / - and never ending with . or /. Inside a Pattern file the Rule ID is local; the loader qualifies it with the Pattern's namespace/name, so two Patterns may distribute the same local identity.",
 			"type":        "string",
 			"pattern":     ruleIDJSONPattern,
 		},
@@ -388,7 +388,7 @@ func patternHeaderSchema() map[string]any {
 	return strictObjectSchema(
 		"Pattern identity header, present only in a Pattern distribution file, never in a repository ruleset.",
 		map[string]any{
-			"namespace": map[string]any{"description": "Pattern namespace; every distributed Rule ID is qualified with it.", "type": "string", "pattern": `^` + patternPartJSONPattern + `$`},
+			"namespace": map[string]any{"description": "Pattern namespace; with the name it qualifies every distributed Rule ID as namespace/name:local.", "type": "string", "pattern": `^` + patternPartJSONPattern + `$`},
 			"name":      map[string]any{"description": "Pattern name within its namespace.", "type": "string", "pattern": `^` + patternPartJSONPattern + `$`},
 			"version":   map[string]any{"description": "Exact published version; never part of Rule identity.", "type": "string", "pattern": `^\d+\.\d+\.\d+([\-+][0-9A-Za-z.\-+]+)?$`},
 			"coverage": map[string]any{

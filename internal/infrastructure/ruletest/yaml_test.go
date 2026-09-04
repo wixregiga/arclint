@@ -34,7 +34,7 @@ func TestSourceMissingDirectoryYieldsZeroTests(t *testing.T) {
 
 func TestSourceRejectsUnknownKey(t *testing.T) {
 	root := t.TempDir()
-	writeTest(t, root, "bad.yaml", "rule: \"t:m/r\"\nfiles:\n  m/a.go: \"package m\"\nbogus: 1\n")
+	writeTest(t, root, "bad.yaml", "rule: \"t/p:m/r\"\nfiles:\n  m/a.go: \"package m\"\nbogus: 1\n")
 	_, err := ruletest.NewSource(root).Tests()
 	if err == nil || !strings.Contains(err.Error(), "bogus") {
 		t.Errorf("unknown key: err = %v, want a loud rejection naming the key", err)
@@ -52,7 +52,7 @@ func TestSourceRejectsMissingRule(t *testing.T) {
 
 func TestSourceRejectsMissingFiles(t *testing.T) {
 	root := t.TempDir()
-	writeTest(t, root, "bad.yaml", "rule: \"t:m/r\"\n")
+	writeTest(t, root, "bad.yaml", "rule: \"t/p:m/r\"\n")
 	_, err := ruletest.NewSource(root).Tests()
 	if err == nil || !strings.Contains(err.Error(), "missing files") {
 		t.Errorf("missing files: err = %v, want a loud rejection", err)
@@ -62,7 +62,7 @@ func TestSourceRejectsMissingFiles(t *testing.T) {
 func TestSourceRejectsInvalidExpectKind(t *testing.T) {
 	root := t.TempDir()
 	writeTest(t, root, "bad.yaml",
-		"rule: \"t:m/r\"\nfiles:\n  m/a.go: \"package m\"\nexpect:\n  - kind: warning\n    path: m/a.go\n    message: broken\n")
+		"rule: \"t/p:m/r\"\nfiles:\n  m/a.go: \"package m\"\nexpect:\n  - kind: warning\n    path: m/a.go\n    message: broken\n")
 	_, err := ruletest.NewSource(root).Tests()
 	if err == nil || !strings.Contains(err.Error(), `kind "warning"`) ||
 		!strings.Contains(err.Error(), "bad.yaml") {
@@ -82,9 +82,9 @@ func TestSourceRejectsEmptyFile(t *testing.T) {
 func TestSourceLoadsTestsInNameOrder(t *testing.T) {
 	root := t.TempDir()
 	writeTest(t, root, "zz_second.yaml",
-		"rule: \"t:m/r\"\nfiles:\n  m/b.go: \"package m\"\n  m/a.go: \"package m\"\nexpect:\n  - path: m/a.go\n    line: 2\n    message: broken\n")
+		"rule: \"t/p:m/r\"\nfiles:\n  m/b.go: \"package m\"\n  m/a.go: \"package m\"\nexpect:\n  - path: m/a.go\n    line: 2\n    message: broken\n")
 	writeTest(t, root, "aa_first.yaml",
-		"rule: \"t:m/r\"\nfiles:\n  m/a.go: \"package m\"\n")
+		"rule: \"t/p:m/r\"\nfiles:\n  m/a.go: \"package m\"\n")
 	writeTest(t, root, "ignored.txt", "not a rule test")
 	tests, err := ruletest.NewSource(root).Tests()
 	if err != nil {
@@ -94,7 +94,7 @@ func TestSourceLoadsTestsInNameOrder(t *testing.T) {
 		t.Fatalf("tests = %v, want [aa_first zz_second] from file stems", tests)
 	}
 	second := tests[1]
-	if second.RuleID() != "t:m/r" {
+	if second.RuleID() != "t/p:m/r" {
 		t.Errorf("RuleID = %q", second.RuleID())
 	}
 	files := second.Files()

@@ -10,7 +10,7 @@ it drifts). Add hand-written guidance outside the markers.
 
 Enforced from rules.yaml: 32 rules over languages [go, typescript].
 
-Extended Patterns: `arclint/domain-model@0.1.0` (3 rules, ids qualified `arclint:`). A Pattern Rule is listed and reported under its qualified id; change it through an Override under that id in rules.yaml (`arclint rules <id>` prints it), never by editing the Pattern.
+Extended Patterns: `arclint/domain-model@0.1.0` (3 rules, ids qualified `arclint/domain-model:`). A Pattern Rule is listed and reported under its qualified id; change it through an Override under that id in rules.yaml (`arclint rules <id>` prints it), never by editing the Pattern.
 
 ### Ask arclint first
 
@@ -28,7 +28,7 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 
 ### The recorded domain
 
-4 contexts, 1 aggregates, 24 invariants (ubiquitous-language.yaml).
+4 contexts, 1 aggregates, 25 invariants (ubiquitous-language.yaml).
 
 - **rule**: Rule [aggregate], Module, Pattern; value objects RuleID, ModuleName, Claim, Assertion, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec
 - **adoption**: value objects Binding, Override, Disablement, Exclusion, Suppression, Installation
@@ -44,8 +44,8 @@ If your change speaks about something new, or changes what a recorded term means
 ### Modules and their rules
 
 - **vocabulary**: The project's recorded Ubiquitous Language vocabulary. (paths ubiquitous-language.yaml)
-  - arclint:vocabulary/terms-carry-definitions: Every recorded term carries a definition.
-  - arclint:vocabulary/invariants-name-recorded-owners: Every recorded invariant names a recorded term of its own context as its owner.
+  - arclint/domain-model:vocabulary/terms-carry-definitions: Every recorded term carries a definition.
+  - arclint/domain-model:vocabulary/invariants-name-recorded-owners: Every recorded invariant names a recorded term of its own context as its owner.
 - **domain**: Rule aggregate and domain values; stdlib-only. (paths internal/domain/**)
   - imports no other module; external imports forbidden
   - rule-is-sole-aggregate: Rule is the only aggregate: it has a root, and no other aggregate root exists.
@@ -86,7 +86,7 @@ If your change speaks about something new, or changes what a recorded term means
 
 ### Repository-wide rules
 
-- arclint:contexts/respect-relations (warning): Imports between context-named Modules respect the recorded context-map relations.
+- arclint/domain-model:contexts/respect-relations (warning): Imports between context-named Modules respect the recorded context-map relations.
 - dependencies/application-inward: Dependencies point inward: application, then domain.
 - infrastructure/composition-only: Only composition imports infrastructure.
 - delivery/cobra-factory-only: Only the CLI factory imports the Cobra adapter.

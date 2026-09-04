@@ -109,9 +109,11 @@ Assurance.
 
 Rule IDs are stable strings of the form `segment/segment`
 (`domain/stdlib-only`). A material Claim change needs a new ID. Rules an
-extended Pattern distributes carry the Pattern's namespace
-(`arclint:domain/stdlib-only`), so the prefix selector `arclint:` narrows
-to the distributed set. `arclint rules <selector>` lists matches or
+extended Pattern distributes carry the Pattern's namespace/name
+(`arclint/vertical:domain/stdlib-only`), so the prefix selector
+`arclint/vertical:` narrows to what that Pattern distributes and
+`arclint/` to everything the namespace publishes. `arclint rules
+<selector>` lists matches or
 shows one Rule; `arclint rules test` runs fixture-backed Rule Tests
 under `.arclint/tests`.
 

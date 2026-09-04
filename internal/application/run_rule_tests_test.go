@@ -33,7 +33,7 @@ func ruleTestConfig(t *testing.T) rule.Configured {
 		t.Fatalf("ModuleApplicability: %v", err)
 	}
 	r, err := rule.New(rule.Spec{
-		ID:            "t:m/snake",
+		ID:            "t/p:m/snake",
 		Type:          rule.TypeNaming,
 		Params:        rule.NamingParams{Case: snake},
 		Applicability: scope,
@@ -138,11 +138,11 @@ func TestRunRuleTestsMapsAssessmentToFindings(t *testing.T) {
 		{Path: "m/all_good.go"},
 	}
 	source := fakeRuleTestSource{tests: []rule.Test{
-		mustRuleTest(t, "unknown-rule", "t:m/none", files, nil),
-		mustRuleTest(t, "mapping", "t:m/snake", files, []rule.ExpectedFinding{
+		mustRuleTest(t, "unknown-rule", "t/p:m/none", files, nil),
+		mustRuleTest(t, "mapping", "t/p:m/snake", files, []rule.ExpectedFinding{
 			{Kind: rule.FindingCoverage, Path: "m", Message: "never produced"},
 		}),
-		mustRuleTest(t, "conforming", "t:m/snake",
+		mustRuleTest(t, "conforming", "t/p:m/snake",
 			[]rule.TestFile{{Path: "m/all_good.go"}}, nil),
 	}}
 	observer := &fakeFixtureObserver{}
@@ -159,7 +159,7 @@ func TestRunRuleTestsMapsAssessmentToFindings(t *testing.T) {
 	}
 
 	unknown := results[0]
-	if unknown.Name != "unknown-rule" || unknown.RuleID != "t:m/none" {
+	if unknown.Name != "unknown-rule" || unknown.RuleID != "t/p:m/none" {
 		t.Errorf("unknown identity = %q %q", unknown.Name, unknown.RuleID)
 	}
 	if unknown.Passed() || !strings.Contains(unknown.Err, "not configured") {
@@ -218,7 +218,7 @@ func TestRunRuleTestsContainsConformanceErrorAndContinues(t *testing.T) {
 		t.Fatalf("ModuleApplicability: %v", err)
 	}
 	extRule, err := rule.New(rule.Spec{
-		ID:            "t:m/ext",
+		ID:            "t/p:m/ext",
 		Type:          rule.TypeExtension,
 		Params:        rule.ExtensionParams{Uses: "broken-ext"},
 		Applicability: extScope,
@@ -230,8 +230,8 @@ func TestRunRuleTestsContainsConformanceErrorAndContinues(t *testing.T) {
 
 	files := []rule.TestFile{{Path: "m/all_good.go"}}
 	source := fakeRuleTestSource{tests: []rule.Test{
-		mustRuleTest(t, "extension-crash", "t:m/ext", files, nil),
-		mustRuleTest(t, "still-runs", "t:m/snake", files, nil),
+		mustRuleTest(t, "extension-crash", "t/p:m/ext", files, nil),
+		mustRuleTest(t, "still-runs", "t/p:m/snake", files, nil),
 	}}
 	uc, err := application.NewRunRuleTests(
 		ruleTestRepository{cfg},
@@ -290,7 +290,7 @@ func TestRunRuleTestsFeedsFixtureVocabularyToExtensions(t *testing.T) {
 		t.Fatalf("ModuleApplicability: %v", err)
 	}
 	extRule, err := rule.New(rule.Spec{
-		ID:            "t:m/ext",
+		ID:            "t/p:m/ext",
 		Type:          rule.TypeExtension,
 		Params:        rule.ExtensionParams{Uses: "domain-probe"},
 		Applicability: extScope,
@@ -310,7 +310,7 @@ func TestRunRuleTestsFeedsFixtureVocabularyToExtensions(t *testing.T) {
 		{Path: vocab.UbiquitousLanguageFileName, Content: authored},
 	}
 	source := fakeRuleTestSource{tests: []rule.Test{
-		mustRuleTest(t, "sees-vocabulary", "t:m/ext", files, nil),
+		mustRuleTest(t, "sees-vocabulary", "t/p:m/ext", files, nil),
 	}}
 	vocabulary := &fakeVocabularySource{lang: recorded}
 	recorder := &recordingExtensions{}
@@ -343,8 +343,8 @@ func TestRunRuleTestsContainsFixtureVocabularyError(t *testing.T) {
 		{Path: vocab.UbiquitousLanguageFileName, Content: "version: 2\n"},
 	}
 	source := fakeRuleTestSource{tests: []rule.Test{
-		mustRuleTest(t, "broken-vocabulary", "t:m/snake", files, nil),
-		mustRuleTest(t, "still-runs", "t:m/snake", []rule.TestFile{{Path: "m/all_good.go"}}, nil),
+		mustRuleTest(t, "broken-vocabulary", "t/p:m/snake", files, nil),
+		mustRuleTest(t, "still-runs", "t/p:m/snake", []rule.TestFile{{Path: "m/all_good.go"}}, nil),
 	}}
 	vocabulary := &fakeVocabularySource{err: errors.New("unsupported version 2")}
 	uc, err := application.NewRunRuleTests(

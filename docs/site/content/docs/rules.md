@@ -38,11 +38,12 @@ The common keys beside the assertion:
 | `exclude` | `{paths, modules, reason}`: files the Rule does not judge |
 | `suppress` | `{paths, reason}`: files whose findings are kept but not active |
 
-A Rule ID is `LOCAL` or `NAMESPACE:LOCAL`, where the local part is
+A Rule ID is `LOCAL` or `NAMESPACE/NAME:LOCAL`, where the local part is
 `segment/segment` in lower-case kebab. Repository Rules use bare local
 IDs (`domain/stdlib-only`); Rules an extended Pattern distributes carry
-the Pattern's namespace (`arclint:domain/stdlib-only`). An entry with no
-assertion key is an Override of a Pattern Rule; see
+the Pattern's namespace/name (`arclint/vertical:domain/stdlib-only`), so
+two Patterns may distribute the same local ID without colliding. An
+entry with no assertion key is an Override of a Pattern Rule; see
 [Patterns](/docs/patterns/).
 
 ## modules

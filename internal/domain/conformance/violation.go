@@ -113,8 +113,8 @@ func NewViolation(spec ViolationSpec) (Violation, error) {
 		if spec.Provenance.IsZero() {
 			return fail(fmt.Errorf("unconstructed provenance"))
 		}
-		if spec.Rule.Namespace() != spec.Provenance.Namespace() {
-			return fail(fmt.Errorf("provenance %s outside the rule namespace %q", spec.Provenance, spec.Rule.Namespace()))
+		if spec.Rule.Qualifier() != spec.Provenance.Qualifier() {
+			return fail(fmt.Errorf("provenance %s does not qualify rule %s", spec.Provenance, spec.Rule))
 		}
 		ref := *spec.Provenance
 		provenance = &ref

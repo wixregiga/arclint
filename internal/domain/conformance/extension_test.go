@@ -40,7 +40,7 @@ func extensionRequest(t *testing.T, evaluator conformance.ExtensionEvaluator) co
 		t.Fatalf("NewObservations: %v", err)
 	}
 	r := mustRule(t, rule.Spec{
-		ID:            "t:m/no-panic",
+		ID:            "t/p:m/no-panic",
 		Type:          rule.TypeExtension,
 		Params:        rule.ExtensionParams{Uses: "forbid-content", With: map[string]any{"pattern": `\bpanic\(`}},
 		Applicability: moduleScope(t, "m"),
@@ -159,8 +159,8 @@ func TestExtensionOutOfApplicabilityIsContained(t *testing.T) {
 	}
 	for i, w := range want {
 		d := ops[i]
-		if d.RuleID() != "t:m/no-panic" {
-			t.Errorf("ops[%d].RuleID = %q, want t:m/no-panic", i, d.RuleID())
+		if d.RuleID() != "t/p:m/no-panic" {
+			t.Errorf("ops[%d].RuleID = %q, want t/p:m/no-panic", i, d.RuleID())
 		}
 		if d.Path() != w.path || d.Line() != w.line {
 			t.Errorf("ops[%d] anchor = %s:%d, want %s:%d", i, d.Path(), d.Line(), w.path, w.line)
@@ -169,7 +169,7 @@ func TestExtensionOutOfApplicabilityIsContained(t *testing.T) {
 		if !strings.Contains(msg, `extension "forbid-content"`) ||
 			!strings.Contains(msg, w.path) ||
 			!strings.Contains(msg, "outside the rule's applicability") ||
-			!strings.Contains(msg, "t:m/no-panic") {
+			!strings.Contains(msg, "t/p:m/no-panic") {
 			t.Errorf("ops[%d].Message = %q, want rule/extension/path/applicability", i, msg)
 		}
 	}
@@ -190,7 +190,7 @@ func TestExtensionOutOfApplicabilityWithNoSelectedSubjects(t *testing.T) {
 		t.Fatalf("NewObservations: %v", err)
 	}
 	r := mustRule(t, rule.Spec{
-		ID:            "t:m/require-registry",
+		ID:            "t/p:m/require-registry",
 		Type:          rule.TypeExtension,
 		Params:        rule.ExtensionParams{Uses: "require-registry"},
 		Applicability: moduleScope(t, "m"),
@@ -219,7 +219,7 @@ func TestExtensionOutOfApplicabilityWithNoSelectedSubjects(t *testing.T) {
 			continue
 		}
 		ops++
-		if d.RuleID() != "t:m/require-registry" {
+		if d.RuleID() != "t/p:m/require-registry" {
 			t.Errorf("RuleID = %q", d.RuleID())
 		}
 		if d.Path() != "missing/registry.go" || d.Line() != 1 {

@@ -33,14 +33,15 @@ func writeCheck(w io.Writer, a conformance.Assessment) error {
 	return p.Err
 }
 
-// provenanceTag spells the distributing Pattern beside a shared Rule's
-// id, so a reader tells a Pattern Rule from a local one on every line.
+// provenanceTag spells the distributing Pattern's version beside a
+// shared Rule's id. The id already names the Pattern (namespace/name),
+// so the tag adds only the version, and a local Rule carries no tag.
 func provenanceTag(v conformance.Violation) string {
 	ref, ok := v.Provenance()
 	if !ok {
 		return ""
 	}
-	return " (" + ref.String() + ")"
+	return " (@" + ref.Version() + ")"
 }
 
 func atPath(d conformance.Diagnostic) string {

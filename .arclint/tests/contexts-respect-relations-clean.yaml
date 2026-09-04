@@ -1,7 +1,7 @@
 # Conforming case: dependence flows downstream to upstream; the
 # conformance module imports the rule module, exactly as the recorded
 # conformist relation permits.
-rule: "arclint:contexts/respect-relations"
+rule: "arclint/domain-model:contexts/respect-relations"
 files:
   ubiquitous-language.yaml: |
     version: 1

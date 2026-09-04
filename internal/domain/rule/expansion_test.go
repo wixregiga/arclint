@@ -157,7 +157,7 @@ func expandedRule(t *testing.T, lang vocab.UbiquitousLanguage) rule.Rule {
 		t.Fatalf("applicability: %v", err)
 	}
 	r, err := rule.New(rule.Spec{
-		ID:            "test:domain/aggregate-skeleton",
+		ID:            "test/p:domain/aggregate-skeleton",
 		Type:          rule.TypeStructure,
 		Params:        params,
 		Applicability: scope,

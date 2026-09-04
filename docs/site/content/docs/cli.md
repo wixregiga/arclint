@@ -214,7 +214,7 @@ in the complete Conformance Assessment. The stable shape is:
 [
   {
     "kind": "violation",
-    "ruleId": "arclint:dependencies/inward",
+    "ruleId": "arclint/vertical:dependencies/inward",
     "pattern": "arclint/vertical@0.1.0",
     "path": "internal/orders/application/create_order.go",
     "line": 3,

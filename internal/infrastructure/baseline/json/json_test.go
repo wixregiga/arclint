@@ -12,11 +12,11 @@ import (
 
 func snapshot(t *testing.T) baseline.Snapshot {
 	t.Helper()
-	entry, err := baseline.NewEntry("t:m/snake", "m/BadName.go", "file name violates naming rule", 2)
+	entry, err := baseline.NewEntry("t/p:m/snake", "m/BadName.go", "file name violates naming rule", 2)
 	if err != nil {
 		t.Fatalf("NewEntry: %v", err)
 	}
-	s, err := baseline.New([]string{"t:m/snake"}, []baseline.Entry{entry}, "")
+	s, err := baseline.New([]string{"t/p:m/snake"}, []baseline.Entry{entry}, "")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -52,10 +52,10 @@ func TestRoundtripIsDeterministic(t *testing.T) {
 		t.Fatalf("Load = (%v, %v)", present, err)
 	}
 	entries := loaded.Entries()
-	if len(entries) != 1 || entries[0].Count() != 2 || entries[0].RuleID() != "t:m/snake" {
+	if len(entries) != 1 || entries[0].Count() != 2 || entries[0].RuleID() != "t/p:m/snake" {
 		t.Errorf("loaded entries = %+v", entries)
 	}
-	if rules := loaded.CapturedRules(); len(rules) != 1 || rules[0] != "t:m/snake" {
+	if rules := loaded.CapturedRules(); len(rules) != 1 || rules[0] != "t/p:m/snake" {
 		t.Errorf("loaded captured rules = %v", rules)
 	}
 }

@@ -20,39 +20,39 @@ func TestNewRuleTestConstructionRejections(t *testing.T) {
 		wantErr string
 	}{
 		{"empty name", func() (rule.Test, error) {
-			return rule.NewTest("", "t:m/r", files, expect)
+			return rule.NewTest("", "t/p:m/r", files, expect)
 		}, "missing name"},
 		{"empty rule id", func() (rule.Test, error) {
 			return rule.NewTest("case", "", files, expect)
 		}, "missing rule id"},
 		{"no files", func() (rule.Test, error) {
-			return rule.NewTest("case", "t:m/r", nil, expect)
+			return rule.NewTest("case", "t/p:m/r", nil, expect)
 		}, "no fixture files"},
 		{"empty file path", func() (rule.Test, error) {
-			return rule.NewTest("case", "t:m/r", []rule.TestFile{{Path: "", Content: "x"}}, nil)
+			return rule.NewTest("case", "t/p:m/r", []rule.TestFile{{Path: "", Content: "x"}}, nil)
 		}, "empty path"},
 		{"duplicate file path", func() (rule.Test, error) {
-			return rule.NewTest("case", "t:m/r",
+			return rule.NewTest("case", "t/p:m/r",
 				[]rule.TestFile{{Path: "m/a.go"}, {Path: "m/a.go"}}, nil)
 		}, "duplicate fixture path"},
 		{"expected missing path", func() (rule.Test, error) {
-			return rule.NewTest("case", "t:m/r", files,
+			return rule.NewTest("case", "t/p:m/r", files,
 				[]rule.ExpectedFinding{{Kind: rule.FindingViolation, Message: "broken"}})
 		}, "missing path"},
 		{"expected missing message", func() (rule.Test, error) {
-			return rule.NewTest("case", "t:m/r", files,
+			return rule.NewTest("case", "t/p:m/r", files,
 				[]rule.ExpectedFinding{{Kind: rule.FindingViolation, Path: "m/a.go"}})
 		}, "missing message"},
 		{"invalid kind", func() (rule.Test, error) {
-			return rule.NewTest("case", "t:m/r", files,
+			return rule.NewTest("case", "t/p:m/r", files,
 				[]rule.ExpectedFinding{{Kind: "warning", Path: "m/a.go", Message: "broken"}})
 		}, `kind "warning"`},
 		{"negative line", func() (rule.Test, error) {
-			return rule.NewTest("case", "t:m/r", files,
+			return rule.NewTest("case", "t/p:m/r", files,
 				[]rule.ExpectedFinding{{Path: "m/a.go", Line: -1, Message: "broken"}})
 		}, "negative line"},
 		{"duplicate expectation", func() (rule.Test, error) {
-			return rule.NewTest("case", "t:m/r", files,
+			return rule.NewTest("case", "t/p:m/r", files,
 				[]rule.ExpectedFinding{
 					{Kind: rule.FindingViolation, Path: "m/a.go", Line: 1, Message: "broken"},
 					{Kind: rule.FindingViolation, Path: "m/a.go", Line: 1, Message: "broken"},
@@ -73,7 +73,7 @@ func TestNewRuleTestConstructionRejections(t *testing.T) {
 }
 
 func TestNewRuleTestDefaultsEmptyKindToViolation(t *testing.T) {
-	rt, err := rule.NewTest("case", "t:m/r", validFiles(),
+	rt, err := rule.NewTest("case", "t/p:m/r", validFiles(),
 		[]rule.ExpectedFinding{{Path: "m/a.go", Line: 2, Message: "broken"}})
 	if err != nil {
 		t.Fatalf("NewTest: %v", err)
@@ -84,7 +84,7 @@ func TestNewRuleTestDefaultsEmptyKindToViolation(t *testing.T) {
 	}
 	// An empty kind duplicating an explicit violation kind is the same
 	// expectation and must be rejected.
-	_, err = rule.NewTest("case", "t:m/r", validFiles(),
+	_, err = rule.NewTest("case", "t/p:m/r", validFiles(),
 		[]rule.ExpectedFinding{
 			{Path: "m/a.go", Line: 2, Message: "broken"},
 			{Kind: rule.FindingViolation, Path: "m/a.go", Line: 2, Message: "broken"},
@@ -96,11 +96,11 @@ func TestNewRuleTestDefaultsEmptyKindToViolation(t *testing.T) {
 
 func TestRuleTestAccessors(t *testing.T) {
 	files := []rule.TestFile{{Path: "m/a.go", Content: "package m"}}
-	rt, err := rule.NewTest("case", "t:m/r", files, nil)
+	rt, err := rule.NewTest("case", "t/p:m/r", files, nil)
 	if err != nil {
 		t.Fatalf("NewTest: %v", err)
 	}
-	if rt.Name() != "case" || rt.RuleID() != "t:m/r" {
+	if rt.Name() != "case" || rt.RuleID() != "t/p:m/r" {
 		t.Errorf("identity = %q %q", rt.Name(), rt.RuleID())
 	}
 	got := rt.Files()
@@ -115,7 +115,7 @@ func TestRuleTestAccessors(t *testing.T) {
 
 func compareFixture(t *testing.T, expect []rule.ExpectedFinding) rule.Test {
 	t.Helper()
-	rt, err := rule.NewTest("case", "t:m/r", validFiles(), expect)
+	rt, err := rule.NewTest("case", "t/p:m/r", validFiles(), expect)
 	if err != nil {
 		t.Fatalf("NewTest: %v", err)
 	}

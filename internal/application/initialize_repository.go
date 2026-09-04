@@ -208,7 +208,7 @@ func adoptingRuleset(p rule.Pattern, inst rule.Installation, languages []string)
 	if rules := p.Rules(); len(rules) > 0 {
 		fmt.Fprintf(&b, "#     %s:\n", rules[0].ID().Qualified())
 	} else {
-		fmt.Fprintf(&b, "#     %s:some/rule:\n", p.Reference().Namespace())
+		fmt.Fprintf(&b, "#     %s:some/rule:\n", p.Reference().Qualifier())
 	}
 	b.WriteString("#       severity: warning\n")
 	b.WriteString("#       disable: \"why this repository does not hold it\"\n")

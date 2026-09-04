@@ -20,7 +20,7 @@ func contextFixture(t *testing.T) rule.Configured {
 		t.Fatalf("ModuleApplicability: %v", err)
 	}
 	consumes, err := rule.New(rule.Spec{
-		ID:            "t:m/imports",
+		ID:            "t/p:m/imports",
 		Type:          rule.TypeConsumes,
 		Params:        rule.ConsumesParams{Internal: &emptyAllow, External: rule.ImportForbid},
 		Applicability: scope,
@@ -33,7 +33,7 @@ func contextFixture(t *testing.T) rule.Configured {
 		t.Fatalf("RepositoryApplicability: %v", err)
 	}
 	protected, err := rule.New(rule.Spec{
-		ID:            "t:deps/protected-m",
+		ID:            "t/p:deps/protected-m",
 		Type:          rule.TypeProtected,
 		Params:        rule.ProtectedParams{Module: "m"},
 		Applicability: repo,
@@ -65,13 +65,13 @@ func TestArchitecturalContextForPath(t *testing.T) {
 	for _, r := range ctx.Rules {
 		reasons[r.Summary.ID] = r.Reason
 	}
-	if !strings.Contains(reasons["t:m/snake"], "Module(s) m") {
-		t.Errorf("naming reason = %q", reasons["t:m/snake"])
+	if !strings.Contains(reasons["t/p:m/snake"], "Module(s) m") {
+		t.Errorf("naming reason = %q", reasons["t/p:m/snake"])
 	}
-	if !strings.Contains(reasons["t:deps/protected-m"], "protected") {
-		t.Errorf("protected reason = %q", reasons["t:deps/protected-m"])
+	if !strings.Contains(reasons["t/p:deps/protected-m"], "protected") {
+		t.Errorf("protected reason = %q", reasons["t/p:deps/protected-m"])
 	}
-	if _, ok := reasons["t:m/imports"]; !ok {
+	if _, ok := reasons["t/p:m/imports"]; !ok {
 		t.Errorf("consumes rule missing from applicable rules: %v", reasons)
 	}
 
@@ -160,7 +160,7 @@ func TestInitializeRepositoryAdoptsPattern(t *testing.T) {
 		"extends:\n  - pattern: arclint/ddd-flat@1.2.3\n",
 		"      m: \"src/m/**\"\n",
 		"      # unbound: <glob>\n",
-		"#     arclint:m/snake:\n",
+		"#     arclint/ddd-flat:m/snake:\n",
 	} {
 		if !strings.Contains(scaffold.content, want) {
 			t.Errorf("adopting ruleset lacks %q:\n%s", want, scaffold.content)
@@ -214,7 +214,7 @@ func namespacedPatternFixture(t *testing.T, namespace, version string) rule.Patt
 		t.Fatalf("ModuleApplicability: %v", err)
 	}
 	r, err := rule.New(rule.Spec{
-		ID:            namespace + ":m/snake",
+		ID:            namespace + "/ddd-flat:m/snake",
 		Type:          rule.TypeNaming,
 		Params:        rule.NamingParams{Case: snake},
 		Applicability: scope,
