@@ -176,7 +176,21 @@ contexts:
           The decision keeping a finding one Rule produced at selected
           paths while removing its gate effect, with a reason. The
           finding is still reported as suppressed.
+      - name: Installation
+        definition: >-
+          The decision to extend one Pattern, recorded in rules.yaml as
+          one extends entry that names the PatternReference and carries
+          a Binding for every Module the Pattern lists, drafted from
+          the paths the Pattern suggests. Installing a Pattern the
+          binary does not embed keeps a VendoredPattern first, so the
+          repository resolves the PatternReference offline.
     invariants:
+      - statement: >-
+          An Installation of a Pattern whose namespace and name the
+          repository already extends replaces the extended version and
+          keeps every Binding; it never records a second extends entry
+          for one namespace and name.
+        owner: Installation
       - statement: >-
           A Binding names a Module the extended Pattern lists and gives
           it at least one path; a Binding for a Module the Pattern does
@@ -213,10 +227,115 @@ contexts:
     value_objects:
       - name: Violation
         definition: >-
-          One suspected breach of a Rule, anchored at a file and line.
-          It has no lifecycle: every assessment derives its Violations
-          fresh, and two Violations with the same values are the same
-          finding.
+          One suspected breach of a Rule, anchored at a file and line
+          and carrying the PatternReference of the Pattern that
+          distributed the Rule when one did. It has no lifecycle: every
+          assessment derives its Violations fresh, and two Violations
+          with the same values are the same finding.
+  - name: distribution
+    value_objects:
+      - name: Catalog
+        definition: >-
+          Every Pattern the resolving PatternSources carry, one entry
+          per PatternReference in source order, with the agreeing
+          copies of one reference kept beside the first. A listing
+          reads the Catalog to say where a Pattern resolves from and
+          what the repository carries of it; a check resolves the
+          PatternReferences it extends through the Catalog.
+      - name: Digest
+        definition: >-
+          The sha256 content hash, spelled sha256:<hex>, that identifies
+          the exact bytes of one PatternFile, or of a whole Pattern
+          through the sorted list of its PatternFile paths and their
+          Digests. Two copies of one published version share one
+          Digest.
+      - name: Index
+        definition: >-
+          A Registry's complete listing of the Pattern versions it
+          publishes, one entry per PatternReference carrying the
+          version's Digest and documentation, ordered by namespace,
+          name, then version. The Index is read before any Manifest or
+          PatternFile, so a Registry is listed and a Selection resolved
+          without fetching a Pattern.
+      - name: Manifest
+        definition: >-
+          The record a published Pattern version travels with: its
+          PatternReference, its Digest, and the path and Digest of
+          every PatternFile it ships. A Manifest is written beside a
+          VendoredPattern and read from a Registry before any
+          PatternFile is fetched.
+      - name: PatternFile
+        definition: >-
+          One file a Pattern ships: a forward-slash path relative to
+          the Pattern's own directory and the file's bytes. The
+          pattern.yaml file is always one of them, and every Extension
+          the Pattern distributes lives under extensions/.
+      - name: PatternSource
+        definition: >-
+          One place arclint resolves a PatternReference from: the
+          Patterns embedded in the binary, the Patterns kept under
+          .arclint/patterns in the repository, or a Registry. A check
+          resolves through the first two only; a Registry is read when
+          a command asks to vendor or install a Pattern.
+      - name: Registry
+        definition: >-
+          A location, reachable by URL, that publishes Patterns by
+          PatternReference: an index of every published reference and,
+          per version, a Manifest beside the Pattern's files. The
+          default Registry is arclint's own; a command may name
+          another.
+      - name: Selection
+        definition: >-
+          The spelling a command accepts to name one Pattern among the
+          PatternReferences a source carries: an exact
+          namespace/name@version, a namespace/name meaning its highest
+          version, or a bare name meaning the highest version of the
+          one namespace/name that carries it.
+      - name: VendoredPattern
+        definition: >-
+          An exact copy of one published Pattern version kept under
+          .arclint/patterns/<namespace>/<name>/ together with its
+          Manifest, so the repository resolves the PatternReference
+          offline. One name in one namespace has one vendored version.
+    invariants:
+      - statement: >-
+          A Digest computed twice over the same PatternFiles is the
+          same Digest; file order, platform, and time never enter it.
+        owner: Digest
+      - statement: >-
+          A Manifest lists every PatternFile of the Pattern and none
+          outside the Pattern's directory; a path that is absolute,
+          escapes the directory, or appears twice is rejected at
+          construction.
+        owner: Manifest
+      - statement: >-
+          A Registry is never read while a check runs; a check resolves
+          only embedded and vendored Patterns.
+        owner: Registry
+      - statement: >-
+          Two PatternSources that carry one PatternReference must agree
+          on its Digest; a disagreement is rejected at load, because a
+          published version is immutable.
+        owner: PatternSource
+      - statement: >-
+          A VendoredPattern whose PatternFiles no longer match its
+          Manifest is rejected at load, never used silently.
+        owner: VendoredPattern
+      - statement: >-
+          An Index lists one PatternReference at most once; a listing
+          that repeats a reference is rejected at construction, because
+          a published version is immutable.
+        owner: Index
+      - statement: >-
+          A Pattern fetched from a Registry must carry the Digest its
+          Index records; a fetched version whose Digest disagrees with
+          the Index is rejected, never vendored.
+        owner: Index
+      - statement: >-
+          A bare-name Selection carried by more than one namespace/name
+          is rejected as ambiguous, with every matching reference
+          spelled out; nothing is chosen on the caller's behalf.
+        owner: Selection
 relations:
   # conformance adopts the rule context's model as-is: assessments
   # consume Rule, Severity, and the rest of the rule model directly,
@@ -228,5 +347,18 @@ relations:
   # names a Module, an Override names a Rule, and neither redefines
   # them, so dependence flows adoption -> rule and never back.
   - from: rule
+    to: adoption
+    kind: conformist
+  # distribution moves Patterns around without redefining them: a
+  # Manifest names a PatternReference and a VendoredPattern carries a
+  # Pattern as the rule context spells it, so dependence flows
+  # distribution -> rule and never back.
+  - from: rule
+    to: distribution
+    kind: conformist
+  # adoption consumes the distribution model unchanged: an Installation
+  # keeps a VendoredPattern and resolves through PatternSources, so
+  # dependence flows adoption -> distribution and never back.
+  - from: distribution
     to: adoption
     kind: conformist
