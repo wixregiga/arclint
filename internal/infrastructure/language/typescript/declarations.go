@@ -26,27 +26,63 @@ func normalizeType(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
+// parsers is one worker goroutine's tree-sitter parsers, one per
+// grammar, built on first use. A Parser is not safe for concurrent
+// use and costs more to construct than a typical file costs to parse,
+// so each worker keeps its own and reuses them file after file.
+type parsers struct {
+	byGrammar map[string]*gotreesitter.Parser
+}
+
+func newParsers() *parsers { return &parsers{byGrammar: map[string]*gotreesitter.Parser{}} }
+
+// forFile returns the worker's parser for the grammar the file's
+// extension selects.
+func (ps *parsers) forFile(path string) (*gotreesitter.Parser, error) {
+	name := grammarFor(path)
+	if p, ok := ps.byGrammar[name]; ok {
+		return p, nil
+	}
+	lang, err := languageNamed(name)
+	if err != nil {
+		return nil, err
+	}
+	p := gotreesitter.NewParser(lang)
+	ps.byGrammar[name] = p
+	return p, nil
+}
+
 // extractDeclarations extracts declaration facts from one TypeScript/TSX/JavaScript
 // file via the pinned pure-Go tree-sitter runtime (pinned grammar, deterministic). The walker
 // is arclint-owned: the shapes below are the fact schema, and the
 // per-language tests are its contract.
-func extractDeclarations(path string, src []byte) *declarationFacts {
+func extractDeclarations(ps *parsers, path string, src []byte) *declarationFacts {
 	out := &declarationFacts{}
-	tsLang, err := languageFor(path)
+	parser, err := ps.forFile(path)
 	if err != nil {
 		out.ParseError = err.Error()
 		return out
 	}
-	parser := gotreesitter.NewParser(tsLang)
 	tree, err := parser.ParseStrict(src)
 	if err != nil {
 		out.ParseError = fmt.Sprintf("parse: %v", err)
 		return out
 	}
-	w := &tsWalker{lang: tsLang, src: src, out: out}
+	w := &tsWalker{lang: parser.Language(), src: src, out: out}
 	w.walk(tree.RootNode(), "", false)
 	w.walkCalls(tree.RootNode(), "")
 	return out
+}
+
+// grammarFor names the embedded grammar a file's extension selects.
+func grammarFor(path string) string {
+	switch {
+	case strings.HasSuffix(path, ".tsx"):
+		return "tsx"
+	case strings.HasSuffix(path, ".ts"):
+		return "typescript"
+	}
+	return "javascript"
 }
 
 var (
@@ -54,15 +90,9 @@ var (
 	tsLangCache = map[string]*gotreesitter.Language{}
 )
 
-// languageFor loads the grammar for a file's extension once per process.
-func languageFor(path string) (*gotreesitter.Language, error) {
-	name := "javascript"
-	switch {
-	case strings.HasSuffix(path, ".tsx"):
-		name = "tsx"
-	case strings.HasSuffix(path, ".ts"):
-		name = "typescript"
-	}
+// languageNamed loads one embedded grammar once per process; a
+// Language is immutable once loaded and shared by every parser.
+func languageNamed(name string) (*gotreesitter.Language, error) {
 	tsLangMu.Lock()
 	defer tsLangMu.Unlock()
 	if l, ok := tsLangCache[name]; ok {

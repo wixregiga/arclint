@@ -19,6 +19,7 @@ import (
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/infrastructure/language/fanout"
 )
 
 // Producer implements the observation FactProducer seam for Go.
@@ -33,7 +34,8 @@ func (Producer) Language() rule.Language { return rule.LanguageGo }
 // Facts analyzes every analyzable .go file among the observed files,
 // producing the requested fact classes: imports always, declarations
 // only when asked for — observation costs follow what enforcement
-// declares.
+// declares. Files are analyzed in parallel; the resolver is read-only
+// once built, and each worker parses into its own token.FileSet.
 func (Producer) Facts(root string, files []conformance.ObservedFile, requested []rule.Fact) (map[string]conformance.LanguageFacts, error) {
 	res := newResolver(root, files)
 	wantDeclarations := false
@@ -46,15 +48,12 @@ func (Producer) Facts(root string, files []conformance.ObservedFile, requested [
 			wantCalls = true
 		}
 	}
-	out := map[string]conformance.LanguageFacts{}
-	fset := token.NewFileSet()
-	for _, f := range files {
-		if !analyzable(f.Path) {
-			continue
+	return fanout.Analyze(files, analyzable, func() fanout.Analyzer {
+		fset := token.NewFileSet()
+		return func(rel string) conformance.LanguageFacts {
+			return analyzeFile(fset, res, root, rel, wantDeclarations, wantCalls)
 		}
-		out[f.Path] = analyzeFile(fset, res, root, f.Path, wantDeclarations, wantCalls)
-	}
-	return out, nil
+	}), nil
 }
 
 // analyzable reports whether the go tool would ever consider the file:

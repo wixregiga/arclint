@@ -1,6 +1,6 @@
 # Violating case: the plain report adapter imports an external package;
 # only the Lipgloss adapter may take external dependencies.
-rule: "arclint:delivery/plain-report-dependencies"
+rule: "delivery/plain-report-dependencies"
 files:
   go.mod: |
     module fixture

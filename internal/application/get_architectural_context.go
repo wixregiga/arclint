@@ -357,13 +357,13 @@ func modulePolicy(m rule.Module, rules []rule.Rule) ModulePolicy {
 // reason in domain language.
 func appliesToScope(r rule.Rule, path string, owning []rule.ModuleName) (string, bool) {
 	switch params := r.Params().(type) {
-	case rule.ConsumesParams, rule.StructureParams, rule.NamingParams, rule.ExtensionParams:
+	case rule.ConsumesParams, rule.StructureParams, rule.NamingParams, rule.ContentParams, rule.ExtensionParams:
 		_ = params
 		if r.AppliesToFile(path, owning) {
 			shared := sharedModules(r, owning)
 			if len(shared) == 0 {
-				// Repository-scoped extension Rules select every file
-				// without any Module in common.
+				// Repository-scoped content and extension Rules select
+				// every file without any Module in common.
 				return "selects the file repository-wide", true
 			}
 			return fmt.Sprintf("selects the file through Module(s) %s", joinNames(shared)), true
@@ -402,7 +402,7 @@ func appliesToScope(r rule.Rule, path string, owning []rule.ModuleName) (string,
 // named directly in the scope.
 func appliesToModule(r rule.Rule, name rule.ModuleName) (string, bool) {
 	switch params := r.Params().(type) {
-	case rule.ConsumesParams, rule.StructureParams, rule.NamingParams, rule.ExtensionParams:
+	case rule.ConsumesParams, rule.StructureParams, rule.NamingParams, rule.ContentParams, rule.ExtensionParams:
 		_ = params
 		if r.Applicability().WouldSelectModule(name) {
 			return fmt.Sprintf("selects Module %q", name), true

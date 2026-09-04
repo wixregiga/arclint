@@ -7,7 +7,15 @@ weight = 50
 
 ArcLint now supports mapping your Ubiquitous Language directly to **Visible Domain Contracts**. This ensures that the expert-defined invariants, assertions, and specifications recorded in your domain vocabulary are continuously evaluated against your codebase via exact declaration and call facts.
 
-By using the `invariants` rule kind, you can enforce that your structural contracts remain unbroken as the code evolves. 
+A Rule whose assertion is `invariants` enforces that these structural contracts remain unbroken as the code evolves:
+
+```yaml
+rules:
+  entities/contracts-visible:
+    description: "Every aggregate's invariants are visible through its cluster method."
+    on: entities
+    invariants: {}
+```
 
 ## Recording Domain Contracts
 
@@ -91,7 +99,7 @@ func (h HighValueOrder) SatisfiedBy(o Order) bool {
 
 ## Evaluation & Facts
 
-When checking conformance (e.g. via an `invariants` rule like `"arclint:entities/contracts-visible"`), ArcLint utilizes deep language facts—specifically **Declarations** and **Calls**—to verify structural compliance.
+When checking conformance (e.g. via an `invariants` rule like `entities/contracts-visible` above), ArcLint utilizes deep language facts, specifically **Declarations** and **Calls**, to verify structural compliance. `invariants: {closed: true}` tightens the posture: every exported error-returning function in the owner's files must call the cluster method, not only the constructor and commands.
 
 The engine verifies that:
 - **Cluster Invariants:** The constructor and all domain commands call the invariant method.

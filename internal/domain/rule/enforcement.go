@@ -21,17 +21,6 @@ func Languages() []Language {
 	return []Language{LanguageGo, LanguageTypeScript, LanguagePython}
 }
 
-// ParseLanguage accepts only a language supported by the running
-// ArcLint version.
-func ParseLanguage(s string) (Language, error) {
-	for _, l := range Languages() {
-		if Language(s) == l {
-			return l, nil
-		}
-	}
-	return "", fmt.Errorf("language %q: not one of %v", s, Languages())
-}
-
 // Valid reports whether the value is a supported language.
 func (l Language) Valid() bool {
 	for _, known := range Languages() {
@@ -219,6 +208,10 @@ func BuiltinEnforcement(t Type) Enforcement {
 			[]Fact{FactDeclarations, FactCalls},
 			"declaration and call matching against recorded domain contracts",
 			AssuranceExact, nil, true)
+		return e
+	case TypeContent:
+		e, _ := NewEnforcement(nil, []Fact{FactFileTree},
+			"line matching against the forbidden pattern over file bytes", AssuranceExact, nil, true)
 		return e
 	case TypeExtension:
 		e, _ := NewEnforcement(nil, []Fact{FactFileTree, FactImports, FactDeclarations},

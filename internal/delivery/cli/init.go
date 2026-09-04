@@ -15,7 +15,7 @@ func NewInitCommand(initialize application.InitializeRepository, render Renderer
 		Short: "draft a starter rules.yaml for this repository",
 		Flags: []Flag{
 			{Name: "languages", Default: "go", Doc: "comma-separated runtime targets: go, ts, py", Complete: completeLanguages},
-			{Name: "pattern", Default: "bare", Doc: "starter ruleset pattern: bare or a built-in Pattern (vertical)", Complete: completePatterns(initialize)},
+			{Name: "pattern", Default: "bare", Doc: "starter ruleset: bare, or a Pattern to extend by reference or name (arclint patterns lists them)", Complete: completePatterns(initialize)},
 			{Name: "force", Bool: true, Doc: "overwrite an existing rules.yaml"},
 		},
 		Run: func(ctx Context) error {
@@ -52,7 +52,12 @@ func completeLanguages(toComplete string) []AutoCompleteCandidate {
 
 func completePatterns(initialize application.InitializeRepository) func(toComplete string) []AutoCompleteCandidate {
 	return func(_ string) []AutoCompleteCandidate {
-		names := initialize.Patterns()
+		// Completion degrades to no candidates when a Pattern source
+		// fails: the shell callback has nowhere to report the error.
+		names, err := initialize.Patterns()
+		if err != nil {
+			return nil
+		}
 		candidates := make([]AutoCompleteCandidate, 0, len(names))
 		for _, name := range names {
 			candidates = append(candidates, AutoCompleteCandidate{Value: name})

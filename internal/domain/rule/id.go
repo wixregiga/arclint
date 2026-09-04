@@ -15,6 +15,11 @@ type ID struct {
 	local     string
 }
 
+// namespacePart names the Pattern namespace in diagnostics: the part
+// of a qualified Rule ID before ":" and of a Pattern reference before
+// "/".
+const namespacePart = "namespace"
+
 // NewID parses and validates "local" or "namespace:local".
 func NewID(s string) (ID, error) {
 	if s == "" {
@@ -33,7 +38,7 @@ func NewID(s string) (ID, error) {
 	if strings.Contains(local, ":") {
 		return ID{}, fmt.Errorf("rule id %q: more than one namespace separator", s)
 	}
-	for part, name := range map[string]string{namespace: "namespace", local: "local identity"} {
+	for part, name := range map[string]string{namespace: namespacePart, local: "local identity"} {
 		if part == "" {
 			continue
 		}

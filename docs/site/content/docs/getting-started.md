@@ -41,16 +41,18 @@ single-module draft. Default languages is `go`. Pass others with
 arclint init --languages go,ts
 ```
 
-Choose a built-in Pattern instead of the bare draft:
+Adopt a Pattern instead of starting bare:
 
 ```bash
-arclint init --pattern vertical
+arclint init --pattern arclint/vertical@0.1.0   # or --pattern vertical
 ```
 
-That copies the Pattern's Extension entries into `.arclint/extensions`
-as repository-owned files, then writes `rules.yaml`. `--pattern bare`
-writes only the draft ruleset. An existing `rules.yaml` or any of those
-extension files is refused unless you pass `--force`.
+That writes a `rules.yaml` whose `extends` block pins the Pattern by
+exact reference and binds each Pattern Module to the paths the Pattern
+suggests; edit the bindings to match your tree. Nothing is copied into
+`.arclint/extensions`: the Pattern's Rules and Extensions load by
+reference on every run. `--pattern bare` writes only the draft ruleset.
+An existing `rules.yaml` is refused unless you pass `--force`.
 
 Accepted values for `--languages` are `go`, `ts`, and `py`
 (comma-separated).
@@ -62,14 +64,14 @@ wrote /path/to/rules.yaml
 next: declare your modules, then run `arclint check .`
 ```
 
-The draft sets `runtime`, one Module `source` covering `**`, and one
-vacuously satisfied `consumes` Rule so the file loads and `check` stays
-clean until you split Modules:
+The bare draft sets `runtime`, one Module `source` covering `**`, and
+one vacuously satisfied `imports` Rule so the file loads and `check`
+stays clean until you split Modules:
 
 ```yaml
 # ArcLint architecture contracts.
 # Grow this file module by module: declare real Modules under `modules`,
-# then state what each may import under `contracts`.
+# then state what each may import under `rules`.
 # Query commands: arclint rules [selector] · arclint context <path>
 
 runtime: [go]
@@ -80,18 +82,70 @@ scan:
   unknown_imports: warn
 
 modules:
-  source:
-    paths: ["**"]
-    description: "Every file. Split into real modules as the architecture takes shape."
+  # A Module is a name and the paths it owns: one glob, a list of globs,
+  # or {paths, description}. Split into real Modules as the architecture
+  # takes shape.
+  source: "**"
 
-contracts:
-  source:
-    consumes:
-      id: "repo:source/dependencies"
-      # An allow-list of other declared modules. Empty means this module
-      # may import no other declared module; with one module this is
-      # vacuously true — it starts binding the moment you split modules.
+rules:
+  # Every Rule has an id, the Module(s) it judges under `on`, and exactly
+  # one assertion: imports, structure, naming, content, layers,
+  # imported_by, independent, acyclic, invariants, or uses.
+  source/dependencies:
+    description: "Source imports no other declared Module."
+    on: source
+    imports:
+      # An allow-list of other declared Modules. Empty means this Module
+      # may import no other declared Module; with one Module this is
+      # vacuously true and starts binding the moment you split Modules.
       internal: []
+```
+
+A grown file reads the same way, one Rule per architectural claim:
+
+```yaml
+runtime: [go]
+
+modules:
+  domain:
+    paths: "internal/domain/**"
+    description: "Aggregates and domain values; stdlib-only."
+  application:
+    paths: "internal/application/**"
+    description: "Use cases coordinating domain objects through ports."
+  infrastructure: "internal/infrastructure/**"
+  composition: "cmd/**"
+
+rules:
+  domain/stdlib-only:
+    description: "The domain imports no other Module and no third-party package."
+    on: domain
+    imports:
+      internal: []
+      external: forbid
+
+  domain/no-panic:
+    description: "Domain code never panics."
+    on: domain
+    files: "internal/domain/**/*.go"
+    content:
+      forbid: '\bpanic\('
+
+  application/through-ports:
+    description: "Use cases import only the domain."
+    on: application
+    imports:
+      internal: [domain]
+      external: forbid
+
+  infrastructure/composition-only:
+    description: "Only composition imports infrastructure."
+    on: infrastructure
+    imported_by: [composition]
+
+  dependencies/acyclic:
+    description: "Module dependencies contain no cycle."
+    acyclic: {}
 ```
 
 When you add TypeScript Extensions later, `arclint sdk init` writes
@@ -165,7 +219,7 @@ paths and import allow-list, and the Rules that apply. Re-run
 
 ```bash
 arclint rules                          # one line per configured Rule
-arclint rules repo:source/dependencies # full detail for one Rule
+arclint rules source/dependencies      # full detail for one Rule
 arclint rules schema                   # JSON Schema for rules.yaml
 ```
 

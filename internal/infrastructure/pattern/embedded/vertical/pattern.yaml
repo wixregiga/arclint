@@ -1,0 +1,138 @@
+# arclint/vertical: vertical slices with hexagonal layers inside.
+#
+# Each feature folder under internal/ owns its domain, application, and
+# infra; internal/app wires transports, internal/shared holds
+# cross-cutting mechanisms. Adopt it from rules.yaml:
+#
+#   extends:
+#     - pattern: arclint/vertical@0.1.0
+#       bind:
+#         domain: internal/*/domain/**
+#         ...
+#
+# Every module below must be bound; the paths here are suggestions the
+# `arclint init --pattern vertical` starter copies into bind.
+
+pattern:
+  namespace: arclint
+  name: vertical
+  version: 0.1.0
+  coverage: [go]
+  documentation: |
+    Vertical slices with hexagonal layers inside. Each feature folder
+    owns its domain, application, and infra packages; features stay
+    independent of each other; transports and wiring live in app;
+    cross-cutting mechanisms with no product meaning live in shared.
+
+modules:
+  domain:
+    description: "Pure domain model per feature; stdlib-only."
+    paths: internal/*/domain/**
+  application:
+    description: "Use cases and ports per feature."
+    paths: internal/*/application/**
+  infra:
+    description: "Driven adapters implementing the feature's ports."
+    paths: internal/*/infra/**
+  app:
+    description: "Driving adapters and wiring, organized by transport."
+    paths: internal/app/**
+  shared:
+    description: "Cross-cutting mechanisms with no product meaning."
+    paths: internal/shared/**
+  composition:
+    description: "Entrypoints; each main.go builds a binary."
+    paths: cmd/**
+
+rules:
+  domain/stdlib-only:
+    description: "Domain imports no other module and no third-party package."
+    on: domain
+    imports:
+      internal: []
+      external: forbid
+
+  domain/no-context:
+    description: "Domain never imports context; cancellation is an application concern."
+    on: domain
+    uses: vertical/forbid-imports
+    with:
+      packages: [context]
+
+  domain/no-io:
+    description: "Domain performs no I/O; adapters do."
+    on: domain
+    uses: vertical/forbid-imports
+    with:
+      packages: [bufio, database/sql, io, log, net, os, syscall]
+
+  application/use-cases-through-ports:
+    description: "Application imports only the domain and no third-party package."
+    on: application
+    imports:
+      internal: [domain]
+      external: forbid
+
+  application/repository-context:
+    description: "Repository ports take a context as their first parameter."
+    on: application
+    uses: vertical/repository-context
+
+  application/usecase-contract:
+    description: "Use cases expose one Execute method."
+    on: application
+    uses: vertical/usecase
+
+  infra/outbound-only:
+    description: "Infra imports only application, domain, and shared."
+    on: infra
+    imports:
+      internal: [application, domain, shared]
+
+  app/driving-and-wiring:
+    description: "App imports application, domain, infra, and shared."
+    on: app
+    imports:
+      internal: [application, domain, infra, shared]
+
+  shared/mechanism-only:
+    description: "Shared imports no other module."
+    on: shared
+    imports:
+      internal: []
+
+  shared/concerns:
+    description: "Shared packages are named after a recognized cross-cutting concern."
+    on: shared
+    uses: vertical/shared-concerns
+    with:
+      concerns: [logging, tracing, metrics, config, security, errors, cache, db, validation, events]
+
+  composition/selects-adapters:
+    description: "Composition may import every module to wire adapters."
+    on: composition
+    imports:
+      internal: [app, infra, application, domain, shared]
+
+  repositories/application-only:
+    description: "Repository interfaces are declared only in application packages."
+    uses: vertical/repository-location
+    with:
+      module: application
+
+  dependencies/inward:
+    description: "Dependencies point inward: app, then application, then domain."
+    layers: [app, application, domain]
+
+  infra/app-and-composition-only:
+    description: "Only app and composition import infra."
+    on: infra
+    imported_by: [app, composition]
+
+  features/independent:
+    description: "Feature folders never import each other."
+    independent: ["internal/*"]
+
+  dependencies/acyclic:
+    description: "Module dependencies contain no cycle."
+    acyclic: {}

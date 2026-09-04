@@ -129,7 +129,7 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 		"### Repository-wide rules",
 		`- deps/protected-m: Module "m" is imported by no other Module`,
 		`- fsd/slice-isolation: satisfies extension rule "fsd-slice-isolation" (layers: [a, b])`,
-		"### Local extension rules",
+		"### Extension rules",
 		"`.arclint/extensions/local.ts` default-exports the rule definitions: forbid-content, fsd-slice-isolation.",
 	} {
 		if !strings.Contains(block, want) {
@@ -178,7 +178,7 @@ func TestPublishAgentsContextOmitsAbsentSections(t *testing.T) {
 		t.Fatalf("Render: %v", err)
 	}
 	for _, reject := range []string{
-		"### The recorded domain", "### Repository-wide rules", "### Local extension rules",
+		"### The recorded domain", "### Repository-wide rules", "### Extension rules",
 	} {
 		if strings.Contains(block, reject) {
 			t.Errorf("block must omit %q without its data:\n%s", reject, block)

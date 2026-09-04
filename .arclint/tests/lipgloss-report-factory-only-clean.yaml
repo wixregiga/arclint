@@ -1,5 +1,5 @@
 # Conforming case: only report_factory imports the Lipgloss adapter.
-rule: "arclint:delivery/lipgloss-report-factory-only"
+rule: "delivery/lipgloss-report-factory-only"
 files:
   go.mod: |
     module fixture

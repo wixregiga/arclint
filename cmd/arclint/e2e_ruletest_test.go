@@ -16,16 +16,13 @@ import (
 const ruleTestRules = `runtime: [go]
 
 modules:
-  core:
-    paths: ["core/**"]
+  core: core/**
 
-contracts:
-  core:
-    invariants:
-      - id: "t:core/no-extra"
-        kind: structure
-        forbid:
-          - "core/extra/**"
+rules:
+  core/no-extra:
+    on: core
+    structure:
+      forbid: ["core/extra/**"]
 `
 
 func TestRuleTestsRunThroughBinary(t *testing.T) {
@@ -33,25 +30,25 @@ func TestRuleTestsRunThroughBinary(t *testing.T) {
 	write(t, dir, "rules.yaml", ruleTestRules)
 	write(t, dir, "core/keep.go", "package core\n")
 	write(t, dir, ".arclint/tests/clean.yaml",
-		"rule: \"t:core/no-extra\"\nfiles:\n  core/keep.go: |\n    package core\nexpect: []\n")
+		"rule: \"core/no-extra\"\nfiles:\n  core/keep.go: |\n    package core\nexpect: []\n")
 
 	stdout, stderr, code := runBin(t, dir, os.Environ(), "rules", "test")
 	if code != 0 {
 		t.Fatalf("rules test: exit %d, stderr %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "ok   clean (t:core/no-extra)") || !strings.Contains(stdout, "1 passed · 0 failed") {
+	if !strings.Contains(stdout, "ok   clean (core/no-extra)") || !strings.Contains(stdout, "1 passed · 0 failed") {
 		t.Errorf("unexpected output:\n%s", stdout)
 	}
 
 	// A failing test prints a ready-to-paste expect entry and exits 1.
 	write(t, dir, ".arclint/tests/violating.yaml",
-		"rule: \"t:core/no-extra\"\nfiles:\n  core/extra/x.go: |\n    package extra\nexpect: []\n")
+		"rule: \"core/no-extra\"\nfiles:\n  core/extra/x.go: |\n    package extra\nexpect: []\n")
 	stdout, _, code = runBin(t, dir, os.Environ(), "rules", "test")
 	if code != 1 {
 		t.Fatalf("failing rules test: exit %d, want 1\n%s", code, stdout)
 	}
 	for _, want := range []string{
-		"FAIL violating (t:core/no-extra)",
+		"FAIL violating (core/no-extra)",
 		"- kind: violation",
 		"path: core/extra/x.go",
 		"1 passed · 1 failed",
@@ -83,20 +80,17 @@ func TestRuleTestEmptyExpectPrintsExactConsumesMessage(t *testing.T) {
 scan:
   unknown_imports: error
 modules:
-  core:
-    paths: ["core/**"]
-  adapters:
-    paths: ["adapters/**"]
-contracts:
-  core:
-    consumes:
-      id: "t:core/consumes"
+  core: core/**
+  adapters: adapters/**
+rules:
+  core/consumes:
+    on: core
+    imports:
       internal: []
       external: forbid
-      stdlib: allow
 `)
 	write(t, dir, ".arclint/tests/disallowed_adapters_import.yaml",
-		`rule: "t:core/consumes"
+		`rule: "core/consumes"
 files:
   go.mod: "module example.com/app\n\ngo 1.26\n"
   core/a.go: "package core\n\nimport _ \"example.com/app/adapters\"\n"
@@ -113,7 +107,7 @@ expect: []
 	// verbatim so authors paste it into expect.message.
 	wantMessage := `import "example.com/app/adapters" resolves to Module(s) ["adapters"], not in the allow-list of Module "core"`
 	for _, want := range []string{
-		"FAIL disallowed_adapters_import (t:core/consumes)",
+		"FAIL disallowed_adapters_import (core/consumes)",
 		"- kind: violation",
 		"path: core/a.go",
 		"line: 3",

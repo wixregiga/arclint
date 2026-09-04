@@ -1,6 +1,6 @@
 # Conforming case: the expanded rule derives its globs from the
 # fixture's recorded aggregates, and every derived file exists.
-rule: "arclint:domain-model/aggregate-skeleton"
+rule: "domain-model/aggregate-skeleton"
 files:
   ubiquitous-language.yaml: |
     version: 1

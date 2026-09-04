@@ -719,15 +719,12 @@ export default defineRule({
 `)
 	write(t, root, "rules.yaml", `runtime: [go]
 modules:
-  src:
-    paths: ["src/**"]
-contracts:
-  src:
-    invariants:
-      - id: "repo:src/domain-probe"
-        kind: extension
-        files: "src/**/*.go"
-        uses: domain-probe
+  src: src/**
+rules:
+  src/domain-probe:
+    on: src
+    files: "src/**/*.go"
+    uses: domain-probe
 `)
 	write(t, root, "src/ok.go", "package src\n")
 	write(t, root, "ubiquitous-language.yaml", `version: 1

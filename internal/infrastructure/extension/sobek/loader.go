@@ -87,13 +87,42 @@ func (r *Registry) Types() []*RuleType {
 	return out
 }
 
+// SuppliedSource is one extension entry handed to the host as bytes
+// rather than discovered on disk: the Extension sources an extended
+// Pattern distributes. Name is the attribution every diagnostic and
+// inventory line carries; it is not a filesystem path.
+type SuppliedSource struct {
+	Name   string
+	Source string
+}
+
 // LoadDir discovers .arclint/extensions/*.ts|*.js under repoRoot,
 // deduplicates by real path, transpiles each in-process, and runs the
 // registration phase. A missing directory yields an empty registry.
 func LoadDir(repoRoot string, opts Options) (*Registry, error) {
+	return Load(repoRoot, nil, opts)
+}
+
+// Load registers the supplied sources first, in the given order, then
+// the repository's own extensions under .arclint/extensions. A rule
+// type registered twice is an error naming both sources: a local
+// extension never silently shadows one a Pattern distributes.
+func Load(repoRoot string, supplied []SuppliedSource, opts Options) (*Registry, error) {
 	opts.fill()
 	reg := &Registry{types: map[string]*RuleType{}}
+	for _, s := range supplied {
+		bundle, err := transpileSource(s, opts.Version, opts.CacheDir)
+		if err != nil {
+			return nil, err
+		}
+		if err := reg.register(s.Name, bundle, opts); err != nil {
+			return nil, err
+		}
+	}
+	return loadDir(repoRoot, reg, opts)
+}
 
+func loadDir(repoRoot string, reg *Registry, opts Options) (*Registry, error) {
 	dir := filepath.Join(repoRoot, filepath.FromSlash(ExtensionsDir))
 	entries, err := os.ReadDir(dir)
 	if os.IsNotExist(err) {
@@ -176,16 +205,70 @@ func hashDir(dir, version string) string {
 // "arclint" resolves to the embedded SDK, bare npm imports are rejected
 // with a clear error. Results are cached by directory fingerprint.
 func transpile(entry, dirHash, cacheDir string) (string, error) {
+	stem := strings.TrimSuffix(filepath.Base(entry), filepath.Ext(entry))
+	return cachedBundle(cacheDir, stem+"-"+dirHash, func() (string, error) {
+		return bundle(filepath.Base(entry), esbuild.BuildOptions{
+			EntryPoints: []string{entry},
+			Plugins:     []esbuild.Plugin{sdkPlugin(true)},
+		})
+	})
+}
+
+// transpileSource bundles one supplied source held in memory. A
+// supplied source is a single file: it may import the SDK, nothing
+// else. Results are cached by a fingerprint of the bytes, the build
+// version, and the SDK.
+func transpileSource(s SuppliedSource, version, cacheDir string) (string, error) {
+	h := sha256.New()
+	h.Write([]byte(version))
+	h.Write([]byte(sdkSource))
+	h.Write([]byte(s.Name))
+	h.Write([]byte(s.Source))
+	key := "supplied-" + hex.EncodeToString(h.Sum(nil))[:16]
+	loader := esbuild.LoaderTS
+	if strings.HasSuffix(s.Name, ".js") {
+		loader = esbuild.LoaderJS
+	}
+	return cachedBundle(cacheDir, key, func() (string, error) {
+		return bundle(s.Name, esbuild.BuildOptions{
+			Stdin: &esbuild.StdinOptions{
+				Contents:   s.Source,
+				Sourcefile: s.Name,
+				Loader:     loader,
+			},
+			Plugins: []esbuild.Plugin{sdkPlugin(false)},
+		})
+	})
+}
+
+// cachedBundle returns the cached bundle under key, or produces and
+// stores it. A missing cache directory disables caching.
+func cachedBundle(cacheDir, key string, produce func() (string, error)) (string, error) {
 	var cachePath string
 	if cacheDir != "" {
-		stem := strings.TrimSuffix(filepath.Base(entry), filepath.Ext(entry))
-		cachePath = filepath.Join(cacheDir, "extensions", stem+"-"+dirHash+".js")
+		cachePath = filepath.Join(cacheDir, "extensions", key+".js")
 		if data, err := os.ReadFile(cachePath); err == nil {
 			return string(data), nil
 		}
 	}
+	js, err := produce()
+	if err != nil {
+		return "", err
+	}
+	if cachePath != "" {
+		if err := os.MkdirAll(filepath.Dir(cachePath), 0o750); err == nil {
+			_ = os.WriteFile(cachePath, []byte(js), 0o600)
+		}
+	}
+	return js, nil
+}
 
-	sdkPlugin := esbuild.Plugin{
+// sdkPlugin resolves "arclint" to the embedded SDK and rejects bare
+// npm specifiers. Relative imports bundle from disk for discovered
+// entries; a supplied (in-memory) source has no directory to resolve
+// them against and rejects them with a clear message.
+func sdkPlugin(allowRelative bool) esbuild.Plugin {
+	return esbuild.Plugin{
 		Name: sdkNamespace,
 		Setup: func(pb esbuild.PluginBuild) {
 			pb.OnResolve(esbuild.OnResolveOptions{Filter: `^arclint$`},
@@ -198,7 +281,7 @@ func transpile(entry, dirHash, cacheDir string) (string, error) {
 					return esbuild.OnLoadResult{Contents: &contents, Loader: esbuild.LoaderTS}, nil
 				})
 			// Anything else that is not relative or absolute is a bare npm
-			// specifier: v1 extensions are single-file (plus relative
+			// specifier: extensions are single-file (plus relative
 			// imports); reject with a clear error instead of a resolve
 			// failure.
 			pb.OnResolve(esbuild.OnResolveOptions{Filter: `^[^./]`},
@@ -206,21 +289,29 @@ func transpile(entry, dirHash, cacheDir string) (string, error) {
 					return esbuild.OnResolveResult{}, fmt.Errorf(
 						"bare import %q is not supported: extensions bundle relative imports only, and the SDK is available as \"arclint\"", args.Path)
 				})
+			if !allowRelative {
+				pb.OnResolve(esbuild.OnResolveOptions{Filter: `^[./]`},
+					func(args esbuild.OnResolveArgs) (esbuild.OnResolveResult, error) {
+						return esbuild.OnResolveResult{}, fmt.Errorf(
+							"import %q is not supported: a pattern extension is one self-contained file, and the SDK is available as \"arclint\"", args.Path)
+					})
+			}
 		},
 	}
+}
 
-	result := esbuild.Build(esbuild.BuildOptions{
-		EntryPoints: []string{entry},
-		Bundle:      true,
-		Write:       false,
-		Format:      esbuild.FormatCommonJS,
-		Platform:    esbuild.PlatformNeutral,
-		Target:      esbuild.ES2017,
-		Plugins:     []esbuild.Plugin{sdkPlugin},
-		LogLevel:    esbuild.LogLevelSilent,
-	})
+// bundle runs esbuild with the shared output settings and returns the
+// single CommonJS bundle.
+func bundle(name string, options esbuild.BuildOptions) (string, error) {
+	options.Bundle = true
+	options.Write = false
+	options.Format = esbuild.FormatCommonJS
+	options.Platform = esbuild.PlatformNeutral
+	options.Target = esbuild.ES2017
+	options.LogLevel = esbuild.LogLevelSilent
+	result := esbuild.Build(options)
 	if len(result.Errors) > 0 {
-		var msgs []string
+		msgs := make([]string, 0, len(result.Errors))
 		for _, m := range result.Errors {
 			loc := ""
 			if m.Location != nil {
@@ -228,17 +319,10 @@ func transpile(entry, dirHash, cacheDir string) (string, error) {
 			}
 			msgs = append(msgs, loc+m.Text)
 		}
-		return "", fmt.Errorf("extension %s: %s", filepath.Base(entry), strings.Join(msgs, "; "))
+		return "", fmt.Errorf("extension %s: %s", name, strings.Join(msgs, "; "))
 	}
 	if len(result.OutputFiles) != 1 {
-		return "", fmt.Errorf("extension %s: expected one bundle, got %d", filepath.Base(entry), len(result.OutputFiles))
+		return "", fmt.Errorf("extension %s: expected one bundle, got %d", name, len(result.OutputFiles))
 	}
-	js := string(result.OutputFiles[0].Contents)
-
-	if cachePath != "" {
-		if err := os.MkdirAll(filepath.Dir(cachePath), 0o750); err == nil {
-			_ = os.WriteFile(cachePath, []byte(js), 0o600)
-		}
-	}
-	return js, nil
+	return string(result.OutputFiles[0].Contents), nil
 }

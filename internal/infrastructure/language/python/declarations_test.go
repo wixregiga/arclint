@@ -36,7 +36,7 @@ if True:
     def conditional():
         pass
 `)
-	got := extractDeclarations(src)
+	got := extractDeclarations(newParsers(), src)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}
@@ -77,7 +77,7 @@ func TestPythonSignatureextractDeclarations(t *testing.T) {
 def top(x: int) -> dict[str, int]:
     return {}
 `)
-	got := extractDeclarations(src)
+	got := extractDeclarations(newParsers(), src)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}
@@ -123,7 +123,7 @@ func TestPythonextractCalls(t *testing.T) {
     def publish(self):
         return self.published_frozen()
 `)
-	got := extractDeclarations(src)
+	got := extractDeclarations(newParsers(), src)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}

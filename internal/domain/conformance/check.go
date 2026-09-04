@@ -84,6 +84,8 @@ func Run(req Request) (Assessment, error) {
 			es, err = evaluateStructure(r, mem)
 		case r.Type() == rule.TypeNaming:
 			es, err = evaluateNaming(r, mem)
+		case r.Type() == rule.TypeContent:
+			es, err = evaluateContent(r, mem, req.Observations)
 		case r.Type() == rule.TypeExtension:
 			es, ruleDiags, err = evaluateExtensionRule(r, mem, req.Observations, req.Extensions, req.Modules, req.Knowledge)
 		case r.Type() == rule.TypeLayers, r.Type() == rule.TypeProtected, r.Type() == rule.TypeIndependence, r.Type() == rule.TypeAcyclic:
@@ -128,7 +130,7 @@ func validRules(rules []rule.Rule, mem membership) ([]rule.Rule, error) {
 			return nil, fmt.Errorf("conformance: duplicate rule id %q", q)
 		}
 		seen[q] = true
-		for _, m := range referencedModules(r) {
+		for _, m := range r.ReferencedModules() {
 			if _, ok := mem.modules[m]; !ok {
 				return nil, fmt.Errorf("conformance: rule %s references undeclared module %q", r.ID(), m)
 			}
@@ -138,26 +140,6 @@ func validRules(rules []rule.Rule, mem membership) ([]rule.Rule, error) {
 		return out[i].ID().Qualified() < out[j].ID().Qualified()
 	})
 	return out, nil
-}
-
-// referencedModules collects every Module a Rule names, in its
-// Applicability and its parameters.
-func referencedModules(r rule.Rule) []rule.ModuleName {
-	out := r.Applicability().Modules()
-	switch p := r.Params().(type) {
-	case rule.ConsumesParams:
-		if p.Internal != nil {
-			out = append(out, p.Internal.Modules()...)
-		}
-	case rule.LayersParams:
-		out = append(out, p.Layers...)
-	case rule.ProtectedParams:
-		out = append(out, p.Module)
-		out = append(out, p.Allow...)
-	case rule.AcyclicParams:
-		out = append(out, p.Modules...)
-	}
-	return out
 }
 
 // membership resolves Module membership over the Observations once,

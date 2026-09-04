@@ -36,7 +36,7 @@ export const exportedArrow = (y: string) => y;
 
 let counter = 0;
 `)
-	got := extractDeclarations("src/domain/repo.ts", src)
+	got := extractDeclarations(newParsers(), "src/domain/repo.ts", src)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}
@@ -90,7 +90,7 @@ function helper() {}
 
 const fn = () => 1;
 `)
-	got := extractDeclarations("src/store.js", src)
+	got := extractDeclarations(newParsers(), "src/store.js", src)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}
@@ -120,7 +120,7 @@ export class Repo {
 const arrow = (x: number, y = 2): number => x;
 const bare = x => x;
 `)
-	got := extractDeclarations("src/port.ts", src)
+	got := extractDeclarations(newParsers(), "src/port.ts", src)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}
@@ -178,7 +178,7 @@ func TestTypeScriptextractCalls(t *testing.T) {
   }
 }
 `)
-	got := extractDeclarations("src/event.ts", src)
+	got := extractDeclarations(newParsers(), "src/event.ts", src)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}

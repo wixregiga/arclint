@@ -1,8 +1,10 @@
 package typescript
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"testing"
 
@@ -174,6 +176,38 @@ func TestStdlibTableSanity(t *testing.T) {
 	for _, m := range []string{"lodash", "react", "@scope/x"} {
 		if isStdlib(m) {
 			t.Errorf("%s wrongly stdlib", m)
+		}
+	}
+}
+
+// TestFactsDeclarationsAcrossManyFiles proves parallel analysis with
+// per-worker parser reuse keeps every file's declarations its own:
+// more files than workers, each declaring one uniquely named class and
+// function, and each file's facts name exactly those two.
+func TestFactsDeclarationsAcrossManyFiles(t *testing.T) {
+	sources := map[string]string{}
+	for i := range 4 * runtime.GOMAXPROCS(0) {
+		sources[fmt.Sprintf("src/m%03d.ts", i)] = fmt.Sprintf(
+			"export class Thing%d {}\nexport function make%d(): Thing%d { return new Thing%d(); }\n", i, i, i, i)
+	}
+	root, files := writeFiles(t, sources)
+	facts, err := NewProducer().Facts(root, files, []rule.Fact{rule.FactDeclarations, rule.FactCalls})
+	if err != nil {
+		t.Fatalf("Facts: %v", err)
+	}
+	for i := range len(sources) {
+		rel := fmt.Sprintf("src/m%03d.ts", i)
+		got, ok := facts[rel]
+		if !ok || !got.DeclarationsAvailable || !got.CallsAvailable {
+			t.Fatalf("%s: declarations or calls unavailable: %+v", rel, got)
+		}
+		var names []string
+		for _, d := range got.Declarations {
+			names = append(names, d.Kind+" "+d.Name)
+		}
+		want := []string{fmt.Sprintf("class Thing%d", i), fmt.Sprintf("func make%d", i)}
+		if fmt.Sprint(names) != fmt.Sprint(want) {
+			t.Errorf("%s declarations = %v, want %v", rel, names, want)
 		}
 	}
 }

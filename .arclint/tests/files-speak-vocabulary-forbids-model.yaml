@@ -1,6 +1,6 @@
 # Violating case: a generic container file name appears in a domain
 # package; the structure rule must report the forbidden file.
-rule: "arclint:domain/files-speak-the-vocabulary"
+rule: "domain/files-speak-the-vocabulary"
 files:
   internal/domain/vocab/model.go: |
     package vocab

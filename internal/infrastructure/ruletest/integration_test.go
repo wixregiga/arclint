@@ -20,26 +20,23 @@ const integrationRuleset = `runtime: [go]
 scan:
   unknown_imports: error
 modules:
-  core:
-    paths: ["core/**"]
-  util:
-    paths: ["util/**"]
-contracts:
-  core:
-    consumes:
-      id: "t:core/consumes"
+  core: core/**
+  util: util/**
+rules:
+  core/consumes:
+    on: core
+    imports:
       internal: []
       external: forbid
-      stdlib: allow
-    invariants:
-      - id: "t:core/has-doc"
-        kind: structure
-        require: ["core/doc.go"]
+  core/has-doc:
+    on: core
+    structure:
+      require: ["core/doc.go"]
 `
 
 // The structure test expects the exact violation the real evaluator
 // produces for a fixture missing the required file: it passes.
-const structureTest = `rule: "t:core/has-doc"
+const structureTest = `rule: "core/has-doc"
 files:
   core/other.go: "package core\n"
 expect:
@@ -51,7 +48,7 @@ expect:
 // Go source, parsed by the production Go fact producer, imports a
 // Module outside the empty allow-list: it fails with one unexpected
 // violation.
-const consumesTest = `rule: "t:core/consumes"
+const consumesTest = `rule: "core/consumes"
 files:
   go.mod: "module example.com/app\n\ngo 1.26\n"
   core/a.go: "package core\n\nimport _ \"example.com/app/util\"\n"
@@ -97,7 +94,7 @@ func TestRunRuleTestsEndToEnd(t *testing.T) {
 	}
 
 	failing := results[0]
-	if failing.Name != "consumes_disallowed_import" || failing.RuleID != "t:core/consumes" {
+	if failing.Name != "consumes_disallowed_import" || failing.RuleID != "core/consumes" {
 		t.Fatalf("results[0] identity = %q %q", failing.Name, failing.RuleID)
 	}
 	if failing.Passed() || failing.Err != "" {
@@ -118,7 +115,7 @@ func TestRunRuleTestsEndToEnd(t *testing.T) {
 	}
 
 	passing := results[1]
-	if passing.Name != "structure_missing_doc" || passing.RuleID != "t:core/has-doc" {
+	if passing.Name != "structure_missing_doc" || passing.RuleID != "core/has-doc" {
 		t.Fatalf("results[1] identity = %q %q", passing.Name, passing.RuleID)
 	}
 	if !passing.Passed() {
@@ -129,22 +126,19 @@ func TestRunRuleTestsEndToEnd(t *testing.T) {
 
 const extensionRuleset = `runtime: [go]
 modules:
-  m:
-    paths: ["m/**"]
-contracts:
-  m:
-    invariants:
-      - id: "t:m/no-panic"
-        kind: extension
-        files: "m/**/*.go"
-        uses: forbid-content
-        with:
-          pattern: '\bpanic\('
+  m: m/**
+rules:
+  m/no-panic:
+    on: m
+    files: "m/**/*.go"
+    uses: lines-matching
+    with:
+      pattern: '\bpanic\('
 `
 
 // Fixture content contains panic; the repository production file does
 // not. ctx.read must see the fixture bytes or the expectation misses.
-const extensionFixtureTest = `rule: "t:m/no-panic"
+const extensionFixtureTest = `rule: "m/no-panic"
 files:
   m/a.go: |
     package m
@@ -155,10 +149,10 @@ expect:
     message: 'forbidden content matching /\bpanic\(/'
 `
 
-const forbidContentExtension = `import { defineRule, s } from "arclint";
+const linesMatchingExtension = `import { defineRule, s } from "arclint";
 
 export default defineRule({
-  type: "forbid-content",
+  type: "lines-matching",
   description: "report lines matching a configured pattern",
   capability: "exact",
   params: s.object({
@@ -200,7 +194,7 @@ func TestRuleTestExtensionReadsFixtureContent(t *testing.T) {
 		}
 	}
 	write("rules.yaml", extensionRuleset)
-	write(".arclint/extensions/forbid_content.ts", forbidContentExtension)
+	write(".arclint/extensions/lines_matching.ts", linesMatchingExtension)
 	write(".arclint/tests/fixture_reads_panic.yaml", extensionFixtureTest)
 	// Production path exists with clean content — the opposite of the fixture.
 	write("m/a.go", "package m\n// clean production file\n")
@@ -233,15 +227,12 @@ func TestRuleTestExtensionReadsFixtureContent(t *testing.T) {
 
 const vocabularyRuleset = `runtime: [go]
 modules:
-  vocabulary:
-    paths: ["ubiquitous-language.yaml"]
-contracts:
-  vocabulary:
-    invariants:
-      - id: "t:vocabulary/terms-carry-definitions"
-        kind: extension
-        files: "ubiquitous-language.yaml"
-        uses: require-defined-terms
+  vocabulary: ubiquitous-language.yaml
+rules:
+  vocabulary/terms-carry-definitions:
+    on: vocabulary
+    files: "ubiquitous-language.yaml"
+    uses: require-defined-terms
 `
 
 // fixtureVocabulary records one term without a definition. Its two
@@ -316,7 +307,7 @@ func TestVocabularyFindingAnchorsAtTheRecordedTerm(t *testing.T) {
 	write("rules.yaml", vocabularyRuleset)
 	write(".arclint/extensions/require_defined_terms.ts", requireDefinedTermsExtension)
 	write(".arclint/tests/vocabulary_term_anchor.yaml",
-		"rule: \"t:vocabulary/terms-carry-definitions\"\nfiles:\n"+
+		"rule: \"vocabulary/terms-carry-definitions\"\nfiles:\n"+
 			"  ubiquitous-language.yaml: |\n"+nestFixture(fixtureVocabulary)+
 			"expect:\n  - path: ubiquitous-language.yaml\n"+
 			fmt.Sprintf("    line: %d\n", wantLine)+

@@ -30,15 +30,12 @@ export default defineRule({
 `)
 	write(t, root, "rules.yaml", `runtime: [go]
 modules:
-  src:
-    paths: ["src/**"]
-contracts:
-  src:
-    invariants:
-      - id: "repo:src/report-outside"
-        kind: extension
-        files: "src/**/*.go"
-        uses: report-outside
+  src: src/**
+rules:
+  src/report-outside:
+    on: src
+    files: "src/**/*.go"
+    uses: report-outside
 `)
 	write(t, root, "src/ok.go", "package src\n")
 
@@ -70,10 +67,10 @@ contracts:
 		t.Fatalf("operational diagnostics = %+v, want exactly one error-severity Applicability breach", operational)
 	}
 	op := operational[0]
-	if op.Severity != "error" || op.RuleID != "repo:src/report-outside" || op.Path != "elsewhere/secret.go" || op.Line != 1 {
-		t.Errorf("operational = %+v, want error on repo:src/report-outside at elsewhere/secret.go:1", op)
+	if op.Severity != "error" || op.RuleID != "src/report-outside" || op.Path != "elsewhere/secret.go" || op.Line != 1 {
+		t.Errorf("operational = %+v, want error on src/report-outside at elsewhere/secret.go:1", op)
 	}
-	wantMsg := `rule repo:src/report-outside: extension "report-outside" reported "elsewhere/secret.go", which is outside the rule's applicability`
+	wantMsg := `rule src/report-outside: extension "report-outside" reported "elsewhere/secret.go", which is outside the rule's applicability`
 	if op.Message != wantMsg {
 		t.Errorf("message = %q\nwant    %q", op.Message, wantMsg)
 	}
@@ -81,7 +78,7 @@ contracts:
 	// read as a clean Evaluation for the in-scope file.
 	var sawFailedCoverage bool
 	for _, d := range diagnostics {
-		if d.Kind == "coverage" && d.RuleID == "repo:src/report-outside" &&
+		if d.Kind == "coverage" && d.RuleID == "src/report-outside" &&
 			strings.Contains(d.Message, "failed evaluation") {
 			sawFailedCoverage = true
 		}

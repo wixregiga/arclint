@@ -17,6 +17,7 @@ import (
 	"github.com/wixregiga/arclint/internal/delivery/cli"
 	clifactory "github.com/wixregiga/arclint/internal/delivery/cli/factory"
 	"github.com/wixregiga/arclint/internal/delivery/cli/reportfactory"
+	"github.com/wixregiga/arclint/internal/domain/rule"
 	markdownagents "github.com/wixregiga/arclint/internal/infrastructure/agents/markdown"
 	jsonbaseline "github.com/wixregiga/arclint/internal/infrastructure/baseline/json"
 	sobekextension "github.com/wixregiga/arclint/internal/infrastructure/extension/sobek"
@@ -69,7 +70,15 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	repository, err := yamlrule.NewRepository(absRulesPath, knowledge)
+	// Patterns a ruleset may extend come from the binary and from the
+	// repository's own .arclint/patterns; the rule repository resolves
+	// extends through both.
+	builtinPatterns := embeddedpattern.NewSource()
+	localPatterns, err := filesystempattern.NewSource(filepath.Join(root, ".arclint", "patterns"))
+	if err != nil {
+		return configError(err)
+	}
+	repository, err := yamlrule.NewRepository(absRulesPath, knowledge, builtinPatterns, localPatterns)
 	if err != nil {
 		return configError(err)
 	}
@@ -78,15 +87,19 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	extensions, err := sobekextension.NewEvaluator(root)
+	// Extension sources the extended Patterns distribute reach the host
+	// from the loaded ruleset, never from a copy on disk.
+	extensions, err := sobekextension.NewEvaluator(root, func() ([]rule.ConfiguredExtension, error) {
+		cfg, err := repository.ConfiguredRules()
+		if err != nil {
+			return nil, fmt.Errorf("pattern extensions: %w", err)
+		}
+		return cfg.Extensions, nil
+	})
 	if err != nil {
 		return configError(err)
 	}
 	baselines, err := jsonbaseline.NewStore(root)
-	if err != nil {
-		return configError(err)
-	}
-	patterns, err := filesystempattern.NewSource(filepath.Join(root, ".arclint", "patterns"))
 	if err != nil {
 		return configError(err)
 	}
@@ -111,7 +124,7 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	listPatterns, err := application.NewListPatterns(embeddedpattern.NewSource(), patterns)
+	listPatterns, err := application.NewListPatterns(builtinPatterns, localPatterns)
 	if err != nil {
 		return configError(err)
 	}
@@ -169,7 +182,7 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	initialize, err := application.NewInitializeRepository(scaffoldWriter, embeddedpattern.NewSource())
+	initialize, err := application.NewInitializeRepository(scaffoldWriter, builtinPatterns, localPatterns)
 	if err != nil {
 		return configError(err)
 	}
@@ -257,7 +270,11 @@ func runInit(args []string, renderer cli.Renderer, configError func(error) int) 
 	if err != nil {
 		return configError(err)
 	}
-	initialize, err := application.NewInitializeRepository(writer, embeddedpattern.NewSource())
+	localPatterns, err := filesystempattern.NewSource(filepath.Join(cwd, ".arclint", "patterns"))
+	if err != nil {
+		return configError(err)
+	}
+	initialize, err := application.NewInitializeRepository(writer, embeddedpattern.NewSource(), localPatterns)
 	if err != nil {
 		return configError(err)
 	}

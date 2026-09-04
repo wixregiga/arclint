@@ -165,8 +165,6 @@ type ObservedFile struct {
 // bytes for Extension evaluation (ctx.read). Production supplies a
 // lazy repository reader; Rule Tests supply fixture content directly
 // so temporary fixture materialization cannot invalidate later reads.
-//
-//nolint:iface // Implementation capability provided and consumed outside package.
 type Content interface {
 	Read(path string) (string, error)
 }

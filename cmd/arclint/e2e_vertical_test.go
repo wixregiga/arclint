@@ -79,19 +79,39 @@ func activeVerticalIDs(t *testing.T, root string) (code int, ids []string, messa
 	return code, ids, messages, out
 }
 
-func TestVerticalInitInstallsExtensions(t *testing.T) {
+// TestVerticalInitExtendsThePattern proves init --pattern writes an
+// adopting ruleset: the Pattern is extended by exact reference, every
+// Module it lists is bound, and no extension source is copied into the
+// repository because the Pattern supplies its own extensions in memory.
+func TestVerticalInitExtendsThePattern(t *testing.T) {
 	root := initVertical(t)
-	want := []string{
-		"vertical_forbid_imports.ts",
-		"vertical_repository_context.ts",
-		"vertical_repository_location.ts",
-		"vertical_shared_concerns.ts",
-		"vertical_usecase.ts",
+	ruleset, err := os.ReadFile(filepath.Join(root, "rules.yaml"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, name := range want {
-		if _, err := os.Stat(filepath.Join(root, ".arclint", "extensions", name)); err != nil {
-			t.Errorf("missing installed extension %s: %v", name, err)
+	for _, want := range []string{
+		"extends:\n  - pattern: arclint/vertical@0.1.0\n",
+		"    bind:\n",
+		"      domain:",
+		"      application:",
+		"      shared:",
+	} {
+		if !strings.Contains(string(ruleset), want) {
+			t.Errorf("init --pattern vertical ruleset misses %q:\n%s", want, ruleset)
 		}
+	}
+	if _, err := os.Stat(filepath.Join(root, ".arclint", "extensions")); !os.IsNotExist(err) {
+		t.Errorf("adopting a pattern must not write .arclint/extensions, stat err = %v", err)
+	}
+	stdout, stderr, code := runBin(t, root, os.Environ(), "rules")
+	if code != 0 {
+		t.Fatalf("rules exit %d\nstderr: %s", code, stderr)
+	}
+	if lines := strings.Split(strings.TrimSpace(stdout), "\n"); len(lines) != 16 {
+		t.Errorf("rules listed = %d, want the 16 the pattern distributes\n%s", len(lines), stdout)
+	}
+	if !strings.Contains(stdout, "arclint:application/usecase-contract") {
+		t.Errorf("distributed rules carry the pattern namespace:\n%s", stdout)
 	}
 }
 
@@ -109,8 +129,8 @@ func TestVerticalDomainNoContext(t *testing.T) {
 	writeCompliantVertical(t, root)
 	write(t, root, "internal/order/domain/model.go", "package domain\n\nimport \"context\"\n\nfunc unused(_ context.Context) {}\n")
 	code, ids, _, stdout := activeVerticalIDs(t, root)
-	if code != 1 || len(ids) != 1 || ids[0] != "vertical:domain/no-context" {
-		t.Errorf("exit %d ids %v, want only vertical:domain/no-context\n%s", code, ids, stdout)
+	if code != 1 || len(ids) != 1 || ids[0] != "arclint:domain/no-context" {
+		t.Errorf("exit %d ids %v, want only arclint:domain/no-context\n%s", code, ids, stdout)
 	}
 }
 
@@ -119,8 +139,8 @@ func TestVerticalDomainNoIO(t *testing.T) {
 	writeCompliantVertical(t, root)
 	write(t, root, "internal/order/domain/model.go", "package domain\n\nimport \"os\"\n")
 	code, ids, _, stdout := activeVerticalIDs(t, root)
-	if code != 1 || len(ids) != 1 || ids[0] != "vertical:domain/no-io" {
-		t.Errorf("exit %d ids %v, want only vertical:domain/no-io\n%s", code, ids, stdout)
+	if code != 1 || len(ids) != 1 || ids[0] != "arclint:domain/no-io" {
+		t.Errorf("exit %d ids %v, want only arclint:domain/no-io\n%s", code, ids, stdout)
 	}
 }
 
@@ -134,8 +154,8 @@ type CustomerRepository interface {
 }
 `)
 	code, ids, _, stdout := activeVerticalIDs(t, root)
-	if code != 1 || len(ids) != 1 || ids[0] != "vertical:repositories/application-only" {
-		t.Errorf("exit %d ids %v, want only vertical:repositories/application-only\n%s", code, ids, stdout)
+	if code != 1 || len(ids) != 1 || ids[0] != "arclint:repositories/application-only" {
+		t.Errorf("exit %d ids %v, want only arclint:repositories/application-only\n%s", code, ids, stdout)
 	}
 }
 
@@ -149,8 +169,8 @@ type OrderRepository interface {
 }
 `)
 	code, ids, messages, stdout := activeVerticalIDs(t, root)
-	if code != 1 || len(ids) != 1 || ids[0] != "vertical:application/repository-context" {
-		t.Errorf("exit %d ids %v, want only vertical:application/repository-context\n%s", code, ids, stdout)
+	if code != 1 || len(ids) != 1 || ids[0] != "arclint:application/repository-context" {
+		t.Errorf("exit %d ids %v, want only arclint:application/repository-context\n%s", code, ids, stdout)
 	}
 	if len(messages) != 1 || !strings.Contains(messages[0], `Repository method "OrderRepository.Find" must take ctx context.Context as its first parameter`) {
 		t.Errorf("message = %v", messages)
@@ -172,8 +192,8 @@ func CreateOrder(ctx context.Context, cmd CreateOrderCommand) error {
 }
 `)
 	code, ids, messages, stdout := activeVerticalIDs(t, root)
-	if code != 1 || len(ids) != 1 || ids[0] != "vertical:application/usecase-contract" {
-		t.Errorf("exit %d ids %v, want only vertical:application/usecase-contract\n%s", code, ids, stdout)
+	if code != 1 || len(ids) != 1 || ids[0] != "arclint:application/usecase-contract" {
+		t.Errorf("exit %d ids %v, want only arclint:application/usecase-contract\n%s", code, ids, stdout)
 	}
 	if len(messages) != 1 || messages[0] != `Use case "CreateOrder" must be declared in "create_order.go"` {
 		t.Errorf("messages = %v", messages)
@@ -188,8 +208,8 @@ func TestVerticalUseCaseBadSignature(t *testing.T) {
 func CreateOrder() error { return nil }
 `)
 	code, ids, messages, stdout := activeVerticalIDs(t, root)
-	if code != 1 || len(ids) != 1 || ids[0] != "vertical:application/usecase-contract" {
-		t.Errorf("exit %d ids %v, want only vertical:application/usecase-contract\n%s", code, ids, stdout)
+	if code != 1 || len(ids) != 1 || ids[0] != "arclint:application/usecase-contract" {
+		t.Errorf("exit %d ids %v, want only arclint:application/usecase-contract\n%s", code, ids, stdout)
 	}
 	if len(messages) != 1 || messages[0] != `Use case "CreateOrder" must have signature CreateOrder(ctx context.Context, cmd CreateOrderCommand) error` {
 		t.Errorf("messages = %v", messages)
@@ -201,8 +221,8 @@ func TestVerticalSharedUnknownConcern(t *testing.T) {
 	writeCompliantVertical(t, root)
 	write(t, root, "internal/shared/utils/x.go", "package utils\n")
 	code, ids, _, stdout := activeVerticalIDs(t, root)
-	if code != 1 || len(ids) != 1 || ids[0] != "vertical:shared/concerns" {
-		t.Errorf("exit %d ids %v, want only vertical:shared/concerns\n%s", code, ids, stdout)
+	if code != 1 || len(ids) != 1 || ids[0] != "arclint:shared/concerns" {
+		t.Errorf("exit %d ids %v, want only arclint:shared/concerns\n%s", code, ids, stdout)
 	}
 }
 
@@ -211,20 +231,30 @@ func TestVerticalSharedDirectFile(t *testing.T) {
 	writeCompliantVertical(t, root)
 	write(t, root, "internal/shared/x.go", "package shared\n")
 	code, ids, _, stdout := activeVerticalIDs(t, root)
-	if code != 1 || len(ids) != 1 || ids[0] != "vertical:shared/concerns" {
-		t.Errorf("exit %d ids %v, want only vertical:shared/concerns\n%s", code, ids, stdout)
+	if code != 1 || len(ids) != 1 || ids[0] != "arclint:shared/concerns" {
+		t.Errorf("exit %d ids %v, want only arclint:shared/concerns\n%s", code, ids, stdout)
 	}
 }
 
-func TestVerticalMissingExtensionFailsLoudly(t *testing.T) {
-	root := initVertical(t)
-	writeCompliantVertical(t, root)
-	if err := os.Remove(filepath.Join(root, ".arclint", "extensions", "vertical_usecase.ts")); err != nil {
-		t.Fatal(err)
-	}
+// TestPatternExtensionsSuppliedOnlyWhenExtended pins the supply
+// boundary: a Pattern's extensions exist for a repository only through
+// extends. A local Rule naming one of them without extending the
+// Pattern is a loud configuration error.
+func TestPatternExtensionsSuppliedOnlyWhenExtended(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "go.mod", "module fixture\n\ngo 1.22\n")
+	write(t, root, "rules.yaml", `runtime: [go]
+modules:
+  application: internal/*/application/**
+rules:
+  application/usecase-contract:
+    on: application
+    uses: vertical/usecase
+`)
+	write(t, root, "internal/order/application/create_order.go", "package application\n")
 	stdout, stderr, code := runBin(t, root, os.Environ(), "check")
 	if code != 2 {
-		t.Fatalf("missing extension must be configuration error, exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+		t.Fatalf("unregistered uses must be a configuration error, exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
 	}
 	if !strings.Contains(stderr, `no extension registers rule "vertical/usecase"`) &&
 		!strings.Contains(stdout, `no extension registers rule "vertical/usecase"`) {

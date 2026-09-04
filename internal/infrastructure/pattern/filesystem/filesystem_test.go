@@ -16,12 +16,12 @@ pattern:
   version: 1.0.0
   coverage: [go]
 modules:
-  core:
-    paths: ["internal/core/**"]
-contracts:
-  core:
-    consumes:
-      id: "arclint:core/stdlib-only"
+  core: "The core of the sample."
+rules:
+  core/stdlib-only:
+    description: "The core imports no other Module and no third-party package."
+    on: core
+    imports:
       internal: []
       external: forbid
 `
@@ -57,6 +57,12 @@ func TestPatternsLoadsValidatedPackages(t *testing.T) {
 	if ref, ok := rules[0].Provenance(); !ok || ref.Name() != "sample" {
 		t.Errorf("carried rule lacks pattern provenance")
 	}
+	if rules[0].ID().Qualified() != "arclint:core/stdlib-only" {
+		t.Errorf("rule id = %q, want the local id qualified with the pattern namespace", rules[0].ID().Qualified())
+	}
+	if mods := p.Modules(); len(mods) != 1 || mods[0].Name().String() != "core" || mods[0].Description() != "The core of the sample." {
+		t.Errorf("modules = %+v", mods)
+	}
 }
 
 func TestPatternsAbsenceAndInvalidity(t *testing.T) {
@@ -74,7 +80,7 @@ func TestPatternsAbsenceAndInvalidity(t *testing.T) {
 	if err := os.MkdirAll(pkg, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	headerless := "modules:\n  core:\n    paths: [\"core/**\"]\n"
+	headerless := "modules:\n  core: \"core/**\"\n"
 	if err := os.WriteFile(filepath.Join(pkg, filesystempattern.FileName), []byte(headerless), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -84,6 +90,8 @@ func TestPatternsAbsenceAndInvalidity(t *testing.T) {
 	}
 	if _, err := broken.Patterns(); err == nil {
 		t.Errorf("a pattern file without an identity header must be an error, never skipped")
+	} else if !strings.Contains(err.Error(), "missing pattern header") {
+		t.Errorf("headerless error = %v", err)
 	}
 }
 

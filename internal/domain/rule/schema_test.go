@@ -52,76 +52,128 @@ func TestSchemaPublishesDomainEnums(t *testing.T) {
 	}
 	assertStrings(t, "unknown_imports enum",
 		dig(t, doc, "properties", "scan", "properties", "unknown_imports", "enum"), wantUnknown)
+	targets := []string{"go", "ts", "py"}
 	assertStrings(t, "runtime enum",
-		dig(t, doc, "properties", "runtime", "items", "enum"), []string{"go", "ts", "py"})
-	languages := make([]string, 0, len(rule.Languages()))
-	for _, l := range rule.Languages() {
-		languages = append(languages, string(l))
-	}
+		dig(t, doc, "properties", "runtime", "items", "enum"), targets)
+	// One spelling of language targets across the format: coverage in a
+	// Pattern file accepts exactly what runtime accepts.
 	assertStrings(t, "pattern coverage enum",
-		dig(t, doc, "properties", "pattern", "properties", "coverage", "items", "enum"), languages)
+		dig(t, doc, "properties", "pattern", "properties", "coverage", "items", "enum"), targets)
 }
 
 // TestSchemaCoversEveryRuleType proves each published Rule Type owns
-// exactly one shape in the document schema: consumes as the contract
-// key, the invariant kinds, and the dependency kinds by const.
+// exactly one shape in the document schema, named after the Type and
+// requiring the Type's one assertion key, and that the rule entry is
+// the choice among those shapes plus the Override.
 func TestSchemaCoversEveryRuleType(t *testing.T) {
 	doc := schemaTree(t)
-	kindDefs := map[rule.Type]string{
-		rule.TypeStructure:    "structureInvariant",
-		rule.TypeNaming:       "namingInvariant",
-		rule.TypeInvariants:   "invariantsInvariant",
-		rule.TypeExtension:    "extensionInvariant",
-		rule.TypeLayers:       "layersDependency",
-		rule.TypeProtected:    "protectedDependency",
-		rule.TypeIndependence: "independenceDependency",
-		rule.TypeAcyclic:      "acyclicDependency",
+	alternatives, ok := dig(t, doc, "$defs", "rule", "oneOf").([]any)
+	if !ok || len(alternatives) != len(rule.Types())+1 {
+		t.Fatalf("rule oneOf = %v, want one shape per Type plus the override", alternatives)
 	}
-	for _, typ := range rule.Types() {
-		if typ == rule.TypeConsumes {
-			if _, ok := dig(t, doc, "$defs", "consumes").(map[string]any); !ok {
-				t.Errorf("missing consumes definition")
+	for i, typ := range rule.Types() {
+		def := string(typ) + "Rule"
+		if ref := alternatives[i].(map[string]any)["$ref"]; ref != "#/$defs/"+def {
+			t.Errorf("rule oneOf[%d] = %v, want %s", i, ref, def)
+		}
+		required, ok := dig(t, doc, "$defs", def, "required").([]any)
+		if !ok || !containsString(required, typ.AssertionKey()) {
+			t.Errorf("%s required = %v, want the assertion key %q", def, required, typ.AssertionKey())
+		}
+		props := dig(t, doc, "$defs", def, "properties").(map[string]any)
+		if _, ok := props[typ.AssertionKey()]; !ok {
+			t.Errorf("%s lacks its assertion key %q", def, typ.AssertionKey())
+		}
+		for _, other := range rule.AssertionKeys() {
+			if other == typ.AssertionKey() {
+				continue
 			}
-			continue
+			if _, ok := props[other]; ok {
+				t.Errorf("%s accepts a second assertion key %q", def, other)
+			}
 		}
-		def, ok := kindDefs[typ]
-		if !ok {
-			t.Errorf("rule type %q has no schema shape", typ)
-			continue
+		_, hasOn := props["on"]
+		switch typ.Scope() {
+		case rule.ScopeModules, rule.ScopeOneModule:
+			if !hasOn || !containsString(required, "on") {
+				t.Errorf("%s must require on", def)
+			}
+		case rule.ScopeRepository:
+			if hasOn {
+				t.Errorf("%s must not accept on", def)
+			}
+		case rule.ScopeModulesOrRepository:
+			if !hasOn || containsString(required, "on") {
+				t.Errorf("%s must accept an optional on", def)
+			}
 		}
-		if got := dig(t, doc, "$defs", def, "properties", "kind", "const"); got != string(typ) {
-			t.Errorf("%s kind const = %v, want %q", def, got, typ)
+		if _, hasFiles := props["files"]; hasFiles != typ.AcceptsFiles() {
+			t.Errorf("%s files = %v, want %v", def, hasFiles, typ.AcceptsFiles())
 		}
+	}
+	if ref := alternatives[len(alternatives)-1].(map[string]any)["$ref"]; ref != "#/$defs/override" {
+		t.Errorf("rule oneOf last = %v, want the override", ref)
+	}
+	overrideProps := dig(t, doc, "$defs", "override", "properties").(map[string]any)
+	for _, key := range rule.AssertionKeys() {
+		if _, ok := overrideProps[key]; ok {
+			t.Errorf("override must not accept assertion key %q", key)
+		}
+	}
+	if _, ok := overrideProps["description"]; ok {
+		t.Errorf("override must not accept a description")
 	}
 }
 
 // TestSchemaRejectsUnknownKeys proves the schema mirrors the loader's
 // strict decoding: every object shape closes with
-// additionalProperties: false and requires an explicit Rule ID where it
-// describes a Rule.
+// additionalProperties: false, and the Pattern branch forbids the
+// repository-only keys.
 func TestSchemaRejectsUnknownKeys(t *testing.T) {
 	doc := schemaTree(t)
 	if got := dig(t, doc, "additionalProperties"); got != false {
 		t.Errorf("document additionalProperties = %v, want false", got)
 	}
-	ruleShapes := []string{
-		"consumes", "structureInvariant", "namingInvariant", "invariantsInvariant", "extensionInvariant",
-		"layersDependency", "protectedDependency", "acyclicDependency",
+	shapes := []string{"override", "exclusion", "suppression"}
+	for _, typ := range rule.Types() {
+		shapes = append(shapes, string(typ)+"Rule")
 	}
-	for _, name := range ruleShapes {
+	for _, name := range shapes {
 		if got := dig(t, doc, "$defs", name, "additionalProperties"); got != false {
 			t.Errorf("%s additionalProperties = %v, want false", name, got)
 		}
-		required, ok := dig(t, doc, "$defs", name, "required").([]any)
-		if !ok || len(required) == 0 || required[0] != "id" {
-			t.Errorf("%s required = %v, want id first", name, required)
-		}
 	}
-	for _, name := range []string{"pattern", "scan", "repository"} {
+	for _, name := range []string{"pattern", "scan"} {
 		if got := dig(t, doc, "properties", name, "additionalProperties"); got != false {
 			t.Errorf("properties.%s additionalProperties = %v, want false", name, got)
 		}
 	}
+	if got := dig(t, doc, "properties", "extends", "items", "additionalProperties"); got != false {
+		t.Errorf("extends item additionalProperties = %v, want false", got)
+	}
+	for _, key := range []string{"runtime", "scan", "extends"} {
+		if got := dig(t, doc, "then", "properties", key); got != false {
+			t.Errorf("pattern branch %s = %v, want false", key, got)
+		}
+	}
+	patternRules, ok := dig(t, doc, "then", "properties", "rules", "additionalProperties", "oneOf").([]any)
+	if !ok || len(patternRules) != len(rule.Types()) {
+		t.Fatalf("pattern branch rules oneOf = %v, want one alternative per Type and no override", patternRules)
+	}
+	for _, alt := range patternRules {
+		if ref := alt.(map[string]any)["$ref"]; ref == "#/$defs/override" {
+			t.Errorf("a pattern file must not accept an override")
+		}
+	}
+}
+
+func containsString(list []any, want string) bool {
+	for _, v := range list {
+		if v == want {
+			return true
+		}
+	}
+	return false
 }
 
 func schemaTree(t *testing.T) map[string]any {

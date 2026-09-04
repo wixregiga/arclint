@@ -1,6 +1,6 @@
 # Conforming case: report_factory selects the three report adapters and
 # the delivery-owned Report port; no external imports.
-rule: "arclint:delivery/report-factory-dependencies"
+rule: "delivery/report-factory-dependencies"
 files:
   go.mod: |
     module fixture

@@ -17,6 +17,7 @@ import (
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/infrastructure/language/fanout"
 )
 
 // Producer implements the observation FactProducer seam for Python.
@@ -30,7 +31,9 @@ func (Producer) Language() rule.Language { return rule.LanguagePython }
 
 // Facts analyzes every .py file among the observed files, producing
 // the requested fact classes: imports always, declarations (pinned
-// tree-sitter grammar, deterministic) only when asked for.
+// tree-sitter grammar, deterministic) only when asked for. Files are
+// analyzed in parallel: the resolver is read-only once built and every
+// parse owns a fresh tree-sitter parser.
 func (Producer) Facts(root string, files []conformance.ObservedFile, requested []rule.Fact) (map[string]conformance.LanguageFacts, error) {
 	wantDeclarations := false
 	wantCalls := false
@@ -43,17 +46,19 @@ func (Producer) Facts(root string, files []conformance.ObservedFile, requested [
 		}
 	}
 	res := newResolver(root, files)
-	out := map[string]conformance.LanguageFacts{}
-	for _, f := range files {
-		if rule.LanguageOf(f.Path) != rule.LanguagePython {
-			continue
+	return fanout.Analyze(files, analyzable, func() fanout.Analyzer {
+		ps := newParsers()
+		return func(rel string) conformance.LanguageFacts {
+			return analyzeFile(ps, res, root, rel, wantDeclarations, wantCalls)
 		}
-		out[f.Path] = analyzeFile(res, root, f.Path, wantDeclarations, wantCalls)
-	}
-	return out, nil
+	}), nil
 }
 
-func analyzeFile(res *resolver, root, rel string, wantDeclarations, wantCalls bool) conformance.LanguageFacts {
+// analyzable selects the files this producer owns: exactly what the
+// target vocabulary assigns Python.
+func analyzable(rel string) bool { return rule.LanguageOf(rel) == rule.LanguagePython }
+
+func analyzeFile(ps *parsers, res *resolver, root, rel string, wantDeclarations, wantCalls bool) conformance.LanguageFacts {
 	facts := conformance.LanguageFacts{Language: rule.LanguagePython, ImportsAvailable: true}
 	src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
 	if err != nil {
@@ -71,7 +76,7 @@ func analyzeFile(res *resolver, root, rel string, wantDeclarations, wantCalls bo
 	}
 	// A strict-parse failure yields honest fact absence without
 	// poisoning the scanner import view.
-	df := extractDeclarations(src)
+	df := extractDeclarations(ps, src)
 	if df.ParseError != "" {
 		return facts
 	}

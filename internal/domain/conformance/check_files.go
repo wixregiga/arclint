@@ -61,6 +61,66 @@ func evaluateNaming(r rule.Rule, mem membership) ([]Evaluation, error) {
 	return appendNotApplicable(out, r, excluded)
 }
 
+// evaluateContent judges every selected file line by line against the
+// Rule's forbidden pattern. Each matching line is one Violation anchored
+// at that line; a file that cannot be read evaluates unsupported rather
+// than silently passing.
+func evaluateContent(r rule.Rule, mem membership, obs Observations) ([]Evaluation, error) {
+	p, ok := r.Params().(rule.ContentParams)
+	if !ok {
+		return nil, fmt.Errorf("rule %s: content rule with %T params", r.ID(), r.Params())
+	}
+	re, err := p.Regexp()
+	if err != nil {
+		return nil, fmt.Errorf("rule %s: %w", r.ID(), err)
+	}
+	content := obs.Content()
+	selected, excluded := partitionFiles(r, mem)
+	var out []Evaluation
+	for _, f := range selected {
+		subject, err := rule.FileSubject(f)
+		if err != nil {
+			return nil, fmt.Errorf("content: %w", err)
+		}
+		if content == nil {
+			e, err := simpleEvaluation(r, subject, OutcomeUnsupported)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, e)
+			continue
+		}
+		text, err := content.Read(f)
+		if err != nil {
+			e, err := simpleEvaluation(r, subject, OutcomeUnsupported)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, e)
+			continue
+		}
+		var vs []Violation
+		for i, line := range strings.Split(text, "\n") {
+			if !re.MatchString(line) {
+				continue
+			}
+			v, err := newViolation(r, subject, f, i+1,
+				fmt.Sprintf("forbidden content matching /%s/", p.Forbid),
+				"remove the content or relocate it outside this rule's scope")
+			if err != nil {
+				return nil, err
+			}
+			vs = append(vs, v)
+		}
+		e, err := completeEvaluation(r, subject, vs)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return appendNotApplicable(out, r, excluded)
+}
+
 // evaluateStructure judges each selected Module: every require glob
 // must match a member file, no member file may match a forbid glob.
 func evaluateStructure(r rule.Rule, mem membership) ([]Evaluation, error) {
