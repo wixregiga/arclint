@@ -1,30 +1,46 @@
 {
   "$defs": {
-    "acyclicDependency": {
+    "acyclicRule": {
       "additionalProperties": false,
       "description": "An acyclic Rule: forbids dependency cycles among declared Modules.",
       "properties": {
-        "id": {
-          "$ref": "#/$defs/ruleID"
+        "acyclic": {
+          "description": "Cycle scope: a list of declared Modules, or an empty mapping for every declared Module.",
+          "oneOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/moduleName"
+              },
+              "minItems": 2,
+              "type": "array",
+              "uniqueItems": true
+            },
+            {
+              "additionalProperties": false,
+              "properties": {},
+              "type": "object"
+            }
+          ]
         },
-        "kind": {
-          "const": "acyclic"
+        "description": {
+          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "type": "string"
         },
-        "modules": {
-          "description": "Cycle scope; absent means every declared Module.",
-          "items": {
-            "$ref": "#/$defs/moduleName"
-          },
-          "type": "array",
-          "uniqueItems": true
+        "disable": {
+          "$ref": "#/$defs/reason"
+        },
+        "exclude": {
+          "$ref": "#/$defs/exclusion"
         },
         "severity": {
           "$ref": "#/$defs/severity"
+        },
+        "suppress": {
+          "$ref": "#/$defs/suppression"
         }
       },
       "required": [
-        "id",
-        "kind"
+        "acyclic"
       ],
       "type": "object"
     },
@@ -33,143 +49,171 @@
       "pattern": "^\\s*(PascalCase|camelCase|kebab-case|snake_case|regex:[^|]*)(\\s*\\|\\s*(PascalCase|camelCase|kebab-case|snake_case|regex:[^|]*))*\\s*$",
       "type": "string"
     },
-    "consumes": {
+    "consumesRule": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "required": [
-            "internal"
-          ]
+      "description": "An imports Rule: states what a Module may import: declared Modules by allow-list, external and standard-library imports by policy.",
+      "properties": {
+        "description": {
+          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "type": "string"
         },
-        {
+        "disable": {
+          "$ref": "#/$defs/reason"
+        },
+        "exclude": {
+          "$ref": "#/$defs/exclusion"
+        },
+        "imports": {
+          "additionalProperties": false,
+          "anyOf": [
+            {
+              "required": [
+                "internal"
+              ]
+            },
+            {
+              "properties": {
+                "external": {
+                  "const": "forbid"
+                }
+              },
+              "required": [
+                "external"
+              ]
+            },
+            {
+              "properties": {
+                "stdlib": {
+                  "const": "forbid"
+                }
+              },
+              "required": [
+                "stdlib"
+              ]
+            }
+          ],
+          "description": "What the Module may import. At least one restriction must be declared: an internal allow-list, external: forbid, or stdlib: forbid.",
           "properties": {
             "external": {
-              "const": "forbid"
-            }
-          },
-          "required": [
-            "external"
-          ]
-        },
-        {
-          "properties": {
+              "$ref": "#/$defs/importPolicy"
+            },
+            "internal": {
+              "description": "Declared Modules this Module may import; absent means unrestricted, empty means none. The owning Module is always permitted implicitly.",
+              "items": {
+                "$ref": "#/$defs/moduleName"
+              },
+              "type": "array",
+              "uniqueItems": true
+            },
             "stdlib": {
-              "const": "forbid"
+              "$ref": "#/$defs/importPolicy"
             }
           },
-          "required": [
-            "stdlib"
-          ]
-        }
-      ],
-      "description": "A consumes Rule: what the contract's Module may import. At least one restriction must be declared — an internal allow-list, external: forbid, or stdlib: forbid.",
-      "properties": {
-        "external": {
-          "$ref": "#/$defs/importPolicy"
+          "type": "object"
         },
-        "id": {
-          "$ref": "#/$defs/ruleID"
-        },
-        "internal": {
-          "description": "Declared Modules this Module may import; absent means unrestricted, empty means none. The owning Module is always permitted implicitly.",
-          "items": {
-            "$ref": "#/$defs/moduleName"
-          },
-          "type": "array",
-          "uniqueItems": true
+        "on": {
+          "$ref": "#/$defs/moduleNames",
+          "description": "The declared Module or Modules the Rule judges."
         },
         "severity": {
           "$ref": "#/$defs/severity"
         },
-        "stdlib": {
-          "$ref": "#/$defs/importPolicy"
+        "suppress": {
+          "$ref": "#/$defs/suppression"
         }
       },
       "required": [
-        "id"
+        "on",
+        "imports"
       ],
       "type": "object"
     },
-    "dependency": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/layersDependency"
+    "contentRule": {
+      "additionalProperties": false,
+      "description": "A content Rule: forbids lines matching a regular expression in the selected files.",
+      "properties": {
+        "content": {
+          "additionalProperties": false,
+          "description": "Content no selected file may contain.",
+          "properties": {
+            "forbid": {
+              "description": "RE2 regular expression; every matching line is one Violation.",
+              "pattern": "\\S",
+              "type": "string"
+            }
+          },
+          "required": [
+            "forbid"
+          ],
+          "type": "object"
         },
-        {
-          "$ref": "#/$defs/protectedDependency"
+        "description": {
+          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "type": "string"
         },
-        {
-          "$ref": "#/$defs/independenceDependency"
+        "disable": {
+          "$ref": "#/$defs/reason"
         },
-        {
-          "$ref": "#/$defs/acyclicDependency"
+        "exclude": {
+          "$ref": "#/$defs/exclusion"
+        },
+        "files": {
+          "$ref": "#/$defs/globs",
+          "description": "Narrows the files judged; absent means every selected file."
+        },
+        "on": {
+          "$ref": "#/$defs/moduleNames",
+          "description": "The declared Module or Modules the Rule judges; absent means the whole repository."
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "suppress": {
+          "$ref": "#/$defs/suppression"
         }
-      ]
+      },
+      "required": [
+        "content"
+      ],
+      "type": "object"
+    },
+    "exclusion": {
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "paths"
+          ]
+        },
+        {
+          "required": [
+            "modules"
+          ]
+        }
+      ],
+      "description": "Removes paths or Modules from what the Rule judges; excluded subjects evaluate not applicable.",
+      "properties": {
+        "modules": {
+          "$ref": "#/$defs/moduleNames",
+          "description": "Modules the Rule no longer judges."
+        },
+        "paths": {
+          "$ref": "#/$defs/globs",
+          "description": "Files the Rule no longer judges."
+        },
+        "reason": {
+          "$ref": "#/$defs/reason"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "type": "object"
     },
     "expandedGlob": {
       "description": "Structure glob that may carry {name:\u003ccase\u003e} placeholders, each resolving once per recorded term; cases are PascalCase, camelCase, flatcase, kebab-case, snake_case.",
       "pattern": "^([^/{}]|\\{name:(PascalCase|camelCase|flatcase|kebab-case|snake_case)\\})+(/([^/{}]|\\{name:(PascalCase|camelCase|flatcase|kebab-case|snake_case)\\})+)*$",
       "type": "string"
-    },
-    "expandedStructureInvariant": {
-      "additionalProperties": false,
-      "anyOf": [
-        {
-          "properties": {
-            "require": {
-              "minItems": 1
-            }
-          },
-          "required": [
-            "require"
-          ]
-        },
-        {
-          "properties": {
-            "forbid": {
-              "minItems": 1
-            }
-          },
-          "required": [
-            "forbid"
-          ]
-        }
-      ],
-      "description": "An expanded structure Rule: one universally quantified claim whose require/forbid globs derive from a recorded Ubiquitous Language collection, {name:\u003ccase\u003e} placeholders resolving once per recorded term. A project recording nothing derives no obligations; the Rule exists and says so.",
-      "properties": {
-        "each": {
-          "$ref": "#/$defs/expansionSource"
-        },
-        "forbid": {
-          "description": "No member file may match any derived glob.",
-          "items": {
-            "$ref": "#/$defs/expandedGlob"
-          },
-          "type": "array"
-        },
-        "id": {
-          "$ref": "#/$defs/ruleID"
-        },
-        "kind": {
-          "const": "structure"
-        },
-        "require": {
-          "description": "Each derived glob must match at least one member file.",
-          "items": {
-            "$ref": "#/$defs/expandedGlob"
-          },
-          "type": "array"
-        },
-        "severity": {
-          "$ref": "#/$defs/severity"
-        }
-      },
-      "required": [
-        "id",
-        "kind",
-        "each"
-      ],
-      "type": "object"
     },
     "expansionSource": {
       "description": "Recorded Ubiquitous Language collection an expanded structure Rule derives its globs from.",
@@ -184,25 +228,36 @@
         "domain.specifications"
       ]
     },
-    "extensionInvariant": {
+    "extensionRule": {
       "additionalProperties": false,
-      "description": "An extension Rule: delegates enforcement to a named Extension through the sandboxed SDK.",
+      "description": "A uses Rule: delegates enforcement to a named Extension through the sandboxed SDK.",
       "properties": {
+        "description": {
+          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "type": "string"
+        },
+        "disable": {
+          "$ref": "#/$defs/reason"
+        },
+        "exclude": {
+          "$ref": "#/$defs/exclusion"
+        },
         "files": {
-          "$ref": "#/$defs/glob",
-          "description": "Narrows the member files judged; absent means all."
+          "$ref": "#/$defs/globs",
+          "description": "Narrows the files judged; absent means every selected file."
         },
-        "id": {
-          "$ref": "#/$defs/ruleID"
-        },
-        "kind": {
-          "const": "extension"
+        "on": {
+          "$ref": "#/$defs/moduleNames",
+          "description": "The declared Module or Modules the Rule judges; absent means the whole repository."
         },
         "severity": {
           "$ref": "#/$defs/severity"
         },
+        "suppress": {
+          "$ref": "#/$defs/suppression"
+        },
         "uses": {
-          "description": "The extension rule name registered under .arclint/extensions.",
+          "description": "The extension rule name registered under .arclint/extensions or distributed by an extended Pattern.",
           "pattern": "\\S",
           "type": "string"
         },
@@ -212,8 +267,6 @@
         }
       },
       "required": [
-        "id",
-        "kind",
         "uses"
       ],
       "type": "object"
@@ -223,6 +276,22 @@
       "pattern": "^[^/{}]+(/[^/{}]+)*$",
       "type": "string"
     },
+    "globs": {
+      "description": "One glob or a non-empty list of globs.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/glob"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/glob"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      ]
+    },
     "importPolicy": {
       "default": "allow",
       "description": "Policy for one import class.",
@@ -231,12 +300,22 @@
         "forbid"
       ]
     },
-    "independenceDependency": {
+    "independenceRule": {
       "additionalProperties": false,
-      "description": "An independence Rule: sibling Folders selected by the globs may not import each other.",
+      "description": "An independent Rule: forbids imports between sibling Folders selected by globs.",
       "properties": {
-        "folders": {
-          "description": "Globs selecting sibling Folders; at least one, no duplicates.",
+        "description": {
+          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "type": "string"
+        },
+        "disable": {
+          "$ref": "#/$defs/reason"
+        },
+        "exclude": {
+          "$ref": "#/$defs/exclusion"
+        },
+        "independent": {
+          "description": "Globs selecting sibling Folders that may not import each other; at least one, no duplicates.",
           "items": {
             "$ref": "#/$defs/glob"
           },
@@ -244,83 +323,74 @@
           "type": "array",
           "uniqueItems": true
         },
-        "id": {
-          "$ref": "#/$defs/ruleID"
-        },
-        "kind": {
-          "const": "independence"
-        },
         "severity": {
           "$ref": "#/$defs/severity"
+        },
+        "suppress": {
+          "$ref": "#/$defs/suppression"
         }
       },
       "required": [
-        "id",
-        "kind",
-        "folders"
+        "independent"
       ],
       "type": "object"
     },
-    "invariant": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/structureInvariant"
-        },
-        {
-          "$ref": "#/$defs/expandedStructureInvariant"
-        },
-        {
-          "$ref": "#/$defs/namingInvariant"
-        },
-        {
-          "$ref": "#/$defs/invariantsInvariant"
-        },
-        {
-          "$ref": "#/$defs/extensionInvariant"
-        }
-      ]
-    },
-    "invariantsInvariant": {
+    "invariantsRule": {
       "additionalProperties": false,
-      "description": "An invariants Rule: recorded domain contracts are visible in source as named methods called from their join points.",
+      "description": "An invariants Rule: requires recorded domain contracts to be visible in source as named methods called from their join points.",
       "properties": {
-        "id": {
-          "$ref": "#/$defs/ruleID"
+        "description": {
+          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "type": "string"
         },
-        "kind": {
-          "const": "invariants"
+        "disable": {
+          "$ref": "#/$defs/reason"
         },
-        "severity": {
-          "$ref": "#/$defs/severity"
+        "exclude": {
+          "$ref": "#/$defs/exclusion"
         },
-        "with": {
+        "invariants": {
           "additionalProperties": false,
-          "description": "Optional evaluation posture.\n\n- closed: false (default): child constructors may return errors.\n- closed: true: every exported error-returning function in the owner's files must call the cluster method.",
+          "description": "Evaluation posture. closed: false (default): child constructors may return errors. closed: true: every exported error-returning function in the owner's files must call the cluster method.",
           "properties": {
             "closed": {
               "default": false,
-              "description": "When true, extra exported error-returning functions that do not call the cluster method fail.\n\nDefault: false.",
+              "description": "When true, extra exported error-returning functions that do not call the cluster method fail. Default: false.",
               "type": "boolean"
             }
           },
           "type": "object"
+        },
+        "on": {
+          "$ref": "#/$defs/moduleNames",
+          "description": "The declared Module or Modules the Rule judges."
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "suppress": {
+          "$ref": "#/$defs/suppression"
         }
       },
       "required": [
-        "id",
-        "kind"
+        "on",
+        "invariants"
       ],
       "type": "object"
     },
-    "layersDependency": {
+    "layersRule": {
       "additionalProperties": false,
       "description": "A layers Rule: orders Modules highest first; a Module may import same or lower layers, never higher.",
       "properties": {
-        "id": {
-          "$ref": "#/$defs/ruleID"
+        "description": {
+          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "type": "string"
         },
-        "kind": {
-          "const": "layers"
+        "disable": {
+          "$ref": "#/$defs/reason"
+        },
+        "exclude": {
+          "$ref": "#/$defs/exclusion"
         },
         "layers": {
           "description": "Modules ordered highest first; at least two, no duplicates.",
@@ -333,83 +403,292 @@
         },
         "severity": {
           "$ref": "#/$defs/severity"
+        },
+        "suppress": {
+          "$ref": "#/$defs/suppression"
         }
       },
       "required": [
-        "id",
-        "kind",
         "layers"
       ],
       "type": "object"
     },
+    "module": {
+      "description": "One Module: a glob, a list of globs, or an object in a repository ruleset; a description or an object in a Pattern file.",
+      "oneOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/glob"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "description": "Authoring description of the Module.",
+              "type": "string"
+            },
+            "paths": {
+              "$ref": "#/$defs/globs",
+              "description": "Membership selectors; a glob naming a directory claims its whole subtree."
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
     "moduleName": {
-      "description": "Repository-local Module name: a-z 0-9 _ -.",
+      "description": "Module name: a-z 0-9 _ -.",
       "pattern": "^[a-z0-9_-]+$",
       "type": "string"
     },
-    "namingInvariant": {
+    "moduleNames": {
+      "description": "One Module name or a non-empty list of Module names.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/moduleName"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/moduleName"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      ]
+    },
+    "namingRule": {
       "additionalProperties": false,
-      "description": "A naming Rule: constrains member file names to a finite case vocabulary.",
+      "description": "A naming Rule: constrains file names within a Module to a finite case vocabulary.",
       "properties": {
-        "case": {
-          "$ref": "#/$defs/caseSpec"
+        "description": {
+          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "type": "string"
+        },
+        "disable": {
+          "$ref": "#/$defs/reason"
+        },
+        "exclude": {
+          "$ref": "#/$defs/exclusion"
         },
         "files": {
-          "$ref": "#/$defs/glob",
-          "description": "Narrows the member files judged; absent means all."
+          "$ref": "#/$defs/globs",
+          "description": "Narrows the files judged; absent means every selected file."
         },
-        "id": {
-          "$ref": "#/$defs/ruleID"
+        "naming": {
+          "description": "The case vocabulary file stems must match: the case spec itself, or an object with case.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/caseSpec"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "case": {
+                  "$ref": "#/$defs/caseSpec"
+                }
+              },
+              "required": [
+                "case"
+              ],
+              "type": "object"
+            }
+          ]
         },
-        "kind": {
-          "const": "naming"
+        "on": {
+          "$ref": "#/$defs/moduleNames",
+          "description": "The declared Module or Modules the Rule judges."
         },
         "severity": {
           "$ref": "#/$defs/severity"
+        },
+        "suppress": {
+          "$ref": "#/$defs/suppression"
         }
       },
       "required": [
-        "id",
-        "kind",
-        "case"
+        "on",
+        "naming"
       ],
       "type": "object"
     },
-    "protectedDependency": {
+    "override": {
       "additionalProperties": false,
-      "description": "A protected Rule: restricts which Modules may import one Module.",
+      "description": "An Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID. It carries no assertion and no description: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID.",
+      "minProperties": 1,
       "properties": {
-        "allow": {
-          "description": "Modules permitted to import it; absent or empty means none.",
+        "disable": {
+          "$ref": "#/$defs/reason"
+        },
+        "exclude": {
+          "$ref": "#/$defs/exclusion"
+        },
+        "severity": {
+          "$ref": "#/$defs/severity"
+        },
+        "suppress": {
+          "$ref": "#/$defs/suppression"
+        }
+      },
+      "type": "object"
+    },
+    "patternModule": {
+      "description": "One Pattern Module: its description, or an object with the description and the paths the Pattern suggests for the Binding. A Pattern never owns paths.",
+      "oneOf": [
+        {
+          "pattern": "\\S",
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "description": "What the Module is for.",
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "paths": {
+              "$ref": "#/$defs/globs",
+              "description": "Paths the Pattern suggests; arclint init --pattern writes them into bind."
+            }
+          },
+          "required": [
+            "description"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "patternReference": {
+      "description": "Exact reference to one published Pattern version: namespace/name@version.",
+      "pattern": "^[a-z0-9_]([a-z0-9._-]*[a-z0-9_-])?/[a-z0-9_]([a-z0-9._-]*[a-z0-9_-])?@\\d+\\.\\d+\\.\\d+([\\-+][0-9A-Za-z.\\-+]+)?$",
+      "type": "string"
+    },
+    "protectedRule": {
+      "additionalProperties": false,
+      "description": "An imported_by Rule: restricts which Modules may import one Module.",
+      "properties": {
+        "description": {
+          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "type": "string"
+        },
+        "disable": {
+          "$ref": "#/$defs/reason"
+        },
+        "exclude": {
+          "$ref": "#/$defs/exclusion"
+        },
+        "imported_by": {
+          "description": "Modules permitted to import the Module named under on; empty means none.",
           "items": {
             "$ref": "#/$defs/moduleName"
           },
           "type": "array",
           "uniqueItems": true
         },
-        "id": {
-          "$ref": "#/$defs/ruleID"
-        },
-        "kind": {
-          "const": "protected"
-        },
-        "module": {
+        "on": {
           "$ref": "#/$defs/moduleName",
-          "description": "The protected Module."
+          "description": "The one declared Module the Rule protects."
         },
         "severity": {
           "$ref": "#/$defs/severity"
+        },
+        "suppress": {
+          "$ref": "#/$defs/suppression"
         }
       },
       "required": [
-        "id",
-        "kind",
-        "module"
+        "on",
+        "imported_by"
       ],
       "type": "object"
     },
+    "reason": {
+      "description": "The recorded reason for an adoption decision; required so the decision stays inspectable.",
+      "pattern": "\\S",
+      "type": "string"
+    },
+    "repositoryModule": {
+      "description": "One repository Module: its paths as a glob or a list of globs, or an object with paths and an optional description.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/glob"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/glob"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "description": "Authoring description of the Module.",
+              "type": "string"
+            },
+            "paths": {
+              "$ref": "#/$defs/globs",
+              "description": "Membership selectors; a glob naming a directory claims its whole subtree."
+            }
+          },
+          "required": [
+            "paths"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "rule": {
+      "description": "One Rule carrying exactly one assertion key (imports, structure, naming, layers, imported_by, independent, acyclic, invariants, content, uses), or an Override carrying none.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/consumesRule"
+        },
+        {
+          "$ref": "#/$defs/structureRule"
+        },
+        {
+          "$ref": "#/$defs/namingRule"
+        },
+        {
+          "$ref": "#/$defs/layersRule"
+        },
+        {
+          "$ref": "#/$defs/protectedRule"
+        },
+        {
+          "$ref": "#/$defs/independenceRule"
+        },
+        {
+          "$ref": "#/$defs/acyclicRule"
+        },
+        {
+          "$ref": "#/$defs/invariantsRule"
+        },
+        {
+          "$ref": "#/$defs/contentRule"
+        },
+        {
+          "$ref": "#/$defs/extensionRule"
+        },
+        {
+          "$ref": "#/$defs/override"
+        }
+      ]
+    },
     "ruleID": {
-      "description": "Explicit stable Rule ID: LOCAL or NAMESPACE:LOCAL, each part using a-z 0-9 . _ - /, never starting with . / - and never ending with . or /.",
+      "description": "Explicit stable Rule ID: LOCAL or NAMESPACE:LOCAL, each part using a-z 0-9 . _ - /, never starting with . / - and never ending with . or /. Inside a Pattern file the Rule ID is local; the loader qualifies it with the Pattern namespace.",
       "pattern": "^([a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?:)?[a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?$",
       "type": "string"
     },
@@ -422,59 +701,149 @@
         "info"
       ]
     },
-    "structureInvariant": {
+    "structureRule": {
       "additionalProperties": false,
-      "anyOf": [
-        {
-          "properties": {
-            "require": {
-              "minItems": 1
-            }
-          },
-          "required": [
-            "require"
-          ]
-        },
-        {
-          "properties": {
-            "forbid": {
-              "minItems": 1
-            }
-          },
-          "required": [
-            "forbid"
-          ]
-        }
-      ],
-      "description": "A structure Rule: requires or forbids member files matching globs. At least one non-empty glob list must be declared.",
+      "description": "A structure Rule: requires or forbids files matching globs inside a Module.",
       "properties": {
-        "forbid": {
-          "description": "No member file may match any glob.",
-          "items": {
-            "$ref": "#/$defs/glob"
-          },
-          "type": "array"
+        "description": {
+          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "type": "string"
         },
-        "id": {
-          "$ref": "#/$defs/ruleID"
+        "disable": {
+          "$ref": "#/$defs/reason"
         },
-        "kind": {
-          "const": "structure"
+        "exclude": {
+          "$ref": "#/$defs/exclusion"
         },
-        "require": {
-          "description": "Each glob must match at least one member file.",
-          "items": {
-            "$ref": "#/$defs/glob"
-          },
-          "type": "array"
+        "on": {
+          "$ref": "#/$defs/moduleNames",
+          "description": "The declared Module or Modules the Rule judges."
         },
         "severity": {
           "$ref": "#/$defs/severity"
+        },
+        "structure": {
+          "description": "Files the Module must or must not contain. With each, the globs derive from a recorded vocabulary collection and may carry {name:\u003ccase\u003e} placeholders.",
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "anyOf": [
+                {
+                  "properties": {
+                    "require": {
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "require"
+                  ]
+                },
+                {
+                  "properties": {
+                    "forbid": {
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "forbid"
+                  ]
+                }
+              ],
+              "description": "Plain structure: at least one non-empty glob list.",
+              "properties": {
+                "forbid": {
+                  "description": "No member file may match any glob.",
+                  "items": {
+                    "$ref": "#/$defs/glob"
+                  },
+                  "type": "array"
+                },
+                "require": {
+                  "description": "Each glob must match at least one member file.",
+                  "items": {
+                    "$ref": "#/$defs/glob"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "anyOf": [
+                {
+                  "properties": {
+                    "require": {
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "require"
+                  ]
+                },
+                {
+                  "properties": {
+                    "forbid": {
+                      "minItems": 1
+                    }
+                  },
+                  "required": [
+                    "forbid"
+                  ]
+                }
+              ],
+              "description": "Expanded structure: one universally quantified claim whose globs derive from a recorded Ubiquitous Language collection. A project recording nothing derives no obligations; the Rule exists and says so.",
+              "properties": {
+                "each": {
+                  "$ref": "#/$defs/expansionSource"
+                },
+                "forbid": {
+                  "description": "No member file may match any glob.",
+                  "items": {
+                    "$ref": "#/$defs/expandedGlob"
+                  },
+                  "type": "array"
+                },
+                "require": {
+                  "description": "Each glob must match at least one member file.",
+                  "items": {
+                    "$ref": "#/$defs/expandedGlob"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "each"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "suppress": {
+          "$ref": "#/$defs/suppression"
         }
       },
       "required": [
-        "id",
-        "kind"
+        "on",
+        "structure"
+      ],
+      "type": "object"
+    },
+    "suppression": {
+      "additionalProperties": false,
+      "description": "Keeps findings at the paths while removing their gate effect; suppressed findings are still reported.",
+      "properties": {
+        "paths": {
+          "$ref": "#/$defs/globs",
+          "description": "Files whose findings are suppressed."
+        },
+        "reason": {
+          "$ref": "#/$defs/reason"
+        }
+      },
+      "required": [
+        "paths",
+        "reason"
       ],
       "type": "object"
     }
@@ -482,63 +851,59 @@
   "$id": "https://raw.githubusercontent.com/wixregiga/arclint/main/docs/rules.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "The complete rules.yaml document ArcLint accepts: runtime targets, scan policy, Module declarations, per-Module contracts, repository-scoped Extension invariants, repository-wide dependency Rules, and the Pattern identity header of a distribution file. Unknown keys are rejected everywhere.",
-  "properties": {
-    "contracts": {
-      "additionalProperties": {
-        "additionalProperties": false,
-        "description": "Rules bound to one declared Module.",
-        "properties": {
-          "consumes": {
-            "$ref": "#/$defs/consumes"
-          },
-          "invariants": {
-            "description": "Structure, naming, invariants, and extension Rules over the Module's member files.",
-            "items": {
-              "$ref": "#/$defs/invariant"
-            },
-            "type": "array"
-          }
+  "description": "The complete rules.yaml document ArcLint accepts. A repository ruleset carries runtime, scan, extends, modules, and rules; a Pattern distribution file carries the pattern header, modules, and rules. Every Rule is keyed by its Rule ID and carries exactly one assertion key; an entry with no assertion key is an Override of a Rule an extended Pattern distributes. Unknown keys are rejected everywhere.",
+  "else": {
+    "description": "A repository ruleset: every Module carries paths, directly or through a Binding.",
+    "properties": {
+      "modules": {
+        "additionalProperties": {
+          "$ref": "#/$defs/repositoryModule"
+        },
+        "propertyNames": {
+          "$ref": "#/$defs/moduleName"
         },
         "type": "object"
-      },
-      "description": "Per-Module contracts. Every key must name a declared Module; the loader enforces the declaration, the schema validates the name shape.",
-      "propertyNames": {
-        "$ref": "#/$defs/moduleName"
-      },
-      "type": "object"
-    },
-    "dependencies": {
-      "description": "Repository-wide dependency Rules over the Module graph.",
+      }
+    }
+  },
+  "if": {
+    "required": [
+      "pattern"
+    ]
+  },
+  "properties": {
+    "extends": {
+      "description": "Patterns this repository adopts. Each entry pins one exact version and binds every Module the Pattern lists to repository paths. Repository rulesets only.",
       "items": {
-        "$ref": "#/$defs/dependency"
+        "additionalProperties": false,
+        "description": "One adopted Pattern and its Bindings.",
+        "properties": {
+          "bind": {
+            "additionalProperties": {
+              "$ref": "#/$defs/globs"
+            },
+            "description": "Paths for every Module the Pattern lists, keyed by Module name: one glob or a list of globs. The only place a Pattern Module's paths live.",
+            "propertyNames": {
+              "$ref": "#/$defs/moduleName"
+            },
+            "type": "object"
+          },
+          "pattern": {
+            "$ref": "#/$defs/patternReference"
+          }
+        },
+        "required": [
+          "pattern"
+        ],
+        "type": "object"
       },
       "type": "array"
     },
     "modules": {
       "additionalProperties": {
-        "additionalProperties": false,
-        "description": "One Module declaration.",
-        "properties": {
-          "description": {
-            "description": "Authoring description of the Module.",
-            "type": "string"
-          },
-          "paths": {
-            "description": "Membership selectors; a glob naming a directory claims its whole subtree.",
-            "items": {
-              "$ref": "#/$defs/glob"
-            },
-            "minItems": 1,
-            "type": "array"
-          }
-        },
-        "required": [
-          "paths"
-        ],
-        "type": "object"
+        "$ref": "#/$defs/module"
       },
-      "description": "Declared Modules: named logical groupings of files selected by membership globs. Modules may overlap.",
+      "description": "Declared Modules keyed by name. In a repository ruleset a Module is a glob, a list of globs, or an object with paths and description. In a Pattern file a Module is its description, or an object with description and the paths it suggests for the Binding.",
       "propertyNames": {
         "$ref": "#/$defs/moduleName"
       },
@@ -546,32 +911,37 @@
     },
     "pattern": {
       "additionalProperties": false,
-      "description": "Pattern identity header, present only in a Pattern distribution file — never in a repository ruleset.",
+      "description": "Pattern identity header, present only in a Pattern distribution file, never in a repository ruleset.",
       "properties": {
         "coverage": {
-          "description": "Languages the Pattern declares coverage for.",
+          "description": "Runtime targets the Pattern's Rules were written for, spelled exactly like the repository runtime list.",
           "items": {
             "enum": [
               "go",
-              "typescript",
-              "python"
+              "ts",
+              "py"
             ]
           },
-          "type": "array"
+          "type": "array",
+          "uniqueItems": true
+        },
+        "documentation": {
+          "description": "Where readers learn what the Pattern enforces and why: a URL or a short text.",
+          "type": "string"
         },
         "name": {
           "description": "Pattern name within its namespace.",
-          "minLength": 1,
+          "pattern": "^[a-z0-9_]([a-z0-9._-]*[a-z0-9_-])?$",
           "type": "string"
         },
         "namespace": {
-          "description": "Pattern namespace qualifying distributed Rule IDs.",
-          "minLength": 1,
+          "description": "Pattern namespace; every distributed Rule ID is qualified with it.",
+          "pattern": "^[a-z0-9_]([a-z0-9._-]*[a-z0-9_-])?$",
           "type": "string"
         },
         "version": {
-          "description": "Pattern version; never part of Rule identity.",
-          "minLength": 1,
+          "description": "Exact published version; never part of Rule identity.",
+          "pattern": "^\\d+\\.\\d+\\.\\d+([\\-+][0-9A-Za-z.\\-+]+)?$",
           "type": "string"
         }
       },
@@ -582,22 +952,18 @@
       ],
       "type": "object"
     },
-    "repository": {
-      "additionalProperties": false,
-      "description": "Repository-scoped Extension invariants that inspect files outside every declared Module.",
-      "properties": {
-        "invariants": {
-          "description": "Extension Rules whose subjects are the whole repository.",
-          "items": {
-            "$ref": "#/$defs/extensionInvariant"
-          },
-          "type": "array"
-        }
+    "rules": {
+      "additionalProperties": {
+        "$ref": "#/$defs/rule"
+      },
+      "description": "Every Rule keyed by its Rule ID. An entry with one assertion key is a Rule; an entry with none is an Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID.",
+      "propertyNames": {
+        "$ref": "#/$defs/ruleID"
       },
       "type": "object"
     },
     "runtime": {
-      "description": "Language targets whose code facts observation produces.",
+      "description": "Language targets whose code facts observation produces. Repository rulesets only.",
       "items": {
         "enum": [
           "go",
@@ -605,7 +971,9 @@
           "py"
         ]
       },
-      "type": "array"
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
     },
     "scan": {
       "additionalProperties": false,
@@ -634,6 +1002,64 @@
         }
       },
       "type": "object"
+    }
+  },
+  "then": {
+    "description": "A Pattern distribution file: no runtime, no scan, no extends, because those are repository policy; Modules carry descriptions and suggested paths only.",
+    "properties": {
+      "extends": false,
+      "modules": {
+        "additionalProperties": {
+          "$ref": "#/$defs/patternModule"
+        },
+        "propertyNames": {
+          "$ref": "#/$defs/moduleName"
+        },
+        "type": "object"
+      },
+      "rules": {
+        "additionalProperties": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/consumesRule"
+            },
+            {
+              "$ref": "#/$defs/structureRule"
+            },
+            {
+              "$ref": "#/$defs/namingRule"
+            },
+            {
+              "$ref": "#/$defs/layersRule"
+            },
+            {
+              "$ref": "#/$defs/protectedRule"
+            },
+            {
+              "$ref": "#/$defs/independenceRule"
+            },
+            {
+              "$ref": "#/$defs/acyclicRule"
+            },
+            {
+              "$ref": "#/$defs/invariantsRule"
+            },
+            {
+              "$ref": "#/$defs/contentRule"
+            },
+            {
+              "$ref": "#/$defs/extensionRule"
+            }
+          ]
+        },
+        "description": "A Pattern distributes Rules and cannot override: every entry carries exactly one assertion key.",
+        "propertyNames": {
+          "$ref": "#/$defs/ruleID"
+        },
+        "type": "object"
+      },
+      "runtime": false,
+      "scan": false
     }
   },
   "title": "ArcLint ruleset",

@@ -35,8 +35,10 @@ type Scan struct {
 }
 
 // Configured bundles what a repository has configured: complete Rule
-// aggregates, its Modules, the language targets, and the scan policy.
-// It is a plain result value, not a domain object with identity.
+// aggregates (its own and those of every Pattern it extends, Overrides
+// applied), its Modules (declared and bound), the language targets,
+// the scan policy, and the Extension sources the extended Patterns
+// carry. It is a plain result value, not a domain object with identity.
 type Configured struct {
 	Rules   []Rule
 	Modules []Module
@@ -44,6 +46,17 @@ type Configured struct {
 	// runtime) whose facts observation should produce.
 	Languages []Language
 	Scan      Scan
+	// Extensions are the Extension sources distributed by the extended
+	// Patterns, keyed by the distributing Pattern so their registered
+	// names stay attributable.
+	Extensions []ConfiguredExtension
+}
+
+// ConfiguredExtension is one Extension source an extended Pattern
+// distributes, attributed to that Pattern.
+type ConfiguredExtension struct {
+	Pattern   PatternReference
+	Extension PatternExtension
 }
 
 // Repository is the domain-owned persistence port for complete Rule

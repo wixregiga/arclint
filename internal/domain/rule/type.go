@@ -8,9 +8,11 @@ import (
 
 // Type is one value from the finite ArcLint-owned set of supported Rule
 // shapes: consumes, structure, naming, layers, protected, independence,
-// acyclic, invariants, and extension. Pattern and Extension authors configure
-// existing values; they do not add new ones — custom logic plugs into
-// the extension kind through the SDK, it never grows this enum.
+// acyclic, invariants, content, and extension. Pattern and Extension
+// authors configure existing values; they do not add new ones — custom
+// logic plugs into the extension kind through the SDK, it never grows
+// this enum. In rules.yaml a Type is never spelled: the one Assertion
+// key a Rule carries decides it (see AssertionKey).
 type Type string
 
 const (
@@ -36,6 +38,9 @@ const (
 	// TypeInvariants requires recorded domain contracts to be visible
 	// in source as named methods called from their join points.
 	TypeInvariants Type = "invariants"
+	// TypeContent forbids lines matching a regular expression in the
+	// Rule's Subjects: the built-in evaluator over file bytes.
+	TypeContent Type = "content"
 	// TypeExtension delegates enforcement to a named Extension through
 	// the sandboxed SDK; parameters are validated host-side against the
 	// extension's published schema before any extension code runs.
@@ -46,7 +51,92 @@ const (
 func Types() []Type {
 	return []Type{
 		TypeConsumes, TypeStructure, TypeNaming,
-		TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic, TypeInvariants, TypeExtension,
+		TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic, TypeInvariants,
+		TypeContent, TypeExtension,
+	}
+}
+
+// assertionKeys maps each Type to the one rules.yaml key that spells
+// its Assertion. The key is the Type's whole public spelling: a Rule
+// written with that key is a Rule of that Type, and no rule carries
+// two keys.
+var assertionKeys = map[Type]string{
+	TypeConsumes:     "imports",
+	TypeStructure:    "structure",
+	TypeNaming:       "naming",
+	TypeLayers:       "layers",
+	TypeProtected:    "imported_by",
+	TypeIndependence: "independent",
+	TypeAcyclic:      "acyclic",
+	TypeInvariants:   "invariants",
+	TypeContent:      "content",
+	TypeExtension:    "uses",
+}
+
+// AssertionKey returns the rules.yaml key that spells this Type's
+// Assertion.
+func (t Type) AssertionKey() string { return assertionKeys[t] }
+
+// AssertionKeys returns every Assertion key in published Type order.
+func AssertionKeys() []string {
+	out := make([]string, 0, len(assertionKeys))
+	for _, t := range Types() {
+		out = append(out, assertionKeys[t])
+	}
+	return out
+}
+
+// TypeOfAssertionKey resolves a rules.yaml Assertion key to its Type.
+func TypeOfAssertionKey(key string) (Type, bool) {
+	for _, t := range Types() {
+		if assertionKeys[t] == key {
+			return t, true
+		}
+	}
+	return "", false
+}
+
+// Scope is the Applicability shape a Type demands: which Modules a
+// Rule of the Type judges and how rules.yaml spells that.
+type Scope int
+
+const (
+	// ScopeModules judges the members of the Modules named under on;
+	// on is required.
+	ScopeModules Scope = iota
+	// ScopeOneModule judges exactly one Module named under on.
+	ScopeOneModule
+	// ScopeRepository ranges over the repository's Module graph or
+	// its files; on is not accepted.
+	ScopeRepository
+	// ScopeModulesOrRepository judges the Modules named under on, or
+	// the whole repository when on is omitted.
+	ScopeModulesOrRepository
+)
+
+// Scope returns the Applicability shape the Type demands.
+func (t Type) Scope() Scope {
+	switch t {
+	case TypeConsumes, TypeStructure, TypeNaming, TypeInvariants:
+		return ScopeModules
+	case TypeProtected:
+		return ScopeOneModule
+	case TypeLayers, TypeIndependence, TypeAcyclic:
+		return ScopeRepository
+	case TypeContent, TypeExtension:
+		return ScopeModulesOrRepository
+	}
+	return ScopeRepository
+}
+
+// AcceptsFiles reports whether the Type's Applicability may be narrowed
+// by file globs (the files key).
+func (t Type) AcceptsFiles() bool {
+	switch t {
+	case TypeNaming, TypeContent, TypeExtension:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -91,6 +181,8 @@ func (t Type) Meaning() string {
 		return "forbids dependency cycles among declared Modules"
 	case TypeInvariants:
 		return "requires recorded domain contracts to be visible in source as named methods called from their join points"
+	case TypeContent:
+		return "forbids lines matching a regular expression in the selected files"
 	case TypeExtension:
 		return "delegates enforcement to a named Extension through the sandboxed SDK"
 	}
@@ -416,6 +508,39 @@ func (p InvariantsParams) proposition() string {
 		return "recorded domain contracts are visible in source as named methods called from their join points (closed)"
 	}
 	return "recorded domain contracts are visible in source as named methods called from their join points"
+}
+
+// ContentParams configure a content Rule: no line of any selected file
+// may match the forbidden regular expression (Go RE2 syntax).
+type ContentParams struct {
+	Forbid string
+}
+
+// Type returns TypeContent.
+func (p ContentParams) Type() Type { return TypeContent }
+
+func (p ContentParams) validate() error {
+	if strings.TrimSpace(p.Forbid) == "" {
+		return fmt.Errorf("content: missing the forbidden pattern (forbid)")
+	}
+	if _, err := regexp.Compile(p.Forbid); err != nil {
+		return fmt.Errorf("content: forbid %q: %v", p.Forbid, err)
+	}
+	return nil
+}
+
+func (p ContentParams) proposition() string {
+	return fmt.Sprintf("contains no line matching /%s/", p.Forbid)
+}
+
+// Regexp compiles the forbidden pattern. Construction validated it, so
+// a compile failure here means the value was built outside New.
+func (p ContentParams) Regexp() (*regexp.Regexp, error) {
+	re, err := regexp.Compile(p.Forbid)
+	if err != nil {
+		return nil, fmt.Errorf("content: forbid %q: %v", p.Forbid, err)
+	}
+	return re, nil
 }
 
 func uniqueValidModules(what string, modules []ModuleName) error {

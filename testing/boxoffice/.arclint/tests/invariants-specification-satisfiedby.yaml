@@ -1,7 +1,7 @@
 # Specification is proved here, not by inventing a spec term in
 # boxoffice's recorded language. The fixture's own vocabulary records
 # a specification; source shows the type and Evans SatisfiedBy.
-rule: "boxoffice:entities/contracts-visible"
+rule: "entities/contracts-visible"
 files:
   ubiquitous-language.yaml: |
     version: 1

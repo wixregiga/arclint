@@ -1,41 +1,13 @@
-// boxoffice's extension rules, one file exporting them all.
-//
-// forbid-content: report every line matching a forbidden pattern in
-// the files a rule scopes. Authored here against the SDK the way any
-// consuming repo would; that this small utility has to be
-// re-authored per repo is a distribution gap the proving ground
-// records rather than hides.
+// boxoffice's extension rules, one file exporting them all. Content
+// fences (no panic, no transport in the domain) are the built-in
+// content assertion in rules.yaml, not an extension: the proving
+// ground recorded the re-authoring gap and arclint closed it.
 //
 // fsd-slice-isolation: slices on the same FSD layer never import
 // each other; anything they share lives on a lower layer. The
 // structural half of what Steiger's forbidden-imports rule checks,
 // covering both runtimes.
 import { defineRule, s } from "arclint";
-
-const forbidContent = defineRule({
-  type: "forbid-content",
-  description: "Report every line matching a forbidden pattern.",
-  capability: "exact",
-  params: s.object({
-    pattern: s.string().describe("RegExp source matched against each line."),
-  }),
-  check(ctx, params) {
-    const re = new RegExp(String(params.pattern));
-    for (const file of ctx.files()) {
-      const lines = ctx.read(file.path).split("\n");
-      lines.forEach((line, index) => {
-        if (re.test(line)) {
-          ctx.report({
-            path: file.path,
-            line: index + 1,
-            message: `forbidden content matching /${params.pattern}/: ${line.trim()}`,
-            fixHint: "move the technology to a layer that is allowed to speak it",
-          });
-        }
-      });
-    }
-  },
-});
 
 // sliceOfFile names the slice a file belongs to: the first path
 // segment under the layer root, only when the file sits inside one.
@@ -177,4 +149,4 @@ const aggregateEncapsulation = defineRule({
   },
 });
 
-export default [forbidContent, fsdSliceIsolation, sliceFiles, aggregateEncapsulation];
+export default [fsdSliceIsolation, sliceFiles, aggregateEncapsulation];

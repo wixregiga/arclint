@@ -1,6 +1,6 @@
 # Conforming case: the aggregate's struct keeps every field
 # unexported; value objects may export theirs.
-rule: "boxoffice:entities/aggregates-encapsulate"
+rule: "entities/aggregates-encapsulate"
 files:
   ubiquitous-language.yaml: |
     version: 1

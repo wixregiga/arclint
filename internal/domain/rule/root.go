@@ -187,9 +187,9 @@ func validateScope(t Type, a Applicability) error {
 		if !a.EntireRepository() {
 			return fmt.Errorf("%s rule requires repository applicability", t)
 		}
-	case TypeExtension:
+	case TypeContent, TypeExtension:
 		if a.IsZero() {
-			return fmt.Errorf("extension rule requires applicability")
+			return fmt.Errorf("%s rule requires applicability", t)
 		}
 	}
 	return nil
@@ -202,14 +202,14 @@ func deriveClaim(a Applicability, p Params) string {
 	switch p.Type() {
 	case TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic:
 		return proposition
-	case TypeConsumes, TypeStructure, TypeNaming, TypeInvariants, TypeExtension:
+	case TypeConsumes, TypeStructure, TypeNaming, TypeInvariants, TypeContent, TypeExtension:
 		// Module-scoped Types: the Claim carries the Modules below.
 	}
 	modules := a.Modules()
 	switch len(modules) {
 	case 0:
-		// Only extension Rules reach here without Modules: repository
-		// applicability, so the proposition stands alone.
+		// Only content and extension Rules reach here without Modules:
+		// repository applicability, so the proposition stands alone.
 		return proposition
 	case 1:
 		return fmt.Sprintf("Module %q: %s", modules[0], proposition)
@@ -300,6 +300,41 @@ func (r Rule) Disablement() (Disablement, bool) {
 // resolved Module membership.
 func (r Rule) AppliesToFile(path string, memberOf []ModuleName) bool {
 	return r.applicability.SelectsFile(path, memberOf)
+}
+
+// ReferencedModules returns every ModuleName the Rule speaks about:
+// the Modules it applies to plus any its parameters name (an import
+// allow-list, a layer order, a protected Module and its allowed
+// importers, an acyclic Module set). Each name appears once, in first
+// mention order. A Rule is well-formed only when every name here is a
+// declared Module.
+func (r Rule) ReferencedModules() []ModuleName {
+	var out []ModuleName
+	seen := map[ModuleName]bool{}
+	add := func(names ...ModuleName) {
+		for _, n := range names {
+			if seen[n] {
+				continue
+			}
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	add(r.applicability.Modules()...)
+	switch p := r.params.(type) {
+	case ConsumesParams:
+		if p.Internal != nil {
+			add(p.Internal.Modules()...)
+		}
+	case LayersParams:
+		add(p.Layers...)
+	case ProtectedParams:
+		add(p.Module)
+		add(p.Allow...)
+	case AcyclicParams:
+		add(p.Modules...)
+	}
+	return out
 }
 
 // Validate proves that the complete Rule satisfies its invariants.

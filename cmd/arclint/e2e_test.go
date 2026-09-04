@@ -134,12 +134,12 @@ func TestRulesListsRuleset(t *testing.T) {
 		t.Errorf("rules listed = %d, want 32\n%s", len(lines), stdout)
 	}
 	for _, want := range []string{
-		"arclint:domain/stdlib-only", "arclint:domain/no-panic",
-		"arclint:domain-model/aggregate-skeleton",
-		"arclint:domain-model/contexts-respect-relations",
-		"arclint:delivery/report-factory-dependencies",
-		"arclint:delivery/lipgloss-sealed",
-		"arclint:delivery/cli-interface-dependencies",
+		"domain/stdlib-only", "domain/no-panic",
+		"domain-model/aggregate-skeleton",
+		"domain-model/contexts-respect-relations",
+		"delivery/report-factory-dependencies",
+		"delivery/lipgloss-sealed",
+		"delivery/cli-interface-dependencies",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("missing %s in listing", want)
@@ -148,7 +148,7 @@ func TestRulesListsRuleset(t *testing.T) {
 }
 
 func TestRuleDetailAndContext(t *testing.T) {
-	stdout, stderr, code := runBin(t, repoRoot(t), os.Environ(), "rules", "arclint:domain/stdlib-only")
+	stdout, stderr, code := runBin(t, repoRoot(t), os.Environ(), "rules", "domain/stdlib-only")
 	if code != 0 || !strings.Contains(stdout, "when violated: fails the gate") {
 		t.Errorf("rules detail exit %d, output %q, stderr %s", code, stdout, stderr)
 	}
@@ -230,29 +230,20 @@ func TestAgentsGroupHelpOnly(t *testing.T) {
 	}
 }
 
-// TestExtensionDemoGates proves the SDK showcase end to end: the
-// forbid-content extension, configured with an input, gates a real
-// fixture repository.
-func TestExtensionDemoGates(t *testing.T) {
-	demo, err := os.ReadFile(filepath.Join(repoRoot(t), ".arclint", "extensions", "forbid_content.ts"))
-	if err != nil {
-		t.Fatal(err)
-	}
+// TestContentRuleGates proves the built-in content assertion end to
+// end: a forbid pattern over the selected files gates a real fixture
+// repository, no extension required.
+func TestContentRuleGates(t *testing.T) {
 	root := t.TempDir()
-	write(t, root, ".arclint/extensions/forbid_content.ts", string(demo))
 	write(t, root, "rules.yaml", `runtime: [go]
 modules:
-  src:
-    paths: ["src/**"]
-contracts:
-  src:
-    invariants:
-      - id: "repo:src/no-panic"
-        kind: extension
-        files: "src/**/*.go"
-        uses: forbid-content
-        with:
-          pattern: '\bpanic\('
+  src: src/**
+rules:
+  src/no-panic:
+    on: src
+    files: "src/**/*.go"
+    content:
+      forbid: '\bpanic\('
 `)
 	write(t, root, "src/bad.go", "package src\n\nfunc boom() {\n\tpanic(\"no\")\n}\n")
 	write(t, root, "src/ok.go", "package src\n")
@@ -271,7 +262,7 @@ contracts:
 			active = append(active, d)
 		}
 	}
-	if len(active) != 1 || active[0].RuleID != "repo:src/no-panic" ||
+	if len(active) != 1 || active[0].RuleID != "src/no-panic" ||
 		active[0].Path != "src/bad.go" || active[0].Line != 4 {
 		t.Errorf("active = %+v, want the panic line in src/bad.go", active)
 	}
@@ -312,15 +303,12 @@ func TestBaselineLifecycle(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "rules.yaml", `runtime: [go]
 modules:
-  src:
-    paths: ["src/**"]
-contracts:
-  src:
-    invariants:
-      - id: "repo:src/snake"
-        kind: naming
-        files: "src/**/*.go"
-        case: snake_case
+  src: src/**
+rules:
+  src/snake:
+    on: src
+    files: "src/**/*.go"
+    naming: snake_case
 `)
 	write(t, root, "src/BadName.go", "package src\n")
 	write(t, root, "src/ok.go", "package src\n")
@@ -364,8 +352,9 @@ modules:
   src: ["src/**"]
 contracts:
   src:
-    provides:
-      - kind: correspondence
+    consumes:
+      id: "repo:src/dependencies"
+      internal: []
 `)
 	if _, stderr, code := runBin(t, root, os.Environ(), "check"); code != 2 ||
 		!strings.Contains(stderr, "arclint:") {
@@ -414,14 +403,11 @@ export default defineRule({
 `)
 	write(t, root, "rules.yaml", `runtime: [go, ts]
 modules:
-  src:
-    paths: ["src/**"]
-contracts:
-  src:
-    invariants:
-      - id: "repo:src/inventory"
-        kind: extension
-        uses: exported-inventory
+  src: src/**
+rules:
+  src/inventory:
+    on: src
+    uses: exported-inventory
 `)
 	write(t, root, "src/a.go", "package src\n\nfunc Public() {}\n\nfunc private() {}\n")
 	write(t, root, "src/b.ts", "export function TsThing(): void {}\nfunction hidden(): void {}\n")

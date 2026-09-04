@@ -1,6 +1,6 @@
 # Conforming case: the rule aggregate file exists and no forbidden
 # aggregate directory does, so the structure rule must stay silent.
-rule: "arclint:domain/rule-is-sole-aggregate"
+rule: "domain/rule-is-sole-aggregate"
 files:
   internal/domain/rule/root.go: |
     package rule

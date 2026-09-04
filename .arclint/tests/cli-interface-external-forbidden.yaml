@@ -1,6 +1,6 @@
 # Violating case: the framework-neutral CLI package imports Lipgloss;
 # presentation frameworks belong only in their concrete adapter.
-rule: "arclint:delivery/cli-interface-dependencies"
+rule: "delivery/cli-interface-dependencies"
 files:
   go.mod: |
     module fixture

@@ -3,7 +3,12 @@
 # domain model: Rule is the sole aggregate, use cases coordinate
 # through ports, adapters stay outbound or inbound, Cobra stays
 # sealed behind the CLI factory, and report renderers stay sealed
-# behind the report factory — two distinct delivery seams.
+# behind the report factory (two distinct delivery seams).
+#
+# Every Rule is keyed by its id and carries exactly one assertion:
+# imports, structure, naming, content, layers, imported_by,
+# independent, acyclic, invariants, or uses. `on` names the Module(s)
+# it judges. Query commands: arclint rules [selector] · arclint context <path>
 
 # go for the engine itself; ts for the embedded extension SDK sources.
 runtime: [go, ts]
@@ -22,304 +27,326 @@ scan:
 
 modules:
   domain:
-    paths: ["internal/domain/**"]
+    paths: "internal/domain/**"
     description: "Rule aggregate and domain values; stdlib-only."
   application:
-    paths: ["internal/application/**"]
+    paths: "internal/application/**"
     description: "Action-named use cases coordinating domain objects through ports."
   infrastructure:
-    paths: ["internal/infrastructure/**"]
+    paths: "internal/infrastructure/**"
     description: "Outbound technology adapters implementing inward-owned ports."
   delivery:
-    paths: ["internal/delivery/**"]
+    paths: "internal/delivery/**"
     description: "CLI adapters for inbound command translation and outbound Report rendering."
   cli_interface:
-    paths: ["internal/delivery/cli/*.go"]
+    paths: "internal/delivery/cli/*.go"
     description: "Framework-neutral CLI commands, reports, and adapter ports."
   cli_factory:
-    paths: ["internal/delivery/cli/factory/**"]
+    paths: "internal/delivery/cli/factory/**"
     description: "Sealed CLI factory selecting an adapter by ArcLint-owned identity."
   cobra_adapter:
-    paths: ["internal/delivery/cli/adapters/cobra/**"]
+    paths: "internal/delivery/cli/adapters/cobra/**"
     description: "The only package permitted to import Cobra."
   report_factory:
-    paths: ["internal/delivery/cli/reportfactory/**"]
+    paths: "internal/delivery/cli/reportfactory/**"
     description: "Sealed report factory selecting a renderer by ArcLint-owned identity."
   plain_report:
-    paths: ["internal/delivery/cli/adapters/report/plain/**"]
+    paths: "internal/delivery/cli/adapters/report/plain/**"
     description: "Plain-text report renderer adapter."
   json_report:
-    paths: ["internal/delivery/cli/adapters/report/json/**"]
+    paths: "internal/delivery/cli/adapters/report/json/**"
     description: "JSON report renderer adapter."
   lipgloss_report:
-    paths: ["internal/delivery/cli/adapters/report/lipgloss/**"]
+    paths: "internal/delivery/cli/adapters/report/lipgloss/**"
     description: "The only package permitted to import Lipgloss."
   composition:
-    paths: ["cmd/**"]
+    paths: "cmd/**"
     description: "Composition roots selecting and connecting concrete adapters."
   source:
-    paths: ["internal/**"]
+    paths: "internal/**"
     description: "Common source invariants for internal packages."
   vocabulary:
-    paths: ["ubiquitous-language.yaml"]
+    paths: "ubiquitous-language.yaml"
     description: "The project's recorded Ubiquitous Language vocabulary."
   # Context-named modules: each bounded context recorded in the
   # vocabulary binds to the module of the same name, which is how the
   # contexts-respect-relations rule observes the context map.
   rule:
-    paths: ["internal/domain/rule/**"]
+    paths: "internal/domain/rule/**"
     description: "The rule bounded context: the Rule aggregate's home."
   conformance:
-    paths: ["internal/domain/conformance/**"]
+    paths: "internal/domain/conformance/**"
     description: "The conformance bounded context, downstream conformist of rule."
 
-contracts:
-  domain:
-    consumes:
-      id: "arclint:domain/stdlib-only"
+rules:
+  # ---- domain --------------------------------------------------------
+
+  domain/stdlib-only:
+    description: "The domain imports no other Module and no third-party package."
+    on: domain
+    imports:
       internal: []
       external: forbid
-      stdlib: allow
-    invariants:
-      - id: "arclint:domain/rule-is-sole-aggregate"
-        kind: structure
-        require:
-          - "internal/domain/rule/root.go"
-        forbid:
-          - "internal/domain/architecture/**"
-          - "internal/domain/pattern/**"
-          - "internal/domain/baseline/root.go"
-          - "internal/domain/conformance/root.go"
-      # The SDK showcase: content enforcement supplied by the
-      # forbid-content extension under .arclint/extensions.
-      - id: "arclint:domain/no-panic"
-        kind: extension
-        files: "internal/domain/**/*.go"
-        uses: forbid-content
-        with:
-          pattern: '\bpanic\('
-      # Domain directories talk through their file names: a domain
-      # file is named for the vocabulary concept it holds, never for a
-      # generic container.
-      - id: "arclint:domain/files-speak-the-vocabulary"
-        kind: structure
-        forbid:
-          - "internal/domain/**/model.go"
-          - "internal/domain/**/types.go"
-          - "internal/domain/**/util.go"
-          - "internal/domain/**/utils.go"
-          - "internal/domain/**/helpers.go"
-          - "internal/domain/**/common.go"
-      # Domain errors scream their subject: ErrDefinitionNotFound,
-      # never a bare ErrNotFound the package qualifier cannot rescue.
-      - id: "arclint:domain/errors-name-their-subject"
-        kind: extension
-        files: "internal/domain/**/*.go"
-        uses: forbid-content
-        with:
-          pattern: '\bErr(NotFound|Invalid|Failed|Exists)\b'
-      # The vocabulary-expansion showcase: one universally quantified
-      # structure Rule whose globs derive from the recorded aggregates
-      # — every recorded aggregate owns a home declaring its root and
-      # its Repository. Inert until a vocabulary is recorded; warning
-      # because model-code drift is a conversation, not a broken build.
-      - id: "arclint:domain-model/aggregate-skeleton"
-        kind: structure
-        severity: warning
-        each: domain.aggregates
-        require:
-          - "internal/domain/{name:flatcase}/root.go"
-          - "internal/domain/{name:flatcase}/repository.go"
 
-  vocabulary:
-    invariants:
-      # The vocabulary showcase: an extension consumes the recorded
-      # Ubiquitous Language through ctx.domain(). Inert until a
-      # project records terms; a recorded term must carry a
-      # definition.
-      - id: "arclint:vocabulary/terms-carry-definitions"
-        kind: extension
-        files: "ubiquitous-language.yaml"
-        uses: require-defined-terms
-      # A recorded invariant is enforced by exactly one recorded term
-      # of its own context; an owner outside the vocabulary is a hole
-      # in the model.
-      - id: "arclint:vocabulary/invariants-name-recorded-owners"
-        kind: extension
-        files: "ubiquitous-language.yaml"
-        uses: invariants-name-recorded-owners
+  domain/rule-is-sole-aggregate:
+    description: "Rule is the only aggregate: it has a root, and no other aggregate root exists."
+    on: domain
+    structure:
+      require:
+        - "internal/domain/rule/root.go"
+      forbid:
+        - "internal/domain/architecture/**"
+        - "internal/domain/pattern/**"
+        - "internal/domain/baseline/root.go"
+        - "internal/domain/conformance/root.go"
 
-  application:
-    consumes:
-      id: "arclint:application/use-cases-through-ports"
+  domain/no-panic:
+    description: "Domain code never panics; a representation that cannot become a value is an error."
+    on: domain
+    files: "internal/domain/**/*.go"
+    content:
+      forbid: '\bpanic\('
+
+  # Domain directories talk through their file names: a domain file is
+  # named for the vocabulary concept it holds, never for a generic
+  # container.
+  domain/files-speak-the-vocabulary:
+    description: "Domain files are named for the concept they hold, never for a generic container."
+    on: domain
+    structure:
+      forbid:
+        - "internal/domain/**/model.go"
+        - "internal/domain/**/types.go"
+        - "internal/domain/**/util.go"
+        - "internal/domain/**/utils.go"
+        - "internal/domain/**/helpers.go"
+        - "internal/domain/**/common.go"
+
+  # Domain errors scream their subject: ErrDefinitionNotFound, never a
+  # bare ErrNotFound the package qualifier cannot rescue.
+  domain/errors-name-their-subject:
+    description: "Domain errors name their subject; a bare ErrNotFound or ErrInvalid is forbidden."
+    on: domain
+    files: "internal/domain/**/*.go"
+    content:
+      forbid: '\bErr(NotFound|Invalid|Failed|Exists)\b'
+
+  # The vocabulary-expansion showcase: one universally quantified
+  # structure Rule whose globs derive from the recorded aggregates:
+  # every recorded aggregate owns a home declaring its root and its
+  # Repository. Inert until a vocabulary is recorded; warning because
+  # model-code drift is a conversation, not a broken build.
+  domain-model/aggregate-skeleton:
+    description: "Every recorded aggregate owns a home declaring its root and its Repository."
+    severity: warning
+    on: domain
+    structure:
+      each: domain.aggregates
+      require:
+        - "internal/domain/{name:flatcase}/root.go"
+        - "internal/domain/{name:flatcase}/repository.go"
+
+  # ---- vocabulary ----------------------------------------------------
+
+  # The vocabulary showcase: an extension consumes the recorded
+  # Ubiquitous Language through ctx.domain(). Inert until a project
+  # records terms; a recorded term must carry a definition.
+  vocabulary/terms-carry-definitions:
+    description: "Every recorded term carries a definition."
+    on: vocabulary
+    uses: require-defined-terms
+
+  # A recorded invariant is enforced by exactly one recorded term of
+  # its own context; an owner outside the vocabulary is a hole in the
+  # model.
+  vocabulary/invariants-name-recorded-owners:
+    description: "Every recorded invariant names a recorded term of its own context as its owner."
+    on: vocabulary
+    uses: invariants-name-recorded-owners
+
+  # ---- application ---------------------------------------------------
+
+  application/use-cases-through-ports:
+    description: "Use cases import only the domain and no third-party package."
+    on: application
+    imports:
       internal: [domain]
       external: forbid
-      stdlib: allow
-    invariants:
-      - id: "arclint:application/core-actions-present"
-        kind: structure
-        require:
-          - "internal/application/list_rules.go"
-          - "internal/application/assess_conformance.go"
-          - "internal/application/capture_baseline.go"
-          - "internal/application/list_patterns.go"
 
-  infrastructure:
-    consumes:
-      id: "arclint:infrastructure/outbound-only"
+  application/core-actions-present:
+    description: "The core use cases exist under their action names."
+    on: application
+    structure:
+      require:
+        - "internal/application/list_rules.go"
+        - "internal/application/assess_conformance.go"
+        - "internal/application/capture_baseline.go"
+        - "internal/application/list_patterns.go"
+
+  # ---- infrastructure ------------------------------------------------
+
+  infrastructure/outbound-only:
+    description: "Infrastructure imports only application and domain."
+    on: infrastructure
+    imports:
       internal: [application, domain]
-      external: allow
-      stdlib: allow
-    invariants:
-      # Every shipped language adapter embeds its generated stdlib
-      # table: exact import classification, never heuristics. One
-      # require per adapter; languages are a finite ArcLint enum, so
-      # the parametric legacy correspondence rule is unnecessary.
-      - id: "arclint:infrastructure/stdlib-table-present"
-        kind: structure
-        require:
-          - "internal/infrastructure/language/golang/stdlib_gen.go"
 
-  delivery:
-    consumes:
-      id: "arclint:delivery/dependencies"
+  # Every shipped language adapter embeds its generated stdlib table:
+  # exact import classification, never heuristics.
+  infrastructure/stdlib-table-present:
+    description: "The Go language adapter embeds its generated stdlib table."
+    on: infrastructure
+    structure:
+      require:
+        - "internal/infrastructure/language/golang/stdlib_gen.go"
+
+  # ---- delivery ------------------------------------------------------
+
+  delivery/dependencies:
+    description: "Delivery imports only application and domain."
+    on: delivery
+    imports:
       internal: [application, domain]
-      external: allow
-      stdlib: allow
-    invariants:
-      - id: "arclint:delivery/cli-seal-present"
-        kind: structure
-        require:
-          - "internal/delivery/cli/cli.go"
-          - "internal/delivery/cli/factory/factory.go"
-          - "internal/delivery/cli/adapters/cobra/cobra.go"
-          - "internal/delivery/cli/report.go"
-          - "internal/delivery/cli/reportfactory/factory.go"
-          - "internal/delivery/cli/adapters/report/plain/plain.go"
-          - "internal/delivery/cli/adapters/report/json/json.go"
-          - "internal/delivery/cli/adapters/report/lipgloss/lipgloss.go"
 
-  cli_interface:
-    consumes:
-      id: "arclint:delivery/cli-interface-dependencies"
+  delivery/cli-seal-present:
+    description: "The CLI seal and the report seal are both complete."
+    on: delivery
+    structure:
+      require:
+        - "internal/delivery/cli/cli.go"
+        - "internal/delivery/cli/factory/factory.go"
+        - "internal/delivery/cli/adapters/cobra/cobra.go"
+        - "internal/delivery/cli/report.go"
+        - "internal/delivery/cli/reportfactory/factory.go"
+        - "internal/delivery/cli/adapters/report/plain/plain.go"
+        - "internal/delivery/cli/adapters/report/json/json.go"
+        - "internal/delivery/cli/adapters/report/lipgloss/lipgloss.go"
+
+  delivery/cli-interface-dependencies:
+    description: "The framework-neutral CLI imports only application and domain, and no third-party package."
+    on: cli_interface
+    imports:
       internal: [application, domain]
       external: forbid
-      stdlib: allow
 
-  cli_factory:
-    consumes:
-      id: "arclint:delivery/cli-factory-dependencies"
-      # delivery is allowed because the neutral CLI Interface the
-      # factory selects for lives in the delivery module.
+  # delivery is allowed because the neutral CLI Interface the factory
+  # selects for lives in the delivery module.
+  delivery/cli-factory-dependencies:
+    description: "The CLI factory imports application, domain, the Cobra adapter, and delivery, and no third-party package."
+    on: cli_factory
+    imports:
       internal: [application, domain, cobra_adapter, delivery]
       external: forbid
-      stdlib: allow
 
-  cobra_adapter:
-    consumes:
-      id: "arclint:delivery/cobra-sealed"
-      # delivery is allowed because the adapter translates the neutral
-      # commands owned by the delivery module; the seal is enforced by
-      # the cobra-factory-only protected rule, not by this allow-list.
+  # delivery is allowed because the adapter translates the neutral
+  # commands owned by the delivery module; the seal is enforced by the
+  # cobra-factory-only rule, not by this allow-list.
+  delivery/cobra-sealed:
+    description: "The Cobra adapter imports application, domain, and delivery."
+    on: cobra_adapter
+    imports:
       internal: [application, domain, delivery]
-      external: allow
-      stdlib: allow
 
-  report_factory:
-    consumes:
-      id: "arclint:delivery/report-factory-dependencies"
-      # delivery is allowed because the sealed Report/Renderer port the
-      # factory selects for lives in the delivery module.
+  # delivery is allowed because the sealed Report/Renderer port the
+  # factory selects for lives in the delivery module.
+  delivery/report-factory-dependencies:
+    description: "The report factory imports delivery and the three renderers, and no third-party package."
+    on: report_factory
+    imports:
       internal: [delivery, plain_report, json_report, lipgloss_report]
       external: forbid
-      stdlib: allow
 
-  plain_report:
-    consumes:
-      id: "arclint:delivery/plain-report-dependencies"
-      # Renderers consume the delivery-owned Report wrappers and their
-      # inward application/domain values.
+  # Renderers consume the delivery-owned Report wrappers and their
+  # inward application/domain values.
+  delivery/plain-report-dependencies:
+    description: "The plain renderer imports delivery, application, and domain, and no third-party package."
+    on: plain_report
+    imports:
       internal: [delivery, application, domain]
       external: forbid
-      stdlib: allow
 
-  json_report:
-    consumes:
-      id: "arclint:delivery/json-report-dependencies"
+  delivery/json-report-dependencies:
+    description: "The JSON renderer imports delivery, application, and domain, and no third-party package."
+    on: json_report
+    imports:
       internal: [delivery, application, domain]
       external: forbid
-      stdlib: allow
 
-  lipgloss_report:
-    consumes:
-      id: "arclint:delivery/lipgloss-sealed"
-      # The adapter consumes delivery-owned Reports and their inward
-      # application/domain values. The protected rule seals imports to
-      # report_factory; external allow is the Lipgloss framework edge.
+  # External allow is the Lipgloss framework edge; the
+  # lipgloss-report-factory-only rule seals who may import it.
+  delivery/lipgloss-sealed:
+    description: "The Lipgloss renderer imports delivery, application, and domain."
+    on: lipgloss_report
+    imports:
       internal: [delivery, application, domain]
-      external: allow
-      stdlib: allow
 
-  composition:
-    consumes:
-      id: "arclint:composition/selects-adapters"
-      # report adapters are deliberately absent: composition selects
-      # them only through report_factory by RendererName.
+  # ---- composition ---------------------------------------------------
+
+  # Report adapters are deliberately absent: composition selects them
+  # only through report_factory by RendererName.
+  composition/selects-adapters:
+    description: "Composition imports every Module it wires except the report renderers."
+    on: composition
+    imports:
       internal: [delivery, infrastructure, application, domain, cli_factory, cobra_adapter, report_factory]
-      external: allow
-      stdlib: allow
-    invariants:
-      - id: "arclint:composition/main-present"
-        kind: structure
-        require: ["cmd/arclint/main.go"]
 
-  source:
-    invariants:
-      - id: "arclint:source/snake-case"
-        kind: naming
-        files: "internal/**/*.go"
-        case: snake_case
+  composition/main-present:
+    description: "The arclint binary has a main."
+    on: composition
+    structure:
+      require: ["cmd/arclint/main.go"]
 
-# Repository-scoped domain rules: extensions that consume the recorded
-# Ubiquitous Language through ctx.domain() where enforcement needs more
-# than glob derivation. Inert until a project records vocabulary.
-repository:
-  invariants:
-    # Recorded context-map relations bind to the modules named after
-    # the contexts and become import rules between them.
-    - id: "arclint:domain-model/contexts-respect-relations"
-      kind: extension
-      severity: warning
-      uses: respect-context-relations
+  # ---- source --------------------------------------------------------
 
-dependencies:
-  - id: "arclint:dependencies/application-inward"
-    kind: layers
+  source/snake-case:
+    description: "Go file names use snake_case."
+    on: source
+    files: "internal/**/*.go"
+    naming: snake_case
+
+  # ---- repository-wide -----------------------------------------------
+
+  # Recorded context-map relations bind to the modules named after the
+  # contexts and become import rules between them. Inert until a
+  # project records vocabulary.
+  domain-model/contexts-respect-relations:
+    description: "Imports between context-named Modules respect the recorded context-map relations."
+    severity: warning
+    uses: respect-context-relations
+
+  dependencies/application-inward:
+    description: "Dependencies point inward: application, then domain."
     layers: [application, domain]
-  - id: "arclint:infrastructure/composition-only"
-    kind: protected
-    module: infrastructure
-    allow: [composition]
-  - id: "arclint:delivery/cobra-factory-only"
-    kind: protected
-    module: cobra_adapter
-    allow: [cli_factory]
-  - id: "arclint:delivery/plain-report-factory-only"
-    kind: protected
-    module: plain_report
-    allow: [report_factory]
-  - id: "arclint:delivery/json-report-factory-only"
-    kind: protected
-    module: json_report
-    allow: [report_factory]
-  - id: "arclint:delivery/lipgloss-report-factory-only"
-    kind: protected
-    module: lipgloss_report
-    allow: [report_factory]
-  - id: "arclint:dependencies/acyclic"
-    kind: acyclic
-    # cli_interface, cli_factory, cobra_adapter, report_factory, and
-    # the report adapters are excluded: their paths nest inside
-    # delivery's, and overlapping membership lifts intra-delivery
-    # imports into artificial module cycles.
-    modules: [composition, delivery, infrastructure, application, domain]
+
+  infrastructure/composition-only:
+    description: "Only composition imports infrastructure."
+    on: infrastructure
+    imported_by: [composition]
+
+  delivery/cobra-factory-only:
+    description: "Only the CLI factory imports the Cobra adapter."
+    on: cobra_adapter
+    imported_by: [cli_factory]
+
+  delivery/plain-report-factory-only:
+    description: "Only the report factory imports the plain renderer."
+    on: plain_report
+    imported_by: [report_factory]
+
+  delivery/json-report-factory-only:
+    description: "Only the report factory imports the JSON renderer."
+    on: json_report
+    imported_by: [report_factory]
+
+  delivery/lipgloss-report-factory-only:
+    description: "Only the report factory imports the Lipgloss renderer."
+    on: lipgloss_report
+    imported_by: [report_factory]
+
+  # cli_interface, cli_factory, cobra_adapter, report_factory, and the
+  # report adapters are excluded: their paths nest inside delivery's,
+  # and overlapping membership lifts intra-delivery imports into
+  # artificial module cycles.
+  dependencies/acyclic:
+    description: "Dependencies among the top-level Modules contain no cycle."
+    acyclic: [composition, delivery, infrastructure, application, domain]

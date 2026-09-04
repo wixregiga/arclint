@@ -1,6 +1,6 @@
 # Conforming case: a feature imports an entity (a lower layer) and
 # its own slice; no horizontal imports.
-rule: "boxoffice:fsd/slice-isolation"
+rule: "fsd/slice-isolation"
 files:
   go.mod: |
     module boxoffice

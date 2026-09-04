@@ -302,14 +302,15 @@ func writeRepositoryRules(b *strings.Builder, cfg rule.Configured) {
 	b.WriteString("\n")
 }
 
-// writeExtensionInventory lists each local extension file with the
-// rule definitions it registers, so an agent knows what enforcement
-// exists beyond the built-in Rule Types.
+// writeExtensionInventory lists each extension source, local or
+// distributed by an extended Pattern, with the rule definitions it
+// registers, so an agent knows what enforcement exists beyond the
+// built-in Rule Types.
 func writeExtensionInventory(b *strings.Builder, registered []RegisteredExtensionRule) {
 	if len(registered) == 0 {
 		return
 	}
-	b.WriteString("### Local extension rules\n\n")
+	b.WriteString("### Extension rules\n\n")
 	var sources []string
 	names := map[string][]string{}
 	for _, r := range registered {

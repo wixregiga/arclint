@@ -96,30 +96,29 @@ func writeSyntheticRepo(t *testing.T, root string, pkgs, filesPer int) {
 	write("go.mod", "module example.com/synth\n\ngo 1.24\n\nrequire github.com/pkg/errors v0.9.1\n")
 	write("rules.yaml", `runtime: [go]
 modules:
-  entities:
-    paths: ["internal/entities/**"]
-  features:
-    paths: ["internal/features/**"]
-  shared:
-    paths: ["internal/shared/**"]
-contracts:
-  entities:
-    consumes:
-      id: "synth:entities/pure"
+  entities: "internal/entities/**"
+  features: "internal/features/**"
+  shared: "internal/shared/**"
+rules:
+  entities/pure:
+    description: "Entities import nothing internal and no third-party package."
+    on: entities
+    imports:
       internal: []
       external: forbid
-  features:
-    consumes:
-      id: "synth:features/inward"
+  features/inward:
+    description: "Features import only shared and entities."
+    on: features
+    imports:
       internal: [shared, entities]
-    invariants:
-      - id: "synth:features/snake"
-        kind: naming
-        files: "internal/features/**/*.go"
-        case: snake_case
-dependencies:
-  - id: "synth:deps/acyclic"
-    kind: acyclic
+  features/snake:
+    description: "Feature files use snake_case."
+    on: features
+    files: "internal/features/**/*.go"
+    naming: snake_case
+  dependencies/acyclic:
+    description: "Module dependencies contain no cycle."
+    acyclic: {}
 `)
 	for p := 0; p < pkgs; p++ {
 		var area, imports string

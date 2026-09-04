@@ -1,6 +1,6 @@
 # Violating case: a recorded aggregate misses its tests, another has
 # no home at all.
-rule: "boxoffice:entities/aggregate-slices"
+rule: "entities/aggregate-slices"
 files:
   ubiquitous-language.yaml: |
     version: 1

@@ -1,6 +1,6 @@
 # Conforming case: every discovered use-case slice carries its named
 # file and its tests.
-rule: "boxoffice:features/use-cases-tested"
+rule: "features/use-cases-tested"
 files:
   internal/features/holdseats/holdseats.go: |
     package holdseats

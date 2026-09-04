@@ -6,8 +6,8 @@ weight = 6
 
 | command | does |
 |---|---|
-| `arclint init` | draft a starter `rules.yaml`; `--pattern bare` (default) or a built-in Pattern (`vertical`), which also copies Pattern extension entries into `.arclint/extensions`; `--languages go,ts,py` selects runtime targets and `--force` permits replacing existing targets |
-| `arclint patterns` | list visible Pattern distribution packages, including built-in packages such as `arclint/vertical@0.1.0` |
+| `arclint init` | draft a starter `rules.yaml`; `--pattern bare` (default) or a Pattern to extend by exact reference or name (`arclint/vertical@0.1.0`, `vertical`), which drafts the `extends` block with the Pattern's suggested bindings; `--languages go,ts,py` selects runtime targets and `--force` permits replacing an existing file |
+| `arclint patterns` | list visible Pattern distribution packages: built-in packages such as `arclint/vertical@0.1.0`, then local packages under `.arclint/patterns/<name>/pattern.yaml` |
 | `arclint check [path]` | evaluate configured Rules; accepts `--no-baseline` and `--only` / `--exclude` Rule selectors |
 | `arclint baseline capture` | replace `.arclint/baseline.v2.json` with the active findings from one complete assessment |
 | `arclint baseline refresh` | reassess and replace the Baseline, dropping stale entries |
@@ -54,7 +54,7 @@ real parsers and evaluators.
 
 ```yaml
 # .arclint/tests/disallowed-adapters-import.yaml
-rule: "t:core/consumes"
+rule: "core/consumes"
 files:
   go.mod: |
     module example.com/app
@@ -71,8 +71,8 @@ expect: []
 
 Author expected findings from the CLI, not from evaluator source. Start
 with `expect: []` and run `arclint rules test`. Failures print every
-unexpected finding as a ready-to-paste `.arclint/tests` entry — `kind`,
-`path`, optional `line`, and `message` — under `unexpected findings
+unexpected finding as a ready-to-paste `.arclint/tests` entry (`kind`,
+`path`, optional `line`, and `message`) under `unexpected findings
 (add intended ones to expect):`. Copy only the entries you intend; leave
 the list empty when the case must produce no Diagnostics. An empty list
 that stays empty asserts exactly that, not a stronger conformance outcome.
@@ -80,11 +80,13 @@ that stays empty asserts exactly that, not a stronger conformance outcome.
 The `message` field is an exact Diagnostic contract. Paste the
 CLI-emitted text verbatim (Go-quoted). Do not hand-format or reconstruct
 it: consumes, for example, renders quoted Module lists as
-`Module(s) ["adapters"]`, not bare `"adapters"`. A failure for the
-fixture above looks like:
+`Module(s) ["adapters"]`, not bare `"adapters"`. With
+`core: "core/**"` and `adapters: "adapters/**"` declared as Modules and
+`core/consumes` asserting `imports: {internal: []}` on `core`, a failure
+for the fixture above looks like:
 
 ```
-FAIL disallowed-adapters-import (t:core/consumes)
+FAIL disallowed-adapters-import (core/consumes)
   unexpected findings (add intended ones to expect):
     - kind: violation
       path: core/a.go
@@ -107,10 +109,10 @@ emits the machine shape for coding agents.
 
 `arclint agents md --write` covers the prompt-time half: it compiles the
 ruleset, the recorded vocabulary, and the local extension registry into
-a generated block inside `AGENTS.md` — an ask-arclint-first directive,
+a generated block inside `AGENTS.md`: an ask-arclint-first directive,
 the full command surface with when-to-use guidance, a recorded-domain
 snapshot, every module with its rule claims, repository-wide rules, and
-the local extension inventory — so agents see the architecture before
+the local extension inventory. Agents see the architecture before
 writing code. The block sits between markers; hand-written content
 around it survives regeneration, and the block never carries
 timestamps, so regeneration is idempotent for an unchanged ruleset and
@@ -121,7 +123,8 @@ vocabulary.
 `arclint completion bash|zsh|fish|powershell` emits the shell script.
 Completion uses the resolved `rules.yaml` when available: Rule IDs for
 `rules` and the `check --only` / `--exclude` selectors, Module names for
-`context --module`, supported languages for `init --languages`, and the
+`context --module`, supported languages for `init --languages`, `bare`
+plus every visible Pattern reference for `init --pattern`, and the
 closed `human` / `json` output-format values. Without a loadable
 repository configuration, repository-derived candidates stay empty.
 Command aliases complete alongside canonical names (`agents mar<TAB>`
@@ -137,7 +140,7 @@ in the complete Conformance Assessment. The stable shape is:
 [
   {
     "kind": "violation",
-    "ruleId": "repo:dependencies/application-inward",
+    "ruleId": "dependencies/application-inward",
     "path": "internal/delivery/handler.go",
     "line": 3,
     "severity": "error",

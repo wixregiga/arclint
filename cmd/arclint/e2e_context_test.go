@@ -59,12 +59,12 @@ func TestContextWorksite(t *testing.T) {
 		rules[r.Summary.ID] = r.Via
 	}
 	// The boundary rule protecting infrastructure joins the union, and
-	// the extension rule binds through the domain path.
-	if _, ok := rules["arclint:infrastructure/composition-only"]; !ok {
+	// the content rule binds through the domain path.
+	if _, ok := rules["infrastructure/composition-only"]; !ok {
 		t.Errorf("boundary rule missing from union: %v", rules)
 	}
-	if via := rules["arclint:domain/no-panic"]; len(via) == 0 || via[0] != "internal/domain/rule/root.go" {
-		t.Errorf("extension rule via = %v", via)
+	if via := rules["domain/no-panic"]; len(via) == 0 || via[0] != "internal/domain/rule/root.go" {
+		t.Errorf("content rule via = %v", via)
 	}
 }
 
@@ -89,7 +89,7 @@ func TestContextModuleScopeAndErrors(t *testing.T) {
 	for _, r := range ctx.Rules {
 		ids[r.Summary.ID] = true
 	}
-	if !ids["arclint:domain/stdlib-only"] {
+	if !ids["domain/stdlib-only"] {
 		t.Errorf("module scope misses the module's own consumes rule: %v", ids)
 	}
 

@@ -26,19 +26,19 @@ func TestVerticalPatternLoads(t *testing.T) {
 	}
 	var sawIndependence bool
 	wantUses := map[string]string{
-		"vertical:domain/no-context":              "vertical/forbid-imports",
-		"vertical:domain/no-io":                   "vertical/forbid-imports",
-		"vertical:application/repository-context": "vertical/repository-context",
-		"vertical:application/usecase-contract":   "vertical/usecase",
-		"vertical:shared/concerns":                "vertical/shared-concerns",
-		"vertical:repositories/application-only":  "vertical/repository-location",
+		"arclint:domain/no-context":              "vertical/forbid-imports",
+		"arclint:domain/no-io":                   "vertical/forbid-imports",
+		"arclint:application/repository-context": "vertical/repository-context",
+		"arclint:application/usecase-contract":   "vertical/usecase",
+		"arclint:shared/concerns":                "vertical/shared-concerns",
+		"arclint:repositories/application-only":  "vertical/repository-location",
 	}
 	for _, r := range p.Rules() {
 		id := r.ID().Qualified()
-		if id == "vertical:features/independent" {
+		if id == "arclint:features/independent" {
 			sawIndependence = true
 			if r.Type() != rule.TypeIndependence {
-				t.Errorf("vertical:features/independent type = %q, want independence", r.Type())
+				t.Errorf("arclint:features/independent type = %q, want independence", r.Type())
 			}
 		}
 		if uses, ok := wantUses[id]; ok {
@@ -53,17 +53,38 @@ func TestVerticalPatternLoads(t *testing.T) {
 		}
 	}
 	if !sawIndependence {
-		t.Errorf("missing vertical:features/independent")
+		t.Errorf("missing arclint:features/independent")
 	}
 	if len(wantUses) != 0 {
 		t.Errorf("missing extension rules: %v", wantUses)
 	}
-	scaffold, ok := source.Scaffold("vertical")
-	if !ok {
-		t.Fatal("Scaffold(vertical) missing")
+	if strings.TrimSpace(p.Documentation()) == "" {
+		t.Errorf("the vertical pattern must document itself")
 	}
-	if !strings.Contains(scaffold.Ruleset, "runtime: [go]") {
-		t.Errorf("Scaffold text lacks runtime: [go] marker")
+	modules := p.Modules()
+	wantModules := []string{"domain", "application", "infra", "app", "shared", "composition"}
+	if len(modules) != len(wantModules) {
+		t.Fatalf("modules = %d, want %d", len(modules), len(wantModules))
+	}
+	for i, m := range modules {
+		if m.Name().String() != wantModules[i] {
+			t.Errorf("modules[%d] = %q, want %q", i, m.Name(), wantModules[i])
+		}
+		if m.Description() == "" || len(m.SuggestedPaths()) == 0 {
+			t.Errorf("module %s must carry a description and suggested paths", m.Name())
+		}
+	}
+	for _, r := range p.Rules() {
+		if r.Claim().String() == "" {
+			t.Errorf("%s: a distributed Rule must carry a description", r.ID().Qualified())
+		}
+		if ref, ok := r.Provenance(); !ok || ref.String() != "arclint/vertical@0.1.0" {
+			t.Errorf("%s provenance = %v %v", r.ID().Qualified(), ref, ok)
+		}
+	}
+	names, err := source.Names()
+	if err != nil || len(names) != 1 || names[0] != "vertical" {
+		t.Errorf("Names = %v, %v", names, err)
 	}
 }
 

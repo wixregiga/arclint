@@ -1,6 +1,6 @@
 +++
 title = "Concepts"
-description = "Modules, contracts, Assurance, and how ArcLint reports findings."
+description = "Modules, Rules, Patterns, Assurance, and how ArcLint reports findings."
 weight = 2
 +++
 
@@ -10,19 +10,25 @@ A Module is a named set of files, defined by path globs in `rules.yaml`.
 Modules are the vocabulary other Rules use: consumes allow-lists,
 layers, and protections refer to Module names, never raw paths.
 
+A Module is logical, not a folder. One Module may gather files from
+many roots, and one glob may reach into every slice of a vertically
+sliced tree: `internal/*/domain/**` is the domain layer of every
+feature, wherever the feature lives.
+
 ```yaml
 modules:
   entities:
-    paths: ["internal/entities/**"]
-    description: "Domain types and invariants; depends on nothing."
-  features:
-    paths: ["internal/features/*"]
+    paths: "internal/*/domain/**"
+    description: "Every slice's domain layer; depends on nothing."
+  use_cases: "internal/*/app/**"
+  transport: ["internal/*/http/**", "internal/*/grpc/**"]
+  toolchain: ["Makefile", "go.mod"]
 ```
 
 A glob matches files directly, and a glob naming a directory owns the
 whole subtree. Overlapping Modules are legal: a file can belong to
-several Modules, which makes umbrella Modules
-(`paths: ["internal/**"]`) cheap for repo-wide invariants.
+several Modules, which makes umbrella Modules (`source: "internal/**"`)
+cheap for repo-wide invariants.
 
 Inspect the loaded map with `arclint context` or
 `arclint context --module <name>`.
@@ -39,29 +45,41 @@ Rules run. The class names appear throughout the Rule surface:
 | `stdlib` | the language's standard library (embedded tables generated from each toolchain) |
 | `unknown` | none of the above; governed by `scan.unknown_imports: warn/error/ignore` |
 
-So in a consumes Rule, `internal: [app]` means "may import the app
+So in an `imports` Rule, `internal: [app]` means "may import the app
 Module and nothing else internal", and `external: forbid` means "no
 third-party libraries here at all". Go classification follows toolchain
 semantics. TypeScript and Python are lexer-grade with documented
 limits: computed specifiers like `import(x)` or
 `importlib.import_module(name)` are invisible by design.
 
-## Contracts and dependencies
+## Rules and assertions
 
-`rules.yaml` binds Rules in two places:
+`rules:` is one map keyed by Rule ID. Every Rule states one Claim
+(`description`), judges the Modules named under `on`, and carries
+exactly one assertion key; that key is the Rule Type:
 
-- **`contracts.<module>`** — Rules scoped to one declared Module:
-  - `consumes`: what the Module may depend on (internal allow-list,
-    external and stdlib policy).
-  - `invariants`: properties that always hold over member files —
-    `structure`, `naming`, and `extension` Rule Types.
-- **`dependencies:`** — repository-wide graph Rules that span Modules:
-  `layers`, `protected`, and `acyclic`.
+- Module-scoped: `imports` (what the Module may depend on),
+  `structure` (files it must or must not contain), `naming`,
+  `content` (lines it must not contain), `invariants` (recorded domain
+  contracts visible in source), and `uses` (an Extension).
+- Graph-scoped, with the Modules in the assertion itself: `layers`,
+  `imported_by` (who may import the one Module under `on`),
+  `independent`, and `acyclic`.
 
+A Rule with two assertion keys is rejected: give each claim its own ID.
 The [rule reference](/docs/rules/) lists every published Rule Type and
 paste-ready YAML. `arclint rules` lists configured Rules;
 `arclint rules <id>` shows one complete Rule when the selector matches
 exactly.
+
+## Patterns and adoption
+
+A Pattern distributes Rules by reference. `extends` names it by exact
+version and binds every Pattern Module to local paths; the Pattern's
+Rules load under the Pattern's namespace, and an entry under `rules:`
+with no assertion is an Override of one of them: `severity`, `disable`
+with a reason, `exclude`, or `suppress`. Nothing is copied. See
+[Patterns](/docs/patterns/).
 
 ## Assurance
 
@@ -83,9 +101,11 @@ Assurance.
 
 ## Rule identity
 
-Rule IDs are stable strings. A material Claim change needs a new ID.
-Patterns may namespace IDs (`slice:…`, `layers:…`) so a selector can
-narrow a distributed set. `arclint rules <selector>` lists matches or
+Rule IDs are stable strings of the form `segment/segment`
+(`domain/stdlib-only`). A material Claim change needs a new ID. Rules an
+extended Pattern distributes carry the Pattern's namespace
+(`arclint:domain/stdlib-only`), so the prefix selector `arclint:` narrows
+to the distributed set. `arclint rules <selector>` lists matches or
 shows one Rule; `arclint rules test` runs fixture-backed Rule Tests
 under `.arclint/tests`.
 
@@ -130,8 +150,34 @@ printed by `arclint domain schema`). Inspect and maintain the model with
 Initialization leaves an existing file untouched. `arclint domain explain`
 prints the same ArcLint meanings used by help, guided authoring, JSON
 output, and the extension SDK. Declaring knowledge never creates a
-Diagnostic by itself—enabled Rules under `arclint check` (such as [Visible Domain Contracts](/docs/contracts/)) decide whether
-the model is enforced.
+Diagnostic by itself; enabled Rules under `arclint check` (such as
+[Visible Domain Contracts](/docs/contracts/)) decide whether the model
+is enforced.
+
+### What the language buys you
+
+Modules and Rules speak in Module names, and the recorded language is
+where those names come from. Once the two agree, recording a term is
+enough to extend the architecture:
+
+- A structure Rule with `each: domain.aggregates` expands once per
+  recorded aggregate. Record a new aggregate and the Rule now requires
+  its home (`internal/domain/{name:flatcase}/root.go`) without an edit
+  to `rules.yaml`.
+- A Module named after a bounded context is that context in the
+  dependency graph. The `respect-context-relations` Extension reads the
+  recorded context map and judges imports between context-named
+  Modules by the recorded relation, so recording a new context and its
+  relation is what adds the import Rule.
+- An `invariants` Rule requires every recorded invariant of a context
+  to be visible in the owner's source, so recording an invariant states
+  a Claim the next `arclint check` evaluates.
+
+This repository runs the first two on itself (`domain-model/aggregate-skeleton`
+and `domain-model/contexts-respect-relations` in
+[rules.yaml](https://github.com/wixregiga/arclint/blob/main/rules.yaml));
+the boxoffice proving ground under `testing/boxoffice` runs all three,
+with `entities/contracts-visible` as the `invariants` Rule.
 
 ## Validation layers
 

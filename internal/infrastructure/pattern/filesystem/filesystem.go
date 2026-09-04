@@ -1,7 +1,8 @@
 // Package filesystempattern supplies local Pattern distribution
 // packages from a directory: each subdirectory holding a pattern.yaml
-// — a target-format ruleset file with a pattern identity header — is
-// one distributable Pattern, returned as a validated domain value.
+// (a ruleset file with a pattern header) and an optional extensions
+// directory is one distributable Pattern, returned as a validated
+// domain value.
 package filesystempattern
 
 import (
@@ -11,7 +12,6 @@ import (
 	"sort"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
-	"github.com/wixregiga/arclint/internal/domain/vocab"
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
 )
 
@@ -60,21 +60,13 @@ func (s Source) Patterns() ([]rule.Pattern, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", file, err)
 		}
-		doc, err := yamlrule.Load(data, file, vocab.UbiquitousLanguage{})
-		if err != nil {
-			return nil, fmt.Errorf("load pattern: %w", err)
-		}
-		if doc.Pattern == nil {
-			return nil, fmt.Errorf("%s: missing pattern identity header (namespace, name, version)", file)
-		}
 		exts, err := loadPatternExtensions(pkgDir)
 		if err != nil {
 			return nil, err
 		}
-		p, err := rule.NewPattern(doc.Pattern.Namespace, doc.Pattern.Name, doc.Pattern.Version,
-			doc.Configured.Rules, exts, doc.Pattern.Coverage)
+		p, err := yamlrule.LoadPattern(data, file, exts)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %v", file, err)
+			return nil, fmt.Errorf("load pattern: %w", err)
 		}
 		out = append(out, p)
 	}
@@ -95,7 +87,7 @@ func loadPatternExtensions(pkgDir string) ([]rule.PatternExtension, error) {
 	}
 	var names []string
 	for _, e := range entries {
-		if e.IsDir() {
+		if e.IsDir() || !rule.InstallableExtensionFileName(e.Name()) {
 			continue
 		}
 		names = append(names, e.Name())
@@ -103,9 +95,6 @@ func loadPatternExtensions(pkgDir string) ([]rule.PatternExtension, error) {
 	sort.Strings(names)
 	var out []rule.PatternExtension
 	for _, name := range names {
-		if !rule.InstallableExtensionFileName(name) {
-			continue
-		}
 		path := filepath.Join(dir, name)
 		data, err := os.ReadFile(path)
 		if err != nil {

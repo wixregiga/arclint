@@ -85,7 +85,7 @@ func TestArchitecturalContextForPath(t *testing.T) {
 }
 
 func TestInitializeRepositoryRejectsUnknownLanguages(t *testing.T) {
-	uc, err := application.NewInitializeRepository(fakeScaffold{}, fakePatternScaffolds{})
+	uc, err := application.NewInitializeRepository(&recordingScaffold{}, fakePatternSource{})
 	if err != nil {
 		t.Fatalf("NewInitializeRepository: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestInitializeRepositoryRejectsUnknownLanguages(t *testing.T) {
 }
 
 func TestInitializeRepositoryRejectsUnknownPatterns(t *testing.T) {
-	uc, err := application.NewInitializeRepository(fakeScaffold{}, fakePatternScaffolds{})
+	uc, err := application.NewInitializeRepository(&recordingScaffold{}, fakePatternSource{})
 	if err != nil {
 		t.Fatalf("NewInitializeRepository: %v", err)
 	}
@@ -107,20 +107,141 @@ func TestInitializeRepositoryRejectsUnknownPatterns(t *testing.T) {
 	if err.Error() != want {
 		t.Errorf("error = %q, want %q", err.Error(), want)
 	}
+	if _, err := application.NewInitializeRepository(nil); err == nil {
+		t.Errorf("a missing scaffold must be rejected")
+	}
+	if _, err := application.NewInitializeRepository(&recordingScaffold{}, nil); err == nil {
+		t.Errorf("a nil pattern source must be rejected")
+	}
 }
 
-type fakeScaffold struct{}
+func TestInitializeRepositoryDraftsStarter(t *testing.T) {
+	scaffold := &recordingScaffold{}
+	uc, err := application.NewInitializeRepository(scaffold, fakePatternSource{})
+	if err != nil {
+		t.Fatalf("NewInitializeRepository: %v", err)
+	}
+	path, err := uc.Execute(application.InitializeRepositoryRequest{Languages: []string{"go", "ts"}, Force: true})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if path != "rules.yaml" || !scaffold.force {
+		t.Errorf("path = %q, force = %v", path, scaffold.force)
+	}
+	for _, want := range []string{"runtime: [go, ts]\n", "modules:\n", "  source: \"**\"\n", "rules:\n", "  source/dependencies:\n", "    on: source\n", "      internal: []\n"} {
+		if !strings.Contains(scaffold.content, want) {
+			t.Errorf("starter ruleset lacks %q:\n%s", want, scaffold.content)
+		}
+	}
+	choices, err := uc.Patterns()
+	if err != nil || len(choices) != 1 || choices[0] != application.BarePattern {
+		t.Errorf("Patterns = %v, %v; want only bare", choices, err)
+	}
+}
 
-func (fakeScaffold) Write(string, []rule.PatternExtension, bool) (string, error) {
+func TestInitializeRepositoryAdoptsPattern(t *testing.T) {
+	p := patternFixture(t, "1.2.3")
+	scaffold := &recordingScaffold{}
+	uc, err := application.NewInitializeRepository(scaffold, fakePatternSource{[]rule.Pattern{p}})
+	if err != nil {
+		t.Fatalf("NewInitializeRepository: %v", err)
+	}
+	choices, err := uc.Patterns()
+	if err != nil || len(choices) != 2 || choices[1] != "arclint/ddd-flat@1.2.3" {
+		t.Fatalf("Patterns = %v, %v", choices, err)
+	}
+	if _, err := uc.Execute(application.InitializeRepositoryRequest{Pattern: "ddd-flat"}); err != nil {
+		t.Fatalf("Execute by name: %v", err)
+	}
+	for _, want := range []string{
+		"this repository adopts arclint/ddd-flat@1.2.3.\n",
+		"# https://example.test/ddd-flat\n",
+		"runtime: [go]\n",
+		"extends:\n  - pattern: arclint/ddd-flat@1.2.3\n",
+		"      m: \"src/m/**\"\n",
+		"      # unbound: <glob>\n",
+		"#     arclint:m/snake:\n",
+	} {
+		if !strings.Contains(scaffold.content, want) {
+			t.Errorf("adopting ruleset lacks %q:\n%s", want, scaffold.content)
+		}
+	}
+	if strings.Contains(scaffold.content, "\nrules:\n") {
+		t.Errorf("an adopting ruleset never copies the pattern's rules:\n%s", scaffold.content)
+	}
+	if _, err := uc.Execute(application.InitializeRepositoryRequest{Pattern: "arclint/ddd-flat@1.2.3"}); err != nil {
+		t.Errorf("Execute by reference: %v", err)
+	}
+	if _, err := uc.Execute(application.InitializeRepositoryRequest{Pattern: "arclint/ddd-flat@9.9.9"}); err == nil {
+		t.Errorf("an unavailable version must be rejected")
+	}
+	ambiguous, err := application.NewInitializeRepository(scaffold, fakePatternSource{[]rule.Pattern{p, patternFixture(t, "2.0.0")}})
+	if err != nil {
+		t.Fatalf("NewInitializeRepository: %v", err)
+	}
+	_, err = ambiguous.Execute(application.InitializeRepositoryRequest{Pattern: "ddd-flat"})
+	if err == nil || !strings.Contains(err.Error(), "ambiguous") {
+		t.Errorf("an ambiguous name must be rejected, got %v", err)
+	}
+}
+
+// patternFixture distributes the fixture's naming Rule under the
+// arclint namespace with two Modules: m with a suggested path, and
+// unbound with none.
+func patternFixture(t *testing.T, version string) rule.Pattern {
+	t.Helper()
+	snake, err := rule.NewCaseSpec("snake_case")
+	if err != nil {
+		t.Fatalf("NewCaseSpec: %v", err)
+	}
+	scope, err := rule.ModuleApplicability([]rule.ModuleName{"m"})
+	if err != nil {
+		t.Fatalf("ModuleApplicability: %v", err)
+	}
+	r, err := rule.New(rule.Spec{
+		ID:            "arclint:m/snake",
+		Type:          rule.TypeNaming,
+		Params:        rule.NamingParams{Case: snake},
+		Applicability: scope,
+	})
+	if err != nil {
+		t.Fatalf("rule.New: %v", err)
+	}
+	glob, err := rule.NewGlob("src/m/**")
+	if err != nil {
+		t.Fatalf("NewGlob: %v", err)
+	}
+	m, err := rule.NewPatternModule("m", "The m module.", []rule.Glob{glob})
+	if err != nil {
+		t.Fatalf("NewPatternModule: %v", err)
+	}
+	unbound, err := rule.NewPatternModule("unbound", "A module with no suggested path.", nil)
+	if err != nil {
+		t.Fatalf("NewPatternModule: %v", err)
+	}
+	p, err := rule.NewPattern(rule.PatternSpec{
+		Namespace:     "arclint",
+		Name:          "ddd-flat",
+		Version:       version,
+		Documentation: "https://example.test/ddd-flat",
+		Coverage:      []rule.Language{rule.LanguageGo},
+		Modules:       []rule.PatternModule{m, unbound},
+		Rules:         []rule.Rule{r},
+	})
+	if err != nil {
+		t.Fatalf("NewPattern: %v", err)
+	}
+	return p
+}
+
+type recordingScaffold struct {
+	content string
+	force   bool
+}
+
+func (s *recordingScaffold) Write(content string, force bool) (string, error) {
+	s.content, s.force = content, force
 	return "rules.yaml", nil
-}
-
-type fakePatternScaffolds struct{}
-
-func (fakePatternScaffolds) Names() []string { return nil }
-
-func (fakePatternScaffolds) Scaffold(string) (application.PatternScaffold, bool) {
-	return application.PatternScaffold{}, false
 }
 
 func TestArchitecturalContextWorksite(t *testing.T) {

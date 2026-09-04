@@ -1,0 +1,18 @@
+# Violating case: the built-in content assertion catches a panic in the
+# entities layer, line-exact, where the re-authored forbid-content
+# extension used to.
+rule: "entities/no-panic"
+files:
+  internal/entities/event/event.go: |
+    package event
+
+    type Event struct{}
+
+    func (e Event) mustBeOnSale() {
+        panic("not on sale")
+    }
+expect:
+  - kind: violation
+    path: internal/entities/event/event.go
+    line: 6
+    message: "forbidden content matching /\\bpanic\\(/"

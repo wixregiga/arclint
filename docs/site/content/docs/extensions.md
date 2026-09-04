@@ -4,11 +4,13 @@ description = "Full rule logic in .arclint/extensions/*.ts, executed by the bina
 weight = 4
 +++
 
-When the declarative vocabulary runs out, a Rule of kind `extension`
-delegates enforcement to a TypeScript file. The binary transpiles and
-executes it in-process (esbuild + sobek, the k6 pattern): contributors
-and CI need no Node, npm, or tsc. Extensions do not add Rule Types;
-they supply enforcement for the finite `extension` kind.
+When the declarative vocabulary runs out, a Rule whose assertion is
+`uses` delegates enforcement to a TypeScript file. The binary transpiles
+and executes it in-process (esbuild + sobek, the k6 pattern):
+contributors and CI need no Node, npm, or tsc. Extensions do not add
+Rule Types; they supply enforcement for the finite `extension` Type.
+Reach for one only after the built-in assertions run out: a line
+pattern is a `content` Rule, not an Extension.
 
 ## Resolution
 
@@ -27,31 +29,37 @@ the error names the absolute directory that was searched.
 
 ## Anatomy
 
+The built-in `arclint/vertical` Pattern ships this one, which forbids
+named packages and their subpackages through the classified import
+facts rather than by grepping source:
+
 ```ts
-// .arclint/extensions/forbid_content.ts
+// .arclint/extensions/forbid_imports.ts
 import { defineRule, s } from "arclint";
 
 export default defineRule({
-  type: "forbid-content",
-  description: "report lines matching a configured pattern",
+  type: "forbid-imports",
+  description: "forbid imports of named packages and their subpackages",
   capability: "exact",
   params: s.object({
-    pattern: s.string().describe("RegExp source matched against each line"),
+    packages: s.array(s.string()).describe("Import paths no selected file may import."),
   }),
   check(ctx, params) {
-    const re = new RegExp(String(params.pattern));
+    const packages = params.packages as string[];
     for (const file of ctx.files()) {
-      const lines = ctx.read(file.path).split("\n");
-      lines.forEach((line, index) => {
-        if (re.test(line)) {
-          ctx.report({
-            path: file.path,
-            line: index + 1,
-            message: `forbidden content matching /${params.pattern}/`,
-            fixHint: "remove the content or relocate it outside this rule's scope",
-          });
+      for (const imp of ctx.imports(file.path)) {
+        for (const pkg of packages) {
+          if (imp.path === pkg || imp.path.startsWith(pkg + "/")) {
+            ctx.report({
+              path: file.path,
+              line: imp.line,
+              message: `import of ${imp.path} is forbidden`,
+              fixHint: "move the dependency behind a port the application layer owns",
+            });
+            break;
+          }
         }
-      });
+      }
     }
   },
 });
@@ -70,48 +78,48 @@ export default defineRule({
 Default-export one `defineRule(...)` result, or an array of them. Duplicate
 `type` names across entries fail registration.
 
-Wire the Rule under the Module it applies to. Severity, identity, and
-Applicability belong to the Rule, not the TypeScript file:
+Wire the Rule in `rules.yaml` with `uses` as its assertion. Severity,
+identity, Claim, and Applicability belong to the Rule, not the
+TypeScript file:
 
 ```yaml
 modules:
-  domain:
-    paths: ["internal/domain/**"]
-contracts:
-  domain:
-    invariants:
-      - id: "arclint:domain/no-panic"
-        kind: extension
-        # severity defaults to error when omitted
-        files: "internal/domain/**/*.go"   # optional member-file narrow
-        uses: forbid-content
-        with:
-          pattern: '\bpanic\('
+  domain: "internal/domain/**"
+
+rules:
+  domain/no-io:
+    description: "Domain performs no I/O; adapters do."
+    # severity defaults to error when omitted
+    on: domain
+    files: "internal/domain/**/*.go"   # optional member-file narrow
+    uses: forbid-imports
+    with:
+      packages: [bufio, database/sql, io, log, net, os, syscall]
 ```
 
-Required fields: `id`, `kind: extension`, `uses`. Optional: `severity`
-(`error` \| `warning` \| `info`), `files` (one glob narrowing member
-files; absent means all members), `with` (object validated host-side
-against the extension's published schema before `check` runs).
-
-To inspect files outside every declared Module, put the same extension
-shape under top-level `repository.invariants`. That is repository-scoped
-enforcement, not a new Rule Type: only `kind: extension` is accepted
-there. `uses`, `with`, and optional `files` keep the same meaning.
+`uses` is the registered extension name. `on` names the Module or
+Modules whose members the Extension sees; omit it to inspect files
+outside every declared Module, which is repository-scoped enforcement
+with the same Rule Type. `files` narrows the selected files (one glob
+or a list). `with` is validated host-side against the extension's
+published schema before `check` runs, and is rejected on any Rule
+whose assertion is not `uses`.
 
 ```yaml
-repository:
-  invariants:
-    - id: "vertical:repositories/application-only"
-      kind: extension
-      uses: vertical/repository-location
-      with:
-        module: application
+rules:
+  repositories/application-only:
+    description: "Repository interfaces are declared only in application packages."
+    uses: repository-location
+    with:
+      module: application
 ```
 
-`arclint init --pattern vertical` copies Pattern extension entries into
-`.arclint/extensions`. Those files are then ordinary repository-owned
-registry entries.
+Extensions a Pattern carries are supplied to the runtime when the
+Pattern is extended; nothing is copied into `.arclint/extensions`, and
+the Pattern's Rules name them by the Pattern's own type names
+(`vertical/forbid-imports`). A local Rule may not use a Pattern's
+extension unless the Pattern is extended; the check fails with
+`no extension registers rule "vertical/forbid-imports"`.
 
 ## The ctx surface
 
@@ -220,8 +228,9 @@ Rule Tests exercise `ctx.domain()` the same way they exercise files: a
 fixture that authors `ubiquitous-language.yaml` at its tree root is
 parsed with the production loader, and the extension under test
 observes that vocabulary through `ctx.domain()`. Fixtures without one
-see an empty model. See `arclint:vocabulary/terms-carry-definitions`
-and its cases under `.arclint/tests/` for a complete example.
+see an empty model. See `vocabulary/terms-carry-definitions` in this
+repository's `rules.yaml` and its cases under `.arclint/tests/` for a
+complete example.
 
 ## Evidence honesty
 

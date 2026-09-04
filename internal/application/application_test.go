@@ -346,11 +346,7 @@ type fakePatternSource struct {
 func (f fakePatternSource) Patterns() ([]rule.Pattern, error) { return f.patterns, nil }
 
 func TestListPatternsSummarizes(t *testing.T) {
-	cfg, _ := fixture(t, "m/ok.go")
-	p, err := rule.NewPattern("arclint", "ddd-flat", "1.2.3", cfg.Rules, nil, []rule.Language{rule.LanguageGo})
-	if err != nil {
-		t.Fatalf("NewPattern: %v", err)
-	}
+	p := patternFixture(t, "1.2.3")
 	uc, err := application.NewListPatterns(fakePatternSource{[]rule.Pattern{p}})
 	if err != nil {
 		t.Fatalf("NewListPatterns: %v", err)

@@ -1,6 +1,6 @@
 # Conforming case: every recorded aggregate has its slice, its
 # repository interface, and its tests.
-rule: "boxoffice:entities/aggregate-slices"
+rule: "entities/aggregate-slices"
 files:
   ubiquitous-language.yaml: |
     version: 1

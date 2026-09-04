@@ -1,6 +1,6 @@
 # Violating case: a domain file imports a declared external dependency;
 # the consumes rule forbids external imports for the domain Module.
-rule: "arclint:domain/stdlib-only"
+rule: "domain/stdlib-only"
 files:
   go.mod: |
     module fixture

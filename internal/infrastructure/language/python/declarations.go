@@ -26,24 +26,45 @@ func normalizeType(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }
 
+// parsers is one worker goroutine's tree-sitter parser, built on
+// first use. A Parser is not safe for concurrent use and costs more
+// to construct than a typical file costs to parse, so each worker
+// keeps its own and reuses it file after file.
+type parsers struct {
+	python *gotreesitter.Parser
+}
+
+func newParsers() *parsers { return &parsers{} }
+
+func (ps *parsers) forPython() (*gotreesitter.Parser, error) {
+	if ps.python != nil {
+		return ps.python, nil
+	}
+	lang, err := pythonLanguage()
+	if err != nil {
+		return nil, err
+	}
+	ps.python = gotreesitter.NewParser(lang)
+	return ps.python, nil
+}
+
 // extractDeclarations extracts declaration facts from one Python file via the pinned
 // pure-Go tree-sitter runtime (pinned grammar, deterministic). Classes, functions, and methods
 // carry line spans; visibility follows the leading-underscore
 // convention.
-func extractDeclarations(src []byte) *declarationFacts {
+func extractDeclarations(ps *parsers, src []byte) *declarationFacts {
 	out := &declarationFacts{}
-	pyLang, err := pythonLanguage()
+	parser, err := ps.forPython()
 	if err != nil {
 		out.ParseError = err.Error()
 		return out
 	}
-	parser := gotreesitter.NewParser(pyLang)
 	tree, err := parser.ParseStrict(src)
 	if err != nil {
 		out.ParseError = fmt.Sprintf("parse: %v", err)
 		return out
 	}
-	w := &pyWalker{lang: pyLang, src: src, out: out}
+	w := &pyWalker{lang: parser.Language(), src: src, out: out}
 	w.walk(tree.RootNode(), "", false)
 	w.walkCalls(tree.RootNode(), "")
 	return out

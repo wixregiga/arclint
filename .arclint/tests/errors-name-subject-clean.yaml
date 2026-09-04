@@ -1,7 +1,7 @@
 # Conforming case: the domain error names its subject, so the
-# forbid-content rule must stay silent; proves the pattern does not
-# overfire on ErrDefinitionNotFound.
-rule: "arclint:domain/errors-name-their-subject"
+# content rule must stay silent; proves the pattern does not overfire
+# on ErrDefinitionNotFound.
+rule: "domain/errors-name-their-subject"
 files:
   internal/domain/vocab/language.go: |
     package vocab

@@ -12,6 +12,24 @@ contexts:
           Claim, its scope, and its Severity change together in one
           edit of rules.yaml.
         aggregate: true
+      - name: Module
+        definition: >-
+          A named group of folders and files an architecture speaks
+          about, such as domain or delivery. A Module keeps its
+          ModuleName while the paths that belong to it change: a Rule
+          says "on: domain" and never repeats a folder. A Pattern lists
+          its Modules with descriptions and no paths; a repository
+          ruleset gives every Module its paths, either directly or
+          through a Binding.
+      - name: Pattern
+        definition: >-
+          A named, namespaced collection of Rules and Modules published
+          for other repositories to extend, with a documentation link
+          and the Languages it covers. A Pattern keeps its namespace
+          and name across versions; a repository always extends one
+          exact version through a PatternReference. Every Rule a
+          Pattern distributes carries the Pattern's namespace in its
+          RuleID.
     value_objects:
       - name: RuleID
         definition: >-
@@ -19,17 +37,43 @@ contexts:
           Rule, spelled explicitly in rules.yaml. Every record arclint
           keeps about a Rule over time keys on it, so it outlives
           renames of anything else about the Rule.
+      - name: ModuleName
+        definition: >-
+          The lowercase name a ruleset spells for a Module, the only
+          way a Rule, a Binding, or an Exclusion refers to one.
       - name: Claim
         definition: >-
           The architectural proposition a Rule states, either written
           by the author or derived from the Rule's parameters. The
           Claim of an expanded Rule says what it derives from, and
           says plainly when the vocabulary records nothing yet.
+        aliases: [description]
+      - name: Assertion
+        definition: >-
+          The one checkable proposition a Rule carries, written in
+          rules.yaml as exactly one assertion key with its parameters:
+          imports, structure, naming, invariants, layers, imported_by,
+          independent, acyclic, content, or uses. The key alone decides
+          how the Rule is evaluated; a Rule never carries two.
       - name: Severity
         definition: >-
           Gate importance of a finding: error, warning, or info.
           Described entirely by its value and validated at
           construction. Two equal spellings are interchangeable.
+      - name: Language
+        definition: >-
+          A source language arclint recognizes and can analyze: go,
+          typescript, or python. A repository ruleset states which
+          Languages it runs under runtime, and a Pattern states which
+          Languages it covers. Recognition does not promise that every
+          Rule covers the Language.
+      - name: PatternReference
+        definition: >-
+          The exact spelling namespace/name@version by which a
+          repository extends one published version of a Pattern. A
+          Rule a Pattern distributes carries the PatternReference as
+          its provenance, and two references with the same spelling
+          resolve to the same Pattern version.
       - name: Expansion
         definition: >-
           How a structure Rule's globs derive from one recorded
@@ -79,9 +123,92 @@ contexts:
           parameters are empty and the Claim says so.
         owner: Rule
       - statement: >-
+          A Rule carries exactly one Assertion; a Rule written with two
+          assertion keys, or with none and no Override target, is
+          rejected at load.
+        owner: Rule
+      - statement: >-
+          Two Rules with the same qualified RuleID cannot both exist in
+          one repository; a repository Rule spelled with the RuleID of a
+          Rule an extended Pattern distributes is rejected at load.
+        owner: Rule
+      - statement: >-
+          A Module in a repository ruleset has at least one path; a
+          Module written with no paths is legal only in a Pattern file,
+          where a Binding supplies them later.
+        owner: Module
+      - statement: >-
+          A Pattern lists its Modules without paths, and every Rule the
+          Pattern distributes names only Modules the Pattern lists.
+        owner: Pattern
+      - statement: >-
           A TermCase never renders an empty segment: a term without
           letters or digits is rejected at resolution.
         owner: TermCase
+  - name: adoption
+    value_objects:
+      - name: Binding
+        definition: >-
+          The paths an adopting repository gives to one Module of a
+          Pattern it extends, spelled under bind as one glob or a list
+          of globs. A Binding is the only place a Pattern Module's
+          paths live; the Pattern's Rules never change when the folders
+          do.
+      - name: Override
+        definition: >-
+          One adopting repository's decision applied onto a Rule an
+          extended Pattern distributes, keyed by the Rule's qualified
+          RuleID. An Override is not a second Rule: it only disables
+          the Rule, changes its Severity, excludes subjects from it, or
+          suppresses its findings.
+      - name: Disablement
+        definition: >-
+          The decision to stop evaluating one Rule for the repository,
+          with a reason. The Rule and its provenance stay inspectable
+          and the reason is reported wherever the Rule is listed.
+      - name: Exclusion
+        definition: >-
+          The decision removing selected paths or Modules from what one
+          Rule judges, with a reason. Excluded subjects are reported as
+          not applicable, never silently dropped.
+      - name: Suppression
+        definition: >-
+          The decision keeping a finding one Rule produced at selected
+          paths while removing its gate effect, with a reason. The
+          finding is still reported as suppressed.
+    invariants:
+      - statement: >-
+          A Binding names a Module the extended Pattern lists and gives
+          it at least one path; a Binding for a Module the Pattern does
+          not list is rejected at load.
+        owner: Binding
+      - statement: >-
+          Every Module an extended Pattern lists has a Binding before
+          the Pattern's Rules evaluate; a Module left unbound is
+          rejected at load.
+        owner: Binding
+      - statement: >-
+          An Override names a Rule an extended Pattern distributes; an
+          Override whose RuleID matches no Pattern Rule is rejected at
+          load.
+        owner: Override
+      - statement: >-
+          An Override carries no Assertion and no Claim; adding either
+          is rejected at load with the advice to add a new local Rule
+          under a new RuleID.
+        owner: Override
+      - statement: >-
+          A Disablement carries a reason; disabling without one is
+          rejected at load.
+        owner: Disablement
+      - statement: >-
+          An Exclusion names at least one path or Module and carries a
+          reason; an Exclusion without either is rejected at load.
+        owner: Exclusion
+      - statement: >-
+          A Suppression names at least one path and carries a reason;
+          a Suppression without either is rejected at load.
+        owner: Suppression
   - name: conformance
     value_objects:
       - name: Violation
@@ -96,4 +223,10 @@ relations:
   # so dependence flows conformance -> rule and never back.
   - from: rule
     to: conformance
+    kind: conformist
+  # adoption speaks the rule context's model unchanged: a Binding
+  # names a Module, an Override names a Rule, and neither redefines
+  # them, so dependence flows adoption -> rule and never back.
+  - from: rule
+    to: adoption
     kind: conformist

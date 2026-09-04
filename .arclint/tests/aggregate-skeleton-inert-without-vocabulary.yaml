@@ -1,6 +1,6 @@
 # Inert case: with no recorded vocabulary the rule derives no
 # obligations — declaring knowledge is what arms it.
-rule: "arclint:domain-model/aggregate-skeleton"
+rule: "domain-model/aggregate-skeleton"
 files:
   internal/domain/anything/thing.go: |
     package anything

@@ -1,6 +1,6 @@
 # Violating case: the aggregate struct exposes an exported field,
 # letting callers bypass the invariants its methods enforce.
-rule: "boxoffice:entities/aggregates-encapsulate"
+rule: "entities/aggregates-encapsulate"
 files:
   ubiquitous-language.yaml: |
     version: 1

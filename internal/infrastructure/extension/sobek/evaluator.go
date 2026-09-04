@@ -20,38 +20,78 @@ import (
 // Per-finding severity, contract, and blame from the legacy wire shape
 // are ignored: in the target model Severity belongs to the Rule.
 type Evaluator struct {
-	root string
-	opts Options
+	root      string
+	opts      Options
+	suppliers []ExtensionSupplier
 
 	once     sync.Once
 	registry *Registry
 	loadErr  error
 }
 
-// NewEvaluator binds the evaluator to a repository root; extensions
-// load lazily from <root>/.arclint/extensions on first use.
-func NewEvaluator(root string) (*Evaluator, error) {
+// ExtensionSupplier hands the host the Extension sources the
+// repository's extended Patterns distribute. It runs once, on first
+// use, so it may load the ruleset lazily.
+type ExtensionSupplier func() ([]rule.ConfiguredExtension, error)
+
+// NewEvaluator binds the evaluator to a repository root. On first use
+// it registers the sources every supplier hands over, then the
+// repository's own extensions under <root>/.arclint/extensions.
+func NewEvaluator(root string, suppliers ...ExtensionSupplier) (*Evaluator, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, fmt.Errorf("extensions root: %w", err)
 	}
+	for _, s := range suppliers {
+		if s == nil {
+			return nil, fmt.Errorf("extensions root %s: nil extension supplier", abs)
+		}
+	}
 	return &Evaluator{
-		root: abs,
-		opts: Options{CacheDir: filepath.Join(abs, ".arclint", "cache")},
+		root:      abs,
+		opts:      Options{CacheDir: filepath.Join(abs, ".arclint", "cache")},
+		suppliers: suppliers,
 	}, nil
+}
+
+func (e *Evaluator) load() {
+	e.once.Do(func() {
+		var supplied []SuppliedSource
+		for _, supplier := range e.suppliers {
+			exts, err := supplier()
+			if err != nil {
+				e.loadErr = fmt.Errorf("pattern extensions: %w", err)
+				return
+			}
+			for _, ext := range exts {
+				supplied = append(supplied, SuppliedSource{
+					Name:   SuppliedSourceName(ext),
+					Source: ext.Extension.Source(),
+				})
+			}
+		}
+		e.registry, e.loadErr = Load(e.root, supplied, e.opts)
+	})
+}
+
+// SuppliedSourceName is the attribution a Pattern-distributed
+// extension carries in diagnostics and inventories: the Pattern
+// reference followed by the file inside its extensions directory.
+func SuppliedSourceName(ext rule.ConfiguredExtension) string {
+	return ext.Pattern.String() + "/extensions/" + ext.Extension.FileName()
 }
 
 // Evaluate runs one extension rule over the selected subjects.
 func (e *Evaluator) Evaluate(extension string, params map[string]any, subjects []string,
 	modules []rule.Module, obs conformance.Observations, knowledge vocab.UbiquitousLanguage,
 ) ([]conformance.ExtensionFinding, error) {
-	e.once.Do(func() { e.registry, e.loadErr = LoadDir(e.root, e.opts) })
+	e.load()
 	if e.loadErr != nil {
 		return nil, e.loadErr
 	}
 	ruleType := e.registry.Get(extension)
 	if ruleType == nil {
-		return nil, fmt.Errorf("no extension registers rule %q (looked in %s)",
+		return nil, fmt.Errorf("no extension registers rule %q (looked in %s and the extended patterns)",
 			extension, filepath.Join(e.root, filepath.FromSlash(ExtensionsDir)))
 	}
 	validated, err := ruleType.ValidateParams(params)
@@ -78,7 +118,7 @@ func (e *Evaluator) Evaluate(extension string, params map[string]any, subjects [
 // ExtensionInventory port: every rule definition the repository's
 // extensions register, with its source file, in registration order.
 func (e *Evaluator) RegisteredExtensionRules() ([]application.RegisteredExtensionRule, error) {
-	e.once.Do(func() { e.registry, e.loadErr = LoadDir(e.root, e.opts) })
+	e.load()
 	if e.loadErr != nil {
 		return nil, e.loadErr
 	}

@@ -12,19 +12,16 @@ import (
 	"testing"
 )
 
-// completionRules is a minimal but real ruleset: one naming invariant
+// completionRules is a minimal but real ruleset: one naming Rule
 // whose id the completion callbacks must surface.
 const completionRules = `runtime: [go]
 modules:
-  src:
-    paths: ["src/**"]
-contracts:
-  src:
-    invariants:
-      - id: "repo:src/snake"
-        kind: naming
-        files: "src/**/*.go"
-        case: snake_case
+  src: src/**
+rules:
+  src/snake:
+    on: src
+    files: "src/**/*.go"
+    naming: snake_case
 `
 
 // containsLine reports whether output has want as one complete line;
@@ -50,7 +47,7 @@ func TestCompletionListsRuleIDs(t *testing.T) {
 		if code != 0 {
 			t.Fatalf("__complete %s: exit %d\nstdout: %s\nstderr: %s", sub, code, stdout, stderr)
 		}
-		if !containsLine(stdout, "repo:src/snake") {
+		if !containsLine(stdout, "src/snake") {
 			t.Errorf("__complete %s misses the rule id\n%s", sub, stdout)
 		}
 		if !containsLine(stdout, ":4") {
@@ -111,7 +108,9 @@ func TestCompletionListsInitPatterns(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("__complete init --pattern: exit %d\nstderr: %s", code, stderr)
 	}
-	for _, name := range []string{"bare", "vertical"} {
+	// bare, then every available Pattern by its exact reference: the
+	// spelling that pins one version in extends.
+	for _, name := range []string{"bare", "arclint/vertical@0.1.0"} {
 		if !containsLine(stdout, name) {
 			t.Errorf("--pattern completion misses %q\n%s", name, stdout)
 		}
@@ -132,15 +131,13 @@ func TestCompletionDegradesWithoutRuleset(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("__complete rules without ruleset: exit %d\nstderr: %s", code, stderr)
 	}
-	// No dynamic candidates: every configured rule id contains ":", so
-	// any candidate carrying one means the ruleset leaked in.
+	// No dynamic candidates: only the static subcommands and the
+	// directive may appear.
 	for _, line := range strings.Split(strings.TrimSpace(stdout), "\n") {
-		if line == ":4" {
+		if line == ":4" || strings.HasPrefix(line, "schema\t") || strings.HasPrefix(line, "test\t") {
 			continue
 		}
-		if strings.Contains(line, ":") {
-			t.Errorf("dynamic candidate without a ruleset: %q\n%s", line, stdout)
-		}
+		t.Errorf("dynamic candidate without a ruleset: %q\n%s", line, stdout)
 	}
 	if !containsLine(stdout, ":4") {
 		t.Errorf("missing the NoFileComp directive\n%s", stdout)

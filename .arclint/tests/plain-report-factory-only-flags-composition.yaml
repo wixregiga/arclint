@@ -1,6 +1,6 @@
 # Violating case: composition imports the plain report adapter
 # directly instead of selecting it through report_factory.
-rule: "arclint:delivery/plain-report-factory-only"
+rule: "delivery/plain-report-factory-only"
 files:
   go.mod: |
     module fixture
