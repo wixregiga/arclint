@@ -151,11 +151,11 @@ modules:
 
 rules:
   # Overrides: the Pattern's qualified id, no assertion key.
-  arclint:shared/concerns:
+  arclint/vertical:shared/concerns:
     severity: warning
-  arclint:domain/no-context:
+  arclint/vertical:domain/no-context:
     disable: "this service threads context through domain services on purpose"
-  arclint:features/independent:
+  arclint/vertical:features/independent:
     exclude:
       paths: ["internal/billing/**"]
       reason: "billing is being split; tracked in AL-52"
@@ -177,12 +177,14 @@ The loader enforces the adoption contract:
   under `on`. A local `modules:` entry with the same name must carry
   the same paths; different paths are rejected.
 - The Pattern's Rules load under their qualified IDs
-  (`arclint:domain/stdlib-only`). `arclint rules` lists them beside the
-  local Rules with `from arclint/vertical@0.1.0`, `arclint check`
-  reports their findings under the qualified id, and
-  `arclint rules arclint:domain/stdlib-only` shows the Pattern under
-  `provenance`. A finding always says whether it came from a Pattern or
-  from the local ruleset.
+  (`arclint/vertical:domain/stdlib-only`). `arclint rules` lists them
+  beside the local Rules with `from arclint/vertical@0.1.0`,
+  `arclint check` reports their findings under the qualified id with
+  the Pattern's version beside it (`(@0.1.0)`), and
+  `arclint rules arclint/vertical:domain/stdlib-only` shows the Pattern
+  under `provenance`. A finding always says whether it came from a
+  Pattern or from the local ruleset: a local Rule's id has no
+  qualifier.
 - Extensions the Pattern carries are supplied to the runtime for the
   Pattern's Rules; nothing is copied into `.arclint/extensions`.
 - One Pattern is extended at most once, and two extended Patterns may
@@ -278,8 +280,12 @@ The rules of the Pattern file:
   `init --pattern` offer as the starting binding. A list of globs is
   rejected, because the adopting repository binds the paths.
 - Rule IDs are local (`core/stdlib-only`); the loader qualifies them
-  with the namespace (`acme:core/stdlib-only`). A namespaced ID inside a
-  Pattern file is rejected.
+  with the Pattern's namespace/name (`acme/hexagonal:core/stdlib-only`).
+  A qualified ID inside a Pattern file is rejected. Because the
+  qualifier names the Pattern and not only its publisher, two Patterns
+  may distribute the same local ID (`acme/hexagonal:core/stdlib-only`
+  and `acme/onion:core/stdlib-only`) and both apply; an Override under
+  either qualified ID reaches exactly that Rule.
 - Every Rule names only Modules the Pattern lists, and every entry
   carries an assertion key; a Pattern distributes Rules and cannot
   override. A Pattern with no Rules is rejected.

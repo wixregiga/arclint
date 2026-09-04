@@ -108,15 +108,15 @@ func TestVerticalRulesetRoundTrips(t *testing.T) {
 	}
 	var sawIndependence bool
 	for _, r := range cfg.Rules {
-		if r.ID().Qualified() == "arclint:features/independent" {
+		if r.ID().Qualified() == "arclint/vertical:features/independent" {
 			sawIndependence = true
 			if r.Type() != "independence" {
-				t.Errorf("arclint:features/independent type = %q", r.Type())
+				t.Errorf("arclint/vertical:features/independent type = %q", r.Type())
 			}
 		}
 	}
 	if !sawIndependence {
-		t.Errorf("missing arclint:features/independent")
+		t.Errorf("missing arclint/vertical:features/independent")
 	}
 	if len(cfg.Languages) != 2 {
 		t.Errorf("languages = %v, want go and typescript", cfg.Languages)

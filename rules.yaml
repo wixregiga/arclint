@@ -31,7 +31,7 @@ scan:
 # invariants name recorded owners, and imports between context-named
 # Modules respect the context map. Adopt it with
 # `arclint patterns install domain-model`; its Rule IDs are qualified
-# (arclint:vocabulary/terms-carry-definitions) so a finding always
+# (arclint/domain-model:vocabulary/terms-carry-definitions) so a finding always
 # says whether it came from the Pattern or from this file.
 extends:
   - pattern: arclint/domain-model@0.1.0

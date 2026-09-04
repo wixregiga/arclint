@@ -33,10 +33,14 @@ contexts:
     value_objects:
       - name: RuleID
         definition: >-
-          The stable, optionally namespace-qualified identity of a
-          Rule, spelled explicitly in rules.yaml. Every record arclint
-          keeps about a Rule over time keys on it, so it outlives
-          renames of anything else about the Rule.
+          The stable identity of a Rule, spelled explicitly in
+          rules.yaml. A repository Rule's RuleID is local; a Rule a
+          Pattern distributes is qualified by that Pattern's
+          namespace/name, spelled namespace/name:local, so two Patterns
+          may distribute the same local identity and both apply under
+          distinct RuleIDs. Every record arclint keeps about a Rule over
+          time keys on it, so it outlives renames of anything else about
+          the Rule, and it never carries a version.
       - name: ModuleName
         definition: >-
           The lowercase name a ruleset spells for a Module, the only
@@ -132,6 +136,12 @@ contexts:
           one repository; a repository Rule spelled with the RuleID of a
           Rule an extended Pattern distributes is rejected at load.
         owner: Rule
+      - statement: >-
+          A distributed Rule's RuleID is qualified by the full
+          namespace/name of its Pattern, never by the namespace alone,
+          so Patterns that share a namespace may distribute the same
+          local identity without colliding.
+        owner: RuleID
       - statement: >-
           A Module in a repository ruleset has at least one path; a
           Module written with no paths is legal only in a Pattern file,

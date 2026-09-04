@@ -63,9 +63,9 @@ func TestLoadTargetRuleset(t *testing.T) {
 	// Pattern's provenance under qualified ids, and the local ruleset
 	// spells no copy of them.
 	for _, id := range []string{
-		"arclint:vocabulary/terms-carry-definitions",
-		"arclint:vocabulary/invariants-name-recorded-owners",
-		"arclint:contexts/respect-relations",
+		"arclint/domain-model:vocabulary/terms-carry-definitions",
+		"arclint/domain-model:vocabulary/invariants-name-recorded-owners",
+		"arclint/domain-model:contexts/respect-relations",
 	} {
 		r, ok := byID[id]
 		if !ok {
@@ -360,7 +360,7 @@ modules:
 contracts:
   m:
     consumes:
-      id: "repo:m/imports"
+      id: "repo/p:m/imports"
       internal: []
 `, `unknown key "contracts"`},
 		"rule without assertion and without extends": {`
@@ -710,7 +710,7 @@ func TestLoadPatternQualifiesLocalIDs(t *testing.T) {
 			t.Errorf("%s provenance = %v %v", r.ID().Qualified(), ref, ok)
 		}
 	}
-	if p.Rules()[0].ID().Qualified() != "acme:core/stdlib-only" {
+	if p.Rules()[0].ID().Qualified() != "acme/hexagonal:core/stdlib-only" {
 		t.Errorf("first rule = %s", p.Rules()[0].ID().Qualified())
 	}
 	modules := p.Modules()
@@ -733,7 +733,7 @@ pattern: {namespace: acme, name: hexagonal, version: 1.0.0}
 modules:
   core: "The core."
 rules:
-  acme:core/stdlib-only:
+  acme/hexagonal:core/stdlib-only:
     on: core
     imports:
       internal: []
@@ -815,11 +815,11 @@ extends:
 modules:
   shared: internal/shared/**
 rules:
-  acme:core/stdlib-only:
+  acme/hexagonal:core/stdlib-only:
     severity: warning
-  acme:core/no-panic:
+  acme/hexagonal:core/no-panic:
     disable: "the core wraps a legacy library that panics"
-  acme:core/checked:
+  acme/hexagonal:core/checked:
     exclude:
       paths: ["internal/core/generated/**"]
       reason: "generated"
@@ -845,25 +845,25 @@ rules:
 		t.Errorf("local module must follow the bound ones, got %s", cfg.Modules[3].Name())
 	}
 	ids := ruleIDs(cfg)
-	if len(ids) != 7 || ids[0] != "acme:core/stdlib-only" || ids[6] != "shared/imports" {
+	if len(ids) != 7 || ids[0] != "acme/hexagonal:core/stdlib-only" || ids[6] != "shared/imports" {
 		t.Fatalf("rules = %v, want the six pattern rules then the local one", ids)
 	}
-	if r := ruleByID(t, cfg, "acme:core/stdlib-only"); r.Severity() != rule.SeverityWarning {
+	if r := ruleByID(t, cfg, "acme/hexagonal:core/stdlib-only"); r.Severity() != rule.SeverityWarning {
 		t.Errorf("override severity = %s", r.Severity())
 	} else if r.Claim().Statement() != "The core imports no other Module and no third-party package." {
 		t.Errorf("an override keeps the pattern's description, got %q", r.Claim())
 	}
-	if r := ruleByID(t, cfg, "acme:core/no-panic"); !r.Disabled() {
+	if r := ruleByID(t, cfg, "acme/hexagonal:core/no-panic"); !r.Disabled() {
 		t.Errorf("override disable must disable the pattern rule")
 	}
-	checked := ruleByID(t, cfg, "acme:core/checked")
+	checked := ruleByID(t, cfg, "acme/hexagonal:core/checked")
 	if checked.AppliesToFile("internal/core/generated/x.go", []rule.ModuleName{"core"}) {
 		t.Errorf("override exclude must narrow the pattern rule")
 	}
 	if _, ok := checked.SuppressionFor("internal/core/legacy/x.go"); !ok {
 		t.Errorf("override suppress must suppress the pattern rule's findings")
 	}
-	if untouched := ruleByID(t, cfg, "acme:adapters/core-only"); untouched.Severity() != rule.SeverityError {
+	if untouched := ruleByID(t, cfg, "acme/hexagonal:adapters/core-only"); untouched.Severity() != rule.SeverityError {
 		t.Errorf("an unoverridden pattern rule keeps its severity")
 	}
 	if len(cfg.Extensions) != 1 || cfg.Extensions[0].Pattern.String() != "acme/hexagonal@1.0.0" ||
@@ -904,47 +904,47 @@ extends:
   core: internal/other/**
 `, `module "core" is already bound by an extended pattern`},
 		"override of an undistributed rule": {bound + `rules:
-  acme:core/missing:
+  acme/hexagonal:core/missing:
     severity: warning
-`, "no extended pattern distributes rule acme:core/missing"},
+`, "no extended pattern distributes rule acme/hexagonal:core/missing"},
 		"override of an unqualified id": {bound + `rules:
   core/stdlib-only:
     severity: warning
 `, "no extended pattern distributes rule core/stdlib-only"},
 		"override with description": {bound + `rules:
-  acme:core/stdlib-only:
+  acme/hexagonal:core/stdlib-only:
     description: "rewritten"
     severity: warning
 `, "an override does not accept description"},
 		"override with on": {bound + `rules:
-  acme:core/stdlib-only:
+  acme/hexagonal:core/stdlib-only:
     on: ports
     severity: warning
 `, "an override does not accept on"},
 		"override with files": {bound + `rules:
-  acme:core/no-panic:
+  acme/hexagonal:core/no-panic:
     files: "**/*.go"
     severity: warning
 `, "an override does not accept files"},
 		"override with with": {bound + `rules:
-  acme:core/checked:
+  acme/hexagonal:core/checked:
     with:
       depth: 1
     severity: warning
 `, "an override does not accept with"},
 		"override without change": {bound + `rules:
-  acme:core/stdlib-only: {}
+  acme/hexagonal:core/stdlib-only: {}
 `, "an override changes something"},
 		"local rule redefines a pattern rule": {bound + `rules:
-  acme:core/stdlib-only:
+  acme/hexagonal:core/stdlib-only:
     on: core
     imports:
       internal: [ports]
 `, "is distributed by an extended pattern"},
 		"override twice": {bound + `rules:
-  acme:core/stdlib-only:
+  acme/hexagonal:core/stdlib-only:
     severity: warning
-  acme:core/stdlib-only:
+  acme/hexagonal:core/stdlib-only:
     severity: info
 `, `appears twice`},
 	}
@@ -961,9 +961,11 @@ extends:
 	}
 }
 
-// TestLoadRejectsDuplicateDistribution proves two Patterns cannot
-// distribute the same qualified id into one repository.
-func TestLoadRejectsDuplicateDistribution(t *testing.T) {
+// TestLoadAppliesOneLocalIdFromTwoPatterns proves two Patterns may
+// distribute the same local Rule id into one repository: each Rule
+// applies under its own namespace/name qualifier, an Override reaches
+// exactly one of them, and every finding still names its Pattern.
+func TestLoadAppliesOneLocalIdFromTwoPatterns(t *testing.T) {
 	p := loadSamplePattern(t)
 	other, err := yamlrule.LoadPattern([]byte(`
 pattern:
@@ -981,7 +983,7 @@ rules:
 	if err != nil {
 		t.Fatalf("LoadPattern: %v", err)
 	}
-	_, err = loadString(t, `
+	cfg := mustLoad(t, `
 extends:
   - pattern: acme/hexagonal@1.0.0
     bind:
@@ -991,9 +993,22 @@ extends:
   - pattern: acme/onion@2.0.0
     bind:
       core: internal/core/**
+rules:
+  acme/onion:core/stdlib-only:
+    severity: warning
 `, p, other)
-	if err == nil || !strings.Contains(err.Error(), "distributed by two extended patterns") {
-		t.Errorf("error = %v", err)
+	hex := ruleByID(t, cfg, "acme/hexagonal:core/stdlib-only")
+	onion := ruleByID(t, cfg, "acme/onion:core/stdlib-only")
+	if hex.ID().Local() != onion.ID().Local() || hex.ID().Equals(onion.ID()) {
+		t.Errorf("ids %s and %s must share a local identity and differ as RuleIDs", hex.ID(), onion.ID())
+	}
+	if hex.Severity() != rule.SeverityError || onion.Severity() != rule.SeverityWarning {
+		t.Errorf("override reached hex=%s onion=%s, want error and warning", hex.Severity(), onion.Severity())
+	}
+	hexRef, _ := hex.Provenance()
+	onionRef, _ := onion.Provenance()
+	if hexRef.String() != "acme/hexagonal@1.0.0" || onionRef.String() != "acme/onion@2.0.0" {
+		t.Errorf("provenance hex=%s onion=%s", hexRef, onionRef)
 	}
 	_, err = loadString(t, `
 extends:
@@ -1007,6 +1022,34 @@ extends:
       adapters: internal/adapters/**
 `, p, other)
 	if err == nil || !strings.Contains(err.Error(), `module "core" is already declared with different paths`) {
+		t.Errorf("error = %v", err)
+	}
+}
+
+// TestLoadRejectsOnePatternAtTwoVersions proves the qualifier is the
+// unit of extension: a Pattern extended at two versions would
+// distribute every Rule id twice, so the loader names the first.
+func TestLoadRejectsOnePatternAtTwoVersions(t *testing.T) {
+	p := loadSamplePattern(t)
+	newer, err := yamlrule.LoadPattern([]byte(strings.Replace(samplePatternFile, "version: 1.0.0", "version: 1.1.0", 1)),
+		"acme/hexagonal/pattern.yaml", nil)
+	if err != nil {
+		t.Fatalf("LoadPattern: %v", err)
+	}
+	_, err = loadString(t, `
+extends:
+  - pattern: acme/hexagonal@1.0.0
+    bind:
+      core: internal/core/**
+      ports: internal/ports/**
+      adapters: internal/adapters/**
+  - pattern: acme/hexagonal@1.1.0
+    bind:
+      core: internal/core/**
+      ports: internal/ports/**
+      adapters: internal/adapters/**
+`, p, newer)
+	if err == nil || !strings.Contains(err.Error(), "pattern acme/hexagonal@1.1.0 is already extended as acme/hexagonal@1.0.0") {
 		t.Errorf("error = %v", err)
 	}
 }

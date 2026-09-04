@@ -688,8 +688,8 @@
       ]
     },
     "ruleID": {
-      "description": "Explicit stable Rule ID: LOCAL or NAMESPACE:LOCAL, each part using a-z 0-9 . _ - /, never starting with . / - and never ending with . or /. Inside a Pattern file the Rule ID is local; the loader qualifies it with the Pattern namespace.",
-      "pattern": "^([a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?:)?[a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?$",
+      "description": "Explicit stable Rule ID: LOCAL for a repository Rule, or NAMESPACE/NAME:LOCAL for a Rule an extended Pattern distributes. LOCAL uses a-z 0-9 . _ - /, never starting with . / - and never ending with . or /. Inside a Pattern file the Rule ID is local; the loader qualifies it with the Pattern's namespace/name, so two Patterns may distribute the same local identity.",
+      "pattern": "^([a-z0-9_]([a-z0-9._-]*[a-z0-9_-])?/[a-z0-9_]([a-z0-9._-]*[a-z0-9_-])?:)?[a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?$",
       "type": "string"
     },
     "severity": {
@@ -935,7 +935,7 @@
           "type": "string"
         },
         "namespace": {
-          "description": "Pattern namespace; every distributed Rule ID is qualified with it.",
+          "description": "Pattern namespace; with the name it qualifies every distributed Rule ID as namespace/name:local.",
           "pattern": "^[a-z0-9_]([a-z0-9._-]*[a-z0-9_-])?$",
           "type": "string"
         },

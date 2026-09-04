@@ -20,7 +20,7 @@ func installationFixture(t *testing.T, version string) rule.Installation {
 	}
 	internal := rule.AllowList{}
 	r, err := rule.New(rule.Spec{
-		ID:            "acme:domain/stdlib-only",
+		ID:            "acme/layers:domain/stdlib-only",
 		Type:          rule.TypeConsumes,
 		Params:        rule.ConsumesParams{Internal: &internal, External: rule.ImportForbid},
 		Applicability: scope,

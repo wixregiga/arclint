@@ -139,8 +139,8 @@ func TestRulesListsRuleset(t *testing.T) {
 		// The vocabulary rules come from the embedded Pattern the
 		// repository extends, so they list under qualified ids with
 		// their provenance.
-		"arclint:contexts/respect-relations",
-		"arclint:vocabulary/terms-carry-definitions  [extension/error/heuristic]",
+		"arclint/domain-model:contexts/respect-relations",
+		"arclint/domain-model:vocabulary/terms-carry-definitions  [extension/error/heuristic]",
 		"from arclint/domain-model@0.1.0",
 		"delivery/report-factory-dependencies",
 		"delivery/lipgloss-sealed",

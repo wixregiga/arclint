@@ -74,9 +74,9 @@ func TestDomainModelPatternLoads(t *testing.T) {
 		t.Fatal("arclint/domain-model is not embedded")
 	}
 	wantUses := map[string]string{
-		"arclint:vocabulary/terms-carry-definitions":        "domain-model/require-defined-terms",
-		"arclint:vocabulary/invariants-name-recorded-owners": "domain-model/invariants-name-recorded-owners",
-		"arclint:contexts/respect-relations":                 "domain-model/respect-context-relations",
+		"arclint/domain-model:vocabulary/terms-carry-definitions":         "domain-model/require-defined-terms",
+		"arclint/domain-model:vocabulary/invariants-name-recorded-owners": "domain-model/invariants-name-recorded-owners",
+		"arclint/domain-model:contexts/respect-relations":                 "domain-model/respect-context-relations",
 	}
 	if len(p.Rules()) != len(wantUses) {
 		t.Errorf("rules = %d, want %d", len(p.Rules()), len(wantUses))
@@ -93,7 +93,7 @@ func TestDomainModelPatternLoads(t *testing.T) {
 			t.Errorf("%s uses = %v, want %q", id, r.Params(), uses)
 		}
 		delete(wantUses, id)
-		if id == "arclint:contexts/respect-relations" && r.Severity() != rule.SeverityWarning {
+		if id == "arclint/domain-model:contexts/respect-relations" && r.Severity() != rule.SeverityWarning {
 			t.Errorf("%s severity = %s, want warning", id, r.Severity())
 		}
 	}
@@ -130,19 +130,19 @@ func TestVerticalPatternLoads(t *testing.T) {
 	}
 	var sawIndependence bool
 	wantUses := map[string]string{
-		"arclint:domain/no-context":              "vertical/forbid-imports",
-		"arclint:domain/no-io":                   "vertical/forbid-imports",
-		"arclint:application/repository-context": "vertical/repository-context",
-		"arclint:application/usecase-contract":   "vertical/usecase",
-		"arclint:shared/concerns":                "vertical/shared-concerns",
-		"arclint:repositories/application-only":  "vertical/repository-location",
+		"arclint/vertical:domain/no-context":              "vertical/forbid-imports",
+		"arclint/vertical:domain/no-io":                   "vertical/forbid-imports",
+		"arclint/vertical:application/repository-context": "vertical/repository-context",
+		"arclint/vertical:application/usecase-contract":   "vertical/usecase",
+		"arclint/vertical:shared/concerns":                "vertical/shared-concerns",
+		"arclint/vertical:repositories/application-only":  "vertical/repository-location",
 	}
 	for _, r := range p.Rules() {
 		id := r.ID().Qualified()
-		if id == "arclint:features/independent" {
+		if id == "arclint/vertical:features/independent" {
 			sawIndependence = true
 			if r.Type() != rule.TypeIndependence {
-				t.Errorf("arclint:features/independent type = %q, want independence", r.Type())
+				t.Errorf("arclint/vertical:features/independent type = %q, want independence", r.Type())
 			}
 		}
 		if uses, ok := wantUses[id]; ok {
@@ -157,7 +157,7 @@ func TestVerticalPatternLoads(t *testing.T) {
 		}
 	}
 	if !sawIndependence {
-		t.Errorf("missing arclint:features/independent")
+		t.Errorf("missing arclint/vertical:features/independent")
 	}
 	if len(wantUses) != 0 {
 		t.Errorf("missing extension rules: %v", wantUses)

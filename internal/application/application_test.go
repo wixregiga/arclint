@@ -33,7 +33,7 @@ func fixture(t *testing.T, paths ...string) (rule.Configured, conformance.Observ
 		t.Fatalf("ModuleApplicability: %v", err)
 	}
 	r, err := rule.New(rule.Spec{
-		ID:            "t:m/snake",
+		ID:            "t/p:m/snake",
 		Type:          rule.TypeNaming,
 		Params:        rule.NamingParams{Case: snake},
 		Applicability: scope,
@@ -168,7 +168,7 @@ func TestListRulesSummarizes(t *testing.T) {
 		t.Fatalf("rows = %d, want 1", len(rows))
 	}
 	row := rows[0]
-	if row.ID != "t:m/snake" || row.Type != "naming" || row.Severity != "error" {
+	if row.ID != "t/p:m/snake" || row.Type != "naming" || row.Severity != "error" {
 		t.Errorf("row = %+v", row)
 	}
 	if !strings.Contains(row.Claim, "snake_case") {
@@ -281,11 +281,11 @@ func TestShowRule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewShowRule: %v", err)
 	}
-	detail, err := show.Execute("t:m/snake")
+	detail, err := show.Execute("t/p:m/snake")
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if detail.Summary.ID != "t:m/snake" || len(detail.Modules) != 1 || detail.Modules[0] != "m" {
+	if detail.Summary.ID != "t/p:m/snake" || len(detail.Modules) != 1 || detail.Modules[0] != "m" {
 		t.Errorf("detail = %+v", detail)
 	}
 	if len(detail.Exclusions) != 1 || detail.Exclusions[0].Reason != "adopted as-is" {
@@ -294,7 +294,7 @@ func TestShowRule(t *testing.T) {
 	if !strings.Contains(detail.Schema, "rule type naming") {
 		t.Errorf("schema description missing: %q", detail.Schema)
 	}
-	if _, err := show.Execute("t:m/ghost"); err == nil {
+	if _, err := show.Execute("t/p:m/ghost"); err == nil {
 		t.Errorf("unknown rule id must be an error")
 	}
 }
@@ -390,7 +390,7 @@ func TestListPatternsSummarizes(t *testing.T) {
 	}
 	want := application.PatternSummary{
 		Namespace: "arclint", Name: "ddd-flat", Version: "1.2.3",
-		Source: distribution.SourceEmbedded,
+		Source:        distribution.SourceEmbedded,
 		Documentation: "https://example.test/ddd-flat",
 		Rules:         1, Extensions: 0, Coverage: []string{"go"},
 	}

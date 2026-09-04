@@ -439,7 +439,7 @@ func parseExtends(n *yaml.Node) ([]extension, error) {
 		return nil, fmt.Errorf("extends: expected a list of {pattern, bind} entries")
 	}
 	var out []extension
-	seen := map[string]bool{}
+	seen := map[string]string{}
 	for i, item := range n.Content {
 		where := fmt.Sprintf("extends[%d]", i)
 		m, err := asMapping(item, where)
@@ -461,10 +461,15 @@ func parseExtends(n *yaml.Node) ([]extension, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s: %v", where, err)
 		}
-		if seen[ref.String()] {
-			return nil, fmt.Errorf("%s: pattern %s is extended twice", where, ref)
+		// One Pattern extends at one version: its qualifier names every
+		// Rule it distributes, so a second version could only collide.
+		if prior, dup := seen[ref.Qualifier()]; dup {
+			if prior == ref.String() {
+				return nil, fmt.Errorf("%s: pattern %s is extended twice", where, ref)
+			}
+			return nil, fmt.Errorf("%s: pattern %s is already extended as %s; one Pattern extends at one version", where, ref, prior)
 		}
-		seen[ref.String()] = true
+		seen[ref.Qualifier()] = ref.String()
 		ext := extension{where: where, ref: ref}
 		if bv := m.get(keyBind); bv != nil {
 			if ext.bindings, err = parseBindings(bv, where+".bind"); err != nil {
@@ -788,7 +793,7 @@ func requiredReason(m mapping, where string) (string, error) {
 }
 
 // distribution translates a Pattern file into a Pattern: local Rule
-// IDs are qualified with the Pattern namespace, Modules carry
+// IDs are qualified with the Pattern's namespace/name, Modules carry
 // descriptions and suggested paths, and every Rule names only listed
 // Modules.
 func (d *document) distribution(extensions []rule.PatternExtension) (rule.Pattern, error) {
@@ -818,10 +823,10 @@ func (d *document) distribution(extensions []rule.PatternExtension) (rule.Patter
 		if err != nil {
 			return fail("%s: %v", e.where, err)
 		}
-		if id.Namespace() != "" {
-			return fail("%s: rule ids inside a pattern are local; the loader qualifies them with namespace %q", e.where, h.namespace)
+		if id.Qualifier() != "" {
+			return fail("%s: rule ids inside a pattern are local; the loader qualifies them with %q", e.where, h.namespace+"/"+h.name)
 		}
-		e.id = h.namespace + ":" + id.Local()
+		e.id = h.namespace + "/" + h.name + ":" + id.Local()
 		r, err := e.build(vocab.UbiquitousLanguage{}, declared)
 		if err != nil {
 			return fail("%v", err)
@@ -892,11 +897,7 @@ func (d *document) repository(lang vocab.UbiquitousLanguage, available []rule.Pa
 			if err != nil {
 				return fail("%s: %v", ext.where, err)
 			}
-			q := r.ID().Qualified()
-			if _, dup := patternRules[q]; dup {
-				return fail("%s: rule %s is distributed by two extended patterns", ext.where, q)
-			}
-			patternRules[q] = len(rules)
+			patternRules[r.ID().Qualified()] = len(rules)
 			rules = append(rules, r)
 		}
 		for _, e := range p.Extensions() {

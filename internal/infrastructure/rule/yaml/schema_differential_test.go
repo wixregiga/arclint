@@ -591,7 +591,7 @@ rules:
 contracts:
   core:
     consumes:
-      id: t:core/stdlib-only
+      id: t/p:core/stdlib-only
       internal: []
 `, false},
 		{"retired repository key", `
@@ -611,19 +611,19 @@ repository:
 		{"extends with an unknown key", "extends:\n  - pattern: acme/hexagonal@1.0.0\n    version: 1.0.0\n", false},
 		{"override with a description", oneModule + `
 rules:
-  acme:core/stdlib-only:
+  acme/hexagonal:core/stdlib-only:
     description: "rewritten"
     severity: warning
 `, false},
 		{"override with on", oneModule + `
 rules:
-  acme:core/stdlib-only:
+  acme/hexagonal:core/stdlib-only:
     on: core
     severity: warning
 `, false},
 		{"override changing nothing", `
 rules:
-  acme:core/stdlib-only: {}
+  acme/hexagonal:core/stdlib-only: {}
 `, false},
 
 		// ---- pattern distribution files ----------------------------------

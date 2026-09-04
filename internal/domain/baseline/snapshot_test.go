@@ -36,7 +36,7 @@ func assess(t *testing.T, paths ...string) conformance.Assessment {
 		t.Fatalf("ModuleApplicability: %v", err)
 	}
 	r, err := rule.New(rule.Spec{
-		ID:            "t:m/snake",
+		ID:            "t/p:m/snake",
 		Type:          rule.TypeNaming,
 		Params:        rule.NamingParams{Case: snake},
 		Applicability: scope,
@@ -65,7 +65,7 @@ func TestCaptureAndApply(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Capture: %v", err)
 	}
-	if len(snapshot.CapturedRules()) != 1 || snapshot.CapturedRules()[0] != "t:m/snake" {
+	if len(snapshot.CapturedRules()) != 1 || snapshot.CapturedRules()[0] != "t/p:m/snake" {
 		t.Errorf("captured rules = %v", snapshot.CapturedRules())
 	}
 	if !snapshot.Covers(before.ActiveViolations()[0]) {
@@ -102,20 +102,20 @@ func TestStaleEntriesSignalRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StaleEntries: %v", err)
 	}
-	if len(stale) != 1 || stale[0].RuleID() != "t:m/snake" || stale[0].Count() != 1 {
+	if len(stale) != 1 || stale[0].RuleID() != "t/p:m/snake" || stale[0].Count() != 1 {
 		t.Errorf("stale = %v, want the captured finding once", stale)
 	}
 }
 
 func TestAmbiguousIdentitiesRejected(t *testing.T) {
-	e, err := baseline.NewEntry("t:m/snake", "m/BadName.go", "broken", 1)
+	e, err := baseline.NewEntry("t/p:m/snake", "m/BadName.go", "broken", 1)
 	if err != nil {
 		t.Fatalf("NewEntry: %v", err)
 	}
 	if _, err := baseline.New(nil, []baseline.Entry{e, e}, ""); err == nil {
 		t.Errorf("duplicate fingerprints must be rejected")
 	}
-	if _, err := baseline.NewEntry("t:m/snake", "", "broken", 1); err == nil {
+	if _, err := baseline.NewEntry("t/p:m/snake", "", "broken", 1); err == nil {
 		t.Errorf("partial finding identity must be rejected")
 	}
 }

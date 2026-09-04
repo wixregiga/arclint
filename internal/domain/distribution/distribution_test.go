@@ -233,7 +233,7 @@ func available(t *testing.T, kind distribution.SourceKind, ref, doc string) dist
 		t.Fatal(err)
 	}
 	rl, err := rule.New(rule.Spec{
-		ID:            r.Namespace() + ":core/stdlib-only",
+		ID:            r.Qualifier() + ":core/stdlib-only",
 		Type:          rule.TypeConsumes,
 		Params:        rule.ConsumesParams{Internal: &internal, External: rule.ImportForbid},
 		Applicability: scope,

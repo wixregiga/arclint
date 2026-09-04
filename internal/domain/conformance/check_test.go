@@ -107,13 +107,13 @@ func scenarioRequest(t *testing.T, policy rule.UnknownImportPolicy) conformance.
 
 	rules := []rule.Rule{
 		mustRule(t, rule.Spec{
-			ID:            "t:alpha/imports",
+			ID:            "t/p:alpha/imports",
 			Type:          rule.TypeConsumes,
 			Params:        rule.ConsumesParams{Internal: &emptyAllow},
 			Applicability: moduleScope(t, "alpha"),
 		}),
 		mustRule(t, rule.Spec{
-			ID:   "t:beta/shape",
+			ID:   "t/p:beta/shape",
 			Type: rule.TypeStructure,
 			Params: rule.StructureParams{
 				Require: []rule.Glob{mustGlob(t, "beta/root.go")},
@@ -122,31 +122,31 @@ func scenarioRequest(t *testing.T, policy rule.UnknownImportPolicy) conformance.
 			Applicability: moduleScope(t, "beta"),
 		}),
 		mustRule(t, rule.Spec{
-			ID:            "t:src/snake",
+			ID:            "t/p:src/snake",
 			Type:          rule.TypeNaming,
 			Params:        rule.NamingParams{Case: snake},
 			Applicability: moduleScope(t, "alpha", "beta"),
 		}),
 		mustRule(t, rule.Spec{
-			ID:            "t:deps/layers",
+			ID:            "t/p:deps/layers",
 			Type:          rule.TypeLayers,
 			Params:        rule.LayersParams{Layers: []rule.ModuleName{"alpha", "beta"}},
 			Applicability: repoScope(t),
 		}),
 		mustRule(t, rule.Spec{
-			ID:            "t:deps/protected-beta",
+			ID:            "t/p:deps/protected-beta",
 			Type:          rule.TypeProtected,
 			Params:        rule.ProtectedParams{Module: "beta"},
 			Applicability: repoScope(t),
 		}).Suppress(suppression),
 		mustRule(t, rule.Spec{
-			ID:            "t:deps/acyclic",
+			ID:            "t/p:deps/acyclic",
 			Type:          rule.TypeAcyclic,
 			Params:        rule.AcyclicParams{},
 			Applicability: repoScope(t),
 		}),
 		mustRule(t, rule.Spec{
-			ID:            "t:src/disabled",
+			ID:            "t/p:src/disabled",
 			Type:          rule.TypeNaming,
 			Params:        rule.NamingParams{Case: snake},
 			Applicability: moduleScope(t, "alpha"),
@@ -175,12 +175,12 @@ func TestConformanceCheckScenario(t *testing.T) {
 	}
 
 	wantActive := []string{
-		"t:alpha/imports|alpha/service.go",
-		"t:beta/shape|beta/data.yaml",
-		"t:deps/acyclic|alpha/service.go",
-		"t:deps/acyclic|beta/root.go",
-		"t:deps/layers|beta/root.go",
-		"t:src/snake|beta/BadName.go",
+		"t/p:alpha/imports|alpha/service.go",
+		"t/p:beta/shape|beta/data.yaml",
+		"t/p:deps/acyclic|alpha/service.go",
+		"t/p:deps/acyclic|beta/root.go",
+		"t/p:deps/layers|beta/root.go",
+		"t/p:src/snake|beta/BadName.go",
 	}
 	active := sortedCopy(violationKeys(a.ActiveViolations()))
 	if strings.Join(active, "\n") != strings.Join(wantActive, "\n") {
@@ -189,7 +189,7 @@ func TestConformanceCheckScenario(t *testing.T) {
 	}
 
 	suppressed := a.SuppressedViolations()
-	if len(suppressed) != 1 || suppressed[0].Rule().Qualified() != "t:deps/protected-beta" {
+	if len(suppressed) != 1 || suppressed[0].Rule().Qualified() != "t/p:deps/protected-beta" {
 		t.Fatalf("suppressed = %v, want the protected finding", violationKeys(suppressed))
 	}
 	if suppressed[0].SuppressionReason() != "adopted legacy import" {
@@ -212,14 +212,14 @@ func TestConformanceCheckScenario(t *testing.T) {
 	}
 
 	for _, id := range a.AppliedRules() {
-		if id == "t:src/disabled" {
+		if id == "t/p:src/disabled" {
 			t.Errorf("disabled rule listed as applied")
 		}
 	}
 	var sawDisabled, sawUnknownImport, sawParseFailure bool
 	for _, d := range a.Diagnostics() {
 		switch {
-		case d.Kind() == conformance.DiagnosticCoverage && strings.Contains(d.Message(), "t:src/disabled"):
+		case d.Kind() == conformance.DiagnosticCoverage && strings.Contains(d.Message(), "t/p:src/disabled"):
 			sawDisabled = true
 		case d.Kind() == conformance.DiagnosticOperational && strings.Contains(d.Message(), `import "mystery"`):
 			sawUnknownImport = true
@@ -296,7 +296,7 @@ func TestIndependenceForbidsSiblingImports(t *testing.T) {
 		t.Fatalf("NewObservations: %v", err)
 	}
 	r := mustRule(t, rule.Spec{
-		ID:            "t:features/independent",
+		ID:            "t/p:features/independent",
 		Type:          rule.TypeIndependence,
 		Params:        rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*")}},
 		Applicability: repoScope(t),
@@ -309,7 +309,7 @@ func TestIndependenceForbidsSiblingImports(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	active := violationKeys(a.ActiveViolations())
-	if len(active) != 1 || active[0] != "t:features/independent|internal/order/application/create.go" {
+	if len(active) != 1 || active[0] != "t/p:features/independent|internal/order/application/create.go" {
 		t.Fatalf("active = %v, want one order→customer independence violation", active)
 	}
 	msg := a.ActiveViolations()[0].Message()
@@ -336,7 +336,7 @@ func TestIndependenceIsVacuousWithOneMember(t *testing.T) {
 		t.Fatalf("NewObservations: %v", err)
 	}
 	r := mustRule(t, rule.Spec{
-		ID:            "t:features/independent",
+		ID:            "t/p:features/independent",
 		Type:          rule.TypeIndependence,
 		Params:        rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*")}},
 		Applicability: repoScope(t),
@@ -360,7 +360,7 @@ func TestFingerprintIsLineIndependent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FileSubject: %v", err)
 	}
-	id, err := rule.NewID("t:alpha/imports")
+	id, err := rule.NewID("t/p:alpha/imports")
 	if err != nil {
 		t.Fatalf("NewID: %v", err)
 	}
@@ -403,7 +403,7 @@ func TestViolationCarriesRuleProvenance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FileSubject: %v", err)
 	}
-	id, err := rule.NewID("acme:alpha/imports")
+	id, err := rule.NewID("acme/hex:alpha/imports")
 	if err != nil {
 		t.Fatalf("NewID: %v", err)
 	}
@@ -434,7 +434,7 @@ func TestViolationCarriesRuleProvenance(t *testing.T) {
 	foreign, _ := rule.ParsePatternReference("other/hex@1.0.0")
 	spec.Provenance = &foreign
 	if _, err := conformance.NewViolation(spec); err == nil {
-		t.Error("provenance outside the rule namespace accepted")
+		t.Error("provenance that does not qualify the rule id accepted")
 	}
 	spec.Provenance = &rule.PatternReference{}
 	if _, err := conformance.NewViolation(spec); err == nil {

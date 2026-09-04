@@ -1,6 +1,6 @@
 # Violating case: one invariant names an owner the context never
 # records, another names an alias instead of the canonical term.
-rule: "arclint:vocabulary/invariants-name-recorded-owners"
+rule: "arclint/domain-model:vocabulary/invariants-name-recorded-owners"
 files:
   ubiquitous-language.yaml: |
     version: 1

@@ -174,7 +174,7 @@ func writeExtendedPatterns(b *strings.Builder, cfg rule.Configured) {
 	}
 	parts := make([]string, 0, len(refs))
 	for _, ref := range refs {
-		parts = append(parts, fmt.Sprintf("`%s` (%d rules, ids qualified `%s:`)", ref, counts[ref.String()], ref.Namespace()))
+		parts = append(parts, fmt.Sprintf("`%s` (%d rules, ids qualified `%s:`)", ref, counts[ref.String()], ref.Qualifier()))
 	}
 	fmt.Fprintf(b, "Extended Patterns: %s. A Pattern Rule is listed and reported under its qualified id; "+
 		"change it through an Override under that id in rules.yaml (`arclint rules <id>` prints it), never by editing the Pattern.\n\n",

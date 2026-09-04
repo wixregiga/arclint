@@ -71,7 +71,7 @@ func TestAvailableLoadsAuthoredPackages(t *testing.T) {
 		t.Errorf("files = %+v, want pattern.yaml only", files)
 	}
 	rules := a.Pattern.Rules()
-	if len(rules) != 1 || rules[0].ID().Qualified() != "acme:core/stdlib-only" {
+	if len(rules) != 1 || rules[0].ID().Qualified() != "acme/sample:core/stdlib-only" {
 		t.Errorf("rules = %+v", rules)
 	}
 	if ref, ok := rules[0].Provenance(); !ok || ref.Name() != "sample" {

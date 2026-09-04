@@ -50,5 +50,5 @@ func distributedBy(r rule.Rule, selector string) bool {
 	if strings.Contains(selector, "@") {
 		return ref.String() == selector
 	}
-	return ref.Namespace()+"/"+ref.Name() == selector
+	return ref.Qualifier() == selector
 }

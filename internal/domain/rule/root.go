@@ -32,7 +32,8 @@ type Rule struct {
 
 // Spec is the input to validated Rule construction.
 type Spec struct {
-	// ID is the explicit stable identity, optionally namespace-qualified.
+	// ID is the explicit stable identity, qualified by namespace/name
+	// when a Pattern distributes the Rule.
 	ID string
 	// Type is one published Rule Type.
 	Type Type
@@ -124,6 +125,9 @@ func New(spec Spec) (Rule, error) {
 			return fail(fmt.Errorf("unconstructed pattern provenance"))
 		}
 		ref := *spec.Provenance
+		if id.Qualifier() != ref.Qualifier() {
+			return fail(fmt.Errorf("provenance %s does not qualify rule id %s", ref, id))
+		}
 		provenance = &ref
 	}
 	var expansion *Expansion
