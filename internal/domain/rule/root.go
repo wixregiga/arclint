@@ -230,6 +230,19 @@ func (r Rule) Type() Type { return r.typ }
 // Claim returns the architectural proposition.
 func (r Rule) Claim() Claim { return r.claim }
 
+// Assertion states what the parameters assert in canonical domain
+// language, independent of the Claim the author wrote: the layer
+// order, the allow-list, the cycle scope, the globs. A reader of one
+// Rule sees the proposition and its operational content side by side.
+func (r Rule) Assertion() string {
+	if r.expansion != nil {
+		if sp, ok := r.params.(StructureParams); ok {
+			return deriveExpandedClaim(r.applicability, sp, *r.expansion)
+		}
+	}
+	return deriveClaim(r.applicability, r.params)
+}
+
 // Severity returns the configured gate importance.
 func (r Rule) Severity() Severity { return r.severity }
 

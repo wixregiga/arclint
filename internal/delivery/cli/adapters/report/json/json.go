@@ -218,6 +218,7 @@ type policyNoteDoc struct {
 
 type ruleDetailDocT struct {
 	Summary          ruleSummaryDoc  `json:"summary"`
+	Asserts          string          `json:"asserts,omitempty"`
 	Evidence         string          `json:"evidence,omitempty"`
 	Languages        []string        `json:"languages,omitempty"`
 	Facts            []string        `json:"facts,omitempty"`
@@ -233,6 +234,7 @@ type ruleDetailDocT struct {
 func ruleDetailDoc(d application.RuleDetail) ruleDetailDocT {
 	doc := ruleDetailDocT{
 		Summary:          ruleSummaryDocOf(d.Summary),
+		Asserts:          d.Asserts,
 		Evidence:         d.Evidence,
 		Languages:        append([]string(nil), d.Languages...),
 		Facts:            append([]string(nil), d.Facts...),

@@ -42,6 +42,24 @@ Rule Test does not match its expectation, and `2` for configuration or
 usage errors. A gate failure can come from an active error-severity
 Violation or an error-severity operational Diagnostic.
 
+A complete Rule (`arclint rules <id>`) prints the Claim the author
+wrote and, beside it, `asserts`: the canonical statement of what the
+parameters assert, in domain language. The two differ on purpose: the
+Claim is the proposition, `asserts` is its operational content, such
+as the layer order, the allow-list, the cycle scope, or the globs an
+expanded structure Rule derived. JSON carries the same string as
+`asserts`.
+
+```
+$ arclint rules acme/hexagonal:dependencies/acyclic
+id:          acme/hexagonal:dependencies/acyclic
+type:        acyclic
+severity:    error
+claim:       Module dependencies contain no cycle.
+asserts:     dependencies among ["core", "ports", "adapters"] contain no cycle
+applies to:  the entire repository
+```
+
 Commands that use repository configuration accept `--rules <path>` or
 `--rules=<path>` to select `rules.yaml` explicitly. Otherwise ArcLint
 discovers it upward from the working directory. `check [path]` starts
