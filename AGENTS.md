@@ -22,7 +22,7 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 - `arclint sdk init`: regenerate the extension SDK artifacts under `.arclint/extensions`
 - `arclint agents md --write`: refresh this block after changing rules.yaml or the vocabulary
 - `arclint baseline`: manage the committed baseline of adopted findings
-- `arclint patterns`: list available Pattern distribution packages
+- `arclint patterns`: list the Patterns that resolve offline (embedded, vendored, authored); `patterns install <pattern>` extends rules.yaml with one, `patterns vendor` copies one under `.arclint/patterns`
 
 ### The recorded domain
 

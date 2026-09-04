@@ -195,3 +195,73 @@ func TestPublishAgentsContextOmitsAbsentSections(t *testing.T) {
 		}
 	}
 }
+
+func TestPublishAgentsContextSpellsPatternRulesQualified(t *testing.T) {
+	cfg := agentsFixture(t)
+	shared, err := rule.ParsePatternReference("acme/layers@1.2.0")
+	if err != nil {
+		t.Fatalf("ParsePatternReference: %v", err)
+	}
+	scope, err := rule.ModuleApplicability([]rule.ModuleName{"m"})
+	if err != nil {
+		t.Fatalf("ModuleApplicability: %v", err)
+	}
+	repo, err := rule.RepositoryApplicability()
+	if err != nil {
+		t.Fatalf("RepositoryApplicability: %v", err)
+	}
+	glob, err := rule.NewGlob("m/root.go")
+	if err != nil {
+		t.Fatalf("NewGlob: %v", err)
+	}
+	bound, err := rule.New(rule.Spec{
+		ID:            "acme:m/has-root",
+		Type:          rule.TypeStructure,
+		Params:        rule.StructureParams{Require: []rule.Glob{glob}},
+		Applicability: scope,
+		Provenance:    &shared,
+	})
+	if err != nil {
+		t.Fatalf("rule.New: %v", err)
+	}
+	wide, err := rule.New(rule.Spec{
+		ID:            "acme:deps/acyclic",
+		Type:          rule.TypeAcyclic,
+		Params:        rule.AcyclicParams{},
+		Applicability: repo,
+		Provenance:    &shared,
+	})
+	if err != nil {
+		t.Fatalf("rule.New: %v", err)
+	}
+	cfg.Rules = append(cfg.Rules, bound, wide)
+	publish, err := application.NewPublishAgentsContext(
+		fakeRepository{cfg}, emptyKnowledge(), fakeExtensionInventory{}, &fakePublisher{})
+	if err != nil {
+		t.Fatalf("NewPublishAgentsContext: %v", err)
+	}
+	block, err := publish.Render()
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	// The Pattern is named once with its rule count, and every Rule it
+	// distributes keeps the qualified id an Override or `arclint rules`
+	// takes; local Rules keep their short spelling.
+	for _, want := range []string{
+		"Extended Patterns: `acme/layers@1.2.0` (2 rules, ids qualified `acme:`).",
+		"never by editing the Pattern.",
+		"  - acme:m/has-root: ",
+		"- acme:deps/acyclic: ",
+		"  - snake: file names use snake_case",
+		`- deps/protected-m: Module "m" is imported by no other Module`,
+	} {
+		if !strings.Contains(block, want) {
+			t.Errorf("block lacks %q:\n%s", want, block)
+		}
+	}
+	for _, reject := range []string{"  - has-root: ", "\n- deps/acyclic: "} {
+		if strings.Contains(block, reject) {
+			t.Errorf("a Pattern Rule must not lose its namespace (%q):\n%s", reject, block)
+		}
+	}
+}
