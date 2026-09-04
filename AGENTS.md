@@ -10,6 +10,8 @@ it drifts). Add hand-written guidance outside the markers.
 
 Enforced from rules.yaml: 32 rules over languages [go, typescript].
 
+Extended Patterns: `arclint/domain-model@0.1.0` (3 rules, ids qualified `arclint:`). A Pattern Rule is listed and reported under its qualified id; change it through an Override under that id in rules.yaml (`arclint rules <id>` prints it), never by editing the Pattern.
+
 ### Ask arclint first
 
 IMPORTANT: you MUST ask arclint before reading around. The architecture, the rules, and the recorded domain are queryable; run `arclint context` on the paths you expect to touch BEFORE opening source files, and do NOT learn the architecture by reading file after file or guessing from folder names.
@@ -41,6 +43,9 @@ If your change speaks about something new, or changes what a recorded term means
 
 ### Modules and their rules
 
+- **vocabulary**: The project's recorded Ubiquitous Language vocabulary. (paths ubiquitous-language.yaml)
+  - arclint:vocabulary/terms-carry-definitions: Every recorded term carries a definition.
+  - arclint:vocabulary/invariants-name-recorded-owners: Every recorded invariant names a recorded term of its own context as its owner.
 - **domain**: Rule aggregate and domain values; stdlib-only. (paths internal/domain/**)
   - imports no other module; external imports forbidden
   - rule-is-sole-aggregate: Rule is the only aggregate: it has a root, and no other aggregate root exists.
@@ -76,15 +81,12 @@ If your change speaks about something new, or changes what a recorded term means
   - main-present: The arclint binary has a main.
 - **source**: Common source invariants for internal packages. (paths internal/**)
   - snake-case: Go file names use snake_case.
-- **vocabulary**: The project's recorded Ubiquitous Language vocabulary. (paths ubiquitous-language.yaml)
-  - terms-carry-definitions: Every recorded term carries a definition.
-  - invariants-name-recorded-owners: Every recorded invariant names a recorded term of its own context as its owner.
 - **rule**: The rule bounded context: the Rule aggregate's home. (paths internal/domain/rule/**)
 - **conformance**: The conformance bounded context, downstream conformist of rule. (paths internal/domain/conformance/**)
 
 ### Repository-wide rules
 
-- domain-model/contexts-respect-relations (warning): Imports between context-named Modules respect the recorded context-map relations.
+- arclint:contexts/respect-relations (warning): Imports between context-named Modules respect the recorded context-map relations.
 - dependencies/application-inward: Dependencies point inward: application, then domain.
 - infrastructure/composition-only: Only composition imports infrastructure.
 - delivery/cobra-factory-only: Only the CLI factory imports the Cobra adapter.
@@ -95,9 +97,9 @@ If your change speaks about something new, or changes what a recorded term means
 
 ### Extension rules
 
-`.arclint/extensions/invariants_name_recorded_owners.ts` default-exports the rule definitions: invariants-name-recorded-owners.
-`.arclint/extensions/require_defined_terms.ts` default-exports the rule definitions: require-defined-terms.
-`.arclint/extensions/respect_context_relations.ts` default-exports the rule definitions: respect-context-relations.
+`arclint/domain-model@0.1.0/extensions/domain_model_invariants_name_recorded_owners.ts` default-exports the rule definitions: domain-model/invariants-name-recorded-owners.
+`arclint/domain-model@0.1.0/extensions/domain_model_require_defined_terms.ts` default-exports the rule definitions: domain-model/require-defined-terms.
+`arclint/domain-model@0.1.0/extensions/domain_model_respect_context_relations.ts` default-exports the rule definitions: domain-model/respect-context-relations.
 <!-- arclint:agents:end -->
 
 ## Finish gate

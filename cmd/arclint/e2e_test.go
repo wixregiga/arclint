@@ -136,7 +136,12 @@ func TestRulesListsRuleset(t *testing.T) {
 	for _, want := range []string{
 		"domain/stdlib-only", "domain/no-panic",
 		"domain-model/aggregate-skeleton",
-		"domain-model/contexts-respect-relations",
+		// The vocabulary rules come from the embedded Pattern the
+		// repository extends, so they list under qualified ids with
+		// their provenance.
+		"arclint:contexts/respect-relations",
+		"arclint:vocabulary/terms-carry-definitions  [extension/error/heuristic]",
+		"from arclint/domain-model@0.1.0",
 		"delivery/report-factory-dependencies",
 		"delivery/lipgloss-sealed",
 		"delivery/cli-interface-dependencies",

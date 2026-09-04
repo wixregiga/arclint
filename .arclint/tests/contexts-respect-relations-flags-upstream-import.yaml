@@ -1,6 +1,6 @@
 # Violating case: the upstream rule module imports the downstream
 # conformance module, against the recorded conformist relation.
-rule: "domain-model/contexts-respect-relations"
+rule: "arclint:contexts/respect-relations"
 files:
   ubiquitous-language.yaml: |
     version: 1

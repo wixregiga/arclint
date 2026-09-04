@@ -25,6 +25,19 @@ scan:
     # in this build or this scan.
     - "testing/**"
 
+# The vocabulary rules are not written here: they come from the
+# arclint/domain-model Pattern this binary embeds, exactly as any
+# adopter receives them. Recorded terms carry definitions, recorded
+# invariants name recorded owners, and imports between context-named
+# Modules respect the context map. Adopt it with
+# `arclint patterns install domain-model`; its Rule IDs are qualified
+# (arclint:vocabulary/terms-carry-definitions) so a finding always
+# says whether it came from the Pattern or from this file.
+extends:
+  - pattern: arclint/domain-model@0.1.0
+    bind:
+      vocabulary: "ubiquitous-language.yaml"
+
 modules:
   domain:
     paths: "internal/domain/**"
@@ -65,12 +78,9 @@ modules:
   source:
     paths: "internal/**"
     description: "Common source invariants for internal packages."
-  vocabulary:
-    paths: "ubiquitous-language.yaml"
-    description: "The project's recorded Ubiquitous Language vocabulary."
   # Context-named modules: each bounded context recorded in the
   # vocabulary binds to the module of the same name, which is how the
-  # contexts-respect-relations rule observes the context map.
+  # Pattern's contexts/respect-relations rule observes the context map.
   rule:
     paths: "internal/domain/rule/**"
     description: "The rule bounded context: the Rule aggregate's home."
@@ -99,6 +109,7 @@ rules:
         - "internal/domain/pattern/**"
         - "internal/domain/baseline/root.go"
         - "internal/domain/conformance/root.go"
+        - "internal/domain/distribution/root.go"
 
   domain/no-panic:
     description: "Domain code never panics; a representation that cannot become a value is an error."
@@ -145,24 +156,6 @@ rules:
       require:
         - "internal/domain/{name:flatcase}/root.go"
         - "internal/domain/{name:flatcase}/repository.go"
-
-  # ---- vocabulary ----------------------------------------------------
-
-  # The vocabulary showcase: an extension consumes the recorded
-  # Ubiquitous Language through ctx.domain(). Inert until a project
-  # records terms; a recorded term must carry a definition.
-  vocabulary/terms-carry-definitions:
-    description: "Every recorded term carries a definition."
-    on: vocabulary
-    uses: require-defined-terms
-
-  # A recorded invariant is enforced by exactly one recorded term of
-  # its own context; an owner outside the vocabulary is a hole in the
-  # model.
-  vocabulary/invariants-name-recorded-owners:
-    description: "Every recorded invariant names a recorded term of its own context as its owner."
-    on: vocabulary
-    uses: invariants-name-recorded-owners
 
   # ---- application ---------------------------------------------------
 
@@ -305,14 +298,6 @@ rules:
     naming: snake_case
 
   # ---- repository-wide -----------------------------------------------
-
-  # Recorded context-map relations bind to the modules named after the
-  # contexts and become import rules between them. Inert until a
-  # project records vocabulary.
-  domain-model/contexts-respect-relations:
-    description: "Imports between context-named Modules respect the recorded context-map relations."
-    severity: warning
-    uses: respect-context-relations
 
   dependencies/application-inward:
     description: "Dependencies point inward: application, then domain."

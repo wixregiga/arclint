@@ -8,6 +8,7 @@ import (
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
+	embeddedpattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/embedded"
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
 	yamlvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/yaml"
 )
@@ -25,9 +26,10 @@ func repoVocabulary(t *testing.T) vocab.Repository {
 }
 
 // TestLoadTargetRuleset proves the loader against the real target
-// ruleset of this repository.
+// ruleset of this repository, which extends the embedded domain-model
+// Pattern exactly as an adopter would.
 func TestLoadTargetRuleset(t *testing.T) {
-	repo, err := yamlrule.NewRepository("../../../../rules.yaml", repoVocabulary(t))
+	repo, err := yamlrule.NewRepository("../../../../rules.yaml", repoVocabulary(t), embeddedpattern.NewSource())
 	if err != nil {
 		t.Fatalf("NewRepository: %v", err)
 	}
@@ -47,14 +49,36 @@ func TestLoadTargetRuleset(t *testing.T) {
 	if cfg.Scan.UnknownImports != rule.UnknownImportsError {
 		t.Errorf("unknown imports policy = %q, want error", cfg.Scan.UnknownImports)
 	}
-	if len(cfg.Extensions) != 0 {
-		t.Errorf("the repository extends no pattern, yet %d extensions were supplied", len(cfg.Extensions))
+	if len(cfg.Extensions) != 3 {
+		t.Errorf("the repository extends arclint/domain-model, whose 3 extensions must be supplied; got %d", len(cfg.Extensions))
 	}
 	byID := map[string]rule.Rule{}
 	for _, r := range cfg.Rules {
 		byID[r.ID().Qualified()] = r
 		if r.Claim().String() == "" {
 			t.Errorf("%s: every Rule in the target ruleset carries a description", r.ID().Qualified())
+		}
+	}
+	// The vocabulary rules are distributed, not local: they carry the
+	// Pattern's provenance under qualified ids, and the local ruleset
+	// spells no copy of them.
+	for _, id := range []string{
+		"arclint:vocabulary/terms-carry-definitions",
+		"arclint:vocabulary/invariants-name-recorded-owners",
+		"arclint:contexts/respect-relations",
+	} {
+		r, ok := byID[id]
+		if !ok {
+			t.Errorf("missing %s; have %v", id, keys(byID))
+			continue
+		}
+		if ref, distributed := r.Provenance(); !distributed || ref.String() != "arclint/domain-model@0.1.0" {
+			t.Errorf("%s provenance = %v, %v", id, ref, distributed)
+		}
+	}
+	for _, local := range []string{"vocabulary/terms-carry-definitions", "domain-model/contexts-respect-relations"} {
+		if _, ok := byID[local]; ok {
+			t.Errorf("%s must come from the Pattern, not be re-declared locally", local)
 		}
 	}
 	stdlibOnly, ok := byID["domain/stdlib-only"]
