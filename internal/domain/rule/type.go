@@ -440,7 +440,8 @@ func (p ExtensionParams) proposition() string {
 }
 
 // AcyclicParams scope the no-cycles proposition; an empty scope means
-// every declared Module.
+// every Module the repository declares. A Pattern never distributes an
+// empty scope: its loader resolves {} to the Pattern's own Modules.
 type AcyclicParams struct {
 	Modules []ModuleName
 }

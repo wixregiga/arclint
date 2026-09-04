@@ -806,6 +806,7 @@ func (d *document) distribution(extensions []rule.PatternExtension) (rule.Patter
 	}
 	modules := make([]rule.PatternModule, 0, len(d.modules))
 	declared := map[rule.ModuleName]bool{}
+	universe := make([]rule.ModuleName, 0, len(d.modules))
 	for _, m := range d.modules {
 		pm, err := rule.NewPatternModule(m.name, m.description, m.paths)
 		if err != nil {
@@ -813,6 +814,7 @@ func (d *document) distribution(extensions []rule.PatternExtension) (rule.Patter
 		}
 		modules = append(modules, pm)
 		declared[m.name] = true
+		universe = append(universe, m.name)
 	}
 	var rules []rule.Rule
 	for _, e := range d.rules {
@@ -827,7 +829,7 @@ func (d *document) distribution(extensions []rule.PatternExtension) (rule.Patter
 			return fail("%s: rule ids inside a pattern are local; the loader qualifies them with %q", e.where, h.namespace+"/"+h.name)
 		}
 		e.id = h.namespace + "/" + h.name + ":" + id.Local()
-		r, err := e.build(vocab.UbiquitousLanguage{}, declared)
+		r, err := e.build(vocab.UbiquitousLanguage{}, declared, universe)
 		if err != nil {
 			return fail("%v", err)
 		}
@@ -953,7 +955,7 @@ func (d *document) repository(lang vocab.UbiquitousLanguage, available []rule.Pa
 			return fail("%s: duplicate rule id %q", e.where, q)
 		}
 		seen[q] = true
-		r, err := e.build(lang, declared)
+		r, err := e.build(lang, declared, nil)
 		if err != nil {
 			return fail("%v", err)
 		}
@@ -1054,8 +1056,14 @@ func (e ruleEntry) adopt(r rule.Rule) (rule.Rule, error) {
 }
 
 // build constructs the Rule an entry with an assertion spells, then
-// applies its own adoption decisions.
-func (e ruleEntry) build(lang vocab.UbiquitousLanguage, declared map[rule.ModuleName]bool) (rule.Rule, error) {
+// applies its own adoption decisions. declared is the set of Modules
+// the entry may name; universe, non-nil only inside a Pattern, lists
+// the Pattern's Modules in order, and it is what an empty acyclic
+// scope resolves to: a Pattern's Rules speak about the Pattern's
+// Modules, never about Modules the adopting repository or a sibling
+// Pattern declares. In the repository ruleset the empty scope stays
+// open and covers every declared Module at evaluation.
+func (e ruleEntry) build(lang vocab.UbiquitousLanguage, declared map[rule.ModuleName]bool, universe []rule.ModuleName) (rule.Rule, error) {
 	t, ok := rule.TypeOfAssertionKey(e.assertion)
 	if !ok {
 		return rule.Rule{}, fmt.Errorf("%s: unknown assertion %q", e.where, e.assertion)
@@ -1120,7 +1128,7 @@ func (e ruleEntry) build(lang vocab.UbiquitousLanguage, declared map[rule.Module
 	case rule.TypeIndependence:
 		spec.Params, err = parseIndependent(e.assertNode, where)
 	case rule.TypeAcyclic:
-		spec.Params, err = parseAcyclic(e.assertNode, where)
+		spec.Params, err = parseAcyclic(e.assertNode, where, universe)
 	case rule.TypeInvariants:
 		spec.Params, err = parseInvariants(e.assertNode, where)
 	case rule.TypeContent:
@@ -1298,7 +1306,11 @@ func parseIndependent(n *yaml.Node, where string) (rule.Params, error) {
 	return rule.IndependenceParams{Folders: globs}, nil
 }
 
-func parseAcyclic(n *yaml.Node, where string) (rule.Params, error) {
+// parseAcyclic reads the cycle scope: a list of at least two Modules,
+// or {} for every declared Module. Inside a Pattern, {} is resolved
+// now to the Pattern's own Modules (universe), so the Rule it
+// distributes names exactly what the Pattern declared.
+func parseAcyclic(n *yaml.Node, where string, universe []rule.ModuleName) (rule.Params, error) {
 	switch n.Kind {
 	case yaml.SequenceNode:
 		modules, err := moduleNameList(n, where)
@@ -1313,7 +1325,7 @@ func parseAcyclic(n *yaml.Node, where string) (rule.Params, error) {
 		if len(n.Content) != 0 {
 			return nil, fmt.Errorf("%s: expected a list of modules or {} for every declared module", where)
 		}
-		return rule.AcyclicParams{}, nil
+		return rule.AcyclicParams{Modules: append([]rule.ModuleName(nil), universe...)}, nil
 	default:
 		return nil, fmt.Errorf("%s: expected a list of modules or {} for every declared module", where)
 	}

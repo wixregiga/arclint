@@ -317,7 +317,10 @@ No import cycles among the named Modules.
 - `on`: not accepted
 
 A list names the Modules to check (at least two); `{}` covers every
-declared Module.
+declared Module. Inside a Pattern file, `{}` covers every Module the
+Pattern declares and nothing the adopting repository or another
+extended Pattern adds, so a distributed Rule never judges Modules its
+author never saw.
 
 ```yaml
 rules:

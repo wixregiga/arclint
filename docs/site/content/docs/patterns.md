@@ -288,7 +288,11 @@ The rules of the Pattern file:
   either qualified ID reaches exactly that Rule.
 - Every Rule names only Modules the Pattern lists, and every entry
   carries an assertion key; a Pattern distributes Rules and cannot
-  override. A Pattern with no Rules is rejected.
+  override. A Pattern with no Rules is rejected. An `acyclic: {}`
+  inside a Pattern resolves to the Pattern's own Modules, so
+  `arclint rules acme/hexagonal:dependencies/acyclic` lists
+  `core, ports, adapters` and a sibling Pattern's Modules never enter
+  that cycle scope.
 - Extension names a Pattern Rule uses (`acme/check`) are registered by
   the `*.ts` files under the Pattern's `extensions/` directory; the
   adopting repository never copies them. A name no file registers
