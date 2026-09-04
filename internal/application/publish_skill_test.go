@@ -21,7 +21,7 @@ func repoRoot(t *testing.T) string {
 }
 
 // On failure: regenerate the committed skill artifacts via arclint
-// agents skill, or fix the generator — never edit fixtures by hand.
+// agents skill, or fix the generator; never edit fixtures by hand.
 
 func TestPublishSkillProtocolRenderMatchesLitmus(t *testing.T) {
 	uc, err := application.NewPublishSkillProtocol(stubSkillWriter{})
@@ -34,7 +34,7 @@ func TestPublishSkillProtocolRenderMatchesLitmus(t *testing.T) {
 	}
 	got := []byte(uc.Render())
 	if !bytes.Equal(got, want) {
-		t.Fatalf("PublishSkillProtocol.Render drifted from litmus SKILL.md; regenerate the committed skill artifacts via arclint agents skill, or fix the generator — never edit fixtures by hand")
+		t.Fatalf("PublishSkillProtocol.Render drifted from litmus SKILL.md; regenerate the committed skill artifacts via arclint agents skill, or fix the generator; never edit fixtures by hand")
 	}
 }
 
@@ -49,7 +49,7 @@ func TestPublishSkillVocabularyRenderMatchesLitmus(t *testing.T) {
 	}
 	got := []byte(uc.Render())
 	if !bytes.Equal(got, want) {
-		t.Fatalf("PublishSkillVocabulary.Render drifted from litmus VOCAB.yaml; regenerate the committed skill artifacts via arclint agents skill, or fix the generator — never edit fixtures by hand")
+		t.Fatalf("PublishSkillVocabulary.Render drifted from litmus VOCAB.yaml; regenerate the committed skill artifacts via arclint agents skill, or fix the generator; never edit fixtures by hand")
 	}
 }
 
@@ -67,7 +67,7 @@ func TestPublishLibrarySchemaRenderMatchesLitmus(t *testing.T) {
 		t.Fatalf("Render: %v", err)
 	}
 	if !bytes.Equal(got, want) {
-		t.Fatalf("PublishLibrarySchema.Render drifted from litmus library.schema.json; regenerate the committed skill artifacts via arclint agents skill, or fix the generator — never edit fixtures by hand")
+		t.Fatalf("PublishLibrarySchema.Render drifted from litmus library.schema.json; regenerate the committed skill artifacts via arclint agents skill, or fix the generator; never edit fixtures by hand")
 	}
 }
 

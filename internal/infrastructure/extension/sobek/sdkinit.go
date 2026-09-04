@@ -45,7 +45,7 @@ export interface Ctx {
    * empty collections when the project records none. Read-only:
    * declaring knowledge never creates a diagnostic by itself. */
   domain(): DomainInfo;
-  /** Render a recorded term in one published TermCase — the host's
+  /** Render a recorded term in one published TermCase, the host's
    * one casing implementation, identical to what rules.yaml
    * {name:<case>} placeholders resolve with. Throws on an unknown
    * case and on terms without letters or digits. */

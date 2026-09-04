@@ -147,7 +147,7 @@ func New(spec Spec) (Rule, error) {
 
 // acceptsParams is Type.Accepts with the one expansion allowance: an
 // expanded structure Rule over an empty recorded collection holds
-// empty parameters — it exists and asserts nothing yet, which its
+// empty parameters: it exists and asserts nothing yet, which its
 // Claim states.
 func acceptsParams(t Type, p Params, e *Expansion) error {
 	if e != nil {
@@ -360,7 +360,7 @@ func (r Rule) Validate() error {
 }
 
 // WithSeverity produces a valid repository-specific Rule with the same
-// identity and a different Severity — the configure operation for the
+// identity and a different Severity, the configure operation for the
 // one common field the Rule Schema marks configurable.
 func (r Rule) WithSeverity(s Severity) (Rule, error) {
 	if !s.Valid() {

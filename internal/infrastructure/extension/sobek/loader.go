@@ -175,7 +175,7 @@ func loadDir(repoRoot string, reg *Registry, opts Options) (*Registry, error) {
 }
 
 // hashDir fingerprints every file under the extensions directory
-// (recursively — helpers in subdirectories are bundle inputs too), plus
+// (recursively; helpers in subdirectories are bundle inputs too), plus
 // the build version and the embedded SDK, so any change invalidates
 // cached bundles.
 func hashDir(dir, version string) string {

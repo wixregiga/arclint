@@ -149,8 +149,8 @@ func renderAgentsBlock(cfg rule.Configured, lang vocab.UbiquitousLanguage,
 	return AgentsBegin + "\n" + strings.TrimRight(b.String(), "\n") + "\n" + AgentsEnd + "\n"
 }
 
-// writeAskFirst is the fixed imperative opening — ask the tool, never
-// survey the tree — followed by the command surface with when-to-use
+// writeAskFirst is the fixed imperative opening (ask the tool, never
+// survey the tree) followed by the command surface with when-to-use
 // guidance.
 func writeAskFirst(b *strings.Builder) {
 	b.WriteString("### Ask arclint first\n\n")
@@ -159,7 +159,7 @@ func writeAskFirst(b *strings.Builder) {
 		"run `arclint context` on the paths you expect to touch BEFORE opening source files, " +
 		"and do NOT learn the architecture by reading file after file or guessing from folder names.\n\n")
 	for _, c := range AgentCommandSurface() {
-		fmt.Fprintf(b, "- `arclint %s` — %s\n", c.Usage, c.Doc)
+		fmt.Fprintf(b, "- `arclint %s`: %s\n", c.Usage, c.Doc)
 	}
 	b.WriteString("\n")
 }
@@ -211,7 +211,7 @@ func writeRecordedDomain(b *strings.Builder, lang vocab.UbiquitousLanguage) {
 
 // writeChangingLanguage is the fixed obligation to evolve the recorded
 // vocabulary before the code, through the domain-librarian skill. It is
-// emitted unconditionally — the obligation stands whether or not the
+// emitted unconditionally; the obligation stands whether or not the
 // skill files are installed, and it is how an unrecorded domain gets
 // its first entry.
 func writeChangingLanguage(b *strings.Builder) {
@@ -244,7 +244,7 @@ func writeModuleRules(b *strings.Builder, cfg rule.Configured) {
 		p := modulePolicy(m, cfg.Rules)
 		line := "- **" + p.Name + "**"
 		if p.Description != "" {
-			line += " — " + p.Description
+			line += ": " + p.Description
 		}
 		b.WriteString(line + " (paths " + strings.Join(p.Paths, " ") + ")\n")
 		if imports := importsLine(p); imports != "" {

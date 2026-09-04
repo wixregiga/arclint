@@ -58,7 +58,7 @@ func NewSource(root string, producers ...FactProducer) (Source, error) {
 
 // Observe walks the repository under the scan policy and produces the
 // requested fact classes for the requested languages. facts is the
-// union of what the configured Rules' Enforcement declares — the seam
+// union of what the configured Rules' Enforcement declares, the seam
 // Extension enforcement will discriminate through; the builtin fact
 // classes (file_tree, imports) are gathered whenever their language is
 // requested.
@@ -87,7 +87,7 @@ func (s Source) Observe(languages []rule.Language, scan rule.Scan, facts []rule.
 	if err != nil {
 		return conformance.Observations{}, fmt.Errorf("assemble observations: %w", err)
 	}
-	// Lazy repository reads for Extension ctx.read — bytes are not
+	// Lazy repository reads for Extension ctx.read: bytes are not
 	// eagerly copied into Observations.
 	return obs.WithContent(rootContent{root: s.root}), nil
 }

@@ -1,6 +1,6 @@
 // Command genpystdlib generates the embedded Python standard-library
 // module table from sys.stdlib_module_names of the CPython invoked at
-// generate time — the authoritative source (PEP 632 era, 3.10+).
+// generate time: the authoritative source (PEP 632 era, 3.10+).
 package main
 
 import (

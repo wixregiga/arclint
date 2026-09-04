@@ -1,5 +1,5 @@
 # Violating case: one recorded aggregate misses its repository file,
-# another has no home at all — the one rule reports each derived glob
+# another has no home at all; the one rule reports each derived glob
 # no file satisfies.
 rule: "domain-model/aggregate-skeleton"
 files:

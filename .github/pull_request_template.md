@@ -22,8 +22,8 @@ Fixes #
 
 # User-facing?
 
-- [ ] Yes — CLI, rule syntax, patterns, vocabulary, output, or docs a user follows. Release note draft is required.
-- [ ] No — internal only. Do not add a release note.
+- [ ] Yes: CLI, rule syntax, patterns, vocabulary, output, or docs a user follows. Release note draft is required.
+- [ ] No: internal only. Do not add a release note.
 
 # Release note draft
 

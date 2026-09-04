@@ -7,7 +7,7 @@ body:
       value: |
         Link the feature or bug this tests. Write for someone who did not implement it.
         Do not paste implementation notes. If the steps disagree with the release note
-        draft on the parent issue, the note is wrong — update the parent issue.
+        draft on the parent issue, the note is wrong; update the parent issue.
 
   - type: input
     id: refs

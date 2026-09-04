@@ -1,4 +1,4 @@
-# Conforming case: dependence flows downstream to upstream — the
+# Conforming case: dependence flows downstream to upstream; the
 # conformance module imports the rule module, exactly as the recorded
 # conformist relation permits.
 rule: "domain-model/contexts-respect-relations"

@@ -69,7 +69,7 @@ func TestAgentsSkillDefaultDirWritesLitmus(t *testing.T) {
 
 // TestAgentsSkillArtifactsCurrent is the drift gate: the three committed
 // .agents/skills/domain-librarian files must equal what the binary generates.
-// On failure run `arclint agents skill` — never hand-edit the fixtures.
+// On failure run `arclint agents skill`; never hand-edit the fixtures.
 func TestAgentsSkillArtifactsCurrent(t *testing.T) {
 	root := repoRoot(t)
 	dir := t.TempDir()

@@ -35,7 +35,7 @@ func TestVersionOutput(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("--version: exit %d, stderr %s", code, stderr)
 	}
-	// The e2e binary builds inside the repo, so VCS stamping applies —
+	// The e2e binary builds inside the repo, so VCS stamping applies,
 	// except where the environment's git cannot stamp and TestMain fell
 	// back to an unstamped build, which must still report the plain
 	// product version.

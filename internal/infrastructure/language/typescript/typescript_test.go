@@ -135,7 +135,7 @@ func TestNestedManifestNearestWins(t *testing.T) {
 
 // TestOnlyOwnedFilesClaimed pins the target vocabulary: the producer
 // claims .ts/.tsx (minus .d.ts) and never the .js family the legacy
-// analyzer also covered — while relative resolution still probes .js
+// analyzer also covered, while relative resolution still probes .js
 // targets.
 func TestOnlyOwnedFilesClaimed(t *testing.T) {
 	root, files := writeFiles(t, map[string]string{

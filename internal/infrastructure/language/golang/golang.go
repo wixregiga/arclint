@@ -1,6 +1,6 @@
 // Package golang produces normalized Language Facts for Go: exact
 // per-file import extraction (go/parser) and classification following
-// the Go toolchain's resolution semantics — embedded `go list std`
+// the Go toolchain's resolution semantics: embedded `go list std`
 // table, module-path ownership, replace directives, go.work
 // membership, and require coverage, longest prefix winning.
 package golang
@@ -33,7 +33,7 @@ func (Producer) Language() rule.Language { return rule.LanguageGo }
 
 // Facts analyzes every analyzable .go file among the observed files,
 // producing the requested fact classes: imports always, declarations
-// only when asked for — observation costs follow what enforcement
+// only when asked for: observation costs follow what enforcement
 // declares. Files are analyzed in parallel; the resolver is read-only
 // once built, and each worker parses into its own token.FileSet.
 func (Producer) Facts(root string, files []conformance.ObservedFile, requested []rule.Fact) (map[string]conformance.LanguageFacts, error) {

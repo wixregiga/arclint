@@ -141,8 +141,8 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 	return covered, nil
 }
 
-// selectRules narrows the configured Rules by selectors — exact
-// qualified Rule ids, id prefixes, or path.Match patterns — with
+// selectRules narrows the configured Rules by selectors (exact
+// qualified Rule ids, id prefixes, or path.Match patterns) with
 // exclusion winning over selection. Selection fails loudly, never
 // evaluates vacuously: every selector must match at least one
 // configured Rule, and the narrowed set may not be empty.
@@ -203,7 +203,7 @@ func staleCount(entries []baseline.Entry) int {
 
 // requiredFacts unions the fact classes every enabled Rule's
 // Enforcement declares, so observation gathers exactly what the check
-// needs — no more, no less.
+// needs, no more and no less.
 func requiredFacts(rules []rule.Rule) []rule.Fact {
 	seen := map[rule.Fact]bool{}
 	var out []rule.Fact

@@ -9,8 +9,8 @@ import (
 // §4): `import` and `from ... import` are simple statements legal at any
 // indentation, including inside functions and conditionals, with
 // parenthesized multi-line and backslash-continued forms. The documented
-// false-negative class — importlib.import_module(name), __import__(name)
-// — is textually a call, never matches the statement grammar, and is
+// false-negative class (importlib.import_module(name), __import__(name))
+// is textually a call, never matches the statement grammar, and is
 // intentionally not extracted.
 
 type rawImport struct {

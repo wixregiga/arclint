@@ -276,7 +276,7 @@ func runOracle(t *testing.T, spec repoSpec) {
 			for f := range ignored {
 				fp := path.Join(rel, f)
 				if _, analyzedFile := analyzed[fp]; !analyzedFile {
-					mismatches = append(mismatches, fmt.Sprintf("%s: build-constrained (go list ignored) but NOT scanned by arclint — the spec requires scanning", fp))
+					mismatches = append(mismatches, fmt.Sprintf("%s: build-constrained (go list ignored) but NOT scanned by arclint; the spec requires scanning", fp))
 				}
 			}
 		}

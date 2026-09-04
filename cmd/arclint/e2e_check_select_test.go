@@ -2,7 +2,7 @@ package main
 
 // check --only / --exclude narrow one run to the rules matching exact
 // ids or path patterns, with selectors that match nothing failing
-// loudly — the single-rule pathway for trying a rule on the real
+// loudly: the single-rule pathway for trying a rule on the real
 // repository.
 
 import (

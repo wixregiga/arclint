@@ -33,8 +33,8 @@ body:
       label: Will a user notice this?
       description: Only user-facing work goes in release notes. Internal engine refactors do not.
       options:
-        - "Yes — new or changed user-visible behavior (CLI, rule schema, patterns, vocabulary, output, docs a user follows)"
-        - "No — internal only (engine, perf, plumbing). Do not put this in release notes."
+        - "Yes: new or changed user-visible behavior (CLI, rule schema, patterns, vocabulary, output, docs a user follows)"
+        - "No: internal only (engine, perf, plumbing). Do not put this in release notes."
     validations:
       required: true
 
@@ -75,7 +75,7 @@ body:
       label: Release note draft
       description: |
         One or two sentences a user can read. Imperative, no "now".
-        Example — "Add `vocabulary` support so rules can describe recorded domain terms and invariants."
+        Example: "Add `vocabulary` support so rules can describe recorded domain terms and invariants."
         Leave blank only if you marked this internal-only.
       placeholder: Add support for …
     validations:

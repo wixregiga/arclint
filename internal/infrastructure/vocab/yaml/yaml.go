@@ -1,8 +1,8 @@
 // Package yamlvocab loads and stores the project's recorded
 // Ubiquitous Language vocabulary from ubiquitous-language.yaml.
 // RecordedLanguage is strict (unknown keys are errors). Record
-// preserves human authoring of untouched entries — comments and
-// ordering — and writes atomically.
+// preserves human authoring of untouched entries (comments and
+// ordering) and writes atomically.
 package yamlvocab
 
 import (
@@ -73,8 +73,8 @@ func (r Repository) RecordedLanguage() (vocab.UbiquitousLanguage, bool, error) {
 // Parse turns authored ubiquitous-language.yaml content into the
 // recorded vocabulary, applying the same strict decoding and domain
 // invariants as RecordedLanguage. Callers that hold fixture bytes
-// rather than a repository file — such as the rule-test harness
-// feeding ctx.domain() — parse through here.
+// rather than a repository file, such as the rule-test harness
+// feeding ctx.domain(), parse through here.
 func Parse(data []byte) (vocab.UbiquitousLanguage, error) {
 	return parse(data, vocab.UbiquitousLanguageFileName)
 }

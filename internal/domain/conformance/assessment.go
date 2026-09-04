@@ -166,7 +166,7 @@ func (a Assessment) HasErrors() bool {
 
 // RelabelViolations returns a copy whose Violations carry the statuses
 // assigned by label; label returns false to leave one unchanged. The
-// findings themselves are immutable — only reporting status changes.
+// findings themselves are immutable; only reporting status changes.
 func (a Assessment) RelabelViolations(label func(Violation) (Status, string, bool)) (Assessment, error) {
 	evals := make([]Evaluation, len(a.evaluations))
 	for i, e := range a.evaluations {

@@ -17,7 +17,7 @@ import (
 
 // TestAgentsCommandSurfaceMatchesCLI proves the block's command surface
 // against the binary: every taught command resolves, and every
-// user-facing root command is taught. init is exempt — it runs before
+// user-facing root command is taught. init is exempt: it runs before
 // a ruleset exists, and the block lives in an initialized repository.
 func TestAgentsCommandSurfaceMatchesCLI(t *testing.T) {
 	root := repoRoot(t)
@@ -59,7 +59,7 @@ func TestAgentsCommandSurfaceMatchesCLI(t *testing.T) {
 // TestAgentsBlockForBoxoffice generates the block for the boxoffice
 // proving ground and verifies it as a superset of the hand-modeled
 // spec: every section heading of the hand block, the imperative
-// ask-first prohibition, every module, and every non-consumes rule —
+// ask-first prohibition, every module, and every non-consumes rule, with
 // expectations derived from the binary's own query commands, never
 // frozen fixtures.
 func TestAgentsBlockForBoxoffice(t *testing.T) {

@@ -12,10 +12,10 @@ import (
 // Expansion is a value object a structure Rule may carry: its glob
 // parameters derive from a recorded Ubiquitous Language collection,
 // one substitution per recorded term. The Rule stays the one and only
-// aggregate — an expanded Rule is one Rule stating one universally
+// aggregate: an expanded Rule is one Rule stating one universally
 // quantified claim; Expansion only describes how its globs are
 // derived. Derivation is pure substitution over a closed placeholder
-// grammar — no predicates, no filters, no joins; logic beyond
+// grammar: no predicates, no filters, no joins; logic beyond
 // substitution belongs to the Extension SDK. A project recording
 // nothing derives empty parameters: the Rule exists, asserts nothing
 // yet, and says so in its Claim.

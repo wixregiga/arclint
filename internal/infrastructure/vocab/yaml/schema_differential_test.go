@@ -131,7 +131,7 @@ func compileUbiquitousSchema(t *testing.T) *sj.Schema {
 
 // validateAgainstSchema parses the YAML document generically, converts
 // it to the JSON data model, and validates it against the compiled
-// schema — the editor-side half of the invariant.
+// schema, the editor-side half of the invariant.
 func validateAgainstSchema(t *testing.T, schema *sj.Schema, source []byte) error {
 	t.Helper()
 	var value any

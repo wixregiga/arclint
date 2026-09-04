@@ -194,8 +194,8 @@ func aliasCompletion(subcommands []cli.Command, prev cobra.CompletionFunc) cobra
 // ValidArgsFunction: candidates take Cobra's "value\tdescription" form
 // when Doc is set, and completion stops once the positional-argument
 // budget is spent. Cobra's default root supplies the rest of the
-// machinery — the `completion bash|zsh|fish|powershell` subcommand and
-// the hidden `__complete` command — because translate never sets
+// machinery (the `completion bash|zsh|fish|powershell` subcommand and
+// the hidden `__complete` command) because translate never sets
 // CompletionOptions.
 func argsCompletion(complete func([]string, string) []cli.AutoCompleteCandidate, maxArgs int) cobra.CompletionFunc {
 	return func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {

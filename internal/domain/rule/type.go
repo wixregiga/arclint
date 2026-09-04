@@ -9,7 +9,7 @@ import (
 // Type is one value from the finite ArcLint-owned set of supported Rule
 // shapes: consumes, structure, naming, layers, protected, independence,
 // acyclic, invariants, content, and extension. Pattern and Extension
-// authors configure existing values; they do not add new ones — custom
+// authors configure existing values; they do not add new ones; custom
 // logic plugs into the extension kind through the SDK, it never grows
 // this enum. In rules.yaml a Type is never spelled: the one Assertion
 // key a Rule carries decides it (see AssertionKey).

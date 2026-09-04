@@ -62,7 +62,7 @@ library_file:
   purpose: One YAML file per project, sole custody of the librarian; humans review and edit, the librarian writes.
   json_schema: library.schema.json  # ships beside this file; gives human editors descriptions and validation
   header: "# yaml-language-server: $schema=<relative path to library.schema.json, or its canonical $id URL when the schema file is not nearby>"  # first line of every written library file
-  shape: |  # human-readable summary; library.schema.json is authoritative — on any divergence, the schema wins
+  shape: |  # human-readable summary; library.schema.json is authoritative; on any divergence, the schema wins
     version: 1
     contexts:
       - name: <context>

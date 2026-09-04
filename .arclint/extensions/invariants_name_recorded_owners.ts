@@ -1,5 +1,5 @@
 // The invariant-ownership capability: every recorded invariant's owner
-// must itself be a term recorded in the same bounded context — an
+// must itself be a term recorded in the same bounded context: an
 // entity (enforced in behavior) or a value object (enforced at
 // construction). An invariant with no owner at all is the
 // require-defined-terms rule's finding, not this one's. Owners must

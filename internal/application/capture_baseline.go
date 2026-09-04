@@ -20,9 +20,9 @@ type CaptureBaselineResult struct {
 	Rules int
 }
 
-// CaptureBaseline captures a Baseline from one completed assessment —
-// evaluated without subtracting any prior Baseline, since the capture
-// must see everything it is about to adopt — and persists it through
+// CaptureBaseline captures a Baseline from one completed assessment
+// (evaluated without subtracting any prior Baseline, since the capture
+// must see everything it is about to adopt) and persists it through
 // the output port.
 type CaptureBaseline struct {
 	assess AssessConformance

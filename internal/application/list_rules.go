@@ -52,7 +52,7 @@ func (uc ListRules) Execute() ([]RuleSummary, error) {
 	return out, nil
 }
 
-// Select returns the summaries of the Rules one selector matches — an
+// Select returns the summaries of the Rules one selector matches: an
 // exact qualified id, an id prefix, or a path.Match pattern, exact
 // winning completely. Matching nothing is a loud error, never an
 // empty listing.
