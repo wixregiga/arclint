@@ -288,6 +288,9 @@ func TestShowRule(t *testing.T) {
 	if detail.Summary.ID != "t/p:m/snake" || len(detail.Modules) != 1 || detail.Modules[0] != "m" {
 		t.Errorf("detail = %+v", detail)
 	}
+	if detail.Asserts != cfg.Rules[0].Assertion() || !strings.Contains(detail.Asserts, "snake_case") {
+		t.Errorf("asserts = %q", detail.Asserts)
+	}
 	if len(detail.Exclusions) != 1 || detail.Exclusions[0].Reason != "adopted as-is" {
 		t.Errorf("exclusions = %+v", detail.Exclusions)
 	}

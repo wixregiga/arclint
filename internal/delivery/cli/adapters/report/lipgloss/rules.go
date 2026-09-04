@@ -42,6 +42,7 @@ func writeRuleDetail(p *out.Printer, th Theme, d application.RuleDetail) {
 		p.Printf("%s %s\n", th.Bold.Render(label), th.severity(d.Summary.Severity).Render(d.Summary.Severity))
 	}
 	write("claim", d.Summary.Claim)
+	write("asserts", d.Asserts)
 	if d.EntireRepository {
 		write("applies to", "the entire repository")
 	} else {

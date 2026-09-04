@@ -120,6 +120,7 @@ func TestJSONRuleDetailLowerCamel(t *testing.T) {
 	err := New().Render(&buf, cli.RuleDetailReport{
 		Detail: application.RuleDetail{
 			Summary:    application.RuleSummary{ID: "r1", Type: "layers", Severity: "warning", Claim: "c", Assurance: "exact"},
+			Asserts:    "dependencies point inward: app, then domain",
 			Evidence:   "static",
 			Modules:    []string{"app"},
 			Exclusions: []application.PolicyNote{{Selectors: []string{"x"}, Reason: "y"}},
@@ -138,6 +139,9 @@ func TestJSONRuleDetailLowerCamel(t *testing.T) {
 	}
 	if doc["evidence"] != "static" {
 		t.Fatalf("evidence = %v", doc["evidence"])
+	}
+	if doc["asserts"] != "dependencies point inward: app, then domain" {
+		t.Fatalf("asserts = %v", doc["asserts"])
 	}
 }
 

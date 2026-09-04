@@ -38,6 +38,7 @@ func writeRuleDetail(w io.Writer, d application.RuleDetail) error {
 	write("type", d.Summary.Type)
 	write("severity", d.Summary.Severity)
 	write("claim", d.Summary.Claim)
+	write("asserts", d.Asserts)
 	if d.EntireRepository {
 		write("applies to", "the entire repository")
 	} else {

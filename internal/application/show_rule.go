@@ -18,6 +18,7 @@ type PolicyNote struct {
 // the accepted configuration of its Type.
 type RuleDetail struct {
 	Summary          RuleSummary
+	Asserts          string // the parameters' canonical assertion
 	Evidence         string
 	Languages        []string // empty = language-independent
 	Facts            []string
@@ -52,6 +53,7 @@ func (uc ShowRule) Execute(id string) (RuleDetail, error) {
 	}
 	detail := RuleDetail{
 		Summary:          summarize(r),
+		Asserts:          r.Assertion(),
 		Evidence:         r.Enforcement().Evidence().Describe(),
 		EntireRepository: r.Applicability().EntireRepository(),
 		Schema:           r.Type().Schema().Describe(),
