@@ -39,6 +39,10 @@ Use arclint for that check. Or not. It's up to you.
 - Want to test your rule out first? Write a test for it in
   `.arclint/tests/name-features-the-way-i-want.yaml` and run
   `arclint rules test`.
+- Found rules worth sharing? Package them as a pattern and publish it
+  to a registry; the next team runs `arclint patterns install
+  yours/pattern`, gets a verified copy under `.arclint/patterns`, and
+  never needs the network again to check.
 - It does other things too. They're below.
 
 ## Install
@@ -129,8 +133,9 @@ rules:
     acyclic: {}
 ```
 
-Or adopt a pattern by reference and bind its modules to your tree;
-its rules load under its namespace, and you override them in place:
+Or adopt a pattern by reference and bind its modules to your tree
+(`arclint patterns install vertical` writes this for you); its rules
+load under its namespace, and you override them in place:
 
 ```yaml
 runtime: [go]
@@ -312,7 +317,10 @@ context [paths...]  the architecture, or everything binding the given paths (--m
 domain              inspect and maintain the project's ubiquitous language (init/overview/list/show/explain/define/remove/schema)
 agents              AGENTS.md block (--write); skill bundle (skill); SKILL.md only (md|agentmd|markdown)
 baseline capture    adopt current findings   ·  baseline refresh: drop stale entries
-patterns            list built-in and local pattern packages (.arclint/patterns/<name>/pattern.yaml)
+patterns            list the patterns that resolve offline: embedded, vendored, authored (--remote lists a registry)
+patterns install    extend rules.yaml with one pattern; vendors it first when it came from the registry
+patterns vendor     copy one pattern under .arclint/patterns/<namespace>/<name>/ with its manifest
+patterns export     publish one pattern into a registry tree on disk (--dir)
 sdk init            write arclint.d.ts + tsconfig.json for extension authors
 init                draft a starter rules.yaml (--pattern bare|<reference> --languages go,ts,py --force)
 completion <shell>  shell completion with live rule ids and module names (bash|zsh|fish|powershell)

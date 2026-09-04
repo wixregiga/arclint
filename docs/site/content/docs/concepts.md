@@ -78,7 +78,13 @@ A Pattern distributes Rules by reference. `extends` names it by exact
 version and binds every Pattern Module to local paths; the Pattern's
 Rules load under the Pattern's namespace, and an entry under `rules:`
 with no assertion is an Override of one of them: `severity`, `disable`
-with a reason, `exclude`, or `suppress`. Nothing is copied. See
+with a reason, `exclude`, or `suppress`. Nothing is copied.
+
+A Pattern resolves offline first: from the binary that embeds it, then
+from a vendored or authored copy under `.arclint/patterns`. A Registry
+is read only when `install` or `vendor` asks for a Pattern that
+resolves nowhere offline, and the copy it writes is verified against
+its manifest on every load; a check never reaches the network. See
 [Patterns](/docs/patterns/).
 
 ## Assurance
