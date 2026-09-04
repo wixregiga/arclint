@@ -26,13 +26,14 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 
 ### The recorded domain
 
-3 contexts, 1 aggregates, 15 invariants (ubiquitous-language.yaml).
+4 contexts, 1 aggregates, 24 invariants (ubiquitous-language.yaml).
 
 - **rule**: Rule [aggregate], Module, Pattern; value objects RuleID, ModuleName, Claim, Assertion, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec
-- **adoption**: value objects Binding, Override, Disablement, Exclusion, Suppression
+- **adoption**: value objects Binding, Override, Disablement, Exclusion, Suppression, Installation
 - **conformance**: value objects Violation
+- **distribution**: value objects Catalog, Digest, Index, Manifest, PatternFile, PatternSource, Registry, Selection, VendoredPattern
 
-Relations: rule → conformance (conformist); rule → adoption (conformist). Full text: `arclint domain`.
+Relations: rule → conformance (conformist); rule → adoption (conformist); rule → distribution (conformist); distribution → adoption (conformist). Full text: `arclint domain`.
 
 ### Changing the language
 
