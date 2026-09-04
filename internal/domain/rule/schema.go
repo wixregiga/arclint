@@ -216,9 +216,14 @@ const (
 )
 
 // runtimeTargets are the rules.yaml runtime spellings the loader maps
-// onto Languages(). The spelling is owned by the ruleset format; the
-// Language each value resolves to is owned by this package.
-func runtimeTargets() []string { return []string{"go", "ts", "py"} }
+// onto Languages(), in Languages() order.
+func runtimeTargets() []string {
+	out := make([]string, 0, len(Languages()))
+	for _, l := range Languages() {
+		out = append(out, l.RuntimeTarget())
+	}
+	return out
+}
 
 // caseSpecPattern derives the naming-case grammar from the published
 // named cases: alternatives of a named case or regex:PATTERN, combined

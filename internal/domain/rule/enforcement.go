@@ -31,6 +31,20 @@ func (l Language) Valid() bool {
 	return false
 }
 
+// RuntimeTarget is the spelling a ruleset uses for the Language under
+// runtime and under a Pattern's coverage: go, ts, py.
+func (l Language) RuntimeTarget() string {
+	switch l {
+	case LanguageGo:
+		return "go"
+	case LanguageTypeScript:
+		return "ts"
+	case LanguagePython:
+		return "py"
+	}
+	return ""
+}
+
 // LanguageOf maps a repo-relative file path to the Programming Language
 // whose facts describe it, or "" for files no language owns. Go owns
 // .go, TypeScript owns .ts and .tsx, Python owns .py.
