@@ -7,7 +7,10 @@ weight = 6
 | command | does |
 |---|---|
 | `arclint init` | draft a starter `rules.yaml`; `--pattern bare` (default) or a Pattern to extend by exact reference or name (`arclint/vertical@0.1.0`, `vertical`), which drafts the `extends` block with the Pattern's suggested bindings; `--languages go,ts,py` selects runtime targets and `--force` permits replacing an existing file |
-| `arclint patterns` | list visible Pattern distribution packages: built-in packages such as `arclint/vertical@0.1.0`, then local packages under `.arclint/patterns/<name>/pattern.yaml` |
+| `arclint patterns` | list the Patterns that resolve offline: those embedded in the binary (`arclint/vertical@0.1.0`, `arclint/domain-model@0.1.0`), then vendored and authored packages under `.arclint/patterns/<namespace>/<name>/`; `--remote` lists what the Registry publishes instead (`--registry <url>` or `ARCLINT_REGISTRY` names one; `file://` trees work) |
+| `arclint patterns install <pattern>` | extend `rules.yaml` with one Pattern named by reference, `namespace/name`, or bare name, binding every Module it lists; vendors it first when it came from the Registry; drafts `rules.yaml` when none exists (`--languages`) |
+| `arclint patterns vendor <pattern>` | copy one Pattern under `.arclint/patterns/<namespace>/<name>/` with its `manifest.json`, so every load verifies it and the Registry is never needed again |
+| `arclint patterns export <pattern> --dir <tree>` | publish one offline Pattern into a Registry tree on disk: `<tree>/<namespace>/<name>/<version>/` plus `<tree>/index.json` |
 | `arclint check [path]` | evaluate configured Rules; accepts `--no-baseline` and `--only` / `--exclude` Rule selectors |
 | `arclint baseline capture` | replace `.arclint/baseline.v2.json` with the active findings from one complete assessment |
 | `arclint baseline refresh` | reassess and replace the Baseline, dropping stale entries |
@@ -43,7 +46,76 @@ Commands that use repository configuration accept `--rules <path>` or
 `--rules=<path>` to select `rules.yaml` explicitly. Otherwise ArcLint
 discovers it upward from the working directory. `check [path]` starts
 discovery from the optional path. The directory containing `rules.yaml`
-is the repository root and Extension root.
+is the repository root and Extension root. `patterns` commands compose
+against the working directory instead, so `patterns install` can draft
+a `rules.yaml` where none exists yet.
+
+## Patterns
+
+`arclint patterns` and its subcommands move Patterns between the three
+places a Pattern resolves from: the binary, `.arclint/patterns`, and a
+Registry. A check never reaches a Registry; `install` and `vendor` read
+one only for a Pattern that is neither embedded nor under
+`.arclint/patterns`, and `--remote` lists one from its index alone.
+
+```
+$ arclint patterns install acme/layers --registry file:///srv/patterns
+installed acme/layers@1.0.0 (registry, 3fb2cbda1af6)
+vendored to /work/shop/.arclint/patterns/acme/layers
+extended /work/shop/rules.yaml
+bound:
+  app: internal/app/**
+unbound (bind each under extends[].bind before the ruleset loads):
+  domain
+next: bind the unbound modules, then run `arclint check .`
+```
+
+`install` reports the source it resolved from (`embedded`, `local`, or
+`registry`), the short digest of the exact files, where the vendored
+copy went, whether `rules.yaml` was written or extended (and which
+version an existing entry moved from), every binding it wrote, the
+declared Modules it folded into bindings, and the Modules still to
+bind. `vendor` reports the directory written or that an identical copy
+was already there; `export` reports the version directory and the
+index it updated.
+
+Requests to an `https` Registry carry `Authorization: Bearer` with
+`GITHUB_TOKEN`, else `GH_TOKEN`, when one is set. A `404` from the
+Registry is reported as the Pattern not being published there; `401`
+and `403` name the two variables.
+
+With `--format json`:
+
+```json
+{
+  "registry": "file:///srv/patterns",
+  "patterns": [
+    {
+      "reference": "acme/layers@1.0.0",
+      "namespace": "acme",
+      "name": "layers",
+      "version": "1.0.0",
+      "source": "registry",
+      "vendored": false,
+      "authored": false,
+      "digest": "sha256:3fb2cbda1af6...",
+      "documentation": "Two layers: a domain that imports nothing, and an app above it.",
+      "rules": 1,
+      "extensions": 0,
+      "coverage": ["go"]
+    }
+  ]
+}
+```
+
+`registry` is present only for `--remote`. `source` is `embedded`,
+`local`, or `registry`; `vendored` and `authored` say what the
+repository carries under `.arclint/patterns` regardless of `source`.
+`install` emits `{reference, digest, source, vendoredPath?,
+vendorReplaced?, rulesetPath, rulesetCreated, rulesetReplaced?,
+bound: [{module, paths}], unbound: [], adopted?}`; `vendor` emits
+`{reference, digest, source, path?, replaced?, unchanged}`; `export`
+emits `{reference, digest, versionDir, indexPath, replaced}`.
 
 ## Rule tests
 
@@ -123,9 +195,11 @@ vocabulary.
 `arclint completion bash|zsh|fish|powershell` emits the shell script.
 Completion uses the resolved `rules.yaml` when available: Rule IDs for
 `rules` and the `check --only` / `--exclude` selectors, Module names for
-`context --module`, supported languages for `init --languages`, `bare`
-plus every visible Pattern reference for `init --pattern`, and the
-closed `human` / `json` output-format values. Without a loadable
+`context --module`, supported languages for `init --languages` and
+`patterns install --languages`, `bare` plus every visible Pattern
+reference for `init --pattern`, every offline Pattern reference for the
+`patterns install`, `vendor`, and `export` argument, and the closed
+`human` / `json` output-format values. Without a loadable
 repository configuration, repository-derived candidates stay empty.
 Command aliases complete alongside canonical names (`agents mar<TAB>`
 offers `markdown`, `domain r<TAB>` offers both `remove` and `rm`), each
@@ -140,12 +214,13 @@ in the complete Conformance Assessment. The stable shape is:
 [
   {
     "kind": "violation",
-    "ruleId": "dependencies/application-inward",
-    "path": "internal/delivery/handler.go",
+    "ruleId": "arclint:dependencies/inward",
+    "pattern": "arclint/vertical@0.1.0",
+    "path": "internal/orders/application/create_order.go",
     "line": 3,
     "severity": "error",
     "status": "active",
-    "message": "import resolves to Module \"infrastructure\", not allowed by Module \"delivery\"",
+    "message": "import resolves to Module \"infra\", not allowed by Module \"application\"",
     "remediation": "depend on the inward-owned port"
   }
 ]
@@ -154,7 +229,9 @@ in the complete Conformance Assessment. The stable shape is:
 `kind` is `violation`, `operational`, or `coverage`. Fields that do not
 apply are omitted: coverage Diagnostics have no Severity, operational
 Diagnostics may have no Rule ID, and only Violation Diagnostics have a
-status. `line` is omitted when the Diagnostic is not line-anchored, and
+status. `ruleId` is the qualified id, and `pattern` names the Pattern
+that distributed the Rule; a local Rule has an unqualified `ruleId` and
+no `pattern`. `line` is omitted when the Diagnostic is not line-anchored, and
 `remediation` is omitted when none was supplied.
 
 The default human output prints active Violations and operational or

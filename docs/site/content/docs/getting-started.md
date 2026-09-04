@@ -54,6 +54,22 @@ suggests; edit the bindings to match your tree. Nothing is copied into
 reference on every run. `--pattern bare` writes only the draft ruleset.
 An existing `rules.yaml` is refused unless you pass `--force`.
 
+A repository that already has a `rules.yaml` adds a Pattern with
+`install` instead, which extends the file in place and keeps its
+comments:
+
+```bash
+arclint patterns                      # what resolves offline
+arclint patterns install domain-model # extend rules.yaml with it
+arclint patterns install acme/layers  # fetched from the Registry, vendored, then extended
+```
+
+A Pattern the binary does not embed is vendored under
+`.arclint/patterns/<namespace>/<name>/` with a manifest before the
+ruleset extends it, so `arclint check` never touches the network. See
+[Patterns](/docs/patterns/) for vendoring, Registries, and publishing
+your own.
+
 Accepted values for `--languages` are `go`, `ts`, and `py`
 (comma-separated).
 
