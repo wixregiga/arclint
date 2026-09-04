@@ -3,7 +3,7 @@ package rule
 import "fmt"
 
 // Installation is the decision to extend one Pattern: the extends entry
-// rules.yaml records, naming the PatternReference and carrying a
+// rules.arclint.yaml records, naming the PatternReference and carrying a
 // Binding for every PatternModule that has paths here. A Module left
 // unbound is listed so the adopter is told what still needs a path.
 type Installation struct {

@@ -30,7 +30,7 @@ func repoVocabulary(t *testing.T) vocab.Repository {
 // ruleset of this repository, which extends the embedded domain-model
 // Pattern exactly as an adopter would.
 func TestLoadTargetRuleset(t *testing.T) {
-	repo, err := yamlrule.NewRepository("../../../../rules.yaml", repoVocabulary(t), embeddedpattern.NewSource())
+	repo, err := yamlrule.NewRepository("../../../../rules.arclint.yaml", repoVocabulary(t), embeddedpattern.NewSource())
 	if err != nil {
 		t.Fatalf("NewRepository: %v", err)
 	}
@@ -1100,7 +1100,7 @@ extends:
 // refuses a Pattern file in the ruleset's place.
 func TestRepositoryResolvesPatternsFromSources(t *testing.T) {
 	dir := t.TempDir()
-	file := filepath.Join(dir, "rules.yaml")
+	file := filepath.Join(dir, "rules.arclint.yaml")
 	if err := os.WriteFile(file, []byte(samplePatternFile), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
@@ -1179,18 +1179,18 @@ func TestDiscoverPath(t *testing.T) {
 	if err := os.MkdirAll(nested, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	target := root + "/rules.yaml"
+	target := root + "/rules.arclint.yaml"
 	if err := os.WriteFile(target, []byte("runtime: [go]\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
-	found, err := yamlrule.DiscoverPath(nested, "rules.yaml")
+	found, err := yamlrule.DiscoverPath(nested, "rules.arclint.yaml")
 	if err != nil {
 		t.Fatalf("DiscoverPath: %v", err)
 	}
 	if found != target {
 		t.Errorf("DiscoverPath = %q, want %q", found, target)
 	}
-	if _, err := yamlrule.DiscoverPath(t.TempDir(), "rules.yaml"); err == nil {
+	if _, err := yamlrule.DiscoverPath(t.TempDir(), "rules.arclint.yaml"); err == nil {
 		t.Errorf("expected discovery failure in an empty tree")
 	}
 }

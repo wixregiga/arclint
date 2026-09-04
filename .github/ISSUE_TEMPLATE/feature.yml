@@ -51,7 +51,7 @@ body:
     id: proposal
     attributes:
       label: Proposed solution
-      description: What should arclint do? A rules.yaml sketch of the desired syntax helps, and so does a pattern or vocabulary example if relevant.
+      description: What should arclint do? A rules.arclint.yaml sketch of the desired syntax helps, and so does a pattern or vocabulary example if relevant.
       render: yaml
     validations:
       required: true
@@ -63,7 +63,7 @@ body:
       description: Concrete, testable outcomes. These become the test plan and keep the release note honest.
       placeholder: |
         - `arclint check` reports X on this tree
-        - this rules.yaml snippet is valid
+        - this rules.arclint.yaml snippet is valid
         - `arclint context` exposes the new pattern or vocabulary contract
         - `arclint --help` documents the new flag
     validations:

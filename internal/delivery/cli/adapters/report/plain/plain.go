@@ -72,8 +72,8 @@ func (Renderer) Render(w io.Writer, r cli.Report) error {
 		return writeDefineText(w, v)
 	case cli.DomainRemoveReport:
 		return writeRemoveText(w, v.Result)
-	case cli.AgentsStatusReport:
-		return writeAgentsStatus(w, v)
+	case cli.ArtifactStatusReport:
+		return writeArtifactStatus(w, v)
 	case cli.BaselineCaptureReport:
 		return writeBaselineCapture(w, v)
 	case cli.BaselineRefreshReport:

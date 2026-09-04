@@ -102,8 +102,8 @@ func TestDomainModelPatternLoads(t *testing.T) {
 	}
 	modules := p.Modules()
 	if len(modules) != 1 || modules[0].Name().String() != "vocabulary" || len(modules[0].SuggestedPaths()) != 1 ||
-		modules[0].SuggestedPaths()[0].String() != "ubiquitous-language.yaml" {
-		t.Errorf("modules = %+v, want vocabulary suggesting ubiquitous-language.yaml", modules)
+		modules[0].SuggestedPaths()[0].String() != "domain.arclint.yaml" {
+		t.Errorf("modules = %+v, want vocabulary suggesting domain.arclint.yaml", modules)
 	}
 	exts := p.Extensions()
 	if len(exts) != 3 {

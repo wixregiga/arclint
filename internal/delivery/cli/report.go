@@ -147,13 +147,15 @@ type ArtifactWrite struct {
 	Path    string
 }
 
-// AgentsStatusReport is the product of agents write-status lines
-// (install/skill). Raw AGENTS.md markdown stays a raw byte product.
-type AgentsStatusReport struct {
+// ArtifactStatusReport is the product of the write-status lines every
+// artifact-writing command reports (agents md --write, agents skill,
+// rules schema --write, domain schema --write). Raw AGENTS.md markdown
+// and raw schema bytes stay raw byte products.
+type ArtifactStatusReport struct {
 	Writes []ArtifactWrite
 }
 
-func (AgentsStatusReport) report() {}
+func (ArtifactStatusReport) report() {}
 
 // BaselineCaptureReport is the product of `arclint baseline capture`.
 type BaselineCaptureReport struct {

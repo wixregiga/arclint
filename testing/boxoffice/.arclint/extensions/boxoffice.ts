@@ -1,6 +1,6 @@
 // boxoffice's extension rules, one file exporting them all. Content
 // fences (no panic, no transport in the domain) are the built-in
-// content assertion in rules.yaml, not an extension: the proving
+// content assertion in rules.arclint.yaml, not an extension: the proving
 // ground recorded the re-authoring gap and arclint closed it.
 //
 // fsd-slice-isolation: slices on the same FSD layer never import

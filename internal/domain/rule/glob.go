@@ -39,17 +39,24 @@ func NewGlob(pattern string) (Glob, error) {
 	return Glob{pattern: pattern, segments: segments}, nil
 }
 
-// NewGlobs validates a list of patterns.
+// NewGlobs validates a list of patterns. A list is a set: the same
+// pattern listed twice is a repetition the author did not mean, so it
+// is rejected, exactly as the published schema's uniqueItems does.
 func NewGlobs(patterns []string) ([]Glob, error) {
 	if len(patterns) == 0 {
 		return nil, nil
 	}
 	out := make([]Glob, 0, len(patterns))
+	seen := make(map[string]struct{}, len(patterns))
 	for _, p := range patterns {
 		g, err := NewGlob(p)
 		if err != nil {
 			return nil, err
 		}
+		if _, dup := seen[p]; dup {
+			return nil, fmt.Errorf("glob %q: listed twice", p)
+		}
+		seen[p] = struct{}{}
 		out = append(out, g)
 	}
 	return out, nil

@@ -75,7 +75,7 @@ func (f *fakeEditor) Exists() (bool, error) { return f.exists, nil }
 
 func (f *fakeEditor) Extend(inst rule.Installation) (application.RulesetChange, error) {
 	f.extended = append(f.extended, inst)
-	return application.RulesetChange{Path: "rules.yaml", Replaced: f.replaced}, nil
+	return application.RulesetChange{Path: "rules.arclint.yaml", Replaced: f.replaced}, nil
 }
 
 type fakeRegistryPublisher struct {
@@ -207,7 +207,7 @@ func TestInstallPatternExtendsAnExistingRuleset(t *testing.T) {
 		t.Fatalf("Execute: %v", err)
 	}
 	if result.Reference != "arclint/ddd-flat@2.0.0" || result.Source != distribution.SourceRegistry ||
-		result.VendoredPath != ".arclint/patterns/arclint/ddd-flat" || result.RulesetPath != "rules.yaml" ||
+		result.VendoredPath != ".arclint/patterns/arclint/ddd-flat" || result.RulesetPath != "rules.arclint.yaml" ||
 		result.RulesetCreated || result.RulesetReplaced != "1.0.0" {
 		t.Errorf("result = %+v", result)
 	}

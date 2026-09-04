@@ -72,11 +72,11 @@ func TestRunRuleTestsEndToEnd(t *testing.T) {
 			t.Fatalf("WriteFile %s: %v", rel, err)
 		}
 	}
-	write("rules.yaml", integrationRuleset)
+	write("rules.arclint.yaml", integrationRuleset)
 	write(".arclint/tests/consumes_disallowed_import.yaml", consumesTest)
 	write(".arclint/tests/structure_missing_doc.yaml", structureTest)
 
-	repo, err := yamlrule.NewRepository(filepath.Join(root, "rules.yaml"), nil)
+	repo, err := yamlrule.NewRepository(filepath.Join(root, "rules.arclint.yaml"), nil)
 	if err != nil {
 		t.Fatalf("NewRepository: %v", err)
 	}
@@ -193,13 +193,13 @@ func TestRuleTestExtensionReadsFixtureContent(t *testing.T) {
 			t.Fatalf("WriteFile %s: %v", rel, err)
 		}
 	}
-	write("rules.yaml", extensionRuleset)
+	write("rules.arclint.yaml", extensionRuleset)
 	write(".arclint/extensions/lines_matching.ts", linesMatchingExtension)
 	write(".arclint/tests/fixture_reads_panic.yaml", extensionFixtureTest)
 	// Production path exists with clean content, the opposite of the fixture.
 	write("m/a.go", "package m\n// clean production file\n")
 
-	repo, err := yamlrule.NewRepository(filepath.Join(root, "rules.yaml"), nil)
+	repo, err := yamlrule.NewRepository(filepath.Join(root, "rules.arclint.yaml"), nil)
 	if err != nil {
 		t.Fatalf("NewRepository: %v", err)
 	}
@@ -227,11 +227,11 @@ func TestRuleTestExtensionReadsFixtureContent(t *testing.T) {
 
 const vocabularyRuleset = `runtime: [go]
 modules:
-  vocabulary: ubiquitous-language.yaml
+  vocabulary: domain.arclint.yaml
 rules:
   vocabulary/terms-carry-definitions:
     on: vocabulary
-    files: "ubiquitous-language.yaml"
+    files: "domain.arclint.yaml"
     uses: require-defined-terms
 `
 
@@ -266,7 +266,7 @@ export default defineRule({
       for (const term of bound.entities) {
         if (!term.definition) {
           ctx.report({
-            path: "ubiquitous-language.yaml",
+            path: "domain.arclint.yaml",
             line: term.line,
             message: 'entity "' + term.name + '" has no definition recorded',
           });
@@ -304,16 +304,16 @@ func TestVocabularyFindingAnchorsAtTheRecordedTerm(t *testing.T) {
 		t.Fatalf("fixture writes Venue on line %d; it must sit below line 1 to prove anything", wantLine)
 	}
 
-	write("rules.yaml", vocabularyRuleset)
+	write("rules.arclint.yaml", vocabularyRuleset)
 	write(".arclint/extensions/require_defined_terms.ts", requireDefinedTermsExtension)
 	write(".arclint/tests/vocabulary_term_anchor.yaml",
 		"rule: \"vocabulary/terms-carry-definitions\"\nfiles:\n"+
-			"  ubiquitous-language.yaml: |\n"+nestFixture(fixtureVocabulary)+
-			"expect:\n  - path: ubiquitous-language.yaml\n"+
+			"  domain.arclint.yaml: |\n"+nestFixture(fixtureVocabulary)+
+			"expect:\n  - path: domain.arclint.yaml\n"+
 			fmt.Sprintf("    line: %d\n", wantLine)+
 			"    message: 'entity \"Venue\" has no definition recorded'\n")
 
-	repo, err := yamlrule.NewRepository(filepath.Join(root, "rules.yaml"), nil)
+	repo, err := yamlrule.NewRepository(filepath.Join(root, "rules.arclint.yaml"), nil)
 	if err != nil {
 		t.Fatalf("NewRepository: %v", err)
 	}

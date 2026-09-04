@@ -1,11 +1,11 @@
 +++
 title = "Rule reference"
-description = "Every published Rule Type: its assertion key in rules.yaml, and a paste-ready example."
+description = "Every published Rule Type: its assertion key in rules.arclint.yaml, and a paste-ready example."
 weight = 3
 +++
 
 The published Rule Types are a finite ArcLint-owned enum. Configure them
-in `rules.yaml`; Extensions do not add new types. The same shapes power
+in `rules.arclint.yaml`; Extensions do not add new types. The same shapes power
 `arclint rules schema`, editor completion, and `arclint rules <id>`
 detail output.
 
@@ -123,7 +123,7 @@ rules:
 ```
 
 `each` derives the globs from a recorded vocabulary collection in
-`ubiquitous-language.yaml`, resolving `{name:<case>}` once per recorded
+`domain.arclint.yaml`, resolving `{name:<case>}` once per recorded
 term. The published sources are `domain.aggregates`, `domain.entities`,
 `domain.value_objects`, `domain.events`, `domain.contexts`,
 `domain.invariants`, `domain.assertions`, and `domain.specifications`;
@@ -207,7 +207,7 @@ Recorded domain contracts are visible in source.
 - `on`: required
 
 Every cluster invariant, assertion, and specification recorded in
-`ubiquitous-language.yaml` for the owners that live in the Module must
+`domain.arclint.yaml` for the owners that live in the Module must
 exist as a named method called from its join points. `{}` takes the
 default posture; `closed: true` additionally requires every exported
 error-returning function in the owner's files to call the cluster

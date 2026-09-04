@@ -13,7 +13,7 @@ func writeInit(w io.Writer, r cli.InitReport) error {
 	return p.Err
 }
 
-func writeAgentsStatus(w io.Writer, r cli.AgentsStatusReport) error {
+func writeArtifactStatus(w io.Writer, r cli.ArtifactStatusReport) error {
 	p := &out.Printer{W: w}
 	for _, a := range r.Writes {
 		if a.Changed {

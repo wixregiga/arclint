@@ -264,6 +264,7 @@ func (e *Evaluator) host(subjects []string, modules []rule.Module, obs conforman
 // empty slices so JavaScript sees arrays rather than null.
 func emptyDomainInfo() DomainInfo {
 	return DomainInfo{
+		Source:    vocab.UbiquitousLanguageFileName,
 		Contexts:  []DomainContextInfo{},
 		Relations: []DomainRelationInfo{},
 	}

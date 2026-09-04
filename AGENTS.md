@@ -1,16 +1,16 @@
 # Agent guide
 
 Repo-specific instructions for coding agents. The architecture block
-below is generated from rules.yaml; refresh it with
+below is generated from rules.arclint.yaml; refresh it with
 `arclint agents --write` after changing the ruleset (a test fails when
 it drifts). Add hand-written guidance outside the markers.
 
 <!-- arclint:agents:begin -->
 ## Architecture contracts (arclint)
 
-Enforced from rules.yaml: 32 rules over languages [go, typescript].
+Enforced from rules.arclint.yaml: 32 rules over languages [go, typescript].
 
-Extended Patterns: `arclint/domain-model@0.1.0` (3 rules, ids qualified `arclint/domain-model:`). A Pattern Rule is listed and reported under its qualified id; change it through an Override under that id in rules.yaml (`arclint rules <id>` prints it), never by editing the Pattern.
+Extended Patterns: `arclint/domain-model@0.1.0` (3 rules, ids qualified `arclint/domain-model:`). A Pattern Rule is listed and reported under its qualified id; change it through an Override under that id in rules.arclint.yaml (`arclint rules <id>` prints it), never by editing the Pattern.
 
 ### Ask arclint first
 
@@ -22,13 +22,13 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 - `arclint check .`: evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings
 - `arclint rules test`: run the rule fixtures under `.arclint/tests` after changing any rule
 - `arclint sdk init`: regenerate the extension SDK artifacts under `.arclint/extensions`
-- `arclint agents md --write`: refresh this block after changing rules.yaml or the vocabulary
+- `arclint agents md --write`: refresh this block after changing rules.arclint.yaml or the vocabulary
 - `arclint baseline`: manage the committed baseline of adopted findings
-- `arclint patterns`: list the Patterns that resolve offline (embedded, vendored, authored); `patterns install <pattern>` extends rules.yaml with one, `patterns vendor` copies one under `.arclint/patterns`
+- `arclint patterns`: list the Patterns that resolve offline (embedded, vendored, authored); `patterns install <pattern>` extends rules.arclint.yaml with one, `patterns vendor` copies one under `.arclint/patterns`
 
 ### The recorded domain
 
-4 contexts, 1 aggregates, 25 invariants (ubiquitous-language.yaml).
+4 contexts, 1 aggregates, 25 invariants (domain.arclint.yaml).
 
 - **rule**: Rule [aggregate], Module, Pattern; value objects RuleID, ModuleName, Claim, Assertion, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec
 - **adoption**: value objects Binding, Override, Disablement, Exclusion, Suppression, Installation
@@ -39,11 +39,11 @@ Relations: rule → conformance (conformist); rule → adoption (conformist); ru
 
 ### Changing the language
 
-If your change speaks about something new, or changes what a recorded term means, record it in `ubiquitous-language.yaml` before writing code. Invoke the domain-librarian skill for that work: it decides how a concept is classified, what evidence a recording needs, and when an open question is recorded instead of a guess. If your harness does not have the skill, `arclint agents skill` writes it to `.agents/skills/domain-librarian/`.
+If your change speaks about something new, or changes what a recorded term means, record it in `domain.arclint.yaml` before writing code. Invoke the domain-librarian skill for that work: it decides how a concept is classified, what evidence a recording needs, and when an open question is recorded instead of a guess. If your harness does not have the skill, `arclint agents skill` writes it to `.agents/skills/domain-librarian/`.
 
 ### Modules and their rules
 
-- **vocabulary**: The project's recorded Ubiquitous Language vocabulary. (paths ubiquitous-language.yaml)
+- **vocabulary**: The project's recorded Ubiquitous Language vocabulary. (paths domain.arclint.yaml)
   - arclint/domain-model:vocabulary/terms-carry-definitions: Every recorded term carries a definition.
   - arclint/domain-model:vocabulary/invariants-name-recorded-owners: Every recorded invariant names a recorded term of its own context as its owner.
 - **domain**: Rule aggregate and domain values; stdlib-only. (paths internal/domain/**)

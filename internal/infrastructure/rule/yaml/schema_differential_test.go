@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	sj "github.com/santhosh-tekuri/jsonschema/v6"
@@ -30,22 +31,84 @@ func repoRoot(t *testing.T) string {
 }
 
 // TestPublishedSchemaMatchesDomain is the drift half of the Rule Schema
-// invariant: the committed docs/rules.schema.json is byte-for-byte what
-// rule.Schema() produces. Regenerate by writing rule.Schema() output
-// over the file.
+// invariant: the release copy under docs/schemas and the dogfood copy
+// under .arclint/schemas are both byte-for-byte what rule.Schema()
+// produces. Regenerate with make schemas.
 func TestPublishedSchemaMatchesDomain(t *testing.T) {
 	want, err := rule.Schema()
 	if err != nil {
 		t.Fatalf("rule.Schema: %v", err)
 	}
-	published := filepath.Join(repoRoot(t), "docs", "rules.schema.json")
-	got, err := os.ReadFile(published)
+	for _, dir := range []string{"docs/schemas", ".arclint/schemas"} {
+		published := filepath.Join(repoRoot(t), filepath.FromSlash(dir), rule.SchemaFileName)
+		got, err := os.ReadFile(published)
+		if err != nil {
+			t.Fatalf("read published schema: %v", err)
+		}
+		if !bytes.Equal(want, got) {
+			t.Fatalf("%s/%s drifted from rule.Schema(); run make schemas", dir, rule.SchemaFileName)
+		}
+	}
+}
+
+// TestPublishedSchemaIdentifiesItself pins the $id to the release copy
+// and every $ref to a described $defs entry whose description the
+// reference repeats, the contract the Spectral ruleset enforces on the
+// committed file and editors rely on for hover text.
+func TestPublishedSchemaIdentifiesItself(t *testing.T) {
+	data, err := rule.Schema()
 	if err != nil {
-		t.Fatalf("read published schema: %v", err)
+		t.Fatalf("rule.Schema: %v", err)
 	}
-	if !bytes.Equal(want, got) {
-		t.Fatalf("docs/rules.schema.json drifted from rule.Schema(); regenerate it from rule.Schema() output")
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
 	}
+	if want := "https://raw.githubusercontent.com/wixregiga/arclint/main/docs/schemas/" + rule.SchemaFileName; doc["$id"] != want {
+		t.Fatalf("$id = %v, want %q", doc["$id"], want)
+	}
+	defs, ok := doc["$defs"].(map[string]any)
+	if !ok {
+		t.Fatal("schema has no $defs object")
+	}
+	for name, def := range defs {
+		entry, ok := def.(map[string]any)
+		if !ok {
+			t.Fatalf("$defs/%s is not an object", name)
+		}
+		if text, _ := entry["description"].(string); text == "" {
+			t.Errorf("$defs/%s has no description", name)
+		}
+	}
+	var walk func(path string, node any)
+	walk = func(path string, node any) {
+		switch typed := node.(type) {
+		case map[string]any:
+			if ref, ok := typed["$ref"].(string); ok {
+				const prefix = "#/$defs/"
+				if !strings.HasPrefix(ref, prefix) {
+					t.Errorf("%s: $ref %q does not point into $defs", path, ref)
+					return
+				}
+				target, ok := defs[strings.TrimPrefix(ref, prefix)].(map[string]any)
+				if !ok {
+					t.Errorf("%s: $ref %q has no $defs target", path, ref)
+					return
+				}
+				if typed["description"] != target["description"] {
+					t.Errorf("%s: $ref %q description %v differs from its target's %v", path, ref, typed["description"], target["description"])
+				}
+			}
+			for key, child := range typed {
+				walk(path+"/"+key, child)
+			}
+		case []any:
+			for i, child := range typed {
+				walk(fmt.Sprintf("%s/%d", path, i), child)
+			}
+		}
+	}
+	walk("#", doc)
 }
 
 // compileRuleSchema compiles rule.Schema() with the same validator the
@@ -60,12 +123,11 @@ func compileRuleSchema(t *testing.T) *sj.Schema {
 	if err != nil {
 		t.Fatalf("unmarshal schema: %v", err)
 	}
-	const url = "https://raw.githubusercontent.com/wixregiga/arclint/main/docs/rules.schema.json"
 	compiler := sj.NewCompiler()
-	if err := compiler.AddResource(url, doc); err != nil {
+	if err := compiler.AddResource(rule.SchemaID, doc); err != nil {
 		t.Fatalf("add schema resource: %v", err)
 	}
-	schema, err := compiler.Compile(url)
+	schema, err := compiler.Compile(rule.SchemaID)
 	if err != nil {
 		t.Fatalf("compile schema: %v", err)
 	}
@@ -126,9 +188,9 @@ func jsonify(value any) any {
 // naming the case.
 func TestSchemaAgreesWithLoader(t *testing.T) {
 	schema := compileRuleSchema(t)
-	realRuleset, err := os.ReadFile(filepath.Join(repoRoot(t), "rules.yaml"))
+	realRuleset, err := os.ReadFile(filepath.Join(repoRoot(t), rule.RulesetFileName))
 	if err != nil {
-		t.Fatalf("read repository rules.yaml: %v", err)
+		t.Fatalf("read repository %s: %v", rule.RulesetFileName, err)
 	}
 	// oneModule is the smallest repository ruleset every Rule case is
 	// written against.
@@ -141,7 +203,7 @@ func TestSchemaAgreesWithLoader(t *testing.T) {
 		document string
 		accepted bool
 	}{
-		{"repository rules.yaml", string(realRuleset), true},
+		{"repository " + rule.RulesetFileName, string(realRuleset), true},
 		{"empty file", "", false},
 		{"empty document", "{}\n", true},
 		{"runtime, scan, modules, empty rules", `
@@ -164,6 +226,8 @@ rules: {}
 		{"module object with an unknown key", "modules:\n  core:\n    paths: core/**\n    globs: [\"core/**\"]\n", false},
 		{"module with an empty glob list", "modules:\n  core: []\n", false},
 		{"module with a brace glob", "modules:\n  core: \"core/{a,b}/**\"\n", false},
+		{"module listing a glob twice", "modules:\n  core: [\"core/**\", \"core/**\"]\n", false},
+		{"module object listing a glob twice", "modules:\n  core:\n    paths: [\"core/**\", \"core/**\"]\n", false},
 		{"module name with uppercase", "modules:\n  Core: core/**\n", false},
 
 		// ---- one minimal Rule per assertion --------------------------------
@@ -218,6 +282,21 @@ rules:
     structure:
       forbid: ["core/**/util.go"]
 `, true},
+		{"structure requiring a glob twice", oneModule + `
+rules:
+  core/shape:
+    on: core
+    structure:
+      require: ["root.go", "root.go"]
+`, false},
+		{"structure with each listing a glob twice", oneModule + `
+rules:
+  core/aggregates:
+    on: core
+    structure:
+      each: domain.aggregates
+      require: ["core/{name:flatcase}/root.go", "core/{name:flatcase}/root.go"]
+`, false},
 		{"structure with empty require", oneModule + `
 rules:
   core/root-present:
@@ -465,6 +544,20 @@ rules:
     imports:
       internal: []
 `, false},
+		{"imports naming a module twice", twoModules + `
+rules:
+  core/imports:
+    on: [core, core]
+    imports:
+      internal: []
+`, false},
+		{"imports allowing a module twice", twoModules + `
+rules:
+  core/imports:
+    on: core
+    imports:
+      internal: [app, app]
+`, false},
 		{"imports with an empty on", oneModule + `
 rules:
   core/imports:
@@ -531,6 +624,24 @@ rules:
       modules: [app]
       reason: "app is the composition root"
 `, true},
+		{"exclude listing a path twice", oneModule + `
+rules:
+  core/imports:
+    on: core
+    imports:
+      internal: []
+    exclude:
+      paths: ["core/generated/**", "core/generated/**"]
+      reason: "generated code is not authored"
+`, false},
+		{"exclude listing a module twice", twoModules + `
+rules:
+  deps/acyclic:
+    acyclic: {}
+    exclude:
+      modules: [app, app]
+      reason: "app is the composition root"
+`, false},
 		{"exclude without a reason", oneModule + `
 rules:
   core/imports:
@@ -559,6 +670,16 @@ rules:
       paths: ["core/legacy/**"]
       reason: "adopted debt tracked in the baseline"
 `, true},
+		{"suppress listing a path twice", oneModule + `
+rules:
+  core/imports:
+    on: core
+    imports:
+      internal: []
+    suppress:
+      paths: ["core/legacy/**", "core/legacy/**"]
+      reason: "adopted debt tracked in the baseline"
+`, false},
 		{"suppress without paths", oneModule + `
 rules:
   core/imports:
@@ -605,6 +726,8 @@ repository:
 		{"runtime naming no language", "runtime: []\n", false},
 		{"scan with an unknown policy", "scan:\n  unknown_imports: explode\n", false},
 		{"scan with an unknown key", "scan:\n  follow_symlinks: true\n", false},
+		{"scan excluding a glob twice", "scan:\n  exclude: [\"vendor/**\", \"vendor/**\"]\n", false},
+		{"extends listing a pattern twice", "extends:\n  - pattern: arclint/domain-model@0.1.0\n  - pattern: arclint/domain-model@0.1.0\n", false},
 		{"extends entry without pattern", "extends:\n  - bind:\n      core: core/**\n", false},
 		{"extends with an inexact version", "extends:\n  - pattern: acme/hexagonal@latest\n", false},
 		{"extends with a bind list", "extends:\n  - pattern: acme/hexagonal@1.0.0\n    bind: [core]\n", false},

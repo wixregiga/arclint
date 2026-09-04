@@ -20,7 +20,7 @@ func ansiRenderer() cli.Renderer {
 
 func TestLipglossInitPreservesGrammar(t *testing.T) {
 	var buf bytes.Buffer
-	err := ansiRenderer().Render(&buf, cli.InitReport{Path: "rules.yaml"})
+	err := ansiRenderer().Render(&buf, cli.InitReport{Path: "rules.arclint.yaml"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,13 +29,13 @@ func TestLipglossInitPreservesGrammar(t *testing.T) {
 		t.Fatalf("expected ANSI styling, got %q", raw)
 	}
 	out := stripANSI(raw)
-	if !strings.Contains(out, "rules.yaml") {
+	if !strings.Contains(out, "rules.arclint.yaml") {
 		t.Fatalf("path missing: %q", out)
 	}
 	if !strings.Contains(out, "arclint check .") {
 		t.Fatalf("next-step grammar changed: %q", out)
 	}
-	if out != "wrote rules.yaml\nnext: declare your modules, then run `arclint check .`\n" {
+	if out != "wrote rules.arclint.yaml\nnext: declare your modules, then run `arclint check .`\n" {
 		t.Fatalf("stripped grammar = %q", out)
 	}
 }

@@ -94,7 +94,7 @@ func writeSyntheticRepo(t *testing.T, root string, pkgs, filesPer int) {
 		}
 	}
 	write("go.mod", "module example.com/synth\n\ngo 1.24\n\nrequire github.com/pkg/errors v0.9.1\n")
-	write("rules.yaml", `runtime: [go]
+	write("rules.arclint.yaml", `runtime: [go]
 modules:
   entities: "internal/entities/**"
   features: "internal/features/**"

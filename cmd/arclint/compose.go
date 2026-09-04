@@ -20,6 +20,7 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/distribution"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	markdownagents "github.com/wixregiga/arclint/internal/infrastructure/agents/markdown"
+	artifactfs "github.com/wixregiga/arclint/internal/infrastructure/artifact"
 	jsonbaseline "github.com/wixregiga/arclint/internal/infrastructure/baseline/json"
 	sobekextension "github.com/wixregiga/arclint/internal/infrastructure/extension/sobek"
 	golangfacts "github.com/wixregiga/arclint/internal/infrastructure/language/golang"
@@ -32,7 +33,6 @@ import (
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
 	"github.com/wixregiga/arclint/internal/infrastructure/ruletest"
 	filesystemscaffold "github.com/wixregiga/arclint/internal/infrastructure/scaffold/filesystem"
-	skillfs "github.com/wixregiga/arclint/internal/infrastructure/skill"
 	yamlvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/yaml"
 )
 
@@ -143,19 +143,23 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	skillWriter, err := skillfs.NewWriter(root)
+	artifactWriter, err := artifactfs.NewWriter(root)
 	if err != nil {
 		return configError(err)
 	}
-	publishSkillProtocol, err := application.NewPublishSkillProtocol(skillWriter)
+	publishSkillProtocol, err := application.NewPublishSkillProtocol(artifactWriter)
 	if err != nil {
 		return configError(err)
 	}
-	publishSkillVocabulary, err := application.NewPublishSkillVocabulary(skillWriter)
+	publishSkillVocabulary, err := application.NewPublishSkillVocabulary(artifactWriter)
 	if err != nil {
 		return configError(err)
 	}
-	publishLibrarySchema, err := application.NewPublishLibrarySchema(skillWriter)
+	publishDomainSchema, err := application.NewPublishDomainSchema(artifactWriter)
+	if err != nil {
+		return configError(err)
+	}
+	publishRuleSchema, err := application.NewPublishRuleSchema(artifactWriter)
 	if err != nil {
 		return configError(err)
 	}
@@ -216,10 +220,10 @@ func run(args []string) int {
 	rootCommand := cli.Root(buildVersion(version),
 		cli.NewCheckCommand(assess, listRules, renderer),
 		cli.NewInitCommand(initialize, renderer),
-		cli.NewRulesCommand(listRules, showRule, ruleTests, renderer),
+		cli.NewRulesCommand(listRules, showRule, ruleTests, publishRuleSchema, renderer),
 		cli.NewContextCommand(getContext, renderer),
-		cli.NewDomainCommand(initDomain, getDomainOverview, listDomainDefinitions, showDomainDefinition, defineDomainDefinition, removeDomainDefinition, renderer),
-		cli.NewAgentsCommand(publishAgents, publishSkillProtocol, publishSkillVocabulary, publishLibrarySchema, renderer),
+		cli.NewDomainCommand(initDomain, getDomainOverview, listDomainDefinitions, showDomainDefinition, defineDomainDefinition, removeDomainDefinition, publishDomainSchema, renderer),
+		cli.NewAgentsCommand(publishAgents, publishSkillProtocol, publishSkillVocabulary, publishDomainSchema, renderer),
 		cli.NewBaselineCommand(capture, refresh, renderer),
 		cli.NewPatternsCommand(patternCommands, renderer),
 		cli.NewSDKCommand(initializeSDK, renderer),
@@ -387,7 +391,7 @@ func resolveRulesPath(args []string) (string, []string, error) {
 	if len(rest) > 1 && rest[0] == "check" && !strings.HasPrefix(rest[1], "-") {
 		start = rest[1]
 	}
-	discovered, err := yamlrule.DiscoverPath(start, "rules.yaml")
+	discovered, err := yamlrule.DiscoverPath(start, rule.RulesetFileName)
 	if err != nil {
 		// No subcommand means --version or --help: neither needs a
 		// repository, and construction alone never loads the ruleset.
@@ -399,7 +403,7 @@ func resolveRulesPath(args []string) (string, []string, error) {
 		// none exists, so they compose against the working directory.
 		if fp := firstPositional(rest); fp == "" || fp == "help" || fp == "completion" ||
 			fp == "__complete" || fp == "__completeNoDesc" || fp == "patterns" {
-			fallback, absErr := filepath.Abs("rules.yaml")
+			fallback, absErr := filepath.Abs(rule.RulesetFileName)
 			if absErr != nil {
 				return "", nil, fmt.Errorf("rules path: %w", absErr)
 			}

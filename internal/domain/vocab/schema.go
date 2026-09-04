@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// Schema returns the published library.schema.json bytes: draft 2020-12,
+// Schema returns the published domain.arclint.schema.json bytes: draft 2020-12,
 // 2-space indented, trailing newline, key order and compact leaf objects
 // matching the litmus file byte-for-byte. Field descriptions are composed
 // from taxonomy data (RelationKind meanings via SchemaKindDescription,
@@ -55,6 +55,7 @@ func writeSchema(buf *bytes.Buffer) error {
 	aliases := func(desc string) compactObject {
 		return co(
 			"type", "array",
+			"uniqueItems", true,
 			"items", strItems,
 			"description", desc,
 		)
@@ -70,11 +71,13 @@ func writeSchema(buf *bytes.Buffer) error {
 		"required", a("version", "contexts"),
 		"properties", o(
 			"version", o(
+				"type", "integer",
 				"const", UbiquitousLanguageVersion,
 				"description", SchemaVersionDescription,
 			),
 			"contexts", o(
 				"type", "array",
+				"uniqueItems", true,
 				"description", SchemaContextsDescription,
 				"items", o(
 					"type", "object",
@@ -88,6 +91,7 @@ func writeSchema(buf *bytes.Buffer) error {
 						),
 						"entities", o(
 							"type", "array",
+							"uniqueItems", true,
 							"description", SchemaEntitiesDescription,
 							"items", o(
 								"type", "object",
@@ -103,6 +107,7 @@ func writeSchema(buf *bytes.Buffer) error {
 						),
 						"value_objects", o(
 							"type", "array",
+							"uniqueItems", true,
 							"description", SchemaValueObjectsDescription,
 							"items", o(
 								"type", "object",
@@ -117,6 +122,7 @@ func writeSchema(buf *bytes.Buffer) error {
 						),
 						"invariants", o(
 							"type", "array",
+							"uniqueItems", true,
 							"description", SchemaInvariantsDescription,
 							"items", o(
 								"type", "object",
@@ -131,6 +137,7 @@ func writeSchema(buf *bytes.Buffer) error {
 						),
 						"assertions", o(
 							"type", "array",
+							"uniqueItems", true,
 							"description", SchemaAssertionsDescription,
 							"items", o(
 								"type", "object",
@@ -146,6 +153,7 @@ func writeSchema(buf *bytes.Buffer) error {
 						),
 						"specifications", o(
 							"type", "array",
+							"uniqueItems", true,
 							"description", SchemaSpecificationsDescription,
 							"items", o(
 								"type", "object",
@@ -159,6 +167,7 @@ func writeSchema(buf *bytes.Buffer) error {
 						),
 						"events", o(
 							"type", "array",
+							"uniqueItems", true,
 							"description", SchemaEventsDescription,
 							"items", o(
 								"type", "object",
@@ -175,6 +184,7 @@ func writeSchema(buf *bytes.Buffer) error {
 			),
 			"relations", o(
 				"type", "array",
+				"uniqueItems", true,
 				"description", SchemaRelationsDescription,
 				"items", o(
 					"type", "object",
@@ -184,6 +194,7 @@ func writeSchema(buf *bytes.Buffer) error {
 						"from", str(SchemaFromDescription),
 						"to", str(SchemaToDescription),
 						"kind", o(
+							"type", "string",
 							"enum", kindEnum,
 							"description", SchemaKindDescription(),
 						),

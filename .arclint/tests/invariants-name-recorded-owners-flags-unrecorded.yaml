@@ -2,7 +2,7 @@
 # records, another names an alias instead of the canonical term.
 rule: "arclint/domain-model:vocabulary/invariants-name-recorded-owners"
 files:
-  ubiquitous-language.yaml: |
+  domain.arclint.yaml: |
     version: 1
     contexts:
       - name: ordering
@@ -20,10 +20,10 @@ expect:
   # statement is written on line 9 of the file above, the Purchase-owned
   # one on line 11.
   - kind: violation
-    path: ubiquitous-language.yaml
+    path: domain.arclint.yaml
     line: 9
     message: "invariant owner \"Ledger\" in context \"ordering\" is not a recorded entity or value object of that context"
   - kind: violation
-    path: ubiquitous-language.yaml
+    path: domain.arclint.yaml
     line: 11
     message: "invariant owner \"Purchase\" in context \"ordering\" is not a recorded entity or value object of that context"

@@ -52,7 +52,7 @@ modules:
     paths: "web/src/shared/**"
     description: "FSD shared layer: the api client, per-aggregate api files, and the ui kit."
   vocabulary:
-    paths: "ubiquitous-language.yaml"
+    paths: "domain.arclint.yaml"
     description: "The recorded Ubiquitous Language of the box office."
   toolchain:
     paths: ["Makefile", ".golangci.yml", "go.mod", "web/package.json"]

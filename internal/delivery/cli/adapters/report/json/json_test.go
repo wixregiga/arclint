@@ -17,14 +17,14 @@ import (
 
 func TestJSONInitShape(t *testing.T) {
 	var buf bytes.Buffer
-	if err := New().Render(&buf, cli.InitReport{Path: "rules.yaml"}); err != nil {
+	if err := New().Render(&buf, cli.InitReport{Path: "rules.arclint.yaml"}); err != nil {
 		t.Fatal(err)
 	}
 	var doc map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc["path"] != "rules.yaml" {
+	if doc["path"] != "rules.arclint.yaml" {
 		t.Fatalf("path = %v", doc["path"])
 	}
 	if !strings.HasSuffix(buf.String(), "\n") {
@@ -205,7 +205,7 @@ func TestJSONBaselineRefreshLowerCamel(t *testing.T) {
 
 func TestJSONAgentsStatusLowerCamel(t *testing.T) {
 	var buf bytes.Buffer
-	err := New().Render(&buf, cli.AgentsStatusReport{
+	err := New().Render(&buf, cli.ArtifactStatusReport{
 		Writes: []cli.ArtifactWrite{{Changed: true, Path: "AGENTS.md"}},
 	})
 	if err != nil {
@@ -271,7 +271,7 @@ func TestJSONPatternVendorInstallExportLowerCamel(t *testing.T) {
 	buf.Reset()
 	err = New().Render(&buf, cli.PatternInstallReport{Result: application.InstallPatternResult{
 		Reference: "acme/layers@1.0.0", Digest: "sha256:abc", Source: distribution.SourceEmbedded,
-		RulesetPath: "rules.yaml", RulesetReplaced: "0.9.0",
+		RulesetPath: "rules.arclint.yaml", RulesetReplaced: "0.9.0",
 		Bound:   []application.BoundModule{{Module: "domain", Paths: []string{"src/domain/**"}}},
 		Adopted: []string{"domain"},
 	}})
@@ -282,7 +282,7 @@ func TestJSONPatternVendorInstallExportLowerCamel(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &install); err != nil {
 		t.Fatal(err)
 	}
-	if install["rulesetPath"] != "rules.yaml" || install["rulesetReplaced"] != "0.9.0" || install["rulesetCreated"] != false {
+	if install["rulesetPath"] != "rules.arclint.yaml" || install["rulesetReplaced"] != "0.9.0" || install["rulesetCreated"] != false {
 		t.Fatalf("install doc = %v", install)
 	}
 	bound, _ := install["bound"].([]any)
@@ -329,7 +329,7 @@ func TestJSONSDKInitLowerCamel(t *testing.T) {
 func TestJSONDomainInitLowerCamel(t *testing.T) {
 	var buf bytes.Buffer
 	err := New().Render(&buf, cli.DomainInitReport{
-		Result: application.InitDomainResult{Source: "ubiquitous-language.yaml", Created: true},
+		Result: application.InitDomainResult{Source: "domain.arclint.yaml", Created: true},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -338,7 +338,7 @@ func TestJSONDomainInitLowerCamel(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc["source"] != "ubiquitous-language.yaml" || doc["created"] != true {
+	if doc["source"] != "domain.arclint.yaml" || doc["created"] != true {
 		t.Fatalf("doc = %v", doc)
 	}
 }
@@ -351,7 +351,7 @@ func TestJSONContextPreservesEstablishedKeys(t *testing.T) {
 			Languages: []string{"go"},
 			RuleCount: 1,
 			Domain: &application.DomainKnowledge{
-				Source: "ubiquitous-language.yaml",
+				Source: "domain.arclint.yaml",
 				Counts: vocab.Counts{Entities: 1},
 			},
 		},
@@ -377,7 +377,7 @@ func TestJSONContextPreservesEstablishedKeys(t *testing.T) {
 }
 
 func TestJSONShortWrite(t *testing.T) {
-	err := New().Render(&shortWriter{n: 2}, cli.InitReport{Path: "rules.yaml"})
+	err := New().Render(&shortWriter{n: 2}, cli.InitReport{Path: "rules.arclint.yaml"})
 	if err == nil {
 		t.Fatal("expected short-write error")
 	}

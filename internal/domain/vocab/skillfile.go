@@ -8,8 +8,17 @@ const (
 	SkillProtocolFile = "SKILL.md"
 	// SkillVocabularyFile is the VOCAB.yaml filename.
 	SkillVocabularyFile = "VOCAB.yaml"
-	// SkillLibrarySchemaFile is the library.schema.json filename.
-	SkillLibrarySchemaFile = "library.schema.json"
+)
+
+// Where the published schemas live. SchemaDirectory is the
+// project-relative directory arclint writes every generated JSON
+// Schema into; SchemaFileName is the Ubiquitous Language schema under
+// it, and SchemaPath is the two joined, the path a library file's
+// modeline names when the schema is nearby.
+const (
+	SchemaDirectory = ".arclint/schemas"
+	SchemaFileName  = "domain.arclint.schema.json"
+	SchemaPath      = SchemaDirectory + "/" + SchemaFileName
 )
 
 // Skill frontmatter (SKILL.md).
@@ -73,11 +82,11 @@ type LibraryFile struct {
 func LibraryFileSpec() LibraryFile {
 	return LibraryFile{
 		Purpose:           "One YAML file per project, sole custody of the librarian; humans review and edit, the librarian writes.",
-		JSONSchema:        SkillLibrarySchemaFile,
-		JSONSchemaComment: "ships beside this file; gives human editors descriptions and validation",
-		Header:            `# yaml-language-server: $schema=<relative path to library.schema.json, or its canonical $id URL when the schema file is not nearby>`,
+		JSONSchema:        SchemaPath,
+		JSONSchemaComment: "written by arclint domain schema --write; gives human editors descriptions and validation",
+		Header:            `# yaml-language-server: $schema=<relative path to ` + SchemaPath + `, or its canonical $id URL when the schema file is not nearby>`,
 		HeaderComment:     "first line of every written library file",
-		ShapeComment:      "human-readable summary; library.schema.json is authoritative; on any divergence, the schema wins",
+		ShapeComment:      "human-readable summary; " + SchemaFileName + " is authoritative; on any divergence, the schema wins",
 		Shape: `    version: 1
     contexts:
       - name: <context>
@@ -105,10 +114,10 @@ func LibraryFileSpec() LibraryFile {
 // VOCABHeaderComment is line 1 of VOCAB.yaml.
 const VOCABHeaderComment = "# domain-librarian core reference: DDD vocabulary, distillation rules, clarification protocol."
 
-// Schema document scaffolding (library.schema.json). Descriptions that
+// Schema document scaffolding (domain.arclint.schema.json). Descriptions that
 // embed taxonomy data are built in schema.go; these are fixed prose.
 const (
-	SchemaID    = "https://raw.githubusercontent.com/wixregiga/arclint/main/.agents/skills/domain-librarian/library.schema.json"
+	SchemaID    = "https://raw.githubusercontent.com/wixregiga/arclint/main/docs/schemas/" + SchemaFileName
 	SchemaDraft = "https://json-schema.org/draft/2020-12/schema"
 	SchemaTitle = "domain-librarian ubiquitous-language library"
 
@@ -124,11 +133,11 @@ const (
 
 	SchemaValueObjectsDescription = "Immutable, identity-less concepts described entirely by their values (value-test: two with identical values are interchangeable). Measurements, units, and amounts belong here."
 
-	SchemaInvariantsDescription = "Must-always/must-never rules that hold at all times within this context.\n\nA valid invariant forbids something a naive implementation could do. Restating a definition is not an invariant.\n\nOwner:\n- value object: value integrity. No id. Enforced at that type's constructor.\n- aggregate with id: cluster invariant. Method named from id, called from the constructor and every exported command."
+	SchemaInvariantsDescription = "Must-always/must-never rules that hold at all times within this context.\n\nA valid invariant forbids something a naive implementation could do. Restating a definition is not an invariant.\n\nThe owner decides the enforcement. A value object owner means value integrity: no id, enforced at that type's constructor. An aggregate owner with an id means a cluster invariant: a method named from the id, called from the constructor and every exported command."
 
-	SchemaAssertionsDescription = "Post-conditions of a named operation.\n\nUnlike an invariant, an assertion holds when that operation occurs, not at all times.\n\nFields:\n- id: method that checks the post-condition\n- on: operation that must call that method"
+	SchemaAssertionsDescription = "Post-conditions of a named operation.\n\nUnlike an invariant, an assertion holds when that operation occurs, not at all times.\n\nThe id names the method that checks the post-condition; on names the operation that must call that method."
 
-	SchemaSpecificationsDescription = "Named predicates experts pass around as a thing.\n\nA type of this name carries an Evans satisfaction method:\n- SatisfiedBy\n- satisfiedBy\n- satisfied_by\n\nA specification is not an invariant and is not a flag on a value object. A name may not appear in both value_objects and specifications."
+	SchemaSpecificationsDescription = "Named predicates experts pass around as a thing.\n\nA type of this name carries an Evans satisfaction method, spelled SatisfiedBy, satisfiedBy, or satisfied_by in the language's method case.\n\nA specification is not an invariant and is not a flag on a value object. A name may not appear in both value_objects and specifications."
 
 	SchemaEventsDescription = "Domain events: things that happened that experts care about, named in past-tense expert language (event-detection). Technical changes are not events."
 
@@ -148,11 +157,11 @@ const (
 
 	SchemaStatementDescription = "The rule, phrased so the concrete forbidden violation is clear."
 
-	SchemaOwnerDescription = "Exactly one enforcing term in this context.\n\n- aggregate: cluster invariant. id required for a named contract.\n- value object: value integrity. No id. Enforced at construction."
+	SchemaOwnerDescription = "Exactly one enforcing term in this context. An aggregate owner enforces a cluster invariant, and a named contract requires an id. A value object owner enforces value integrity at construction and carries no id."
 
 	SchemaAssertionOwnerDescription = "The entity whose named operation must satisfy this post-condition. Must be a recorded entity in this context."
 
-	SchemaInvariantIDDescription = "Stable identity of a cluster invariant, unique within the bounded context.\n\n- Required when the owner is an aggregate and this is a named cluster contract.\n- Forbidden when the owner is a value object.\n\nThe enforcing method is this id rendered in the language's method case: PascalCase, camelCase, or snake_case."
+	SchemaInvariantIDDescription = "Stable identity of a cluster invariant, unique within the bounded context. Required when the owner is an aggregate and this is a named cluster contract; forbidden when the owner is a value object.\n\nThe enforcing method is this id rendered in the language's method case: PascalCase, camelCase, or snake_case."
 
 	SchemaAssertionIDDescription = "Stable identity of the assertion, unique within the bounded context. Names the method that checks the post-condition, rendered in the language's method case."
 

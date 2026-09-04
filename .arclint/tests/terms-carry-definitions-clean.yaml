@@ -2,7 +2,7 @@
 # definition, so the ctx.domain()-consuming extension stays silent.
 rule: "arclint/domain-model:vocabulary/terms-carry-definitions"
 files:
-  ubiquitous-language.yaml: |
+  domain.arclint.yaml: |
     version: 1
     contexts:
       - name: Ordering

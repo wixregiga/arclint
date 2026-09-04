@@ -32,7 +32,7 @@ body:
     attributes:
       label: Will a user notice this?
       options:
-        - "Yes: wrong diagnostic, crash, bad CLI/output, accepted invalid rules.yaml, broken pattern contract, or incorrect vocabulary behavior"
+        - "Yes: wrong diagnostic, crash, bad CLI/output, accepted invalid rules.arclint.yaml, broken pattern contract, or incorrect vocabulary behavior"
         - "No: internal only. Skip release notes."
     validations:
       required: true
@@ -49,8 +49,8 @@ body:
   - type: textarea
     id: rules
     attributes:
-      label: rules.yaml snippet
-      description: The smallest rules.yaml that reproduces the problem.
+      label: rules.arclint.yaml snippet
+      description: The smallest rules.arclint.yaml that reproduces the problem.
       render: yaml
     validations:
       required: true

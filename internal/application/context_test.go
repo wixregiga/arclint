@@ -125,7 +125,7 @@ func TestInitializeRepositoryDraftsStarter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if path != "rules.yaml" || !scaffold.force {
+	if path != "rules.arclint.yaml" || !scaffold.force {
 		t.Errorf("path = %q, force = %v", path, scaffold.force)
 	}
 	for _, want := range []string{"runtime: [go, ts]\n", "modules:\n", "  source: \"**\"\n", "rules:\n", "  source/dependencies:\n", "    on: source\n", "      internal: []\n"} {
@@ -256,7 +256,7 @@ type recordingScaffold struct {
 
 func (s *recordingScaffold) Write(content string, force bool) (string, error) {
 	s.content, s.force = content, force
-	return "rules.yaml", nil
+	return "rules.arclint.yaml", nil
 }
 
 func TestArchitecturalContextWorksite(t *testing.T) {

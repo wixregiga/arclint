@@ -3,7 +3,7 @@
 # no file satisfies.
 rule: "domain-model/aggregate-skeleton"
 files:
-  ubiquitous-language.yaml: |
+  domain.arclint.yaml: |
     version: 1
     contexts:
       - name: ordering

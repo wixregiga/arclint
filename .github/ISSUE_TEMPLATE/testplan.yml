@@ -60,10 +60,10 @@ body:
     id: setup
     attributes:
       label: Set up
-      description: Install this build, this rules.yaml, this tree. No theory.
+      description: Install this build, this rules.arclint.yaml, this tree. No theory.
       placeholder: |
         cargo install --path .   # or download the release candidate
-        use the rules.yaml and tree from #42
+        use the rules.arclint.yaml and tree from #42
     validations:
       required: true
 

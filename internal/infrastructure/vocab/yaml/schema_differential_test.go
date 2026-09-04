@@ -53,26 +53,11 @@ relations:
     kind: customer_supplier
 `
 
-// TestLibrarySchemaCompilesAsDraft202012 asserts vocab.Schema() is a
+// TestDomainSchemaCompilesAsDraft202012 asserts vocab.Schema() is a
 // valid JSON Schema draft 2020-12 document (santhosh-tekuri), matching
 // the infrastructure differential-test approach.
-func TestLibrarySchemaCompilesAsDraft202012(t *testing.T) {
-	data, err := vocab.Schema()
-	if err != nil {
-		t.Fatalf("vocab.Schema: %v", err)
-	}
-	doc, err := sj.UnmarshalJSON(bytes.NewReader(data))
-	if err != nil {
-		t.Fatalf("unmarshal schema: %v", err)
-	}
-	const url = "https://raw.githubusercontent.com/wixregiga/arclint/main/.agents/skills/domain-librarian/library.schema.json"
-	compiler := sj.NewCompiler()
-	if err := compiler.AddResource(url, doc); err != nil {
-		t.Fatalf("add schema resource: %v", err)
-	}
-	if _, err := compiler.Compile(url); err != nil {
-		t.Fatalf("compile draft 2020-12 schema: %v", err)
-	}
+func TestDomainSchemaCompilesAsDraft202012(t *testing.T) {
+	compileDomainSchema(t)
 }
 
 // repoRoot locates the repository root from this source file, keeping
@@ -86,28 +71,29 @@ func repoRoot(t *testing.T) string {
 	return filepath.Join(filepath.Dir(file), "..", "..", "..", "..")
 }
 
-// TestPublishedSchemaMatchesDomain is the drift half of the Ubiquitous
-// Language Schema invariant: the committed
-// .agents/skills/domain-librarian/library.schema.json is byte-for-byte what
-// vocab.Schema() produces.
-func TestPublishedSchemaMatchesDomain(t *testing.T) {
+// TestProjectSchemaMatchesDomain is the drift half of the Ubiquitous
+// Language Schema invariant from the project's side: the dogfood copy
+// under .arclint/schemas (what the domain file's modeline points at) is
+// byte-for-byte what vocab.Schema() produces.
+func TestProjectSchemaMatchesDomain(t *testing.T) {
 	want, err := vocab.Schema()
 	if err != nil {
 		t.Fatalf("vocab.Schema: %v", err)
 	}
-	published := filepath.Join(repoRoot(t), ".agents", "skills", "domain-librarian", "library.schema.json")
+	published := filepath.Join(repoRoot(t), filepath.FromSlash(vocab.SchemaPath))
 	got, err := os.ReadFile(published)
 	if err != nil {
-		t.Fatalf("read published schema: %v", err)
+		t.Fatalf("read project schema: %v", err)
 	}
 	if !bytes.Equal(want, got) {
-		t.Fatalf(".agents/skills/domain-librarian/library.schema.json drifted from vocab.Schema(); regenerate it from vocab.Schema() output")
+		t.Fatalf("%s drifted from vocab.Schema(); run make schemas", vocab.SchemaPath)
 	}
 }
 
-// compileUbiquitousSchema compiles vocab.Schema() with the same
-// validator the engine uses for extension parameter schemas.
-func compileUbiquitousSchema(t *testing.T) *sj.Schema {
+// compileDomainSchema compiles vocab.Schema() under its published $id
+// with the same validator the engine uses for extension parameter
+// schemas.
+func compileDomainSchema(t *testing.T) *sj.Schema {
 	t.Helper()
 	data, err := vocab.Schema()
 	if err != nil {
@@ -117,14 +103,13 @@ func compileUbiquitousSchema(t *testing.T) *sj.Schema {
 	if err != nil {
 		t.Fatalf("unmarshal schema: %v", err)
 	}
-	const url = "https://raw.githubusercontent.com/wixregiga/arclint/main/.agents/skills/domain-librarian/library.schema.json"
 	compiler := sj.NewCompiler()
-	if err := compiler.AddResource(url, doc); err != nil {
+	if err := compiler.AddResource(vocab.SchemaID, doc); err != nil {
 		t.Fatalf("add schema resource: %v", err)
 	}
-	schema, err := compiler.Compile(url)
+	schema, err := compiler.Compile(vocab.SchemaID)
 	if err != nil {
-		t.Fatalf("compile schema: %v", err)
+		t.Fatalf("compile draft 2020-12 schema: %v", err)
 	}
 	return schema
 }
@@ -180,7 +165,7 @@ func jsonify(value any) any {
 // multi-context document both loads through Repository.RecordedLanguage
 // and validates against vocab.Schema().
 func TestMultiContextExampleLoadsAndValidates(t *testing.T) {
-	schema := compileUbiquitousSchema(t)
+	schema := compileDomainSchema(t)
 	dir := t.TempDir()
 	path := filepath.Join(dir, vocab.UbiquitousLanguageFileName)
 	if err := os.WriteFile(path, []byte(multiContextExample), 0o600); err != nil {
@@ -219,7 +204,7 @@ func TestMultiContextExampleLoadsAndValidates(t *testing.T) {
 // allow empty definition so the terms-carry-definitions showcase can
 // observe incomplete terms through ctx.domain().
 func TestSchemaAgreesWithLoader(t *testing.T) {
-	schema := compileUbiquitousSchema(t)
+	schema := compileDomainSchema(t)
 
 	cases := []struct {
 		name             string
@@ -311,6 +296,34 @@ relations:
     to: Billing
     kind: customer_supplier
 `, false, true, false,
+		},
+		{
+			"duplicate alias", `
+version: 1
+contexts:
+  - name: Ordering
+    entities:
+      - name: Order
+        definition: A customer's request to purchase products.
+        aliases:
+          - Purchase Order
+          - Purchase Order
+`, false, false, false,
+		},
+		{
+			"duplicate relation", `
+version: 1
+contexts:
+  - name: Ordering
+  - name: Billing
+relations:
+  - from: Ordering
+    to: Billing
+    kind: customer_supplier
+  - from: Ordering
+    to: Billing
+    kind: customer_supplier
+`, false, false, false,
 		},
 		{
 			"minimal context", `

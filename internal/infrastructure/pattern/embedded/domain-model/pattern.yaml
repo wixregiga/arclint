@@ -1,15 +1,15 @@
 # arclint/domain-model: the recorded Ubiquitous Language as a contract.
 #
-# Every rule here reads the project's ubiquitous-language.yaml through
+# Every rule here reads the project's domain.arclint.yaml through
 # ctx.domain(): recorded terms must carry definitions, recorded
 # invariants must be owned by recorded terms, and the context map's
 # relations become import rules between the Modules named after the
-# contexts. Adopt it from rules.yaml:
+# contexts. Adopt it from rules.arclint.yaml:
 #
 #   extends:
 #     - pattern: arclint/domain-model@0.1.0
 #       bind:
-#         vocabulary: ubiquitous-language.yaml
+#         vocabulary: domain.arclint.yaml
 #
 # Context-named Modules are declared by the adopting ruleset: a bounded
 # context named "billing" is observed through the Module "billing", so
@@ -26,12 +26,12 @@ pattern:
     definitions, recorded invariants name a recorded owner in their own
     context, and imports between context-named Modules respect the
     recorded context-map relations. Every rule reads the project's
-    ubiquitous-language.yaml and is inert until vocabulary is recorded.
+    domain.arclint.yaml and is inert until vocabulary is recorded.
 
 modules:
   vocabulary:
     description: "The project's recorded Ubiquitous Language vocabulary."
-    paths: ubiquitous-language.yaml
+    paths: domain.arclint.yaml
 
 rules:
   vocabulary/terms-carry-definitions:

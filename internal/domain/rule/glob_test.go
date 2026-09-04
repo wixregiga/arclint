@@ -1,6 +1,7 @@
 package rule_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
@@ -73,5 +74,21 @@ func TestGlobConstructionRejectsInvalid(t *testing.T) {
 		if _, err := rule.NewGlob(pattern); err == nil {
 			t.Errorf("NewGlob(%q): expected construction error", pattern)
 		}
+	}
+}
+
+// TestGlobsRejectRepetition pins the loader side of the schema's
+// uniqueItems on every glob list: a pattern listed twice is an
+// authoring slip, not a wider selection.
+func TestGlobsRejectRepetition(t *testing.T) {
+	if _, err := rule.NewGlobs([]string{"core/**", "core/**"}); err == nil || !strings.Contains(err.Error(), "listed twice") {
+		t.Fatalf("NewGlobs with a repeated pattern: err = %v, want listed twice", err)
+	}
+	globs, err := rule.NewGlobs([]string{"core/**", "pkg/core/**"})
+	if err != nil {
+		t.Fatalf("NewGlobs with distinct patterns: %v", err)
+	}
+	if len(globs) != 2 {
+		t.Fatalf("len(globs) = %d, want 2", len(globs))
 	}
 }

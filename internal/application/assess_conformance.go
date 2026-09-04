@@ -93,7 +93,7 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 	}
 	// Missing domain model is an empty Ubiquitous Language; load
 	// failure is a configuration error, same class as an unreadable
-	// rules.yaml.
+	// rules.arclint.yaml.
 	knowledge, found, err := uc.knowledge.RecordedLanguage()
 	if err != nil {
 		return conformance.Assessment{}, fmt.Errorf("load domain model: %w", err)

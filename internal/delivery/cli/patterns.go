@@ -6,6 +6,7 @@ import (
 
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/domain/distribution"
+	"github.com/wixregiga/arclint/internal/domain/rule"
 )
 
 const (
@@ -101,14 +102,14 @@ func NewPatternsCommand(commands PatternCommands, render Renderer) Command {
 			},
 			{
 				Name:  "install",
-				Short: "extend rules.yaml with one Pattern, vendoring it when it came from the Registry",
-				Long: "Installing records the Pattern under extends in rules.yaml with every Binding the Pattern suggests, " +
+				Short: "extend " + rule.RulesetFileName + " with one Pattern, vendoring it when it came from the Registry",
+				Long: "Installing records the Pattern under extends in " + rule.RulesetFileName + " with every Binding the Pattern suggests, " +
 					"binding a Module the ruleset already declares to its declared paths. A Pattern fetched from the Registry " +
-					"is vendored first. Without a rules.yaml, one is drafted that extends the Pattern.",
+					"is vendored first. Without a " + rule.RulesetFileName + ", one is drafted that extends the Pattern.",
 				Example: "  arclint patterns install vertical\n  arclint patterns install acme/layers --languages go,ts",
 				Flags: []Flag{
 					registryFlag,
-					{Name: flagLanguages, Doc: "comma-separated runtime targets written when rules.yaml is created: go, ts, py (default: the Pattern's coverage)", Complete: completeLanguages},
+					{Name: flagLanguages, Doc: "comma-separated runtime targets written when " + rule.RulesetFileName + " is created: go, ts, py (default: the Pattern's coverage)", Complete: completeLanguages},
 				},
 				MaxArgs:      1,
 				CompleteArgs: completePatternSelections(commands.List),

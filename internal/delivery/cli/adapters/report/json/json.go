@@ -64,7 +64,7 @@ func (renderer) Render(w io.Writer, r cli.Report) error {
 		doc = defineJSONDoc(x)
 	case cli.DomainRemoveReport:
 		doc = removeJSONDoc(x.Result)
-	case cli.AgentsStatusReport:
+	case cli.ArtifactStatusReport:
 		doc = artifactWriteDocs(x.Writes)
 	case cli.BaselineCaptureReport:
 		doc = baselineCaptureDoc{

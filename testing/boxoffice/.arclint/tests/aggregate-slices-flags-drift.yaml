@@ -2,7 +2,7 @@
 # no home at all.
 rule: "entities/aggregate-slices"
 files:
-  ubiquitous-language.yaml: |
+  domain.arclint.yaml: |
     version: 1
     contexts:
       - name: catalog

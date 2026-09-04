@@ -2,7 +2,7 @@
 # fixture's recorded aggregates, and every derived file exists.
 rule: "domain-model/aggregate-skeleton"
 files:
-  ubiquitous-language.yaml: |
+  domain.arclint.yaml: |
     version: 1
     contexts:
       - name: ordering

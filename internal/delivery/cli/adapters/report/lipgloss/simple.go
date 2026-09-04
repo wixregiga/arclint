@@ -26,7 +26,7 @@ func writeBaselineRefresh(p *out.Printer, th Theme, result application.RefreshBa
 		th.Bold.Render(itoa(result.RemovedStale)))
 }
 
-func writeAgentsStatus(p *out.Printer, th Theme, writes []cli.ArtifactWrite) {
+func writeArtifactStatus(p *out.Printer, th Theme, writes []cli.ArtifactWrite) {
 	for _, w := range writes {
 		if w.Changed {
 			p.Printf("%s %s\n", th.OK.Render("wrote"), th.Path.Render(w.Path))

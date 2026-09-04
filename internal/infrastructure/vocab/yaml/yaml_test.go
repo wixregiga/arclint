@@ -302,11 +302,11 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 
 func TestFreshModelineUsesLocalSchemaWhenPresent(t *testing.T) {
 	dir := t.TempDir()
-	schemaDir := filepath.Join(dir, ".agents", "skills", "domain-librarian")
+	schemaDir := filepath.Join(dir, filepath.FromSlash(vocab.SchemaDirectory))
 	if err := os.MkdirAll(schemaDir, 0o750); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(schemaDir, "library.schema.json"), []byte(`{"$id":"x"}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(schemaDir, vocab.SchemaFileName), []byte(`{"$id":"x"}`), 0o600); err != nil {
 		t.Fatalf("WriteFile schema: %v", err)
 	}
 	repo := newRepo(t, dir)
@@ -687,7 +687,7 @@ func TestAtomicWriteLeavesNoTempFiles(t *testing.T) {
 		t.Fatalf("ReadDir: %v", err)
 	}
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".ubiquitous-language-") {
+		if strings.HasPrefix(e.Name(), ".domain-") {
 			t.Fatalf("temp file left behind: %s", e.Name())
 		}
 	}
@@ -722,8 +722,8 @@ func TestPathBindsFileName(t *testing.T) {
 }
 
 const (
-	localSchemaHint  = "# yaml-language-server: $schema=.agents/skills/domain-librarian/library.schema.json"
-	remoteSchemaHint = "# yaml-language-server: $schema=https://raw.githubusercontent.com/wixregiga/arclint/main/.agents/skills/domain-librarian/library.schema.json"
+	localSchemaHint  = "# yaml-language-server: $schema=" + vocab.SchemaPath
+	remoteSchemaHint = "# yaml-language-server: $schema=" + vocab.SchemaID
 )
 
 func newRepo(t *testing.T, root string) yamlvocab.Repository {

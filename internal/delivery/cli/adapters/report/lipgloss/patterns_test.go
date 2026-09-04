@@ -16,10 +16,14 @@ import (
 func TestLipglossPatternsAlignsColumnsUnderStyling(t *testing.T) {
 	var buf bytes.Buffer
 	err := ansiRenderer().Render(&buf, cli.PatternsReport{Patterns: []application.PatternSummary{
-		{Namespace: "arclint", Name: "domain-model", Version: "0.1.0", Source: distribution.SourceEmbedded,
-			Digest: "sha256:3f2a9c1e5b7d0000", Rules: 3, Extensions: 3, Coverage: []string{"go", "ts"}},
-		{Namespace: "acme", Name: "layers", Version: "1.2.0", Source: distribution.SourceLocal, Vendored: true,
-			Digest: "sha256:9b1c2d3e4f5a6666", Rules: 12, Extensions: 0, Coverage: []string{"go"}},
+		{
+			Namespace: "arclint", Name: "domain-model", Version: "0.1.0", Source: distribution.SourceEmbedded,
+			Digest: "sha256:3f2a9c1e5b7d0000", Rules: 3, Extensions: 3, Coverage: []string{"go", "ts"},
+		},
+		{
+			Namespace: "acme", Name: "layers", Version: "1.2.0", Source: distribution.SourceLocal, Vendored: true,
+			Digest: "sha256:9b1c2d3e4f5a6666", Rules: 12, Extensions: 0, Coverage: []string{"go"},
+		},
 	}})
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +44,7 @@ func TestLipglossPatternInstallPreservesGrammar(t *testing.T) {
 	err := ansiRenderer().Render(&buf, cli.PatternInstallReport{Result: application.InstallPatternResult{
 		Reference: "acme/layers@1.2.0", Digest: "sha256:9b1c2d3e4f5a6666", Source: distribution.SourceRegistry,
 		VendoredPath: ".arclint/patterns/acme/layers",
-		RulesetPath:  "rules.yaml",
+		RulesetPath:  "rules.arclint.yaml",
 		Bound:        []application.BoundModule{{Module: "domain", Paths: []string{"internal/domain/**"}}},
 		Unbound:      []string{"app"},
 	}})
@@ -49,7 +53,7 @@ func TestLipglossPatternInstallPreservesGrammar(t *testing.T) {
 	}
 	want := "installed acme/layers@1.2.0 (registry, 9b1c2d3e4f5a)\n" +
 		"vendored to .arclint/patterns/acme/layers\n" +
-		"extended rules.yaml\n" +
+		"extended rules.arclint.yaml\n" +
 		"bound:\n" +
 		"  domain: internal/domain/**\n" +
 		"unbound (bind each under extends[].bind before the ruleset loads):\n" +

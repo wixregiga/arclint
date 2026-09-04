@@ -14,10 +14,10 @@ pattern is a `content` Rule, not an Extension.
 
 ## Resolution
 
-The directory that contains `rules.yaml` is the repository root and the
+The directory that contains `rules.arclint.yaml` is the repository root and the
 Extension root. Extensions load from `<root>/.arclint/extensions/`.
-`--rules path/to/rules.yaml` moves the root and that directory together.
-Without `--rules`, ArcLint discovers `rules.yaml` upward from the working
+`--rules path/to/rules.arclint.yaml` moves the root and that directory together.
+Without `--rules`, ArcLint discovers `rules.arclint.yaml` upward from the working
 directory (`check [path]` starts discovery from the optional path).
 
 Discovery is top-level only: every `*.ts` or `*.js` directly under
@@ -69,7 +69,7 @@ export default defineRule({
 
 | field | required | meaning |
 |---|---|---|
-| `type` | yes | Registered extension name; `uses` in rules.yaml |
+| `type` | yes | Registered extension name; `uses` in rules.arclint.yaml |
 | `check` | yes | `(ctx, params) => void` |
 | `description` | no | One-line summary |
 | `capability` | no | Author claim: `exact` \| `structural` \| `heuristic` \| `advisory` (default `heuristic`) |
@@ -78,7 +78,7 @@ export default defineRule({
 Default-export one `defineRule(...)` result, or an array of them. Duplicate
 `type` names across entries fail registration.
 
-Wire the Rule in `rules.yaml` with `uses` as its assertion. Severity,
+Wire the Rule in `rules.arclint.yaml` with `uses` as its assertion. Severity,
 identity, Claim, and Applicability belong to the Rule, not the
 TypeScript file:
 
@@ -155,6 +155,7 @@ ignored if present.
 
 ```ts
 {
+  source: string; // repository-relative path of the domain file
   contexts: Array<{
     name: string;
     entities: Array<{
@@ -207,14 +208,17 @@ ignored if present.
 Collections are always arrays (empty when the project records none or
 the file is absent). Each term lives inside a named bounded context.
 `aggregate` is an entity designation, never a separate collection.
-Invariants carry a statement and exactly one owner. Every entry carries
-the `line` it is written on in `ubiquitous-language.yaml`, so a finding
+Invariants carry a statement and exactly one owner. `source` is the
+repository-relative path of the domain file (`domain.arclint.yaml`), and
+every entry carries the `line` it is written on there, so a finding
 about a context, term, invariant, or relation anchors at the entry
-instead of at the top of the file:
+instead of at the top of the file, without the Extension spelling the
+file name:
 
 ```ts
+const domain = ctx.domain();
 ctx.report({
-  path: "ubiquitous-language.yaml",
+  path: domain.source,
   line: term.line,
   message: `entity "${term.name}" has no definition recorded`,
 });
@@ -225,11 +229,11 @@ knowledge never creates a Diagnostic by itself; an Extension only
 surfaces findings when its `check` calls `ctx.report`.
 
 Rule Tests exercise `ctx.domain()` the same way they exercise files: a
-fixture that authors `ubiquitous-language.yaml` at its tree root is
+fixture that authors `domain.arclint.yaml` at its tree root is
 parsed with the production loader, and the extension under test
 observes that vocabulary through `ctx.domain()`. Fixtures without one
 see an empty model. See `vocabulary/terms-carry-definitions` in this
-repository's `rules.yaml` and its cases under `.arclint/tests/` for a
+repository's `rules.arclint.yaml` and its cases under `.arclint/tests/` for a
 complete example.
 
 ## Evidence honesty

@@ -12,6 +12,11 @@ local linters = new Mapping<String, Step> {
         check = "make _lint-no-fix"
         exclusive = true
     }
+    ["spectral"] {
+        glob = List("**/*.schema.json", ".spectral.yaml", "scripts/validation/schema/**")
+        check = "make lint-schema"
+        exclusive = true
+    }
     ["gitleaks"] {
         check = "gitleaks protect --staged --verbose"
         exclusive = true

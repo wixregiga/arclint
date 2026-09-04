@@ -3,7 +3,7 @@
 // npm, Node, or tsc ever runs on the user's machine.
 //
 // defineRule computes the params JSON Schema eagerly (registration phase);
-// the HOST validates rules.yaml params against it before check() is ever
+// the HOST validates rules.arclint.yaml params against it before check() is ever
 // invoked. esbuild strips types without checking them, so type safety is
 // an author-time editor concern backed by the generated arclint.d.ts.
 
@@ -62,7 +62,7 @@ export interface FactsInfo {
   parseError?: string;
 }
 
-/** Published TermCases: the same closed set rules.yaml accepts in
+/** Published TermCases: the same closed set rules.arclint.yaml accepts in
  * {name:<case>} placeholders. */
 export type TermCase =
   | "flatcase"
@@ -169,7 +169,7 @@ export const s = {
 export type Capability = "exact" | "structural" | "heuristic" | "advisory";
 
 export interface RuleDef {
-  /** Unique rule type name, referenced by rules.yaml entries. */
+  /** Unique rule type name, referenced by rules.arclint.yaml entries. */
   type: string;
   /** One-line summary shown by arclint rules. */
   description?: string;

@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=../../.agents/skills/domain-librarian/library.schema.json
+# yaml-language-server: $schema=.arclint/schemas/domain.arclint.schema.json
 version: 1
 contexts:
   - name: catalog

@@ -4,13 +4,12 @@
 // a statement or owner. Inert while the project records no vocabulary.
 import { defineRule } from "arclint";
 
-const VOCABULARY = "ubiquitous-language.yaml";
-
 export default defineRule({
   type: "domain-model/require-defined-terms",
   description: "every recorded vocabulary term carries a definition",
   check(ctx) {
     const domain = ctx.domain();
+    const VOCABULARY = domain.source;
     for (const bound of domain.contexts ?? []) {
       const groups: [
         string,

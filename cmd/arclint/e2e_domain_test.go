@@ -13,7 +13,7 @@ import (
 )
 
 // minimalDomainRules is a ruleset that resolves a project root so
-// ubiquitous-language.yaml is found/created beside rules.yaml.
+// domain.arclint.yaml is found/created beside rules.arclint.yaml.
 const minimalDomainRules = `runtime: [go]
 modules:
   src:
@@ -23,7 +23,7 @@ modules:
 func domainFixture(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
-	write(t, root, "rules.yaml", minimalDomainRules)
+	write(t, root, "rules.arclint.yaml", minimalDomainRules)
 	write(t, root, "src/ok.go", "package src\n")
 	return root
 }
@@ -56,10 +56,10 @@ func TestDomainCommandFamily(t *testing.T) {
 
 func testDomainInit(t *testing.T) {
 	root := domainFixture(t)
-	modelPath := filepath.Join(root, "ubiquitous-language.yaml")
+	modelPath := filepath.Join(root, "domain.arclint.yaml")
 
 	stdout := mustRunDomain(t, root, "domain", "init")
-	if stdout != "Initialized ubiquitous-language.yaml.\n" {
+	if stdout != "Initialized domain.arclint.yaml.\n" {
 		t.Fatalf("first init output = %q", stdout)
 	}
 	created, err := os.ReadFile(modelPath)
@@ -79,9 +79,9 @@ contexts:
       - name: Order
         definition: A purchase request.
 `
-	write(t, root, "ubiquitous-language.yaml", existing)
+	write(t, root, "domain.arclint.yaml", existing)
 	stdout = mustRunDomain(t, root, "domain", "init")
-	if stdout != "ubiquitous-language.yaml already exists; left unchanged.\n" {
+	if stdout != "domain.arclint.yaml already exists; left unchanged.\n" {
 		t.Fatalf("repeated init output = %q", stdout)
 	}
 	unchanged, err := os.ReadFile(modelPath)
@@ -117,14 +117,14 @@ func testDomainResolution(t *testing.T) {
 		"--context", "Ordering",
 		"--definition", "A customer's request to purchase products.",
 	)
-	modelPath := filepath.Join(root, "ubiquitous-language.yaml")
+	modelPath := filepath.Join(root, "domain.arclint.yaml")
 	if _, err := os.Stat(modelPath); err != nil {
-		t.Fatalf("define must create ubiquitous-language.yaml beside rules.yaml: %v", err)
+		t.Fatalf("define must create domain.arclint.yaml beside rules.arclint.yaml: %v", err)
 	}
 
 	other := t.TempDir()
 	stdout, stderr, code = runBin(t, other, os.Environ(),
-		"--rules", filepath.Join(root, "rules.yaml"),
+		"--rules", filepath.Join(root, "rules.arclint.yaml"),
 		"domain", "show", "entity", "Order",
 	)
 	if code != 0 {
@@ -377,7 +377,7 @@ func testDomainJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &overview); err != nil {
 		t.Fatalf("overview json: %v\n%s", err, stdout)
 	}
-	if overview.Source != "ubiquitous-language.yaml" || !overview.Found {
+	if overview.Source != "domain.arclint.yaml" || !overview.Found {
 		t.Fatalf("overview envelope: %+v", overview)
 	}
 	if overview.Counts.Contexts != 1 || overview.Counts.Entities != 1 || overview.Counts.Aggregates != 1 ||
@@ -471,7 +471,7 @@ func testDomainJSON(t *testing.T) {
 
 func testDomainCommentPreservation(t *testing.T) {
 	root := domainFixture(t)
-	write(t, root, "ubiquitous-language.yaml", `# project domain model
+	write(t, root, "domain.arclint.yaml", `# project domain model
 version: 1
 contexts:
   - name: Ordering
@@ -481,7 +481,7 @@ contexts:
         definition: A customer's request to purchase products.
         aggregate: true
 `)
-	before, err := os.ReadFile(filepath.Join(root, "ubiquitous-language.yaml"))
+	before, err := os.ReadFile(filepath.Join(root, "domain.arclint.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -494,7 +494,7 @@ contexts:
 		"--context", "Ordering",
 		"--definition", "A monetary amount expressed in a particular currency.",
 	)
-	after, err := os.ReadFile(filepath.Join(root, "ubiquitous-language.yaml"))
+	after, err := os.ReadFile(filepath.Join(root, "domain.arclint.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -542,7 +542,7 @@ func testDomainGuided(t *testing.T) {
 			t.Fatalf("guided stdout missing %q:\n%s", want, stdout)
 		}
 	}
-	data, err := os.ReadFile(filepath.Join(root, "ubiquitous-language.yaml"))
+	data, err := os.ReadFile(filepath.Join(root, "domain.arclint.yaml"))
 	if err != nil {
 		t.Fatalf("guided write missing file: %v", err)
 	}
@@ -572,21 +572,45 @@ func testDomainGuided(t *testing.T) {
 	if !strings.Contains(stdout, "Nothing written.") {
 		t.Fatalf("guided decline missing Nothing written:\n%s", stdout)
 	}
-	if _, err := os.Stat(filepath.Join(rootNo, "ubiquitous-language.yaml")); !os.IsNotExist(err) {
-		t.Fatalf("guided decline must not create ubiquitous-language.yaml, err=%v", err)
+	if _, err := os.Stat(filepath.Join(rootNo, "domain.arclint.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("guided decline must not create domain.arclint.yaml, err=%v", err)
 	}
 }
 
 func testDomainSchema(t *testing.T) {
 	root := domainFixture(t)
 	stdout := mustRunDomain(t, root, "domain", "schema")
-	committed, err := os.ReadFile(filepath.Join(repoRoot(t), ".agents", "skills", "domain-librarian", "library.schema.json"))
+	committed, err := os.ReadFile(filepath.Join(repoRoot(t), filepath.FromSlash(domainSchemaLitmus)))
 	if err != nil {
 		t.Fatalf("read committed schema: %v", err)
 	}
 	if stdout != string(committed) {
-		t.Fatalf("domain schema output differs from .agents/skills/domain-librarian/library.schema.json (%d vs %d bytes)",
-			len(stdout), len(committed))
+		t.Fatalf("domain schema output differs from %s (%d vs %d bytes)",
+			domainSchemaLitmus, len(stdout), len(committed))
+	}
+
+	// --write lands the schema under the project's schema directory by
+	// default and reports the write; a second run reports it unchanged.
+	out := mustRunDomain(t, root, "domain", "schema", "--write")
+	written, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(domainSchemaProjectPath)))
+	if err != nil {
+		t.Fatalf("domain schema --write did not create %s: %v", domainSchemaProjectPath, err)
+	}
+	if string(written) != string(committed) {
+		t.Fatalf("domain schema --write bytes differ from %s", domainSchemaLitmus)
+	}
+	if !strings.Contains(out, "domain.arclint.schema.json") {
+		t.Fatalf("domain schema --write did not report the written path:\n%s", out)
+	}
+	if _, stderr, code := runBin(t, root, os.Environ(), "domain", "schema", "--dir", "elsewhere"); code == 0 {
+		t.Fatalf("domain schema --dir without --write must fail; stderr: %s", stderr)
+	}
+	out = mustRunDomain(t, root, "domain", "schema", "--write", "--dir", "elsewhere")
+	if _, err := os.Stat(filepath.Join(root, "elsewhere", "domain.arclint.schema.json")); err != nil {
+		t.Fatalf("domain schema --write --dir elsewhere did not create the file: %v", err)
+	}
+	if !strings.Contains(out, "elsewhere") {
+		t.Fatalf("domain schema --write --dir did not report the written path:\n%s", out)
 	}
 }
 
@@ -717,7 +741,7 @@ export default defineRule({
   },
 });
 `)
-	write(t, root, "rules.yaml", `runtime: [go]
+	write(t, root, "rules.arclint.yaml", `runtime: [go]
 modules:
   src: src/**
 rules:
@@ -727,7 +751,7 @@ rules:
     uses: domain-probe
 `)
 	write(t, root, "src/ok.go", "package src\n")
-	write(t, root, "ubiquitous-language.yaml", `version: 1
+	write(t, root, "domain.arclint.yaml", `version: 1
 contexts:
   - name: Ordering
     entities:
@@ -759,9 +783,9 @@ contexts:
 
 	// Declaration alone never produces diagnostics: model present, no consuming rule.
 	clean := t.TempDir()
-	write(t, clean, "rules.yaml", minimalDomainRules)
+	write(t, clean, "rules.arclint.yaml", minimalDomainRules)
 	write(t, clean, "src/ok.go", "package src\n")
-	write(t, clean, "ubiquitous-language.yaml", `version: 1
+	write(t, clean, "domain.arclint.yaml", `version: 1
 contexts:
   - name: Ordering
     entities:
@@ -782,7 +806,7 @@ func testDomainContext(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("context without model: exit %d\nstderr: %s", code, stderr)
 	}
-	if strings.Contains(stdout, "project domain") || strings.Contains(stdout, "ubiquitous-language.yaml") {
+	if strings.Contains(stdout, "project domain") || strings.Contains(stdout, "domain.arclint.yaml") {
 		t.Fatalf("context text leaked domain block without model:\n%s", stdout)
 	}
 	stdout, stderr, code = runBin(t, absent, os.Environ(), "context", "--format", "json")
@@ -799,7 +823,7 @@ func testDomainContext(t *testing.T) {
 
 	// Present model -> text block + json domain key with contexts.
 	root := domainFixture(t)
-	write(t, root, "ubiquitous-language.yaml", `version: 1
+	write(t, root, "domain.arclint.yaml", `version: 1
 contexts:
   - name: Ordering
     entities:
@@ -830,7 +854,7 @@ contexts:
 	if code != 0 {
 		t.Fatalf("context with model: exit %d\nstderr: %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "project domain (ubiquitous-language.yaml)") {
+	if !strings.Contains(stdout, "project domain (domain.arclint.yaml)") {
 		t.Fatalf("context text missing project-domain header:\n%s", stdout)
 	}
 	if !strings.Contains(stdout, "Order [aggregate]") {
@@ -854,7 +878,7 @@ contexts:
 	if !ok {
 		t.Fatalf("context json missing domain object: %+v", with)
 	}
-	if domain["source"] != "ubiquitous-language.yaml" {
+	if domain["source"] != "domain.arclint.yaml" {
 		t.Fatalf("domain.source = %v", domain["source"])
 	}
 	contexts, ok := domain["contexts"].([]any)
@@ -870,7 +894,7 @@ contexts:
 
 func testDomainAmbiguity(t *testing.T) {
 	root := domainFixture(t)
-	write(t, root, "ubiquitous-language.yaml", `version: 1
+	write(t, root, "domain.arclint.yaml", `version: 1
 contexts:
   - name: Ordering
     entities:

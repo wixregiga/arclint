@@ -39,7 +39,7 @@ func containsLine(output, want string) bool {
 // positional argument from the configured ruleset.
 func TestCompletionListsRuleIDs(t *testing.T) {
 	root := t.TempDir()
-	write(t, root, "rules.yaml", completionRules)
+	write(t, root, "rules.arclint.yaml", completionRules)
 	write(t, root, "src/ok.go", "package src\n")
 
 	for _, sub := range []string{"rules"} {
@@ -60,7 +60,7 @@ func TestCompletionListsRuleIDs(t *testing.T) {
 // completes its closed value set.
 func TestCompletionListsFormatValues(t *testing.T) {
 	root := t.TempDir()
-	write(t, root, "rules.yaml", completionRules)
+	write(t, root, "rules.arclint.yaml", completionRules)
 
 	stdout, stderr, code := runBin(t, root, os.Environ(), "__complete", "check", "--format", "")
 	if code != 0 {
@@ -121,7 +121,7 @@ func TestCompletionListsInitPatterns(t *testing.T) {
 }
 
 // TestCompletionDegradesWithoutRuleset pins the contract: with no
-// rules.yaml anywhere, completion exits 0 with no dynamic candidates
+// rules.arclint.yaml anywhere, completion exits 0 with no dynamic candidates
 // and no error text; the shell must never see a failure on TAB.
 // Static subcommand names (schema, test) still complete: they need no
 // ruleset.

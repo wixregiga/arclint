@@ -1,6 +1,6 @@
 // Package vocab holds the project's recorded Ubiquitous Language
 // vocabulary: the domain definitions a project declares in
-// ubiquitous-language.yaml, the ArcLint-owned concept kinds and their
+// domain.arclint.yaml, the ArcLint-owned concept kinds and their
 // meanings, the mutation semantics for maintaining the vocabulary, its
 // published JSON Schema, the domain-librarian skill taxonomy, and the
 // Repository port that persists it. UbiquitousLanguage is a value with

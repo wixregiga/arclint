@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/wixregiga/arclint/internal/application"
+	"github.com/wixregiga/arclint/internal/domain/rule"
 )
 
 // NewInitCommand adapts the repository-initialization use case: draft
@@ -12,11 +13,11 @@ import (
 func NewInitCommand(initialize application.InitializeRepository, render Renderer) Command {
 	return Command{
 		Name:  commandInit,
-		Short: "draft a starter rules.yaml for this repository",
+		Short: "draft a starter " + rule.RulesetFileName + " for this repository",
 		Flags: []Flag{
 			{Name: "languages", Default: "go", Doc: "comma-separated runtime targets: go, ts, py", Complete: completeLanguages},
 			{Name: "pattern", Default: "bare", Doc: "starter ruleset: bare, or a Pattern to extend by reference or name (arclint patterns lists them)", Complete: completePatterns(initialize)},
-			{Name: "force", Bool: true, Doc: "overwrite an existing rules.yaml"},
+			{Name: "force", Bool: true, Doc: "overwrite an existing " + rule.RulesetFileName},
 		},
 		Run: func(ctx Context) error {
 			var languages []string

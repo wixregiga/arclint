@@ -90,12 +90,12 @@ func TestPatternsInstallDraftsThenExtendsAndChecks(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("install: exit %d\nstderr: %s", code, stderr)
 	}
-	for _, want := range []string{"installed arclint/domain-model@0.1.0 (embedded, ", "wrote ", "vocabulary: ubiquitous-language.yaml", "next: run `arclint check .`"} {
+	for _, want := range []string{"installed arclint/domain-model@0.1.0 (embedded, ", "wrote ", "vocabulary: domain.arclint.yaml", "next: run `arclint check .`"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("install output misses %q:\n%s", want, stdout)
 		}
 	}
-	ruleset, err := os.ReadFile(filepath.Join(root, "rules.yaml"))
+	ruleset, err := os.ReadFile(filepath.Join(root, "rules.arclint.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestPatternsInstallDraftsThenExtendsAndChecks(t *testing.T) {
 	if !strings.Contains(stdout, "extended ") || !strings.Contains(stdout, "  domain: internal/*/domain/**") {
 		t.Errorf("second install output:\n%s", stdout)
 	}
-	ruleset, err = os.ReadFile(filepath.Join(root, "rules.yaml"))
+	ruleset, err = os.ReadFile(filepath.Join(root, "rules.arclint.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestPatternsInstallDraftsThenExtendsAndChecks(t *testing.T) {
 
 func TestPatternsInstallFoldsDeclaredModules(t *testing.T) {
 	root := t.TempDir()
-	write(t, root, "rules.yaml", `runtime: [go]
+	write(t, root, "rules.arclint.yaml", `runtime: [go]
 
 modules:
   # The domain model.
@@ -163,7 +163,7 @@ rules:
 	if !strings.Contains(stdout, "adopted declared module(s): domain") || !strings.Contains(stdout, "  domain: pkg/domain/**") {
 		t.Errorf("install must report the adopted declaration and its paths:\n%s", stdout)
 	}
-	ruleset, err := os.ReadFile(filepath.Join(root, "rules.yaml"))
+	ruleset, err := os.ReadFile(filepath.Join(root, "rules.arclint.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,12 +241,12 @@ func TestPatternsVendorExportAndInstallFromRegistry(t *testing.T) {
 	if code != 2 || !strings.Contains(stderr, "unbound modules domain") {
 		t.Errorf("check with an unbound module: exit %d\nstderr: %s", code, stderr)
 	}
-	ruleset, err := os.ReadFile(filepath.Join(consumer, "rules.yaml"))
+	ruleset, err := os.ReadFile(filepath.Join(consumer, "rules.arclint.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	bound := strings.Replace(string(ruleset), "# domain: <glob>", "domain: \"internal/domain/**\"", 1)
-	write(t, consumer, "rules.yaml", bound)
+	write(t, consumer, "rules.arclint.yaml", bound)
 	write(t, consumer, "internal/domain/model.go", "package domain\n\ntype Order struct{ ID string }\n")
 	write(t, consumer, "internal/app/service.go", "package app\n\nimport \"fmt\"\n\nfunc Run() { fmt.Println(\"ok\") }\n")
 	stdout, stderr, code = runBin(t, consumer, os.Environ(), "check", ".")

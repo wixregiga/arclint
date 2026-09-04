@@ -19,7 +19,7 @@ rules:
 
 ## Recording Domain Contracts
 
-You can record domain contracts in your `ubiquitous-language.yaml` library file under the respective bounded context. We support three categories of contracts:
+You can record domain contracts in your `domain.arclint.yaml` library file under the respective bounded context. We support three categories of contracts:
 
 ### 1. Cluster Invariants
 Must-always/must-never rules that hold at all times within a context. A cluster invariant on an **Aggregate** requires a named contract (e.g., `published-frozen`). The invariant method must be called from the entity's constructor and every exported command.
@@ -119,7 +119,7 @@ We only support Go, Python, Typescript right now. If a specification lacks one o
 
 ## Schema Formatting & Tooling
 
-To aid in authoring, the JSON schema backing the ubiquitous language library (`library.schema.json`) has been rigorously structured. 
+To aid in authoring, the JSON schema backing `domain.arclint.yaml` (`domain.arclint.schema.json`, printed by `arclint domain schema` and written to `.arclint/schemas/` with `--write`) has been rigorously structured. 
 
 **Hover Text Enhancements:** The schema documentation strings are now cleanly split into short paragraphs and lists. When using compatible IDEs, hovering over a field (like `invariants` or `assertions`) provides highly readable, structured guidance directly in the editor.
 

@@ -72,6 +72,51 @@ func TestNewUbiquitousLanguageRejectsDuplicateTermInSection(t *testing.T) {
 	}
 }
 
+func TestNewUbiquitousLanguageRejectsDuplicateAlias(t *testing.T) {
+	_, err := vocab.NewUbiquitousLanguage(
+		[]vocab.BoundedContext{{
+			Name:     ctx,
+			Entities: []vocab.Entity{{Definition: vocab.Definition{Name: "Order", Aliases: []string{"Purchase Order", "Purchase Order"}}}},
+		}},
+		nil,
+	)
+	if err == nil || !strings.Contains(err.Error(), "entities") || !strings.Contains(err.Error(), "Purchase Order") {
+		t.Fatalf("expected duplicate-alias error naming the section and alias, got %v", err)
+	}
+	_, err = vocab.NewUbiquitousLanguage(
+		[]vocab.BoundedContext{{
+			Name:         ctx,
+			ValueObjects: []vocab.Definition{{Name: "Money", Aliases: []string{"Amount", "Amount"}}},
+		}},
+		nil,
+	)
+	if err == nil || !strings.Contains(err.Error(), "value_objects") || !strings.Contains(err.Error(), "Amount") {
+		t.Fatalf("expected duplicate-alias error naming the section and alias, got %v", err)
+	}
+}
+
+func TestNewUbiquitousLanguageRejectsDuplicateRelation(t *testing.T) {
+	_, err := vocab.NewUbiquitousLanguage(
+		[]vocab.BoundedContext{{Name: "A"}, {Name: "B"}},
+		[]vocab.ContextRelation{
+			{From: "A", To: "B", Kind: vocab.RelationPartnership},
+			{From: "A", To: "B", Kind: vocab.RelationPartnership},
+		},
+	)
+	if err == nil || !strings.Contains(err.Error(), "recorded twice") {
+		t.Fatalf("expected duplicate-relation error, got %v", err)
+	}
+	if _, err := vocab.NewUbiquitousLanguage(
+		[]vocab.BoundedContext{{Name: "A"}, {Name: "B"}},
+		[]vocab.ContextRelation{
+			{From: "A", To: "B", Kind: vocab.RelationPartnership},
+			{From: "A", To: "B", Kind: vocab.RelationCustomerSupplier},
+		},
+	); err != nil {
+		t.Fatalf("distinct kinds between the same contexts must be accepted: %v", err)
+	}
+}
+
 func TestNewUbiquitousLanguageRejectsBadRelation(t *testing.T) {
 	_, err := vocab.NewUbiquitousLanguage(
 		[]vocab.BoundedContext{{Name: "A"}},

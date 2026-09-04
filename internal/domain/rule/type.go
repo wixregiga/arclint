@@ -11,7 +11,7 @@ import (
 // acyclic, invariants, content, and extension. Pattern and Extension
 // authors configure existing values; they do not add new ones; custom
 // logic plugs into the extension kind through the SDK, it never grows
-// this enum. In rules.yaml a Type is never spelled: the one Assertion
+// this enum. In rules.arclint.yaml a Type is never spelled: the one Assertion
 // key a Rule carries decides it (see AssertionKey).
 type Type string
 
@@ -56,7 +56,7 @@ func Types() []Type {
 	}
 }
 
-// assertionKeys maps each Type to the one rules.yaml key that spells
+// assertionKeys maps each Type to the one rules.arclint.yaml key that spells
 // its Assertion. The key is the Type's whole public spelling: a Rule
 // written with that key is a Rule of that Type, and no rule carries
 // two keys.
@@ -73,7 +73,7 @@ var assertionKeys = map[Type]string{
 	TypeExtension:    "uses",
 }
 
-// AssertionKey returns the rules.yaml key that spells this Type's
+// AssertionKey returns the rules.arclint.yaml key that spells this Type's
 // Assertion.
 func (t Type) AssertionKey() string { return assertionKeys[t] }
 
@@ -86,7 +86,7 @@ func AssertionKeys() []string {
 	return out
 }
 
-// TypeOfAssertionKey resolves a rules.yaml Assertion key to its Type.
+// TypeOfAssertionKey resolves a rules.arclint.yaml Assertion key to its Type.
 func TypeOfAssertionKey(key string) (Type, bool) {
 	for _, t := range Types() {
 		if assertionKeys[t] == key {
@@ -97,7 +97,7 @@ func TypeOfAssertionKey(key string) (Type, bool) {
 }
 
 // Scope is the Applicability shape a Type demands: which Modules a
-// Rule of the Type judges and how rules.yaml spells that.
+// Rule of the Type judges and how rules.arclint.yaml spells that.
 type Scope int
 
 const (

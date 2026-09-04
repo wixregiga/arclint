@@ -1,16 +1,16 @@
-# yaml-language-server: $schema=.agents/skills/domain-librarian/library.schema.json
+# yaml-language-server: $schema=.arclint/schemas/domain.arclint.schema.json
 version: 1
 contexts:
   - name: rule
     entities:
       - name: Rule
         definition: >-
-          One enforceable architecture claim configured in rules.yaml.
+          One enforceable architecture claim configured in rules.arclint.yaml.
           A Rule keeps its RuleID while everything human-facing about
-          it can be renamed. Aggregate evidence, from the rules.yaml
+          it can be renamed. Aggregate evidence, from the rules.arclint.yaml
           header: "Rule is the sole aggregate". A Rule's identity, its
           Claim, its scope, and its Severity change together in one
-          edit of rules.yaml.
+          edit of rules.arclint.yaml.
         aggregate: true
       - name: Module
         definition: >-
@@ -34,7 +34,7 @@ contexts:
       - name: RuleID
         definition: >-
           The stable identity of a Rule, spelled explicitly in
-          rules.yaml. A repository Rule's RuleID is local; a Rule a
+          rules.arclint.yaml. A repository Rule's RuleID is local; a Rule a
           Pattern distributes is qualified by that Pattern's
           namespace/name, spelled namespace/name:local, so two Patterns
           may distribute the same local identity and both apply under
@@ -55,7 +55,7 @@ contexts:
       - name: Assertion
         definition: >-
           The one checkable proposition a Rule carries, written in
-          rules.yaml as exactly one assertion key with its parameters:
+          rules.arclint.yaml as exactly one assertion key with its parameters:
           imports, structure, naming, invariants, layers, imported_by,
           independent, acyclic, content, or uses. The key alone decides
           how the Rule is evaluated; a Rule never carries two.
@@ -100,14 +100,14 @@ contexts:
           One published rendering of a recorded term as a path or
           identifier segment: flatcase, snake_case, kebab-case,
           camelCase, or PascalCase. One producing implementation
-          serves both surfaces, the rules.yaml {name:<case>}
+          serves both surfaces, the rules.arclint.yaml {name:<case>}
           placeholders and the extension SDK's ctx.caseTerm, so
           whatever the ruleset grammar expresses an extension can
           see. A CaseSpec checks names; a TermCase produces them.
       - name: CaseSpec
         definition: >-
           The finite case vocabulary a naming Rule matches file stems
-          against in rules.yaml: kebab-case, snake_case, camelCase,
+          against in rules.arclint.yaml: kebab-case, snake_case, camelCase,
           PascalCase, or a regex, combined as alternatives.
     invariants:
       - statement: >-
@@ -188,7 +188,7 @@ contexts:
           finding is still reported as suppressed.
       - name: Installation
         definition: >-
-          The decision to extend one Pattern, recorded in rules.yaml as
+          The decision to extend one Pattern, recorded in rules.arclint.yaml as
           one extends entry that names the PatternReference and carries
           a Binding for every Module the Pattern lists, drafted from
           the paths the Pattern suggests. Installing a Pattern the

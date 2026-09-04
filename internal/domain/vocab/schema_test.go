@@ -48,25 +48,49 @@ func TestSchemaIsDeterministicIndentedJSON(t *testing.T) {
 	}
 }
 
-// TestSchemaMatchesLitmusLibrarySchema is the drift half of the
-// domain-librarian schema invariant: vocab.Schema() must equal the
-// committed litmus library.schema.json byte-for-byte.
+// TestSchemaMatchesPublishedSchema is the drift half of the domain
+// schema invariant: vocab.Schema() must equal the published
+// docs/schemas/domain.arclint.schema.json byte-for-byte.
 //
-// On failure: regenerate the committed skill artifacts via arclint
-// agents skill, or fix the generator; never edit fixtures by hand.
-func TestSchemaMatchesLitmusLibrarySchema(t *testing.T) {
-	wantPath := filepath.Join(repoRoot(t), ".agents", "skills", "domain-librarian", "library.schema.json")
+// On failure: regenerate the committed schemas via make schemas, or fix
+// the generator; never edit the committed copies by hand.
+func TestSchemaMatchesPublishedSchema(t *testing.T) {
+	wantPath := filepath.Join(repoRoot(t), "docs", "schemas", vocab.SchemaFileName)
 	want, err := os.ReadFile(wantPath)
 	if err != nil {
-		t.Fatalf("read litmus library.schema.json: %v", err)
+		t.Fatalf("read published %s: %v", vocab.SchemaFileName, err)
 	}
 	got, err := vocab.Schema()
 	if err != nil {
 		t.Fatalf("vocab.Schema: %v", err)
 	}
 	if !bytes.Equal(got, want) {
-		t.Fatalf("vocab.Schema() drifted from litmus library.schema.json; regenerate the committed skill artifacts via arclint agents skill, or fix the generator; never edit fixtures by hand\n--- got (%d bytes) ---\n%s\n--- want (%d bytes) ---\n%s",
-			len(got), truncate(got, 400), len(want), truncate(want, 400))
+		t.Fatalf("vocab.Schema() drifted from published %s; run make schemas, or fix the generator; never edit the committed copies by hand\n--- got (%d bytes) ---\n%s\n--- want (%d bytes) ---\n%s",
+			vocab.SchemaFileName, len(got), truncate(got, 400), len(want), truncate(want, 400))
+	}
+}
+
+// TestSchemaIdentifiesItself pins the $id to the published location and
+// the file name the modeline and the skill vocabulary point at.
+func TestSchemaIdentifiesItself(t *testing.T) {
+	got, err := vocab.Schema()
+	if err != nil {
+		t.Fatalf("vocab.Schema: %v", err)
+	}
+	var doc struct {
+		ID string `json:"$id"`
+	}
+	if err := json.Unmarshal(got, &doc); err != nil {
+		t.Fatalf("unmarshal schema: %v", err)
+	}
+	if doc.ID != vocab.SchemaID {
+		t.Fatalf("$id = %q, want %q", doc.ID, vocab.SchemaID)
+	}
+	if want := "https://raw.githubusercontent.com/wixregiga/arclint/main/docs/schemas/" + vocab.SchemaFileName; vocab.SchemaID != want {
+		t.Fatalf("SchemaID = %q, want %q", vocab.SchemaID, want)
+	}
+	if want := ".arclint/schemas/" + vocab.SchemaFileName; vocab.SchemaPath != want {
+		t.Fatalf("SchemaPath = %q, want %q", vocab.SchemaPath, want)
 	}
 }
 

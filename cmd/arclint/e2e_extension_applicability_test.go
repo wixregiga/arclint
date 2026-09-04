@@ -28,7 +28,7 @@ export default defineRule({
   },
 });
 `)
-	write(t, root, "rules.yaml", `runtime: [go]
+	write(t, root, "rules.arclint.yaml", `runtime: [go]
 modules:
   src: src/**
 rules:

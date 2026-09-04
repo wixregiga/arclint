@@ -125,7 +125,7 @@ export interface ViolationInput {
 /**
  * DomainDefinitionInfo is one recorded project domain definition as
  * exposed through ctx.domain(). Line is where the term is written in
- * ubiquitous-language.yaml, so a finding about the term can anchor at
+ * domain.arclint.yaml, so a finding about the term can anchor at
  * the term; 0 when the vocabulary was not read from a file.
  */
 export interface DomainDefinitionInfo {
@@ -138,7 +138,7 @@ export interface DomainDefinitionInfo {
 /**
  * DomainInvariantInfo is one recorded invariant (statement + owner)
  * inside a bounded context as exposed through ctx.domain(). Line is
- * where the invariant is written in ubiquitous-language.yaml. ID is
+ * where the invariant is written in domain.arclint.yaml. ID is
  * the cluster identity when the owner is an aggregate named contract.
  */
 export interface DomainInvariantInfo {
@@ -172,7 +172,7 @@ export interface DomainSpecificationInfo {
 /**
  * DomainContextInfo is one bounded context and its recorded terms as
  * exposed through ctx.domain(). Line is where the context is written
- * in ubiquitous-language.yaml.
+ * in domain.arclint.yaml.
  */
 export interface DomainContextInfo {
   name: string;
@@ -187,7 +187,7 @@ export interface DomainContextInfo {
 /**
  * DomainRelationInfo is one context-map edge as exposed through
  * ctx.domain(). Line is where the relation is written in
- * ubiquitous-language.yaml.
+ * domain.arclint.yaml.
  */
 export interface DomainRelationInfo {
   from: string;
@@ -199,8 +199,12 @@ export interface DomainRelationInfo {
  * DomainInfo is the project's recorded domain model as exposed through
  * ctx.domain(): empty collections when the project records none.
  * Read-only: declaring knowledge never creates a diagnostic by itself.
+ * Source is the repository-relative path of the domain file the model
+ * is (or would be) recorded in, so a finding about a recorded term
+ * anchors there without the extension spelling the file name.
  */
 export interface DomainInfo {
+  source: string;
   contexts: DomainContextInfo[];
   relations: DomainRelationInfo[];
 }

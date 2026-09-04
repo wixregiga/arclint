@@ -129,7 +129,7 @@ declare module "arclint" {
   /**
    * DomainDefinitionInfo is one recorded project domain definition as
    * exposed through ctx.domain(). Line is where the term is written in
-   * ubiquitous-language.yaml, so a finding about the term can anchor at
+   * domain.arclint.yaml, so a finding about the term can anchor at
    * the term; 0 when the vocabulary was not read from a file.
    */
   export interface DomainDefinitionInfo {
@@ -142,30 +142,56 @@ declare module "arclint" {
   /**
    * DomainInvariantInfo is one recorded invariant (statement + owner)
    * inside a bounded context as exposed through ctx.domain(). Line is
-   * where the invariant is written in ubiquitous-language.yaml.
+   * where the invariant is written in domain.arclint.yaml. ID is
+   * the cluster identity when the owner is an aggregate named contract.
    */
   export interface DomainInvariantInfo {
     statement: string;
     owner: string;
+    id?: string;
+    line: number /* int */;
+  }
+  /**
+   * DomainAssertionInfo is one recorded assertion as exposed through
+   * ctx.domain(). ID names the checking method; On names the operation
+   * that must call it.
+   */
+  export interface DomainAssertionInfo {
+    statement: string;
+    owner: string;
+    id: string;
+    on: string;
+    line: number /* int */;
+  }
+  /**
+   * DomainSpecificationInfo is one recorded specification as exposed
+   * through ctx.domain(): a named predicate, never a flag on a value
+   * object.
+   */
+  export interface DomainSpecificationInfo {
+    name: string;
+    definition?: string;
     line: number /* int */;
   }
   /**
    * DomainContextInfo is one bounded context and its recorded terms as
    * exposed through ctx.domain(). Line is where the context is written
-   * in ubiquitous-language.yaml.
+   * in domain.arclint.yaml.
    */
   export interface DomainContextInfo {
     name: string;
     entities: DomainDefinitionInfo[];
     valueObjects: DomainDefinitionInfo[];
     invariants: DomainInvariantInfo[];
+    assertions: DomainAssertionInfo[];
+    specifications: DomainSpecificationInfo[];
     events: DomainDefinitionInfo[];
     line: number /* int */;
   }
   /**
    * DomainRelationInfo is one context-map edge as exposed through
    * ctx.domain(). Line is where the relation is written in
-   * ubiquitous-language.yaml.
+   * domain.arclint.yaml.
    */
   export interface DomainRelationInfo {
     from: string;
@@ -177,8 +203,12 @@ declare module "arclint" {
    * DomainInfo is the project's recorded domain model as exposed through
    * ctx.domain(): empty collections when the project records none.
    * Read-only: declaring knowledge never creates a diagnostic by itself.
+   * Source is the repository-relative path of the domain file the model
+   * is (or would be) recorded in, so a finding about a recorded term
+   * anchors there without the extension spelling the file name.
    */
   export interface DomainInfo {
+    source: string;
     contexts: DomainContextInfo[];
     relations: DomainRelationInfo[];
   }
@@ -187,7 +217,7 @@ declare module "arclint" {
   export type Capability = "exact" | "structural" | "heuristic" | "advisory";
 
   /** Published TermCases: renderings of a recorded vocabulary term as a
-   * path or identifier segment. The same closed set rules.yaml accepts in
+   * path or identifier segment. The same closed set rules.arclint.yaml accepts in
    * {name:<case>} placeholders. */
   export type TermCase =
     | "flatcase"
@@ -210,12 +240,12 @@ declare module "arclint" {
     facts(path: string): FactsInfo | null;
     /** The sorted module names a file belongs to. */
     moduleOf(path: string): string[];
-    /** The project's recorded domain model (ubiquitous-language.yaml);
+    /** The project's recorded domain model (domain.arclint.yaml);
      * empty collections when the project records none. Read-only:
      * declaring knowledge never creates a diagnostic by itself. */
     domain(): DomainInfo;
-    /** Render a recorded term in one published TermCase — the host's
-     * one casing implementation, identical to what rules.yaml
+    /** Render a recorded term in one published TermCase, the host's
+     * one casing implementation, identical to what rules.arclint.yaml
      * {name:<case>} placeholders resolve with. Throws on an unknown
      * case and on terms without letters or digits. */
     caseTerm(term: string, termCase: TermCase): string;
@@ -231,7 +261,7 @@ declare module "arclint" {
   }
 
   /** Minimal zod-style schema builder producing JSON Schema; the host
-   * validates rules.yaml params against it before check() runs. */
+   * validates rules.arclint.yaml params against it before check() runs. */
   export const s: {
     string(): Schema;
     number(): Schema;
@@ -243,7 +273,7 @@ declare module "arclint" {
   };
 
   export interface RuleDef {
-    /** Unique rule type name, referenced by rules.yaml entries. */
+    /** Unique rule type name, referenced by rules.arclint.yaml entries. */
     type: string;
     /** One-line summary shown by arclint rules. */
     description?: string;

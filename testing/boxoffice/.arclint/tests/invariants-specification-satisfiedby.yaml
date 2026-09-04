@@ -3,7 +3,7 @@
 # a specification; source shows the type and Evans SatisfiedBy.
 rule: "entities/contracts-visible"
 files:
-  ubiquitous-language.yaml: |
+  domain.arclint.yaml: |
     version: 1
     contexts:
       - name: catalog

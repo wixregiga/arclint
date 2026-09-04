@@ -7,7 +7,7 @@ weight = 5
 A **Pattern** is a named, versioned collection of Rules packaged for
 distribution: an identity header, the Modules its Rules speak about
 (without paths), the Rules, and any Extensions those Rules use. A
-repository adopts a Pattern by reference from `rules.yaml`, binds each
+repository adopts a Pattern by reference from `rules.arclint.yaml`, binds each
 Pattern Module to the paths it owns locally, and adjusts individual
 Rules through Overrides. Rule text is never copied; when a folder moves,
 only the binding changes.
@@ -83,21 +83,21 @@ exactly one namespace, and:
 - resolves it offline first, then from the Registry;
 - vendors it under `.arclint/patterns/<namespace>/<name>/` when it came
   from the Registry, so the next check needs no network;
-- records it under `extends` in `rules.yaml` with a binding for every
+- records it under `extends` in `rules.arclint.yaml` with a binding for every
   Module the Pattern lists, drafted from the paths the Pattern suggests;
-- adopts a Module `rules.yaml` already declares under the same name:
+- adopts a Module `rules.arclint.yaml` already declares under the same name:
   its declared paths become the binding and the local declaration is
   folded away, comments preserved;
 - replaces the entry in place when the ruleset already extends another
   version of the same Pattern, keeping every binding;
-- drafts a `rules.yaml` that extends the Pattern when there is none
+- drafts a `rules.arclint.yaml` that extends the Pattern when there is none
   (`--languages go,ts` chooses the runtime; the default is the
   Pattern's coverage).
 
 ```
 installed acme/layers@1.0.0 (registry, 3fb2cbda1af6)
 vendored to /work/shop/.arclint/patterns/acme/layers
-extended /work/shop/rules.yaml
+extended /work/shop/rules.arclint.yaml
 bound:
   app: internal/app/**
 unbound (bind each under extends[].bind before the ruleset loads):
@@ -274,7 +274,7 @@ The rules of the Pattern file:
 - `namespace`, `name`, and `version` are required; `version` is exact
   semver. `coverage` lists the languages the Pattern's Rules were
   written for; `documentation` is the prose `init` and `install` copy
-  into the drafted `rules.yaml` header.
+  into the drafted `rules.arclint.yaml` header.
 - A Module is listed by its description: a bare string, or an object
   with `description` (required) and optional `paths` that `install` and
   `init --pattern` offer as the starting binding. A list of globs is
@@ -327,7 +327,7 @@ repository can serve a team's Patterns.
 
 `arclint/domain-model` turns a repository's recorded Ubiquitous
 Language into a contract. Its three Rules read
-`ubiquitous-language.yaml` through the extension SDK: every recorded
+`domain.arclint.yaml` through the extension SDK: every recorded
 term carries a definition, every recorded invariant names a recorded
 term of its own context as its owner, and imports between Modules named
 after bounded contexts respect the recorded context-map relations.
@@ -336,9 +336,9 @@ after bounded contexts respect the recorded context-map relations.
 arclint patterns install domain-model
 ```
 
-binds its one Module, `vocabulary`, to `ubiquitous-language.yaml`.
+binds its one Module, `vocabulary`, to `domain.arclint.yaml`.
 Declare one Module per bounded context whose imports the map should
 govern (`billing: internal/billing/**`) and the context map becomes
-import rules with no further configuration. arclint's own `rules.yaml`
+import rules with no further configuration. arclint's own `rules.arclint.yaml`
 extends this Pattern; the vocabulary rules it enforces on itself are
 the ones every adopter receives.

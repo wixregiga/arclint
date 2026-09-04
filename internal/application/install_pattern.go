@@ -56,7 +56,7 @@ type InstallPatternResult struct {
 // InstallPattern makes one Pattern part of the repository's
 // architecture in one step: it resolves the Pattern offline first,
 // vendors it when it came from a Registry, and records the Installation
-// in rules.yaml with every suggested Binding, replacing an older
+// in rules.arclint.yaml with every suggested Binding, replacing an older
 // version of the same Pattern without touching its bindings.
 type InstallPattern struct {
 	resolver patternResolver

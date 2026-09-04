@@ -18,7 +18,7 @@ const sdkAPIDecl = `
 export type Capability = "exact" | "structural" | "heuristic" | "advisory";
 
 /** Published TermCases: renderings of a recorded vocabulary term as a
- * path or identifier segment. The same closed set rules.yaml accepts in
+ * path or identifier segment. The same closed set rules.arclint.yaml accepts in
  * {name:<case>} placeholders. */
 export type TermCase =
   | "flatcase"
@@ -41,12 +41,12 @@ export interface Ctx {
   facts(path: string): FactsInfo | null;
   /** The sorted module names a file belongs to. */
   moduleOf(path: string): string[];
-  /** The project's recorded domain model (ubiquitous-language.yaml);
+  /** The project's recorded domain model (domain.arclint.yaml);
    * empty collections when the project records none. Read-only:
    * declaring knowledge never creates a diagnostic by itself. */
   domain(): DomainInfo;
   /** Render a recorded term in one published TermCase, the host's
-   * one casing implementation, identical to what rules.yaml
+   * one casing implementation, identical to what rules.arclint.yaml
    * {name:<case>} placeholders resolve with. Throws on an unknown
    * case and on terms without letters or digits. */
   caseTerm(term: string, termCase: TermCase): string;
@@ -62,7 +62,7 @@ export interface Schema {
 }
 
 /** Minimal zod-style schema builder producing JSON Schema; the host
- * validates rules.yaml params against it before check() runs. */
+ * validates rules.arclint.yaml params against it before check() runs. */
 export const s: {
   string(): Schema;
   number(): Schema;
@@ -74,7 +74,7 @@ export const s: {
 };
 
 export interface RuleDef {
-  /** Unique rule type name, referenced by rules.yaml entries. */
+  /** Unique rule type name, referenced by rules.arclint.yaml entries. */
   type: string;
   /** One-line summary shown by arclint rules. */
   description?: string;

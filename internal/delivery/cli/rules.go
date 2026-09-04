@@ -13,7 +13,7 @@ import (
 // Rule completely. Subcommands print the published Rule Schema and run
 // the authored Rule Tests.
 func NewRulesCommand(list application.ListRules, show application.ShowRule,
-	runTests application.RunRuleTests, render Renderer,
+	runTests application.RunRuleTests, publishSchema application.PublishRuleSchema, render Renderer,
 ) Command {
 	return Command{
 		Name:         "rules",
@@ -21,7 +21,7 @@ func NewRulesCommand(list application.ListRules, show application.ShowRule,
 		MaxArgs:      1,
 		CompleteArgs: completeRuleIDs(list),
 		Subcommands: []Command{
-			newRuleSchemaCommand(),
+			newRuleSchemaCommand(publishSchema, render),
 			newRuleTestCommand(runTests, render),
 		},
 		Run: func(ctx Context) error {
@@ -108,26 +108,29 @@ func withListPrefix(toComplete string, candidates []AutoCompleteCandidate) []Aut
 	return out
 }
 
-// newRuleSchemaCommand prints the published Rule Schema: the JSON
-// Schema editors reference to validate and autocomplete rules.yaml.
-// Runtime validation and this published schema accept the same values.
-// Raw schema bytes bypass the Renderer.
-func newRuleSchemaCommand() Command {
-	return Command{
-		Name:  "schema",
-		Short: "print the JSON Schema for rules.yaml",
-		Run: func(ctx Context) error {
-			data, err := rule.Schema()
-			if err != nil {
-				return fmt.Errorf("rule schema: %w", err)
-			}
-			if _, err := ctx.Stdout.Write(data); err != nil {
-				return fmt.Errorf("write output: %w", err)
-			}
-			return nil
-		},
-	}
+// newRuleSchemaCommand prints or writes the published Rule Schema:
+// the JSON Schema editors reference to validate and autocomplete the
+// ruleset. Runtime validation and this published schema accept the
+// same values.
+func newRuleSchemaCommand(publish application.PublishRuleSchema, render Renderer) Command {
+	return newSchemaCommand(
+		"print or write the JSON Schema for "+rule.RulesetFileName,
+		ruleSchemaLong,
+		ruleSchemaExample,
+		publish,
+		render,
+	)
 }
+
+const ruleSchemaLong = `Print the JSON Schema accepted for ` + rule.RulesetFileName + `, or write it under
+the project's schema directory with --write so the ruleset's modeline can
+name a local copy.
+
+Runtime validation and the published schema accept the same values.`
+
+const ruleSchemaExample = `  arclint rules schema
+  arclint rules schema --write
+  arclint rules schema --write --dir docs/schemas`
 
 // newRuleTestCommand runs the repository's authored Rule Tests; an
 // optional argument selects one test by name. Any failing test exits
