@@ -80,6 +80,12 @@ func (Renderer) Render(w io.Writer, r cli.Report) error {
 		return writeBaselineRefresh(w, v)
 	case cli.PatternsReport:
 		return writePatterns(w, v)
+	case cli.PatternVendorReport:
+		return writePatternVendor(w, v)
+	case cli.PatternInstallReport:
+		return writePatternInstall(w, v)
+	case cli.PatternExportReport:
+		return writePatternExport(w, v)
 	case cli.SDKInitReport:
 		return writeSDKInit(w, v)
 	default:

@@ -2,9 +2,9 @@ package application
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
+	"github.com/wixregiga/arclint/internal/domain/distribution"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 )
 
@@ -24,9 +24,9 @@ type InitializeRepositoryRequest struct {
 	// Languages are the runtime targets: go, ts, py. Empty means go.
 	Languages []string
 	// Pattern selects BarePattern for the commented starter, or a
-	// Pattern to adopt by reference (namespace/name@version) or by
-	// name when only one available Pattern carries it. Empty means
-	// BarePattern.
+	// Pattern to adopt by reference (namespace/name@version), by
+	// namespace/name at its highest available version, or by name when
+	// only one available Pattern carries it. Empty means BarePattern.
 	Pattern string
 	// Force overwrites an existing ruleset.
 	Force bool
@@ -49,10 +49,8 @@ func NewInitializeRepository(scaffold RulesetScaffold, patterns ...PatternSource
 	if scaffold == nil {
 		return InitializeRepository{}, fmt.Errorf("initialize repository: missing ruleset scaffold")
 	}
-	for _, p := range patterns {
-		if p == nil {
-			return InitializeRepository{}, fmt.Errorf("initialize repository: nil pattern source")
-		}
+	if err := validSources("initialize repository", patterns); err != nil {
+		return InitializeRepository{}, err
 	}
 	return InitializeRepository{scaffold: scaffold, patterns: patterns}, nil
 }
@@ -75,32 +73,13 @@ func supportsLanguage(language string) bool {
 }
 
 // Patterns returns the init choices: bare, then every available
-// Pattern by reference.
+// Pattern by reference in resolution order.
 func (uc InitializeRepository) Patterns() ([]string, error) {
-	available, err := uc.available()
+	catalog, err := loadCatalog(uc.patterns)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("initialize repository: %w", err)
 	}
-	choices := []string{BarePattern}
-	for _, p := range available {
-		choices = append(choices, p.Reference().String())
-	}
-	return choices, nil
-}
-
-func (uc InitializeRepository) available() ([]rule.Pattern, error) {
-	var out []rule.Pattern
-	for _, source := range uc.patterns {
-		ps, err := source.Patterns()
-		if err != nil {
-			return nil, fmt.Errorf("initialize repository: %w", err)
-		}
-		out = append(out, ps...)
-	}
-	sort.SliceStable(out, func(i, j int) bool {
-		return out[i].Reference().String() < out[j].Reference().String()
-	})
-	return out, nil
+	return append([]string{BarePattern}, catalog.Spellings()...), nil
 }
 
 // Execute drafts and persists the starter ruleset, returning its path.
@@ -129,44 +108,38 @@ func (uc InitializeRepository) rulesetContent(selection string, languages []stri
 	if selection == "" || selection == BarePattern {
 		return starterRuleset(languages), nil
 	}
-	available, err := uc.available()
+	catalog, err := loadCatalog(uc.patterns)
+	if err != nil {
+		return "", fmt.Errorf("initialize repository: %w", err)
+	}
+	p, err := selectPattern(selection, catalog)
 	if err != nil {
 		return "", err
 	}
-	p, err := selectPattern(selection, available)
+	inst, err := rule.NewInstallation(p)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("initialize repository: %w", err)
 	}
-	return adoptingRuleset(p, languages), nil
+	return adoptingRuleset(p, inst, languages), nil
 }
 
-// selectPattern resolves a selection by full reference, or by bare
-// name when exactly one available Pattern carries it.
-func selectPattern(selection string, available []rule.Pattern) (rule.Pattern, error) {
-	var byName []rule.Pattern
-	for _, p := range available {
-		if p.Reference().String() == selection {
-			return p, nil
-		}
-		if p.Reference().Name() == selection {
-			byName = append(byName, p)
-		}
+// selectPattern resolves a selection against the offline catalog:
+// exact reference, namespace/name at its highest version, or bare name
+// when exactly one namespace/name carries it.
+func selectPattern(selection string, catalog distribution.Catalog) (rule.Pattern, error) {
+	refs, err := distribution.Selection(selection, catalog.References())
+	if err != nil {
+		return rule.Pattern{}, fmt.Errorf("initialize repository: %w", err)
 	}
-	switch len(byName) {
+	switch len(refs) {
 	case 1:
-		return byName[0], nil
+		a, _ := catalog.Lookup(refs[0])
+		return a.Pattern, nil
 	case 0:
-		choices := []string{BarePattern}
-		for _, p := range available {
-			choices = append(choices, p.Reference().String())
-		}
+		choices := append([]string{BarePattern}, catalog.Spellings()...)
 		return rule.Pattern{}, fmt.Errorf("initialize repository: pattern %q is not one of %s", selection, strings.Join(choices, ", "))
 	}
-	refs := make([]string, 0, len(byName))
-	for _, p := range byName {
-		refs = append(refs, p.Reference().String())
-	}
-	return rule.Pattern{}, fmt.Errorf("initialize repository: pattern name %q is ambiguous; use one of %s", selection, strings.Join(refs, ", "))
+	return rule.Pattern{}, fmt.Errorf("initialize repository: %w", ambiguous(selection, refs))
 }
 
 func runtimeLine(languages []string) string {
@@ -211,11 +184,11 @@ func starterRuleset(languages []string) string {
 	return b.String()
 }
 
-// adoptingRuleset renders a ruleset that extends the Pattern, binding
-// every Pattern Module to its suggested paths. A Module the Pattern
-// suggests no paths for is left as a commented bind entry: the loader
-// then names it unbound, so the owner binds it before the first check.
-func adoptingRuleset(p rule.Pattern, languages []string) string {
+// adoptingRuleset renders a ruleset that extends the Pattern with the
+// drafted Installation. A Module the Installation leaves unbound is
+// written as a commented bind entry: the loader then names it unbound,
+// so the owner binds it before the first check.
+func adoptingRuleset(p rule.Pattern, inst rule.Installation, languages []string) string {
 	ref := p.Reference().String()
 	var b strings.Builder
 	fmt.Fprintf(&b, "# ArcLint architecture contracts: this repository adopts %s.\n", ref)
@@ -228,26 +201,7 @@ func adoptingRuleset(p rule.Pattern, languages []string) string {
 	b.WriteString(runtimeLine(languages))
 	b.WriteString(scanBlock())
 	b.WriteString("extends:\n")
-	fmt.Fprintf(&b, "  - pattern: %s\n", ref)
-	b.WriteString("    # bind maps every Pattern Module to the paths it owns here. Paths live\n")
-	b.WriteString("    # only in bind: the Pattern's Rules never change when a folder moves.\n")
-	b.WriteString("    bind:\n")
-	for _, m := range p.Modules() {
-		fmt.Fprintf(&b, "      # %s\n", m.Description())
-		paths := m.SuggestedPaths()
-		switch len(paths) {
-		case 0:
-			fmt.Fprintf(&b, "      # %s: <glob>\n", m.Name())
-		case 1:
-			fmt.Fprintf(&b, "      %s: %s\n", m.Name(), yamlQuote(paths[0].String()))
-		default:
-			quoted := make([]string, 0, len(paths))
-			for _, g := range paths {
-				quoted = append(quoted, yamlQuote(g.String()))
-			}
-			fmt.Fprintf(&b, "      %s: [%s]\n", m.Name(), strings.Join(quoted, ", "))
-		}
-	}
+	b.WriteString(extendsEntry(inst, "  "))
 	b.WriteString("\n")
 	b.WriteString("# Override a Pattern Rule under its qualified id (arclint rules lists them):\n")
 	b.WriteString("#   rules:\n")
@@ -260,6 +214,45 @@ func adoptingRuleset(p rule.Pattern, languages []string) string {
 	b.WriteString("#       disable: \"why this repository does not hold it\"\n")
 	b.WriteString("# House Rules go under new ids beside the overrides.\n")
 	return b.String()
+}
+
+// extendsEntry renders one extends list item at the given indent: the
+// reference, then a bind entry per Pattern Module, commented out when
+// the Installation leaves the Module unbound. When nothing is bound the
+// whole bind block is commented, so the document stays valid and the
+// loader names the unbound Modules.
+func extendsEntry(inst rule.Installation, indent string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s- pattern: %s\n", indent, inst.Reference())
+	fmt.Fprintf(&b, "%s  # bind maps every Pattern Module to the paths it owns here. Paths live\n", indent)
+	fmt.Fprintf(&b, "%s  # only in bind: the Pattern's Rules never change when a folder moves.\n", indent)
+	off := ""
+	if len(inst.Bindings()) == 0 {
+		off = "# "
+	}
+	fmt.Fprintf(&b, "%s  %sbind:\n", indent, off)
+	for _, m := range inst.Modules() {
+		fmt.Fprintf(&b, "%s    # %s\n", indent, m.Description())
+		bound, ok := inst.Binding(m.Name())
+		if !ok {
+			fmt.Fprintf(&b, "%s    # %s: <glob>\n", indent, m.Name())
+			continue
+		}
+		fmt.Fprintf(&b, "%s    %s: %s\n", indent, m.Name(), bindPaths(bound.Paths()))
+	}
+	return b.String()
+}
+
+// bindPaths spells a Binding's paths: one quoted glob, or a flow list.
+func bindPaths(paths []rule.Glob) string {
+	if len(paths) == 1 {
+		return yamlQuote(paths[0].String())
+	}
+	quoted := make([]string, 0, len(paths))
+	for _, g := range paths {
+		quoted = append(quoted, yamlQuote(g.String()))
+	}
+	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
 // yamlQuote spells a glob as a double-quoted YAML scalar so `*` and

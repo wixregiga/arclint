@@ -90,7 +90,13 @@ func (r renderer) Render(w io.Writer, rep cli.Report) error {
 	case cli.BaselineRefreshReport:
 		writeBaselineRefresh(p, th, x.Result)
 	case cli.PatternsReport:
-		writePatterns(p, th, x.Patterns)
+		writePatterns(p, th, x)
+	case cli.PatternVendorReport:
+		writePatternVendor(p, th, x.Result)
+	case cli.PatternInstallReport:
+		writePatternInstall(p, th, x.Result)
+	case cli.PatternExportReport:
+		writePatternExport(p, th, x.Result)
 	case cli.SDKInitReport:
 		writeSDKInit(p, th, x.Paths)
 	default:

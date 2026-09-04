@@ -3,68 +3,137 @@ package application
 import (
 	"fmt"
 
+	"github.com/wixregiga/arclint/internal/domain/distribution"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 )
 
-// PatternSource supplies available Pattern distribution packages as
-// validated domain values.
-type PatternSource interface {
-	Patterns() ([]rule.Pattern, error)
-}
-
-// PatternSummary is the plain result value describing one available
-// Pattern.
+// PatternSummary is one Pattern as the patterns listing shows it:
+// its identity, where it resolves from, what the repository carries
+// under .arclint/patterns, and its Digest, so a reader can tell an
+// embedded Pattern from a vendored copy and match either against what
+// a Registry publishes.
 type PatternSummary struct {
-	Namespace  string
-	Name       string
-	Version    string
-	Rules      int
-	Extensions int
-	Coverage   []string
+	Namespace string
+	Name      string
+	Version   string
+	// Source is where the Pattern resolves from: embedded, local, or
+	// registry.
+	Source distribution.SourceKind
+	Digest string
+	// Vendored reports a verified copy under .arclint/patterns, with a
+	// manifest.json every load checks the files against.
+	Vendored bool
+	// Authored reports a copy under .arclint/patterns without a
+	// manifest: authored in place, loaded as written.
+	Authored      bool
+	Documentation string
+	Rules         int
+	Extensions    int
+	Coverage      []string
 }
 
-// ListPatterns lists available Pattern distribution packages through
-// the source ports, concatenated in constructor argument order.
+// Reference spells the summary's PatternReference.
+func (s PatternSummary) Reference() string {
+	return s.Namespace + "/" + s.Name + "@" + s.Version
+}
+
+// ListPatterns lists every Pattern the resolving sources carry, and on
+// request every Pattern a Registry publishes.
 type ListPatterns struct {
-	sources []PatternSource
+	sources  []PatternSource
+	registry PatternRegistry
 }
 
-// NewListPatterns requires at least one Pattern source port.
-func NewListPatterns(sources ...PatternSource) (ListPatterns, error) {
+// NewListPatterns requires at least one source; registry may be nil
+// when remote listing is not offered.
+func NewListPatterns(registry PatternRegistry, sources ...PatternSource) (ListPatterns, error) {
 	if len(sources) == 0 {
-		return ListPatterns{}, fmt.Errorf("list patterns: missing pattern source")
+		return ListPatterns{}, fmt.Errorf("list patterns: at least one pattern source required")
 	}
-	for _, source := range sources {
-		if source == nil {
-			return ListPatterns{}, fmt.Errorf("list patterns: missing pattern source")
-		}
+	if err := validSources("list patterns", sources); err != nil {
+		return ListPatterns{}, err
 	}
-	return ListPatterns{sources: append([]PatternSource(nil), sources...)}, nil
+	return ListPatterns{sources: sources, registry: registry}, nil
 }
 
-// Execute returns one summary per available Pattern.
+// Execute lists the offline Patterns in resolution order: embedded
+// first, then the repository's own.
 func (uc ListPatterns) Execute() ([]PatternSummary, error) {
-	var out []PatternSummary
-	for _, source := range uc.sources {
-		patterns, err := source.Patterns()
-		if err != nil {
-			return nil, fmt.Errorf("load patterns: %w", err)
-		}
-		for _, p := range patterns {
-			ref := p.Reference()
-			coverage := make([]string, 0, len(p.Coverage()))
-			for _, l := range p.Coverage() {
-				coverage = append(coverage, string(l))
-			}
-			out = append(out, PatternSummary{
-				Namespace:  ref.Namespace(),
-				Name:       ref.Name(),
-				Version:    ref.Version(),
-				Rules:      len(p.Rules()),
-				Extensions: len(p.Extensions()),
-				Coverage:   coverage,
-			})
-		}
+	catalog, err := loadCatalog(uc.sources)
+	if err != nil {
+		return nil, fmt.Errorf("list patterns: %w", err)
+	}
+	entries := catalog.Entries()
+	out := make([]PatternSummary, 0, len(entries))
+	for _, a := range entries {
+		out = append(out, summarizeAvailable(a, catalog.Copies(a.Reference())))
 	}
 	return out, nil
+}
+
+// Remote lists what the Registry at location publishes.
+func (uc ListPatterns) Remote(location string) ([]PatternSummary, error) {
+	if uc.registry == nil {
+		return nil, fmt.Errorf("list patterns: no registry client configured")
+	}
+	reg, err := distribution.NewRegistry(location)
+	if err != nil {
+		return nil, fmt.Errorf("list patterns: %w", err)
+	}
+	index, err := uc.registry.Index(reg)
+	if err != nil {
+		return nil, fmt.Errorf("list patterns: %w", err)
+	}
+	entries := index.Entries()
+	out := make([]PatternSummary, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, PatternSummary{
+			Namespace:     e.Reference().Namespace(),
+			Name:          e.Reference().Name(),
+			Version:       e.Reference().Version(),
+			Source:        distribution.SourceRegistry,
+			Digest:        e.Digest().String(),
+			Documentation: e.Documentation(),
+			Rules:         e.Rules(),
+			Extensions:    e.Extensions(),
+			Coverage:      runtimeTargetsOf(e.Coverage()),
+		})
+	}
+	return out, nil
+}
+
+// summarizeAvailable spells the resolving copy and what the
+// repository carries of it under .arclint/patterns.
+func summarizeAvailable(a distribution.Available, copies []distribution.Available) PatternSummary {
+	ref := a.Reference()
+	s := PatternSummary{
+		Namespace:     ref.Namespace(),
+		Name:          ref.Name(),
+		Version:       ref.Version(),
+		Source:        a.Kind,
+		Digest:        a.Digest().String(),
+		Documentation: a.Pattern.Documentation(),
+		Rules:         len(a.Pattern.Rules()),
+		Extensions:    len(a.Pattern.Extensions()),
+		Coverage:      runtimeTargetsOf(a.Pattern.Coverage()),
+	}
+	for _, c := range copies {
+		if c.Kind != distribution.SourceLocal {
+			continue
+		}
+		if c.Authored {
+			s.Authored = true
+		} else {
+			s.Vendored = true
+		}
+	}
+	return s
+}
+
+func runtimeTargetsOf(languages []rule.Language) []string {
+	out := make([]string, 0, len(languages))
+	for _, l := range languages {
+		out = append(out, l.RuntimeTarget())
+	}
+	return out
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/delivery/cli"
+	"github.com/wixregiga/arclint/internal/domain/distribution"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
@@ -218,19 +219,90 @@ func TestJSONAgentsStatusLowerCamel(t *testing.T) {
 func TestJSONPatternsLowerCamel(t *testing.T) {
 	var buf bytes.Buffer
 	err := New().Render(&buf, cli.PatternsReport{
+		Registry: "https://patterns.example.com",
 		Patterns: []application.PatternSummary{{
-			Namespace: "arclint", Name: "vertical", Version: "1", Rules: 5, Extensions: 2, Coverage: []string{"go"},
+			Namespace: "arclint", Name: "vertical", Version: "1", Source: distribution.SourceEmbedded, Vendored: true,
+			Digest: "sha256:abc", Documentation: "Vertical slices.", Rules: 5, Extensions: 2, Coverage: []string{"go"},
 		}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var docs []map[string]any
-	if err := json.Unmarshal(buf.Bytes(), &docs); err != nil {
+	var doc struct {
+		Registry string           `json:"registry"`
+		Patterns []map[string]any `json:"patterns"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
 		t.Fatal(err)
 	}
-	if docs[0]["namespace"] != "arclint" || docs[0]["rules"] != float64(5) {
-		t.Fatalf("doc = %v", docs[0])
+	if doc.Registry != "https://patterns.example.com" || len(doc.Patterns) != 1 {
+		t.Fatalf("doc = %+v", doc)
+	}
+	row := doc.Patterns[0]
+	if row["reference"] != "arclint/vertical@1" || row["namespace"] != "arclint" || row["rules"] != float64(5) ||
+		row["source"] != "embedded" || row["vendored"] != true || row["authored"] != false || row["digest"] != "sha256:abc" || row["documentation"] != "Vertical slices." {
+		t.Fatalf("row = %v", row)
+	}
+	if !strings.Contains(buf.String(), `"extensions": 2`) {
+		t.Fatalf("keys must be lowerCamel:\n%s", buf.String())
+	}
+}
+
+func TestJSONPatternVendorInstallExportLowerCamel(t *testing.T) {
+	var buf bytes.Buffer
+	err := New().Render(&buf, cli.PatternVendorReport{Result: application.VendorPatternResult{
+		Reference: "acme/layers@1.0.0", Digest: "sha256:abc", Source: distribution.SourceRegistry, Path: ".arclint/patterns/acme/layers", Replaced: "0.9.0",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vendor map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &vendor); err != nil {
+		t.Fatal(err)
+	}
+	if vendor["reference"] != "acme/layers@1.0.0" || vendor["path"] != ".arclint/patterns/acme/layers" || vendor["replaced"] != "0.9.0" || vendor["unchanged"] != false {
+		t.Fatalf("vendor doc = %v", vendor)
+	}
+
+	buf.Reset()
+	err = New().Render(&buf, cli.PatternInstallReport{Result: application.InstallPatternResult{
+		Reference: "acme/layers@1.0.0", Digest: "sha256:abc", Source: distribution.SourceEmbedded,
+		RulesetPath: "rules.yaml", RulesetReplaced: "0.9.0",
+		Bound:   []application.BoundModule{{Module: "domain", Paths: []string{"src/domain/**"}}},
+		Adopted: []string{"domain"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var install map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &install); err != nil {
+		t.Fatal(err)
+	}
+	if install["rulesetPath"] != "rules.yaml" || install["rulesetReplaced"] != "0.9.0" || install["rulesetCreated"] != false {
+		t.Fatalf("install doc = %v", install)
+	}
+	bound, _ := install["bound"].([]any)
+	unbound, _ := install["unbound"].([]any)
+	if len(bound) != 1 || bound[0].(map[string]any)["module"] != "domain" || unbound == nil || len(unbound) != 0 {
+		t.Fatalf("install bindings = %v / %v", install["bound"], install["unbound"])
+	}
+	if _, present := install["vendoredPath"]; present {
+		t.Fatalf("an offline install carries no vendoredPath: %v", install)
+	}
+
+	buf.Reset()
+	err = New().Render(&buf, cli.PatternExportReport{Result: application.ExportPatternResult{
+		Reference: "acme/layers@1.0.0", Digest: "sha256:abc", VersionDir: "registry/acme/layers/1.0.0", IndexPath: "registry/index.json", Replaced: true,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var export map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &export); err != nil {
+		t.Fatal(err)
+	}
+	if export["versionDir"] != "registry/acme/layers/1.0.0" || export["indexPath"] != "registry/index.json" || export["replaced"] != true {
+		t.Fatalf("export doc = %v", export)
 	}
 }
 

@@ -78,7 +78,13 @@ func (renderer) Render(w io.Writer, r cli.Report) error {
 			RemovedStale: x.Result.RemovedStale,
 		}
 	case cli.PatternsReport:
-		doc = patternDocs(x.Patterns)
+		doc = patternsDoc(x)
+	case cli.PatternVendorReport:
+		doc = patternVendorDocOf(x.Result)
+	case cli.PatternInstallReport:
+		doc = patternInstallDocOf(x.Result)
+	case cli.PatternExportReport:
+		doc = patternExportDocOf(x.Result)
 	case cli.SDKInitReport:
 		doc = sdkInitDoc{Paths: x.Paths}
 	default:
@@ -165,30 +171,6 @@ type baselineRefreshDoc struct {
 	Findings     int `json:"findings"`
 	Rules        int `json:"rules"`
 	RemovedStale int `json:"removedStale"`
-}
-
-type patternDoc struct {
-	Namespace  string   `json:"namespace"`
-	Name       string   `json:"name"`
-	Version    string   `json:"version"`
-	Rules      int      `json:"rules"`
-	Extensions int      `json:"extensions"`
-	Coverage   []string `json:"coverage,omitempty"`
-}
-
-func patternDocs(rows []application.PatternSummary) []patternDoc {
-	out := make([]patternDoc, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, patternDoc{
-			Namespace:  row.Namespace,
-			Name:       row.Name,
-			Version:    row.Version,
-			Rules:      row.Rules,
-			Extensions: row.Extensions,
-			Coverage:   append([]string(nil), row.Coverage...),
-		})
-	}
-	return out
 }
 
 type sdkInitDoc struct {

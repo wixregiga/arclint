@@ -4,20 +4,124 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/wixregiga/arclint/internal/domain/distribution"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	embeddedpattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/embedded"
 )
 
-func TestVerticalPatternLoads(t *testing.T) {
-	source := embeddedpattern.NewSource()
-	patterns, err := source.Patterns()
+// vertical returns the arclint/vertical Pattern from the built-in
+// source.
+func vertical(t *testing.T) rule.Pattern {
+	t.Helper()
+	patterns, err := embeddedpattern.NewSource().Patterns()
 	if err != nil {
 		t.Fatalf("Patterns: %v", err)
 	}
-	if len(patterns) != 1 {
-		t.Fatalf("patterns = %d, want 1", len(patterns))
+	for _, p := range patterns {
+		if p.Reference().Name() == "vertical" {
+			return p
+		}
 	}
-	p := patterns[0]
+	t.Fatalf("arclint/vertical is not embedded; got %d patterns", len(patterns))
+	return rule.Pattern{}
+}
+
+func TestBuiltInPatternsAreAvailableWithDigests(t *testing.T) {
+	source := embeddedpattern.NewSource()
+	available, err := source.Available()
+	if err != nil {
+		t.Fatalf("Available: %v", err)
+	}
+	want := []string{"arclint/domain-model@0.1.0", "arclint/vertical@0.1.0"}
+	if len(available) != len(want) {
+		t.Fatalf("available = %d, want %d", len(available), len(want))
+	}
+	for i, a := range available {
+		if a.Reference().String() != want[i] {
+			t.Errorf("available[%d] = %s, want %s", i, a.Reference(), want[i])
+		}
+		if a.Kind != distribution.SourceEmbedded || a.Authored {
+			t.Errorf("%s: kind %q authored %v; a built-in is an embedded, vendored copy", a.Reference(), a.Kind, a.Authored)
+		}
+		if a.Digest().IsZero() {
+			t.Errorf("%s: no digest", a.Reference())
+		}
+		if _, ok := a.Vendored.File("pattern.yaml"); !ok {
+			t.Errorf("%s: pattern.yaml is not among the shipped files", a.Reference())
+		}
+		if _, ok := a.Vendored.File("extensions/package.json"); !ok {
+			t.Errorf("%s: extensions/package.json must ship so the extension directory type-checks", a.Reference())
+		}
+	}
+	names, err := source.Names()
+	if err != nil || len(names) != 2 || names[0] != "domain-model" || names[1] != "vertical" {
+		t.Errorf("Names = %v, %v", names, err)
+	}
+}
+
+func TestDomainModelPatternLoads(t *testing.T) {
+	patterns, err := embeddedpattern.NewSource().Patterns()
+	if err != nil {
+		t.Fatalf("Patterns: %v", err)
+	}
+	var p rule.Pattern
+	for _, candidate := range patterns {
+		if candidate.Reference().Name() == "domain-model" {
+			p = candidate
+		}
+	}
+	if p.Reference().IsZero() {
+		t.Fatal("arclint/domain-model is not embedded")
+	}
+	wantUses := map[string]string{
+		"arclint:vocabulary/terms-carry-definitions":        "domain-model/require-defined-terms",
+		"arclint:vocabulary/invariants-name-recorded-owners": "domain-model/invariants-name-recorded-owners",
+		"arclint:contexts/respect-relations":                 "domain-model/respect-context-relations",
+	}
+	if len(p.Rules()) != len(wantUses) {
+		t.Errorf("rules = %d, want %d", len(p.Rules()), len(wantUses))
+	}
+	for _, r := range p.Rules() {
+		id := r.ID().Qualified()
+		uses, ok := wantUses[id]
+		if !ok {
+			t.Errorf("unexpected rule %s", id)
+			continue
+		}
+		params, isExt := r.Params().(rule.ExtensionParams)
+		if !isExt || params.Uses != uses {
+			t.Errorf("%s uses = %v, want %q", id, r.Params(), uses)
+		}
+		delete(wantUses, id)
+		if id == "arclint:contexts/respect-relations" && r.Severity() != rule.SeverityWarning {
+			t.Errorf("%s severity = %s, want warning", id, r.Severity())
+		}
+	}
+	if len(wantUses) != 0 {
+		t.Errorf("missing rules: %v", wantUses)
+	}
+	modules := p.Modules()
+	if len(modules) != 1 || modules[0].Name().String() != "vocabulary" || len(modules[0].SuggestedPaths()) != 1 ||
+		modules[0].SuggestedPaths()[0].String() != "ubiquitous-language.yaml" {
+		t.Errorf("modules = %+v, want vocabulary suggesting ubiquitous-language.yaml", modules)
+	}
+	exts := p.Extensions()
+	if len(exts) != 3 {
+		t.Fatalf("extensions = %d, want 3", len(exts))
+	}
+	for _, e := range exts {
+		if !strings.Contains(e.Source(), `type: "domain-model/`) {
+			t.Errorf("%s: the extension type must carry the pattern name", e.FileName())
+		}
+	}
+	if len(p.Coverage()) != 2 {
+		t.Errorf("coverage = %v, want go and ts", p.Coverage())
+	}
+}
+
+func TestVerticalPatternLoads(t *testing.T) {
+	source := embeddedpattern.NewSource()
+	p := vertical(t)
 	if p.Reference().String() != "arclint/vertical@0.1.0" {
 		t.Errorf("reference = %q, want arclint/vertical@0.1.0", p.Reference())
 	}
@@ -82,22 +186,13 @@ func TestVerticalPatternLoads(t *testing.T) {
 			t.Errorf("%s provenance = %v %v", r.ID().Qualified(), ref, ok)
 		}
 	}
-	names, err := source.Names()
-	if err != nil || len(names) != 1 || names[0] != "vertical" {
-		t.Errorf("Names = %v, %v", names, err)
+	if _, err := source.Names(); err != nil {
+		t.Errorf("Names: %v", err)
 	}
 }
 
 func TestVerticalPatternCarriesExtensions(t *testing.T) {
-	source := embeddedpattern.NewSource()
-	patterns, err := source.Patterns()
-	if err != nil {
-		t.Fatalf("Patterns: %v", err)
-	}
-	if len(patterns) != 1 {
-		t.Fatalf("patterns = %d, want 1", len(patterns))
-	}
-	exts := patterns[0].Extensions()
+	exts := vertical(t).Extensions()
 	want := []string{
 		"vertical_forbid_imports.ts",
 		"vertical_repository_context.ts",
