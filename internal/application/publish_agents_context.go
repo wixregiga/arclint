@@ -60,7 +60,7 @@ func AgentCommandSurface() []AgentCommandDoc {
 		{"sdk init", "sdk init", "regenerate the extension SDK artifacts under `.arclint/extensions`"},
 		{"agents md", "agents md --write", "refresh this block after changing rules.yaml or the vocabulary"},
 		{"baseline", "baseline", "manage the committed baseline of adopted findings"},
-		{"patterns", "patterns", "list available Pattern distribution packages"},
+		{"patterns", "patterns", "list the Patterns that resolve offline (embedded, vendored, authored); `patterns install <pattern>` extends rules.yaml with one, `patterns vendor` copies one under `.arclint/patterns`"},
 	}
 }
 
@@ -138,6 +138,7 @@ func renderAgentsBlock(cfg rule.Configured, lang vocab.UbiquitousLanguage,
 	}
 	fmt.Fprintf(&b, "Enforced from rules.yaml: %d rules over languages [%s].\n\n",
 		len(cfg.Rules), strings.Join(languages, ", "))
+	writeExtendedPatterns(&b, cfg)
 	writeAskFirst(&b)
 	if recorded && !lang.Empty() {
 		writeRecordedDomain(&b, lang)
@@ -147,6 +148,37 @@ func renderAgentsBlock(cfg rule.Configured, lang vocab.UbiquitousLanguage,
 	writeRepositoryRules(&b, cfg)
 	writeExtensionInventory(&b, registered)
 	return AgentsBegin + "\n" + strings.TrimRight(b.String(), "\n") + "\n" + AgentsEnd + "\n"
+}
+
+// writeExtendedPatterns names every Pattern the ruleset extends with
+// the number of Rules it distributes, so an agent reading a qualified
+// Rule ID below knows which Pattern owns it and that the Rule is
+// changed through an Override in rules.yaml, never by editing the
+// Pattern.
+func writeExtendedPatterns(b *strings.Builder, cfg rule.Configured) {
+	var refs []rule.PatternReference
+	counts := map[string]int{}
+	for _, r := range cfg.Rules {
+		ref, ok := r.Provenance()
+		if !ok {
+			continue
+		}
+		key := ref.String()
+		if _, seen := counts[key]; !seen {
+			refs = append(refs, ref)
+		}
+		counts[key]++
+	}
+	if len(refs) == 0 {
+		return
+	}
+	parts := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		parts = append(parts, fmt.Sprintf("`%s` (%d rules, ids qualified `%s:`)", ref, counts[ref.String()], ref.Namespace()))
+	}
+	fmt.Fprintf(b, "Extended Patterns: %s. A Pattern Rule is listed and reported under its qualified id; "+
+		"change it through an Override under that id in rules.yaml (`arclint rules <id>` prints it), never by editing the Pattern.\n\n",
+		strings.Join(parts, "; "))
 }
 
 // writeAskFirst is the fixed imperative opening (ask the tool, never
@@ -255,7 +287,7 @@ func writeModuleRules(b *strings.Builder, cfg rule.Configured) {
 				continue
 			}
 			claim := strings.TrimPrefix(r.Claim().Statement(), fmt.Sprintf("Module %q: ", m.Name()))
-			b.WriteString("  - " + ruleLine(shortRuleName(r.ID()), r, claim) + "\n")
+			b.WriteString("  - " + ruleLine(ruleName(r, true), r, claim) + "\n")
 		}
 	}
 	b.WriteString("\n")
@@ -290,7 +322,7 @@ func writeRepositoryRules(b *strings.Builder, cfg rule.Configured) {
 		if r.Type() == rule.TypeConsumes || len(r.Applicability().Modules()) > 0 {
 			continue
 		}
-		lines = append(lines, "- "+ruleLine(r.ID().Local(), r, r.Claim().Statement()))
+		lines = append(lines, "- "+ruleLine(ruleName(r, false), r, r.Claim().Statement()))
 	}
 	if len(lines) == 0 {
 		return
@@ -345,14 +377,21 @@ func ruleLine(name string, r rule.Rule, claim string) string {
 	return name + ": " + claim
 }
 
-// shortRuleName drops the leading segment of a local rule id, so
-// "entities/aggregate-slices" reads "aggregate-slices" under its
-// Module.
-func shortRuleName(id rule.ID) string {
-	if _, rest, ok := strings.Cut(id.Local(), "/"); ok {
-		return rest
+// ruleName spells a Rule in the block. A Rule an extended Pattern
+// distributes keeps its qualified id, the spelling an Override and
+// `arclint rules` take. A local Rule reads by its local id, and under
+// its Module drops the leading segment, so "entities/aggregate-slices"
+// reads "aggregate-slices".
+func ruleName(r rule.Rule, underModule bool) string {
+	if _, distributed := r.Provenance(); distributed {
+		return r.ID().Qualified()
 	}
-	return id.Local()
+	if underModule {
+		if _, rest, ok := strings.Cut(r.ID().Local(), "/"); ok {
+			return rest
+		}
+	}
+	return r.ID().Local()
 }
 
 // formatExtensionParams renders an extension Rule's with-parameters
