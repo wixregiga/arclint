@@ -17,6 +17,7 @@ import (
 	"github.com/wixregiga/arclint/internal/delivery/cli"
 	clifactory "github.com/wixregiga/arclint/internal/delivery/cli/factory"
 	"github.com/wixregiga/arclint/internal/delivery/cli/reportfactory"
+	"github.com/wixregiga/arclint/internal/domain/distribution"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	markdownagents "github.com/wixregiga/arclint/internal/infrastructure/agents/markdown"
 	jsonbaseline "github.com/wixregiga/arclint/internal/infrastructure/baseline/json"
@@ -27,6 +28,7 @@ import (
 	filesystemobservation "github.com/wixregiga/arclint/internal/infrastructure/observation/filesystem"
 	embeddedpattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/embedded"
 	filesystempattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/filesystem"
+	registrypattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/registry"
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
 	"github.com/wixregiga/arclint/internal/infrastructure/ruletest"
 	filesystemscaffold "github.com/wixregiga/arclint/internal/infrastructure/scaffold/filesystem"
@@ -124,7 +126,7 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	listPatterns, err := application.NewListPatterns(builtinPatterns, localPatterns)
+	patternCommands, err := composePatternCommands(root, absRulesPath, builtinPatterns, localPatterns)
 	if err != nil {
 		return configError(err)
 	}
@@ -219,7 +221,7 @@ func run(args []string) int {
 		cli.NewDomainCommand(initDomain, getDomainOverview, listDomainDefinitions, showDomainDefinition, defineDomainDefinition, removeDomainDefinition, renderer),
 		cli.NewAgentsCommand(publishAgents, publishSkillProtocol, publishSkillVocabulary, publishLibrarySchema, renderer),
 		cli.NewBaselineCommand(capture, refresh, renderer),
-		cli.NewPatternsCommand(listPatterns, renderer),
+		cli.NewPatternsCommand(patternCommands, renderer),
 		cli.NewSDKCommand(initializeSDK, renderer),
 	)
 	adapter, err := clifactory.Select(cli.AdapterCobra)
@@ -228,6 +230,68 @@ func run(args []string) int {
 	}
 	outcome := adapter.Run(rootCommand, cli.Invocation{Args: rest, Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr})
 	return outcome.ExitCode
+}
+
+// composePatternCommands wires the Pattern distribution use cases: the
+// offline sources every command resolves through, the Registry client
+// only the patterns commands may call, the vendored store under
+// .arclint/patterns, and the ruleset editor for install. The Registry
+// location defaults from ARCLINT_REGISTRY, then arclint's own Registry;
+// a private Registry authenticates with GITHUB_TOKEN or GH_TOKEN.
+func composePatternCommands(root, rulesPath string, builtinPatterns embeddedpattern.Source, localPatterns filesystempattern.Source) (cli.PatternCommands, error) {
+	registry := registrypattern.NewClient(registryToken())
+	listPatterns, err := application.NewListPatterns(registry, builtinPatterns, localPatterns)
+	if err != nil {
+		return cli.PatternCommands{}, fmt.Errorf("compose patterns: %w", err)
+	}
+	vendorPattern, err := application.NewVendorPattern(localPatterns, registry, builtinPatterns, localPatterns)
+	if err != nil {
+		return cli.PatternCommands{}, fmt.Errorf("compose patterns vendor: %w", err)
+	}
+	editor, err := yamlrule.NewEditor(rulesPath)
+	if err != nil {
+		return cli.PatternCommands{}, fmt.Errorf("compose patterns install: %w", err)
+	}
+	scaffold, err := filesystemscaffold.NewWriter(root)
+	if err != nil {
+		return cli.PatternCommands{}, fmt.Errorf("compose patterns install: %w", err)
+	}
+	installPattern, err := application.NewInstallPattern(localPatterns, editor, scaffold, registry, builtinPatterns, localPatterns)
+	if err != nil {
+		return cli.PatternCommands{}, fmt.Errorf("compose patterns install: %w", err)
+	}
+	exportPattern, err := application.NewExportPattern(registrypattern.NewPublisher(), builtinPatterns, localPatterns)
+	if err != nil {
+		return cli.PatternCommands{}, fmt.Errorf("compose patterns export: %w", err)
+	}
+	return cli.PatternCommands{
+		List:     listPatterns,
+		Vendor:   vendorPattern,
+		Install:  installPattern,
+		Export:   exportPattern,
+		Registry: registryLocation(),
+	}, nil
+}
+
+// registryLocation is the default --registry value: ARCLINT_REGISTRY
+// when set, otherwise arclint's own published Registry.
+func registryLocation() string {
+	if location := strings.TrimSpace(os.Getenv("ARCLINT_REGISTRY")); location != "" {
+		return location
+	}
+	return distribution.DefaultRegistryLocation
+}
+
+// registryToken is the bearer token a private Registry is read with:
+// GITHUB_TOKEN first, then GH_TOKEN, matching the GitHub tooling that
+// serves raw repository content.
+func registryToken() string {
+	for _, name := range []string{"GITHUB_TOKEN", "GH_TOKEN"} {
+		if token := strings.TrimSpace(os.Getenv(name)); token != "" {
+			return token
+		}
+	}
+	return ""
 }
 
 // firstPositional returns the first non-flag argument, skipping
@@ -330,9 +394,11 @@ func resolveRulesPath(args []string) (string, []string, error) {
 		// The completion machinery must answer without one too: the
 		// shell re-executes the binary on TAB in arbitrary directories,
 		// and completion callbacks degrade to no candidates when the
-		// ruleset fails to load.
+		// ruleset fails to load. The patterns commands list, vendor,
+		// and export without a ruleset, and install drafts one where
+		// none exists, so they compose against the working directory.
 		if fp := firstPositional(rest); fp == "" || fp == "help" || fp == "completion" ||
-			fp == "__complete" || fp == "__completeNoDesc" {
+			fp == "__complete" || fp == "__completeNoDesc" || fp == "patterns" {
 			fallback, absErr := filepath.Abs("rules.yaml")
 			if absErr != nil {
 				return "", nil, fmt.Errorf("rules path: %w", absErr)

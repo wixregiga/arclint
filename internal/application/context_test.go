@@ -142,7 +142,7 @@ func TestInitializeRepositoryDraftsStarter(t *testing.T) {
 func TestInitializeRepositoryAdoptsPattern(t *testing.T) {
 	p := patternFixture(t, "1.2.3")
 	scaffold := &recordingScaffold{}
-	uc, err := application.NewInitializeRepository(scaffold, fakePatternSource{[]rule.Pattern{p}})
+	uc, err := application.NewInitializeRepository(scaffold, fakePatternSource{patterns: []rule.Pattern{p}})
 	if err != nil {
 		t.Fatalf("NewInitializeRepository: %v", err)
 	}
@@ -175,13 +175,23 @@ func TestInitializeRepositoryAdoptsPattern(t *testing.T) {
 	if _, err := uc.Execute(application.InitializeRepositoryRequest{Pattern: "arclint/ddd-flat@9.9.9"}); err == nil {
 		t.Errorf("an unavailable version must be rejected")
 	}
-	ambiguous, err := application.NewInitializeRepository(scaffold, fakePatternSource{[]rule.Pattern{p, patternFixture(t, "2.0.0")}})
+	newer, err := application.NewInitializeRepository(scaffold, fakePatternSource{patterns: []rule.Pattern{p, patternFixture(t, "2.0.0")}})
+	if err != nil {
+		t.Fatalf("NewInitializeRepository: %v", err)
+	}
+	if _, err := newer.Execute(application.InitializeRepositoryRequest{Pattern: "ddd-flat"}); err != nil {
+		t.Fatalf("Execute by name with two versions: %v", err)
+	}
+	if !strings.Contains(scaffold.content, "adopts arclint/ddd-flat@2.0.0.") {
+		t.Errorf("a name resolves to the highest version:\n%s", scaffold.content)
+	}
+	ambiguous, err := application.NewInitializeRepository(scaffold, fakePatternSource{patterns: []rule.Pattern{p, namespacedPatternFixture(t, "acme", "1.0.0")}})
 	if err != nil {
 		t.Fatalf("NewInitializeRepository: %v", err)
 	}
 	_, err = ambiguous.Execute(application.InitializeRepositoryRequest{Pattern: "ddd-flat"})
 	if err == nil || !strings.Contains(err.Error(), "ambiguous") {
-		t.Errorf("an ambiguous name must be rejected, got %v", err)
+		t.Errorf("a name carried by two namespaces must be rejected, got %v", err)
 	}
 }
 
@@ -189,6 +199,11 @@ func TestInitializeRepositoryAdoptsPattern(t *testing.T) {
 // arclint namespace with two Modules: m with a suggested path, and
 // unbound with none.
 func patternFixture(t *testing.T, version string) rule.Pattern {
+	t.Helper()
+	return namespacedPatternFixture(t, "arclint", version)
+}
+
+func namespacedPatternFixture(t *testing.T, namespace, version string) rule.Pattern {
 	t.Helper()
 	snake, err := rule.NewCaseSpec("snake_case")
 	if err != nil {
@@ -199,7 +214,7 @@ func patternFixture(t *testing.T, version string) rule.Pattern {
 		t.Fatalf("ModuleApplicability: %v", err)
 	}
 	r, err := rule.New(rule.Spec{
-		ID:            "arclint:m/snake",
+		ID:            namespace + ":m/snake",
 		Type:          rule.TypeNaming,
 		Params:        rule.NamingParams{Case: snake},
 		Applicability: scope,
@@ -220,7 +235,7 @@ func patternFixture(t *testing.T, version string) rule.Pattern {
 		t.Fatalf("NewPatternModule: %v", err)
 	}
 	p, err := rule.NewPattern(rule.PatternSpec{
-		Namespace:     "arclint",
+		Namespace:     namespace,
 		Name:          "ddd-flat",
 		Version:       version,
 		Documentation: "https://example.test/ddd-flat",

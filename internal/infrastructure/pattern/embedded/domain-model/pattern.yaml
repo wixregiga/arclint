@@ -1,0 +1,50 @@
+# arclint/domain-model: the recorded Ubiquitous Language as a contract.
+#
+# Every rule here reads the project's ubiquitous-language.yaml through
+# ctx.domain(): recorded terms must carry definitions, recorded
+# invariants must be owned by recorded terms, and the context map's
+# relations become import rules between the Modules named after the
+# contexts. Adopt it from rules.yaml:
+#
+#   extends:
+#     - pattern: arclint/domain-model@0.1.0
+#       bind:
+#         vocabulary: ubiquitous-language.yaml
+#
+# Context-named Modules are declared by the adopting ruleset: a bounded
+# context named "billing" is observed through the Module "billing", so
+# declare one Module per context whose imports the map should govern.
+# Every rule is inert until the project records vocabulary.
+
+pattern:
+  namespace: arclint
+  name: domain-model
+  version: 0.1.0
+  coverage: [go, ts]
+  documentation: |
+    The recorded Ubiquitous Language as a contract. Recorded terms carry
+    definitions, recorded invariants name a recorded owner in their own
+    context, and imports between context-named Modules respect the
+    recorded context-map relations. Every rule reads the project's
+    ubiquitous-language.yaml and is inert until vocabulary is recorded.
+
+modules:
+  vocabulary:
+    description: "The project's recorded Ubiquitous Language vocabulary."
+    paths: ubiquitous-language.yaml
+
+rules:
+  vocabulary/terms-carry-definitions:
+    description: "Every recorded term carries a definition."
+    on: vocabulary
+    uses: domain-model/require-defined-terms
+
+  vocabulary/invariants-name-recorded-owners:
+    description: "Every recorded invariant names a recorded term of its own context as its owner."
+    on: vocabulary
+    uses: domain-model/invariants-name-recorded-owners
+
+  contexts/respect-relations:
+    description: "Imports between context-named Modules respect the recorded context-map relations."
+    severity: warning
+    uses: domain-model/respect-context-relations

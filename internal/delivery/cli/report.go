@@ -169,12 +169,35 @@ type BaselineRefreshReport struct {
 
 func (BaselineRefreshReport) report() {}
 
-// PatternsReport is the product of `arclint patterns`.
+// PatternsReport is the product of `arclint patterns`: the offline
+// Patterns, or with Registry set, what that Registry publishes.
 type PatternsReport struct {
 	Patterns []application.PatternSummary
+	Registry string
 }
 
 func (PatternsReport) report() {}
+
+// PatternVendorReport is the product of `arclint patterns vendor`.
+type PatternVendorReport struct {
+	Result application.VendorPatternResult
+}
+
+func (PatternVendorReport) report() {}
+
+// PatternInstallReport is the product of `arclint patterns install`.
+type PatternInstallReport struct {
+	Result application.InstallPatternResult
+}
+
+func (PatternInstallReport) report() {}
+
+// PatternExportReport is the product of `arclint patterns export`.
+type PatternExportReport struct {
+	Result application.ExportPatternResult
+}
+
+func (PatternExportReport) report() {}
 
 // SDKInitReport is the product of `arclint sdk init`.
 type SDKInitReport struct {

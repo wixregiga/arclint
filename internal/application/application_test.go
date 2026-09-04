@@ -7,6 +7,7 @@ import (
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/domain/baseline"
 	"github.com/wixregiga/arclint/internal/domain/conformance"
+	"github.com/wixregiga/arclint/internal/domain/distribution"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
@@ -339,15 +340,47 @@ func TestRefreshBaselineDropsStaleEntries(t *testing.T) {
 	}
 }
 
+// fakePatternSource serves Patterns as one source kind; each Pattern
+// travels with a synthetic pattern.yaml so its Digest is defined.
 type fakePatternSource struct {
+	kind     distribution.SourceKind
+	authored bool
 	patterns []rule.Pattern
 }
 
-func (f fakePatternSource) Patterns() ([]rule.Pattern, error) { return f.patterns, nil }
+func (f fakePatternSource) Available() ([]distribution.Available, error) {
+	kind := f.kind
+	if kind == "" {
+		kind = distribution.SourceEmbedded
+	}
+	out := make([]distribution.Available, 0, len(f.patterns))
+	for _, p := range f.patterns {
+		a, err := availableFixture(kind, f.authored, p, "pattern: "+p.Reference().String()+"\n")
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, nil
+}
+
+// availableFixture pairs a Pattern with one pattern.yaml of the given
+// content.
+func availableFixture(kind distribution.SourceKind, authored bool, p rule.Pattern, document string) (distribution.Available, error) {
+	f, err := distribution.NewPatternFile(distribution.PatternFileName, []byte(document))
+	if err != nil {
+		return distribution.Available{}, err
+	}
+	v, err := distribution.Vendor(p.Reference(), []distribution.PatternFile{f})
+	if err != nil {
+		return distribution.Available{}, err
+	}
+	return distribution.NewAvailable(kind, p, v, authored)
+}
 
 func TestListPatternsSummarizes(t *testing.T) {
 	p := patternFixture(t, "1.2.3")
-	uc, err := application.NewListPatterns(fakePatternSource{[]rule.Pattern{p}})
+	uc, err := application.NewListPatterns(nil, fakePatternSource{patterns: []rule.Pattern{p}})
 	if err != nil {
 		t.Fatalf("NewListPatterns: %v", err)
 	}
@@ -356,13 +389,29 @@ func TestListPatternsSummarizes(t *testing.T) {
 		t.Fatalf("Execute: %v", err)
 	}
 	want := application.PatternSummary{
-		Namespace: "arclint", Name: "ddd-flat",
-		Version: "1.2.3", Rules: 1, Extensions: 0, Coverage: []string{"go"},
+		Namespace: "arclint", Name: "ddd-flat", Version: "1.2.3",
+		Source: distribution.SourceEmbedded,
+		Documentation: "https://example.test/ddd-flat",
+		Rules:         1, Extensions: 0, Coverage: []string{"go"},
 	}
-	if len(rows) != 1 || rows[0].Namespace != want.Namespace || rows[0].Name != want.Name ||
-		rows[0].Version != want.Version || rows[0].Rules != want.Rules ||
-		rows[0].Extensions != want.Extensions ||
-		len(rows[0].Coverage) != 1 || rows[0].Coverage[0] != "go" {
-		t.Errorf("rows = %+v, want %+v", rows, want)
+	if len(rows) != 1 {
+		t.Fatalf("rows = %+v", rows)
+	}
+	got := rows[0]
+	if got.Digest == "" || !strings.HasPrefix(got.Digest, "sha256:") {
+		t.Errorf("digest = %q", got.Digest)
+	}
+	got.Digest = ""
+	if got.Namespace != want.Namespace || got.Name != want.Name || got.Version != want.Version ||
+		got.Source != want.Source || got.Vendored || got.Authored || got.Documentation != want.Documentation ||
+		got.Rules != want.Rules || got.Extensions != want.Extensions ||
+		len(got.Coverage) != 1 || got.Coverage[0] != "go" {
+		t.Errorf("row = %+v, want %+v", got, want)
+	}
+	if _, err := uc.Remote("file:///nowhere"); err == nil {
+		t.Error("remote listing without a registry client must fail")
+	}
+	if _, err := application.NewListPatterns(nil); err == nil {
+		t.Error("no source must be rejected")
 	}
 }
