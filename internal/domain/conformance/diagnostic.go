@@ -28,6 +28,7 @@ const (
 type Diagnostic struct {
 	kind              DiagnosticKind
 	ruleID            string // qualified Rule ID, "" for rule-less operational notes
+	pattern           string // PatternReference of the distributing Pattern, "" for local Rules
 	path              string
 	line              int
 	severity          rule.Severity // "" for coverage notes
@@ -67,9 +68,14 @@ func NewCoverage(ruleID, message string) (Diagnostic, error) {
 
 // Diagnostic lifts a Violation into the unified Diagnostic view.
 func (v Violation) Diagnostic() Diagnostic {
+	pattern := ""
+	if v.provenance != nil {
+		pattern = v.provenance.String()
+	}
 	return Diagnostic{
 		kind:              DiagnosticViolation,
 		ruleID:            v.ruleID.Qualified(),
+		pattern:           pattern,
 		path:              v.path,
 		line:              v.line,
 		severity:          v.severity,
@@ -86,6 +92,10 @@ func (d Diagnostic) Kind() DiagnosticKind { return d.kind }
 // RuleID returns the qualified Rule identity, "" when no Rule is
 // involved.
 func (d Diagnostic) RuleID() string { return d.ruleID }
+
+// Pattern returns the reference of the Pattern that distributed the
+// Rule, "" when the Rule is local or no Rule is involved.
+func (d Diagnostic) Pattern() string { return d.pattern }
 
 // Path is the repo-relative anchor, possibly empty for repo-wide
 // notes.

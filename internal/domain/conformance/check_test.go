@@ -397,3 +397,47 @@ func sortedCopy(in []string) []string {
 	}
 	return out
 }
+
+func TestViolationCarriesRuleProvenance(t *testing.T) {
+	subject, err := rule.FileSubject("alpha/service.go")
+	if err != nil {
+		t.Fatalf("FileSubject: %v", err)
+	}
+	id, err := rule.NewID("acme:alpha/imports")
+	if err != nil {
+		t.Fatalf("NewID: %v", err)
+	}
+	ref, err := rule.ParsePatternReference("acme/hex@1.0.0")
+	if err != nil {
+		t.Fatalf("ParsePatternReference: %v", err)
+	}
+	spec := conformance.ViolationSpec{
+		Rule: id, Subject: subject, Outcome: conformance.OutcomeViolates,
+		Severity: rule.SeverityError, Assurance: rule.AssuranceExact,
+		Evidence: "static import classification", Message: "finding", Provenance: &ref,
+	}
+	v, err := conformance.NewViolation(spec)
+	if err != nil {
+		t.Fatalf("NewViolation: %v", err)
+	}
+	if got, ok := v.Provenance(); !ok || got != ref {
+		t.Errorf("Provenance() = (%s, %v), want %s", got, ok, ref)
+	}
+	spec.Provenance = nil
+	local, err := conformance.NewViolation(spec)
+	if err != nil {
+		t.Fatalf("NewViolation: %v", err)
+	}
+	if _, ok := local.Provenance(); ok {
+		t.Error("local violation reported provenance")
+	}
+	foreign, _ := rule.ParsePatternReference("other/hex@1.0.0")
+	spec.Provenance = &foreign
+	if _, err := conformance.NewViolation(spec); err == nil {
+		t.Error("provenance outside the rule namespace accepted")
+	}
+	spec.Provenance = &rule.PatternReference{}
+	if _, err := conformance.NewViolation(spec); err == nil {
+		t.Error("unconstructed provenance accepted")
+	}
+}

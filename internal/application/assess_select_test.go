@@ -23,12 +23,17 @@ func selectionFixture(t *testing.T) (rule.Configured, conformance.Observations) 
 	if err != nil {
 		t.Fatalf("ModuleApplicability: %v", err)
 	}
+	shared, err := rule.ParsePatternReference("t/shared@1.2.0")
+	if err != nil {
+		t.Fatalf("ParsePatternReference: %v", err)
+	}
 	for _, id := range []string{"t:m/keep", "t:m/keep2"} {
 		r, err := rule.New(rule.Spec{
 			ID:            id,
 			Type:          rule.TypeStructure,
 			Params:        rule.StructureParams{Require: []rule.Glob{keep}},
 			Applicability: scope,
+			Provenance:    &shared,
 		})
 		if err != nil {
 			t.Fatalf("rule.New: %v", err)
@@ -54,6 +59,11 @@ func TestAssessConformanceSelectsRules(t *testing.T) {
 		{"only pattern", []string{"t:m/*"}, nil, []string{"t:m/keep", "t:m/keep2", "t:m/snake"}},
 		{"exclude one", nil, []string{"t:m/snake"}, []string{"t:m/keep", "t:m/keep2"}},
 		{"only pattern minus exact exclude", []string{"t:m/*"}, []string{"t:m/keep"}, []string{"t:m/keep2", "t:m/snake"}},
+		// Provenance spellings select what one Pattern distributed,
+		// exactly or at whatever version is extended.
+		{"only exact provenance", []string{"t/shared@1.2.0"}, nil, []string{"t:m/keep", "t:m/keep2"}},
+		{"only provenance name", []string{"t/shared"}, nil, []string{"t:m/keep", "t:m/keep2"}},
+		{"exclude provenance", nil, []string{"t/shared"}, []string{"t:m/snake"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -95,6 +105,10 @@ func TestListRulesSelect(t *testing.T) {
 	if err != nil || len(pattern) != 1 || pattern[0].ID != "t:m/snake" {
 		t.Errorf("pattern select = %v, %v", pattern, err)
 	}
+	shared, err := list.Select("t/shared")
+	if err != nil || len(shared) != 2 || shared[0].Provenance != "t/shared@1.2.0" {
+		t.Errorf("provenance select = %v, %v", shared, err)
+	}
 	if _, err := list.Select("t:x/*"); err == nil ||
 		!strings.Contains(err.Error(), "matches no configured rule") {
 		t.Errorf("unmatched selector err = %v", err)
@@ -111,6 +125,7 @@ func TestAssessConformanceSelectionFailsLoudly(t *testing.T) {
 		want    string
 	}{
 		{"only matches nothing", []string{"t:m/nope"}, nil, "matches no configured rule"},
+		{"other version of the pattern", []string{"t/shared@9.0.0"}, nil, "matches no configured rule"},
 		{"exclude matches nothing", nil, []string{"t:other/*"}, "matches no configured rule"},
 		{"selection cancels to empty", []string{"t:m/keep"}, []string{"t:m/keep"}, "leaves no rule"},
 		{"malformed pattern", []string{"t:m/["}, nil, "rule selector"},

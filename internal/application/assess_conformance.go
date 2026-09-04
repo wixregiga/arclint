@@ -142,23 +142,19 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 }
 
 // selectRules narrows the configured Rules by selectors (exact
-// qualified Rule ids, id prefixes, or path.Match patterns) with
-// exclusion winning over selection. Selection fails loudly, never
+// qualified Rule ids, id prefixes, path.Match patterns, or the Pattern
+// that distributed them) with exclusion winning over selection. Selection fails loudly, never
 // evaluates vacuously: every selector must match at least one
 // configured Rule, and the narrowed set may not be empty.
 func selectRules(rules []rule.Rule, only, exclude []string) ([]rule.Rule, error) {
-	ids := make([]string, len(rules))
-	for i, r := range rules {
-		ids[i] = r.ID().Qualified()
-	}
 	selected := map[string]bool{}
 	if len(only) == 0 {
-		for _, id := range ids {
-			selected[id] = true
+		for _, r := range rules {
+			selected[r.ID().Qualified()] = true
 		}
 	}
 	for _, s := range only {
-		hits, err := selectorHits(s, ids)
+		hits, err := selectorHits(s, rules)
 		if err != nil {
 			return nil, err
 		}
@@ -170,7 +166,7 @@ func selectRules(rules []rule.Rule, only, exclude []string) ([]rule.Rule, error)
 		}
 	}
 	for _, s := range exclude {
-		hits, err := selectorHits(s, ids)
+		hits, err := selectorHits(s, rules)
 		if err != nil {
 			return nil, err
 		}

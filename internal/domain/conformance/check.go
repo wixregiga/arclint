@@ -314,7 +314,18 @@ func newViolation(r rule.Rule, subject rule.Subject, anchor string, line int, me
 		Remediation: remediation,
 		Path:        anchor,
 		Line:        line,
+		Provenance:  ruleProvenance(r),
 	})
+}
+
+// ruleProvenance lifts a Rule's optional Pattern provenance into the
+// pointer form ViolationSpec carries.
+func ruleProvenance(r rule.Rule) *rule.PatternReference {
+	ref, ok := r.Provenance()
+	if !ok {
+		return nil
+	}
+	return &ref
 }
 
 // observationDiagnostics surfaces analysis failures and the

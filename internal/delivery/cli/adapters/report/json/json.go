@@ -104,6 +104,7 @@ func writeJSON(w io.Writer, v any) error {
 type diagnosticDoc struct {
 	Kind        string `json:"kind"`
 	RuleID      string `json:"ruleId,omitempty"`
+	Pattern     string `json:"pattern,omitempty"`
 	Path        string `json:"path,omitempty"`
 	Line        int    `json:"line,omitempty"`
 	Severity    string `json:"severity,omitempty"`
@@ -119,6 +120,7 @@ func checkDocs(a conformance.Assessment) []diagnosticDoc {
 		docs = append(docs, diagnosticDoc{
 			Kind:        string(d.Kind()),
 			RuleID:      d.RuleID(),
+			Pattern:     d.Pattern(),
 			Path:        d.Path(),
 			Line:        d.Line(),
 			Severity:    string(d.Severity()),
