@@ -14,6 +14,7 @@ import (
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
+	embeddedpattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/embedded"
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
 )
 
@@ -730,9 +731,16 @@ rules:
 		{"pattern header with repeated coverage", header[:len(header)-1] + "\n  coverage: [go, go]\n", false},
 	}
 
+	// The repository ruleset extends the embedded domain-model Pattern,
+	// so the loader resolves it against the embedded source; the schema
+	// judges the document alone.
+	embedded, err := embeddedpattern.NewSource().Patterns()
+	if err != nil {
+		t.Fatalf("embedded patterns: %v", err)
+	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, loaderErr := yamlrule.Load([]byte(tc.document), tc.name, vocab.UbiquitousLanguage{}, nil)
+			_, loaderErr := yamlrule.Load([]byte(tc.document), tc.name, vocab.UbiquitousLanguage{}, embedded)
 			schemaErr := validateAgainstSchema(t, schema, []byte(tc.document))
 			loaderAccepts := loaderErr == nil
 			schemaAccepts := schemaErr == nil

@@ -1,6 +1,6 @@
 # Conforming case: every invariant's owner is a term recorded in the
 # same context.
-rule: "vocabulary/invariants-name-recorded-owners"
+rule: "arclint:vocabulary/invariants-name-recorded-owners"
 files:
   ubiquitous-language.yaml: |
     version: 1
