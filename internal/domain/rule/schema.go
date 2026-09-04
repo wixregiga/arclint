@@ -125,7 +125,7 @@ func (t Type) Schema() TypeSchema {
 		}
 	case TypeAcyclic:
 		params = []FieldSchema{
-			{Name: "acyclic", Kind: "module_list", Required: true, Doc: "cycle scope; an empty mapping means every declared Module"},
+			{Name: "acyclic", Kind: "module_list", Required: true, Doc: "cycle scope; an empty mapping means every declared Module (inside a Pattern, every Module the Pattern declares)"},
 		}
 	case TypeInvariants:
 		params = []FieldSchema{
@@ -631,7 +631,7 @@ func assertionRuleSchema(t Type) map[string]any {
 		s = strictObjectSchema("An independent Rule: "+t.Meaning()+".", props, required...)
 	case TypeAcyclic:
 		props[key] = map[string]any{
-			"description": "Cycle scope: a list of declared Modules, or an empty mapping for every declared Module.",
+			"description": "Cycle scope: a list of declared Modules, or an empty mapping for every declared Module; inside a Pattern the empty mapping means every Module the Pattern declares.",
 			"oneOf": []any{
 				map[string]any{"type": "array", "minItems": 2, "uniqueItems": true, "items": schemaRef("moduleName")},
 				strictObjectSchema("", map[string]any{}),

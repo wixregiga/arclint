@@ -3,6 +3,7 @@ package yamlrule_test
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -1023,6 +1024,46 @@ extends:
 `, p, other)
 	if err == nil || !strings.Contains(err.Error(), `module "core" is already declared with different paths`) {
 		t.Errorf("error = %v", err)
+	}
+}
+
+// TestLoadScopesPatternAcyclicToItsModules proves a Pattern's
+// `acyclic: {}` names the Pattern's own Modules and nothing the
+// adopting repository or a sibling Pattern declares, while the
+// repository's own `{}` stays open over every declared Module.
+func TestLoadScopesPatternAcyclicToItsModules(t *testing.T) {
+	p := loadSamplePattern(t)
+	if got := ruleByID(t, mustLoad(t, `
+extends:
+  - pattern: acme/hexagonal@1.0.0
+    bind:
+      core: internal/core/**
+      ports: internal/ports/**
+      adapters: internal/adapters/**
+modules:
+  source:
+    paths: "internal/**"
+rules:
+  repo/acyclic:
+    acyclic: {}
+`, p), "acme/hexagonal:deps/acyclic").Params().(rule.AcyclicParams).Modules; !reflect.DeepEqual(got, []rule.ModuleName{"core", "ports", "adapters"}) {
+		t.Errorf("a Pattern's acyclic {} must name the Pattern's Modules in order, got %v", got)
+	}
+	if got := ruleByID(t, mustLoad(t, `
+extends:
+  - pattern: acme/hexagonal@1.0.0
+    bind:
+      core: internal/core/**
+      ports: internal/ports/**
+      adapters: internal/adapters/**
+modules:
+  source:
+    paths: "internal/**"
+rules:
+  repo/acyclic:
+    acyclic: {}
+`, p), "repo/acyclic").Params().(rule.AcyclicParams).Modules; len(got) != 0 {
+		t.Errorf("the repository's acyclic {} stays open over every declared Module, got %v", got)
 	}
 }
 

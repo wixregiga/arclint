@@ -5,7 +5,7 @@
       "description": "An acyclic Rule: forbids dependency cycles among declared Modules.",
       "properties": {
         "acyclic": {
-          "description": "Cycle scope: a list of declared Modules, or an empty mapping for every declared Module.",
+          "description": "Cycle scope: a list of declared Modules, or an empty mapping for every declared Module; inside a Pattern the empty mapping means every Module the Pattern declares.",
           "oneOf": [
             {
               "items": {
