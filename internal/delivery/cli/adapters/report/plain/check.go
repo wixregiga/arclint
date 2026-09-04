@@ -15,7 +15,7 @@ func writeCheck(w io.Writer, a conformance.Assessment) error {
 		if v.Line() > 0 {
 			anchor = fmt.Sprintf("%s:%d", v.Path(), v.Line())
 		}
-		p.Printf("%s: [%s] %s %s\n", anchor, v.Severity(), v.Rule().Qualified(), v.Message())
+		p.Printf("%s: [%s] %s%s %s\n", anchor, v.Severity(), v.Rule().Qualified(), provenanceTag(v), v.Message())
 	}
 	for _, d := range a.Diagnostics() {
 		switch d.Kind() {
@@ -31,6 +31,16 @@ func writeCheck(w io.Writer, a conformance.Assessment) error {
 		len(a.ActiveViolations()), len(a.SuppressedViolations()),
 		len(a.BaselinedViolations()), len(a.AppliedRules()))
 	return p.Err
+}
+
+// provenanceTag spells the distributing Pattern beside a shared Rule's
+// id, so a reader tells a Pattern Rule from a local one on every line.
+func provenanceTag(v conformance.Violation) string {
+	ref, ok := v.Provenance()
+	if !ok {
+		return ""
+	}
+	return " (" + ref.String() + ")"
 }
 
 func atPath(d conformance.Diagnostic) string {

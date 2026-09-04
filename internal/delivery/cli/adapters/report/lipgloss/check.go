@@ -7,10 +7,14 @@ import (
 
 func writeCheck(p *out.Printer, th Theme, a conformance.Assessment) {
 	for _, v := range a.ActiveViolations() {
-		// Grammar: path[:line]: [sev] rule msg
+		// Grammar: path[:line]: [sev] rule [(pattern)] msg
 		anchor := th.pathAnchor(v.Path(), v.Line())
+		id := v.Rule().Qualified()
+		if ref, ok := v.Provenance(); ok {
+			id += " (" + ref.String() + ")"
+		}
 		line := anchor + ": " + th.severityBracket(string(v.Severity())) + " " +
-			th.Muted.Render(v.Rule().Qualified()) + " " + v.Message()
+			th.Muted.Render(id) + " " + v.Message()
 		p.Printf("%s\n", line)
 	}
 	for _, d := range a.Diagnostics() {

@@ -180,6 +180,7 @@ func evaluateStructure(r rule.Rule, mem membership) ([]Evaluation, error) {
 					Evidence:    r.Enforcement().Evidence(),
 					Message:     fmt.Sprintf("path forbidden by structure rule %q of Module %q", forbid, name),
 					Remediation: "remove or relocate the file",
+					Provenance:  ruleProvenance(r),
 				})
 				if err != nil {
 					return nil, err

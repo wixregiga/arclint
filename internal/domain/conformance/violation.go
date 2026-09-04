@@ -47,6 +47,7 @@ type Violation struct {
 	line              int
 	status            Status
 	suppressionReason string
+	provenance        *rule.PatternReference
 }
 
 // ViolationSpec is the input to validated Violation construction.
@@ -65,6 +66,9 @@ type ViolationSpec struct {
 	Path string
 	// Line is 0 when the Violation is not line-anchored.
 	Line int
+	// Provenance names the Pattern that distributed the Rule, when any,
+	// so a reader can tell a shared Rule from a local one at a glance.
+	Provenance *rule.PatternReference
 }
 
 // NewViolation constructs a valid, active Violation or rejects the
@@ -104,6 +108,17 @@ func NewViolation(spec ViolationSpec) (Violation, error) {
 	if spec.Line < 0 {
 		return fail(fmt.Errorf("negative line"))
 	}
+	var provenance *rule.PatternReference
+	if spec.Provenance != nil {
+		if spec.Provenance.IsZero() {
+			return fail(fmt.Errorf("unconstructed provenance"))
+		}
+		if spec.Rule.Namespace() != spec.Provenance.Namespace() {
+			return fail(fmt.Errorf("provenance %s outside the rule namespace %q", spec.Provenance, spec.Rule.Namespace()))
+		}
+		ref := *spec.Provenance
+		provenance = &ref
+	}
 	return Violation{
 		ruleID:      spec.Rule,
 		subject:     spec.Subject,
@@ -116,11 +131,21 @@ func NewViolation(spec ViolationSpec) (Violation, error) {
 		path:        path,
 		line:        spec.Line,
 		status:      StatusActive,
+		provenance:  provenance,
 	}, nil
 }
 
 // Rule returns the one Rule this Violation references.
 func (v Violation) Rule() rule.ID { return v.ruleID }
+
+// Provenance returns the Pattern that distributed the violated Rule,
+// when the Rule came from one; a local Rule reports false.
+func (v Violation) Provenance() (rule.PatternReference, bool) {
+	if v.provenance == nil {
+		return rule.PatternReference{}, false
+	}
+	return *v.provenance, true
+}
 
 // Subject returns the one Rule Subject this Violation references.
 func (v Violation) Subject() rule.Subject { return v.subject }
