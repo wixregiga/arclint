@@ -9,8 +9,10 @@ import (
 
 // NewContextCommand adapts the architectural-context use case: with no
 // scope it explains the repository: every Module, the Rule kinds in
-// use, the enforcement posture; with paths or named Modules it is the
-// worksite call, answering in one payload what governs the given set.
+// use, the enforcement posture, the whole recorded domain; with paths
+// or named Modules it is the worksite call, answering in one payload
+// what governs the given set and the part of the recorded domain that
+// anchors into it, the whole domain behind --full.
 func NewContextCommand(context application.GetArchitecturalContext, render Renderer) Command {
 	return Command{
 		Name:    "context",
@@ -22,6 +24,11 @@ func NewContextCommand(context application.GetArchitecturalContext, render Rende
 				Doc:      "declared modules to include in the scope (comma or space separated)",
 				Complete: completeModuleNames(context),
 			},
+			{
+				Name: "full",
+				Bool: true,
+				Doc:  "list the whole recorded domain instead of the part anchored into the scope",
+			},
 		},
 		Run: func(ctx Context) error {
 			paths := make([]string, 0, len(ctx.Args))
@@ -31,6 +38,7 @@ func NewContextCommand(context application.GetArchitecturalContext, render Rende
 			result, err := context.Execute(application.ContextRequest{
 				Paths:   paths,
 				Modules: splitSelectors(ctx.String("module")),
+				Full:    ctx.Bool("full"),
 			})
 			if err != nil {
 				return ConfigError(err)

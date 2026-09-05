@@ -268,10 +268,14 @@ Three commands do the agent-facing work:
   (and/or `--module <names>`) and one payload answers what governs the
   set: each path mapped to its owning modules, each involved module
   once, and the union of applicable rules with the scope parts that
-  pulled them in, boundary rules included. Bare `arclint context`
-  explains the repository instead: every module and its import policy,
-  the rule kinds in use with their meanings, and the unknown-imports
-  posture.
+  pulled them in, boundary rules included. With a recorded domain it
+  adds the contexts, terms, and contracts that anchor into those
+  files, each contract marked with the declaration carrying it or
+  `missing` or `unanchorable`, and closes with the unanchored
+  contracts so they cannot be skimmed past; `--full` lists the whole
+  model. Bare `arclint context` explains the repository instead: every
+  module and its import policy, the rule kinds in use with their
+  meanings, the unknown-imports posture, and the whole recorded domain.
 - `arclint agents --write`: generates the AGENTS.md block from the
   ruleset (this repository's [AGENTS.md](AGENTS.md) is produced this
   way), so the agent-facing context cannot drift from the enforced

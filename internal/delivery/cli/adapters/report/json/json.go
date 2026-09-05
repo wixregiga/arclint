@@ -360,10 +360,17 @@ type ruleSummaryPassthrough struct {
 }
 
 type domainKnowledgeJSON struct {
-	Source    string                   `json:"source"`
-	Counts    domainCountsPassthrough  `json:"counts"`
-	Contexts  []domainContextKnowJSON  `json:"contexts,omitempty"`
-	Relations []domainRelationKnowJSON `json:"relations,omitempty"`
+	Source string                  `json:"source"`
+	Counts domainCountsPassthrough `json:"counts"`
+	// Scoped marks a listing narrowed to what anchors into the
+	// worksite; Shown then tallies the listing while Counts keeps the
+	// whole model.
+	Scoped     bool                     `json:"scoped,omitempty"`
+	Shown      domainCountsPassthrough  `json:"shown"`
+	Located    bool                     `json:"located"`
+	Contexts   []domainContextKnowJSON  `json:"contexts,omitempty"`
+	Relations  []domainRelationKnowJSON `json:"relations,omitempty"`
+	Unanchored []unanchoredKnowJSON     `json:"unanchored,omitempty"`
 }
 
 // domainCountsPassthrough matches untagged vocab.Counts under context domain.
@@ -389,6 +396,8 @@ type domainInvariantKnowJSON struct {
 	Owner     string `json:"owner"`
 	ID        string `json:"id,omitempty"`
 	Source    string `json:"source,omitempty"`
+	Anchor    string `json:"anchor,omitempty"`
+	Reason    string `json:"reason,omitempty"`
 }
 
 type domainAssertionKnowJSON struct {
@@ -397,11 +406,24 @@ type domainAssertionKnowJSON struct {
 	ID        string `json:"id"`
 	On        string `json:"on"`
 	Source    string `json:"source,omitempty"`
+	Anchor    string `json:"anchor,omitempty"`
 }
 
 type domainSpecificationKnowJSON struct {
 	Name   string `json:"name"`
 	Source string `json:"source,omitempty"`
+	Anchor string `json:"anchor,omitempty"`
+}
+
+type unanchoredKnowJSON struct {
+	Kind      string `json:"kind"`
+	Context   string `json:"context"`
+	Owner     string `json:"owner,omitempty"`
+	ID        string `json:"id,omitempty"`
+	Statement string `json:"statement,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Anchor    string `json:"anchor"`
+	Reason    string `json:"reason,omitempty"`
 }
 
 type domainRelationKnowJSON struct {
@@ -418,6 +440,20 @@ type domainContextKnowJSON struct {
 	Assertions     []domainAssertionKnowJSON     `json:"assertions,omitempty"`
 	Specifications []domainSpecificationKnowJSON `json:"specifications,omitempty"`
 	Events         []string                      `json:"events,omitempty"`
+}
+
+func countsDoc(c vocab.Counts) domainCountsPassthrough {
+	return domainCountsPassthrough{
+		Contexts:       c.Contexts,
+		Entities:       c.Entities,
+		Aggregates:     c.Aggregates,
+		ValueObjects:   c.ValueObjects,
+		Invariants:     c.Invariants,
+		Assertions:     c.Assertions,
+		Specifications: c.Specifications,
+		Events:         c.Events,
+		Relations:      c.Relations,
+	}
 }
 
 func contextDoc(c application.ArchitecturalContext) contextJSON {
@@ -466,18 +502,11 @@ func contextDoc(c application.ArchitecturalContext) contextJSON {
 	if c.Domain != nil {
 		d := c.Domain
 		dk := &domainKnowledgeJSON{
-			Source: d.Source,
-			Counts: domainCountsPassthrough{
-				Contexts:       d.Counts.Contexts,
-				Entities:       d.Counts.Entities,
-				Aggregates:     d.Counts.Aggregates,
-				ValueObjects:   d.Counts.ValueObjects,
-				Invariants:     d.Counts.Invariants,
-				Assertions:     d.Counts.Assertions,
-				Specifications: d.Counts.Specifications,
-				Events:         d.Counts.Events,
-				Relations:      d.Counts.Relations,
-			},
+			Source:  d.Source,
+			Counts:  countsDoc(d.Counts),
+			Scoped:  d.Scoped,
+			Shown:   countsDoc(d.Shown),
+			Located: d.Located,
 		}
 		for _, ctx := range d.Contexts {
 			entry := domainContextKnowJSON{
@@ -491,22 +520,30 @@ func contextDoc(c application.ArchitecturalContext) contextJSON {
 			for _, inv := range ctx.Invariants {
 				entry.Invariants = append(entry.Invariants, domainInvariantKnowJSON{
 					Statement: inv.Statement, Owner: inv.Owner, ID: inv.ID, Source: inv.Source,
+					Anchor: string(inv.Anchor), Reason: inv.Reason,
 				})
 			}
 			for _, a := range ctx.Assertions {
 				entry.Assertions = append(entry.Assertions, domainAssertionKnowJSON{
 					Statement: a.Statement, Owner: a.Owner, ID: a.ID, On: a.On, Source: a.Source,
+					Anchor: string(a.Anchor),
 				})
 			}
 			for _, s := range ctx.Specifications {
 				entry.Specifications = append(entry.Specifications, domainSpecificationKnowJSON{
-					Name: s.Name, Source: s.Source,
+					Name: s.Name, Source: s.Source, Anchor: string(s.Anchor),
 				})
 			}
 			dk.Contexts = append(dk.Contexts, entry)
 		}
 		for _, rel := range d.Relations {
 			dk.Relations = append(dk.Relations, domainRelationKnowJSON{From: rel.From, To: rel.To, Kind: rel.Kind})
+		}
+		for _, u := range d.Unanchored {
+			dk.Unanchored = append(dk.Unanchored, unanchoredKnowJSON{
+				Kind: string(u.Kind), Context: u.Context, Owner: u.Owner, ID: u.ID,
+				Statement: u.Statement, Name: u.Name, Anchor: string(u.Anchor), Reason: u.Reason,
+			})
 		}
 		doc.Domain = dk
 	}
