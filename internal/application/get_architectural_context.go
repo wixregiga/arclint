@@ -11,10 +11,12 @@ import (
 // ContextRequest selects the scope: no paths and no modules means the
 // repository; Paths are repo-relative files or folders (a folder
 // matches through the Module path globs), and Modules name declared
-// Modules directly.
+// Modules directly. Full keeps the whole recorded domain in a worksite
+// answer instead of the part that anchors into the scope.
 type ContextRequest struct {
 	Paths   []string
 	Modules []string
+	Full    bool
 }
 
 // PathBinding maps one requested path to the declared Modules owning
@@ -79,8 +81,8 @@ type ArchitecturalContext struct {
 	// imports; repository scope only.
 	UnknownImports string
 	// Domain is the project's recorded domain model summary; nil when
-	// the project records none. Whole-model, never inferred per-path
-	// relevance.
+	// the project records none. Repository scope and Full carry the
+	// whole model; a worksite carries the part anchored into it.
 	Domain *DomainKnowledge `json:"domain,omitempty"`
 }
 
@@ -91,30 +93,37 @@ type DomainEntityRef struct {
 	Aggregate bool   `json:"aggregate,omitempty"`
 }
 
-// DomainInvariantRef is one invariant statement with its owner.
+// DomainInvariantRef is one invariant statement with its owner and the
+// outcome of looking for it in source.
 type DomainInvariantRef struct {
 	Statement string `json:"statement"`
 	Owner     string `json:"owner"`
 	ID        string `json:"id,omitempty"`
-	// Source is file:line of the contract method or constructor, or
-	// "missing" when source does not show it.
-	Source string `json:"source,omitempty"`
+	// Source is file:line of the contract method or constructor when
+	// Anchor is found; empty otherwise.
+	Source string         `json:"source,omitempty"`
+	Anchor ContractAnchor `json:"anchor,omitempty"`
+	// Reason says which recorded shape makes the invariant
+	// unanchorable; empty for the other anchors.
+	Reason string `json:"reason,omitempty"`
 }
 
 // DomainAssertionRef is one assertion with its operation.
 type DomainAssertionRef struct {
-	Statement string `json:"statement"`
-	Owner     string `json:"owner"`
-	ID        string `json:"id"`
-	On        string `json:"on"`
-	Source    string `json:"source,omitempty"`
+	Statement string         `json:"statement"`
+	Owner     string         `json:"owner"`
+	ID        string         `json:"id"`
+	On        string         `json:"on"`
+	Source    string         `json:"source,omitempty"`
+	Anchor    ContractAnchor `json:"anchor,omitempty"`
 }
 
 // DomainSpecificationRef is one specification name with its source
 // location.
 type DomainSpecificationRef struct {
-	Name   string `json:"name"`
-	Source string `json:"source,omitempty"`
+	Name   string         `json:"name"`
+	Source string         `json:"source,omitempty"`
+	Anchor ContractAnchor `json:"anchor,omitempty"`
 }
 
 // DomainRelationRef is one context-map edge.
@@ -136,14 +145,39 @@ type DomainContextKnowledge struct {
 	Events         []string                 `json:"events,omitempty"`
 }
 
+// UnanchoredContract is one listed contract that no observed
+// declaration carries, kept apart from the per-context listing so a
+// reader cannot skim past it.
+type UnanchoredContract struct {
+	Kind    ContractKind `json:"kind"`
+	Context string       `json:"context"`
+	Owner   string       `json:"owner,omitempty"`
+	ID      string       `json:"id,omitempty"`
+	// Statement carries the invariant or assertion statement; Name the
+	// specification name.
+	Statement string         `json:"statement,omitempty"`
+	Name      string         `json:"name,omitempty"`
+	Anchor    ContractAnchor `json:"anchor"`
+	Reason    string         `json:"reason,omitempty"`
+}
+
 // DomainKnowledge is the project's recorded domain model summary as
-// projected into architectural context. contexts replaces the four
-// flat term arrays from the pre-contexts shape.
+// projected into architectural context. Counts always tally the whole
+// recorded model; when Scoped, the listing was narrowed to what
+// anchors into the worksite and Shown tallies the listing.
 type DomainKnowledge struct {
-	Source    string                   `json:"source"`
-	Counts    vocab.Counts             `json:"counts"`
+	Source string       `json:"source"`
+	Counts vocab.Counts `json:"counts"`
+	Scoped bool         `json:"scoped,omitempty"`
+	Shown  vocab.Counts `json:"shown"`
+	// Located is true when observed declarations were used to anchor
+	// the contracts; false leaves every Anchor empty.
+	Located   bool                     `json:"located"`
 	Contexts  []DomainContextKnowledge `json:"contexts,omitempty"`
 	Relations []DomainRelationRef      `json:"relations,omitempty"`
+	// Unanchored lists every listed contract whose Anchor is not
+	// found, unanchorable first.
+	Unanchored []UnanchoredContract `json:"unanchored,omitempty"`
 }
 
 // GetArchitecturalContext projects Rules, Modules, and applicability
@@ -167,7 +201,7 @@ func NewGetArchitecturalContext(rules rule.Repository, knowledge vocab.Repositor
 }
 
 // WithObservations lends the observation source used to locate
-// recorded contracts in source (file:line or missing).
+// recorded contracts and terms in source.
 func (uc GetArchitecturalContext) WithObservations(observations ObservationSource) GetArchitecturalContext {
 	uc.observations = observations
 	return uc
@@ -176,8 +210,8 @@ func (uc GetArchitecturalContext) WithObservations(observations ObservationSourc
 // Execute projects the context for one scope: an empty request means
 // the repository (every Module, the Rule kinds in use, and the
 // enforcement posture); paths and named Modules select a worksite (its
-// per-path bindings, the involved Modules, and the deduplicated Rules
-// that govern it).
+// per-path bindings, the involved Modules, the deduplicated Rules
+// that govern it, and the recorded domain anchored into it).
 func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalContext, error) {
 	cfg, err := uc.rules.ConfiguredRules()
 	if err != nil {
@@ -191,6 +225,7 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 	if err != nil {
 		return ArchitecturalContext{}, fmt.Errorf("load domain model: %w", err)
 	}
+	var idx []declHit
 	if found {
 		out.Domain = domainKnowledgeOf(lang)
 		if uc.observations != nil {
@@ -198,7 +233,8 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 			if err != nil {
 				return ArchitecturalContext{}, fmt.Errorf("observe contracts: %w", err)
 			}
-			locateDomainContracts(out.Domain, lang, obs)
+			idx = indexDeclarations(obs)
+			locateDomainContracts(out.Domain, lang, idx)
 		}
 	}
 	if len(req.Paths) == 0 && len(req.Modules) == 0 {
@@ -211,9 +247,22 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 			policy = rule.UnknownImportsWarn
 		}
 		out.UnknownImports = string(policy)
+		if out.Domain != nil {
+			out.Domain.Unanchored = unanchoredContracts(out.Domain)
+		}
 		return out, nil
 	}
-	return worksite(out, cfg, req)
+	out, err = worksite(out, cfg, req)
+	if err != nil {
+		return ArchitecturalContext{}, err
+	}
+	if out.Domain != nil {
+		if !req.Full {
+			out.Domain = scopeDomainKnowledge(out.Domain, idx, worksiteScope(cfg, req))
+		}
+		out.Domain.Unanchored = unanchoredContracts(out.Domain)
+	}
+	return out, nil
 }
 
 // worksite assembles the scoped view: per-path Module bindings, each
@@ -463,6 +512,7 @@ func domainKnowledgeOf(lang vocab.UbiquitousLanguage) *DomainKnowledge {
 	dk := &DomainKnowledge{
 		Source: vocab.UbiquitousLanguageFileName,
 		Counts: lang.Counts(),
+		Shown:  lang.Counts(),
 	}
 	for _, ctx := range lang.ListContexts() {
 		summary := DomainContextKnowledge{Name: ctx.Name}
@@ -506,4 +556,41 @@ func domainKnowledgeOf(lang vocab.UbiquitousLanguage) *DomainKnowledge {
 		})
 	}
 	return dk
+}
+
+// unanchoredContracts collects every listed contract whose Anchor is
+// not found, unanchorable before missing, in listing order within each
+// group. Empty when the contracts were never located.
+func unanchoredContracts(dk *DomainKnowledge) []UnanchoredContract {
+	if !dk.Located {
+		return nil
+	}
+	var unanchorable, missing []UnanchoredContract
+	add := func(c UnanchoredContract) {
+		switch c.Anchor {
+		case AnchorUnanchorable:
+			unanchorable = append(unanchorable, c)
+		case AnchorMissing:
+			missing = append(missing, c)
+		case AnchorFound:
+		}
+	}
+	for _, ctx := range dk.Contexts {
+		for _, inv := range ctx.Invariants {
+			add(UnanchoredContract{
+				Kind: ContractInvariant, Context: ctx.Name, Owner: inv.Owner, ID: inv.ID,
+				Statement: inv.Statement, Anchor: inv.Anchor, Reason: inv.Reason,
+			})
+		}
+		for _, a := range ctx.Assertions {
+			add(UnanchoredContract{
+				Kind: ContractAssertion, Context: ctx.Name, Owner: a.Owner, ID: a.ID,
+				Statement: a.Statement, Anchor: a.Anchor,
+			})
+		}
+		for _, s := range ctx.Specifications {
+			add(UnanchoredContract{Kind: ContractSpecification, Context: ctx.Name, Name: s.Name, Anchor: s.Anchor})
+		}
+	}
+	return append(unanchorable, missing...)
 }

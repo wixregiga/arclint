@@ -376,6 +376,131 @@ func TestJSONContextPreservesEstablishedKeys(t *testing.T) {
 	}
 }
 
+func TestJSONContextCarriesScopeAndAnchors(t *testing.T) {
+	var buf bytes.Buffer
+	err := New().Render(&buf, cli.ContextReport{
+		Context: application.ArchitecturalContext{
+			Scope: "m/event.go",
+			Domain: &application.DomainKnowledge{
+				Source:  "domain.arclint.yaml",
+				Counts:  vocab.Counts{Contexts: 2, Entities: 1, Aggregates: 1, ValueObjects: 2, Invariants: 3},
+				Scoped:  true,
+				Shown:   vocab.Counts{Contexts: 1, Entities: 1, Aggregates: 1, ValueObjects: 1, Invariants: 2},
+				Located: true,
+				Contexts: []application.DomainContextKnowledge{{
+					Name:         "catalog",
+					Entities:     []application.DomainEntityRef{{Name: "Event", Aggregate: true}},
+					ValueObjects: []string{"Price"},
+					Invariants: []application.DomainInvariantRef{
+						{Statement: "A published Event never changes.", Owner: "Event", ID: "published-frozen", Source: "event/event.go:90", Anchor: application.AnchorFound},
+						{Statement: "An Event has one Venue.", Owner: "Event", Anchor: application.AnchorUnanchorable, Reason: "owner Event is an aggregate and the invariant has no id, so no method is named to carry it"},
+					},
+					Specifications: []application.DomainSpecificationRef{{Name: "LateOrder", Anchor: application.AnchorMissing}},
+				}},
+				Unanchored: []application.UnanchoredContract{
+					{Kind: application.ContractInvariant, Context: "catalog", Owner: "Event", Statement: "An Event has one Venue.", Anchor: application.AnchorUnanchorable, Reason: "owner Event is an aggregate and the invariant has no id, so no method is named to carry it"},
+					{Kind: application.ContractSpecification, Context: "catalog", Name: "LateOrder", Anchor: application.AnchorMissing},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Domain struct {
+			Scoped  bool `json:"scoped"`
+			Located bool `json:"located"`
+			Counts  struct {
+				Invariants int `json:"Invariants"`
+			} `json:"counts"`
+			Shown struct {
+				Contexts   int `json:"Contexts"`
+				Invariants int `json:"Invariants"`
+			} `json:"shown"`
+			Contexts []struct {
+				Invariants []struct {
+					ID     string `json:"id"`
+					Source string `json:"source"`
+					Anchor string `json:"anchor"`
+					Reason string `json:"reason"`
+				} `json:"invariants"`
+				Specifications []struct {
+					Name   string `json:"name"`
+					Anchor string `json:"anchor"`
+				} `json:"specifications"`
+			} `json:"contexts"`
+			Unanchored []struct {
+				Kind      string `json:"kind"`
+				Context   string `json:"context"`
+				Owner     string `json:"owner"`
+				Name      string `json:"name"`
+				Statement string `json:"statement"`
+				Anchor    string `json:"anchor"`
+				Reason    string `json:"reason"`
+			} `json:"unanchored"`
+		} `json:"domain"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, buf.String())
+	}
+	d := doc.Domain
+	if !d.Scoped || !d.Located {
+		t.Fatalf("scoped/located lost: %+v", d)
+	}
+	if d.Counts.Invariants != 3 || d.Shown.Contexts != 1 || d.Shown.Invariants != 2 {
+		t.Fatalf("counts/shown = %+v / %+v", d.Counts, d.Shown)
+	}
+	if len(d.Contexts) != 1 || len(d.Contexts[0].Invariants) != 2 {
+		t.Fatalf("contexts = %+v", d.Contexts)
+	}
+	inv := d.Contexts[0].Invariants
+	if inv[0].Anchor != "found" || inv[0].Source != "event/event.go:90" || inv[0].Reason != "" {
+		t.Fatalf("found invariant = %+v", inv[0])
+	}
+	if inv[1].Anchor != "unanchorable" || inv[1].Source != "" || !strings.Contains(inv[1].Reason, "has no id") {
+		t.Fatalf("unanchorable invariant = %+v", inv[1])
+	}
+	if spec := d.Contexts[0].Specifications; len(spec) != 1 || spec[0].Anchor != "missing" {
+		t.Fatalf("specifications = %+v", spec)
+	}
+	if len(d.Unanchored) != 2 {
+		t.Fatalf("unanchored = %+v", d.Unanchored)
+	}
+	if u := d.Unanchored[0]; u.Kind != "invariant" || u.Context != "catalog" || u.Owner != "Event" || u.Anchor != "unanchorable" || u.Statement == "" || u.Reason == "" {
+		t.Fatalf("unanchored[0] = %+v", u)
+	}
+	if u := d.Unanchored[1]; u.Kind != "specification" || u.Name != "LateOrder" || u.Anchor != "missing" || u.Owner != "" || u.Reason != "" {
+		t.Fatalf("unanchored[1] = %+v", u)
+	}
+	raw := buf.String()
+	for _, absent := range []string{`"owner":""`, `"reason":""`, `"source":""`} {
+		if strings.Contains(raw, absent) {
+			t.Fatalf("empty %s should be omitted:\n%s", absent, raw)
+		}
+	}
+}
+
+func TestJSONContextOmitsScopeMarksForWholeListings(t *testing.T) {
+	var buf bytes.Buffer
+	err := New().Render(&buf, cli.ContextReport{
+		Context: application.ArchitecturalContext{
+			Scope:  "repository",
+			Domain: &application.DomainKnowledge{Source: "domain.arclint.yaml", Counts: vocab.Counts{Contexts: 1}, Shown: vocab.Counts{Contexts: 1}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := buf.String()
+	if strings.Contains(raw, `"scoped"`) || strings.Contains(raw, `"unanchored"`) {
+		t.Fatalf("a whole, unlocated listing must carry neither scoped nor unanchored:\n%s", raw)
+	}
+	if !strings.Contains(raw, `"located": false`) {
+		t.Fatalf("located must always be stated:\n%s", raw)
+	}
+}
+
 func TestJSONShortWrite(t *testing.T) {
 	err := New().Render(&shortWriter{n: 2}, cli.InitReport{Path: "rules.arclint.yaml"})
 	if err == nil {

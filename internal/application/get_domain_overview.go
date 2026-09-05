@@ -69,7 +69,7 @@ func (uc GetDomainOverview) Execute() (DomainOverview, error) {
 			return DomainOverview{}, fmt.Errorf("observe contracts: %w", err)
 		}
 		matrix := domainKnowledgeOf(lang)
-		locateDomainContracts(matrix, lang, obs)
+		locateDomainContracts(matrix, lang, indexDeclarations(obs))
 		out.Matrix = matrix
 	}
 	return out, nil

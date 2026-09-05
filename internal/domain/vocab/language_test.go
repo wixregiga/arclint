@@ -890,6 +890,71 @@ func TestNewUbiquitousLanguageAcceptsClusterAndValueIntegrity(t *testing.T) {
 	}
 }
 
+// TestNewUbiquitousLanguageInvariantShapesTheLoaderAccepts pins the
+// loader-reachable shapes no declaration can carry: an aggregate
+// owner without an id, an entity owner that is not an aggregate, and
+// an owner no term records. The context command reports each as
+// unanchorable; the loader admits them all today.
+func TestNewUbiquitousLanguageInvariantShapesTheLoaderAccepts(t *testing.T) {
+	l := mustLang(t, []vocab.BoundedContext{{
+		Name: ctx,
+		Entities: []vocab.Entity{
+			entity("Order", true),
+			entity("Customer", false),
+		},
+		Invariants: []vocab.Invariant{
+			{Statement: "An Order has one Customer.", Owner: "Order"},
+			{Statement: "A Customer is named.", Owner: "Customer"},
+			{Statement: "A Warehouse holds stock.", Owner: "Warehouse"},
+		},
+	}}, nil)
+	if l.Counts().Invariants != 3 {
+		t.Fatalf("invariants = %d", l.Counts().Invariants)
+	}
+}
+
+func TestNewUbiquitousLanguageRejectsInvariantIDOffAggregate(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		ctx   vocab.BoundedContext
+		wants string
+	}{
+		{
+			name: "entity that is not an aggregate",
+			ctx: vocab.BoundedContext{
+				Name:       ctx,
+				Entities:   []vocab.Entity{entity("Customer", false)},
+				Invariants: []vocab.Invariant{{Statement: "A Customer is named.", Owner: "Customer", ID: "named"}},
+			},
+			wants: `id is only legal when owner "Customer" is an aggregate`,
+		},
+		{
+			name: "owner no term records",
+			ctx: vocab.BoundedContext{
+				Name:       ctx,
+				Invariants: []vocab.Invariant{{Statement: "A Warehouse holds stock.", Owner: "Warehouse", ID: "stocked"}},
+			},
+			wants: `id is only legal when owner "Warehouse" is an aggregate`,
+		},
+		{
+			name: "padded id",
+			ctx: vocab.BoundedContext{
+				Name:       ctx,
+				Entities:   []vocab.Entity{entity("Order", true)},
+				Invariants: []vocab.Invariant{{Statement: "A placed Order's lines never change.", Owner: "Order", ID: " lines-frozen"}},
+			},
+			wants: "id must be non-empty",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := vocab.NewUbiquitousLanguage([]vocab.BoundedContext{tc.ctx}, nil)
+			if err == nil || !strings.Contains(err.Error(), tc.wants) {
+				t.Fatalf("err = %v, want %q", err, tc.wants)
+			}
+		})
+	}
+}
+
 func namesOf(defs []vocab.Definition) []string {
 	out := make([]string, len(defs))
 	for i, d := range defs {

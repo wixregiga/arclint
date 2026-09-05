@@ -222,14 +222,20 @@ Module boundaries are yours. Edit the `modules:` block in `rules.arclint.yaml`,
 then inspect what binds where:
 
 ```bash
-arclint context                  # repository scope
-arclint context path/to/file.go  # everything binding a path
-arclint context --module source  # one declared Module
+arclint context                          # repository scope
+arclint context path/to/file.go          # everything binding a path
+arclint context --module source          # one declared Module
+arclint context path/to/file.go --full   # the whole recorded domain too
 ```
 
 `context` reports scope, languages, configured Rule count, each Module's
-paths and import allow-list, and the Rules that apply. Re-run
-`arclint check .` when the Modules look right.
+paths and import allow-list, and the Rules that apply. With a
+`domain.arclint.yaml` present it also lists the part of the recorded
+domain that anchors into the scope, each contract ending with the
+declaration that carries it or the word `missing` or `unanchorable`,
+and closes with the unanchored contracts grouped by owner and cause;
+`--full` lists the whole model. Re-run `arclint check .` when the
+Modules look right.
 
 ## Inspect Rules and schema
 

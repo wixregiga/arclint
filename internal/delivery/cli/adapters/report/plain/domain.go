@@ -96,7 +96,7 @@ func writeOverviewText(w io.Writer, result application.DomainOverview) error {
 				if inv.ID != "" {
 					p.Printf("    id: %s\n", inv.ID)
 				}
-				if src := matrixSource(result.Matrix, ctx.Name, "invariant", inv.Statement, inv.ID); src != "" {
+				if src := matrixSource(result.Matrix, ctx.Name, application.ContractInvariant, inv.Statement, inv.ID); src != "" {
 					p.Printf("    source: %s\n", src)
 				}
 			}
@@ -113,7 +113,7 @@ func writeOverviewText(w io.Writer, result application.DomainOverview) error {
 				p.Printf("    owner: %s\n", a.Owner)
 				p.Printf("    id: %s\n", a.ID)
 				p.Printf("    on: %s\n", a.On)
-				if src := matrixSource(result.Matrix, ctx.Name, "assertion", a.Statement, a.ID); src != "" {
+				if src := matrixSource(result.Matrix, ctx.Name, application.ContractAssertion, a.Statement, a.ID); src != "" {
 					p.Printf("    source: %s\n", src)
 				}
 			}
@@ -127,7 +127,7 @@ func writeOverviewText(w io.Writer, result application.DomainOverview) error {
 				if s.Definition != "" {
 					p.Printf("    %s\n", s.Definition)
 				}
-				if src := matrixSource(result.Matrix, ctx.Name, "specification", s.Name, ""); src != "" {
+				if src := matrixSource(result.Matrix, ctx.Name, application.ContractSpecification, s.Name, ""); src != "" {
 					p.Printf("    source: %s\n", src)
 				}
 			}
@@ -474,7 +474,11 @@ func sortedEntities(entities []vocab.Entity) []vocab.Entity {
 	return out
 }
 
-func matrixSource(matrix *application.DomainKnowledge, context, kind, key, id string) string {
+// matrixSource phrases one contract's anchor for the overview: the
+// source when found, the anchor word when missing, and the word with
+// its reason when the recorded shape names no declaration; empty when
+// no contracts were located.
+func matrixSource(matrix *application.DomainKnowledge, context string, kind application.ContractKind, key, id string) string {
 	if matrix == nil {
 		return ""
 	}
@@ -483,25 +487,37 @@ func matrixSource(matrix *application.DomainKnowledge, context, kind, key, id st
 			continue
 		}
 		switch kind {
-		case "invariant":
+		case application.ContractInvariant:
 			for _, inv := range ctx.Invariants {
 				if inv.Statement == key || (id != "" && inv.ID == id) {
-					return inv.Source
+					return anchorPhrase(inv.Source, inv.Anchor, inv.Reason)
 				}
 			}
-		case "assertion":
+		case application.ContractAssertion:
 			for _, a := range ctx.Assertions {
 				if a.Statement == key || a.ID == id {
-					return a.Source
+					return anchorPhrase(a.Source, a.Anchor, "")
 				}
 			}
-		case "specification":
+		case application.ContractSpecification:
 			for _, s := range ctx.Specifications {
 				if s.Name == key {
-					return s.Source
+					return anchorPhrase(s.Source, s.Anchor, "")
 				}
 			}
 		}
+	}
+	return ""
+}
+
+func anchorPhrase(source string, anchor application.ContractAnchor, reason string) string {
+	switch anchor {
+	case application.AnchorFound:
+		return source
+	case application.AnchorUnanchorable:
+		return fmt.Sprintf("%s (%s)", anchor, reason)
+	case application.AnchorMissing:
+		return string(anchor)
 	}
 	return ""
 }
