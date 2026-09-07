@@ -191,7 +191,9 @@ func substitutePlaceholders(glob, term string) (string, error) {
 }
 
 // sourceTerms projects the recorded language onto one source's terms,
-// in file order.
+// in file order. Entities are every entity, aggregate roots and their
+// members; value objects include the identities aggregates and members
+// imply; invariants and assertions expand by key.
 func sourceTerms(source ExpansionSource, lang vocab.UbiquitousLanguage) []string {
 	var out []string
 	for _, c := range lang.Contexts {
@@ -199,34 +201,33 @@ func sourceTerms(source ExpansionSource, lang vocab.UbiquitousLanguage) []string
 		case SourceContexts:
 			out = append(out, c.Name)
 		case SourceAggregates:
-			for _, e := range c.Entities {
-				if e.Aggregate {
+			for _, a := range c.Aggregates {
+				out = append(out, a.Name)
+			}
+		case SourceEntities:
+			for _, a := range c.Aggregates {
+				out = append(out, a.Name)
+				for _, e := range a.Entities {
 					out = append(out, e.Name)
 				}
 			}
-		case SourceEntities:
-			for _, e := range c.Entities {
-				out = append(out, e.Name)
-			}
 		case SourceValueObjects:
-			for _, d := range c.ValueObjects {
-				out = append(out, d.Name)
+			for _, t := range c.Terms() {
+				if t.Concept == vocab.ConceptValueObject {
+					out = append(out, t.Name)
+				}
 			}
 		case SourceEvents:
 			for _, d := range c.Events {
 				out = append(out, d.Name)
 			}
 		case SourceInvariants:
-			for _, inv := range c.Invariants {
-				if inv.ID != "" {
-					out = append(out, inv.ID)
-					continue
-				}
-				out = append(out, inv.Owner)
+			for _, inv := range c.Invariants() {
+				out = append(out, inv.Invariant.Key)
 			}
 		case SourceAssertions:
-			for _, a := range c.Assertions {
-				out = append(out, a.ID)
+			for _, a := range c.Assertions() {
+				out = append(out, a.Assertion.Key)
 			}
 		case SourceSpecifications:
 			for _, s := range c.Specifications {

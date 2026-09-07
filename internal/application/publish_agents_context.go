@@ -52,7 +52,7 @@ type AgentCommandDoc struct {
 // the surface cannot silently go stale.
 func AgentCommandSurface() []AgentCommandDoc {
 	return []AgentCommandDoc{
-		{"context", "context [paths...]", "run before editing under any path: the owning modules, their import contracts, and the recorded domain in one answer (`--module <names>`, `--format json`)"},
+		{"context", "context [paths...]", "run before editing under any path: the owning zones, their import contracts, and the recorded domain in one answer (`--zone <names>`, `--format json`)"},
 		{"domain", "domain", "the ubiquitous language: contexts, aggregates, value objects, invariants, relations"},
 		{"rules", "rules [selector]", "every configured rule with its claim; one match prints the complete rule"},
 		{"check", "check .", "evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings"},
@@ -145,7 +145,8 @@ func renderAgentsBlock(cfg rule.Configured, lang vocab.UbiquitousLanguage,
 		writeRecordedDomain(&b, lang)
 	}
 	writeChangingLanguage(&b)
-	writeModuleRules(&b, cfg)
+	writeZoneRules(&b, cfg)
+	writeBuiltInRules(&b, cfg)
 	writeRepositoryRules(&b, cfg)
 	writeExtensionInventory(&b, registered)
 	return AgentsBegin + "\n" + strings.TrimRight(b.String(), "\n") + "\n" + AgentsEnd + "\n"
@@ -198,31 +199,50 @@ func writeAskFirst(b *strings.Builder) {
 }
 
 // writeRecordedDomain snapshots the recorded Ubiquitous Language:
-// tallies, each context's terms with aggregates marked, and the
-// context map.
+// tallies, each context's aggregates with their members, its value
+// objects, events, and services, and the context map.
 func writeRecordedDomain(b *strings.Builder, lang vocab.UbiquitousLanguage) {
 	b.WriteString("### The recorded domain\n\n")
 	counts := lang.Counts()
-	fmt.Fprintf(b, "%d contexts, %d aggregates, %d invariants (%s).\n\n",
-		counts.Contexts, counts.Aggregates, counts.Invariants, vocab.UbiquitousLanguageFileName)
+	fmt.Fprintf(b, "%d contexts, %d aggregates, %d value objects, %d invariants (%s).\n\n",
+		counts.Contexts, counts.Aggregates, counts.ValueObjects, counts.Invariants, vocab.UbiquitousLanguageFileName)
 	for _, ctx := range lang.Contexts {
 		var parts []string
-		if len(ctx.Entities) > 0 {
-			names := make([]string, 0, len(ctx.Entities))
-			for _, e := range ctx.Entities {
-				name := e.Name
-				if e.Aggregate {
-					name += " [aggregate]"
+		if len(ctx.Aggregates) > 0 {
+			names := make([]string, 0, len(ctx.Aggregates))
+			for _, a := range ctx.Aggregates {
+				name := a.Name
+				if len(a.Entities) > 0 {
+					members := make([]string, 0, len(a.Entities))
+					for _, e := range a.Entities {
+						members = append(members, e.Name)
+					}
+					name += " (" + strings.Join(members, ", ") + ")"
 				}
 				names = append(names, name)
 			}
-			parts = append(parts, strings.Join(names, ", "))
+			parts = append(parts, "aggregates "+strings.Join(names, ", "))
 		}
 		if len(ctx.ValueObjects) > 0 {
-			parts = append(parts, "value objects "+joinDefinitionNames(ctx.ValueObjects))
+			names := make([]string, 0, len(ctx.ValueObjects))
+			for _, v := range ctx.ValueObjects {
+				names = append(names, v.Name)
+			}
+			parts = append(parts, "value objects "+strings.Join(names, ", "))
 		}
 		if len(ctx.Events) > 0 {
-			parts = append(parts, "events "+joinDefinitionNames(ctx.Events))
+			names := make([]string, 0, len(ctx.Events))
+			for _, e := range ctx.Events {
+				names = append(names, e.Name)
+			}
+			parts = append(parts, "events "+strings.Join(names, ", "))
+		}
+		if len(ctx.Services) > 0 {
+			names := make([]string, 0, len(ctx.Services))
+			for _, s := range ctx.Services {
+				names = append(names, s.Name)
+			}
+			parts = append(parts, "services "+strings.Join(names, ", "))
 		}
 		line := "- **" + ctx.Name + "**"
 		if len(parts) > 0 {
@@ -257,24 +277,16 @@ func writeChangingLanguage(b *strings.Builder) {
 		vocab.UbiquitousLanguageFileName, vocab.SkillName, vocab.SkillDirectory)
 }
 
-func joinDefinitionNames(defs []vocab.Definition) string {
-	names := make([]string, 0, len(defs))
-	for _, d := range defs {
-		names = append(names, d.Name)
-	}
-	return strings.Join(names, ", ")
-}
-
-// writeModuleRules lists every declared Module with its import
+// writeZoneRules lists every declared Zone with its import
 // contract and the Rules bound to it, Claims included; the consumes
 // Rule is folded into the imports line rather than repeated.
-func writeModuleRules(b *strings.Builder, cfg rule.Configured) {
-	if len(cfg.Modules) == 0 {
+func writeZoneRules(b *strings.Builder, cfg rule.Configured) {
+	if len(cfg.Zones) == 0 {
 		return
 	}
-	b.WriteString("### Modules and their rules\n\n")
-	for _, m := range cfg.Modules {
-		p := modulePolicy(m, cfg.Rules)
+	b.WriteString("### Zones and their rules\n\n")
+	for _, m := range cfg.Zones {
+		p := zonePolicy(m, cfg.Rules)
 		line := "- **" + p.Name + "**"
 		if p.Description != "" {
 			line += ": " + p.Description
@@ -284,23 +296,23 @@ func writeModuleRules(b *strings.Builder, cfg rule.Configured) {
 			b.WriteString("  - " + imports + "\n")
 		}
 		for _, r := range cfg.Rules {
-			if r.Type() == rule.TypeConsumes || !nameIn(r.Applicability().Modules(), m.Name()) {
+			if r.Type() == rule.TypeConsumes || !nameIn(r.Applicability().Zones(), m.Name()) {
 				continue
 			}
-			claim := strings.TrimPrefix(r.Claim().Statement(), fmt.Sprintf("Module %q: ", m.Name()))
+			claim := strings.TrimPrefix(r.Claim().Statement(), fmt.Sprintf("Zone %q: ", m.Name()))
 			b.WriteString("  - " + ruleLine(ruleName(r, true), r, claim) + "\n")
 		}
 	}
 	b.WriteString("\n")
 }
 
-// importsLine states one Module's dependency policy in the block's
-// compact voice; a Module without a consumes Rule gets no line.
-func importsLine(p ModulePolicy) string {
+// importsLine states one Zone's dependency policy in the block's
+// compact voice; a Zone without a consumes Rule gets no line.
+func importsLine(p ZonePolicy) string {
 	var parts []string
 	if p.InternalRestricted {
 		if len(p.Internal) == 0 {
-			parts = append(parts, "imports no other module")
+			parts = append(parts, "imports no other zone")
 		} else {
 			parts = append(parts, "imports only: "+strings.Join(p.Internal, ", "))
 		}
@@ -314,13 +326,38 @@ func importsLine(p ModulePolicy) string {
 	return strings.Join(parts, "; ")
 }
 
+// writeBuiltInRules lists the Rules arclint composes from the DDD
+// meta-model once a domain is recorded: they judge the recorded domain
+// against the code without any Pattern, and a ruleset adopts one the
+// way it adopts a distributed Rule, with an Override under its id.
+func writeBuiltInRules(b *strings.Builder, cfg rule.Configured) {
+	var lines []string
+	for _, r := range cfg.Rules {
+		if !r.BuiltIn() {
+			continue
+		}
+		lines = append(lines, "- "+ruleLine(ruleName(r, false), r, r.Claim().Statement()))
+	}
+	if len(lines) == 0 {
+		return
+	}
+	b.WriteString("### Built-in rules\n\n")
+	fmt.Fprintf(b, "%d rules %s judge the recorded domain against the code; no Pattern distributes them. "+
+		"Change one through an Override under its id in %s (severity, or disable with a reason).\n\n",
+		len(lines), BuiltInOrigin, rule.RulesetFileName)
+	for _, l := range lines {
+		b.WriteString(l + "\n")
+	}
+	b.WriteString("\n")
+}
+
 // writeRepositoryRules lists the Rules that range over the repository
-// rather than one Module: layers, protections, cycles, and
+// rather than one Zone: layers, protections, cycles, and
 // repository-scoped extension rules.
 func writeRepositoryRules(b *strings.Builder, cfg rule.Configured) {
 	var lines []string
 	for _, r := range cfg.Rules {
-		if r.Type() == rule.TypeConsumes || len(r.Applicability().Modules()) > 0 {
+		if r.Type() == rule.TypeConsumes || r.BuiltIn() || len(r.Applicability().Zones()) > 0 {
 			continue
 		}
 		lines = append(lines, "- "+ruleLine(ruleName(r, false), r, r.Claim().Statement()))
@@ -381,13 +418,13 @@ func ruleLine(name string, r rule.Rule, claim string) string {
 // ruleName spells a Rule in the block. A Rule an extended Pattern
 // distributes keeps its qualified id, the spelling an Override and
 // `arclint rules` take. A local Rule reads by its local id, and under
-// its Module drops the leading segment, so "entities/aggregate-slices"
+// its Zone drops the leading segment, so "entities/aggregate-slices"
 // reads "aggregate-slices".
-func ruleName(r rule.Rule, underModule bool) string {
+func ruleName(r rule.Rule, underZone bool) string {
 	if _, distributed := r.Provenance(); distributed {
 		return r.ID().Qualified()
 	}
-	if underModule {
+	if underZone {
 		if _, rest, ok := strings.Cut(r.ID().Local(), "/"); ok {
 			return rest
 		}

@@ -12,7 +12,7 @@ import (
 // Override may change it.
 type FieldSchema struct {
 	Name         string
-	Kind         string // "string", "enum", "glob", "glob_list", "module", "module_list", "allow_list", "policy", "case", "regex", "object", "boolean"
+	Kind         string // "string", "enum", "glob", "glob_list", "zone", "zone_list", "allow_list", "policy", "case", "regex", "object", "boolean"
 	Required     bool
 	Default      string
 	Enum         []string
@@ -46,23 +46,23 @@ func (t Type) Schema() TypeSchema {
 		},
 	}
 	switch t.Scope() {
-	case ScopeModules:
+	case ScopeZones:
 		common = append(common, FieldSchema{
-			Name: "on", Kind: "module_list", Required: true,
-			Doc: "the declared Module or Modules the Rule judges",
+			Name: "on", Kind: "zone_list", Required: true,
+			Doc: "the declared Zone or Zones the Rule judges",
 		})
-	case ScopeOneModule:
+	case ScopeOneZone:
 		common = append(common, FieldSchema{
-			Name: "on", Kind: "module", Required: true,
-			Doc: "the one declared Module the Rule protects",
+			Name: "on", Kind: "zone", Required: true,
+			Doc: "the one declared Zone the Rule protects",
 		})
-	case ScopeModulesOrRepository:
+	case ScopeZonesOrRepository:
 		common = append(common, FieldSchema{
-			Name: "on", Kind: "module_list",
-			Doc: "the declared Module or Modules the Rule judges; absent means the whole repository",
+			Name: "on", Kind: "zone_list",
+			Doc: "the declared Zone or Zones the Rule judges; absent means the whole repository",
 		})
 	case ScopeRepository:
-		// The assertion itself names the Modules; on is not accepted.
+		// The assertion itself names the Zones; on is not accepted.
 	}
 	if t.AcceptsFiles() {
 		common = append(common, FieldSchema{
@@ -76,7 +76,7 @@ func (t Type) Schema() TypeSchema {
 		params = []FieldSchema{
 			{
 				Name: "internal", Kind: "allow_list",
-				Doc: "declared Modules this Module may import; absent = unrestricted, empty = none",
+				Doc: "declared Zones this Zone may import; absent = unrestricted, empty = none",
 			},
 			{
 				Name: "external", Kind: "policy", Default: string(ImportAllow),
@@ -108,13 +108,13 @@ func (t Type) Schema() TypeSchema {
 	case TypeLayers:
 		params = []FieldSchema{
 			{
-				Name: "layers", Kind: "module_list", Required: true,
-				Doc: "Modules ordered highest first; imports may go same or lower only",
+				Name: "layers", Kind: "zone_list", Required: true,
+				Doc: "Zones ordered highest first; imports may go same or lower only",
 			},
 		}
 	case TypeProtected:
 		params = []FieldSchema{
-			{Name: "imported_by", Kind: "module_list", Required: true, Doc: "Modules permitted to import the Module named under on; empty means none"},
+			{Name: "imported_by", Kind: "zone_list", Required: true, Doc: "Zones permitted to import the Zone named under on; empty means none"},
 		}
 	case TypeIndependence:
 		params = []FieldSchema{
@@ -125,15 +125,13 @@ func (t Type) Schema() TypeSchema {
 		}
 	case TypeAcyclic:
 		params = []FieldSchema{
-			{Name: "acyclic", Kind: "module_list", Required: true, Doc: "cycle scope; an empty mapping means every declared Module (inside a Pattern, every Module the Pattern declares)"},
+			{Name: "acyclic", Kind: "zone_list", Required: true, Doc: "cycle scope; an empty mapping means every declared Zone (inside a Pattern, every Zone the Pattern declares)"},
 		}
-	case TypeInvariants:
-		params = []FieldSchema{
-			{
-				Name: "closed", Kind: "boolean", Default: "false",
-				Doc: "when true, every exported error-returning function in the owner's files must call the cluster method",
-			},
-		}
+	case TypeDomain:
+		// Built in: a ruleset never spells a domain Rule, so it has no
+		// assertion fields; an Override under the invariant's id adopts
+		// it through the common fields above.
+		params = nil
 	case TypeContent:
 		params = []FieldSchema{
 			{Name: "forbid", Kind: "regex", Required: true, Doc: "no line of a selected file may match this RE2 pattern"},
@@ -156,7 +154,11 @@ func (t Type) Schema() TypeSchema {
 // Describe explains the accepted configuration of this Rule Type.
 func (s TypeSchema) Describe() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "rule type %s (assertion key %s)\n", s.Type, s.Key)
+	if s.Type.Authored() {
+		fmt.Fprintf(&b, "rule type %s (assertion key %s)\n", s.Type, s.Key)
+	} else {
+		fmt.Fprintf(&b, "rule type %s (built in; adopted by an override under the invariant's id)\n", s.Type)
+	}
 	for _, section := range []struct {
 		title  string
 		fields []FieldSchema
@@ -188,7 +190,7 @@ const (
 // Schema returns the published Rule Schema: a deterministic, indented
 // JSON Schema (draft 2020-12) document describing the complete ruleset
 // grammar: the document shape, runtime targets, scan settings, extended
-// Patterns and their Bindings, Module declarations, the rules map with
+// Patterns and their Bindings, Zone declarations, the rules map with
 // every Assertion shape and the Override shape, and the Pattern
 // identity header of a distribution file. Runtime validation and this
 // published editor schema accept the same values; the committed
@@ -216,8 +218,8 @@ const (
 	// patternReferenceJSONPattern mirrors ParsePatternReference:
 	// namespace/name@version with an exact semantic version.
 	patternReferenceJSONPattern = `^` + patternPartJSONPattern + `/` + patternPartJSONPattern + `@\d+\.\d+\.\d+([\-+][0-9A-Za-z.\-+]+)?$`
-	// moduleNameJSONPattern mirrors NewModuleName: non-empty a-z 0-9 _ -.
-	moduleNameJSONPattern = `^[a-z0-9_-]+$`
+	// zoneNameJSONPattern mirrors NewZoneName: non-empty a-z 0-9 _ -.
+	zoneNameJSONPattern = `^[a-z0-9_-]+$`
 	// globJSONPattern mirrors the structural part of NewGlob: non-empty
 	// slash-separated segments without brace alternation. Escape and
 	// character-class validity remain runtime checks.
@@ -262,7 +264,7 @@ func schemaDocument() map[string]any {
 		"$schema":              "https://json-schema.org/draft/2020-12/schema",
 		"$id":                  SchemaID,
 		"title":                "ArcLint ruleset",
-		"description":          "The complete " + RulesetFileName + " document ArcLint accepts. A repository ruleset carries runtime, scan, extends, modules, and rules; a Pattern distribution file carries the pattern header, modules, and rules. Every Rule is keyed by its Rule ID and carries exactly one assertion key; an entry with no assertion key is an Override of a Rule an extended Pattern distributes. Unknown keys are rejected everywhere.",
+		"description":          "The complete " + RulesetFileName + " document ArcLint accepts. A repository ruleset carries runtime, scan, extends, zones, and rules; a Pattern distribution file carries the pattern header, zones, and rules. Every Rule is keyed by its Rule ID and carries exactly one assertion key; an entry with no assertion key is an Override of a Rule an extended Pattern distributes. Unknown keys are rejected everywhere.",
 		"type":                 "object",
 		"additionalProperties": false,
 		"properties": map[string]any{
@@ -276,26 +278,26 @@ func schemaDocument() map[string]any {
 			},
 			"scan":    scanSchema(),
 			"extends": extendsSchema(),
-			"modules": map[string]any{
-				"description":          "Declared Modules keyed by name. In a repository ruleset a Module is a glob, a list of globs, or an object with paths and description. In a Pattern file a Module is its description, or an object with description and the paths it suggests for the Binding.",
+			"zones": map[string]any{
+				"description":          "Declared Zones keyed by name. In a repository ruleset a Zone is a glob, a list of globs, or an object with paths and description. In a Pattern file a Zone is its description, or an object with description and the paths it suggests for the Binding.",
 				"type":                 "object",
-				"propertyNames":        schemaRef("moduleName"),
-				"additionalProperties": schemaRef("module"),
+				"propertyNames":        schemaRef("zoneName"),
+				"additionalProperties": schemaRef("zone"),
 			},
 			"rules": rulesSchema(),
 		},
 		"if": map[string]any{"required": []string{"pattern"}},
 		"then": map[string]any{
-			"description": "A Pattern distribution file: no runtime, no scan, no extends, because those are repository policy; Modules carry descriptions and suggested paths only.",
+			"description": "A Pattern distribution file: no runtime, no scan, no extends, because those are repository policy; Zones carry descriptions and suggested paths only.",
 			"properties": map[string]any{
 				"runtime": false,
 				"scan":    false,
 				"extends": false,
-				"modules": map[string]any{
-					"description":          "Declared Modules keyed by name, each a description or an object with description and suggested paths.",
+				"zones": map[string]any{
+					"description":          "Declared Zones keyed by name, each a description or an object with description and suggested paths.",
 					"type":                 "object",
-					"propertyNames":        schemaRef("moduleName"),
-					"additionalProperties": schemaRef("patternModule"),
+					"propertyNames":        schemaRef("zoneName"),
+					"additionalProperties": schemaRef("patternZone"),
 				},
 				"rules": map[string]any{
 					"description":          "A Pattern distributes Rules and cannot override: every entry carries exactly one assertion key.",
@@ -306,13 +308,13 @@ func schemaDocument() map[string]any {
 			},
 		},
 		"else": map[string]any{
-			"description": "A repository ruleset: every Module carries paths, directly or through a Binding.",
+			"description": "A repository ruleset: every Zone carries paths, directly or through a Binding.",
 			"properties": map[string]any{
-				"modules": map[string]any{
-					"description":          "Declared Modules keyed by name, each a glob, a list of globs, or an object with paths and description.",
+				"zones": map[string]any{
+					"description":          "Declared Zones keyed by name, each a glob, a list of globs, or an object with paths and description.",
 					"type":                 "object",
-					"propertyNames":        schemaRef("moduleName"),
-					"additionalProperties": schemaRef("repositoryModule"),
+					"propertyNames":        schemaRef("zoneName"),
+					"additionalProperties": schemaRef("repositoryZone"),
 				},
 			},
 		},
@@ -325,39 +327,39 @@ func schemaDocument() map[string]any {
 // editor hover reads the same text wherever a definition is used and
 // the published schema never carries a reference its reader must
 // resolve to understand. Each contextual use of a shared shape (paths
-// a Module claims, files a Rule judges, paths an Exclusion removes)
+// a Zone claims, files a Rule judges, paths an Exclusion removes)
 // is its own definition so the hover names the meaning, not the shape.
 func defDescriptions() map[string]string {
 	descs := map[string]string{
-		"ruleID":                    "Explicit stable Rule ID: LOCAL for a repository Rule, or NAMESPACE/NAME:LOCAL for a Rule an extended Pattern distributes. LOCAL uses a-z 0-9 . _ - /, never starting with . / - and never ending with . or /. Inside a Pattern file the Rule ID is local; the loader qualifies it with the Pattern's namespace/name, so two Patterns may distribute the same local identity.",
-		"moduleName":                "Module name: lowercase letters, digits, underscore, and hyphen.",
-		"protectedModule":           "The one declared Module the Rule protects.",
-		"patternReference":          "Exact reference to one published Pattern version: namespace/name@version.",
-		"severity":                  "Gate importance of a Violation.",
-		"importPolicy":              "Policy for one import class.",
-		"glob":                      "Repo-relative path pattern: * and ? never cross /, a ** segment matches any number of segments, [...] matches one character. Brace alternation is rejected.",
-		"caseSpec":                  "File-name case vocabulary: one or more alternatives of kebab-case, snake_case, camelCase, PascalCase, or regex:PATTERN, combined with | (any-of); applies to the file stem, extension excluded.",
-		"expansionSource":           "Recorded Ubiquitous Language collection an expanded structure Rule derives its globs from.",
-		"expandedGlob":              "Structure glob that may carry {name:<case>} placeholders, each resolving once per recorded term; cases are " + strings.Join(TermCaseNames(), ", ") + ".",
-		"reason":                    "The recorded reason for an adoption decision; required so the decision stays inspectable.",
-		"modulePaths":               "Membership selectors: one glob or a non-empty list of globs. A glob naming a directory claims its whole subtree.",
-		"suggestedPaths":            "Paths the Pattern suggests for the Binding: one glob or a non-empty list of globs. The init command writes them into bind when the Pattern is adopted.",
-		"boundPaths":                "Repository paths bound to one Pattern Module: one glob or a non-empty list of globs. The only place a Pattern Module's paths live.",
-		"judgedFiles":               "Globs narrowing the files the Rule judges: one glob or a non-empty list. Absent means every selected file.",
-		"excludedPaths":             "Files the Rule no longer judges: one glob or a non-empty list of globs.",
-		"suppressedPaths":           "Files whose findings are suppressed: one glob or a non-empty list of globs.",
-		"judgedModules":             "The declared Module or Modules the Rule judges: one Module name or a non-empty list.",
-		"judgedModulesOrRepository": "The declared Module or Modules the Rule judges: one Module name or a non-empty list. Absent means the whole repository.",
-		"excludedModules":           "Modules the Rule no longer judges: one Module name or a non-empty list.",
-		"module":                    "One Module: a glob, a list of globs, or an object in a repository ruleset; a description or an object in a Pattern file.",
-		"repositoryModule":          "One repository Module: its paths as a glob or a list of globs, or an object with paths and an optional description.",
-		"patternModule":             "One Pattern Module: its description, or an object with the description and the paths the Pattern suggests for the Binding. A Pattern never owns paths.",
-		"rule":                      "One Rule carrying exactly one assertion key (" + strings.Join(AssertionKeys(), ", ") + "), or an Override carrying none.",
-		"override":                  "An Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID. It carries no assertion and no description: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID.",
-		"exclusion":                 "Removes paths or Modules from what the Rule judges; excluded subjects evaluate not applicable.",
-		"suppression":               "Keeps findings at the paths while removing their gate effect; suppressed findings are still reported.",
+		"ruleID":                  "Explicit stable Rule ID: LOCAL for a repository Rule, or NAMESPACE/NAME:LOCAL for a Rule an extended Pattern distributes. LOCAL uses a-z 0-9 . _ - /, never starting with . / - and never ending with . or /. Inside a Pattern file the Rule ID is local; the loader qualifies it with the Pattern's namespace/name, so two Patterns may distribute the same local identity.",
+		"zoneName":                "Zone name: lowercase letters, digits, underscore, and hyphen.",
+		"protectedZone":           "The one declared Zone the Rule protects.",
+		"patternReference":        "Exact reference to one published Pattern version: namespace/name@version.",
+		"severity":                "Gate importance of a Violation.",
+		"importPolicy":            "Policy for one import class.",
+		"glob":                    "Repo-relative path pattern: * and ? never cross /, a ** segment matches any number of segments, [...] matches one character. Brace alternation is rejected.",
+		"caseSpec":                "File-name case vocabulary: one or more alternatives of kebab-case, snake_case, camelCase, PascalCase, or regex:PATTERN, combined with | (any-of); applies to the file stem, extension excluded.",
+		"expansionSource":         "Recorded Ubiquitous Language collection an expanded structure Rule derives its globs from.",
+		"expandedGlob":            "Structure glob that may carry {name:<case>} placeholders, each resolving once per recorded term; cases are " + strings.Join(TermCaseNames(), ", ") + ".",
+		"reason":                  "The recorded reason for an adoption decision; required so the decision stays inspectable.",
+		"zonePaths":               "Membership selectors: one glob or a non-empty list of globs. A glob naming a directory claims its whole subtree.",
+		"suggestedPaths":          "Paths the Pattern suggests for the Binding: one glob or a non-empty list of globs. The init command writes them into bind when the Pattern is adopted.",
+		"boundPaths":              "Repository paths bound to one Pattern Zone: one glob or a non-empty list of globs. The only place a Pattern Zone's paths live.",
+		"judgedFiles":             "Globs narrowing the files the Rule judges: one glob or a non-empty list. Absent means every selected file.",
+		"excludedPaths":           "Files the Rule no longer judges: one glob or a non-empty list of globs.",
+		"suppressedPaths":         "Files whose findings are suppressed: one glob or a non-empty list of globs.",
+		"judgedZones":             "The declared Zone or Zones the Rule judges: one Zone name or a non-empty list.",
+		"judgedZonesOrRepository": "The declared Zone or Zones the Rule judges: one Zone name or a non-empty list. Absent means the whole repository.",
+		"excludedZones":           "Zones the Rule no longer judges: one Zone name or a non-empty list.",
+		"zone":                    "One Zone: a glob, a list of globs, or an object in a repository ruleset; a description or an object in a Pattern file.",
+		"repositoryZone":          "One repository Zone: its paths as a glob or a list of globs, or an object with paths and an optional description.",
+		"patternZone":             "One Pattern Zone: its description, or an object with the description and the paths the Pattern suggests for the Binding. A Pattern never owns paths.",
+		"rule":                    "One Rule carrying exactly one assertion key (" + strings.Join(AssertionKeys(), ", ") + "), or an Override carrying none.",
+		"override":                "An Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID. It carries no assertion and no description: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID.",
+		"exclusion":               "Removes paths or Zones from what the Rule judges; excluded subjects evaluate not applicable.",
+		"suppression":             "Keeps findings at the paths while removing their gate effect; suppressed findings are still reported.",
 	}
-	for _, t := range Types() {
+	for _, t := range AuthoredTypes() {
 		descs[assertionDefName(t)] = assertionRuleDescription(t)
 	}
 	return descs
@@ -378,15 +380,15 @@ func schemaDefs() map[string]any {
 			"type":        "string",
 			"pattern":     ruleIDJSONPattern,
 		},
-		"moduleName": map[string]any{
-			"description": defDescription("moduleName"),
+		"zoneName": map[string]any{
+			"description": defDescription("zoneName"),
 			"type":        "string",
-			"pattern":     moduleNameJSONPattern,
+			"pattern":     zoneNameJSONPattern,
 		},
-		"protectedModule": map[string]any{
-			"description": defDescription("protectedModule"),
+		"protectedZone": map[string]any{
+			"description": defDescription("protectedZone"),
 			"type":        "string",
-			"pattern":     moduleNameJSONPattern,
+			"pattern":     zoneNameJSONPattern,
 		},
 		"patternReference": map[string]any{
 			"description": defDescription("patternReference"),
@@ -430,24 +432,24 @@ func schemaDefs() map[string]any {
 			"type":        "string",
 			"pattern":     `\S`,
 		},
-		"modulePaths":               globsSchema("modulePaths"),
-		"suggestedPaths":            globsSchema("suggestedPaths"),
-		"boundPaths":                globsSchema("boundPaths"),
-		"judgedFiles":               globsSchema("judgedFiles"),
-		"excludedPaths":             globsSchema("excludedPaths"),
-		"suppressedPaths":           globsSchema("suppressedPaths"),
-		"judgedModules":             moduleNamesSchema("judgedModules"),
-		"judgedModulesOrRepository": moduleNamesSchema("judgedModulesOrRepository"),
-		"excludedModules":           moduleNamesSchema("excludedModules"),
-		"module":                    moduleSchema(),
-		"repositoryModule":          repositoryModuleSchema(),
-		"patternModule":             patternModuleSchema(),
-		"rule":                      ruleSchema(),
-		"override":                  overrideSchema(),
-		"exclusion":                 exclusionSchema(),
-		"suppression":               suppressionSchema(),
+		"zonePaths":               globsSchema("zonePaths"),
+		"suggestedPaths":          globsSchema("suggestedPaths"),
+		"boundPaths":              globsSchema("boundPaths"),
+		"judgedFiles":             globsSchema("judgedFiles"),
+		"excludedPaths":           globsSchema("excludedPaths"),
+		"suppressedPaths":         globsSchema("suppressedPaths"),
+		"judgedZones":             zoneNamesSchema("judgedZones"),
+		"judgedZonesOrRepository": zoneNamesSchema("judgedZonesOrRepository"),
+		"excludedZones":           zoneNamesSchema("excludedZones"),
+		"zone":                    zoneSchema(),
+		"repositoryZone":          repositoryZoneSchema(),
+		"patternZone":             patternZoneSchema(),
+		"rule":                    ruleSchema(),
+		"override":                overrideSchema(),
+		"exclusion":               exclusionSchema(),
+		"suppression":             suppressionSchema(),
 	}
-	for _, t := range Types() {
+	for _, t := range AuthoredTypes() {
 		defs[assertionDefName(t)] = assertionRuleSchema(t)
 	}
 	return defs
@@ -478,14 +480,14 @@ func globsSchema(name string) map[string]any {
 	}
 }
 
-// moduleNamesSchema is the one-or-many Module name shape under the
+// zoneNamesSchema is the one-or-many Zone name shape under the
 // named definition's own meaning.
-func moduleNamesSchema(name string) map[string]any {
+func zoneNamesSchema(name string) map[string]any {
 	return map[string]any{
 		"description": defDescription(name),
 		"oneOf": []any{
-			schemaRef("moduleName"),
-			map[string]any{"type": "array", "minItems": 1, "uniqueItems": true, "items": schemaRef("moduleName")},
+			schemaRef("zoneName"),
+			map[string]any{"type": "array", "minItems": 1, "uniqueItems": true, "items": schemaRef("zoneName")},
 		},
 	}
 }
@@ -539,7 +541,7 @@ func scanSchema() map[string]any {
 
 func extendsSchema() map[string]any {
 	return map[string]any{
-		"description": "Patterns this repository adopts. Each entry pins one exact version and binds every Module the Pattern lists to repository paths. Repository rulesets only.",
+		"description": "Patterns this repository adopts. Each entry pins one exact version and binds every Zone the Pattern lists to repository paths. Repository rulesets only.",
 		"type":        "array",
 		"uniqueItems": true,
 		"items": strictObjectSchema(
@@ -547,9 +549,9 @@ func extendsSchema() map[string]any {
 			map[string]any{
 				"pattern": schemaRef("patternReference"),
 				"bind": map[string]any{
-					"description":          "Paths for every Module the Pattern lists, keyed by Module name: one glob or a list of globs.",
+					"description":          "Paths for every Zone the Pattern lists, keyed by Zone name: one glob or a list of globs.",
 					"type":                 "object",
-					"propertyNames":        schemaRef("moduleName"),
+					"propertyNames":        schemaRef("zoneName"),
 					"additionalProperties": schemaRef("boundPaths"),
 				},
 			},
@@ -558,41 +560,41 @@ func extendsSchema() map[string]any {
 	}
 }
 
-func moduleSchema() map[string]any {
+func zoneSchema() map[string]any {
 	return map[string]any{
-		"description": defDescription("module"),
+		"description": defDescription("zone"),
 		"oneOf": []any{
-			map[string]any{"description": "A Module's one glob in a repository ruleset, or its description in a Pattern file.", "type": "string", "minLength": 1},
-			map[string]any{"description": "A Module's globs in a repository ruleset.", "type": "array", "minItems": 1, "uniqueItems": true, "items": schemaRef("glob")},
-			strictObjectSchema("A Module object: paths and description in a repository ruleset; description and suggested paths in a Pattern file.", map[string]any{
-				"paths":       schemaRef("modulePaths"),
-				"description": map[string]any{"description": "Authoring description of the Module.", "type": "string"},
+			map[string]any{"description": "A Zone's one glob in a repository ruleset, or its description in a Pattern file.", "type": "string", "minLength": 1},
+			map[string]any{"description": "A Zone's globs in a repository ruleset.", "type": "array", "minItems": 1, "uniqueItems": true, "items": schemaRef("glob")},
+			strictObjectSchema("A Zone object: paths and description in a repository ruleset; description and suggested paths in a Pattern file.", map[string]any{
+				"paths":       schemaRef("zonePaths"),
+				"description": map[string]any{"description": "Authoring description of the Zone.", "type": "string"},
 			}),
 		},
 	}
 }
 
-func repositoryModuleSchema() map[string]any {
+func repositoryZoneSchema() map[string]any {
 	return map[string]any{
-		"description": defDescription("repositoryModule"),
+		"description": defDescription("repositoryZone"),
 		"oneOf": []any{
 			schemaRef("glob"),
-			map[string]any{"description": "The Module's globs.", "type": "array", "minItems": 1, "uniqueItems": true, "items": schemaRef("glob")},
-			strictObjectSchema("The Module's paths and an optional description.", map[string]any{
-				"paths":       schemaRef("modulePaths"),
-				"description": map[string]any{"description": "Authoring description of the Module.", "type": "string"},
+			map[string]any{"description": "The Zone's globs.", "type": "array", "minItems": 1, "uniqueItems": true, "items": schemaRef("glob")},
+			strictObjectSchema("The Zone's paths and an optional description.", map[string]any{
+				"paths":       schemaRef("zonePaths"),
+				"description": map[string]any{"description": "Authoring description of the Zone.", "type": "string"},
 			}, "paths"),
 		},
 	}
 }
 
-func patternModuleSchema() map[string]any {
+func patternZoneSchema() map[string]any {
 	return map[string]any{
-		"description": defDescription("patternModule"),
+		"description": defDescription("patternZone"),
 		"oneOf": []any{
-			map[string]any{"description": "What the Module is for.", "type": "string", "pattern": `\S`},
-			strictObjectSchema("The Module's description and the paths the Pattern suggests.", map[string]any{
-				"description": map[string]any{"description": "What the Module is for.", "type": "string", "pattern": `\S`},
+			map[string]any{"description": "What the Zone is for.", "type": "string", "pattern": `\S`},
+			strictObjectSchema("The Zone's description and the paths the Pattern suggests.", map[string]any{
+				"description": map[string]any{"description": "What the Zone is for.", "type": "string", "pattern": `\S`},
 				"paths":       schemaRef("suggestedPaths"),
 			}, "description"),
 		},
@@ -601,7 +603,7 @@ func patternModuleSchema() map[string]any {
 
 func rulesSchema() map[string]any {
 	return map[string]any{
-		"description":          "Every Rule keyed by its Rule ID. An entry with one assertion key is a Rule; an entry with none is an Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID.",
+		"description":          "Every Rule keyed by its Rule ID. An entry with one assertion key is a Rule; an entry with none is an Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID, or of a built-in domain Rule, keyed by its block invariant.",
 		"type":                 "object",
 		"propertyNames":        schemaRef("ruleID"),
 		"additionalProperties": schemaRef("rule"),
@@ -610,7 +612,7 @@ func rulesSchema() map[string]any {
 
 func ruleSchema() map[string]any {
 	names := make([]string, 0, len(Types())+1)
-	for _, t := range Types() {
+	for _, t := range AuthoredTypes() {
 		names = append(names, assertionDefName(t))
 	}
 	names = append(names, "override")
@@ -623,7 +625,7 @@ func ruleSchema() map[string]any {
 // a Pattern file distributes Rules and has nothing to override.
 func patternRuleSchema() map[string]any {
 	names := make([]string, 0, len(Types()))
-	for _, t := range Types() {
+	for _, t := range AuthoredTypes() {
 		names = append(names, assertionDefName(t))
 	}
 	s := oneOfRefs(names...)
@@ -646,16 +648,16 @@ func commonRuleProperties(t Type) (map[string]any, []string) {
 	}
 	var required []string
 	switch t.Scope() {
-	case ScopeModules:
-		props["on"] = schemaRef("judgedModules")
+	case ScopeZones:
+		props["on"] = schemaRef("judgedZones")
 		required = append(required, "on")
-	case ScopeOneModule:
-		props["on"] = schemaRef("protectedModule")
+	case ScopeOneZone:
+		props["on"] = schemaRef("protectedZone")
 		required = append(required, "on")
-	case ScopeModulesOrRepository:
-		props["on"] = schemaRef("judgedModulesOrRepository")
+	case ScopeZonesOrRepository:
+		props["on"] = schemaRef("judgedZonesOrRepository")
 	case ScopeRepository:
-		// The assertion itself names the Modules; on is not accepted.
+		// The assertion itself names the Zones; on is not accepted.
 	}
 	if t.AcceptsFiles() {
 		props["files"] = schemaRef("judgedFiles")
@@ -671,13 +673,13 @@ func assertionRuleSchema(t Type) map[string]any {
 	switch t {
 	case TypeConsumes:
 		imports := strictObjectSchema(
-			"What the Module may import. At least one restriction must be declared: an internal allow-list, external: forbid, or stdlib: forbid.",
+			"What the Zone may import. At least one restriction must be declared: an internal allow-list, external: forbid, or stdlib: forbid.",
 			map[string]any{
 				"internal": map[string]any{
-					"description": "Declared Modules this Module may import; absent means unrestricted, empty means none. The owning Module is always permitted implicitly.",
+					"description": "Declared Zones this Zone may import; absent means unrestricted, empty means none. The owning Zone is always permitted implicitly.",
 					"type":        "array",
 					"uniqueItems": true,
-					"items":       schemaRef("moduleName"),
+					"items":       schemaRef("zoneName"),
 				},
 				"external": schemaRef("importPolicy"),
 				"stdlib":   schemaRef("importPolicy"),
@@ -699,7 +701,7 @@ func assertionRuleSchema(t Type) map[string]any {
 		props[key] = imports
 	case TypeStructure:
 		props[key] = map[string]any{
-			"description": "Files the Module must or must not contain. With each, the globs derive from a recorded vocabulary collection and may carry {name:<case>} placeholders.",
+			"description": "Files the Zone must or must not contain. With each, the globs derive from a recorded vocabulary collection and may carry {name:<case>} placeholders.",
 			"oneOf": []any{
 				structureAssertionSchema(false),
 				structureAssertionSchema(true),
@@ -715,18 +717,18 @@ func assertionRuleSchema(t Type) map[string]any {
 		}
 	case TypeLayers:
 		props[key] = map[string]any{
-			"description": "Modules ordered highest first; at least two, no duplicates.",
+			"description": "Zones ordered highest first; at least two, no duplicates.",
 			"type":        "array",
 			"minItems":    2,
 			"uniqueItems": true,
-			"items":       schemaRef("moduleName"),
+			"items":       schemaRef("zoneName"),
 		}
 	case TypeProtected:
 		props[key] = map[string]any{
-			"description": "Modules permitted to import the Module named under on; empty means none.",
+			"description": "Zones permitted to import the Zone named under on; empty means none.",
 			"type":        "array",
 			"uniqueItems": true,
-			"items":       schemaRef("moduleName"),
+			"items":       schemaRef("zoneName"),
 		}
 	case TypeIndependence:
 		props[key] = map[string]any{
@@ -738,23 +740,12 @@ func assertionRuleSchema(t Type) map[string]any {
 		}
 	case TypeAcyclic:
 		props[key] = map[string]any{
-			"description": "Cycle scope: a list of declared Modules, or an empty mapping for every declared Module; inside a Pattern the empty mapping means every Module the Pattern declares.",
+			"description": "Cycle scope: a list of declared Zones, or an empty mapping for every declared Zone; inside a Pattern the empty mapping means every Zone the Pattern declares.",
 			"oneOf": []any{
-				map[string]any{"description": "The declared Modules in scope; at least two, no duplicates.", "type": "array", "minItems": 2, "uniqueItems": true, "items": schemaRef("moduleName")},
-				strictObjectSchema("The empty mapping: every declared Module is in scope.", map[string]any{}),
+				map[string]any{"description": "The declared Zones in scope; at least two, no duplicates.", "type": "array", "minItems": 2, "uniqueItems": true, "items": schemaRef("zoneName")},
+				strictObjectSchema("The empty mapping: every declared Zone is in scope.", map[string]any{}),
 			},
 		}
-	case TypeInvariants:
-		props[key] = strictObjectSchema(
-			"Evaluation posture. closed: false (default): child constructors may return errors. closed: true: every exported error-returning function in the owner's files must call the cluster method.",
-			map[string]any{
-				"closed": map[string]any{
-					"description": "When true, extra exported error-returning functions that do not call the cluster method fail. Default: false.",
-					"type":        "boolean",
-					"default":     false,
-				},
-			},
-		)
 	case TypeContent:
 		props[key] = strictObjectSchema(
 			"Content no selected file may contain.",
@@ -778,6 +769,8 @@ func assertionRuleSchema(t Type) map[string]any {
 			"type":                 "object",
 			"additionalProperties": true,
 		}
+	case TypeDomain:
+		// Built in, never spelled: AuthoredTypes never yields it.
 	}
 	return strictObjectSchema(description, props, required...)
 }
@@ -845,15 +838,15 @@ func exclusionSchema() map[string]any {
 	s := strictObjectSchema(
 		defDescription("exclusion"),
 		map[string]any{
-			"paths":   schemaRef("excludedPaths"),
-			"modules": schemaRef("excludedModules"),
-			"reason":  schemaRef("reason"),
+			"paths":  schemaRef("excludedPaths"),
+			"zones":  schemaRef("excludedZones"),
+			"reason": schemaRef("reason"),
 		},
 		"reason",
 	)
 	s["anyOf"] = []any{
 		map[string]any{"required": []string{"paths"}},
-		map[string]any{"required": []string{"modules"}},
+		map[string]any{"required": []string{"zones"}},
 	}
 	return s
 }

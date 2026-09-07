@@ -1,12 +1,12 @@
 // Package yamlrule loads complete Rule aggregates from rules.arclint.yaml. The
 // accepted grammar is one document shape for both file kinds: a
-// repository ruleset carries runtime, scan, extends, modules, and
+// repository ruleset carries runtime, scan, extends, zones, and
 // rules; a Pattern distribution file carries the pattern header,
-// modules, and rules. Every Rule is keyed by its Rule ID and carries
+// zones, and rules. Every Rule is keyed by its Rule ID and carries
 // exactly one assertion key, which decides its Type; an entry with no
 // assertion key is an Override of a Rule an extended Pattern
 // distributes. Compact spellings are sugar the loader expands: the
-// engine only ever sees complete Modules, Rules, and Patterns. A
+// engine only ever sees complete Zones, Rules, and Patterns. A
 // representation that cannot become a valid value is an error, never a
 // partial value.
 package yamlrule
@@ -173,7 +173,7 @@ const (
 	keyRuntime       = "runtime"
 	keyScan          = "scan"
 	keyExtends       = "extends"
-	keyModules       = "modules"
+	keyZones         = "zones"
 	keyRules         = "rules"
 	keyNamespace     = "namespace"
 	keyName          = "name"
@@ -200,7 +200,6 @@ const (
 	keyForbid        = "forbid"
 	keyEach          = "each"
 	keyCase          = "case"
-	keyClosed        = "closed"
 )
 
 // document is the strictly parsed file before domain translation.
@@ -210,7 +209,7 @@ type document struct {
 	runtime []rule.Language
 	scan    rule.Scan
 	extends []extension
-	modules []moduleEntry
+	zones   []zoneEntry
 	rules   []ruleEntry
 }
 
@@ -228,11 +227,11 @@ type extension struct {
 	bindings []rule.Binding
 }
 
-// moduleEntry is one modules entry; paths is nil when the entry
+// zoneEntry is one zones entry; paths is nil when the entry
 // carries none (legal only in a Pattern file).
-type moduleEntry struct {
+type zoneEntry struct {
 	where       string
-	name        rule.ModuleName
+	name        rule.ZoneName
 	description string
 	paths       []rule.Glob
 	hasPaths    bool
@@ -245,7 +244,7 @@ type ruleEntry struct {
 	id          string
 	description string
 	severity    string
-	on          []rule.ModuleName
+	on          []rule.ZoneName
 	onPresent   bool
 	files       []rule.Glob
 	assertion   string
@@ -258,9 +257,9 @@ type ruleEntry struct {
 }
 
 type exclusionEntry struct {
-	paths   []rule.Glob
-	modules []rule.ModuleName
-	reason  string
+	paths  []rule.Glob
+	zones  []rule.ZoneName
+	reason string
 }
 
 type suppressionEntry struct {
@@ -293,7 +292,7 @@ func parse(data []byte, source string) (*document, error) {
 	fail := func(format string, args ...any) (*document, error) {
 		return nil, fmt.Errorf("%s: %s", source, fmt.Sprintf(format, args...))
 	}
-	if err := top.allow(keyPattern, keyRuntime, keyScan, keyExtends, keyModules, keyRules); err != nil {
+	if err := top.allow(keyPattern, keyRuntime, keyScan, keyExtends, keyZones, keyRules); err != nil {
 		return fail("%v", err)
 	}
 	if n := top.get(keyPattern); n != nil {
@@ -336,12 +335,12 @@ func parse(data []byte, source string) (*document, error) {
 		}
 		doc.extends = exts
 	}
-	if n := top.get(keyModules); n != nil {
-		mods, err := parseModules(n, doc.pattern != nil)
+	if n := top.get(keyZones); n != nil {
+		mods, err := parseZones(n, doc.pattern != nil)
 		if err != nil {
 			return fail("%v", err)
 		}
-		doc.modules = mods
+		doc.zones = mods
 	}
 	if n := top.get(keyRules); n != nil {
 		rules, err := parseRules(n)
@@ -481,7 +480,7 @@ func parseExtends(n *yaml.Node) ([]extension, error) {
 	return out, nil
 }
 
-// parseBindings reads one extends entry's bind map: Pattern Module
+// parseBindings reads one extends entry's bind map: Pattern Zone
 // name to the local paths that stand in for it.
 func parseBindings(n *yaml.Node, where string) ([]rule.Binding, error) {
 	bm, err := asMapping(n, where)
@@ -490,7 +489,7 @@ func parseBindings(n *yaml.Node, where string) ([]rule.Binding, error) {
 	}
 	var out []rule.Binding
 	for _, key := range bm.keys() {
-		name, err := rule.NewModuleName(key)
+		name, err := rule.NewZoneName(key)
 		if err != nil {
 			return nil, fmt.Errorf("%s.%s: %v", where, key, err)
 		}
@@ -511,22 +510,22 @@ func parseBindings(n *yaml.Node, where string) ([]rule.Binding, error) {
 	return out, nil
 }
 
-// parseModules expands the module sugar. In a repository ruleset a
-// string or a list is the Module's paths; in a Pattern file a string
+// parseZones expands the zone sugar. In a repository ruleset a
+// string or a list is the Zone's paths; in a Pattern file a string
 // is its description. The object form spells both.
-func parseModules(n *yaml.Node, inPattern bool) ([]moduleEntry, error) {
-	m, err := asMapping(n, keyModules)
+func parseZones(n *yaml.Node, inPattern bool) ([]zoneEntry, error) {
+	m, err := asMapping(n, keyZones)
 	if err != nil {
 		return nil, err
 	}
-	var out []moduleEntry
+	var out []zoneEntry
 	for _, key := range m.keys() {
-		where := "modules." + key
-		name, err := rule.NewModuleName(key)
+		where := "zones." + key
+		name, err := rule.NewZoneName(key)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %v", where, err)
 		}
-		entry := moduleEntry{where: where, name: name}
+		entry := zoneEntry{where: where, name: name}
 		v := m.get(key)
 		switch v.Kind {
 		case yaml.ScalarNode:
@@ -546,7 +545,7 @@ func parseModules(n *yaml.Node, inPattern bool) ([]moduleEntry, error) {
 			}
 		case yaml.SequenceNode:
 			if inPattern {
-				return nil, fmt.Errorf("%s: a pattern lists a module by its description; the adopting repository binds its paths", where)
+				return nil, fmt.Errorf("%s: a pattern lists a zone by its description; the adopting repository binds its paths", where)
 			}
 			patterns, err := stringList(v, where)
 			if err != nil {
@@ -580,10 +579,10 @@ func parseModules(n *yaml.Node, inPattern bool) ([]moduleEntry, error) {
 				entry.hasPaths = true
 			}
 			if inPattern && strings.TrimSpace(entry.description) == "" {
-				return nil, fmt.Errorf("%s: a pattern module requires a description", where)
+				return nil, fmt.Errorf("%s: a pattern zone requires a description", where)
 			}
 			if !inPattern && !entry.hasPaths {
-				return nil, fmt.Errorf("%s: a repository module requires paths; a module without paths is legal only in a pattern file", where)
+				return nil, fmt.Errorf("%s: a repository zone requires paths; a zone without paths is legal only in a pattern file", where)
 			}
 		default:
 			return nil, fmt.Errorf("%s: expected a glob, a list of globs, or an object with paths and description", where)
@@ -656,7 +655,7 @@ func parseRule(id, where string, n *yaml.Node) (ruleEntry, error) {
 			return ruleEntry{}, err
 		}
 		for _, name := range names {
-			mn, err := rule.NewModuleName(name)
+			mn, err := rule.NewZoneName(name)
 			if err != nil {
 				return ruleEntry{}, fmt.Errorf("%s.on: %v", where, err)
 			}
@@ -716,7 +715,7 @@ func parseExclusion(n *yaml.Node, where string) (exclusionEntry, error) {
 	if err != nil {
 		return exclusionEntry{}, err
 	}
-	if err := m.allow(keyPaths, keyModules, keyReason); err != nil {
+	if err := m.allow(keyPaths, keyZones, keyReason); err != nil {
 		return exclusionEntry{}, fmt.Errorf("%s: %v", where, err)
 	}
 	var out exclusionEntry
@@ -729,24 +728,24 @@ func parseExclusion(n *yaml.Node, where string) (exclusionEntry, error) {
 			return exclusionEntry{}, fmt.Errorf("%s.paths: %v", where, err)
 		}
 	}
-	if v := m.get(keyModules); v != nil {
-		names, err := stringOrList(v, where+".modules")
+	if v := m.get(keyZones); v != nil {
+		names, err := stringOrList(v, where+".zones")
 		if err != nil {
 			return exclusionEntry{}, err
 		}
 		for _, name := range names {
-			mn, err := rule.NewModuleName(name)
+			mn, err := rule.NewZoneName(name)
 			if err != nil {
-				return exclusionEntry{}, fmt.Errorf("%s.modules: %v", where, err)
+				return exclusionEntry{}, fmt.Errorf("%s.zones: %v", where, err)
 			}
-			out.modules = append(out.modules, mn)
+			out.zones = append(out.zones, mn)
 		}
 	}
 	if out.reason, err = requiredReason(m, where); err != nil {
 		return exclusionEntry{}, err
 	}
-	if len(out.paths)+len(out.modules) == 0 {
-		return exclusionEntry{}, fmt.Errorf("%s: names no paths and no modules", where)
+	if len(out.paths)+len(out.zones) == 0 {
+		return exclusionEntry{}, fmt.Errorf("%s: names no paths and no zones", where)
 	}
 	return out, nil
 }
@@ -793,9 +792,9 @@ func requiredReason(m mapping, where string) (string, error) {
 }
 
 // distribution translates a Pattern file into a Pattern: local Rule
-// IDs are qualified with the Pattern's namespace/name, Modules carry
+// IDs are qualified with the Pattern's namespace/name, Zones carry
 // descriptions and suggested paths, and every Rule names only listed
-// Modules.
+// Zones.
 func (d *document) distribution(extensions []rule.PatternExtension) (rule.Pattern, error) {
 	h := d.pattern
 	fail := func(format string, args ...any) (rule.Pattern, error) {
@@ -804,15 +803,15 @@ func (d *document) distribution(extensions []rule.PatternExtension) (rule.Patter
 	if _, err := rule.NewPatternReference(h.namespace, h.name, h.version); err != nil {
 		return fail("%v", err)
 	}
-	modules := make([]rule.PatternModule, 0, len(d.modules))
-	declared := map[rule.ModuleName]bool{}
-	universe := make([]rule.ModuleName, 0, len(d.modules))
-	for _, m := range d.modules {
-		pm, err := rule.NewPatternModule(m.name, m.description, m.paths)
+	zones := make([]rule.PatternZone, 0, len(d.zones))
+	declared := map[rule.ZoneName]bool{}
+	universe := make([]rule.ZoneName, 0, len(d.zones))
+	for _, m := range d.zones {
+		pm, err := rule.NewPatternZone(m.name, m.description, m.paths)
 		if err != nil {
 			return fail("%s: %v", m.where, err)
 		}
-		modules = append(modules, pm)
+		zones = append(zones, pm)
 		declared[m.name] = true
 		universe = append(universe, m.name)
 	}
@@ -841,7 +840,7 @@ func (d *document) distribution(extensions []rule.PatternExtension) (rule.Patter
 		Version:       h.version,
 		Documentation: h.documentation,
 		Coverage:      h.coverage,
-		Modules:       modules,
+		Zones:         zones,
 		Rules:         rules,
 		Extensions:    extensions,
 	})
@@ -863,22 +862,32 @@ func (d *document) repository(lang vocab.UbiquitousLanguage, available []rule.Pa
 		byRef[p.Reference().String()] = p
 	}
 
-	var modules []rule.Module
-	moduleIndex := map[rule.ModuleName]int{}
-	addModule := func(m rule.Module, where string) error {
-		if i, dup := moduleIndex[m.Name()]; dup {
-			if sameGlobs(modules[i].Paths(), m.Paths()) {
+	var zones []rule.Zone
+	zoneIndex := map[rule.ZoneName]int{}
+	addZone := func(m rule.Zone, where string) error {
+		if i, dup := zoneIndex[m.Name()]; dup {
+			if sameGlobs(zones[i].Paths(), m.Paths()) {
 				return nil
 			}
-			return fmt.Errorf("%s: module %q is already declared with different paths", where, m.Name())
+			return fmt.Errorf("%s: zone %q is already declared with different paths", where, m.Name())
 		}
-		moduleIndex[m.Name()] = len(modules)
-		modules = append(modules, m)
+		zoneIndex[m.Name()] = len(zones)
+		zones = append(zones, m)
 		return nil
 	}
 
 	var rules []rule.Rule
-	patternRules := map[string]int{}
+	distributed := map[string]int{}
+	if !lang.Empty() {
+		native, err := rule.BuiltIn()
+		if err != nil {
+			return fail("%v", err)
+		}
+		for _, r := range native {
+			distributed[r.ID().Qualified()] = len(rules)
+			rules = append(rules, r)
+		}
+	}
 	var extensions []rule.ConfiguredExtension
 	for _, ext := range d.extends {
 		p, ok := byRef[ext.ref.String()]
@@ -890,7 +899,7 @@ func (d *document) repository(lang vocab.UbiquitousLanguage, available []rule.Pa
 			return fail("%s: %v", ext.where, err)
 		}
 		for _, m := range bound {
-			if err := addModule(m, ext.where+".bind"); err != nil {
+			if err := addZone(m, ext.where+".bind"); err != nil {
 				return fail("%v", err)
 			}
 		}
@@ -899,27 +908,27 @@ func (d *document) repository(lang vocab.UbiquitousLanguage, available []rule.Pa
 			if err != nil {
 				return fail("%s: %v", ext.where, err)
 			}
-			patternRules[r.ID().Qualified()] = len(rules)
+			distributed[r.ID().Qualified()] = len(rules)
 			rules = append(rules, r)
 		}
 		for _, e := range p.Extensions() {
 			extensions = append(extensions, rule.ConfiguredExtension{Pattern: p.Reference(), Extension: e})
 		}
 	}
-	for _, m := range d.modules {
-		mod, err := rule.NewModule(m.name, m.description, m.paths)
+	for _, m := range d.zones {
+		mod, err := rule.NewZone(m.name, m.description, m.paths)
 		if err != nil {
 			return fail("%s: %v", m.where, err)
 		}
-		if _, dup := moduleIndex[m.name]; dup {
-			return fail("%s: module %q is already bound by an extended pattern", m.where, m.name)
+		if _, dup := zoneIndex[m.name]; dup {
+			return fail("%s: zone %q is already bound by an extended pattern", m.where, m.name)
 		}
-		if err := addModule(mod, m.where); err != nil {
+		if err := addZone(mod, m.where); err != nil {
 			return fail("%v", err)
 		}
 	}
-	declared := map[rule.ModuleName]bool{}
-	for _, m := range modules {
+	declared := map[rule.ZoneName]bool{}
+	for _, m := range zones {
 		declared[m.Name()] = true
 	}
 
@@ -931,9 +940,13 @@ func (d *document) repository(lang vocab.UbiquitousLanguage, available []rule.Pa
 		}
 		q := id.Qualified()
 		if e.assertion == "" {
-			i, ok := patternRules[q]
+			i, ok := distributed[q]
+			if !ok && rule.BuiltInID(id) {
+				return fail("%s: rule %s is built in, and exists once a domain is recorded; record the domain in %s or remove the override",
+					e.where, q, vocab.UbiquitousLanguageFileName)
+			}
 			if !ok {
-				return fail("%s: carries no assertion, so it is an override, but no extended pattern distributes rule %s; give a new Rule one assertion key (%s)",
+				return fail("%s: carries no assertion, so it is an override, but no extended pattern or built-in rule distributes rule %s; give a new Rule one assertion key (%s)",
 					e.where, q, strings.Join(rule.AssertionKeys(), ", "))
 			}
 			if seen[q] {
@@ -947,7 +960,11 @@ func (d *document) repository(lang vocab.UbiquitousLanguage, available []rule.Pa
 			rules[i] = overridden
 			continue
 		}
-		if _, ok := patternRules[q]; ok {
+		if rule.BuiltInID(id) {
+			return fail("%s: rule %s is built in; arclint composes it from the recorded domain, and a ruleset adopts it with an override (severity, disable, exclude, suppress)",
+				e.where, q)
+		}
+		if _, ok := distributed[q]; ok {
 			return fail("%s: rule %s is distributed by an extended pattern; to change what it asserts, disable it with a reason and add a local Rule under a new ID",
 				e.where, q)
 		}
@@ -963,7 +980,7 @@ func (d *document) repository(lang vocab.UbiquitousLanguage, available []rule.Pa
 	}
 	return rule.Configured{
 		Rules:      rules,
-		Modules:    modules,
+		Zones:      zones,
 		Languages:  d.runtime,
 		Scan:       d.scan,
 		Extensions: extensions,
@@ -1004,7 +1021,7 @@ func (e ruleEntry) applyOverride(r rule.Rule) (rule.Rule, error) {
 		hint string
 	}{
 		{e.description != "", keyDescription, "a pattern rule keeps its own description"},
-		{e.onPresent, keyOn, "a pattern rule keeps its own modules; use exclude to narrow it"},
+		{e.onPresent, keyOn, "a pattern rule keeps its own zones; use exclude to narrow it"},
 		{len(e.files) > 0, keyFiles, "a pattern rule keeps its own files; use exclude to narrow it"},
 		{e.withPresent, keyWith, "a pattern rule keeps its own parameters"},
 	} {
@@ -1032,7 +1049,7 @@ func (e ruleEntry) adopt(r rule.Rule) (rule.Rule, error) {
 		}
 	}
 	if e.exclude != nil {
-		ex, err := rule.NewExclusion(e.exclude.paths, e.exclude.modules, e.exclude.reason)
+		ex, err := rule.NewExclusion(e.exclude.paths, e.exclude.zones, e.exclude.reason)
 		if err != nil {
 			return rule.Rule{}, fmt.Errorf("%s.exclude: %v", e.where, err)
 		}
@@ -1056,14 +1073,14 @@ func (e ruleEntry) adopt(r rule.Rule) (rule.Rule, error) {
 }
 
 // build constructs the Rule an entry with an assertion spells, then
-// applies its own adoption decisions. declared is the set of Modules
+// applies its own adoption decisions. declared is the set of Zones
 // the entry may name; universe, non-nil only inside a Pattern, lists
-// the Pattern's Modules in order, and it is what an empty acyclic
+// the Pattern's Zones in order, and it is what an empty acyclic
 // scope resolves to: a Pattern's Rules speak about the Pattern's
-// Modules, never about Modules the adopting repository or a sibling
+// Zones, never about Zones the adopting repository or a sibling
 // Pattern declares. In the repository ruleset the empty scope stays
-// open and covers every declared Module at evaluation.
-func (e ruleEntry) build(lang vocab.UbiquitousLanguage, declared map[rule.ModuleName]bool, universe []rule.ModuleName) (rule.Rule, error) {
+// open and covers every declared Zone at evaluation.
+func (e ruleEntry) build(lang vocab.UbiquitousLanguage, declared map[rule.ZoneName]bool, universe []rule.ZoneName) (rule.Rule, error) {
 	t, ok := rule.TypeOfAssertionKey(e.assertion)
 	if !ok {
 		return rule.Rule{}, fmt.Errorf("%s: unknown assertion %q", e.where, e.assertion)
@@ -1072,40 +1089,40 @@ func (e ruleEntry) build(lang vocab.UbiquitousLanguage, declared map[rule.Module
 		return rule.Rule{}, fmt.Errorf("%s: with belongs to uses; %s carries its parameters under %s", e.where, e.assertion, e.assertion)
 	}
 	if len(e.files) > 0 && !t.AcceptsFiles() {
-		return rule.Rule{}, fmt.Errorf("%s: %s does not accept files; it judges whole modules", e.where, e.assertion)
+		return rule.Rule{}, fmt.Errorf("%s: %s does not accept files; it judges whole zones", e.where, e.assertion)
 	}
 	for _, m := range e.on {
 		if !declared[m] {
-			return rule.Rule{}, fmt.Errorf("%s.on: module %q is not declared", e.where, m)
+			return rule.Rule{}, fmt.Errorf("%s.on: zone %q is not declared", e.where, m)
 		}
 	}
 	spec := rule.Spec{ID: e.id, Type: t, Claim: e.description, Severity: e.severity}
 	var err error
 	switch t.Scope() {
-	case rule.ScopeModules:
+	case rule.ScopeZones:
 		if !e.onPresent {
-			return rule.Rule{}, fmt.Errorf("%s: %s requires on (the module or modules it judges)", e.where, e.assertion)
+			return rule.Rule{}, fmt.Errorf("%s: %s requires on (the zone or zones it judges)", e.where, e.assertion)
 		}
-		if spec.Applicability, err = rule.ModuleApplicability(e.on, e.files...); err != nil {
+		if spec.Applicability, err = rule.ZoneApplicability(e.on, e.files...); err != nil {
 			return rule.Rule{}, fmt.Errorf("%s.on: %v", e.where, err)
 		}
-	case rule.ScopeOneModule:
+	case rule.ScopeOneZone:
 		if len(e.on) != 1 {
-			return rule.Rule{}, fmt.Errorf("%s: %s requires on naming exactly one module", e.where, e.assertion)
+			return rule.Rule{}, fmt.Errorf("%s: %s requires on naming exactly one zone", e.where, e.assertion)
 		}
 		if spec.Applicability, err = rule.RepositoryApplicability(); err != nil {
 			return rule.Rule{}, fmt.Errorf("%s: %v", e.where, err)
 		}
 	case rule.ScopeRepository:
 		if e.onPresent {
-			return rule.Rule{}, fmt.Errorf("%s: %s names modules itself, so it has no on", e.where, e.assertion)
+			return rule.Rule{}, fmt.Errorf("%s: %s names zones itself, so it has no on", e.where, e.assertion)
 		}
 		if spec.Applicability, err = rule.RepositoryApplicability(); err != nil {
 			return rule.Rule{}, fmt.Errorf("%s: %v", e.where, err)
 		}
-	case rule.ScopeModulesOrRepository:
+	case rule.ScopeZonesOrRepository:
 		if e.onPresent {
-			spec.Applicability, err = rule.ModuleApplicability(e.on, e.files...)
+			spec.Applicability, err = rule.ZoneApplicability(e.on, e.files...)
 		} else {
 			spec.Applicability, err = rule.RepositoryApplicability(e.files...)
 		}
@@ -1129,12 +1146,12 @@ func (e ruleEntry) build(lang vocab.UbiquitousLanguage, declared map[rule.Module
 		spec.Params, err = parseIndependent(e.assertNode, where)
 	case rule.TypeAcyclic:
 		spec.Params, err = parseAcyclic(e.assertNode, where, universe)
-	case rule.TypeInvariants:
-		spec.Params, err = parseInvariants(e.assertNode, where)
 	case rule.TypeContent:
 		spec.Params, err = parseContent(e.assertNode, where)
 	case rule.TypeExtension:
 		spec.Params, err = parseUses(e.assertNode, where, e.with)
+	case rule.TypeDomain:
+		// Built in, never spelled: no assertion key resolves to it.
 	}
 	if err != nil {
 		return rule.Rule{}, err
@@ -1143,9 +1160,9 @@ func (e ruleEntry) build(lang vocab.UbiquitousLanguage, declared map[rule.Module
 	if err != nil {
 		return rule.Rule{}, fmt.Errorf("%s: %v", e.where, err)
 	}
-	for _, m := range r.ReferencedModules() {
+	for _, m := range r.ReferencedZones() {
 		if !declared[m] {
-			return rule.Rule{}, fmt.Errorf("%s: names module %q, which is not declared", e.where, m)
+			return rule.Rule{}, fmt.Errorf("%s: names zone %q, which is not declared", e.where, m)
 		}
 	}
 	return e.adopt(r)
@@ -1165,15 +1182,15 @@ func parseImports(n *yaml.Node, where string) (rule.Params, error) {
 		if err != nil {
 			return nil, err
 		}
-		moduleNames := make([]rule.ModuleName, 0, len(names))
+		zoneNames := make([]rule.ZoneName, 0, len(names))
 		for _, name := range names {
-			mn, err := rule.NewModuleName(name)
+			mn, err := rule.NewZoneName(name)
 			if err != nil {
 				return nil, fmt.Errorf("%s.internal: %v", where, err)
 			}
-			moduleNames = append(moduleNames, mn)
+			zoneNames = append(zoneNames, mn)
 		}
-		allow, err := rule.NewAllowList(moduleNames...)
+		allow, err := rule.NewAllowList(zoneNames...)
 		if err != nil {
 			return nil, fmt.Errorf("%s.internal: %v", where, err)
 		}
@@ -1279,19 +1296,19 @@ func parseNaming(n *yaml.Node, where string) (rule.Params, error) {
 }
 
 func parseLayers(n *yaml.Node, where string) (rule.Params, error) {
-	layers, err := moduleNameList(n, where)
+	layers, err := zoneNameList(n, where)
 	if err != nil {
 		return nil, err
 	}
 	return rule.LayersParams{Layers: layers}, nil
 }
 
-func parseImportedBy(n *yaml.Node, where string, protected rule.ModuleName) (rule.Params, error) {
-	allow, err := moduleNameList(n, where)
+func parseImportedBy(n *yaml.Node, where string, protected rule.ZoneName) (rule.Params, error) {
+	allow, err := zoneNameList(n, where)
 	if err != nil {
 		return nil, err
 	}
-	return rule.ProtectedParams{Module: protected, Allow: allow}, nil
+	return rule.ProtectedParams{Zone: protected, Allow: allow}, nil
 }
 
 func parseIndependent(n *yaml.Node, where string) (rule.Params, error) {
@@ -1306,46 +1323,29 @@ func parseIndependent(n *yaml.Node, where string) (rule.Params, error) {
 	return rule.IndependenceParams{Folders: globs}, nil
 }
 
-// parseAcyclic reads the cycle scope: a list of at least two Modules,
-// or {} for every declared Module. Inside a Pattern, {} is resolved
-// now to the Pattern's own Modules (universe), so the Rule it
+// parseAcyclic reads the cycle scope: a list of at least two Zones,
+// or {} for every declared Zone. Inside a Pattern, {} is resolved
+// now to the Pattern's own Zones (universe), so the Rule it
 // distributes names exactly what the Pattern declared.
-func parseAcyclic(n *yaml.Node, where string, universe []rule.ModuleName) (rule.Params, error) {
+func parseAcyclic(n *yaml.Node, where string, universe []rule.ZoneName) (rule.Params, error) {
 	switch n.Kind {
 	case yaml.SequenceNode:
-		modules, err := moduleNameList(n, where)
+		zones, err := zoneNameList(n, where)
 		if err != nil {
 			return nil, err
 		}
-		if len(modules) < 2 {
-			return nil, fmt.Errorf("%s: a cycle needs at least two modules; use {} for every declared module", where)
+		if len(zones) < 2 {
+			return nil, fmt.Errorf("%s: a cycle needs at least two zones; use {} for every declared zone", where)
 		}
-		return rule.AcyclicParams{Modules: modules}, nil
+		return rule.AcyclicParams{Zones: zones}, nil
 	case yaml.MappingNode:
 		if len(n.Content) != 0 {
-			return nil, fmt.Errorf("%s: expected a list of modules or {} for every declared module", where)
+			return nil, fmt.Errorf("%s: expected a list of zones or {} for every declared zone", where)
 		}
-		return rule.AcyclicParams{Modules: append([]rule.ModuleName(nil), universe...)}, nil
+		return rule.AcyclicParams{Zones: append([]rule.ZoneName(nil), universe...)}, nil
 	default:
-		return nil, fmt.Errorf("%s: expected a list of modules or {} for every declared module", where)
+		return nil, fmt.Errorf("%s: expected a list of zones or {} for every declared zone", where)
 	}
-}
-
-func parseInvariants(n *yaml.Node, where string) (rule.Params, error) {
-	m, err := asMapping(n, where)
-	if err != nil {
-		return nil, err
-	}
-	if err := m.allow(keyClosed); err != nil {
-		return nil, fmt.Errorf("%s: %v", where, err)
-	}
-	params := rule.InvariantsParams{}
-	if v := m.get(keyClosed); v != nil {
-		if params.Closed, err = boolValue(v, where+".closed"); err != nil {
-			return nil, err
-		}
-	}
-	return params, nil
 }
 
 func parseContent(n *yaml.Node, where string) (rule.Params, error) {
@@ -1375,14 +1375,14 @@ func parseUses(n *yaml.Node, where string, with map[string]any) (rule.Params, er
 	return rule.ExtensionParams{Uses: name, With: with}, nil
 }
 
-func moduleNameList(n *yaml.Node, where string) ([]rule.ModuleName, error) {
+func zoneNameList(n *yaml.Node, where string) ([]rule.ZoneName, error) {
 	names, err := stringList(n, where)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]rule.ModuleName, 0, len(names))
+	out := make([]rule.ZoneName, 0, len(names))
 	for _, name := range names {
-		mn, err := rule.NewModuleName(name)
+		mn, err := rule.NewZoneName(name)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %v", where, err)
 		}

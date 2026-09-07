@@ -9,4 +9,4 @@ files:
 expect:
   - kind: violation
     path: internal/domain/pattern/pattern.go
-    message: "path forbidden by structure rule \"internal/domain/pattern/**\" of Module \"domain\""
+    message: "path forbidden by structure rule \"internal/domain/pattern/**\" of Zone \"domain\""

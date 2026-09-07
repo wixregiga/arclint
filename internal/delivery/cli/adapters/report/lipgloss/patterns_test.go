@@ -45,7 +45,7 @@ func TestLipglossPatternInstallPreservesGrammar(t *testing.T) {
 		Reference: "acme/layers@1.2.0", Digest: "sha256:9b1c2d3e4f5a6666", Source: distribution.SourceRegistry,
 		VendoredPath: ".arclint/patterns/acme/layers",
 		RulesetPath:  "rules.arclint.yaml",
-		Bound:        []application.BoundModule{{Module: "domain", Paths: []string{"internal/domain/**"}}},
+		Bound:        []application.BoundZone{{Zone: "domain", Paths: []string{"internal/domain/**"}}},
 		Unbound:      []string{"app"},
 	}})
 	if err != nil {
@@ -58,7 +58,7 @@ func TestLipglossPatternInstallPreservesGrammar(t *testing.T) {
 		"  domain: internal/domain/**\n" +
 		"unbound (bind each under extends[].bind before the ruleset loads):\n" +
 		"  app\n" +
-		"next: bind the unbound modules, then run `arclint check .`\n"
+		"next: bind the unbound zones, then run `arclint check .`\n"
 	if out := stripANSI(buf.String()); out != want {
 		t.Fatalf("stripped = %q, want %q", out, want)
 	}

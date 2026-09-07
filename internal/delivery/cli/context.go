@@ -8,9 +8,9 @@ import (
 )
 
 // NewContextCommand adapts the architectural-context use case: with no
-// scope it explains the repository: every Module, the Rule kinds in
+// scope it explains the repository: every Zone, the Rule kinds in
 // use, the enforcement posture, the whole recorded domain; with paths
-// or named Modules it is the worksite call, answering in one payload
+// or named Zones it is the worksite call, answering in one payload
 // what governs the given set and the part of the recorded domain that
 // anchors into it, the whole domain behind --full.
 func NewContextCommand(context application.GetArchitecturalContext, render Renderer) Command {
@@ -20,9 +20,9 @@ func NewContextCommand(context application.GetArchitecturalContext, render Rende
 		MaxArgs: -1,
 		Flags: []Flag{
 			{
-				Name:     "module",
-				Doc:      "declared modules to include in the scope (comma or space separated)",
-				Complete: completeModuleNames(context),
+				Name:     "zone",
+				Doc:      "declared zones to include in the scope (comma or space separated)",
+				Complete: completeZoneNames(context),
 			},
 			{
 				Name: "full",
@@ -36,9 +36,9 @@ func NewContextCommand(context application.GetArchitecturalContext, render Rende
 				paths = append(paths, strings.TrimPrefix(a, "./"))
 			}
 			result, err := context.Execute(application.ContextRequest{
-				Paths:   paths,
-				Modules: splitSelectors(ctx.String("module")),
-				Full:    ctx.Bool("full"),
+				Paths: paths,
+				Zones: splitSelectors(ctx.String("zone")),
+				Full:  ctx.Bool("full"),
 			})
 			if err != nil {
 				return ConfigError(err)
@@ -51,17 +51,17 @@ func NewContextCommand(context application.GetArchitecturalContext, render Rende
 	}
 }
 
-// completeModuleNames completes declared Module names for the context
-// --module flag, keeping typed comma segments as the inserted prefix.
+// completeZoneNames completes declared Zone names for the context
+// --zone flag, keeping typed comma segments as the inserted prefix.
 // Per the completion contract a failing ruleset yields no candidates.
-func completeModuleNames(context application.GetArchitecturalContext) func(toComplete string) []AutoCompleteCandidate {
+func completeZoneNames(context application.GetArchitecturalContext) func(toComplete string) []AutoCompleteCandidate {
 	return func(toComplete string) []AutoCompleteCandidate {
 		result, err := context.Execute(application.ContextRequest{})
 		if err != nil {
 			return nil
 		}
-		candidates := make([]AutoCompleteCandidate, 0, len(result.Modules))
-		for _, m := range result.Modules {
+		candidates := make([]AutoCompleteCandidate, 0, len(result.Zones))
+		for _, m := range result.Zones {
 			candidates = append(candidates, AutoCompleteCandidate{Value: m.Name, Doc: m.Description})
 		}
 		return withListPrefix(toComplete, candidates)

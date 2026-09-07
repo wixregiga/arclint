@@ -1,13 +1,17 @@
 # Conforming case: dependence flows downstream to upstream; the
-# conformance module imports the rule module, exactly as the recorded
-# conformist relation permits.
-rule: "arclint/domain-model:contexts/respect-relations"
+# conformance context imports the rule context, exactly as the
+# recorded conformist relation permits. The rule under test is the
+# built-in every recorded relation carries; nothing is installed.
+rule: "context_relation/imports-follow-influence"
 files:
   domain.arclint.yaml: |
     version: 1
+    project: fixture
     contexts:
-      - name: rule
-      - name: conformance
+      rule:
+        definition: The rules an architecture is held to.
+      conformance:
+        definition: The judgement of code against the rules.
     relations:
       - from: rule
         to: conformance

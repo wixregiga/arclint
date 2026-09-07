@@ -24,12 +24,12 @@ func DistillationRules() []DistillationRule {
 		},
 		{
 			ID:      "invariant-ownership",
-			Rule:    "Every must-always/must-never statement -> invariant (or assertion); assign exactly one owner. Always-true -> invariants[]; named operation -> assertions[] with id and on. Value-object owner, no id; aggregate owner of a named cluster contract requires id.",
-			Example: "total = sum of lines -> owner Order root; every tier priced before Publish -> assertion on Publish",
+			Rule:    "Every must-always/must-never statement -> invariant (or assertion) under exactly one owner. Always-true -> the owner's invariants, keyed; named operation -> the aggregate's assertions, keyed, with on. A value object's key names value integrity checked at construction; an aggregate's key names the root method that enforces the cluster rule.",
+			Example: "total = sum of lines -> Order.invariants.total-is-sum-of-lines; every tier priced before Publish -> Order.assertions.tiers-priced on Publish",
 		},
 		{
 			ID:      "specification-as-thing",
-			Rule:    "Experts pass the predicate around as a thing -> specifications[], a type with SatisfiedBy; never a flag on a value object and never an invariant.",
+			Rule:    "Experts pass the predicate around as a thing -> specifications, a type with SatisfiedBy; never a flag on a value object and never an invariant.",
 			Example: "preferred customer is handed to pricing as a spec, not inlined as a must-always",
 		},
 		{

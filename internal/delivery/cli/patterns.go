@@ -104,7 +104,7 @@ func NewPatternsCommand(commands PatternCommands, render Renderer) Command {
 				Name:  "install",
 				Short: "extend " + rule.RulesetFileName + " with one Pattern, vendoring it when it came from the Registry",
 				Long: "Installing records the Pattern under extends in " + rule.RulesetFileName + " with every Binding the Pattern suggests, " +
-					"binding a Module the ruleset already declares to its declared paths. A Pattern fetched from the Registry " +
+					"binding a Zone the ruleset already declares to its declared paths. A Pattern fetched from the Registry " +
 					"is vendored first. Without a " + rule.RulesetFileName + ", one is drafted that extends the Pattern.",
 				Example: "  arclint patterns install vertical\n  arclint patterns install acme/layers --languages go,ts",
 				Flags: []Flag{

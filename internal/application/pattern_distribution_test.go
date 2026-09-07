@@ -211,7 +211,7 @@ func TestInstallPatternExtendsAnExistingRuleset(t *testing.T) {
 		result.RulesetCreated || result.RulesetReplaced != "1.0.0" {
 		t.Errorf("result = %+v", result)
 	}
-	if len(result.Bound) != 1 || result.Bound[0].Module != "m" || result.Bound[0].Paths[0] != "src/m/**" {
+	if len(result.Bound) != 1 || result.Bound[0].Zone != "m" || result.Bound[0].Paths[0] != "src/m/**" {
 		t.Errorf("bound = %+v", result.Bound)
 	}
 	if len(result.Unbound) != 1 || result.Unbound[0] != "unbound" {

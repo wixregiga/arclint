@@ -68,29 +68,29 @@ func patternVendorDocOf(res application.VendorPatternResult) patternVendorDoc {
 	}
 }
 
-type boundModuleDoc struct {
-	Module string   `json:"module"`
-	Paths  []string `json:"paths"`
+type boundZoneDoc struct {
+	Zone  string   `json:"zone"`
+	Paths []string `json:"paths"`
 }
 
 type patternInstallDoc struct {
-	Reference       string           `json:"reference"`
-	Digest          string           `json:"digest"`
-	Source          string           `json:"source"`
-	VendoredPath    string           `json:"vendoredPath,omitempty"`
-	VendorReplaced  string           `json:"vendorReplaced,omitempty"`
-	RulesetPath     string           `json:"rulesetPath"`
-	RulesetCreated  bool             `json:"rulesetCreated"`
-	RulesetReplaced string           `json:"rulesetReplaced,omitempty"`
-	Bound           []boundModuleDoc `json:"bound"`
-	Unbound         []string         `json:"unbound"`
-	Adopted         []string         `json:"adopted,omitempty"`
+	Reference       string         `json:"reference"`
+	Digest          string         `json:"digest"`
+	Source          string         `json:"source"`
+	VendoredPath    string         `json:"vendoredPath,omitempty"`
+	VendorReplaced  string         `json:"vendorReplaced,omitempty"`
+	RulesetPath     string         `json:"rulesetPath"`
+	RulesetCreated  bool           `json:"rulesetCreated"`
+	RulesetReplaced string         `json:"rulesetReplaced,omitempty"`
+	Bound           []boundZoneDoc `json:"bound"`
+	Unbound         []string       `json:"unbound"`
+	Adopted         []string       `json:"adopted,omitempty"`
 }
 
 func patternInstallDocOf(res application.InstallPatternResult) patternInstallDoc {
-	bound := make([]boundModuleDoc, 0, len(res.Bound))
+	bound := make([]boundZoneDoc, 0, len(res.Bound))
 	for _, b := range res.Bound {
-		bound = append(bound, boundModuleDoc{Module: b.Module, Paths: append([]string(nil), b.Paths...)})
+		bound = append(bound, boundZoneDoc{Zone: b.Zone, Paths: append([]string(nil), b.Paths...)})
 	}
 	unbound := make([]string, 0, len(res.Unbound))
 	unbound = append(unbound, res.Unbound...)

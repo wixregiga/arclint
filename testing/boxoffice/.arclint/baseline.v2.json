@@ -1,0 +1,131 @@
+{
+  "version": 1,
+  "capturedRules": [
+    "aggregate/commands-named-for-behavior",
+    "aggregate/invariants-enforced-by-root",
+    "aggregate/protects-an-invariant",
+    "aggregate/references-by-identity",
+    "aggregate/root-declared",
+    "app/surface-tested",
+    "app/wires-the-sides",
+    "assertion/checked-by-its-operation",
+    "bounded_context/code-held-by-one-context",
+    "bounded_context/isolated",
+    "composition/main-and-seed-present",
+    "composition/selects-everything",
+    "context_relation/imports-follow-influence",
+    "dependencies/acyclic",
+    "dependencies/server-layers",
+    "dependencies/web-layers",
+    "domain_event/declared",
+    "domain_event/no-setters",
+    "domain_isolation/model-imports-nothing-outside-itself",
+    "domain_service/declared",
+    "entities/aggregate-slices",
+    "entities/aggregates-encapsulate",
+    "entities/deterministic",
+    "entities/domain-only-imports",
+    "entities/errors-name-their-subject",
+    "entities/no-panic",
+    "entities/no-store-machinery",
+    "entities/technology-free",
+    "factory/declared",
+    "features/deterministic",
+    "features/orchestrate-entities-only",
+    "features/technology-free",
+    "features/use-cases-tested",
+    "fsd/slice-isolation",
+    "invariant/enforced-at-every-mutation",
+    "repository/declared",
+    "shared/kit-stands-alone",
+    "source/slog-only",
+    "source/snake-case",
+    "specification/satisfaction-method",
+    "toolchain/gates-present",
+    "ubiquitous_language/terms-declared-in-code",
+    "value_object/constructed-through-one-door",
+    "value_object/no-setters",
+    "web-app/composes-the-web",
+    "web-embed/stdlib-only",
+    "web-features/interactions-downward",
+    "web-features/slices-export-public-api",
+    "web-pages/screens-downward",
+    "web-pages/slices-export-public-api",
+    "web-shared/aggregates-speak-through-api",
+    "web-shared/kit-stands-alone"
+  ],
+  "findings": [
+    {
+      "ruleId": "aggregate/invariants-enforced-by-root",
+      "subject": "capacity",
+      "message": "aggregate Capacity: invariant refund-within-spoken-for is not enforced by a method of the root; expected EnsureRefundWithinSpokenFor (go)",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/invariants-enforced-by-root",
+      "subject": "capacity",
+      "message": "aggregate Capacity: invariant refunds-only is not enforced by a method of the root; expected EnsureRefundsOnly (go)",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/invariants-enforced-by-root",
+      "subject": "capacity",
+      "message": "aggregate Capacity: invariant sold-out-refuses-holds is not enforced by a method of the root; expected EnsureSoldOutRefusesHolds (go)",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/invariants-enforced-by-root",
+      "subject": "catalog",
+      "message": "aggregate Event: invariant cancel-published-only is not enforced by a method of the root; expected EnsureCancelPublishedOnly (go)",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/invariants-enforced-by-root",
+      "subject": "catalog",
+      "message": "aggregate Event: invariant cancellation-final is not enforced by a method of the root; expected EnsureCancellationFinal (go)",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/invariants-enforced-by-root",
+      "subject": "catalog",
+      "message": "aggregate Event: invariant cancelled-tickets-refunded is not enforced by a method of the root; expected EnsureCancelledTicketsRefunded (go)",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/invariants-enforced-by-root",
+      "subject": "catalog",
+      "message": "aggregate Event: invariant published-only is not enforced by a method of the root; expected EnsurePublishedOnly (go)",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/invariants-enforced-by-root",
+      "subject": "ordering",
+      "message": "aggregate Order: invariant attendee-pays-tier-price is not enforced by a method of the root; expected EnsureAttendeePaysTierPrice (go)",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/invariants-enforced-by-root",
+      "subject": "ordering",
+      "message": "aggregate Order: invariant published-tiers-only is not enforced by a method of the root; expected EnsurePublishedTiersOnly (go)",
+      "count": 1
+    },
+    {
+      "ruleId": "ubiquitous_language/terms-declared-in-code",
+      "subject": "capacity",
+      "message": "identity CapacityID of context capacity names no type declaration in the repository",
+      "count": 1
+    },
+    {
+      "ruleId": "ubiquitous_language/terms-declared-in-code",
+      "subject": "catalog",
+      "message": "identity EventID of context catalog names no type declaration in the repository",
+      "count": 1
+    },
+    {
+      "ruleId": "ubiquitous_language/terms-declared-in-code",
+      "subject": "ordering",
+      "message": "identity OrderID of context ordering names no type declaration in the repository",
+      "count": 1
+    }
+  ]
+}

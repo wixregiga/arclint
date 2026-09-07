@@ -24,7 +24,7 @@ const (
 	// effect.
 	ImportUnknown ImportClass = "unknown"
 	// ImportCgo is Go's "C" pseudo-import: neither a package nor a
-	// resolvable module path.
+	// resolvable zone path.
 	ImportCgo ImportClass = "cgo"
 )
 

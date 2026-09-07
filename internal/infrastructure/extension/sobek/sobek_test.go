@@ -66,7 +66,7 @@ func fakeHost(files map[string]string) sobekextension.Host {
 			return content, nil
 		},
 		Imports: func(path string) []sobekextension.ImportInfo { return nil },
-		Modules: func() map[string][]string { return map[string][]string{} },
+		Zones:   func() map[string][]string { return map[string][]string{} },
 	}
 }
 
@@ -424,8 +424,11 @@ export default defineRule({
   check(ctx) {
     const domain = ctx.domain();
     for (const bound of domain.contexts) {
-      for (const e of bound.entities) {
-        ctx.report({ path: "domain", message: e.name });
+      for (const a of bound.aggregates) {
+        ctx.report({ path: "domain", message: a.name + " identified by " + a.identity });
+        for (const e of a.entities) {
+          ctx.report({ path: "domain", message: e.name + " in " + a.name });
+        }
       }
     }
   },
@@ -433,8 +436,9 @@ export default defineRule({
 `
 
 // ctx.domain() exposes the recorded model read-only: a consuming rule
-// can report from entity names, and an empty model produces no
-// findings and no error (declaration alone never creates diagnostics).
+// can report from aggregate and entity names, and an empty model
+// produces no findings and no error (declaration alone never creates
+// diagnostics).
 func TestEvaluatorDomainExposesRecordedModel(t *testing.T) {
 	root := writeExtensions(t, map[string]string{"domain.ts": domainProbeRule})
 	eval, err := sobekextension.NewEvaluator(root)
@@ -448,12 +452,15 @@ func TestEvaluatorDomainExposesRecordedModel(t *testing.T) {
 		t.Fatalf("NewObservations: %v", err)
 	}
 
-	lang, err := vocab.NewUbiquitousLanguage([]vocab.BoundedContext{{
-		Name: "Ordering",
-		Entities: []vocab.Entity{
-			{Definition: vocab.Definition{Name: "Order"}, Aggregate: true},
-			{Definition: vocab.Definition{Name: "Customer"}},
-		},
+	lang, err := vocab.NewUbiquitousLanguage("shop", "", []vocab.BoundedContext{{
+		Name:       "ordering",
+		Definition: "Taking orders.",
+		Aggregates: []vocab.Aggregate{{
+			Name:       "Order",
+			Definition: "A deal.",
+			Identity:   "OrderID",
+			Entities:   []vocab.Entity{{Name: "OrderLine", Definition: "One item of an Order."}},
+		}},
 	}}, nil)
 	if err != nil {
 		t.Fatalf("NewUbiquitousLanguage: %v", err)
@@ -463,14 +470,14 @@ func TestEvaluatorDomainExposesRecordedModel(t *testing.T) {
 		t.Fatalf("Evaluate with model: %v", err)
 	}
 	if len(findings) != 2 {
-		t.Fatalf("findings = %+v, want one per entity", findings)
+		t.Fatalf("findings = %+v, want one per aggregate and entity", findings)
 	}
 	got := map[string]bool{}
 	for _, f := range findings {
 		got[f.Message] = true
 	}
-	if !got["Order"] || !got["Customer"] {
-		t.Errorf("entity findings = %v, want Order and Customer", got)
+	if !got["Order identified by OrderID"] || !got["OrderLine in Order"] {
+		t.Errorf("domain findings = %v, want the aggregate and its entity", got)
 	}
 
 	empty, err := eval.Evaluate("domain-probe", nil, []string{"m/a.go"}, nil, obs, vocab.UbiquitousLanguage{})
@@ -491,14 +498,29 @@ export default defineRule({
     const domain = ctx.domain();
     for (const bound of domain.contexts) {
       ctx.report({ path: "m/a.go", line: bound.line, message: "context " + bound.name });
-      for (const e of bound.entities) {
-        ctx.report({ path: "m/a.go", line: e.line, message: "entity " + e.name });
+      for (const a of bound.aggregates) {
+        ctx.report({ path: "m/a.go", line: a.line, message: "aggregate " + a.name });
+        for (const e of a.entities) {
+          ctx.report({ path: "m/a.go", line: e.line, message: "entity " + e.name });
+        }
+        for (const i of a.invariants) {
+          ctx.report({ path: "m/a.go", line: i.line, message: "invariant " + i.key + " of " + a.name });
+        }
+        for (const s of a.assertions) {
+          ctx.report({ path: "m/a.go", line: s.line, message: "assertion " + s.key + " on " + s.on });
+        }
       }
       for (const v of bound.valueObjects) {
         ctx.report({ path: "m/a.go", line: v.line, message: "value object " + v.name });
+        for (const i of v.invariants) {
+          ctx.report({ path: "m/a.go", line: i.line, message: "invariant " + i.key + " of " + v.name });
+        }
       }
-      for (const i of bound.invariants) {
-        ctx.report({ path: "m/a.go", line: i.line, message: "invariant owned by " + i.owner });
+      for (const e of bound.events) {
+        ctx.report({ path: "m/a.go", line: e.line, message: "event " + e.name + " raised by " + e.raisedBy });
+      }
+      for (const q of bound.questions) {
+        ctx.report({ path: "m/a.go", line: q.line, message: "question " + q.key });
       }
     }
     for (const r of domain.relations) {
@@ -523,15 +545,30 @@ func TestEvaluatorDomainCarriesRecordedLines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewObservations: %v", err)
 	}
-	lang, err := vocab.NewUbiquitousLanguage([]vocab.BoundedContext{
+	lang, err := vocab.NewUbiquitousLanguage("boxoffice", "", []vocab.BoundedContext{
 		{
-			Name:         "catalog",
-			Line:         3,
-			Entities:     []vocab.Entity{{Definition: vocab.Definition{Name: "Event", Line: 5}}},
-			ValueObjects: []vocab.Definition{{Name: "Price", Line: 12}},
-			Invariants:   []vocab.Invariant{{Statement: "An Event sells only once published.", Owner: "Event", Line: 18}},
+			Name:       "catalog",
+			Definition: "What is on sale.",
+			Line:       3,
+			Aggregates: []vocab.Aggregate{{
+				Name:       "Event",
+				Definition: "A show.",
+				Identity:   "EventID",
+				Line:       5,
+				Entities:   []vocab.Entity{{Name: "Venue", Definition: "A hall.", Line: 8}},
+				Invariants: []vocab.Invariant{{Key: "sells-published", Statement: "An Event sells only once published.", Line: 10}},
+				Assertions: []vocab.Assertion{{Key: "tiers-priced", On: "Publish", Statement: "Tiers are priced.", Line: 12}},
+			}},
+			ValueObjects: []vocab.ValueObject{{
+				Name:       "Price",
+				Definition: "Whole cents.",
+				Line:       14,
+				Invariants: []vocab.Invariant{{Key: "never-negative", Statement: "A Price is never negative.", Line: 16}},
+			}},
+			Events:    []vocab.DomainEvent{{Name: "EventPublished", Definition: "The draft went on sale.", RaisedBy: "Event", Line: 18}},
+			Questions: []vocab.Question{{Key: "resale", Text: "Can a ticket be resold?", Line: 20}},
 		},
-		{Name: "ordering", Line: 24},
+		{Name: "ordering", Definition: "The deals struck.", Line: 24},
 	}, []vocab.ContextRelation{
 		{From: "catalog", To: "ordering", Kind: vocab.RelationCustomerSupplier, Line: 31},
 	})
@@ -543,12 +580,17 @@ func TestEvaluatorDomainCarriesRecordedLines(t *testing.T) {
 		t.Fatalf("Evaluate: %v", err)
 	}
 	want := map[string]int{
-		"context catalog":              3,
-		"entity Event":                 5,
-		"value object Price":           12,
-		"invariant owned by Event":     18,
-		"context ordering":             24,
-		"relation catalog -> ordering": 31,
+		"context catalog":                      3,
+		"aggregate Event":                      5,
+		"entity Venue":                         8,
+		"invariant sells-published of Event":   10,
+		"assertion tiers-priced on Publish":    12,
+		"value object Price":                   14,
+		"invariant never-negative of Price":    16,
+		"event EventPublished raised by Event": 18,
+		"question resale":                      20,
+		"context ordering":                     24,
+		"relation catalog -> ordering":         31,
 	}
 	if len(findings) != len(want) {
 		t.Fatalf("findings = %+v, want one per recorded entry", findings)

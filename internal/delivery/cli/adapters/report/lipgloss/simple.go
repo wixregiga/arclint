@@ -8,7 +8,7 @@ import (
 
 func writeInit(p *out.Printer, th Theme, path string) {
 	p.Printf("%s %s\n", th.OK.Render("wrote"), th.Path.Render(path))
-	p.Printf("%s declare your modules, then run `arclint check .`\n", th.Muted.Render("next:"))
+	p.Printf("%s declare your zones, then run `arclint check .`\n", th.Muted.Render("next:"))
 }
 
 func writeBaselineCapture(p *out.Printer, th Theme, result application.CaptureBaselineResult) {

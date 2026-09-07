@@ -18,4 +18,4 @@ expect:
   - kind: violation
     path: cmd/arclint/main.go
     line: 3
-    message: "Module \"lipgloss_report\" is protected (importable only by [\"report_factory\"]); import of \"fixture/internal/delivery/cli/adapters/report/lipgloss\" from Module(s) [\"composition\"]"
+    message: "Zone \"lipgloss_report\" is protected (importable only by [\"report_factory\"]); import of \"fixture/internal/delivery/cli/adapters/report/lipgloss\" from Zone(s) [\"composition\"]"

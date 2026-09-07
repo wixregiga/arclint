@@ -12,7 +12,7 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
-// fixture builds one configured repository: module "m" with a
+// fixture builds one configured repository: zone "m" with a
 // snake_case naming Rule, observed with the given file paths.
 func fixture(t *testing.T, paths ...string) (rule.Configured, conformance.Observations) {
 	t.Helper()
@@ -20,17 +20,17 @@ func fixture(t *testing.T, paths ...string) (rule.Configured, conformance.Observ
 	if err != nil {
 		t.Fatalf("NewGlob: %v", err)
 	}
-	module, err := rule.NewModule("m", "test module", []rule.Glob{glob})
+	zone, err := rule.NewZone("m", "test zone", []rule.Glob{glob})
 	if err != nil {
-		t.Fatalf("NewModule: %v", err)
+		t.Fatalf("NewZone: %v", err)
 	}
 	snake, err := rule.NewCaseSpec("snake_case")
 	if err != nil {
 		t.Fatalf("NewCaseSpec: %v", err)
 	}
-	scope, err := rule.ModuleApplicability([]rule.ModuleName{"m"})
+	scope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ModuleApplicability: %v", err)
+		t.Fatalf("ZoneApplicability: %v", err)
 	}
 	r, err := rule.New(rule.Spec{
 		ID:            "t/p:m/snake",
@@ -51,7 +51,7 @@ func fixture(t *testing.T, paths ...string) (rule.Configured, conformance.Observ
 	}
 	cfg := rule.Configured{
 		Rules:     []rule.Rule{r},
-		Modules:   []rule.Module{module},
+		Zones:     []rule.Zone{zone},
 		Languages: []rule.Language{rule.LanguageGo},
 	}
 	return cfg, obs
@@ -285,7 +285,7 @@ func TestShowRule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if detail.Summary.ID != "t/p:m/snake" || len(detail.Modules) != 1 || detail.Modules[0] != "m" {
+	if detail.Summary.ID != "t/p:m/snake" || len(detail.Zones) != 1 || detail.Zones[0] != "m" {
 		t.Errorf("detail = %+v", detail)
 	}
 	if detail.Asserts != cfg.Rules[0].Assertion() || !strings.Contains(detail.Asserts, "snake_case") {

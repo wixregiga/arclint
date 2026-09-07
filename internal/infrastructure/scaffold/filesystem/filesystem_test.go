@@ -37,8 +37,8 @@ func TestStarterRulesetRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the starter ruleset must load through the strict loader: %v", err)
 	}
-	if len(cfg.Modules) != 1 || string(cfg.Modules[0].Name()) != "source" {
-		t.Errorf("modules = %+v, want the source module", cfg.Modules)
+	if len(cfg.Zones) != 1 || string(cfg.Zones[0].Name()) != "source" {
+		t.Errorf("zones = %+v, want the source zone", cfg.Zones)
 	}
 	if len(cfg.Rules) != 1 || cfg.Rules[0].ID().Qualified() != "source/dependencies" {
 		t.Errorf("rules = %d, want the starter consumes rule", len(cfg.Rules))
@@ -93,16 +93,16 @@ func TestVerticalRulesetRoundTrips(t *testing.T) {
 		t.Errorf("configured extensions = %d, want the five the pattern distributes", len(cfg.Extensions))
 	}
 	got := map[string]bool{}
-	for _, m := range cfg.Modules {
+	for _, m := range cfg.Zones {
 		got[string(m.Name())] = true
 	}
 	for _, name := range []string{"domain", "application", "infra", "app", "shared", "composition"} {
 		if !got[name] {
-			t.Errorf("missing module %q", name)
+			t.Errorf("missing zone %q", name)
 		}
 	}
-	if len(cfg.Modules) != 6 {
-		t.Errorf("modules = %d, want 6", len(cfg.Modules))
+	if len(cfg.Zones) != 6 {
+		t.Errorf("zones = %d, want 6", len(cfg.Zones))
 	}
 	if len(cfg.Rules) != 16 {
 		t.Errorf("rules = %d, want 16", len(cfg.Rules))

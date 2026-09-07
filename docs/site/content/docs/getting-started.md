@@ -34,7 +34,7 @@ arclint init
 
 `init` drafts a `rules.arclint.yaml` from explicit language choices. It does not
 scan the tree. The no-flag default is `--pattern bare`: a commented
-single-module draft. Default languages is `go`. Pass others with
+single-zone draft. Default languages is `go`. Pass others with
 `--languages`:
 
 ```bash
@@ -48,7 +48,7 @@ arclint init --pattern arclint/vertical@0.1.0   # or --pattern vertical
 ```
 
 That writes a `rules.arclint.yaml` whose `extends` block pins the Pattern by
-exact reference and binds each Pattern Module to the paths the Pattern
+exact reference and binds each Pattern Zone to the paths the Pattern
 suggests; edit the bindings to match your tree. Nothing is copied into
 `.arclint/extensions`: the Pattern's Rules and Extensions load by
 reference on every run. `--pattern bare` writes only the draft ruleset.
@@ -60,7 +60,7 @@ comments:
 
 ```bash
 arclint patterns                      # what resolves offline
-arclint patterns install domain-model # extend rules.arclint.yaml with it
+arclint patterns install vertical     # extend rules.arclint.yaml with the embedded Pattern
 arclint patterns install acme/layers  # fetched from the Registry, vendored, then extended
 ```
 
@@ -77,16 +77,16 @@ On success:
 
 ```
 wrote /path/to/rules.arclint.yaml
-next: declare your modules, then run `arclint check .`
+next: declare your zones, then run `arclint check .`
 ```
 
-The bare draft sets `runtime`, one Module `source` covering `**`, and
+The bare draft sets `runtime`, one Zone `source` covering `**`, and
 one vacuously satisfied `imports` Rule so the file loads and `check`
-stays clean until you split Modules:
+stays clean until you split Zones:
 
 ```yaml
 # ArcLint architecture contracts.
-# Grow this file module by module: declare real Modules under `modules`,
+# Grow this file zone by zone: declare real Zones under `zones`,
 # then state what each may import under `rules`.
 # Query commands: arclint rules [selector] · arclint context <path>
 
@@ -97,23 +97,23 @@ scan:
   # internal, nor declared in the dependency manifest.
   unknown_imports: warn
 
-modules:
-  # A Module is a name and the paths it owns: one glob, a list of globs,
-  # or {paths, description}. Split into real Modules as the architecture
+zones:
+  # A Zone is a name and the paths it owns: one glob, a list of globs,
+  # or {paths, description}. Split into real Zones as the architecture
   # takes shape.
   source: "**"
 
 rules:
-  # Every Rule has an id, the Module(s) it judges under `on`, and exactly
+  # Every Rule has an id, the Zone(s) it judges under `on`, and exactly
   # one assertion: imports, structure, naming, content, layers,
-  # imported_by, independent, acyclic, invariants, or uses.
+  # imported_by, independent, acyclic, or uses.
   source/dependencies:
-    description: "Source imports no other declared Module."
+    description: "Source imports no other declared Zone."
     on: source
     imports:
-      # An allow-list of other declared Modules. Empty means this Module
-      # may import no other declared Module; with one Module this is
-      # vacuously true and starts binding the moment you split Modules.
+      # An allow-list of other declared Zones. Empty means this Zone
+      # may import no other declared Zone; with one Zone this is
+      # vacuously true and starts binding the moment you split Zones.
       internal: []
 ```
 
@@ -122,7 +122,7 @@ A grown file reads the same way, one Rule per architectural claim:
 ```yaml
 runtime: [go]
 
-modules:
+zones:
   domain:
     paths: "internal/domain/**"
     description: "Aggregates and domain values; stdlib-only."
@@ -134,7 +134,7 @@ modules:
 
 rules:
   domain/stdlib-only:
-    description: "The domain imports no other Module and no third-party package."
+    description: "The domain imports no other Zone and no third-party package."
     on: domain
     imports:
       internal: []
@@ -160,7 +160,7 @@ rules:
     imported_by: [composition]
 
   dependencies/acyclic:
-    description: "Module dependencies contain no cycle."
+    description: "Zone dependencies contain no cycle."
     acyclic: {}
 ```
 
@@ -216,26 +216,26 @@ coverage: baseline: 1 adopted finding(s) no longer occur; refresh the baseline
 arclint baseline refresh   # drops stale entries after comparison
 ```
 
-## Adjust the modules
+## Adjust the zones
 
-Module boundaries are yours. Edit the `modules:` block in `rules.arclint.yaml`,
+Zone boundaries are yours. Edit the `zones:` block in `rules.arclint.yaml`,
 then inspect what binds where:
 
 ```bash
 arclint context                          # repository scope
 arclint context path/to/file.go          # everything binding a path
-arclint context --module source          # one declared Module
+arclint context --zone source            # one declared Zone
 arclint context path/to/file.go --full   # the whole recorded domain too
 ```
 
-`context` reports scope, languages, configured Rule count, each Module's
+`context` reports scope, languages, configured Rule count, each Zone's
 paths and import allow-list, and the Rules that apply. With a
 `domain.arclint.yaml` present it also lists the part of the recorded
 domain that anchors into the scope, each contract ending with the
 declaration that carries it or the word `missing` or `unanchorable`,
 and closes with the unanchored contracts grouped by owner and cause;
 `--full` lists the whole model. Re-run `arclint check .` when the
-Modules look right.
+Zones look right.
 
 ## Inspect Rules and schema
 

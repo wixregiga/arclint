@@ -22,24 +22,41 @@ const (
 )
 
 // ContextRelation is one context-map edge: From is upstream, To is
-// downstream, Kind is the relationship pattern. Line is where the
-// relation is written down in the recorded Ubiquitous Language file,
-// 0 for a relation that is not written down yet.
+// downstream, Kind is the relationship pattern, and Description says
+// what passes between the two and which way, in the ubiquitous
+// language. Line is where the relation is written down in the recorded
+// Ubiquitous Language file, 0 for a relation that is not written down
+// yet.
 type ContextRelation struct {
-	From string
-	To   string
-	Kind RelationKind
-	Line int
+	From        string
+	To          string
+	Kind        RelationKind
+	Description string
+	Line        int
 }
 
-// RelationKindDoc is the ArcLint-owned meaning of one RelationKind.
-// Meaning is the VOCAB.yaml one-liner; SchemaMeaning is the phrase used
-// in domain.arclint.schema.json's kind description. They match for every kind
-// except shared_kernel (VOCAB omits "model"; schema includes it).
+// Influences reports whether code of context a may import code of
+// context b under this relation: under a one-way kind only the
+// downstream imports the upstream; under partnership or shared_kernel
+// both may; under separate_ways neither does.
+func (r ContextRelation) Influences(a, b string) bool {
+	switch r.Kind {
+	case RelationPartnership, RelationSharedKernel:
+		return (r.From == a && r.To == b) || (r.From == b && r.To == a)
+	case RelationSeparateWays:
+		return false
+	default:
+		return r.To == a && r.From == b
+	}
+}
+
+// RelationKindDoc is the meaning of one RelationKind: the kind's
+// definition in the meta-model's context_relation block, with its
+// sources.
 type RelationKindDoc struct {
-	Kind          RelationKind
-	Meaning       string
-	SchemaMeaning string
+	Kind    RelationKind
+	Meaning string
+	Sources []Reference
 }
 
 // RelationKinds returns the eight kinds in schema-enum order.
@@ -56,20 +73,24 @@ func RelationKinds() []RelationKind {
 	}
 }
 
-// RelationKindDocs returns documentation for every kind in enum order.
+// RelationKindDocs returns documentation for every kind in enum order,
+// read from the meta-model; a kind the meta-model does not define is
+// documented by its spelling alone.
 func RelationKindDocs() []RelationKindDoc {
-	return []RelationKindDoc{
-		{Kind: RelationPartnership, Meaning: "succeed/fail together", SchemaMeaning: "succeed/fail together"},
-		// VOCAB.yaml: "small jointly-owned subset"
-		// domain.arclint.schema.json: "small jointly-owned model subset"
-		{Kind: RelationSharedKernel, Meaning: "small jointly-owned subset", SchemaMeaning: "small jointly-owned model subset"},
-		{Kind: RelationCustomerSupplier, Meaning: "upstream plans for downstream", SchemaMeaning: "upstream plans for downstream"},
-		{Kind: RelationConformist, Meaning: "downstream adopts upstream model", SchemaMeaning: "downstream adopts upstream model"},
-		{Kind: RelationAnticorruptionLayer, Meaning: "downstream translates defensively", SchemaMeaning: "downstream translates defensively"},
-		{Kind: RelationOpenHostService, Meaning: "upstream exposes one protocol", SchemaMeaning: "upstream exposes one protocol"},
-		{Kind: RelationPublishedLanguage, Meaning: "shared interchange language", SchemaMeaning: "shared interchange language"},
-		{Kind: RelationSeparateWays, Meaning: "no integration", SchemaMeaning: "no integration"},
+	model := DDD()
+	block, _ := model.Block("context_relation")
+	docs := make([]RelationKindDoc, 0, len(RelationKinds()))
+	for _, k := range RelationKinds() {
+		doc := RelationKindDoc{Kind: k}
+		for _, kind := range block.Records.Kinds {
+			if kind.Name == string(k) {
+				doc.Meaning = kind.Definition
+				doc.Sources = model.References(kind.Sources)
+			}
+		}
+		docs = append(docs, doc)
 	}
+	return docs
 }
 
 // ParseRelationKind accepts one kind spelling.
@@ -92,34 +113,19 @@ func (k RelationKind) Doc() RelationKindDoc {
 	return RelationKindDoc{Kind: k}
 }
 
-// SchemaKindDescription builds the domain.arclint.schema.json kind.description
-// text from RelationKindDocs so schema and VOCAB cannot drift on the
-// seven identical meanings (shared_kernel uses SchemaMeaning).
+// SchemaKindDescription builds the domain.arclint.schema.json
+// kind.description text from RelationKindDocs, one line per kind, so
+// the schema and the vocabulary cannot drift.
 func SchemaKindDescription() string {
-	docs := RelationKindDocs()
 	var b strings.Builder
-	b.WriteString("Relationship kind. ")
-	for i, d := range docs {
-		if i > 0 {
-			b.WriteString("; ")
-		}
+	b.WriteString("Relationship kind, one of:")
+	for _, d := range RelationKindDocs() {
+		b.WriteString("\n")
 		b.WriteString(string(d.Kind))
 		b.WriteString(": ")
-		b.WriteString(d.SchemaMeaning)
+		b.WriteString(d.Meaning)
 	}
-	b.WriteString(".")
 	return b.String()
-}
-
-// ContextRelationFlowYAML builds the VOCAB.yaml context_relation flow
-// mapping from RelationKindDocs (uses Meaning, not SchemaMeaning).
-func ContextRelationFlowYAML() string {
-	docs := RelationKindDocs()
-	parts := make([]string, len(docs))
-	for i, d := range docs {
-		parts[i] = string(d.Kind) + ": " + d.Meaning
-	}
-	return "{" + strings.Join(parts, ", ") + "}"
 }
 
 func joinRelationKinds(ks []RelationKind) string {

@@ -15,7 +15,7 @@ import (
 
 const ruleTestRules = `runtime: [go]
 
-modules:
+zones:
   core: core/**
 
 rules:
@@ -73,13 +73,13 @@ func TestRuleTestsRunThroughBinary(t *testing.T) {
 // TestRuleTestEmptyExpectPrintsExactConsumesMessage locks the CLI
 // authoring contract: with expect empty, unexpected findings print as
 // ready-to-paste YAML including the evaluator's exact message. A Rule
-// Author can copy Module(s) ["adapters"] without reading check_imports.
+// Author can copy Zone(s) ["adapters"] without reading check_imports.
 func TestRuleTestEmptyExpectPrintsExactConsumesMessage(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, "rules.arclint.yaml", `runtime: [go]
 scan:
   unknown_imports: error
-modules:
+zones:
   core: core/**
   adapters: adapters/**
 rules:
@@ -103,9 +103,9 @@ expect: []
 		t.Fatalf("rules test: exit %d, want findings exit 1\nstdout:\n%s\nstderr:\n%s", code, stdout, stderr)
 	}
 	// Exact Diagnostic text the consumes evaluator emits for a
-	// disallowed internal import into Module adapters, exposed
+	// disallowed internal import into Zone adapters, exposed
 	// verbatim so authors paste it into expect.message.
-	wantMessage := `import "example.com/app/adapters" resolves to Module(s) ["adapters"], not in the allow-list of Module "core"`
+	wantMessage := `import "example.com/app/adapters" resolves to Zone(s) ["adapters"], not in the allow-list of Zone "core"`
 	for _, want := range []string{
 		"FAIL disallowed_adapters_import (core/consumes)",
 		"- kind: violation",

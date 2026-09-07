@@ -41,12 +41,12 @@ type Scan struct {
 
 // Configured bundles what a repository has configured: complete Rule
 // aggregates (its own and those of every Pattern it extends, Overrides
-// applied), its Modules (declared and bound), the language targets,
+// applied), its Zones (declared and bound), the language targets,
 // the scan policy, and the Extension sources the extended Patterns
 // carry. It is a plain result value, not a domain object with identity.
 type Configured struct {
-	Rules   []Rule
-	Modules []Module
+	Rules []Rule
+	Zones []Zone
 	// Languages are the configured language targets (rules.arclint.yaml
 	// runtime) whose facts observation should produce.
 	Languages []Language

@@ -3,19 +3,20 @@ package application
 import (
 	"strings"
 
+	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 // domainScope is the worksite as the recorded domain sees it: the
-// requested paths and the selected Modules. A recorded term anchors
+// requested paths and the selected Zones. A recorded term anchors
 // into the scope when a declaration named for it, or a declaration
 // carrying one of its contracts, lies inside; a whole context anchors
-// when a selected Module is named for it, the same match the recorded
+// when a selected Zone is named for it, the same match the recorded
 // relations are enforced through.
 type domainScope struct {
-	paths   []string
-	modules []rule.Module
+	paths []string
+	zones []rule.Zone
 }
 
 func worksiteScope(cfg rule.Configured, req ContextRequest) domainScope {
@@ -23,10 +24,10 @@ func worksiteScope(cfg rule.Configured, req ContextRequest) domainScope {
 	for _, p := range req.Paths {
 		scope.paths = append(scope.paths, strings.TrimSuffix(p, "/"))
 	}
-	for _, name := range req.Modules {
-		for _, m := range cfg.Modules {
+	for _, name := range req.Zones {
+		for _, m := range cfg.Zones {
 			if string(m.Name()) == name {
-				scope.modules = append(scope.modules, m)
+				scope.zones = append(scope.zones, m)
 			}
 		}
 	}
@@ -34,14 +35,14 @@ func worksiteScope(cfg rule.Configured, req ContextRequest) domainScope {
 }
 
 // contains reports whether an observed file lies inside the scope: at
-// or under a requested path, or inside a selected Module.
+// or under a requested path, or inside a selected Zone.
 func (s domainScope) contains(path string) bool {
 	for _, p := range s.paths {
 		if path == p || strings.HasPrefix(path, p+"/") {
 			return true
 		}
 	}
-	for _, m := range s.modules {
+	for _, m := range s.zones {
 		if m.Contains(path) {
 			return true
 		}
@@ -62,14 +63,14 @@ func (s domainScope) containsSource(source string) bool {
 	return s.contains(path)
 }
 
-// namesContext reports whether a selected Module is named for the
+// namesContext reports whether a selected Zone is named for the
 // context: both names rendered to flatcase agree.
 func (s domainScope) namesContext(name string) bool {
 	want, err := rule.CaseTerm(name, "flatcase")
 	if err != nil {
 		return false
 	}
-	for _, m := range s.modules {
+	for _, m := range s.zones {
 		got, err := rule.CaseTerm(string(m.Name()), "flatcase")
 		if err == nil && got == want {
 			return true
@@ -79,14 +80,14 @@ func (s domainScope) namesContext(name string) bool {
 }
 
 // scopeDomainKnowledge narrows a located projection to the part that
-// anchors into the scope. Contexts a selected Module is named for stay
+// anchors into the scope. Contexts a selected Zone is named for stay
 // whole; elsewhere a term stays when a declaration named for it or
 // carrying one of its contracts lies inside the scope, an invariant or
 // assertion stays with its owner, and a relation stays when it touches
 // a kept context. Counts keeps tallying the whole model; Shown tallies
 // the narrowed listing. A projection that was never located cannot be
 // narrowed and is returned whole.
-func scopeDomainKnowledge(dk *DomainKnowledge, idx []declHit, scope domainScope) *DomainKnowledge {
+func scopeDomainKnowledge(dk *DomainKnowledge, carriers conformance.Carriers, scope domainScope) *DomainKnowledge {
 	if dk == nil || !dk.Located {
 		return dk
 	}
@@ -103,7 +104,7 @@ func scopeDomainKnowledge(dk *DomainKnowledge, idx []declHit, scope domainScope)
 			kept[ctx.Name] = true
 			continue
 		}
-		narrowed, anchors := scopeContext(ctx, idx, scope)
+		narrowed, anchors := scopeContext(ctx, carriers, scope)
 		if anchors {
 			out.Contexts = append(out.Contexts, narrowed)
 			kept[ctx.Name] = true
@@ -121,11 +122,11 @@ func scopeDomainKnowledge(dk *DomainKnowledge, idx []declHit, scope domainScope)
 // scopeContext keeps the terms of one context that anchor into the
 // scope, with the contracts their owners carry; the second result is
 // false when nothing anchors.
-func scopeContext(ctx DomainContextKnowledge, idx []declHit, scope domainScope) (DomainContextKnowledge, bool) {
+func scopeContext(ctx DomainContextKnowledge, carriers conformance.Carriers, scope domainScope) (DomainContextKnowledge, bool) {
 	out := DomainContextKnowledge{Name: ctx.Name}
 	owners := map[string]bool{}
 	anchored := func(name string) bool {
-		for _, p := range typeDeclarationPaths(idx, name) {
+		for _, p := range carriers.TypeFiles(ctx.Name, name) {
 			if scope.contains(p) {
 				return true
 			}
@@ -142,10 +143,16 @@ func scopeContext(ctx DomainContextKnowledge, idx []declHit, scope domainScope) 
 		}
 		return false
 	}
-	for _, e := range ctx.Entities {
-		if anchored(e.Name) {
-			out.Entities = append(out.Entities, e)
-			owners[e.Name] = true
+	// An aggregate stays whole when its root or any member anchors:
+	// the members are one consistency boundary with the root.
+	for _, a := range ctx.Aggregates {
+		keep := anchored(a.Name)
+		for _, e := range a.Entities {
+			keep = keep || anchored(e)
+		}
+		if keep {
+			out.Aggregates = append(out.Aggregates, a)
+			owners[a.Name] = true
 		}
 	}
 	for _, v := range ctx.ValueObjects {
@@ -174,7 +181,12 @@ func scopeContext(ctx DomainContextKnowledge, idx []declHit, scope domainScope) 
 			out.Events = append(out.Events, e)
 		}
 	}
-	anchors := len(out.Entities)+len(out.ValueObjects)+len(out.Specifications)+len(out.Events) > 0
+	for _, s := range ctx.Services {
+		if anchored(s) {
+			out.Services = append(out.Services, s)
+		}
+	}
+	anchors := len(out.Aggregates)+len(out.ValueObjects)+len(out.Specifications)+len(out.Events)+len(out.Services) > 0
 	return out, anchors
 }
 
@@ -183,17 +195,16 @@ func scopeContext(ctx DomainContextKnowledge, idx []declHit, scope domainScope) 
 func countKnowledge(dk *DomainKnowledge) vocab.Counts {
 	c := vocab.Counts{Contexts: len(dk.Contexts), Relations: len(dk.Relations)}
 	for _, ctx := range dk.Contexts {
-		c.Entities += len(ctx.Entities)
-		for _, e := range ctx.Entities {
-			if e.Aggregate {
-				c.Aggregates++
-			}
+		c.Aggregates += len(ctx.Aggregates)
+		for _, a := range ctx.Aggregates {
+			c.Entities += len(a.Entities)
 		}
 		c.ValueObjects += len(ctx.ValueObjects)
 		c.Invariants += len(ctx.Invariants)
 		c.Assertions += len(ctx.Assertions)
 		c.Specifications += len(ctx.Specifications)
 		c.Events += len(ctx.Events)
+		c.Services += len(ctx.Services)
 	}
 	return c
 }

@@ -16,8 +16,11 @@ func writeRuleRows(p *out.Printer, th Theme, rows []application.RuleSummary) {
 			marker = th.Muted.Render(fmt.Sprintf("  (disabled: %s)", row.DisabledReason))
 		}
 		provenance := ""
-		if row.Provenance != "" {
+		switch {
+		case row.Provenance != "":
 			provenance = th.Muted.Render("  from " + row.Provenance)
+		case row.BuiltIn:
+			provenance = th.Muted.Render("  " + application.BuiltInOrigin)
 		}
 		meta := th.Muted.Render("[") +
 			th.Muted.Render(row.Type+"/") +
@@ -46,7 +49,7 @@ func writeRuleDetail(p *out.Printer, th Theme, d application.RuleDetail) {
 	if d.EntireRepository {
 		write("applies to", "the entire repository")
 	} else {
-		write("modules", strings.Join(d.Modules, ", "))
+		write("zones", strings.Join(d.Zones, ", "))
 		write("files", strings.Join(d.Files, ", "))
 	}
 	write("evidence", d.Evidence)
@@ -60,6 +63,9 @@ func writeRuleDetail(p *out.Printer, th Theme, d application.RuleDetail) {
 	write("facts", strings.Join(d.Facts, ", "))
 	write("limitations", strings.Join(d.Limitations, "; "))
 	write("provenance", th.Muted.Render(d.Summary.Provenance))
+	if d.Summary.BuiltIn {
+		write("origin", th.Muted.Render(application.BuiltInOrigin+"; adopt it with an override under its id"))
+	}
 	for _, e := range d.Exclusions {
 		write("excluded", fmt.Sprintf("%s (%s)", strings.Join(e.Selectors, ", "), e.Reason))
 	}

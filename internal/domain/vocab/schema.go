@@ -8,12 +8,13 @@ import (
 	"strings"
 )
 
-// Schema returns the published domain.arclint.schema.json bytes: draft 2020-12,
-// 2-space indented, trailing newline, key order and compact leaf objects
-// matching the litmus file byte-for-byte. Field descriptions are composed
-// from taxonomy data (RelationKind meanings via SchemaKindDescription,
-// distillation rule ids referenced in prose constants) so schema and
-// VOCAB cannot drift on shared facts.
+// Schema returns the published domain.arclint.schema.json bytes: draft
+// 2020-12, 2-space indented, trailing newline, key order and compact
+// leaf objects matching the litmus file byte-for-byte. The shape is the
+// meta-model's: every object is a building block's `records`, every
+// property description is that block's property definition, and the
+// relation kinds are the context_relation block's kinds, so the schema
+// cannot say anything the meta-model does not.
 func Schema() ([]byte, error) {
 	var buf bytes.Buffer
 	if err := writeSchema(&buf); err != nil {
@@ -22,42 +23,96 @@ func Schema() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func writeSchema(buf *bytes.Buffer) error {
-	// Verify referenced distillation rule ids exist so schema prose
-	// cannot cite a removed rule.
-	for _, id := range []string{"identity-test", "value-test", "language-fidelity", "synonym-collapse", "event-detection"} {
-		if _, ok := DistillationRuleByID(id); !ok {
-			return fmt.Errorf("schema references unknown distillation rule %q", id)
+// The published name patterns of the domain file, shared by the loader
+// and the schema. A context name is spelled like a Zone name, so a Zone
+// spelled with it can narrow its code; a term is any non-empty name
+// without surrounding whitespace, in whatever case the language's type
+// names take; a key is kebab-case.
+const (
+	ContextNamePattern = `^[a-z][a-z0-9_-]*$`
+	TermNamePattern    = `^\S(.*\S)?$`
+	KeyPattern         = `^[a-z][a-z0-9]*(-[a-z0-9]+)*$`
+)
+
+// schemaBuilder reads property definitions out of the meta-model and
+// remembers the first property the meta-model does not record, so the
+// schema fails to build rather than describing a property with nothing.
+type schemaBuilder struct {
+	model MetaModel
+	err   error
+}
+
+// def returns the meta-model's definition of one recorded property.
+func (b *schemaBuilder) def(term, property string) string {
+	block, ok := b.model.Block(term)
+	if !ok {
+		b.fail(fmt.Errorf("schema: building block %q is not recorded", term))
+		return ""
+	}
+	for _, p := range block.Records.Properties {
+		if p.Name == property {
+			return p.Definition
 		}
 	}
+	b.fail(fmt.Errorf("schema: building block %q records no property %q", term, property))
+	return ""
+}
+
+// meaning returns a building block's definition text, one paragraph.
+func (b *schemaBuilder) meaning(term string) string {
+	block, ok := b.model.Block(term)
+	if !ok {
+		b.fail(fmt.Errorf("schema: building block %q is not recorded", term))
+		return ""
+	}
+	return strings.Join(strings.Fields(block.Definition.Text), " ")
+}
+
+func (b *schemaBuilder) fail(err error) {
+	if b.err == nil {
+		b.err = err
+	}
+}
+
+func writeSchema(buf *bytes.Buffer) error {
+	b := &schemaBuilder{model: DDD()}
 
 	kindEnum := make([]any, 0, len(RelationKinds()))
 	for _, k := range RelationKinds() {
 		kindEnum = append(kindEnum, string(k))
 	}
 
-	// Compact leaf helpers matching litmus single-line object style:
+	// Compact leaf helpers matching the litmus single-line object style:
 	// { "type": "string", "minLength": 1, "description": "..." }
 	str := func(desc string) compactObject {
-		return co(
-			"type", "string",
-			"minLength", 1,
-			"description", desc,
-		)
-	}
-	boolProp := func(desc string) compactObject {
-		return co(
-			"type", "boolean",
-			"description", desc,
-		)
+		return co("type", "string", "minLength", 1, "description", desc)
 	}
 	strItems := co("type", "string", "minLength", 1)
-	aliases := func(desc string) compactObject {
-		return co(
-			"type", "array",
-			"uniqueItems", true,
-			"items", strItems,
+	names := func(desc string) orderedObject {
+		return o("type", "array", "uniqueItems", true, "items", strItems, "description", desc)
+	}
+	// A reference repeats its target's description beside the $ref, so
+	// a reader of the property sees the block's meaning without
+	// following the pointer; both come from the same meta-model entry.
+	ref := func(name, term string) compactObject {
+		return co("$ref", "#/$defs/"+name, "description", b.meaning(term))
+	}
+	// keyed is a map whose keys are the instances' names or keys.
+	keyed := func(desc, pattern string, value any) orderedObject {
+		return o(
+			"type", "object",
 			"description", desc,
+			"propertyNames", co("pattern", pattern),
+			"additionalProperties", value,
+		)
+	}
+	entry := func(term string, required []string, props orderedObject) orderedObject {
+		return o(
+			"type", "object",
+			"description", b.meaning(term),
+			"additionalProperties", false,
+			"required", a(required...),
+			"properties", props,
 		)
 	}
 
@@ -68,142 +123,82 @@ func writeSchema(buf *bytes.Buffer) error {
 		"description", SchemaDescription,
 		"type", "object",
 		"additionalProperties", false,
-		"required", a("version", "contexts"),
+		"required", a("version", "project", "contexts"),
 		"properties", o(
 			"version", o(
 				"type", "integer",
 				"const", UbiquitousLanguageVersion,
 				"description", SchemaVersionDescription,
 			),
-			"contexts", o(
-				"type", "array",
-				"uniqueItems", true,
-				"description", SchemaContextsDescription,
-				"items", o(
-					"type", "object",
-					"additionalProperties", false,
-					"required", a("name"),
-					"properties", o(
-						"name", o(
-							"type", "string",
-							"minLength", 1,
-							"description", SchemaContextNameDescription,
-						),
-						"entities", o(
-							"type", "array",
-							"uniqueItems", true,
-							"description", SchemaEntitiesDescription,
-							"items", o(
-								"type", "object",
-								"additionalProperties", false,
-								"required", a("name", "definition"),
-								"properties", o(
-									"name", str(SchemaCanonicalNameDescription),
-									"definition", str(SchemaEntityDefinitionDescription),
-									"aggregate", boolProp(SchemaAggregateFlagDescription),
-									"aliases", aliases(SchemaEntityAliasesDescription),
-								),
-							),
-						),
-						"value_objects", o(
-							"type", "array",
-							"uniqueItems", true,
-							"description", SchemaValueObjectsDescription,
-							"items", o(
-								"type", "object",
-								"additionalProperties", false,
-								"required", a("name", "definition"),
-								"properties", o(
-									"name", str(SchemaCanonicalNameDescription),
-									"definition", str(SchemaValueDefinitionDescription),
-									"aliases", aliases(SchemaValueAliasesDescription),
-								),
-							),
-						),
-						"invariants", o(
-							"type", "array",
-							"uniqueItems", true,
-							"description", SchemaInvariantsDescription,
-							"items", o(
-								"type", "object",
-								"additionalProperties", false,
-								"required", a("statement", "owner"),
-								"properties", o(
-									"statement", str(SchemaStatementDescription),
-									"owner", str(SchemaOwnerDescription),
-									"id", str(SchemaInvariantIDDescription),
-								),
-							),
-						),
-						"assertions", o(
-							"type", "array",
-							"uniqueItems", true,
-							"description", SchemaAssertionsDescription,
-							"items", o(
-								"type", "object",
-								"additionalProperties", false,
-								"required", a("statement", "owner", "id", "on"),
-								"properties", o(
-									"statement", str(SchemaStatementDescription),
-									"owner", str(SchemaAssertionOwnerDescription),
-									"id", str(SchemaAssertionIDDescription),
-									"on", str(SchemaAssertionOnDescription),
-								),
-							),
-						),
-						"specifications", o(
-							"type", "array",
-							"uniqueItems", true,
-							"description", SchemaSpecificationsDescription,
-							"items", o(
-								"type", "object",
-								"additionalProperties", false,
-								"required", a("name", "definition"),
-								"properties", o(
-									"name", str(SchemaSpecificationNameDescription),
-									"definition", str(SchemaSpecificationDefinitionDescription),
-								),
-							),
-						),
-						"events", o(
-							"type", "array",
-							"uniqueItems", true,
-							"description", SchemaEventsDescription,
-							"items", o(
-								"type", "object",
-								"additionalProperties", false,
-								"required", a("name", "definition"),
-								"properties", o(
-									"name", str(SchemaEventNameDescription),
-									"definition", str(SchemaEventDefinitionDescription),
-								),
-							),
-						),
-					),
-				),
-			),
+			"project", str(b.def("domain", "project")),
+			"description", str(b.def("domain", "description")),
+			"contexts", keyed(b.def("domain", "contexts"), ContextNamePattern, ref("context", "bounded_context")),
 			"relations", o(
 				"type", "array",
 				"uniqueItems", true,
-				"description", SchemaRelationsDescription,
-				"items", o(
-					"type", "object",
-					"additionalProperties", false,
-					"required", a("from", "to", "kind"),
-					"properties", o(
-						"from", str(SchemaFromDescription),
-						"to", str(SchemaToDescription),
-						"kind", o(
-							"type", "string",
-							"enum", kindEnum,
-							"description", SchemaKindDescription(),
-						),
-					),
-				),
+				"description", b.def("domain", "relations"),
+				"items", ref("relation", "context_relation"),
 			),
 		),
+		"$defs", o(
+			"context", entry("bounded_context", []string{"definition"}, o(
+				"definition", str(b.def("bounded_context", "definition")),
+				"aggregates", keyed(b.def("bounded_context", "aggregates"), TermNamePattern, ref("aggregate", "aggregate")),
+				"value_objects", keyed(b.def("bounded_context", "value_objects"), TermNamePattern, ref("value_object", "value_object")),
+				"events", keyed(b.def("bounded_context", "events"), TermNamePattern, ref("event", "domain_event")),
+				"services", keyed(b.def("bounded_context", "services"), TermNamePattern, ref("service", "domain_service")),
+				"specifications", keyed(b.def("bounded_context", "specifications"), TermNamePattern, ref("specification", "specification")),
+				"questions", keyed(b.def("bounded_context", "questions"), KeyPattern, str(b.def("question", "text"))),
+			)),
+			"aggregate", entry("aggregate", []string{"definition", "identity"}, o(
+				"definition", str(b.def("aggregate", "definition")),
+				"identity", str(b.def("aggregate", "identity")),
+				"aliases", names(b.def("aggregate", "aliases")),
+				"entities", keyed(b.def("aggregate", "entities"), TermNamePattern, ref("entity", "entity")),
+				"invariants", keyed(b.def("aggregate", "invariants"), KeyPattern, str(b.def("invariant", "statement"))),
+				"assertions", keyed(b.def("aggregate", "assertions"), KeyPattern, ref("assertion", "assertion")),
+				"repository", str(b.def("aggregate", "repository")),
+				"factory", str(b.def("aggregate", "factory")),
+			)),
+			"entity", entry("entity", []string{"definition"}, o(
+				"definition", str(b.def("entity", "definition")),
+				"identity", str(b.def("entity", "identity")),
+				"aliases", names(b.def("entity", "aliases")),
+			)),
+			"value_object", entry("value_object", []string{"definition"}, o(
+				"definition", str(b.def("value_object", "definition")),
+				"aliases", names(b.def("value_object", "aliases")),
+				"invariants", keyed(b.def("value_object", "invariants"), KeyPattern, str(b.def("invariant", "statement"))),
+			)),
+			"assertion", entry("assertion", []string{"on", "statement"}, o(
+				"on", str(b.def("assertion", "on")),
+				"statement", str(b.def("assertion", "statement")),
+			)),
+			"event", entry("domain_event", []string{"definition"}, o(
+				"definition", str(b.def("domain_event", "definition")),
+				"raised_by", str(b.def("domain_event", "raised_by")),
+			)),
+			"service", entry("domain_service", []string{"definition"}, o(
+				"definition", str(b.def("domain_service", "definition")),
+			)),
+			"specification", entry("specification", []string{"definition"}, o(
+				"definition", str(b.def("specification", "definition")),
+			)),
+			"relation", entry("context_relation", []string{"from", "to", "kind"}, o(
+				"from", str(b.def("context_relation", "from")),
+				"to", str(b.def("context_relation", "to")),
+				"kind", o(
+					"type", "string",
+					"enum", kindEnum,
+					"description", SchemaKindDescription(),
+				),
+				"description", str(b.def("context_relation", "description")),
+			)),
+		),
 	)
-
+	if b.err != nil {
+		return b.err
+	}
 	if err := writeJSON(buf, root, 0); err != nil {
 		return err
 	}

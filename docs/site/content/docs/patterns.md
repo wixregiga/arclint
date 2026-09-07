@@ -5,10 +5,10 @@ weight = 5
 +++
 
 A **Pattern** is a named, versioned collection of Rules packaged for
-distribution: an identity header, the Modules its Rules speak about
+distribution: an identity header, the Zones its Rules speak about
 (without paths), the Rules, and any Extensions those Rules use. A
 repository adopts a Pattern by reference from `rules.arclint.yaml`, binds each
-Pattern Module to the paths it owns locally, and adjusts individual
+Pattern Zone to the paths it owns locally, and adjusts individual
 Rules through Overrides. Rule text is never copied; when a folder moves,
 only the binding changes.
 
@@ -22,9 +22,9 @@ exactly what the adopter runs.
 
 A Pattern resolves from three places, always in this order:
 
-1. **Embedded**: the Patterns built into the `arclint` binary
-   (`arclint/vertical`, `arclint/domain-model`). They need no files in
-   the repository and no network.
+1. **Embedded**: the Pattern built into the `arclint` binary
+   (`arclint/vertical`). It needs no files in the repository and no
+   network.
 2. **Local**: `.arclint/patterns/<namespace>/<name>/`. A directory with
    a `manifest.json` is a **vendored** copy of a published version,
    verified byte for byte on every load. A directory without one is
@@ -48,9 +48,8 @@ arclint patterns
 ```
 
 ```
-arclint/domain-model@0.1.0  embedded            3 rule(s)  3 extension(s)  coverage [go, ts]  a5e0ad0146c3
-arclint/vertical@0.1.0      embedded, vendored 16 rule(s)  5 extension(s)  coverage [go]      fc01898bee8f
-acme/layers@1.0.0           authored            1 rule(s)  0 extension(s)  coverage [go]      3fb2cbda1af6
+arclint/vertical@0.1.0  embedded, vendored 16 rule(s)  5 extension(s)  coverage [go]  fc01898bee8f
+acme/layers@1.0.0       authored            1 rule(s)  0 extension(s)  coverage [go]  3fb2cbda1af6
 ```
 
 The second column says where a Pattern resolves from and what the
@@ -84,8 +83,8 @@ exactly one namespace, and:
 - vendors it under `.arclint/patterns/<namespace>/<name>/` when it came
   from the Registry, so the next check needs no network;
 - records it under `extends` in `rules.arclint.yaml` with a binding for every
-  Module the Pattern lists, drafted from the paths the Pattern suggests;
-- adopts a Module `rules.arclint.yaml` already declares under the same name:
+  Zone the Pattern lists, drafted from the paths the Pattern suggests;
+- adopts a Zone `rules.arclint.yaml` already declares under the same name:
   its declared paths become the binding and the local declaration is
   folded away, comments preserved;
 - replaces the entry in place when the ruleset already extends another
@@ -102,10 +101,10 @@ bound:
   app: internal/app/**
 unbound (bind each under extends[].bind before the ruleset loads):
   domain
-next: bind the unbound modules, then run `arclint check .`
+next: bind the unbound zones, then run `arclint check .`
 ```
 
-A Module the Pattern lists without suggested paths is left commented
+A Zone the Pattern lists without suggested paths is left commented
 under `bind` (`# domain: <glob>`); the ruleset says so until the owner
 binds it. `arclint init --pattern <name>` drafts the same file for a
 new repository.
@@ -131,7 +130,7 @@ bytes it reviewed even when the binary that checks it is upgraded.
 ## Adopting a Pattern by hand
 
 `extends` names the Pattern by exact reference (`namespace/name@version`,
-exact semver, no ranges) and binds every Module the Pattern lists:
+exact semver, no ranges) and binds every Zone the Pattern lists:
 
 ```yaml
 runtime: [go]
@@ -146,7 +145,7 @@ extends:
       shared: "internal/shared/**"
       composition: "cmd/**"
 
-modules:
+zones:
   toolchain: ["Makefile", "go.mod"]
 
 rules:
@@ -170,11 +169,11 @@ rules:
 
 The loader enforces the adoption contract:
 
-- Every Module the Pattern lists must be bound; a Module left unbound
-  is rejected (`unbound modules ports, adapters`), and a binding for a
-  Module the Pattern does not list is rejected too.
-- A bound Module is declared like any other: local Rules may name it
-  under `on`. A local `modules:` entry with the same name must carry
+- Every Zone the Pattern lists must be bound; a Zone left unbound
+  is rejected (`unbound zones ports, adapters`), and a binding for a
+  Zone the Pattern does not list is rejected too.
+- A bound Zone is declared like any other: local Rules may name it
+  under `on`. A local `zones:` entry with the same name must carry
   the same paths; different paths are rejected.
 - The Pattern's Rules load under their qualified IDs
   (`arclint/vertical:domain/stdlib-only`). `arclint rules` lists them
@@ -202,11 +201,11 @@ An Override changes at least one of:
 |---|---|
 | `severity` | `error`, `warning`, or `info` |
 | `disable` | a reason string; the Rule stays listed, is marked disabled, and evaluates nothing |
-| `exclude` | `{paths, modules, reason}`: files the Rule does not judge |
+| `exclude` | `{paths, zones, reason}`: files the Rule does not judge |
 | `suppress` | `{paths, reason}`: findings kept in the Assessment but not active |
 
 An Override never carries `description`, `on`, `files`, `with`, or an
-assertion: a Pattern Rule keeps its own Claim, Modules, and parameters.
+assertion: a Pattern Rule keeps its own Claim, Zones, and parameters.
 To assert something different, disable the Pattern Rule with a reason
 and add a local Rule under a new ID. Writing a local Rule under a
 Pattern Rule's ID is rejected for the same reason, and an Override
@@ -231,7 +230,7 @@ pattern:
     Ports and adapters. The core owns the domain and the ports; adapters
     implement them; nothing else imports an adapter.
 
-modules:
+zones:
   core: "The domain and the ports it exposes."
   ports:
     description: "Interfaces the core owns and adapters implement."
@@ -240,7 +239,7 @@ modules:
 
 rules:
   core/stdlib-only:
-    description: "The core imports no other Module and no third-party package."
+    description: "The core imports no other Zone and no third-party package."
     on: core
     imports:
       internal: []
@@ -265,7 +264,7 @@ rules:
       strict: true
 
   dependencies/acyclic:
-    description: "Module dependencies contain no cycle."
+    description: "Zone dependencies contain no cycle."
     acyclic: {}
 ```
 
@@ -275,7 +274,7 @@ The rules of the Pattern file:
   semver. `coverage` lists the languages the Pattern's Rules were
   written for; `documentation` is the prose `init` and `install` copy
   into the drafted `rules.arclint.yaml` header.
-- A Module is listed by its description: a bare string, or an object
+- A Zone is listed by its description: a bare string, or an object
   with `description` (required) and optional `paths` that `install` and
   `init --pattern` offer as the starting binding. A list of globs is
   rejected, because the adopting repository binds the paths.
@@ -286,12 +285,12 @@ The rules of the Pattern file:
   may distribute the same local ID (`acme/hexagonal:core/stdlib-only`
   and `acme/onion:core/stdlib-only`) and both apply; an Override under
   either qualified ID reaches exactly that Rule.
-- Every Rule names only Modules the Pattern lists, and every entry
+- Every Rule names only Zones the Pattern lists, and every entry
   carries an assertion key; a Pattern distributes Rules and cannot
   override. A Pattern with no Rules is rejected. An `acyclic: {}`
-  inside a Pattern resolves to the Pattern's own Modules, so
+  inside a Pattern resolves to the Pattern's own Zones, so
   `arclint rules acme/hexagonal:dependencies/acyclic` lists
-  `core, ports, adapters` and a sibling Pattern's Modules never enter
+  `core, ports, adapters` and a sibling Pattern's Zones never enter
   that cycle scope.
 - Extension names a Pattern Rule uses (`acme/check`) are registered by
   the `*.ts` files under the Pattern's `extensions/` directory; the
@@ -323,22 +322,17 @@ Requests to an `https` Registry send `Authorization: Bearer` with
 `GITHUB_TOKEN` or `GH_TOKEN` when either is set, so a private GitHub
 repository can serve a team's Patterns.
 
-## The domain-model Pattern
+## The recorded domain needs no Pattern
 
-`arclint/domain-model` turns a repository's recorded Ubiquitous
-Language into a contract. Its three Rules read
-`domain.arclint.yaml` through the extension SDK: every recorded
-term carries a definition, every recorded invariant names a recorded
-term of its own context as its owner, and imports between Modules named
-after bounded contexts respect the recorded context-map relations.
-
-```bash
-arclint patterns install domain-model
-```
-
-binds its one Module, `vocabulary`, to `domain.arclint.yaml`.
-Declare one Module per bounded context whose imports the map should
-govern (`billing: internal/billing/**`) and the context map becomes
-import rules with no further configuration. arclint's own `rules.arclint.yaml`
-extends this Pattern; the vocabulary rules it enforces on itself are
-the ones every adopter receives.
+The rules that judge a repository's recorded Ubiquitous Language
+against its code are built into the binary and apply as soon as
+`domain.arclint.yaml` records a context; nothing is installed for them.
+arclint locates a context's code from its recorded terms, the
+declarations that spell them, wherever they are in the repository;
+name a Zone after the context (`billing: internal/billing/**`) only
+to narrow that search when the repository declares a recorded term
+more than once. Once a context and its relations are recorded, the
+context map becomes import rules, every aggregate must have its root,
+and every invariant its enforcing method. A Pattern adds what the
+meta-model does not say: the layout around the model. See
+[Domain Contracts](/docs/contracts/).

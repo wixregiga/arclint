@@ -93,18 +93,18 @@ func writePatternInstall(p *out.Printer, th Theme, res application.InstallPatter
 	if len(res.Bound) > 0 {
 		p.Println(th.Bold.Render("bound:"))
 		for _, b := range res.Bound {
-			p.Printf("  %s: %s\n", b.Module, th.Path.Render(strings.Join(b.Paths, ", ")))
+			p.Printf("  %s: %s\n", b.Zone, th.Path.Render(strings.Join(b.Paths, ", ")))
 		}
 	}
 	if len(res.Adopted) > 0 {
-		p.Printf("%s %s\n", th.Muted.Render("adopted declared module(s):"), strings.Join(res.Adopted, ", "))
+		p.Printf("%s %s\n", th.Muted.Render("adopted declared zone(s):"), strings.Join(res.Adopted, ", "))
 	}
 	if len(res.Unbound) > 0 {
 		p.Println(th.Warning.Render("unbound") + " (bind each under extends[].bind before the ruleset loads):")
 		for _, m := range res.Unbound {
 			p.Printf("  %s\n", m)
 		}
-		p.Printf("%s bind the unbound modules, then run `arclint check .`\n", th.Muted.Render("next:"))
+		p.Printf("%s bind the unbound zones, then run `arclint check .`\n", th.Muted.Render("next:"))
 		return
 	}
 	p.Printf("%s run `arclint check .`\n", th.Muted.Render("next:"))

@@ -2,984 +2,328 @@ package vocab_test
 
 import (
 	"errors"
-	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
-const ctx = "Ordering"
-
-func emptyLang(t *testing.T) vocab.UbiquitousLanguage {
-	t.Helper()
-	l, err := vocab.NewUbiquitousLanguage(nil, nil)
-	if err != nil {
-		t.Fatalf("NewUbiquitousLanguage: %v", err)
-	}
-	return l
-}
-
-func mustLang(t *testing.T, contexts []vocab.BoundedContext, relations []vocab.ContextRelation) vocab.UbiquitousLanguage {
-	t.Helper()
-	l, err := vocab.NewUbiquitousLanguage(contexts, relations)
-	if err != nil {
-		t.Fatalf("NewUbiquitousLanguage: %v", err)
-	}
-	return l
-}
-
-func entity(name string, aggregate bool) vocab.Entity {
-	return vocab.Entity{Definition: vocab.Definition{Name: name}, Aggregate: aggregate}
-}
-
-func TestNewUbiquitousLanguageRejectsEmptyContextName(t *testing.T) {
-	_, err := vocab.NewUbiquitousLanguage(
-		[]vocab.BoundedContext{{Name: "  "}},
-		nil,
-	)
-	if err == nil {
-		t.Fatal("expected empty-name error")
-	}
-	if !strings.Contains(err.Error(), "contexts") {
-		t.Errorf("error %q should name section", err)
-	}
-}
-
-func TestNewUbiquitousLanguageRejectsDuplicateContext(t *testing.T) {
-	_, err := vocab.NewUbiquitousLanguage(
-		[]vocab.BoundedContext{{Name: "A"}, {Name: "A"}},
-		nil,
-	)
-	if err == nil {
-		t.Fatal("expected duplicate context error")
-	}
-}
-
-func TestNewUbiquitousLanguageRejectsDuplicateTermInSection(t *testing.T) {
-	_, err := vocab.NewUbiquitousLanguage(
-		[]vocab.BoundedContext{{
-			Name:         ctx,
-			ValueObjects: []vocab.Definition{{Name: "Money"}, {Name: "Money"}},
-		}},
-		nil,
-	)
-	if err == nil {
-		t.Fatal("expected duplicate-name error")
-	}
-	if !strings.Contains(err.Error(), "value_objects") || !strings.Contains(err.Error(), "Money") {
-		t.Errorf("error %q should name section and name", err)
-	}
-}
-
-func TestNewUbiquitousLanguageRejectsDuplicateAlias(t *testing.T) {
-	_, err := vocab.NewUbiquitousLanguage(
-		[]vocab.BoundedContext{{
-			Name:     ctx,
-			Entities: []vocab.Entity{{Definition: vocab.Definition{Name: "Order", Aliases: []string{"Purchase Order", "Purchase Order"}}}},
-		}},
-		nil,
-	)
-	if err == nil || !strings.Contains(err.Error(), "entities") || !strings.Contains(err.Error(), "Purchase Order") {
-		t.Fatalf("expected duplicate-alias error naming the section and alias, got %v", err)
-	}
-	_, err = vocab.NewUbiquitousLanguage(
-		[]vocab.BoundedContext{{
-			Name:         ctx,
-			ValueObjects: []vocab.Definition{{Name: "Money", Aliases: []string{"Amount", "Amount"}}},
-		}},
-		nil,
-	)
-	if err == nil || !strings.Contains(err.Error(), "value_objects") || !strings.Contains(err.Error(), "Amount") {
-		t.Fatalf("expected duplicate-alias error naming the section and alias, got %v", err)
-	}
-}
-
-func TestNewUbiquitousLanguageRejectsDuplicateRelation(t *testing.T) {
-	_, err := vocab.NewUbiquitousLanguage(
-		[]vocab.BoundedContext{{Name: "A"}, {Name: "B"}},
-		[]vocab.ContextRelation{
-			{From: "A", To: "B", Kind: vocab.RelationPartnership},
-			{From: "A", To: "B", Kind: vocab.RelationPartnership},
-		},
-	)
-	if err == nil || !strings.Contains(err.Error(), "recorded twice") {
-		t.Fatalf("expected duplicate-relation error, got %v", err)
-	}
-	if _, err := vocab.NewUbiquitousLanguage(
-		[]vocab.BoundedContext{{Name: "A"}, {Name: "B"}},
-		[]vocab.ContextRelation{
-			{From: "A", To: "B", Kind: vocab.RelationPartnership},
-			{From: "A", To: "B", Kind: vocab.RelationCustomerSupplier},
-		},
-	); err != nil {
-		t.Fatalf("distinct kinds between the same contexts must be accepted: %v", err)
-	}
-}
-
-func TestNewUbiquitousLanguageRejectsBadRelation(t *testing.T) {
-	_, err := vocab.NewUbiquitousLanguage(
-		[]vocab.BoundedContext{{Name: "A"}},
-		[]vocab.ContextRelation{{From: "A", To: "B", Kind: vocab.RelationPartnership}},
-	)
-	if err == nil || !strings.Contains(err.Error(), "B") {
-		t.Fatalf("expected unknown context error, got %v", err)
-	}
-}
-
-func TestNewUbiquitousLanguageAcceptsDesignatedEntity(t *testing.T) {
-	l := mustLang(t, []vocab.BoundedContext{{
-		Name:     ctx,
-		Entities: []vocab.Entity{entity("Order", true)},
-	}}, nil)
-	if !l.Contexts[0].Entities[0].Aggregate {
-		t.Fatal("expected Aggregate designation preserved")
-	}
-	if l.Contexts[0].Entities[0].Name != "Order" {
-		t.Fatalf("promoted Name = %q, want Order", l.Contexts[0].Entities[0].Name)
-	}
-}
-
-func TestUbiquitousLanguageEmpty(t *testing.T) {
-	if !emptyLang(t).Empty() {
-		t.Fatal("empty language should report Empty")
-	}
-	l := mustLang(t, []vocab.BoundedContext{{Name: ctx}}, nil)
-	if l.Empty() {
-		t.Fatal("language with a context should not report Empty")
-	}
-}
-
-func TestCounts(t *testing.T) {
-	l := mustLang(t,
-		[]vocab.BoundedContext{
-			{
-				Name: ctx,
-				Entities: []vocab.Entity{
-					entity("Order", true),
-					entity("Customer", false),
-					entity("Product", false),
-				},
-				ValueObjects: []vocab.Definition{{Name: "Money"}, {Name: "OrderID"}, {Name: "SKU"}},
+// ticketing is a small but complete recorded domain: two contexts, an
+// aggregate with a member entity, invariants under both owner kinds,
+// an assertion, an event raised by the aggregate, a service, a
+// specification, an open question, and one relation.
+func ticketing() ([]vocab.BoundedContext, []vocab.ContextRelation) {
+	contexts := []vocab.BoundedContext{
+		{
+			Name:       "sales",
+			Definition: "Selling seats for events.",
+			Aggregates: []vocab.Aggregate{{
+				Name:       "Order",
+				Definition: "A customer's purchase of seats for one event.",
+				Identity:   "OrderID",
+				Aliases:    []string{"booking"},
+				Entities: []vocab.Entity{{
+					Name:       "OrderLine",
+					Definition: "One seat on the order.",
+					Identity:   "LineNumber",
+				}},
 				Invariants: []vocab.Invariant{
-					{Statement: "total = sum of lines", Owner: "Order"},
-					{Statement: "must have customer", Owner: "Order"},
+					{Key: "total-is-sum-of-lines", Statement: "The order total equals the sum of its lines."},
 				},
-				Events: []vocab.Definition{{Name: "OrderPlaced"}, {Name: "OrderShipped"}},
-			},
-			{Name: "Shipping"},
+				Assertions: []vocab.Assertion{
+					{Key: "lines-priced", On: "Confirm", Statement: "Every line carries a price once the order is confirmed."},
+				},
+				Repository: "OrderRepository",
+			}},
+			ValueObjects: []vocab.ValueObject{{
+				Name:       "Money",
+				Definition: "An amount in one currency.",
+				Invariants: []vocab.Invariant{{Key: "never-negative", Statement: "Money is never negative."}},
+			}},
+			Events:         []vocab.DomainEvent{{Name: "OrderConfirmed", Definition: "The order was confirmed.", RaisedBy: "Order"}},
+			Services:       []vocab.DomainService{{Name: "Pricing", Definition: "Prices an order against the event's tiers."}},
+			Specifications: []vocab.Specification{{Name: "PreferredCustomer", Definition: "A customer entitled to early access."}},
+			Questions:      []vocab.Question{{Key: "refund-window", Text: "How long after purchase may an order be refunded?"}},
 		},
-		[]vocab.ContextRelation{{From: ctx, To: "Shipping", Kind: vocab.RelationCustomerSupplier}},
-	)
-	got := l.Counts()
+		{
+			Name:       "catalog",
+			Definition: "The events on sale and their seating.",
+			Aggregates: []vocab.Aggregate{{
+				Name:       "Event",
+				Definition: "A performance with a seating plan.",
+				Identity:   "EventID",
+			}},
+		},
+	}
+	relations := []vocab.ContextRelation{
+		{From: "catalog", To: "sales", Kind: vocab.RelationCustomerSupplier, Description: "Sales reads seating from the catalog."},
+	}
+	return contexts, relations
+}
+
+func mustTicketing(t *testing.T) vocab.UbiquitousLanguage {
+	t.Helper()
+	contexts, relations := ticketing()
+	lang, err := vocab.NewUbiquitousLanguage("boxoffice", "Selling tickets.", contexts, relations)
+	if err != nil {
+		t.Fatalf("NewUbiquitousLanguage: %v", err)
+	}
+	return lang
+}
+
+func TestNewUbiquitousLanguageAcceptsACompleteDomain(t *testing.T) {
+	lang := mustTicketing(t)
+	if lang.Empty() {
+		t.Fatal("a recorded domain reports Empty")
+	}
 	want := vocab.Counts{
-		Contexts: 2, Entities: 3, Aggregates: 1, ValueObjects: 3, Invariants: 2, Events: 2, Relations: 1,
+		Contexts: 2, Aggregates: 2, Entities: 1, ValueObjects: 1, Invariants: 2, Assertions: 1,
+		Specifications: 1, Events: 1, Services: 1, Questions: 1, Relations: 1,
 	}
-	if got != want {
-		t.Errorf("Counts() = %+v, want %+v", got, want)
+	if got := lang.Counts(); got != want {
+		t.Errorf("Counts = %+v, want %+v", got, want)
 	}
-}
-
-func TestDefineCreatesUnknownContext(t *testing.T) {
-	l := emptyLang(t)
-	l, res, err := l.Define(vocab.ConceptEntity, ctx, "Order", vocab.Change{
-		SetDefinition:  true,
-		DefinitionText: "A purchase request.",
-	})
-	if err != nil {
-		t.Fatalf("define: %v", err)
+	if names := lang.ContextNames(); strings.Join(names, ",") != "sales,catalog" {
+		t.Errorf("ContextNames = %v", names)
 	}
-	if res.Outcome != vocab.OutcomeCreated {
-		t.Fatalf("outcome = %q", res.Outcome)
-	}
-	if len(l.Contexts) != 1 || l.Contexts[0].Name != ctx {
-		t.Fatalf("contexts = %+v", l.Contexts)
+	if _, ok := lang.Relation("sales", "catalog"); !ok {
+		t.Error("Relation finds the pair in either direction")
 	}
 }
 
-func TestDefineBoundedContext(t *testing.T) {
-	l := emptyLang(t)
-	l, res, err := l.Define(vocab.ConceptBoundedContext, "Shipping", "Shipping", vocab.Change{})
+func TestNewUbiquitousLanguageCopiesItsInput(t *testing.T) {
+	contexts, relations := ticketing()
+	lang, err := vocab.NewUbiquitousLanguage("boxoffice", "", contexts, relations)
 	if err != nil {
-		t.Fatalf("define context: %v", err)
+		t.Fatal(err)
 	}
-	if res.Outcome != vocab.OutcomeCreated {
-		t.Fatalf("outcome = %q", res.Outcome)
-	}
-	_, res, err = l.Define(vocab.ConceptBoundedContext, "Shipping", "Shipping", vocab.Change{})
-	if err != nil {
-		t.Fatalf("redefine context: %v", err)
-	}
-	if res.Outcome != vocab.OutcomeUnchanged {
-		t.Fatalf("redefine outcome = %q", res.Outcome)
+	contexts[0].Aggregates[0].Invariants[0].Key = "mutated"
+	contexts[0].Aggregates[0].Aliases[0] = "mutated"
+	relations[0].Kind = vocab.RelationSeparateWays
+	sales, _ := lang.Context("sales")
+	if sales.Aggregates[0].Invariants[0].Key == "mutated" || sales.Aggregates[0].Aliases[0] == "mutated" || lang.Relations[0].Kind == vocab.RelationSeparateWays {
+		t.Fatal("the language shares slices with the input it was built from")
 	}
 }
 
-func TestDefineCreateUpdateClearUnchangedMatrix(t *testing.T) {
-	concepts := []vocab.Concept{
-		vocab.ConceptEntity,
-		vocab.ConceptValueObject,
-		vocab.ConceptDomainEvent,
+func TestTermsIncludeImpliedIdentities(t *testing.T) {
+	lang := mustTicketing(t)
+	sales, _ := lang.Context("sales")
+	var names []string
+	for _, term := range sales.Terms() {
+		names = append(names, string(term.Concept)+":"+term.Name)
 	}
-	for _, c := range concepts {
-		t.Run(string(c), func(t *testing.T) {
-			l := emptyLang(t)
-
-			l, res, err := l.Define(c, ctx, "Term", vocab.Change{
-				SetDefinition:  true,
-				DefinitionText: "meaning",
-			})
-			if err != nil {
-				t.Fatalf("create: %v", err)
-			}
-			if res.Outcome != vocab.OutcomeCreated {
-				t.Fatalf("create outcome = %q, want created", res.Outcome)
-			}
-			if !reflect.DeepEqual(res.Changed, []string{"definition"}) {
-				t.Fatalf("create Changed = %v, want [definition]", res.Changed)
-			}
-			def, ok := l.Find(c, ctx, "Term")
-			if !ok || def.Definition != "meaning" {
-				t.Fatalf("after create Find = %+v ok=%v", def, ok)
-			}
-
-			l, res, err = l.Define(c, ctx, "Term", vocab.Change{
-				SetDefinition:  true,
-				DefinitionText: "meaning",
-			})
-			if err != nil {
-				t.Fatalf("unchanged: %v", err)
-			}
-			if res.Outcome != vocab.OutcomeUnchanged {
-				t.Fatalf("unchanged outcome = %q", res.Outcome)
-			}
-
-			l, res, err = l.Define(c, ctx, "Term", vocab.Change{
-				SetDefinition:  true,
-				DefinitionText: "new meaning",
-			})
-			if err != nil {
-				t.Fatalf("update: %v", err)
-			}
-			if res.Outcome != vocab.OutcomeUpdated {
-				t.Fatalf("update outcome = %q", res.Outcome)
-			}
-
-			l, res, err = l.Define(c, ctx, "Term", vocab.Change{
-				SetDefinition:  true,
-				DefinitionText: "",
-			})
-			if err != nil {
-				t.Fatalf("clear: %v", err)
-			}
-			def, _ = l.Find(c, ctx, "Term")
-			if def.Definition != "" {
-				t.Fatalf("after clear Definition = %q", def.Definition)
-			}
-
-			l, res, err = l.Define(c, ctx, "Term", vocab.Change{
-				SetAliases: true,
-				Aliases:    []string{"A", "B"},
-			})
-			if err != nil {
-				t.Fatalf("aliases: %v", err)
-			}
-			if !reflect.DeepEqual(res.Changed, []string{"aliases"}) {
-				t.Fatalf("aliases Changed = %v", res.Changed)
-			}
-
-			l, _, err = l.Define(c, ctx, "Term", vocab.Change{
-				SetAliases: true,
-				Aliases:    []string{"C"},
-			})
-			if err != nil {
-				t.Fatalf("replace aliases: %v", err)
-			}
-			def, _ = l.Find(c, ctx, "Term")
-			if !reflect.DeepEqual(def.Aliases, []string{"C"}) {
-				t.Fatalf("replaced aliases = %v", def.Aliases)
-			}
-
-			l, res, err = l.Define(c, ctx, "Term", vocab.Change{ClearAliases: true})
-			if err != nil {
-				t.Fatalf("clear aliases: %v", err)
-			}
-			if !reflect.DeepEqual(res.Changed, []string{"aliases"}) {
-				t.Fatalf("clear aliases Changed = %v", res.Changed)
-			}
-
-			_, res, err = l.Define(c, ctx, "Term", vocab.Change{})
-			if err != nil {
-				t.Fatalf("noop: %v", err)
-			}
-			if res.Outcome != vocab.OutcomeUnchanged {
-				t.Fatalf("noop outcome = %q", res.Outcome)
-			}
-		})
+	want := "aggregate:Order,entity:OrderLine,value_object:Money,value_object:OrderID,value_object:LineNumber,domain_event:OrderConfirmed,domain_service:Pricing,specification:PreferredCustomer"
+	if got := strings.Join(names, ","); got != want {
+		t.Errorf("Terms = %s\nwant    %s", got, want)
+	}
+	id, ok := sales.Term("OrderID")
+	if !ok || !id.Implied || id.Aggregate != "Order" {
+		t.Errorf("OrderID term = %+v, want an implied value object of Order", id)
+	}
+	if _, ok := sales.ValueObject("OrderID"); ok {
+		t.Error("an implied identity has no value object entry")
+	}
+	line, owner, ok := sales.Entity("OrderLine")
+	if !ok || owner.Name != "Order" || line.Identity != "LineNumber" {
+		t.Errorf("Entity(OrderLine) = %+v under %q", line, owner.Name)
 	}
 }
 
-func TestDefineInvariantAndBusinessRule(t *testing.T) {
-	l := emptyLang(t)
-
-	// business_rule resolves to invariant; requires owner.
-	_, _, err := l.Define(vocab.ConceptBusinessRule, ctx, "total = sum of lines", vocab.Change{})
-	if err == nil {
-		t.Fatal("expected owner required error")
+func TestOwnedInvariantsAndAssertions(t *testing.T) {
+	lang := mustTicketing(t)
+	sales, _ := lang.Context("sales")
+	invs := sales.Invariants()
+	if len(invs) != 2 || invs[0].Owner != "Order" || invs[0].OwnerConcept != vocab.ConceptAggregate || invs[1].Owner != "Money" || invs[1].OwnerConcept != vocab.ConceptValueObject {
+		t.Errorf("Invariants = %+v", invs)
 	}
-
-	l, res, err := l.Define(vocab.ConceptBusinessRule, ctx, "total = sum of lines", vocab.Change{
-		Owner: "Order",
-	})
-	if err != nil {
-		t.Fatalf("define business_rule: %v", err)
-	}
-	if res.Outcome != vocab.OutcomeCreated {
-		t.Fatalf("outcome = %q", res.Outcome)
-	}
-	if !reflect.DeepEqual(res.Changed, []string{"owner"}) {
-		t.Fatalf("Changed = %v", res.Changed)
-	}
-	inv, ok := l.FindInvariant(ctx, "total = sum of lines")
-	if !ok || inv.Owner != "Order" {
-		t.Fatalf("FindInvariant = %+v ok=%v", inv, ok)
-	}
-
-	// assertion is its own section and requires owner, id, and on
-	_, _, err = l.Define(vocab.ConceptAssertion, ctx, "post: shipped implies paid", vocab.Change{
-		Owner: "Order",
-	})
-	if err == nil {
-		t.Fatal("expected assertion id required error")
-	}
-	l, res, err = l.Define(vocab.ConceptAssertion, ctx, "post: shipped implies paid", vocab.Change{
-		Owner: "Order",
-		ID:    "tiers-priced",
-		On:    "Publish",
-	})
-	if err != nil {
-		t.Fatalf("define assertion: %v", err)
-	}
-	if res.Outcome != vocab.OutcomeCreated {
-		t.Fatalf("assertion outcome = %q", res.Outcome)
-	}
-	a, ok := l.FindAssertion(ctx, "post: shipped implies paid")
-	if !ok || a.Owner != "Order" || a.ID != "tiers-priced" || a.On != "Publish" {
-		t.Fatalf("FindAssertion = %+v ok=%v", a, ok)
-	}
-
-	// update owner
-	l, res, err = l.Define(vocab.ConceptInvariant, ctx, "total = sum of lines", vocab.Change{
-		SetOwner: true,
-		Owner:    "OrderRoot",
-	})
-	if err != nil {
-		t.Fatalf("update owner: %v", err)
-	}
-	if res.Outcome != vocab.OutcomeUpdated {
-		t.Fatalf("update outcome = %q", res.Outcome)
-	}
-	inv, _ = l.FindInvariant(ctx, "total = sum of lines")
-	if inv.Owner != "OrderRoot" {
-		t.Fatalf("owner = %q", inv.Owner)
-	}
-
-	// unchanged
-	_, res, err = l.Define(vocab.ConceptInvariant, ctx, "total = sum of lines", vocab.Change{
-		SetOwner: true,
-		Owner:    "OrderRoot",
-	})
-	if err != nil {
-		t.Fatalf("unchanged: %v", err)
-	}
-	if res.Outcome != vocab.OutcomeUnchanged {
-		t.Fatalf("unchanged outcome = %q", res.Outcome)
-	}
-
-	if got := l.ListInvariants(ctx); len(got) != 1 {
-		t.Fatalf("ListInvariants len = %d", len(got))
-	}
-	if got := l.ListAssertions(ctx); len(got) != 1 {
-		t.Fatalf("ListAssertions len = %d", len(got))
-	}
-
-	l, res, err = l.Define(vocab.ConceptSpecification, ctx, "PreferredCustomer", vocab.Change{
-		SetDefinition:  true,
-		DefinitionText: "An attendee the house treats as preferred.",
-	})
-	if err != nil {
-		t.Fatalf("define specification: %v", err)
-	}
-	if res.Outcome != vocab.OutcomeCreated {
-		t.Fatalf("specification outcome = %q", res.Outcome)
-	}
-	spec, ok := l.FindSpecification(ctx, "PreferredCustomer")
-	if !ok || spec.Definition != "An attendee the house treats as preferred." {
-		t.Fatalf("FindSpecification = %+v ok=%v", spec, ok)
-	}
-	l, res, err = l.Define(vocab.ConceptSpecification, ctx, "PreferredCustomer", vocab.Change{
-		SetDefinition:  true,
-		DefinitionText: "Updated preferred attendee.",
-	})
-	if err != nil {
-		t.Fatalf("update specification: %v", err)
-	}
-	if res.Outcome != vocab.OutcomeUpdated {
-		t.Fatalf("specification update outcome = %q", res.Outcome)
-	}
-	if got := l.ListSpecifications(ctx); len(got) != 1 || got[0].Definition != "Updated preferred attendee." {
-		t.Fatalf("ListSpecifications = %+v", got)
+	as := sales.Assertions()
+	if len(as) != 1 || as[0].Owner != "Order" || as[0].Assertion.On != "Confirm" {
+		t.Errorf("Assertions = %+v", as)
 	}
 }
 
-func TestDefineRejectsEmptyName(t *testing.T) {
-	l := emptyLang(t)
-	_, _, err := l.Define(vocab.ConceptEntity, ctx, "  ", vocab.Change{})
-	if err == nil {
-		t.Fatal("expected empty-name error")
-	}
-}
-
-func TestDefineRejectsMutualExclusion(t *testing.T) {
-	l := emptyLang(t)
-	_, _, err := l.Define(vocab.ConceptEntity, ctx, "Order", vocab.Change{
-		SetAliases:   true,
-		Aliases:      []string{"PO"},
-		ClearAliases: true,
-	})
-	if err == nil {
-		t.Fatal("expected mutual-exclusion error")
-	}
-}
-
-func TestDefineAggregateCreatesAndDesignates(t *testing.T) {
-	l := emptyLang(t)
-
-	l, res, err := l.Define(vocab.ConceptAggregate, ctx, "Order", vocab.Change{
-		SetDefinition:  true,
-		DefinitionText: "A customer's request to purchase products.",
-	})
-	if err != nil {
-		t.Fatalf("define aggregate: %v", err)
-	}
-	if res.Outcome != vocab.OutcomeCreated {
-		t.Fatalf("outcome = %q, want created", res.Outcome)
-	}
-	if !reflect.DeepEqual(res.Changed, []string{"definition", "aggregate"}) {
-		t.Fatalf("Changed order = %v", res.Changed)
-	}
-
-	def, ok := l.Find(vocab.ConceptEntity, ctx, "Order")
-	if !ok || def.Definition == "" {
-		t.Fatalf("entity after aggregate define = %+v ok=%v", def, ok)
-	}
-	ent, ok := l.FindEntity(ctx, "Order")
-	if !ok || !ent.Aggregate {
-		t.Fatalf("FindEntity after aggregate define = %+v ok=%v", ent, ok)
-	}
-	if _, ok := l.Find(vocab.ConceptAggregate, ctx, "Order"); !ok {
-		t.Fatal("Find(aggregate, Order) should succeed")
-	}
-	if _, ok := l.Find(vocab.ConceptAggregateRoot, ctx, "Order"); !ok {
-		t.Fatal("Find(aggregate_root, Order) should succeed")
-	}
-
-	_, res, err = l.Define(vocab.ConceptAggregate, ctx, "Order", vocab.Change{})
-	if err != nil {
-		t.Fatalf("re-define aggregate: %v", err)
-	}
-	if res.Outcome != vocab.OutcomeUnchanged {
-		t.Fatalf("re-define outcome = %q, want unchanged", res.Outcome)
-	}
-
-	l2 := emptyLang(t)
-	l2, _, err = l2.Define(vocab.ConceptEntity, ctx, "Customer", vocab.Change{})
-	if err != nil {
-		t.Fatalf("define entity: %v", err)
-	}
-	l2, res, err = l2.Define(vocab.ConceptAggregateRoot, ctx, "Customer", vocab.Change{})
-	if err != nil {
-		t.Fatalf("designate: %v", err)
-	}
-	if res.Outcome != vocab.OutcomeUpdated {
-		t.Fatalf("designate outcome = %q, want updated", res.Outcome)
-	}
-	if !reflect.DeepEqual(res.Changed, []string{"aggregate"}) {
-		t.Fatalf("designate Changed = %v", res.Changed)
-	}
-}
-
-func TestDefineEntityPreservesAggregateDesignation(t *testing.T) {
-	l := emptyLang(t)
-	l, _, err := l.Define(vocab.ConceptAggregate, ctx, "Order", vocab.Change{
-		SetDefinition:  true,
-		DefinitionText: "orig",
-	})
-	if err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-
-	l, res, err := l.Define(vocab.ConceptEntity, ctx, "Order", vocab.Change{
-		SetDefinition:  true,
-		DefinitionText: "updated",
-	})
-	if err != nil {
-		t.Fatalf("update entity: %v", err)
-	}
-	if res.Outcome != vocab.OutcomeUpdated {
-		t.Fatalf("outcome = %q", res.Outcome)
-	}
-	if containsAll(res.Changed, "aggregate") {
-		t.Fatalf("Changed should not include aggregate: %v", res.Changed)
-	}
-	ent, _ := l.FindEntity(ctx, "Order")
-	if !ent.Aggregate {
-		t.Fatal("entity define cleared Aggregate designation")
-	}
-	if ent.Definition.Definition != "updated" {
-		t.Fatalf("Definition = %q", ent.Definition.Definition)
-	}
-}
-
-func TestDefineEntitySetAggregateGuided(t *testing.T) {
-	l := emptyLang(t)
-	l, res, err := l.Define(vocab.ConceptEntity, ctx, "Order", vocab.Change{
-		SetDefinition:  true,
-		DefinitionText: "meaning",
-		SetAggregate:   true,
-		Aggregate:      true,
-	})
-	if err != nil {
-		t.Fatalf("guided define: %v", err)
-	}
-	if res.Outcome != vocab.OutcomeCreated {
-		t.Fatalf("outcome = %q", res.Outcome)
-	}
-	ent, _ := l.FindEntity(ctx, "Order")
-	if !ent.Aggregate {
-		t.Fatal("expected Aggregate designation")
-	}
-
-	l, res, err = l.Define(vocab.ConceptEntity, ctx, "Order", vocab.Change{
-		SetAggregate: true,
-		Aggregate:    false,
-	})
-	if err != nil {
-		t.Fatalf("clear designation: %v", err)
-	}
-	if res.Outcome != vocab.OutcomeUpdated {
-		t.Fatalf("outcome = %q", res.Outcome)
-	}
-	ent, _ = l.FindEntity(ctx, "Order")
-	if ent.Aggregate {
-		t.Fatal("expected Aggregate cleared")
-	}
-}
-
-func TestDefineAppendsStableOrder(t *testing.T) {
-	l := emptyLang(t)
-	for _, name := range []string{"Customer", "Order", "Product"} {
-		var err error
-		l, _, err = l.Define(vocab.ConceptEntity, ctx, name, vocab.Change{})
-		if err != nil {
-			t.Fatalf("define %s: %v", name, err)
-		}
-	}
-	got := l.List(vocab.ConceptEntity, ctx)
-	if len(got) != 3 || got[0].Name != "Customer" || got[1].Name != "Order" || got[2].Name != "Product" {
-		t.Fatalf("order = %v", namesOf(got))
-	}
-}
-
-func TestDefineTrimsName(t *testing.T) {
-	l := emptyLang(t)
-	l, _, err := l.Define(vocab.ConceptEntity, "  "+ctx+"  ", "  Order  ", vocab.Change{})
-	if err != nil {
-		t.Fatalf("define: %v", err)
-	}
-	if _, ok := l.Find(vocab.ConceptEntity, ctx, "Order"); !ok {
-		t.Fatal("expected trimmed name Order")
-	}
-}
-
-func TestRemoveMatrix(t *testing.T) {
-	l := emptyLang(t)
-	var err error
-	l, _, err = l.Define(vocab.ConceptEntity, ctx, "Order", vocab.Change{
-		SetDefinition:  true,
-		DefinitionText: "A customer's request to purchase products.",
-		SetAggregate:   true,
-		Aggregate:      true,
-	})
-	if err != nil {
-		t.Fatalf("setup order: %v", err)
-	}
-	l, _, err = l.Define(vocab.ConceptValueObject, ctx, "Money", vocab.Change{})
-	if err != nil {
-		t.Fatalf("setup money: %v", err)
-	}
-	l, _, err = l.Define(vocab.ConceptBusinessRule, ctx, "OrderMustHaveCustomer", vocab.Change{Owner: "Order"})
-	if err != nil {
-		t.Fatalf("setup rule: %v", err)
-	}
-	l, _, err = l.Define(vocab.ConceptDomainEvent, ctx, "OrderPlaced", vocab.Change{})
-	if err != nil {
-		t.Fatalf("setup event: %v", err)
-	}
-
-	l, res, err := l.Remove(vocab.ConceptAggregate, ctx, "Order")
-	if err != nil {
-		t.Fatalf("remove aggregate: %v", err)
-	}
-	if !res.EntityPreserved {
-		t.Fatal("EntityPreserved = false")
-	}
-	ent, ok := l.FindEntity(ctx, "Order")
-	if !ok || ent.Aggregate {
-		t.Fatalf("aggregate designation should be cleared: %+v ok=%v", ent, ok)
-	}
-
-	_, _, err = l.Remove(vocab.ConceptAggregate, ctx, "Order")
-	if !errors.Is(err, vocab.ErrDefinitionNotFound) {
-		t.Fatalf("second aggregate remove err = %v, want ErrDefinitionNotFound", err)
-	}
-
-	l, res, err = l.Remove(vocab.ConceptEntity, ctx, "Order")
-	if err != nil {
-		t.Fatalf("remove entity: %v", err)
-	}
-	if res.EntityPreserved {
-		t.Fatal("EntityPreserved should be false for entity removal")
-	}
-
-	for _, c := range []struct {
-		concept vocab.Concept
-		name    string
+func TestRelationInfluence(t *testing.T) {
+	cases := []struct {
+		kind         vocab.RelationKind
+		downUp, upDn bool
 	}{
-		{vocab.ConceptValueObject, "Money"},
-		{vocab.ConceptBusinessRule, "OrderMustHaveCustomer"},
-		{vocab.ConceptDomainEvent, "OrderPlaced"},
-	} {
-		var rerr error
-		l, _, rerr = l.Remove(c.concept, ctx, c.name)
-		if rerr != nil {
-			t.Fatalf("remove %s %s: %v", c.concept, c.name, rerr)
+		{vocab.RelationCustomerSupplier, true, false},
+		{vocab.RelationConformist, true, false},
+		{vocab.RelationAnticorruptionLayer, true, false},
+		{vocab.RelationOpenHostService, true, false},
+		{vocab.RelationPublishedLanguage, true, false},
+		{vocab.RelationPartnership, true, true},
+		{vocab.RelationSharedKernel, true, true},
+		{vocab.RelationSeparateWays, false, false},
+	}
+	for _, c := range cases {
+		r := vocab.ContextRelation{From: "up", To: "down", Kind: c.kind}
+		if got := r.Influences("down", "up"); got != c.downUp {
+			t.Errorf("%s: downstream imports upstream = %v, want %v", c.kind, got, c.downUp)
 		}
-		if _, ok := l.Find(c.concept, ctx, c.name); ok {
-			t.Fatalf("%s %s still present", c.concept, c.name)
+		if got := r.Influences("up", "down"); got != c.upDn {
+			t.Errorf("%s: upstream imports downstream = %v, want %v", c.kind, got, c.upDn)
 		}
 	}
-
-	_, _, err = l.Remove(vocab.ConceptEntity, ctx, "Missing")
-	if !errors.Is(err, vocab.ErrDefinitionNotFound) {
-		t.Fatalf("missing remove err = %v", err)
-	}
-	if !strings.Contains(err.Error(), `no entity named "Missing" is defined in the project domain model`) {
-		t.Fatalf("error vocabulary = %v", err)
-	}
 }
 
-func TestFindAndListExactMatching(t *testing.T) {
-	l := mustLang(t,
-		[]vocab.BoundedContext{{
-			Name: ctx,
-			Entities: []vocab.Entity{
-				entity("Order", true),
-				entity("Customer", false),
-				entity("order", false),
-			},
-			ValueObjects: []vocab.Definition{{Name: "Money"}},
-		}},
-		nil,
-	)
-
-	if _, ok := l.Find(vocab.ConceptEntity, ctx, "ORDER"); ok {
-		t.Fatal("Find should be case-sensitive")
-	}
-	if _, ok := l.Find(vocab.ConceptEntity, ctx, "Order "); ok {
-		t.Fatal("Find should not trim")
-	}
-	if _, ok := l.Find(vocab.ConceptEntity, ctx, "Order"); !ok {
-		t.Fatal("Find(Order) should succeed")
-	}
-
-	if _, ok := l.Find(vocab.ConceptAggregate, ctx, "Order"); !ok {
-		t.Fatal("Find(aggregate, Order) should succeed")
-	}
-	if _, ok := l.Find(vocab.ConceptAggregate, ctx, "Customer"); ok {
-		t.Fatal("Find(aggregate, Customer) should fail")
-	}
-
-	entities := l.List(vocab.ConceptEntity, ctx)
-	if got := namesOf(entities); !reflect.DeepEqual(got, []string{"Order", "Customer", "order"}) {
-		t.Fatalf("List(entity) = %v", got)
-	}
-	aggregates := l.List(vocab.ConceptAggregate, ctx)
-	if got := namesOf(aggregates); !reflect.DeepEqual(got, []string{"Order"}) {
-		t.Fatalf("List(aggregate) = %v", got)
-	}
-	vos := l.List(vocab.ConceptValueObject, ctx)
-	if got := namesOf(vos); !reflect.DeepEqual(got, []string{"Money"}) {
-		t.Fatalf("List(value_object) = %v", got)
-	}
-}
-
-func TestFindEntityListEntitiesListAggregates(t *testing.T) {
-	l := mustLang(t,
-		[]vocab.BoundedContext{{
-			Name: ctx,
-			Entities: []vocab.Entity{
-				{
-					Definition: vocab.Definition{
-						Name:       "Order",
-						Definition: "A customer's request to purchase products.",
-						Aliases:    []string{"PO"},
-					},
-					Aggregate: true,
-				},
-				entity("Customer", false),
-				entity("Product", false),
-			},
-		}},
-		nil,
-	)
-
-	ent, ok := l.FindEntity(ctx, "Order")
-	if !ok {
-		t.Fatal("FindEntity(Order) missing")
-	}
-	if !ent.Aggregate {
-		t.Fatal("FindEntity should return Aggregate designation")
-	}
-	if ent.Name != "Order" {
-		t.Fatalf("promoted Name = %q", ent.Name)
-	}
-	if !reflect.DeepEqual(ent.Aliases, []string{"PO"}) {
-		t.Fatalf("promoted Aliases = %v", ent.Aliases)
-	}
-
-	all := l.ListEntities(ctx)
-	if got := entityNamesOf(all); !reflect.DeepEqual(got, []string{"Order", "Customer", "Product"}) {
-		t.Fatalf("ListEntities = %v", got)
-	}
-	aggs := l.ListAggregates(ctx)
-	if got := entityNamesOf(aggs); !reflect.DeepEqual(got, []string{"Order"}) {
-		t.Fatalf("ListAggregates = %v", got)
-	}
-}
-
-func TestEntityEmbeddingPromotion(t *testing.T) {
-	e := vocab.Entity{
-		Definition: vocab.Definition{
-			Name:       "Shipment",
-			Definition: "Goods in transit.",
-			Aliases:    []string{"Delivery"},
-		},
-		Aggregate: false,
-	}
-	if e.Name != "Shipment" {
-		t.Errorf("Name promotion = %q", e.Name)
-	}
-	if e.Aliases[0] != "Delivery" {
-		t.Errorf("Aliases promotion = %v", e.Aliases)
-	}
-	if e.Definition.Definition != "Goods in transit." {
-		t.Errorf("nested Definition text = %q", e.Definition.Definition)
-	}
-}
-
-func TestDefineAliasUnchangedElementWise(t *testing.T) {
-	l := emptyLang(t)
-	l, _, err := l.Define(vocab.ConceptEntity, ctx, "Order", vocab.Change{
-		SetAliases: true,
-		Aliases:    []string{"Purchase Order", "PO"},
-	})
-	if err != nil {
-		t.Fatalf("setup: %v", err)
-	}
-	_, res, err := l.Define(vocab.ConceptEntity, ctx, "Order", vocab.Change{
-		SetAliases: true,
-		Aliases:    []string{"Purchase Order", "PO"},
-	})
-	if err != nil {
-		t.Fatalf("redefine: %v", err)
-	}
-	if res.Outcome != vocab.OutcomeUnchanged {
-		t.Fatalf("outcome = %q, want unchanged", res.Outcome)
-	}
-
-	_, res, err = l.Define(vocab.ConceptEntity, ctx, "Order", vocab.Change{
-		SetAliases: true,
-		Aliases:    []string{"PO", "Purchase Order"},
-	})
-	if err != nil {
-		t.Fatalf("reorder: %v", err)
-	}
-	if res.Outcome != vocab.OutcomeUpdated {
-		t.Fatalf("reorder outcome = %q, want updated", res.Outcome)
-	}
-}
-
-func TestNewUbiquitousLanguageRejectsValueObjectInvariantID(t *testing.T) {
-	_, err := vocab.NewUbiquitousLanguage([]vocab.BoundedContext{{
-		Name:         ctx,
-		ValueObjects: []vocab.Definition{{Name: "Price", Definition: "Whole cents."}},
-		Invariants:   []vocab.Invariant{{Statement: "A Price is never negative.", Owner: "Price", ID: "never-negative"}},
-	}}, nil)
-	if err == nil || !strings.Contains(err.Error(), "forbidden") {
-		t.Fatalf("expected value-object id forbidden, got %v", err)
-	}
-}
-
-func TestNewUbiquitousLanguageRejectsAssertionWithoutOn(t *testing.T) {
-	_, err := vocab.NewUbiquitousLanguage([]vocab.BoundedContext{{
-		Name:     ctx,
-		Entities: []vocab.Entity{entity("Order", true)},
-		Assertions: []vocab.Assertion{{
-			Statement: "Every line is priced.",
-			Owner:     "Order",
-			ID:        "lines-priced",
-		}},
-	}}, nil)
-	if err == nil || !strings.Contains(err.Error(), "on must be non-empty") {
-		t.Fatalf("expected assertion on required, got %v", err)
-	}
-}
-
-func TestNewUbiquitousLanguageRejectsNameInValueObjectAndSpecification(t *testing.T) {
-	_, err := vocab.NewUbiquitousLanguage([]vocab.BoundedContext{{
-		Name:           ctx,
-		ValueObjects:   []vocab.Definition{{Name: "Preferred", Definition: "A marking."}},
-		Specifications: []vocab.Specification{{Name: "Preferred", Definition: "A named predicate."}},
-	}}, nil)
-	if err == nil || !strings.Contains(err.Error(), "both a value object and a specification") {
-		t.Fatalf("expected name clash, got %v", err)
-	}
-}
-
-func TestNewUbiquitousLanguageRejectsDuplicateContractIDs(t *testing.T) {
-	_, err := vocab.NewUbiquitousLanguage([]vocab.BoundedContext{{
-		Name:     ctx,
-		Entities: []vocab.Entity{entity("Order", true)},
-		Invariants: []vocab.Invariant{{
-			Statement: "Lines never change.", Owner: "Order", ID: "lines-frozen",
-		}},
-		Assertions: []vocab.Assertion{{
-			Statement: "Priced before place.", Owner: "Order", ID: "lines-frozen", On: "Place",
-		}},
-	}}, nil)
-	if err == nil || !strings.Contains(err.Error(), "duplicate id") {
-		t.Fatalf("expected duplicate id, got %v", err)
-	}
-}
-
-func TestNewUbiquitousLanguageAcceptsClusterAndValueIntegrity(t *testing.T) {
-	l := mustLang(t, []vocab.BoundedContext{{
-		Name: ctx,
-		Entities: []vocab.Entity{
-			entity("Order", true),
-		},
-		ValueObjects: []vocab.Definition{{Name: "Price", Definition: "Whole cents."}},
-		Invariants: []vocab.Invariant{
-			{Statement: "A placed Order's lines never change.", Owner: "Order", ID: "lines-frozen"},
-			{Statement: "A Price is never negative.", Owner: "Price"},
-		},
-	}}, nil)
-	if l.Counts().Invariants != 2 {
-		t.Fatalf("invariants = %d", l.Counts().Invariants)
-	}
-}
-
-// TestNewUbiquitousLanguageInvariantShapesTheLoaderAccepts pins the
-// loader-reachable shapes no declaration can carry: an aggregate
-// owner without an id, an entity owner that is not an aggregate, and
-// an owner no term records. The context command reports each as
-// unanchorable; the loader admits them all today.
-func TestNewUbiquitousLanguageInvariantShapesTheLoaderAccepts(t *testing.T) {
-	l := mustLang(t, []vocab.BoundedContext{{
-		Name: ctx,
-		Entities: []vocab.Entity{
-			entity("Order", true),
-			entity("Customer", false),
-		},
-		Invariants: []vocab.Invariant{
-			{Statement: "An Order has one Customer.", Owner: "Order"},
-			{Statement: "A Customer is named.", Owner: "Customer"},
-			{Statement: "A Warehouse holds stock.", Owner: "Warehouse"},
-		},
-	}}, nil)
-	if l.Counts().Invariants != 3 {
-		t.Fatalf("invariants = %d", l.Counts().Invariants)
-	}
-}
-
-func TestNewUbiquitousLanguageRejectsInvariantIDOffAggregate(t *testing.T) {
-	for _, tc := range []struct {
+// Each loader-level invariant of the meta-model rejects the one
+// representation that breaks it, and the error names the invariant.
+func TestNewUbiquitousLanguageAppliesTheLoaderInvariants(t *testing.T) {
+	cases := []struct {
 		name  string
-		ctx   vocab.BoundedContext
+		mut   func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation)
 		wants string
 	}{
-		{
-			name: "entity that is not an aggregate",
-			ctx: vocab.BoundedContext{
-				Name:       ctx,
-				Entities:   []vocab.Entity{entity("Customer", false)},
-				Invariants: []vocab.Invariant{{Statement: "A Customer is named.", Owner: "Customer", ID: "named"}},
-			},
-			wants: `id is only legal when owner "Customer" is an aggregate`,
-		},
-		{
-			name: "owner no term records",
-			ctx: vocab.BoundedContext{
-				Name:       ctx,
-				Invariants: []vocab.Invariant{{Statement: "A Warehouse holds stock.", Owner: "Warehouse", ID: "stocked"}},
-			},
-			wants: `id is only legal when owner "Warehouse" is an aggregate`,
-		},
-		{
-			name: "padded id",
-			ctx: vocab.BoundedContext{
-				Name:       ctx,
-				Entities:   []vocab.Entity{entity("Order", true)},
-				Invariants: []vocab.Invariant{{Statement: "A placed Order's lines never change.", Owner: "Order", ID: " lines-frozen"}},
-			},
-			wants: "id must be non-empty",
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := vocab.NewUbiquitousLanguage([]vocab.BoundedContext{tc.ctx}, nil)
-			if err == nil || !strings.Contains(err.Error(), tc.wants) {
-				t.Fatalf("err = %v, want %q", err, tc.wants)
+		{"context name is not a zone name", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[1].Name = "Catalog"
+			r[0].From = "Catalog"
+			return c, r
+		}, "bounded_context/named-once"},
+		{"context recorded twice", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[1].Name = "sales"
+			return c, nil
+		}, "bounded_context/named-once"},
+		{"context without definition", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[1].Definition = " "
+			return c, r
+		}, "ubiquitous_language/terms-carry-definitions"},
+		{"one name two concepts", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Events = append(c[0].Events, vocab.DomainEvent{Name: "Money", Definition: "Clashes."})
+			return c, r
+		}, "ubiquitous_language/one-meaning-per-name"},
+		{"member entity named like an aggregate", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Aggregates[0].Entities[0].Name = "Order"
+			return c, r
+		}, "ubiquitous_language/one-meaning-per-name"},
+		{"aggregate without definition", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Aggregates[0].Definition = ""
+			return c, r
+		}, "ubiquitous_language/terms-carry-definitions"},
+		{"aggregate without identity", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[1].Aggregates[0].Identity = ""
+			return c, r
+		}, "aggregate/identity-recorded"},
+		{"identity recorded as an event", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Aggregates[0].Identity = "OrderConfirmed"
+			return c, r
+		}, "aggregate/identity-recorded"},
+		{"member identity recorded as a service", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Aggregates[0].Entities[0].Identity = "Pricing"
+			return c, r
+		}, "aggregate/identity-recorded"},
+		{"entity without definition", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Aggregates[0].Entities[0].Definition = ""
+			return c, r
+		}, "ubiquitous_language/terms-carry-definitions"},
+		{"invariant key not kebab", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].ValueObjects[0].Invariants[0].Key = "NeverNegative"
+			return c, r
+		}, "invariant/keyed-within-owner"},
+		{"invariant key names the check", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Aggregates[0].Invariants[0].Key = "validate"
+			return c, r
+		}, "invariant/key-names-the-rule"},
+		{"invariant recorded twice under one owner", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Aggregates[0].Invariants = append(c[0].Aggregates[0].Invariants, c[0].Aggregates[0].Invariants[0])
+			return c, r
+		}, "invariant/keyed-within-owner"},
+		{"invariant with empty statement", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Aggregates[0].Invariants[0].Statement = ""
+			return c, r
+		}, "invariant/keyed-within-owner"},
+		{"invariant and assertion share a key", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Aggregates[0].Assertions[0].Key = "total-is-sum-of-lines"
+			return c, r
+		}, "invariant/keyed-within-owner"},
+		{"assertion without operation", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Aggregates[0].Assertions[0].On = ""
+			return c, r
+		}, "assertion/names-owner-operation-and-check"},
+		{"assertion without statement", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Aggregates[0].Assertions[0].Statement = ""
+			return c, r
+		}, "assertion/names-owner-operation-and-check"},
+		{"event raised by a value object", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Events[0].RaisedBy = "Money"
+			return c, r
+		}, "domain_event/raised-by-an-aggregate"},
+		{"event raised by a stranger", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Events[0].RaisedBy = "Event"
+			return c, r
+		}, "domain_event/raised-by-an-aggregate"},
+		{"alias listed twice", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Aggregates[0].Aliases = []string{"booking", "booking"}
+			return c, r
+		}, "listed twice"},
+		{"question key not kebab", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Questions[0].Key = "Refund Window"
+			return c, r
+		}, "is not lowercase kebab-case"},
+		{"question without text", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Questions[0].Text = ""
+			return c, r
+		}, "has no text"},
+		{"relation names a stranger", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			r[0].To = "billing"
+			return c, r
+		}, "context_map/relations-name-recorded-contexts"},
+		{"relation to itself", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			r[0].To = "catalog"
+			return c, r
+		}, "context_map/one-relation-per-pair"},
+		{"pair related twice", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			r = append(r, vocab.ContextRelation{From: "sales", To: "catalog", Kind: vocab.RelationConformist})
+			return c, r
+		}, "context_map/one-relation-per-pair"},
+		{"unpublished kind", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			r[0].Kind = "shared-kernel"
+			return c, r
+		}, "context_relation/published-kind"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			contexts, relations := c.mut(ticketing())
+			_, err := vocab.NewUbiquitousLanguage("boxoffice", "", contexts, relations)
+			if err == nil {
+				t.Fatal("accepted")
+			}
+			if !strings.Contains(err.Error(), c.wants) {
+				t.Errorf("error %q does not name %q", err, c.wants)
 			}
 		})
 	}
 }
 
-func namesOf(defs []vocab.Definition) []string {
-	out := make([]string, len(defs))
-	for i, d := range defs {
-		out[i] = d.Name
+func TestNewUbiquitousLanguageRequiresAProject(t *testing.T) {
+	_, err := vocab.NewUbiquitousLanguage(" ", "", nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "project is empty") {
+		t.Fatalf("err = %v", err)
 	}
-	return out
+	lang, err := vocab.NewUbiquitousLanguage("boxoffice", "", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !lang.Empty() {
+		t.Error("a project name alone is not a recorded domain")
+	}
 }
 
-func entityNamesOf(entities []vocab.Entity) []string {
-	out := make([]string, len(entities))
-	for i, e := range entities {
-		out[i] = e.Name
+func TestLineIsReportedWhenKnown(t *testing.T) {
+	contexts, relations := ticketing()
+	contexts[0].Aggregates[0].Line = 12
+	contexts[0].Aggregates[0].Identity = ""
+	_, err := vocab.NewUbiquitousLanguage("boxoffice", "", contexts, relations)
+	if err == nil || !strings.HasPrefix(err.Error(), "aggregate/identity-recorded: line 12: ") {
+		t.Fatalf("err = %v", err)
 	}
-	return out
 }
 
-func containsAll(got []string, want ...string) bool {
-	set := make(map[string]struct{}, len(got))
-	for _, g := range got {
-		set[g] = struct{}{}
+func TestErrDefinitionNotFoundIsWrapped(t *testing.T) {
+	lang := mustTicketing(t)
+	_, _, err := lang.Remove(vocab.ConceptAggregate, vocab.Locator{Context: "sales", Name: "Nothing"})
+	if !errors.Is(err, vocab.ErrDefinitionNotFound) {
+		t.Fatalf("err = %v, want ErrDefinitionNotFound", err)
 	}
-	for _, w := range want {
-		if _, ok := set[w]; !ok {
-			return false
-		}
-	}
-	return true
 }

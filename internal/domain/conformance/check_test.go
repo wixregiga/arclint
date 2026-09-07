@@ -17,11 +17,11 @@ func mustGlob(t *testing.T, pattern string) rule.Glob {
 	return g
 }
 
-func mustModule(t *testing.T, name, glob string) rule.Module {
+func mustZone(t *testing.T, name, glob string) rule.Zone {
 	t.Helper()
-	m, err := rule.NewModule(rule.ModuleName(name), "", []rule.Glob{mustGlob(t, glob)})
+	m, err := rule.NewZone(rule.ZoneName(name), "", []rule.Glob{mustGlob(t, glob)})
 	if err != nil {
-		t.Fatalf("NewModule(%q): %v", name, err)
+		t.Fatalf("NewZone(%q): %v", name, err)
 	}
 	return m
 }
@@ -35,11 +35,11 @@ func mustRule(t *testing.T, spec rule.Spec) rule.Rule {
 	return r
 }
 
-func moduleScope(t *testing.T, names ...rule.ModuleName) rule.Applicability {
+func zoneScope(t *testing.T, names ...rule.ZoneName) rule.Applicability {
 	t.Helper()
-	a, err := rule.ModuleApplicability(names)
+	a, err := rule.ZoneApplicability(names)
 	if err != nil {
-		t.Fatalf("ModuleApplicability(%v): %v", names, err)
+		t.Fatalf("ZoneApplicability(%v): %v", names, err)
 	}
 	return a
 }
@@ -53,15 +53,15 @@ func repoScope(t *testing.T) rule.Applicability {
 	return a
 }
 
-// scenario: Modules alpha and beta import each other; alpha restricts
+// scenario: Zones alpha and beta import each other; alpha restricts
 // its imports; one file breaks naming; one file is forbidden by
 // structure; one file fails analysis; one import is unknown; expr
 // enforcement is not implemented in this build.
 func scenarioRequest(t *testing.T, policy rule.UnknownImportPolicy) conformance.Request {
 	t.Helper()
-	modules := []rule.Module{
-		mustModule(t, "alpha", "alpha/**"),
-		mustModule(t, "beta", "beta/**"),
+	zones := []rule.Zone{
+		mustZone(t, "alpha", "alpha/**"),
+		mustZone(t, "beta", "beta/**"),
 	}
 	files := []conformance.ObservedFile{
 		{Path: "alpha/broken.go"},
@@ -110,7 +110,7 @@ func scenarioRequest(t *testing.T, policy rule.UnknownImportPolicy) conformance.
 			ID:            "t/p:alpha/imports",
 			Type:          rule.TypeConsumes,
 			Params:        rule.ConsumesParams{Internal: &emptyAllow},
-			Applicability: moduleScope(t, "alpha"),
+			Applicability: zoneScope(t, "alpha"),
 		}),
 		mustRule(t, rule.Spec{
 			ID:   "t/p:beta/shape",
@@ -119,24 +119,24 @@ func scenarioRequest(t *testing.T, policy rule.UnknownImportPolicy) conformance.
 				Require: []rule.Glob{mustGlob(t, "beta/root.go")},
 				Forbid:  []rule.Glob{mustGlob(t, "**/*.yaml")},
 			},
-			Applicability: moduleScope(t, "beta"),
+			Applicability: zoneScope(t, "beta"),
 		}),
 		mustRule(t, rule.Spec{
 			ID:            "t/p:src/snake",
 			Type:          rule.TypeNaming,
 			Params:        rule.NamingParams{Case: snake},
-			Applicability: moduleScope(t, "alpha", "beta"),
+			Applicability: zoneScope(t, "alpha", "beta"),
 		}),
 		mustRule(t, rule.Spec{
 			ID:            "t/p:deps/layers",
 			Type:          rule.TypeLayers,
-			Params:        rule.LayersParams{Layers: []rule.ModuleName{"alpha", "beta"}},
+			Params:        rule.LayersParams{Layers: []rule.ZoneName{"alpha", "beta"}},
 			Applicability: repoScope(t),
 		}),
 		mustRule(t, rule.Spec{
 			ID:            "t/p:deps/protected-beta",
 			Type:          rule.TypeProtected,
-			Params:        rule.ProtectedParams{Module: "beta"},
+			Params:        rule.ProtectedParams{Zone: "beta"},
 			Applicability: repoScope(t),
 		}).Suppress(suppression),
 		mustRule(t, rule.Spec{
@@ -149,12 +149,12 @@ func scenarioRequest(t *testing.T, policy rule.UnknownImportPolicy) conformance.
 			ID:            "t/p:src/disabled",
 			Type:          rule.TypeNaming,
 			Params:        rule.NamingParams{Case: snake},
-			Applicability: moduleScope(t, "alpha"),
+			Applicability: zoneScope(t, "alpha"),
 		}).Disable(disablement),
 	}
 	return conformance.Request{
 		Rules:          rules,
-		Modules:        modules,
+		Zones:          zones,
 		Observations:   obs,
 		UnknownImports: policy,
 	}
@@ -268,8 +268,8 @@ func TestConformanceCheckIsDeterministic(t *testing.T) {
 }
 
 func TestIndependenceForbidsSiblingImports(t *testing.T) {
-	modules := []rule.Module{
-		mustModule(t, "app", "internal/app/**"),
+	zones := []rule.Zone{
+		mustZone(t, "app", "internal/app/**"),
 	}
 	files := []conformance.ObservedFile{
 		{Path: "internal/order/application/create.go"},
@@ -302,7 +302,7 @@ func TestIndependenceForbidsSiblingImports(t *testing.T) {
 		Applicability: repoScope(t),
 	})
 	a, err := conformance.Run(conformance.Request{
-		Rules: []rule.Rule{r}, Modules: modules, Observations: obs,
+		Rules: []rule.Rule{r}, Zones: zones, Observations: obs,
 		UnknownImports: rule.UnknownImportsWarn,
 	})
 	if err != nil {
@@ -319,7 +319,7 @@ func TestIndependenceForbidsSiblingImports(t *testing.T) {
 	}
 	for _, v := range a.ActiveViolations() {
 		if strings.Contains(v.Path(), "internal/app") {
-			t.Errorf("module-owned folder produced a violation: %s", v.Path())
+			t.Errorf("zone-owned folder produced a violation: %s", v.Path())
 		}
 	}
 }
@@ -380,11 +380,11 @@ func TestFingerprintIsLineIndependent(t *testing.T) {
 	}
 }
 
-func TestRunRejectsUndeclaredModules(t *testing.T) {
+func TestRunRejectsUndeclaredZones(t *testing.T) {
 	req := scenarioRequest(t, rule.UnknownImportsWarn)
-	req.Modules = req.Modules[:1] // drop beta while rules still reference it
+	req.Zones = req.Zones[:1] // drop beta while rules still reference it
 	if _, err := conformance.Run(req); err == nil {
-		t.Errorf("expected an error for rules referencing undeclared modules")
+		t.Errorf("expected an error for rules referencing undeclared zones")
 	}
 }
 

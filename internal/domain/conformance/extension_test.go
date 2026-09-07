@@ -21,7 +21,7 @@ type fakeExtensions struct {
 }
 
 func (f *fakeExtensions) Evaluate(extension string, params map[string]any, subjects []string,
-	modules []rule.Module, obs conformance.Observations, knowledge vocab.UbiquitousLanguage,
+	zones []rule.Zone, obs conformance.Observations, knowledge vocab.UbiquitousLanguage,
 ) ([]conformance.ExtensionFinding, error) {
 	f.saw.extension = extension
 	f.saw.params = params
@@ -31,7 +31,7 @@ func (f *fakeExtensions) Evaluate(extension string, params map[string]any, subje
 
 func extensionRequest(t *testing.T, evaluator conformance.ExtensionEvaluator) conformance.Request {
 	t.Helper()
-	modules := []rule.Module{mustModule(t, "m", "m/**")}
+	zones := []rule.Zone{mustZone(t, "m", "m/**")}
 	obs, err := conformance.NewObservations([]conformance.ObservedFile{
 		{Path: "m/clean.go"},
 		{Path: "m/dirty.go"},
@@ -43,11 +43,11 @@ func extensionRequest(t *testing.T, evaluator conformance.ExtensionEvaluator) co
 		ID:            "t/p:m/no-panic",
 		Type:          rule.TypeExtension,
 		Params:        rule.ExtensionParams{Uses: "forbid-content", With: map[string]any{"pattern": `\bpanic\(`}},
-		Applicability: moduleScope(t, "m"),
+		Applicability: zoneScope(t, "m"),
 	})
 	return conformance.Request{
 		Rules:        []rule.Rule{r},
-		Modules:      modules,
+		Zones:        zones,
 		Observations: obs,
 		Extensions:   evaluator,
 	}
@@ -176,13 +176,13 @@ func TestExtensionOutOfApplicabilityIsContained(t *testing.T) {
 }
 
 func TestExtensionOutOfApplicabilityWithNoSelectedSubjects(t *testing.T) {
-	// Declared module has no observed members: nothing is selected, yet
+	// Declared zone has no observed members: nothing is selected, yet
 	// the Extension still reported a path. Diagnostics only, no
 	// fabricated Evaluation.
 	outside := &fakeExtensions{findings: []conformance.ExtensionFinding{
 		{Path: "missing/registry.go", Line: 1, Message: "where is registry"},
 	}}
-	modules := []rule.Module{mustModule(t, "m", "m/**")}
+	zones := []rule.Zone{mustZone(t, "m", "m/**")}
 	obs, err := conformance.NewObservations([]conformance.ObservedFile{
 		{Path: "other/file.go"},
 	}, nil)
@@ -193,11 +193,11 @@ func TestExtensionOutOfApplicabilityWithNoSelectedSubjects(t *testing.T) {
 		ID:            "t/p:m/require-registry",
 		Type:          rule.TypeExtension,
 		Params:        rule.ExtensionParams{Uses: "require-registry"},
-		Applicability: moduleScope(t, "m"),
+		Applicability: zoneScope(t, "m"),
 	})
 	a, err := conformance.Run(conformance.Request{
 		Rules:        []rule.Rule{r},
-		Modules:      modules,
+		Zones:        zones,
 		Observations: obs,
 		Extensions:   outside,
 	})

@@ -32,12 +32,12 @@ type Host struct {
 	Files   func(glob string) ([]FileInfo, error)
 	Read    func(path string) (string, error)
 	Imports func(path string) []ImportInfo
-	Modules func() map[string][]string
+	Zones   func() map[string][]string
 	// Facts returns declaration facts for one file, nil when the
 	// file's language does not supply declarations.
 	Facts func(path string) *FactsInfo
-	// ModuleOf returns the sorted modules a file belongs to.
-	ModuleOf func(path string) []string
+	// ZoneOf returns the sorted zones a file belongs to.
+	ZoneOf func(path string) []string
 	// Domain returns the project's recorded domain model; nil means
 	// the host supplies empty collections.
 	Domain func() DomainInfo
@@ -65,7 +65,7 @@ const sandboxJS = `
 		throw new Error("arclint: the runtime API is unavailable during the registration phase; use the ctx passed to check()");
 	};
 	globalThis.__arclint = Object.freeze({
-		files: guard, read: guard, imports: guard, modules: guard, report: guard
+		files: guard, read: guard, imports: guard, zones: guard, report: guard
 	});
 })();
 `
@@ -279,8 +279,8 @@ func (rt *RuleType) Check(host Host, params map[string]any) ([]ViolationInput, e
 		}
 		return vm.ToValue(host.Imports(call.Arguments[0].String()))
 	})
-	mustSet("modules", func(_ sobek.FunctionCall) sobek.Value {
-		return vm.ToValue(host.Modules())
+	mustSet("zones", func(_ sobek.FunctionCall) sobek.Value {
+		return vm.ToValue(host.Zones())
 	})
 	mustSet("facts", func(call sobek.FunctionCall) sobek.Value {
 		if len(call.Arguments) < 1 {
@@ -295,15 +295,15 @@ func (rt *RuleType) Check(host Host, params map[string]any) ([]ViolationInput, e
 		}
 		return vm.ToValue(facts)
 	})
-	mustSet("moduleOf", func(call sobek.FunctionCall) sobek.Value {
+	mustSet("zoneOf", func(call sobek.FunctionCall) sobek.Value {
 		if len(call.Arguments) < 1 {
-			return fail("ctx.moduleOf: path is required")
+			return fail("ctx.zoneOf: path is required")
 		}
-		mods := host.ModuleOf(call.Arguments[0].String())
-		if mods == nil {
-			mods = []string{}
+		zones := host.ZoneOf(call.Arguments[0].String())
+		if zones == nil {
+			zones = []string{}
 		}
-		return vm.ToValue(mods)
+		return vm.ToValue(zones)
 	})
 	mustSet("domain", func(_ sobek.FunctionCall) sobek.Value {
 		if host.Domain == nil {

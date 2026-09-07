@@ -11,12 +11,12 @@ import (
 )
 
 // installationFixture drafts the Installation of a Pattern with one
-// Module suggesting a path and one left unbound.
+// Zone suggesting a path and one left unbound.
 func installationFixture(t *testing.T, version string) rule.Installation {
 	t.Helper()
-	scope, err := rule.ModuleApplicability([]rule.ModuleName{"domain"})
+	scope, err := rule.ZoneApplicability([]rule.ZoneName{"domain"})
 	if err != nil {
-		t.Fatalf("ModuleApplicability: %v", err)
+		t.Fatalf("ZoneApplicability: %v", err)
 	}
 	internal := rule.AllowList{}
 	r, err := rule.New(rule.Spec{
@@ -32,20 +32,20 @@ func installationFixture(t *testing.T, version string) rule.Installation {
 	if err != nil {
 		t.Fatalf("NewGlob: %v", err)
 	}
-	domain, err := rule.NewPatternModule("domain", "The domain model.", []rule.Glob{glob})
+	domain, err := rule.NewPatternZone("domain", "The domain model.", []rule.Glob{glob})
 	if err != nil {
-		t.Fatalf("NewPatternModule: %v", err)
+		t.Fatalf("NewPatternZone: %v", err)
 	}
-	app, err := rule.NewPatternModule("app", "The application layer.", nil)
+	app, err := rule.NewPatternZone("app", "The application layer.", nil)
 	if err != nil {
-		t.Fatalf("NewPatternModule: %v", err)
+		t.Fatalf("NewPatternZone: %v", err)
 	}
 	p, err := rule.NewPattern(rule.PatternSpec{
 		Namespace: "acme",
 		Name:      "layers",
 		Version:   version,
 		Coverage:  []rule.Language{rule.LanguageGo},
-		Modules:   []rule.PatternModule{domain, app},
+		Zones:     []rule.PatternZone{domain, app},
 		Rules:     []rule.Rule{r},
 	})
 	if err != nil {
@@ -80,15 +80,15 @@ func readRuleset(t *testing.T, editor yamlrule.Editor) string {
 	return string(data)
 }
 
-func TestExtendInsertsAnExtendsSectionBeforeModules(t *testing.T) {
+func TestExtendInsertsAnExtendsSectionBeforeZones(t *testing.T) {
 	editor := writeRuleset(t, `# ArcLint architecture contracts.
 runtime: [go]
 
 scan:
   unknown_imports: warn
 
-# Modules of this repository.
-modules:
+# Zones of this repository.
+zones:
   web: "cmd/web/**"
 
 rules:
@@ -122,8 +122,8 @@ extends:
       # The application layer.
       # app: <glob>
 
-# Modules of this repository.
-modules:
+# Zones of this repository.
+zones:
   web: "cmd/web/**"
 
 rules:
@@ -150,8 +150,8 @@ extends:
       shared: internal/shared/**
       composition: cmd/**
 
-  # House modules follow.
-modules:
+  # House zones follow.
+zones:
   tools: "tools/**"
 `)
 	inst := installationFixture(t, "1.0.0")
@@ -166,8 +166,8 @@ modules:
       # The application layer.
       # app: <glob>
 
-  # House modules follow.
-modules:
+  # House zones follow.
+zones:
 `
 	if !strings.Contains(got, want) {
 		t.Errorf("new entry must follow the last entry, before the trailing comment:\n%s", got)
@@ -181,7 +181,7 @@ extends:
     bind:
       domain: [internal/domain/**, pkg/domain/**]
       app: internal/app/**
-modules:
+zones:
   web: "cmd/web/**"
 `)
 	inst := installationFixture(t, "1.0.0")
@@ -197,10 +197,10 @@ modules:
 		t.Errorf("existing bindings must be reported as written: %+v", bindings)
 	}
 	if len(change.Installation.Unbound()) != 0 {
-		t.Errorf("no module is unbound once the entry binds both: %+v", change.Installation.Unbound())
+		t.Errorf("no zone is unbound once the entry binds both: %+v", change.Installation.Unbound())
 	}
 	got := readRuleset(t, editor)
-	if !strings.Contains(got, "  - pattern: 'acme/layers@1.0.0'  # pinned\n    bind:\n      domain: [internal/domain/**, pkg/domain/**]\n      app: internal/app/**\nmodules:\n") {
+	if !strings.Contains(got, "  - pattern: 'acme/layers@1.0.0'  # pinned\n    bind:\n      domain: [internal/domain/**, pkg/domain/**]\n      app: internal/app/**\nzones:\n") {
 		t.Errorf("the version must change in place with its quoting and comment:\n%s", got)
 	}
 	again, err := editor.Extend(inst)
@@ -212,10 +212,10 @@ modules:
 	}
 }
 
-func TestExtendFoldsDeclaredModulesIntoBindings(t *testing.T) {
+func TestExtendFoldsDeclaredZonesIntoBindings(t *testing.T) {
 	editor := writeRuleset(t, `runtime: [go]
 
-modules:
+zones:
   # The domain model of this repository.
   domain:
     paths: internal/domain/**
@@ -251,7 +251,7 @@ extends:
       domain: "internal/domain/**"
       app: "internal/app/**"
 
-modules:
+zones:
   web: "cmd/web/**"
 
 rules:
@@ -266,11 +266,11 @@ rules:
 	}
 }
 
-func TestExtendRemovesAnEmptiedModulesSection(t *testing.T) {
+func TestExtendRemovesAnEmptiedZonesSection(t *testing.T) {
 	editor := writeRuleset(t, `runtime: [go]
 
-# Declared modules.
-modules:
+# Declared zones.
+zones:
   domain: "internal/domain/**"
 
 rules:
@@ -328,7 +328,7 @@ func TestExtendHandlesEmptyAndFlowExtends(t *testing.T) {
 
 func TestExtendRefusesInvalidAndPatternFiles(t *testing.T) {
 	inst := installationFixture(t, "1.0.0")
-	editor := writeRuleset(t, "pattern:\n  namespace: acme\n  name: x\n  version: 1.0.0\nmodules:\n  m: \"M.\"\nrules:\n  m/r:\n    on: m\n    imports:\n      internal: []\n")
+	editor := writeRuleset(t, "pattern:\n  namespace: acme\n  name: x\n  version: 1.0.0\nzones:\n  m: \"M.\"\nrules:\n  m/r:\n    on: m\n    imports:\n      internal: []\n")
 	if _, err := editor.Extend(inst); err == nil || !strings.Contains(err.Error(), "pattern distribution file") {
 		t.Errorf("a pattern file is not a ruleset, got %v", err)
 	}

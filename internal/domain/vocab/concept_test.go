@@ -18,8 +18,10 @@ func TestConceptsOrder(t *testing.T) {
 		vocab.ConceptAggregate,
 		vocab.ConceptAggregateRoot,
 		vocab.ConceptDomainEvent,
+		vocab.ConceptDomainService,
 		vocab.ConceptBoundedContext,
 		vocab.ConceptBusinessRule,
+		vocab.ConceptQuestion,
 	}
 	if len(got) != len(want) {
 		t.Fatalf("Concepts() len = %d, want %d", len(got), len(want))
@@ -86,9 +88,11 @@ func TestListingSpellings(t *testing.T) {
 		vocab.ConceptSpecification:  "specifications",
 		vocab.ConceptAggregate:      "aggregates",
 		vocab.ConceptAggregateRoot:  "aggregate_roots",
-		vocab.ConceptDomainEvent:    "domain_events",
-		vocab.ConceptBoundedContext: "bounded_contexts",
+		vocab.ConceptDomainEvent:    "events",
+		vocab.ConceptDomainService:  "services",
+		vocab.ConceptBoundedContext: "contexts",
 		vocab.ConceptBusinessRule:   "business_rules",
+		vocab.ConceptQuestion:       "questions",
 	}
 	for c, want := range cases {
 		if got := vocab.Listing(c); got != want {
@@ -123,29 +127,35 @@ func TestConceptDocNonEmpty(t *testing.T) {
 	}
 }
 
-func TestConceptDocMeaningsFromVocabularyTerms(t *testing.T) {
-	// Meanings are the VOCAB.yaml one-liners for the matching term.
-	want := map[vocab.Concept]string{
-		vocab.ConceptEntity:         vocab.TermDefinition(vocab.TermEntity),
-		vocab.ConceptValueObject:    vocab.TermDefinition(vocab.TermValueObject),
-		vocab.ConceptInvariant:      vocab.TermDefinition(vocab.TermInvariant),
-		vocab.ConceptAssertion:      vocab.TermDefinition(vocab.TermAssertion),
-		vocab.ConceptSpecification:  vocab.TermDefinition(vocab.TermSpecification),
-		vocab.ConceptAggregate:      vocab.TermDefinition(vocab.TermAggregate),
-		vocab.ConceptAggregateRoot:  vocab.TermDefinition(vocab.TermAggregateRoot),
-		vocab.ConceptDomainEvent:    vocab.TermDefinition(vocab.TermDomainEvent),
-		vocab.ConceptBoundedContext: vocab.TermDefinition(vocab.TermBoundedContext),
-		vocab.ConceptBusinessRule:   vocab.TermDefinition(vocab.TermBusinessRule),
-	}
-	for c, meaning := range want {
+// Every Concept is the term of a meta-model building block, and its
+// documentation is that block's title, definition, and sources.
+func TestConceptDocsComeFromTheMetaModel(t *testing.T) {
+	model := vocab.DDD()
+	for _, c := range vocab.Concepts() {
+		block, ok := model.Block(string(c))
+		if !ok {
+			t.Errorf("%s: no building block of that term in the meta-model", c)
+			continue
+		}
 		doc := c.Doc()
-		if doc.Meaning != meaning {
-			t.Errorf("%s Meaning = %q, want %q", c, doc.Meaning, meaning)
+		if doc.Title != block.Title {
+			t.Errorf("%s Title = %q, want the block's %q", c, doc.Title, block.Title)
+		}
+		if doc.Meaning != block.Definition.Text {
+			t.Errorf("%s Meaning = %q, want the block's definition", c, doc.Meaning)
+		}
+		if len(doc.Sources) != len(block.Definition.Sources) {
+			t.Errorf("%s: %d sources, the block cites %d", c, len(doc.Sources), len(block.Definition.Sources))
+		}
+		for _, s := range doc.Sources {
+			if s.Work.Title == "" {
+				t.Errorf("%s: a source resolved to no work", c)
+			}
 		}
 	}
-	// business_rule doc must state it always resolves to invariant or assertion with an owner.
+	// business_rule doc must state it resolves to an invariant or an assertion with an owner.
 	br := vocab.ConceptBusinessRule.Doc()
-	if !strings.Contains(br.Meaning, "always resolves to invariant or assertion") {
+	if !strings.Contains(br.Meaning, "either an invariant") || !strings.Contains(br.Meaning, "or an assertion") {
 		t.Errorf("business_rule meaning missing resolve clause: %q", br.Meaning)
 	}
 	if !strings.Contains(br.Supplies, "owner") {
@@ -153,7 +163,22 @@ func TestConceptDocMeaningsFromVocabularyTerms(t *testing.T) {
 	}
 }
 
-func TestRelationKindsOrderAndSharedKernelDivergence(t *testing.T) {
+func TestConceptDocSourcesAreReadable(t *testing.T) {
+	doc := vocab.ConceptAggregate.Doc()
+	if len(doc.Sources) == 0 {
+		t.Fatal("aggregate cites nothing")
+	}
+	first := doc.Sources[0].String()
+	for _, want := range []string{"Eric Evans", "Domain-Driven Design Reference", "(2015)", "p. "} {
+		if !strings.Contains(first, want) {
+			t.Errorf("reference %q lacks %q", first, want)
+		}
+	}
+}
+
+// The RelationKind enum is the meta-model's context_relation kinds, in
+// order, and every kind is documented by its recorded definition.
+func TestRelationKindsMatchTheMetaModel(t *testing.T) {
 	kinds := vocab.RelationKinds()
 	want := []vocab.RelationKind{
 		vocab.RelationPartnership,
@@ -174,36 +199,40 @@ func TestRelationKindsOrderAndSharedKernelDivergence(t *testing.T) {
 		}
 	}
 
-	docs := vocab.RelationKindDocs()
-	if len(docs) != 8 {
-		t.Fatalf("RelationKindDocs len = %d", len(docs))
+	block, ok := vocab.DDD().Block("context_relation")
+	if !ok {
+		t.Fatal("the meta-model has no context_relation block")
 	}
-	for _, d := range docs {
-		if d.Kind == vocab.RelationSharedKernel {
-			if d.Meaning != "small jointly-owned subset" {
-				t.Errorf("shared_kernel Meaning = %q", d.Meaning)
-			}
-			if d.SchemaMeaning != "small jointly-owned model subset" {
-				t.Errorf("shared_kernel SchemaMeaning = %q", d.SchemaMeaning)
-			}
-			continue
-		}
-		if d.Meaning != d.SchemaMeaning {
-			t.Errorf("%s Meaning %q != SchemaMeaning %q", d.Kind, d.Meaning, d.SchemaMeaning)
+	if len(block.Records.Kinds) != len(kinds) {
+		t.Fatalf("meta-model records %d kinds, the enum has %d", len(block.Records.Kinds), len(kinds))
+	}
+	for i, k := range block.Records.Kinds {
+		if k.Name != string(kinds[i]) {
+			t.Errorf("meta-model kind %d is %q, the enum has %q", i, k.Name, kinds[i])
 		}
 	}
 
-	flow := vocab.ContextRelationFlowYAML()
-	if !strings.Contains(flow, "shared_kernel: small jointly-owned subset") {
-		t.Errorf("VOCAB flow missing shared_kernel meaning: %s", flow)
+	docs := vocab.RelationKindDocs()
+	if len(docs) != len(kinds) {
+		t.Fatalf("RelationKindDocs len = %d", len(docs))
 	}
-	if strings.Contains(flow, "jointly-owned model subset") {
-		t.Errorf("VOCAB flow must not use schema-only shared_kernel phrasing: %s", flow)
+	for i, d := range docs {
+		if d.Kind != kinds[i] {
+			t.Errorf("RelationKindDocs[%d] = %q, want %q", i, d.Kind, kinds[i])
+		}
+		if d.Meaning != block.Records.Kinds[i].Definition {
+			t.Errorf("%s Meaning = %q, want the recorded definition", d.Kind, d.Meaning)
+		}
+		if len(d.Sources) == 0 {
+			t.Errorf("%s cites nothing", d.Kind)
+		}
 	}
 
 	schemaDesc := vocab.SchemaKindDescription()
-	if !strings.Contains(schemaDesc, "shared_kernel: small jointly-owned model subset") {
-		t.Errorf("schema kind description missing model subset: %s", schemaDesc)
+	for _, d := range docs {
+		if !strings.Contains(schemaDesc, "\n"+string(d.Kind)+": "+d.Meaning) {
+			t.Errorf("schema kind description lacks %s", d.Kind)
+		}
 	}
 }
 

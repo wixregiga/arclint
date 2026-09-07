@@ -1,0 +1,140 @@
+{
+  "version": 1,
+  "capturedRules": [
+    "aggregate/commands-named-for-behavior",
+    "aggregate/invariants-enforced-by-root",
+    "aggregate/protects-an-invariant",
+    "aggregate/references-by-identity",
+    "aggregate/root-declared",
+    "application/core-actions-present",
+    "application/use-cases-through-ports",
+    "assertion/checked-by-its-operation",
+    "bounded_context/code-held-by-one-context",
+    "bounded_context/isolated",
+    "composition/main-present",
+    "composition/selects-adapters",
+    "context_relation/imports-follow-influence",
+    "delivery/cli-factory-dependencies",
+    "delivery/cli-interface-dependencies",
+    "delivery/cli-seal-present",
+    "delivery/cobra-factory-only",
+    "delivery/cobra-sealed",
+    "delivery/dependencies",
+    "delivery/json-report-dependencies",
+    "delivery/json-report-factory-only",
+    "delivery/lipgloss-report-factory-only",
+    "delivery/lipgloss-sealed",
+    "delivery/plain-report-dependencies",
+    "delivery/plain-report-factory-only",
+    "delivery/report-factory-dependencies",
+    "dependencies/acyclic",
+    "dependencies/application-inward",
+    "domain-model/aggregate-skeleton",
+    "domain/errors-name-their-subject",
+    "domain/files-speak-the-vocabulary",
+    "domain/no-panic",
+    "domain/rule-is-sole-aggregate",
+    "domain/stdlib-only",
+    "domain_event/declared",
+    "domain_event/no-setters",
+    "domain_isolation/model-imports-nothing-outside-itself",
+    "domain_service/declared",
+    "factory/declared",
+    "infrastructure/composition-only",
+    "infrastructure/outbound-only",
+    "infrastructure/stdlib-table-present",
+    "invariant/enforced-at-every-mutation",
+    "repository/declared",
+    "source/snake-case",
+    "specification/satisfaction-method",
+    "ubiquitous_language/terms-declared-in-code",
+    "value_object/constructed-through-one-door",
+    "value_object/no-setters"
+  ],
+  "findings": [
+    {
+      "ruleId": "aggregate/invariants-enforced-by-root",
+      "subject": "rule",
+      "message": "aggregate Rule: invariant exactly-one-assertion is not enforced by a method of the root; expected EnsureExactlyOneAssertion (go)",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/invariants-enforced-by-root",
+      "subject": "rule",
+      "message": "aggregate Rule: invariant expansion-only-as-structure is not enforced by a method of the root; expected EnsureExpansionOnlyAsStructure (go)",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/invariants-enforced-by-root",
+      "subject": "rule",
+      "message": "aggregate Rule: invariant pattern-lists-zones-without-paths is not enforced by a method of the root; expected EnsurePatternListsZonesWithoutPaths (go)",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/invariants-enforced-by-root",
+      "subject": "rule",
+      "message": "aggregate Rule: invariant unique-qualified-id is not enforced by a method of the root; expected EnsureUniqueQualifiedId (go)",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/invariants-enforced-by-root",
+      "subject": "rule",
+      "message": "aggregate Rule: invariant zone-has-a-path is not enforced by a method of the root; expected EnsureZoneHasAPath (go)",
+      "count": 1
+    },
+    {
+      "ruleId": "bounded_context/code-held-by-one-context",
+      "subject": "adoption",
+      "message": "context adoption holds 4 file(s) that context rule holds too (internal/domain/rule/exclusion.go, internal/domain/rule/installation.go, internal/domain/rule/pattern.go, and 1 more), and the context map records no shared_kernel between them; a boundary two models straddle is not a boundary",
+      "count": 1
+    },
+    {
+      "ruleId": "bounded_context/code-held-by-one-context",
+      "subject": "rule",
+      "message": "context rule holds 4 file(s) that context adoption holds too (internal/domain/rule/exclusion.go, internal/domain/rule/installation.go, internal/domain/rule/pattern.go, and 1 more), and the context map records no shared_kernel between them; a boundary two models straddle is not a boundary",
+      "count": 1
+    },
+    {
+      "ruleId": "bounded_context/isolated",
+      "subject": "conformance",
+      "message": "context conformance imports context adoption (github.com/wixregiga/arclint/internal/domain/rule), and the context map records no relation between them",
+      "count": 15
+    },
+    {
+      "ruleId": "context_relation/imports-follow-influence",
+      "subject": "distribution",
+      "message": "context distribution imports context adoption (github.com/wixregiga/arclint/internal/domain/rule) against the recorded conformist relation: distribution is upstream of adoption, and only the downstream imports the upstream",
+      "count": 6
+    },
+    {
+      "ruleId": "ubiquitous_language/terms-declared-in-code",
+      "subject": "adoption",
+      "message": "value object Override of context adoption names no type declaration in the repository",
+      "count": 1
+    },
+    {
+      "ruleId": "ubiquitous_language/terms-declared-in-code",
+      "subject": "distribution",
+      "message": "value object PatternSource of context distribution names no type declaration in Zone \"distribution\"",
+      "count": 1
+    },
+    {
+      "ruleId": "ubiquitous_language/terms-declared-in-code",
+      "subject": "distribution",
+      "message": "value object Selection of context distribution names no type declaration in Zone \"distribution\"",
+      "count": 1
+    },
+    {
+      "ruleId": "ubiquitous_language/terms-declared-in-code",
+      "subject": "rule",
+      "message": "value object Assertion of context rule names no type declaration in Zone \"rule\"",
+      "count": 1
+    },
+    {
+      "ruleId": "ubiquitous_language/terms-declared-in-code",
+      "subject": "rule",
+      "message": "value object TermCase of context rule names no type declaration in Zone \"rule\"",
+      "count": 1
+    }
+  ]
+}

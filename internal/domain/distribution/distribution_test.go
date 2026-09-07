@@ -219,16 +219,16 @@ func available(t *testing.T, kind distribution.SourceKind, ref, doc string) dist
 		t.Fatal(err)
 	}
 	spec := rule.PatternSpec{Namespace: r.Namespace(), Name: r.Name(), Version: r.Version()}
-	mod, err := rule.NewPatternModule("core", "the core", nil)
+	mod, err := rule.NewPatternZone("core", "the core", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec.Modules = []rule.PatternModule{mod}
+	spec.Zones = []rule.PatternZone{mod}
 	internal, err := rule.NewAllowList()
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope, err := rule.ModuleApplicability([]rule.ModuleName{"core"})
+	scope, err := rule.ZoneApplicability([]rule.ZoneName{"core"})
 	if err != nil {
 		t.Fatal(err)
 	}

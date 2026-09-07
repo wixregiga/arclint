@@ -21,4 +21,4 @@ expect:
   - kind: violation
     path: internal/delivery/cli/report.go
     line: 0
-    message: "Module \"delivery\" is missing a required file matching \"internal/delivery/cli/report.go\""
+    message: "Zone \"delivery\" is missing a required file matching \"internal/delivery/cli/report.go\""

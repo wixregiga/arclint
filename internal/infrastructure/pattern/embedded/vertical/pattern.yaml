@@ -10,7 +10,7 @@
 #         domain: internal/*/domain/**
 #         ...
 #
-# Every module below must be bound; the paths here are suggestions the
+# Every zone below must be bound; the paths here are suggestions the
 # `arclint init --pattern vertical` starter copies into bind.
 
 pattern:
@@ -24,7 +24,7 @@ pattern:
     independent of each other; transports and wiring live in app;
     cross-cutting mechanisms with no product meaning live in shared.
 
-modules:
+zones:
   domain:
     description: "Pure domain model per feature; stdlib-only."
     paths: internal/*/domain/**
@@ -46,7 +46,7 @@ modules:
 
 rules:
   domain/stdlib-only:
-    description: "Domain imports no other module and no third-party package."
+    description: "Domain imports no other zone and no third-party package."
     on: domain
     imports:
       internal: []
@@ -96,7 +96,7 @@ rules:
       internal: [application, domain, infra, shared]
 
   shared/mechanism-only:
-    description: "Shared imports no other module."
+    description: "Shared imports no other zone."
     on: shared
     imports:
       internal: []
@@ -109,7 +109,7 @@ rules:
       concerns: [logging, tracing, metrics, config, security, errors, cache, db, validation, events]
 
   composition/selects-adapters:
-    description: "Composition may import every module to wire adapters."
+    description: "Composition may import every zone to wire adapters."
     on: composition
     imports:
       internal: [app, infra, application, domain, shared]
@@ -118,7 +118,7 @@ rules:
     description: "Repository interfaces are declared only in application packages."
     uses: vertical/repository-location
     with:
-      module: application
+      zone: application
 
   dependencies/inward:
     description: "Dependencies point inward: app, then application, then domain."
@@ -134,5 +134,5 @@ rules:
     independent: ["internal/*"]
 
   dependencies/acyclic:
-    description: "Module dependencies contain no cycle."
+    description: "Zone dependencies contain no cycle."
     acyclic: {}

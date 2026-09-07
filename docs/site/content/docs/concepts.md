@@ -1,22 +1,22 @@
 +++
 title = "Concepts"
-description = "Modules, Rules, Patterns, Assurance, and how ArcLint reports findings."
+description = "Zones, Rules, Patterns, Assurance, and how ArcLint reports findings."
 weight = 2
 +++
 
-## Modules
+## Zones
 
-A Module is a named set of files, defined by path globs in `rules.arclint.yaml`.
-Modules are the vocabulary other Rules use: consumes allow-lists,
-layers, and protections refer to Module names, never raw paths.
+A Zone is a named set of files, defined by path globs in `rules.arclint.yaml`.
+Zones are the vocabulary other Rules use: consumes allow-lists,
+layers, and protections refer to Zone names, never raw paths.
 
-A Module is logical, not a folder. One Module may gather files from
+A Zone is logical, not a folder. One Zone may gather files from
 many roots, and one glob may reach into every slice of a vertically
 sliced tree: `internal/*/domain/**` is the domain layer of every
 feature, wherever the feature lives.
 
 ```yaml
-modules:
+zones:
   entities:
     paths: "internal/*/domain/**"
     description: "Every slice's domain layer; depends on nothing."
@@ -26,12 +26,12 @@ modules:
 ```
 
 A glob matches files directly, and a glob naming a directory owns the
-whole subtree. Overlapping Modules are legal: a file can belong to
-several Modules, which makes umbrella Modules (`source: "internal/**"`)
+whole subtree. Overlapping Zones are legal: a file can belong to
+several Zones, which makes umbrella Zones (`source: "internal/**"`)
 cheap for repo-wide invariants.
 
 Inspect the loaded map with `arclint context` or
-`arclint context --module <name>`.
+`arclint context --zone <name>`.
 
 ## Import classes
 
@@ -40,13 +40,13 @@ Rules run. The class names appear throughout the Rule surface:
 
 | class | meaning |
 |---|---|
-| `internal` | resolves to a file inside this repository: another Module, or undeclared internal code |
+| `internal` | resolves to a file inside this repository: another Zone, or undeclared internal code |
 | `external` | a third-party dependency declared in your manifest: `go.mod` require, `package.json` dependencies, `pyproject.toml` |
 | `stdlib` | the language's standard library (embedded tables generated from each toolchain) |
 | `unknown` | none of the above; governed by `scan.unknown_imports: warn/error/ignore` |
 
 So in an `imports` Rule, `internal: [app]` means "may import the app
-Module and nothing else internal", and `external: forbid` means "no
+Zone and nothing else internal", and `external: forbid` means "no
 third-party libraries here at all". Go classification follows toolchain
 semantics. TypeScript and Python are lexer-grade with documented
 limits: computed specifiers like `import(x)` or
@@ -55,15 +55,15 @@ limits: computed specifiers like `import(x)` or
 ## Rules and assertions
 
 `rules:` is one map keyed by Rule ID. Every Rule states one Claim
-(`description`), judges the Modules named under `on`, and carries
+(`description`), judges the Zones named under `on`, and carries
 exactly one assertion key; that key is the Rule Type:
 
-- Module-scoped: `imports` (what the Module may depend on),
+- Zone-scoped: `imports` (what the Zone may depend on),
   `structure` (files it must or must not contain), `naming`,
   `content` (lines it must not contain), `invariants` (recorded domain
   contracts visible in source), and `uses` (an Extension).
-- Graph-scoped, with the Modules in the assertion itself: `layers`,
-  `imported_by` (who may import the one Module under `on`),
+- Graph-scoped, with the Zones in the assertion itself: `layers`,
+  `imported_by` (who may import the one Zone under `on`),
   `independent`, and `acyclic`.
 
 A Rule with two assertion keys is rejected: give each claim its own ID.
@@ -75,7 +75,7 @@ exactly.
 ## Patterns and adoption
 
 A Pattern distributes Rules by reference. `extends` names it by exact
-version and binds every Pattern Module to local paths; the Pattern's
+version and binds every Pattern Zone to local paths; the Pattern's
 Rules load under the Pattern's namespace, and an entry under `rules:`
 with no assertion is an Override of one of them: `severity`, `disable`
 with a reason, `exclude`, or `suppress`. Nothing is copied.
@@ -138,18 +138,26 @@ only when findings change.
 The project's Ubiquitous Language lives in a committed
 `domain.arclint.yaml` beside `rules.arclint.yaml`. It is first-class
 project knowledge, not hidden ArcLint machinery. The file is organized
-by bounded context: each context holds entities, value objects,
-invariants, assertions, specifications, and events; top-level relations name how contexts connect.
-ArcLint owns the meanings of the supported concepts; the project
-supplies names, definitions, aliases, invariant statements, and owners.
+by bounded context, names as keys: each context holds its aggregates,
+value objects, events, services, specifications, and open questions;
+an aggregate holds its identity, its entities, its invariants, and its
+assertions; a value object holds its invariants; top-level relations
+name how contexts connect. ArcLint owns the meanings of the concepts
+(`arclint domain explain` prints them with their sources); the project
+supplies names, definitions, aliases, statements, and owners.
 
 | concept | spelling | meaning |
 |---|---|---|
-| Entity | `entity` | A domain concept whose identity matters as it changes over time. |
-| Aggregate | `aggregate` / `aggregate_root` | An Entity designation (`aggregate: true`): a consistency boundary reached through its identity. |
-| Value Object | `value_object` | A domain value defined entirely by its attributes, with no identity of its own. |
+| Bounded Context | `bounded_context` | A linguistic boundary; terms are defined inside one context, and its code is located from where its recorded terms are declared, narrowed to a matching Zone only when the ruleset declares one. |
+| Aggregate | `aggregate` | A consistency boundary reached through its identity; the root enforces the invariants recorded under it, and its code is where the root is declared. |
+| Entity | `entity` | A member of an aggregate whose identity matters as it changes over time. |
+| Value Object | `value_object` | A domain value defined entirely by its attributes, with no identity of its own; built through one constructor when it records an invariant. |
+| Invariant | `invariant` | What always holds inside its owner; keyed, since the root's enforcing method is `Ensure` followed by the key. |
+| Assertion | `assertion` | What holds when one operation of the root completes (`on`); the root's checking method is `Assert` followed by the key. |
 | Domain Event | `domain_event` | Something that has completed in the domain and that the project cares to record (file section: `events`). |
-| Bounded Context | `bounded_context` | A linguistic boundary; terms are defined inside one context. |
+| Domain Service | `domain_service` | An operation of the model that belongs to no aggregate. |
+| Specification | `specification` | A named predicate carrying a satisfaction method. |
+| Question | `question` | What the project has not decided yet, recorded instead of guessed. |
 
 The JSON Schema for the file is generated by the binary: `arclint domain
 schema` prints it, `--write` puts a local copy at
@@ -159,13 +167,13 @@ as `docs/schemas/domain.arclint.schema.json`. Inspect and maintain the model wit
 Initialization leaves an existing file untouched. `arclint domain explain`
 prints the same ArcLint meanings used by help, guided authoring, JSON
 output, and the extension SDK. Declaring knowledge never creates a
-Diagnostic by itself; enabled Rules under `arclint check` (such as
-[Visible Domain Contracts](/docs/contracts/)) decide whether the model
-is enforced.
+Diagnostic by itself; the built-in rules under `arclint check` (see
+[Domain Contracts](/docs/contracts/)) decide whether the model is
+enforced, and they apply as soon as one context is recorded.
 
 ### What the language buys you
 
-Modules and Rules speak in Module names, and the recorded language is
+Zones and Rules speak in Zone names, and the recorded language is
 where those names come from. Once the two agree, recording a term is
 enough to extend the architecture:
 
@@ -173,26 +181,26 @@ enough to extend the architecture:
   recorded aggregate. Record a new aggregate and the Rule now requires
   its home (`internal/domain/{name:flatcase}/root.go`) without an edit
   to `rules.arclint.yaml`.
-- A Module named after a bounded context is that context in the
-  dependency graph. The `respect-context-relations` Extension reads the
-  recorded context map and judges imports between context-named
-  Modules by the recorded relation, so recording a new context and its
-  relation is what adds the import Rule.
-- An `invariants` Rule requires every recorded invariant of a context
-  to be visible in the owner's source, so recording an invariant states
-  a Claim the next `arclint check` evaluates.
+- A Zone named after a bounded context is that context in the
+  dependency graph. The built-in `bounded_context/isolated` and
+  `context_relation/imports-follow-influence` rules judge imports
+  between context-named Zones by the recorded relation, so recording
+  a new context and its relation is what adds the import Rule.
+- The built-in `invariant/enforced-at-every-mutation` rule requires
+  every recorded invariant of an aggregate to be a method of the root
+  that every constructor and command calls, so recording an invariant
+  states a Claim the next `arclint check` evaluates.
 
-This repository runs the first two on itself (`domain-model/aggregate-skeleton`
-and `domain-model/contexts-respect-relations` in
-[rules.arclint.yaml](https://github.com/wixregiga/arclint/blob/main/rules.arclint.yaml));
-the boxoffice proving ground under `testing/boxoffice` runs all three,
-with `entities/contracts-visible` as the `invariants` Rule.
+The boxoffice proving ground under `testing/boxoffice` runs all three
+(the first through its own `aggregate-slices` structure Rule, the other
+two built in), with its honest remaining gaps in
+`.arclint/baseline.v2.json`.
 
 ## Validation layers
 
 `rules.arclint.yaml` passes three gates before anything runs: YAML syntax, the
 published JSON Schema (the same file that powers editor completion and
-`arclint rules schema`), and semantic validation (Module references,
+`arclint rules schema`), and semantic validation (Zone references,
 regex compilation, Extension parameter schemas). Extension Rule params
 are validated against each Extension's declared schema before a line of
 extension code executes.

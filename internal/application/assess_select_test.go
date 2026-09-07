@@ -20,9 +20,9 @@ func selectionFixture(t *testing.T) (rule.Configured, conformance.Observations) 
 	if err != nil {
 		t.Fatalf("NewGlob: %v", err)
 	}
-	scope, err := rule.ModuleApplicability([]rule.ModuleName{"m"})
+	scope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ModuleApplicability: %v", err)
+		t.Fatalf("ZoneApplicability: %v", err)
 	}
 	shared, err := rule.ParsePatternReference("t/shared@1.2.0")
 	if err != nil {

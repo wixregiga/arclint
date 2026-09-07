@@ -206,7 +206,7 @@ func BuiltinEnforcement(t Type) Enforcement {
 	case TypeConsumes, TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic:
 		e, _ := NewEnforcement([]Language{LanguageGo, LanguageTypeScript, LanguagePython},
 			[]Fact{FactImports},
-			"static import classification against the module and dependency manifests",
+			"static import classification against the zone and dependency manifests",
 			AssuranceExact, nil, true)
 		return e
 	case TypeStructure:
@@ -217,12 +217,11 @@ func BuiltinEnforcement(t Type) Enforcement {
 		e, _ := NewEnforcement(nil, []Fact{FactFileTree},
 			"file name matching against the case vocabulary", AssuranceExact, nil, true)
 		return e
-	case TypeInvariants:
-		e, _ := NewEnforcement([]Language{LanguageGo, LanguageTypeScript, LanguagePython},
-			[]Fact{FactDeclarations, FactCalls},
-			"declaration and call matching against recorded domain contracts",
-			AssuranceExact, nil, true)
-		return e
+	case TypeDomain:
+		// A domain Rule's Enforcement is the invariant's own, derived
+		// at construction (builtInEnforcement); there is no one canonical
+		// Enforcement for the Type.
+		return Enforcement{}
 	case TypeContent:
 		e, _ := NewEnforcement(nil, []Fact{FactFileTree},
 			"line matching against the forbidden pattern over file bytes", AssuranceExact, nil, true)

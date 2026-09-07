@@ -9,7 +9,7 @@ import (
 
 func writeInit(w io.Writer, r cli.InitReport) error {
 	p := &out.Printer{W: w}
-	p.Printf("wrote %s\nnext: declare your modules, then run `arclint check .`\n", r.Path)
+	p.Printf("wrote %s\nnext: declare your zones, then run `arclint check .`\n", r.Path)
 	return p.Err
 }
 

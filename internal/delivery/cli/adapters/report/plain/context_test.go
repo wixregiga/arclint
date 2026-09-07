@@ -11,32 +11,35 @@ import (
 )
 
 // scopedKnowledge is a worksite projection carrying every anchor
-// outcome: a found cluster invariant, an unanchorable aggregate
-// invariant without an id, a missing value integrity, and a missing
+// outcome: a found aggregate invariant, a missing aggregate invariant,
+// a missing value object invariant, a found assertion, and a missing
 // specification.
 func scopedKnowledge() *application.DomainKnowledge {
 	return &application.DomainKnowledge{
 		Source:  "domain.arclint.yaml",
-		Counts:  vocab.Counts{Contexts: 2, Entities: 2, Aggregates: 1, ValueObjects: 3, Invariants: 5, Specifications: 1, Relations: 1},
+		Counts:  vocab.Counts{Contexts: 2, Aggregates: 2, Entities: 1, ValueObjects: 3, Invariants: 5, Assertions: 1, Specifications: 1, Relations: 1},
 		Scoped:  true,
-		Shown:   vocab.Counts{Contexts: 1, Entities: 1, Aggregates: 1, ValueObjects: 1, Invariants: 3, Specifications: 1, Relations: 1},
+		Shown:   vocab.Counts{Contexts: 1, Aggregates: 1, Entities: 1, ValueObjects: 1, Invariants: 3, Assertions: 1, Specifications: 1, Relations: 1},
 		Located: true,
 		Contexts: []application.DomainContextKnowledge{{
 			Name:         "catalog",
-			Entities:     []application.DomainEntityRef{{Name: "Event", Aggregate: true}},
+			Aggregates:   []application.DomainAggregateRef{{Name: "Event", Identity: "EventID", Entities: []string{"Organizer"}}},
 			ValueObjects: []string{"Price"},
 			Invariants: []application.DomainInvariantRef{
-				{Statement: "A published Event never changes.", Owner: "Event", ID: "published-frozen", Source: "event/event.go:90", Anchor: application.AnchorFound},
-				{Statement: "An Event has one Venue.", Owner: "Event", Anchor: application.AnchorUnanchorable, Reason: "owner Event is an aggregate and the invariant has no id, so no method is named to carry it"},
-				{Statement: "A Price is never negative.", Owner: "Price", Anchor: application.AnchorMissing},
+				{Key: "published-frozen", Statement: "A published Event never changes.", Owner: "Event", OwnerConcept: vocab.ConceptAggregate, Source: "event/event.go:90", Anchor: application.AnchorFound},
+				{Key: "one-venue", Statement: "An Event has one Venue.", Owner: "Event", OwnerConcept: vocab.ConceptAggregate, Anchor: application.AnchorMissing},
+				{Key: "never-negative", Statement: "A Price is never negative.", Owner: "Price", OwnerConcept: vocab.ConceptValueObject, Anchor: application.AnchorMissing},
+			},
+			Assertions: []application.DomainAssertionRef{
+				{Key: "capacity-fits", Statement: "Capacity fits the venue.", Owner: "Event", On: "Publish", Source: "event/publish.go:12", Anchor: application.AnchorFound},
 			},
 			Specifications: []application.DomainSpecificationRef{{Name: "LateOrder", Anchor: application.AnchorMissing}},
 		}},
 		Relations: []application.DomainRelationRef{{From: "catalog", To: "billing", Kind: "conformist"}},
 		Unanchored: []application.UnanchoredContract{
-			{Kind: application.ContractInvariant, Context: "catalog", Owner: "Event", Statement: "An Event has one Venue.", Anchor: application.AnchorUnanchorable, Reason: "owner Event is an aggregate and the invariant has no id, so no method is named to carry it"},
-			{Kind: application.ContractInvariant, Context: "catalog", Owner: "Price", Statement: "A Price is never negative.", Anchor: application.AnchorMissing},
-			{Kind: application.ContractSpecification, Context: "catalog", Name: "LateOrder", Anchor: application.AnchorMissing},
+			{Kind: application.ContractInvariant, Context: "catalog", Owner: "Event", Key: "one-venue", Statement: "An Event has one Venue.", Expected: "method OneVenue on Event"},
+			{Kind: application.ContractInvariant, Context: "catalog", Owner: "Price", Key: "never-negative", Statement: "A Price is never negative.", Expected: "constructor of Price"},
+			{Kind: application.ContractSpecification, Context: "catalog", Name: "LateOrder", Expected: "satisfaction method on LateOrder"},
 		},
 	}
 }
@@ -45,10 +48,10 @@ func TestPlainContextScopedDomainBytes(t *testing.T) {
 	var buf bytes.Buffer
 	err := New().Render(&buf, cli.ContextReport{Context: application.ArchitecturalContext{
 		Scope:     "m/event.go",
-		Paths:     []application.PathBinding{{Path: "m/event.go", Modules: []string{"m"}}},
+		Paths:     []application.PathBinding{{Path: "m/event.go", Zones: []string{"m"}}},
 		Languages: []string{"go"},
 		RuleCount: 1,
-		Modules:   []application.ModulePolicy{{Name: "m", Paths: []string{"m/**"}, External: "allow", Stdlib: "allow"}},
+		Zones:     []application.ZonePolicy{{Name: "m", Paths: []string{"m/**"}, External: "allow", Stdlib: "allow"}},
 		Domain:    scopedKnowledge(),
 	}})
 	if err != nil {
@@ -60,29 +63,30 @@ func TestPlainContextScopedDomainBytes(t *testing.T) {
 		"languages: go",
 		"configured rules: 1",
 		"",
-		"module m",
+		"zone m",
 		"  paths: m/**",
 		"",
-		"project domain (domain.arclint.yaml): 1 of 2 contexts, 1 of 2 entities, 1 of 3 value objects, 3 of 5 invariants, 1 of 1 specification anchor into this scope; --full shows the whole model",
+		"project domain (domain.arclint.yaml): 1 of 2 contexts, 1 of 2 aggregates, 1 of 1 entity, 1 of 3 value objects, 3 of 5 invariants, 1 of 1 assertion, 1 of 1 specification anchor into this scope; --full shows the whole model",
 		"  context catalog:",
-		"    entities: Event [aggregate]",
+		"    aggregates: Event (EventID; Organizer)",
 		"    value objects: Price",
 		"    invariants:",
-		"      A published Event never changes. (owner: Event, id: published-frozen) event/event.go:90",
-		"      An Event has one Venue. (owner: Event) unanchorable",
-		"      A Price is never negative. (owner: Price) missing",
+		"      published-frozen (Event): A published Event never changes. event/event.go:90",
+		"      one-venue (Event): An Event has one Venue. missing",
+		"      never-negative (Price): A Price is never negative. missing",
+		"    assertions:",
+		"      capacity-fits (Event, on Publish): Capacity fits the venue. event/publish.go:12",
 		"    specifications:",
 		"      LateOrder missing",
 		"  relation: catalog -[conformist]-> billing",
-		"  unanchored contracts: 1 unanchorable, 2 missing",
-		"    unanchorable: 1 invariant owned by Event (context catalog)",
-		"      owner Event is an aggregate and the invariant has no id, so no method is named to carry it",
-		"    missing: 1 invariant owned by Price (context catalog)",
-		"      no constructor declared for Price",
+		"  unanchored contracts: 3 missing",
+		"    missing: invariant one-venue of Event (context catalog)",
+		"      expected method OneVenue on Event",
+		"    missing: invariant never-negative of Price (context catalog)",
+		"      expected constructor of Price",
 		"    missing: specification LateOrder (context catalog)",
-		"      no SatisfiedBy method declared on LateOrder",
-		"    an unanchorable contract needs its recording changed before any source can carry it",
-		"    an invariants Rule on the owning Module reports each missing contract as a Violation",
+		"      expected satisfaction method on LateOrder",
+		"    arclint check reports each as a Violation of the built-in rule of its block",
 		"",
 	}, "\n")
 	if buf.String() != want {
@@ -93,7 +97,7 @@ func TestPlainContextScopedDomainBytes(t *testing.T) {
 func TestPlainContextEmptyScopeAndWholeModelHeadlines(t *testing.T) {
 	empty := &application.DomainKnowledge{
 		Source:  "domain.arclint.yaml",
-		Counts:  vocab.Counts{Contexts: 2, Entities: 2, Aggregates: 1, ValueObjects: 3, Invariants: 5},
+		Counts:  vocab.Counts{Contexts: 2, Aggregates: 1, Entities: 2, ValueObjects: 3, Invariants: 5},
 		Scoped:  true,
 		Located: true,
 	}
@@ -101,7 +105,7 @@ func TestPlainContextEmptyScopeAndWholeModelHeadlines(t *testing.T) {
 	if err := New().Render(&buf, cli.ContextReport{Context: application.ArchitecturalContext{Scope: "elsewhere.go", Domain: empty}}); err != nil {
 		t.Fatal(err)
 	}
-	want := "project domain (domain.arclint.yaml): nothing recorded anchors into this scope; --full shows the whole model (2 contexts, 2 entities (1 aggregate), 3 value objects, 5 invariants, 0 assertions, 0 specifications, 0 events)\n"
+	want := "project domain (domain.arclint.yaml): nothing recorded anchors into this scope; --full shows the whole model (2 contexts · 1 aggregate · 2 entities · 3 value objects · 5 invariants)\n"
 	if !strings.Contains(buf.String(), want) {
 		t.Fatalf("empty-scope headline absent from %q", buf.String())
 	}
@@ -113,7 +117,7 @@ func TestPlainContextEmptyScopeAndWholeModelHeadlines(t *testing.T) {
 	if err := New().Render(&buf, cli.ContextReport{Context: application.ArchitecturalContext{Scope: "repository", Domain: whole}}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(buf.String(), "project domain (domain.arclint.yaml): 2 contexts, 2 entities (1 aggregate), 3 value objects, 5 invariants, 0 assertions, 1 specification, 0 events\n") {
+	if !strings.Contains(buf.String(), "project domain (domain.arclint.yaml): 2 contexts · 2 aggregates · 1 entity · 3 value objects · 5 invariants · 1 assertion · 1 specification · 1 relation\n") {
 		t.Fatalf("whole-model headline absent from %q", buf.String())
 	}
 	if strings.Contains(buf.String(), "--full") {
@@ -129,14 +133,14 @@ func TestPlainContextUnlocatedDomainCarriesNoAnchors(t *testing.T) {
 		Contexts: []application.DomainContextKnowledge{{
 			Name:         "catalog",
 			ValueObjects: []string{"Price"},
-			Invariants:   []application.DomainInvariantRef{{Statement: "A Price is never negative.", Owner: "Price"}},
+			Invariants:   []application.DomainInvariantRef{{Key: "never-negative", Statement: "A Price is never negative.", Owner: "Price", OwnerConcept: vocab.ConceptValueObject}},
 		}},
 	}
 	var buf bytes.Buffer
 	if err := New().Render(&buf, cli.ContextReport{Context: application.ArchitecturalContext{Scope: "repository", Domain: dk}}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(buf.String(), "      A Price is never negative. (owner: Price)\n") {
+	if !strings.Contains(buf.String(), "      never-negative (Price): A Price is never negative.\n") {
 		t.Fatalf("an unlocated contract must print bare: %q", buf.String())
 	}
 	if strings.Contains(buf.String(), "unanchored") || strings.Contains(buf.String(), "missing") {
@@ -144,40 +148,49 @@ func TestPlainContextUnlocatedDomainCarriesNoAnchors(t *testing.T) {
 	}
 }
 
+// The overview prints each contract's anchor under it: the source when
+// a declaration carries it, "missing" when none does.
 func TestPlainDomainOverviewSourcePhrases(t *testing.T) {
-	lang, err := vocab.NewUbiquitousLanguage([]vocab.BoundedContext{{
-		Name: "catalog",
-		Entities: []vocab.Entity{{
-			Definition: vocab.Definition{Name: "Event", Definition: "A show."},
-			Aggregate:  true,
+	lang, err := vocab.NewUbiquitousLanguage("boxoffice", "", []vocab.BoundedContext{{
+		Name:       "catalog",
+		Definition: "What is on sale.",
+		Aggregates: []vocab.Aggregate{{
+			Name: "Event", Definition: "A show.", Identity: "EventID",
+			Invariants: []vocab.Invariant{
+				{Key: "published-frozen", Statement: "A published Event never changes."},
+				{Key: "one-venue", Statement: "An Event has one Venue."},
+			},
+			Assertions: []vocab.Assertion{{Key: "capacity-fits", On: "Publish", Statement: "Capacity fits the venue."}},
 		}},
-		ValueObjects: []vocab.Definition{{Name: "Price", Definition: "Whole cents."}},
-		Invariants: []vocab.Invariant{
-			{Statement: "A published Event never changes.", Owner: "Event", ID: "published-frozen"},
-			{Statement: "An Event has one Venue.", Owner: "Event"},
-			{Statement: "A Price is never negative.", Owner: "Price"},
-		},
+		ValueObjects: []vocab.ValueObject{{
+			Name: "Price", Definition: "Whole cents.",
+			Invariants: []vocab.Invariant{{Key: "never-negative", Statement: "A Price is never negative."}},
+		}},
+		Specifications: []vocab.Specification{{Name: "LateOrder", Definition: "An order placed after doors open."}},
 	}}, nil)
 	if err != nil {
 		t.Fatalf("NewUbiquitousLanguage: %v", err)
 	}
-	matrix := scopedKnowledge()
 	var buf bytes.Buffer
 	err = New().Render(&buf, cli.DomainOverviewReport{Overview: application.DomainOverview{
 		Found:    true,
 		Source:   "domain.arclint.yaml",
 		Counts:   lang.Counts(),
 		Language: lang,
-		Matrix:   matrix,
+		Matrix:   scopedKnowledge(),
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
 	for _, want := range []string{
-		"    source: event/event.go:90\n",
-		"    source: unanchorable (owner Event is an aggregate and the invariant has no id, so no method is named to carry it)\n",
-		"    source: missing\n",
+		"Project domain: boxoffice\n",
+		"1 context · 1 aggregate · 1 value object · 3 invariants · 1 assertion · 1 specification\n",
+		"      published-frozen  A published Event never changes.\n        source: event/event.go:90\n",
+		"      one-venue  An Event has one Venue.\n        source: missing\n",
+		"      capacity-fits (on Publish)  Capacity fits the venue.\n        source: event/publish.go:12\n",
+		"      invariant never-negative  A Price is never negative.\n        source: missing\n",
+		"    LateOrder  An order placed after doors open.\n      source: missing\n",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("overview lacks %q:\n%s", want, out)

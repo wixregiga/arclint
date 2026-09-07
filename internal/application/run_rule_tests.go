@@ -53,7 +53,7 @@ func (r RuleTestResult) Passed() bool {
 // RunRuleTests evaluates every authored Rule Test: each fixture is
 // observed with exactly the facts its Rule's Enforcement declares and
 // checked with only that Rule under the repository's configured
-// Modules and unknown-import policy.
+// Zones and unknown-import policy.
 type RunRuleTests struct {
 	rules      rule.Repository
 	tests      RuleTestSource
@@ -140,7 +140,7 @@ func (uc RunRuleTests) Execute() ([]RuleTestResult, error) {
 		}
 		assessment, err := conformance.Run(conformance.Request{
 			Rules:          []rule.Rule{r},
-			Modules:        cfg.Modules,
+			Zones:          cfg.Zones,
 			Observations:   observations,
 			UnknownImports: cfg.Scan.UnknownImports,
 			Extensions:     uc.extensions,

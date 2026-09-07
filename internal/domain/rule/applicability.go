@@ -3,12 +3,12 @@ package rule
 import "fmt"
 
 // Applicability is the composable, inspectable selection of the Files,
-// Folders, and Modules a Rule evaluates. Selector dimensions intersect;
+// Folders, and Zones a Rule evaluates. Selector dimensions intersect;
 // multiple values within one dimension form a union. Rule Exclusions
 // remove only their selected subjects.
 type Applicability struct {
 	entireRepository bool
-	modules          []ModuleName
+	zones            []ZoneName
 	files            []Glob
 	exclusions       []Exclusion
 }
@@ -25,21 +25,21 @@ func RepositoryApplicability(files ...Glob) (Applicability, error) {
 	}, nil
 }
 
-// ModuleApplicability selects the members of the named Modules (union),
+// ZoneApplicability selects the members of the named Zones (union),
 // optionally intersected with file globs.
-func ModuleApplicability(modules []ModuleName, files ...Glob) (Applicability, error) {
-	if len(modules) == 0 {
-		return Applicability{}, fmt.Errorf("applicability: no module selected")
+func ZoneApplicability(zones []ZoneName, files ...Glob) (Applicability, error) {
+	if len(zones) == 0 {
+		return Applicability{}, fmt.Errorf("applicability: no zone selected")
 	}
-	if err := uniqueValidModules("applicability", modules); err != nil {
+	if err := uniqueValidZones("applicability", zones); err != nil {
 		return Applicability{}, err
 	}
 	if err := validFileGlobs(files); err != nil {
 		return Applicability{}, err
 	}
 	return Applicability{
-		modules: append([]ModuleName(nil), modules...),
-		files:   append([]Glob(nil), files...),
+		zones: append([]ZoneName(nil), zones...),
+		files: append([]Glob(nil), files...),
 	}, nil
 }
 
@@ -54,15 +54,15 @@ func validFileGlobs(files []Glob) error {
 
 // IsZero reports an unconstructed Applicability, which selects nothing.
 func (a Applicability) IsZero() bool {
-	return !a.entireRepository && len(a.modules) == 0
+	return !a.entireRepository && len(a.zones) == 0
 }
 
 // EntireRepository reports repository-wide selection.
 func (a Applicability) EntireRepository() bool { return a.entireRepository }
 
-// Modules returns the selected Module names.
-func (a Applicability) Modules() []ModuleName {
-	return append([]ModuleName(nil), a.modules...)
+// Zones returns the selected Zone names.
+func (a Applicability) Zones() []ZoneName {
+	return append([]ZoneName(nil), a.zones...)
 }
 
 // Files returns the file-glob dimension.
@@ -80,16 +80,16 @@ func (a Applicability) Excluding(e Exclusion) Applicability {
 	return a
 }
 
-// WouldSelectFile decides selection by the module and file dimensions
-// alone, ignoring Exclusions. memberOf is the file's resolved Module
+// WouldSelectFile decides selection by the zone and file dimensions
+// alone, ignoring Exclusions. memberOf is the file's resolved Zone
 // membership.
-func (a Applicability) WouldSelectFile(path string, memberOf []ModuleName) bool {
+func (a Applicability) WouldSelectFile(path string, memberOf []ZoneName) bool {
 	if a.IsZero() {
 		return false
 	}
 	if !a.entireRepository {
 		member := false
-		for _, m := range a.modules {
+		for _, m := range a.zones {
 			for _, of := range memberOf {
 				if m == of {
 					member = true
@@ -124,16 +124,16 @@ func (a Applicability) ExcludedFile(path string) bool {
 
 // SelectsFile decides whether the file is a Rule Subject: selected by
 // the dimensions and not excluded.
-func (a Applicability) SelectsFile(path string, memberOf []ModuleName) bool {
+func (a Applicability) SelectsFile(path string, memberOf []ZoneName) bool {
 	return a.WouldSelectFile(path, memberOf) && !a.ExcludedFile(path)
 }
 
-// WouldSelectModule decides Module selection ignoring Exclusions.
-func (a Applicability) WouldSelectModule(name ModuleName) bool {
+// WouldSelectZone decides Zone selection ignoring Exclusions.
+func (a Applicability) WouldSelectZone(name ZoneName) bool {
 	if a.entireRepository {
 		return true
 	}
-	for _, m := range a.modules {
+	for _, m := range a.zones {
 		if m == name {
 			return true
 		}
@@ -141,17 +141,17 @@ func (a Applicability) WouldSelectModule(name ModuleName) bool {
 	return false
 }
 
-// ExcludedModule reports whether an Exclusion removes the Module.
-func (a Applicability) ExcludedModule(name ModuleName) bool {
+// ExcludedZone reports whether an Exclusion removes the Zone.
+func (a Applicability) ExcludedZone(name ZoneName) bool {
 	for _, e := range a.exclusions {
-		if e.ExcludesModule(name) {
+		if e.ExcludesZone(name) {
 			return true
 		}
 	}
 	return false
 }
 
-// SelectsModule decides whether the Module is a Rule Subject.
-func (a Applicability) SelectsModule(name ModuleName) bool {
-	return a.WouldSelectModule(name) && !a.ExcludedModule(name)
+// SelectsZone decides whether the Zone is a Rule Subject.
+func (a Applicability) SelectsZone(name ZoneName) bool {
+	return a.WouldSelectZone(name) && !a.ExcludedZone(name)
 }

@@ -2,16 +2,16 @@
   "$defs": {
     "acyclicRule": {
       "additionalProperties": false,
-      "description": "An acyclic Rule: forbids dependency cycles among declared Modules.",
+      "description": "An acyclic Rule: forbids dependency cycles among declared Zones.",
       "properties": {
         "acyclic": {
-          "description": "Cycle scope: a list of declared Modules, or an empty mapping for every declared Module; inside a Pattern the empty mapping means every Module the Pattern declares.",
+          "description": "Cycle scope: a list of declared Zones, or an empty mapping for every declared Zone; inside a Pattern the empty mapping means every Zone the Pattern declares.",
           "oneOf": [
             {
-              "description": "The declared Modules in scope; at least two, no duplicates.",
+              "description": "The declared Zones in scope; at least two, no duplicates.",
               "items": {
-                "$ref": "#/$defs/moduleName",
-                "description": "Module name: lowercase letters, digits, underscore, and hyphen."
+                "$ref": "#/$defs/zoneName",
+                "description": "Zone name: lowercase letters, digits, underscore, and hyphen."
               },
               "minItems": 2,
               "type": "array",
@@ -19,7 +19,7 @@
             },
             {
               "additionalProperties": false,
-              "description": "The empty mapping: every declared Module is in scope.",
+              "description": "The empty mapping: every declared Zone is in scope.",
               "properties": {},
               "type": "object"
             }
@@ -35,7 +35,7 @@
         },
         "exclude": {
           "$ref": "#/$defs/exclusion",
-          "description": "Removes paths or Modules from what the Rule judges; excluded subjects evaluate not applicable."
+          "description": "Removes paths or Zones from what the Rule judges; excluded subjects evaluate not applicable."
         },
         "severity": {
           "$ref": "#/$defs/severity",
@@ -52,7 +52,7 @@
       "type": "object"
     },
     "boundPaths": {
-      "description": "Repository paths bound to one Pattern Module: one glob or a non-empty list of globs. The only place a Pattern Module's paths live.",
+      "description": "Repository paths bound to one Pattern Zone: one glob or a non-empty list of globs. The only place a Pattern Zone's paths live.",
       "oneOf": [
         {
           "$ref": "#/$defs/glob",
@@ -76,7 +76,7 @@
     },
     "consumesRule": {
       "additionalProperties": false,
-      "description": "An imports Rule: states what a Module may import: declared Modules by allow-list, external and standard-library imports by policy.",
+      "description": "An imports Rule: states what a Zone may import: declared Zones by allow-list, external and standard-library imports by policy.",
       "properties": {
         "description": {
           "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
@@ -88,7 +88,7 @@
         },
         "exclude": {
           "$ref": "#/$defs/exclusion",
-          "description": "Removes paths or Modules from what the Rule judges; excluded subjects evaluate not applicable."
+          "description": "Removes paths or Zones from what the Rule judges; excluded subjects evaluate not applicable."
         },
         "imports": {
           "additionalProperties": false,
@@ -125,17 +125,17 @@
               "type": "object"
             }
           ],
-          "description": "What the Module may import. At least one restriction must be declared: an internal allow-list, external: forbid, or stdlib: forbid.",
+          "description": "What the Zone may import. At least one restriction must be declared: an internal allow-list, external: forbid, or stdlib: forbid.",
           "properties": {
             "external": {
               "$ref": "#/$defs/importPolicy",
               "description": "Policy for one import class."
             },
             "internal": {
-              "description": "Declared Modules this Module may import; absent means unrestricted, empty means none. The owning Module is always permitted implicitly.",
+              "description": "Declared Zones this Zone may import; absent means unrestricted, empty means none. The owning Zone is always permitted implicitly.",
               "items": {
-                "$ref": "#/$defs/moduleName",
-                "description": "Module name: lowercase letters, digits, underscore, and hyphen."
+                "$ref": "#/$defs/zoneName",
+                "description": "Zone name: lowercase letters, digits, underscore, and hyphen."
               },
               "type": "array",
               "uniqueItems": true
@@ -148,8 +148,8 @@
           "type": "object"
         },
         "on": {
-          "$ref": "#/$defs/judgedModules",
-          "description": "The declared Module or Modules the Rule judges: one Module name or a non-empty list."
+          "$ref": "#/$defs/judgedZones",
+          "description": "The declared Zone or Zones the Rule judges: one Zone name or a non-empty list."
         },
         "severity": {
           "$ref": "#/$defs/severity",
@@ -195,15 +195,15 @@
         },
         "exclude": {
           "$ref": "#/$defs/exclusion",
-          "description": "Removes paths or Modules from what the Rule judges; excluded subjects evaluate not applicable."
+          "description": "Removes paths or Zones from what the Rule judges; excluded subjects evaluate not applicable."
         },
         "files": {
           "$ref": "#/$defs/judgedFiles",
           "description": "Globs narrowing the files the Rule judges: one glob or a non-empty list. Absent means every selected file."
         },
         "on": {
-          "$ref": "#/$defs/judgedModulesOrRepository",
-          "description": "The declared Module or Modules the Rule judges: one Module name or a non-empty list. Absent means the whole repository."
+          "$ref": "#/$defs/judgedZonesOrRepository",
+          "description": "The declared Zone or Zones the Rule judges: one Zone name or a non-empty list. Absent means the whole repository."
         },
         "severity": {
           "$ref": "#/$defs/severity",
@@ -218,24 +218,6 @@
         "content"
       ],
       "type": "object"
-    },
-    "excludedModules": {
-      "description": "Modules the Rule no longer judges: one Module name or a non-empty list.",
-      "oneOf": [
-        {
-          "$ref": "#/$defs/moduleName",
-          "description": "Module name: lowercase letters, digits, underscore, and hyphen."
-        },
-        {
-          "items": {
-            "$ref": "#/$defs/moduleName",
-            "description": "Module name: lowercase letters, digits, underscore, and hyphen."
-          },
-          "minItems": 1,
-          "type": "array",
-          "uniqueItems": true
-        }
-      ]
     },
     "excludedPaths": {
       "description": "Files the Rule no longer judges: one glob or a non-empty list of globs.",
@@ -255,6 +237,24 @@
         }
       ]
     },
+    "excludedZones": {
+      "description": "Zones the Rule no longer judges: one Zone name or a non-empty list.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/zoneName",
+          "description": "Zone name: lowercase letters, digits, underscore, and hyphen."
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/zoneName",
+            "description": "Zone name: lowercase letters, digits, underscore, and hyphen."
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      ]
+    },
     "exclusion": {
       "additionalProperties": false,
       "anyOf": [
@@ -265,16 +265,12 @@
         },
         {
           "required": [
-            "modules"
+            "zones"
           ]
         }
       ],
-      "description": "Removes paths or Modules from what the Rule judges; excluded subjects evaluate not applicable.",
+      "description": "Removes paths or Zones from what the Rule judges; excluded subjects evaluate not applicable.",
       "properties": {
-        "modules": {
-          "$ref": "#/$defs/excludedModules",
-          "description": "Modules the Rule no longer judges: one Module name or a non-empty list."
-        },
         "paths": {
           "$ref": "#/$defs/excludedPaths",
           "description": "Files the Rule no longer judges: one glob or a non-empty list of globs."
@@ -282,6 +278,10 @@
         "reason": {
           "$ref": "#/$defs/reason",
           "description": "The recorded reason for an adoption decision; required so the decision stays inspectable."
+        },
+        "zones": {
+          "$ref": "#/$defs/excludedZones",
+          "description": "Zones the Rule no longer judges: one Zone name or a non-empty list."
         }
       },
       "required": [
@@ -322,15 +322,15 @@
         },
         "exclude": {
           "$ref": "#/$defs/exclusion",
-          "description": "Removes paths or Modules from what the Rule judges; excluded subjects evaluate not applicable."
+          "description": "Removes paths or Zones from what the Rule judges; excluded subjects evaluate not applicable."
         },
         "files": {
           "$ref": "#/$defs/judgedFiles",
           "description": "Globs narrowing the files the Rule judges: one glob or a non-empty list. Absent means every selected file."
         },
         "on": {
-          "$ref": "#/$defs/judgedModulesOrRepository",
-          "description": "The declared Module or Modules the Rule judges: one Module name or a non-empty list. Absent means the whole repository."
+          "$ref": "#/$defs/judgedZonesOrRepository",
+          "description": "The declared Zone or Zones the Rule judges: one Zone name or a non-empty list. Absent means the whole repository."
         },
         "severity": {
           "$ref": "#/$defs/severity",
@@ -384,7 +384,7 @@
         },
         "exclude": {
           "$ref": "#/$defs/exclusion",
-          "description": "Removes paths or Modules from what the Rule judges; excluded subjects evaluate not applicable."
+          "description": "Removes paths or Zones from what the Rule judges; excluded subjects evaluate not applicable."
         },
         "independent": {
           "description": "Globs selecting sibling Folders that may not import each other; at least one, no duplicates.",
@@ -410,53 +410,6 @@
       ],
       "type": "object"
     },
-    "invariantsRule": {
-      "additionalProperties": false,
-      "description": "An invariants Rule: requires recorded domain contracts to be visible in source as named methods called from their join points.",
-      "properties": {
-        "description": {
-          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
-          "type": "string"
-        },
-        "disable": {
-          "$ref": "#/$defs/reason",
-          "description": "The recorded reason for an adoption decision; required so the decision stays inspectable."
-        },
-        "exclude": {
-          "$ref": "#/$defs/exclusion",
-          "description": "Removes paths or Modules from what the Rule judges; excluded subjects evaluate not applicable."
-        },
-        "invariants": {
-          "additionalProperties": false,
-          "description": "Evaluation posture. closed: false (default): child constructors may return errors. closed: true: every exported error-returning function in the owner's files must call the cluster method.",
-          "properties": {
-            "closed": {
-              "default": false,
-              "description": "When true, extra exported error-returning functions that do not call the cluster method fail. Default: false.",
-              "type": "boolean"
-            }
-          },
-          "type": "object"
-        },
-        "on": {
-          "$ref": "#/$defs/judgedModules",
-          "description": "The declared Module or Modules the Rule judges: one Module name or a non-empty list."
-        },
-        "severity": {
-          "$ref": "#/$defs/severity",
-          "description": "Gate importance of a Violation."
-        },
-        "suppress": {
-          "$ref": "#/$defs/suppression",
-          "description": "Keeps findings at the paths while removing their gate effect; suppressed findings are still reported."
-        }
-      },
-      "required": [
-        "on",
-        "invariants"
-      ],
-      "type": "object"
-    },
     "judgedFiles": {
       "description": "Globs narrowing the files the Rule judges: one glob or a non-empty list. Absent means every selected file.",
       "oneOf": [
@@ -475,17 +428,17 @@
         }
       ]
     },
-    "judgedModules": {
-      "description": "The declared Module or Modules the Rule judges: one Module name or a non-empty list.",
+    "judgedZones": {
+      "description": "The declared Zone or Zones the Rule judges: one Zone name or a non-empty list.",
       "oneOf": [
         {
-          "$ref": "#/$defs/moduleName",
-          "description": "Module name: lowercase letters, digits, underscore, and hyphen."
+          "$ref": "#/$defs/zoneName",
+          "description": "Zone name: lowercase letters, digits, underscore, and hyphen."
         },
         {
           "items": {
-            "$ref": "#/$defs/moduleName",
-            "description": "Module name: lowercase letters, digits, underscore, and hyphen."
+            "$ref": "#/$defs/zoneName",
+            "description": "Zone name: lowercase letters, digits, underscore, and hyphen."
           },
           "minItems": 1,
           "type": "array",
@@ -493,17 +446,17 @@
         }
       ]
     },
-    "judgedModulesOrRepository": {
-      "description": "The declared Module or Modules the Rule judges: one Module name or a non-empty list. Absent means the whole repository.",
+    "judgedZonesOrRepository": {
+      "description": "The declared Zone or Zones the Rule judges: one Zone name or a non-empty list. Absent means the whole repository.",
       "oneOf": [
         {
-          "$ref": "#/$defs/moduleName",
-          "description": "Module name: lowercase letters, digits, underscore, and hyphen."
+          "$ref": "#/$defs/zoneName",
+          "description": "Zone name: lowercase letters, digits, underscore, and hyphen."
         },
         {
           "items": {
-            "$ref": "#/$defs/moduleName",
-            "description": "Module name: lowercase letters, digits, underscore, and hyphen."
+            "$ref": "#/$defs/zoneName",
+            "description": "Zone name: lowercase letters, digits, underscore, and hyphen."
           },
           "minItems": 1,
           "type": "array",
@@ -513,7 +466,7 @@
     },
     "layersRule": {
       "additionalProperties": false,
-      "description": "A layers Rule: orders Modules highest first; a Module may import same or lower layers, never higher.",
+      "description": "A layers Rule: orders Zones highest first; a Zone may import same or lower layers, never higher.",
       "properties": {
         "description": {
           "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
@@ -525,13 +478,13 @@
         },
         "exclude": {
           "$ref": "#/$defs/exclusion",
-          "description": "Removes paths or Modules from what the Rule judges; excluded subjects evaluate not applicable."
+          "description": "Removes paths or Zones from what the Rule judges; excluded subjects evaluate not applicable."
         },
         "layers": {
-          "description": "Modules ordered highest first; at least two, no duplicates.",
+          "description": "Zones ordered highest first; at least two, no duplicates.",
           "items": {
-            "$ref": "#/$defs/moduleName",
-            "description": "Module name: lowercase letters, digits, underscore, and hyphen."
+            "$ref": "#/$defs/zoneName",
+            "description": "Zone name: lowercase letters, digits, underscore, and hyphen."
           },
           "minItems": 2,
           "type": "array",
@@ -551,67 +504,9 @@
       ],
       "type": "object"
     },
-    "module": {
-      "description": "One Module: a glob, a list of globs, or an object in a repository ruleset; a description or an object in a Pattern file.",
-      "oneOf": [
-        {
-          "description": "A Module's one glob in a repository ruleset, or its description in a Pattern file.",
-          "minLength": 1,
-          "type": "string"
-        },
-        {
-          "description": "A Module's globs in a repository ruleset.",
-          "items": {
-            "$ref": "#/$defs/glob",
-            "description": "Repo-relative path pattern: * and ? never cross /, a ** segment matches any number of segments, [...] matches one character. Brace alternation is rejected."
-          },
-          "minItems": 1,
-          "type": "array",
-          "uniqueItems": true
-        },
-        {
-          "additionalProperties": false,
-          "description": "A Module object: paths and description in a repository ruleset; description and suggested paths in a Pattern file.",
-          "properties": {
-            "description": {
-              "description": "Authoring description of the Module.",
-              "type": "string"
-            },
-            "paths": {
-              "$ref": "#/$defs/modulePaths",
-              "description": "Membership selectors: one glob or a non-empty list of globs. A glob naming a directory claims its whole subtree."
-            }
-          },
-          "type": "object"
-        }
-      ]
-    },
-    "moduleName": {
-      "description": "Module name: lowercase letters, digits, underscore, and hyphen.",
-      "pattern": "^[a-z0-9_-]+$",
-      "type": "string"
-    },
-    "modulePaths": {
-      "description": "Membership selectors: one glob or a non-empty list of globs. A glob naming a directory claims its whole subtree.",
-      "oneOf": [
-        {
-          "$ref": "#/$defs/glob",
-          "description": "Repo-relative path pattern: * and ? never cross /, a ** segment matches any number of segments, [...] matches one character. Brace alternation is rejected."
-        },
-        {
-          "items": {
-            "$ref": "#/$defs/glob",
-            "description": "Repo-relative path pattern: * and ? never cross /, a ** segment matches any number of segments, [...] matches one character. Brace alternation is rejected."
-          },
-          "minItems": 1,
-          "type": "array",
-          "uniqueItems": true
-        }
-      ]
-    },
     "namingRule": {
       "additionalProperties": false,
-      "description": "A naming Rule: constrains file names within a Module to a finite case vocabulary.",
+      "description": "A naming Rule: constrains file names within a Zone to a finite case vocabulary.",
       "properties": {
         "description": {
           "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
@@ -623,7 +518,7 @@
         },
         "exclude": {
           "$ref": "#/$defs/exclusion",
-          "description": "Removes paths or Modules from what the Rule judges; excluded subjects evaluate not applicable."
+          "description": "Removes paths or Zones from what the Rule judges; excluded subjects evaluate not applicable."
         },
         "files": {
           "$ref": "#/$defs/judgedFiles",
@@ -653,8 +548,8 @@
           ]
         },
         "on": {
-          "$ref": "#/$defs/judgedModules",
-          "description": "The declared Module or Modules the Rule judges: one Module name or a non-empty list."
+          "$ref": "#/$defs/judgedZones",
+          "description": "The declared Zone or Zones the Rule judges: one Zone name or a non-empty list."
         },
         "severity": {
           "$ref": "#/$defs/severity",
@@ -682,7 +577,7 @@
         },
         "exclude": {
           "$ref": "#/$defs/exclusion",
-          "description": "Removes paths or Modules from what the Rule judges; excluded subjects evaluate not applicable."
+          "description": "Removes paths or Zones from what the Rule judges; excluded subjects evaluate not applicable."
         },
         "severity": {
           "$ref": "#/$defs/severity",
@@ -695,20 +590,25 @@
       },
       "type": "object"
     },
-    "patternModule": {
-      "description": "One Pattern Module: its description, or an object with the description and the paths the Pattern suggests for the Binding. A Pattern never owns paths.",
+    "patternReference": {
+      "description": "Exact reference to one published Pattern version: namespace/name@version.",
+      "pattern": "^[a-z0-9_]([a-z0-9._-]*[a-z0-9_-])?/[a-z0-9_]([a-z0-9._-]*[a-z0-9_-])?@\\d+\\.\\d+\\.\\d+([\\-+][0-9A-Za-z.\\-+]+)?$",
+      "type": "string"
+    },
+    "patternZone": {
+      "description": "One Pattern Zone: its description, or an object with the description and the paths the Pattern suggests for the Binding. A Pattern never owns paths.",
       "oneOf": [
         {
-          "description": "What the Module is for.",
+          "description": "What the Zone is for.",
           "pattern": "\\S",
           "type": "string"
         },
         {
           "additionalProperties": false,
-          "description": "The Module's description and the paths the Pattern suggests.",
+          "description": "The Zone's description and the paths the Pattern suggests.",
           "properties": {
             "description": {
-              "description": "What the Module is for.",
+              "description": "What the Zone is for.",
               "pattern": "\\S",
               "type": "string"
             },
@@ -724,19 +624,9 @@
         }
       ]
     },
-    "patternReference": {
-      "description": "Exact reference to one published Pattern version: namespace/name@version.",
-      "pattern": "^[a-z0-9_]([a-z0-9._-]*[a-z0-9_-])?/[a-z0-9_]([a-z0-9._-]*[a-z0-9_-])?@\\d+\\.\\d+\\.\\d+([\\-+][0-9A-Za-z.\\-+]+)?$",
-      "type": "string"
-    },
-    "protectedModule": {
-      "description": "The one declared Module the Rule protects.",
-      "pattern": "^[a-z0-9_-]+$",
-      "type": "string"
-    },
     "protectedRule": {
       "additionalProperties": false,
-      "description": "An imported_by Rule: restricts which Modules may import one Module.",
+      "description": "An imported_by Rule: restricts which Zones may import one Zone.",
       "properties": {
         "description": {
           "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
@@ -748,20 +638,20 @@
         },
         "exclude": {
           "$ref": "#/$defs/exclusion",
-          "description": "Removes paths or Modules from what the Rule judges; excluded subjects evaluate not applicable."
+          "description": "Removes paths or Zones from what the Rule judges; excluded subjects evaluate not applicable."
         },
         "imported_by": {
-          "description": "Modules permitted to import the Module named under on; empty means none.",
+          "description": "Zones permitted to import the Zone named under on; empty means none.",
           "items": {
-            "$ref": "#/$defs/moduleName",
-            "description": "Module name: lowercase letters, digits, underscore, and hyphen."
+            "$ref": "#/$defs/zoneName",
+            "description": "Zone name: lowercase letters, digits, underscore, and hyphen."
           },
           "type": "array",
           "uniqueItems": true
         },
         "on": {
-          "$ref": "#/$defs/protectedModule",
-          "description": "The one declared Module the Rule protects."
+          "$ref": "#/$defs/protectedZone",
+          "description": "The one declared Zone the Rule protects."
         },
         "severity": {
           "$ref": "#/$defs/severity",
@@ -778,20 +668,25 @@
       ],
       "type": "object"
     },
+    "protectedZone": {
+      "description": "The one declared Zone the Rule protects.",
+      "pattern": "^[a-z0-9_-]+$",
+      "type": "string"
+    },
     "reason": {
       "description": "The recorded reason for an adoption decision; required so the decision stays inspectable.",
       "pattern": "\\S",
       "type": "string"
     },
-    "repositoryModule": {
-      "description": "One repository Module: its paths as a glob or a list of globs, or an object with paths and an optional description.",
+    "repositoryZone": {
+      "description": "One repository Zone: its paths as a glob or a list of globs, or an object with paths and an optional description.",
       "oneOf": [
         {
           "$ref": "#/$defs/glob",
           "description": "Repo-relative path pattern: * and ? never cross /, a ** segment matches any number of segments, [...] matches one character. Brace alternation is rejected."
         },
         {
-          "description": "The Module's globs.",
+          "description": "The Zone's globs.",
           "items": {
             "$ref": "#/$defs/glob",
             "description": "Repo-relative path pattern: * and ? never cross /, a ** segment matches any number of segments, [...] matches one character. Brace alternation is rejected."
@@ -802,14 +697,14 @@
         },
         {
           "additionalProperties": false,
-          "description": "The Module's paths and an optional description.",
+          "description": "The Zone's paths and an optional description.",
           "properties": {
             "description": {
-              "description": "Authoring description of the Module.",
+              "description": "Authoring description of the Zone.",
               "type": "string"
             },
             "paths": {
-              "$ref": "#/$defs/modulePaths",
+              "$ref": "#/$defs/zonePaths",
               "description": "Membership selectors: one glob or a non-empty list of globs. A glob naming a directory claims its whole subtree."
             }
           },
@@ -821,27 +716,27 @@
       ]
     },
     "rule": {
-      "description": "One Rule carrying exactly one assertion key (imports, structure, naming, layers, imported_by, independent, acyclic, invariants, content, uses), or an Override carrying none.",
+      "description": "One Rule carrying exactly one assertion key (imports, structure, naming, layers, imported_by, independent, acyclic, content, uses), or an Override carrying none.",
       "oneOf": [
         {
           "$ref": "#/$defs/consumesRule",
-          "description": "An imports Rule: states what a Module may import: declared Modules by allow-list, external and standard-library imports by policy."
+          "description": "An imports Rule: states what a Zone may import: declared Zones by allow-list, external and standard-library imports by policy."
         },
         {
           "$ref": "#/$defs/structureRule",
-          "description": "A structure Rule: requires or forbids files matching globs inside a Module."
+          "description": "A structure Rule: requires or forbids files matching globs inside a Zone."
         },
         {
           "$ref": "#/$defs/namingRule",
-          "description": "A naming Rule: constrains file names within a Module to a finite case vocabulary."
+          "description": "A naming Rule: constrains file names within a Zone to a finite case vocabulary."
         },
         {
           "$ref": "#/$defs/layersRule",
-          "description": "A layers Rule: orders Modules highest first; a Module may import same or lower layers, never higher."
+          "description": "A layers Rule: orders Zones highest first; a Zone may import same or lower layers, never higher."
         },
         {
           "$ref": "#/$defs/protectedRule",
-          "description": "An imported_by Rule: restricts which Modules may import one Module."
+          "description": "An imported_by Rule: restricts which Zones may import one Zone."
         },
         {
           "$ref": "#/$defs/independenceRule",
@@ -849,11 +744,7 @@
         },
         {
           "$ref": "#/$defs/acyclicRule",
-          "description": "An acyclic Rule: forbids dependency cycles among declared Modules."
-        },
-        {
-          "$ref": "#/$defs/invariantsRule",
-          "description": "An invariants Rule: requires recorded domain contracts to be visible in source as named methods called from their join points."
+          "description": "An acyclic Rule: forbids dependency cycles among declared Zones."
         },
         {
           "$ref": "#/$defs/contentRule",
@@ -886,7 +777,7 @@
     },
     "structureRule": {
       "additionalProperties": false,
-      "description": "A structure Rule: requires or forbids files matching globs inside a Module.",
+      "description": "A structure Rule: requires or forbids files matching globs inside a Zone.",
       "properties": {
         "description": {
           "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
@@ -898,18 +789,18 @@
         },
         "exclude": {
           "$ref": "#/$defs/exclusion",
-          "description": "Removes paths or Modules from what the Rule judges; excluded subjects evaluate not applicable."
+          "description": "Removes paths or Zones from what the Rule judges; excluded subjects evaluate not applicable."
         },
         "on": {
-          "$ref": "#/$defs/judgedModules",
-          "description": "The declared Module or Modules the Rule judges: one Module name or a non-empty list."
+          "$ref": "#/$defs/judgedZones",
+          "description": "The declared Zone or Zones the Rule judges: one Zone name or a non-empty list."
         },
         "severity": {
           "$ref": "#/$defs/severity",
           "description": "Gate importance of a Violation."
         },
         "structure": {
-          "description": "Files the Module must or must not contain. With each, the globs derive from a recorded vocabulary collection and may carry {name:\u003ccase\u003e} placeholders.",
+          "description": "Files the Zone must or must not contain. With each, the globs derive from a recorded vocabulary collection and may carry {name:\u003ccase\u003e} placeholders.",
           "oneOf": [
             {
               "additionalProperties": false,
@@ -1095,24 +986,82 @@
         "reason"
       ],
       "type": "object"
+    },
+    "zone": {
+      "description": "One Zone: a glob, a list of globs, or an object in a repository ruleset; a description or an object in a Pattern file.",
+      "oneOf": [
+        {
+          "description": "A Zone's one glob in a repository ruleset, or its description in a Pattern file.",
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "description": "A Zone's globs in a repository ruleset.",
+          "items": {
+            "$ref": "#/$defs/glob",
+            "description": "Repo-relative path pattern: * and ? never cross /, a ** segment matches any number of segments, [...] matches one character. Brace alternation is rejected."
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        {
+          "additionalProperties": false,
+          "description": "A Zone object: paths and description in a repository ruleset; description and suggested paths in a Pattern file.",
+          "properties": {
+            "description": {
+              "description": "Authoring description of the Zone.",
+              "type": "string"
+            },
+            "paths": {
+              "$ref": "#/$defs/zonePaths",
+              "description": "Membership selectors: one glob or a non-empty list of globs. A glob naming a directory claims its whole subtree."
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "zoneName": {
+      "description": "Zone name: lowercase letters, digits, underscore, and hyphen.",
+      "pattern": "^[a-z0-9_-]+$",
+      "type": "string"
+    },
+    "zonePaths": {
+      "description": "Membership selectors: one glob or a non-empty list of globs. A glob naming a directory claims its whole subtree.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/glob",
+          "description": "Repo-relative path pattern: * and ? never cross /, a ** segment matches any number of segments, [...] matches one character. Brace alternation is rejected."
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/glob",
+            "description": "Repo-relative path pattern: * and ? never cross /, a ** segment matches any number of segments, [...] matches one character. Brace alternation is rejected."
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        }
+      ]
     }
   },
   "$id": "https://raw.githubusercontent.com/wixregiga/arclint/main/docs/schemas/rules.arclint.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "The complete rules.arclint.yaml document ArcLint accepts. A repository ruleset carries runtime, scan, extends, modules, and rules; a Pattern distribution file carries the pattern header, modules, and rules. Every Rule is keyed by its Rule ID and carries exactly one assertion key; an entry with no assertion key is an Override of a Rule an extended Pattern distributes. Unknown keys are rejected everywhere.",
+  "description": "The complete rules.arclint.yaml document ArcLint accepts. A repository ruleset carries runtime, scan, extends, zones, and rules; a Pattern distribution file carries the pattern header, zones, and rules. Every Rule is keyed by its Rule ID and carries exactly one assertion key; an entry with no assertion key is an Override of a Rule an extended Pattern distributes. Unknown keys are rejected everywhere.",
   "else": {
-    "description": "A repository ruleset: every Module carries paths, directly or through a Binding.",
+    "description": "A repository ruleset: every Zone carries paths, directly or through a Binding.",
     "properties": {
-      "modules": {
+      "zones": {
         "additionalProperties": {
-          "$ref": "#/$defs/repositoryModule",
-          "description": "One repository Module: its paths as a glob or a list of globs, or an object with paths and an optional description."
+          "$ref": "#/$defs/repositoryZone",
+          "description": "One repository Zone: its paths as a glob or a list of globs, or an object with paths and an optional description."
         },
-        "description": "Declared Modules keyed by name, each a glob, a list of globs, or an object with paths and description.",
+        "description": "Declared Zones keyed by name, each a glob, a list of globs, or an object with paths and description.",
         "propertyNames": {
-          "$ref": "#/$defs/moduleName",
-          "description": "Module name: lowercase letters, digits, underscore, and hyphen."
+          "$ref": "#/$defs/zoneName",
+          "description": "Zone name: lowercase letters, digits, underscore, and hyphen."
         },
         "type": "object"
       }
@@ -1125,7 +1074,7 @@
   },
   "properties": {
     "extends": {
-      "description": "Patterns this repository adopts. Each entry pins one exact version and binds every Module the Pattern lists to repository paths. Repository rulesets only.",
+      "description": "Patterns this repository adopts. Each entry pins one exact version and binds every Zone the Pattern lists to repository paths. Repository rulesets only.",
       "items": {
         "additionalProperties": false,
         "description": "One adopted Pattern and its Bindings.",
@@ -1133,12 +1082,12 @@
           "bind": {
             "additionalProperties": {
               "$ref": "#/$defs/boundPaths",
-              "description": "Repository paths bound to one Pattern Module: one glob or a non-empty list of globs. The only place a Pattern Module's paths live."
+              "description": "Repository paths bound to one Pattern Zone: one glob or a non-empty list of globs. The only place a Pattern Zone's paths live."
             },
-            "description": "Paths for every Module the Pattern lists, keyed by Module name: one glob or a list of globs.",
+            "description": "Paths for every Zone the Pattern lists, keyed by Zone name: one glob or a list of globs.",
             "propertyNames": {
-              "$ref": "#/$defs/moduleName",
-              "description": "Module name: lowercase letters, digits, underscore, and hyphen."
+              "$ref": "#/$defs/zoneName",
+              "description": "Zone name: lowercase letters, digits, underscore, and hyphen."
             },
             "type": "object"
           },
@@ -1154,18 +1103,6 @@
       },
       "type": "array",
       "uniqueItems": true
-    },
-    "modules": {
-      "additionalProperties": {
-        "$ref": "#/$defs/module",
-        "description": "One Module: a glob, a list of globs, or an object in a repository ruleset; a description or an object in a Pattern file."
-      },
-      "description": "Declared Modules keyed by name. In a repository ruleset a Module is a glob, a list of globs, or an object with paths and description. In a Pattern file a Module is its description, or an object with description and the paths it suggests for the Binding.",
-      "propertyNames": {
-        "$ref": "#/$defs/moduleName",
-        "description": "Module name: lowercase letters, digits, underscore, and hyphen."
-      },
-      "type": "object"
     },
     "pattern": {
       "additionalProperties": false,
@@ -1214,9 +1151,9 @@
     "rules": {
       "additionalProperties": {
         "$ref": "#/$defs/rule",
-        "description": "One Rule carrying exactly one assertion key (imports, structure, naming, layers, imported_by, independent, acyclic, invariants, content, uses), or an Override carrying none."
+        "description": "One Rule carrying exactly one assertion key (imports, structure, naming, layers, imported_by, independent, acyclic, content, uses), or an Override carrying none."
       },
-      "description": "Every Rule keyed by its Rule ID. An entry with one assertion key is a Rule; an entry with none is an Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID.",
+      "description": "Every Rule keyed by its Rule ID. An entry with one assertion key is a Rule; an entry with none is an Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID, or of a built-in domain Rule, keyed by its block invariant.",
       "propertyNames": {
         "$ref": "#/$defs/ruleID",
         "description": "Explicit stable Rule ID: LOCAL for a repository Rule, or NAMESPACE/NAME:LOCAL for a Rule an extended Pattern distributes. LOCAL uses a-z 0-9 . _ - /, never starting with . / - and never ending with . or /. Inside a Pattern file the Rule ID is local; the loader qualifies it with the Pattern's namespace/name, so two Patterns may distribute the same local identity."
@@ -1267,47 +1204,47 @@
         }
       },
       "type": "object"
+    },
+    "zones": {
+      "additionalProperties": {
+        "$ref": "#/$defs/zone",
+        "description": "One Zone: a glob, a list of globs, or an object in a repository ruleset; a description or an object in a Pattern file."
+      },
+      "description": "Declared Zones keyed by name. In a repository ruleset a Zone is a glob, a list of globs, or an object with paths and description. In a Pattern file a Zone is its description, or an object with description and the paths it suggests for the Binding.",
+      "propertyNames": {
+        "$ref": "#/$defs/zoneName",
+        "description": "Zone name: lowercase letters, digits, underscore, and hyphen."
+      },
+      "type": "object"
     }
   },
   "then": {
-    "description": "A Pattern distribution file: no runtime, no scan, no extends, because those are repository policy; Modules carry descriptions and suggested paths only.",
+    "description": "A Pattern distribution file: no runtime, no scan, no extends, because those are repository policy; Zones carry descriptions and suggested paths only.",
     "properties": {
       "extends": false,
-      "modules": {
-        "additionalProperties": {
-          "$ref": "#/$defs/patternModule",
-          "description": "One Pattern Module: its description, or an object with the description and the paths the Pattern suggests for the Binding. A Pattern never owns paths."
-        },
-        "description": "Declared Modules keyed by name, each a description or an object with description and suggested paths.",
-        "propertyNames": {
-          "$ref": "#/$defs/moduleName",
-          "description": "Module name: lowercase letters, digits, underscore, and hyphen."
-        },
-        "type": "object"
-      },
       "rules": {
         "additionalProperties": {
-          "description": "One distributed Rule carrying exactly one assertion key (imports, structure, naming, layers, imported_by, independent, acyclic, invariants, content, uses).",
+          "description": "One distributed Rule carrying exactly one assertion key (imports, structure, naming, layers, imported_by, independent, acyclic, content, uses).",
           "oneOf": [
             {
               "$ref": "#/$defs/consumesRule",
-              "description": "An imports Rule: states what a Module may import: declared Modules by allow-list, external and standard-library imports by policy."
+              "description": "An imports Rule: states what a Zone may import: declared Zones by allow-list, external and standard-library imports by policy."
             },
             {
               "$ref": "#/$defs/structureRule",
-              "description": "A structure Rule: requires or forbids files matching globs inside a Module."
+              "description": "A structure Rule: requires or forbids files matching globs inside a Zone."
             },
             {
               "$ref": "#/$defs/namingRule",
-              "description": "A naming Rule: constrains file names within a Module to a finite case vocabulary."
+              "description": "A naming Rule: constrains file names within a Zone to a finite case vocabulary."
             },
             {
               "$ref": "#/$defs/layersRule",
-              "description": "A layers Rule: orders Modules highest first; a Module may import same or lower layers, never higher."
+              "description": "A layers Rule: orders Zones highest first; a Zone may import same or lower layers, never higher."
             },
             {
               "$ref": "#/$defs/protectedRule",
-              "description": "An imported_by Rule: restricts which Modules may import one Module."
+              "description": "An imported_by Rule: restricts which Zones may import one Zone."
             },
             {
               "$ref": "#/$defs/independenceRule",
@@ -1315,11 +1252,7 @@
             },
             {
               "$ref": "#/$defs/acyclicRule",
-              "description": "An acyclic Rule: forbids dependency cycles among declared Modules."
-            },
-            {
-              "$ref": "#/$defs/invariantsRule",
-              "description": "An invariants Rule: requires recorded domain contracts to be visible in source as named methods called from their join points."
+              "description": "An acyclic Rule: forbids dependency cycles among declared Zones."
             },
             {
               "$ref": "#/$defs/contentRule",
@@ -1339,7 +1272,19 @@
         "type": "object"
       },
       "runtime": false,
-      "scan": false
+      "scan": false,
+      "zones": {
+        "additionalProperties": {
+          "$ref": "#/$defs/patternZone",
+          "description": "One Pattern Zone: its description, or an object with the description and the paths the Pattern suggests for the Binding. A Pattern never owns paths."
+        },
+        "description": "Declared Zones keyed by name, each a description or an object with description and suggested paths.",
+        "propertyNames": {
+          "$ref": "#/$defs/zoneName",
+          "description": "Zone name: lowercase letters, digits, underscore, and hyphen."
+        },
+        "type": "object"
+      }
     }
   },
   "title": "ArcLint ruleset",

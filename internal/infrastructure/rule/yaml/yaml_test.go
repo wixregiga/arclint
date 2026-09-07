@@ -27,8 +27,9 @@ func repoVocabulary(t *testing.T) vocab.Repository {
 }
 
 // TestLoadTargetRuleset proves the loader against the real target
-// ruleset of this repository, which extends the embedded domain-model
-// Pattern exactly as an adopter would.
+// ruleset of this repository: the local Rules it spells, plus the
+// built-in vocabulary rules every ruleset carries without extending
+// any Pattern, exactly as an adopter receives them.
 func TestLoadTargetRuleset(t *testing.T) {
 	repo, err := yamlrule.NewRepository("../../../../rules.arclint.yaml", repoVocabulary(t), embeddedpattern.NewSource())
 	if err != nil {
@@ -38,11 +39,16 @@ func TestLoadTargetRuleset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConfiguredRules: %v", err)
 	}
-	if len(cfg.Modules) != 16 {
-		t.Errorf("modules = %d, want 16", len(cfg.Modules))
+	if len(cfg.Zones) != 17 {
+		t.Errorf("zones = %d, want 17", len(cfg.Zones))
 	}
-	if len(cfg.Rules) != 32 {
-		t.Errorf("rules = %d, want 32", len(cfg.Rules))
+	builtIn, err := rule.BuiltIn()
+	if err != nil {
+		t.Fatalf("BuiltIn: %v", err)
+	}
+	const local = 29
+	if len(cfg.Rules) != local+len(builtIn) {
+		t.Errorf("rules = %d, want %d local + %d built-in", len(cfg.Rules), local, len(builtIn))
 	}
 	if len(cfg.Languages) != 2 || cfg.Languages[0] != rule.LanguageGo || cfg.Languages[1] != rule.LanguageTypeScript {
 		t.Errorf("languages = %v, want [go typescript]", cfg.Languages)
@@ -50,8 +56,8 @@ func TestLoadTargetRuleset(t *testing.T) {
 	if cfg.Scan.UnknownImports != rule.UnknownImportsError {
 		t.Errorf("unknown imports policy = %q, want error", cfg.Scan.UnknownImports)
 	}
-	if len(cfg.Extensions) != 3 {
-		t.Errorf("the repository extends arclint/domain-model, whose 3 extensions must be supplied; got %d", len(cfg.Extensions))
+	if len(cfg.Extensions) != 0 {
+		t.Errorf("the repository extends no Pattern and authors no extension; got %d extensions", len(cfg.Extensions))
 	}
 	byID := map[string]rule.Rule{}
 	for _, r := range cfg.Rules {
@@ -59,27 +65,34 @@ func TestLoadTargetRuleset(t *testing.T) {
 		if r.Claim().String() == "" {
 			t.Errorf("%s: every Rule in the target ruleset carries a description", r.ID().Qualified())
 		}
+		if _, distributed := r.Provenance(); distributed {
+			t.Errorf("%s: no Rule of this ruleset comes from a Pattern", r.ID().Qualified())
+		}
 	}
-	// The vocabulary rules are distributed, not local: they carry the
-	// Pattern's provenance under qualified ids, and the local ruleset
-	// spells no copy of them.
+	// The vocabulary rules are built in: listed under the invariant's
+	// id, carrying no provenance, and never spelled in the local file.
 	for _, id := range []string{
-		"arclint/domain-model:vocabulary/terms-carry-definitions",
-		"arclint/domain-model:vocabulary/invariants-name-recorded-owners",
-		"arclint/domain-model:contexts/respect-relations",
+		"ubiquitous_language/terms-declared-in-code",
+		"context_relation/imports-follow-influence",
+		"aggregate/root-declared",
+		"domain_isolation/model-imports-nothing-outside-itself",
 	} {
 		r, ok := byID[id]
 		if !ok {
-			t.Errorf("missing %s; have %v", id, keys(byID))
+			t.Errorf("missing built-in %s; have %v", id, keys(byID))
 			continue
 		}
-		if ref, distributed := r.Provenance(); !distributed || ref.String() != "arclint/domain-model@0.1.0" {
-			t.Errorf("%s provenance = %v, %v", id, ref, distributed)
+		if !r.BuiltIn() {
+			t.Errorf("%s must be marked built in", id)
 		}
 	}
-	for _, local := range []string{"vocabulary/terms-carry-definitions", "domain-model/contexts-respect-relations"} {
-		if _, ok := byID[local]; ok {
-			t.Errorf("%s must come from the Pattern, not be re-declared locally", local)
+	for _, retired := range []string{
+		"arclint/domain-model:vocabulary/terms-carry-definitions",
+		"arclint/domain-model:contexts/respect-relations",
+		"vocabulary/terms-carry-definitions",
+	} {
+		if _, ok := byID[retired]; ok {
+			t.Errorf("%s is retired; the built-in rules replace the domain-model Pattern", retired)
 		}
 	}
 	stdlibOnly, ok := byID["domain/stdlib-only"]
@@ -89,7 +102,7 @@ func TestLoadTargetRuleset(t *testing.T) {
 	if stdlibOnly.Type() != rule.TypeConsumes {
 		t.Errorf("stdlib-only type = %q", stdlibOnly.Type())
 	}
-	if !strings.Contains(stdlibOnly.Claim().Statement(), "no other Module") {
+	if !strings.Contains(stdlibOnly.Claim().Statement(), "no other Zone") {
 		t.Errorf("stdlib-only claim = %q", stdlibOnly.Claim())
 	}
 	if acyclic, ok := byID["dependencies/acyclic"]; !ok {
@@ -163,7 +176,7 @@ func ruleIDs(cfg rule.Configured) []string {
 	return out
 }
 
-// TestLoadEveryAssertionShape proves each assertion key, each module
+// TestLoadEveryAssertionShape proves each assertion key, each zone
 // sugar, and each optional key loads into the Rule Type it spells.
 func TestLoadEveryAssertionShape(t *testing.T) {
 	cfg := mustLoad(t, `
@@ -172,7 +185,7 @@ scan:
   unknown_imports: ignore
   exclude: ["vendor/**"]
   include_testdata: true
-modules:
+zones:
   domain: internal/domain/**
   application: ["internal/application/**", "internal/usecases/**"]
   infra:
@@ -219,13 +232,6 @@ rules:
     severity: info
     content:
       forbid: "TODO"
-  domain/invariants:
-    on: domain
-    invariants: {}
-  domain/invariants-closed:
-    on: domain
-    invariants:
-      closed: true
   deps/inward:
     layers: [app, application, domain]
   infra/app-only:
@@ -257,17 +263,17 @@ rules:
 	if cfg.Scan.UnknownImports != rule.UnknownImportsIgnore || !cfg.Scan.IncludeTestdata || len(cfg.Scan.Exclude) != 1 {
 		t.Errorf("scan = %+v", cfg.Scan)
 	}
-	if len(cfg.Modules) != 4 {
-		t.Fatalf("modules = %d, want 4", len(cfg.Modules))
+	if len(cfg.Zones) != 4 {
+		t.Fatalf("zones = %d, want 4", len(cfg.Zones))
 	}
-	if paths := cfg.Modules[0].Paths(); len(paths) != 1 || paths[0].String() != "internal/domain/**" {
-		t.Errorf("string module paths = %v", paths)
+	if paths := cfg.Zones[0].Paths(); len(paths) != 1 || paths[0].String() != "internal/domain/**" {
+		t.Errorf("string zone paths = %v", paths)
 	}
-	if paths := cfg.Modules[1].Paths(); len(paths) != 2 {
-		t.Errorf("list module paths = %v", paths)
+	if paths := cfg.Zones[1].Paths(); len(paths) != 2 {
+		t.Errorf("list zone paths = %v", paths)
 	}
-	if cfg.Modules[2].Description() != "Outbound adapters." {
-		t.Errorf("object module description = %q", cfg.Modules[2].Description())
+	if cfg.Zones[2].Description() != "Outbound adapters." {
+		t.Errorf("object zone description = %q", cfg.Zones[2].Description())
 	}
 	want := map[string]rule.Type{
 		"domain/stdlib-only":         rule.TypeConsumes,
@@ -278,8 +284,6 @@ rules:
 		"application/kebab":          rule.TypeNaming,
 		"domain/no-panic":            rule.TypeContent,
 		"repo/no-todo":               rule.TypeContent,
-		"domain/invariants":          rule.TypeInvariants,
-		"domain/invariants-closed":   rule.TypeInvariants,
 		"deps/inward":                rule.TypeLayers,
 		"infra/app-only":             rule.TypeProtected,
 		"features/independent":       rule.TypeIndependence,
@@ -299,7 +303,7 @@ rules:
 	if r := ruleByID(t, cfg, "domain/stdlib-only"); r.Claim().Statement() != "The domain imports nothing else." {
 		t.Errorf("description must become the Claim, got %q", r.Claim())
 	}
-	if p := ruleByID(t, cfg, "application/imports-domain").Params().(rule.ConsumesParams); p.Internal == nil || len(p.Internal.Modules()) != 1 || p.External != rule.ImportAllow {
+	if p := ruleByID(t, cfg, "application/imports-domain").Params().(rule.ConsumesParams); p.Internal == nil || len(p.Internal.Zones()) != 1 || p.External != rule.ImportAllow {
 		t.Errorf("imports params = %+v", p)
 	}
 	if r := ruleByID(t, cfg, "domain/each-aggregate"); r.Severity() != rule.SeverityWarning {
@@ -309,30 +313,24 @@ rules:
 	} else if p := r.Params().(rule.StructureParams); len(p.Require) != 0 {
 		t.Errorf("an empty vocabulary derives no obligations, got %v", p.Require)
 	}
-	if r := ruleByID(t, cfg, "domain/snake"); !r.AppliesToFile("internal/domain/a.go", []rule.ModuleName{"domain"}) ||
-		r.AppliesToFile("internal/domain/README.md", []rule.ModuleName{"domain"}) {
+	if r := ruleByID(t, cfg, "domain/snake"); !r.AppliesToFile("internal/domain/a.go", []rule.ZoneName{"domain"}) ||
+		r.AppliesToFile("internal/domain/README.md", []rule.ZoneName{"domain"}) {
 		t.Errorf("files must narrow the naming Rule")
 	}
 	if p := ruleByID(t, cfg, "repo/no-todo").Params().(rule.ContentParams); p.Forbid != "TODO" {
 		t.Errorf("content params = %+v", p)
 	}
-	if r := ruleByID(t, cfg, "repo/no-todo"); len(r.ReferencedModules()) != 0 || r.Severity() != rule.SeverityInfo {
-		t.Errorf("a content Rule without on ranges over the repository; got %v %s", r.ReferencedModules(), r.Severity())
+	if r := ruleByID(t, cfg, "repo/no-todo"); len(r.ReferencedZones()) != 0 || r.Severity() != rule.SeverityInfo {
+		t.Errorf("a content Rule without on ranges over the repository; got %v %s", r.ReferencedZones(), r.Severity())
 	}
-	if p := ruleByID(t, cfg, "domain/invariants-closed").Params().(rule.InvariantsParams); !p.Closed {
-		t.Errorf("invariants closed must load")
-	}
-	if p := ruleByID(t, cfg, "domain/invariants").Params().(rule.InvariantsParams); p.Closed {
-		t.Errorf("invariants default open")
-	}
-	if p := ruleByID(t, cfg, "infra/app-only").Params().(rule.ProtectedParams); p.Module != "infra" || len(p.Allow) != 1 || p.Allow[0] != "app" {
+	if p := ruleByID(t, cfg, "infra/app-only").Params().(rule.ProtectedParams); p.Zone != "infra" || len(p.Allow) != 1 || p.Allow[0] != "app" {
 		t.Errorf("imported_by params = %+v", p)
 	}
-	if p := ruleByID(t, cfg, "deps/acyclic-all").Params().(rule.AcyclicParams); len(p.Modules) != 0 {
-		t.Errorf("acyclic {} means every declared module, got %v", p.Modules)
+	if p := ruleByID(t, cfg, "deps/acyclic-all").Params().(rule.AcyclicParams); len(p.Zones) != 0 {
+		t.Errorf("acyclic {} means every declared zone, got %v", p.Zones)
 	}
-	if p := ruleByID(t, cfg, "deps/acyclic-some").Params().(rule.AcyclicParams); len(p.Modules) != 2 {
-		t.Errorf("acyclic list = %v", p.Modules)
+	if p := ruleByID(t, cfg, "deps/acyclic-some").Params().(rule.AcyclicParams); len(p.Zones) != 2 {
+		t.Errorf("acyclic list = %v", p.Zones)
 	}
 	if p := ruleByID(t, cfg, "domain/checked").Params().(rule.ExtensionParams); p.Uses != "acme/check" || p.With["depth"] != 2 {
 		t.Errorf("uses params = %+v", p)
@@ -356,7 +354,7 @@ func TestLoadRejectsInvalidDocuments(t *testing.T) {
 		"empty document":        {"", "empty document"},
 		"unknown top-level key": {"rulesets: []\n", `unknown key "rulesets"`},
 		"retired contracts key": {`
-modules:
+zones:
   m: m/**
 contracts:
   m:
@@ -365,7 +363,7 @@ contracts:
       internal: []
 `, `unknown key "contracts"`},
 		"rule without assertion and without extends": {`
-modules:
+zones:
   m: m/**
 rules:
   m/imports:
@@ -373,7 +371,7 @@ rules:
     on: m
 `, "carries no assertion"},
 		"two assertions": {`
-modules:
+zones:
   m: m/**
 rules:
   m/two:
@@ -383,7 +381,7 @@ rules:
     naming: snake_case
 `, "carries 2 assertions"},
 		"kind key": {`
-modules:
+zones:
   m: m/**
 rules:
   m/kind:
@@ -392,7 +390,7 @@ rules:
     case: snake_case
 `, `unknown key "kind"`},
 		"imports without on": {`
-modules:
+zones:
   m: m/**
 rules:
   m/imports:
@@ -400,43 +398,43 @@ rules:
       internal: []
 `, "imports requires on"},
 		"on for layers": {`
-modules:
+zones:
   m: m/**
   n: n/**
 rules:
   deps/inward:
     on: m
     layers: [m, n]
-`, "layers names modules itself, so it has no on"},
-		"imported_by with two modules": {`
-modules:
+`, "layers names zones itself, so it has no on"},
+		"imported_by with two zones": {`
+zones:
   m: m/**
   n: n/**
 rules:
   m/protected:
     on: [m, n]
     imported_by: [n]
-`, "imported_by requires on naming exactly one module"},
-		"on names an undeclared module": {`
-modules:
+`, "imported_by requires on naming exactly one zone"},
+		"on names an undeclared zone": {`
+zones:
   m: m/**
 rules:
   ghost/imports:
     on: ghost
     imports:
       internal: []
-`, `module "ghost" is not declared`},
-		"allow-list names an undeclared module": {`
-modules:
+`, `zone "ghost" is not declared`},
+		"allow-list names an undeclared zone": {`
+zones:
   m: m/**
 rules:
   m/imports:
     on: m
     imports:
       internal: [ghost]
-`, `names module "ghost", which is not declared`},
+`, `names zone "ghost", which is not declared`},
 		"files on imports": {`
-modules:
+zones:
   m: m/**
 rules:
   m/imports:
@@ -446,7 +444,7 @@ rules:
       internal: []
 `, "imports does not accept files"},
 		"with on imports": {`
-modules:
+zones:
   m: m/**
 rules:
   m/imports:
@@ -457,7 +455,7 @@ rules:
       depth: 1
 `, "with belongs to uses"},
 		"content without forbid": {`
-modules:
+zones:
   m: m/**
 rules:
   m/content:
@@ -465,7 +463,7 @@ rules:
     content: {}
 `, "forbid is required"},
 		"content with invalid regexp": {`
-modules:
+zones:
   m: m/**
 rules:
   m/content:
@@ -474,22 +472,22 @@ rules:
       forbid: "("
 `, "forbid"},
 		"naming with unknown case": {`
-modules:
+zones:
   m: m/**
 rules:
   m/naming:
     on: m
     naming: SCREAMING_CASE
 `, "SCREAMING_CASE"},
-		"acyclic with one module": {`
-modules:
+		"acyclic with one zone": {`
+zones:
   m: m/**
 rules:
   deps/acyclic:
     acyclic: [m]
-`, "at least two modules"},
+`, "at least two zones"},
 		"duplicate rule id": {`
-modules:
+zones:
   m: m/**
 rules:
   m/same:
@@ -501,7 +499,7 @@ rules:
     naming: snake_case
 `, `key "m/same" appears twice`},
 		"disable without reason": {`
-modules:
+zones:
   m: m/**
 rules:
   m/imports:
@@ -511,7 +509,7 @@ rules:
     disable: ""
 `, "a reason is required"},
 		"exclusion without reason": {`
-modules:
+zones:
   m: m/**
 rules:
   m/imports:
@@ -522,7 +520,7 @@ rules:
       paths: ["m/gen/**"]
 `, "reason is required"},
 		"exclusion without subject": {`
-modules:
+zones:
   m: m/**
 rules:
   m/imports:
@@ -531,9 +529,9 @@ rules:
       internal: []
     exclude:
       reason: "why"
-`, "names no paths and no modules"},
+`, "names no paths and no zones"},
 		"suppression without paths": {`
-modules:
+zones:
   m: m/**
 rules:
   m/imports:
@@ -543,14 +541,14 @@ rules:
     suppress:
       reason: "why"
 `, "paths is required"},
-		"repository module without paths": {`
-modules:
+		"repository zone without paths": {`
+zones:
   m:
     description: "only a description"
 rules: {}
-`, "a repository module requires paths"},
-		"module with unknown key": {`
-modules:
+`, "a repository zone requires paths"},
+		"zone with unknown key": {`
+zones:
   m:
     paths: m/**
     globs: ["m/**"]
@@ -594,14 +592,14 @@ pattern:
   version: 1.0.0
 extends: []
 `, "does not accept extends"},
-		"pattern file with list module": {`
+		"pattern file with list zone": {`
 pattern:
   namespace: acme
   name: hexagonal
   version: 1.0.0
-modules:
+zones:
   core: ["core/**"]
-`, "a pattern lists a module by its description"},
+`, "a pattern lists a zone by its description"},
 		"pattern header missing version": {`
 pattern:
   namespace: acme
@@ -629,7 +627,7 @@ pattern:
 }
 
 // samplePatternFile is a Pattern distribution file in the published
-// grammar: header, Modules by description, Rules under local ids.
+// grammar: header, Zones by description, Rules under local ids.
 const samplePatternFile = `
 pattern:
   namespace: acme
@@ -637,7 +635,7 @@ pattern:
   version: 1.0.0
   coverage: [go, ts]
   documentation: https://example.test/hexagonal
-modules:
+zones:
   core: "The domain core."
   ports:
     description: "Inbound and outbound ports."
@@ -646,7 +644,7 @@ modules:
     description: "Technology adapters."
 rules:
   core/stdlib-only:
-    description: "The core imports no other Module and no third-party package."
+    description: "The core imports no other Zone and no third-party package."
     on: core
     imports:
       internal: []
@@ -688,7 +686,7 @@ func loadSamplePattern(t *testing.T) rule.Pattern {
 }
 
 // TestLoadPatternQualifiesLocalIDs proves a Pattern file's local Rule
-// IDs are qualified with the Pattern namespace, its Modules carry
+// IDs are qualified with the Pattern namespace, its Zones carry
 // descriptions and suggested paths, and its Rules carry provenance.
 func TestLoadPatternQualifiesLocalIDs(t *testing.T) {
 	p := loadSamplePattern(t)
@@ -714,24 +712,24 @@ func TestLoadPatternQualifiesLocalIDs(t *testing.T) {
 	if p.Rules()[0].ID().Qualified() != "acme/hexagonal:core/stdlib-only" {
 		t.Errorf("first rule = %s", p.Rules()[0].ID().Qualified())
 	}
-	modules := p.Modules()
-	if len(modules) != 3 || modules[0].Description() != "The domain core." || len(modules[0].SuggestedPaths()) != 0 {
-		t.Errorf("modules = %+v", modules)
+	zones := p.Zones()
+	if len(zones) != 3 || zones[0].Description() != "The domain core." || len(zones[0].SuggestedPaths()) != 0 {
+		t.Errorf("zones = %+v", zones)
 	}
-	if paths := modules[1].SuggestedPaths(); len(paths) != 1 || paths[0].String() != "internal/ports/**" {
+	if paths := zones[1].SuggestedPaths(); len(paths) != 1 || paths[0].String() != "internal/ports/**" {
 		t.Errorf("ports suggested paths = %v", paths)
 	}
 	if exts := p.Extensions(); len(exts) != 1 || exts[0].FileName() != "acme_check.ts" {
 		t.Errorf("extensions = %+v", exts)
 	}
-	if _, err := yamlrule.LoadPattern([]byte("modules:\n  core: \"desc\"\n"), "headerless.yaml", nil); err == nil ||
+	if _, err := yamlrule.LoadPattern([]byte("zones:\n  core: \"desc\"\n"), "headerless.yaml", nil); err == nil ||
 		!strings.Contains(err.Error(), "missing pattern header") {
 		t.Errorf("headerless file: %v", err)
 	}
 	for name, tc := range map[string]struct{ document, want string }{
 		"namespaced rule id": {`
 pattern: {namespace: acme, name: hexagonal, version: 1.0.0}
-modules:
+zones:
   core: "The core."
 rules:
   acme/hexagonal:core/stdlib-only:
@@ -741,36 +739,36 @@ rules:
 `, "rule ids inside a pattern are local"},
 		"override inside a pattern": {`
 pattern: {namespace: acme, name: hexagonal, version: 1.0.0}
-modules:
+zones:
   core: "The core."
 rules:
   core/stdlib-only:
     severity: warning
 `, "a pattern distributes Rules and cannot override"},
-		"module without description": {`
+		"zone without description": {`
 pattern: {namespace: acme, name: hexagonal, version: 1.0.0}
-modules:
+zones:
   core:
     paths: ["core/**"]
-`, "a pattern module requires a description"},
-		"rule naming an unlisted module": {`
+`, "a pattern zone requires a description"},
+		"rule naming an unlisted zone": {`
 pattern: {namespace: acme, name: hexagonal, version: 1.0.0}
-modules:
+zones:
   core: "The core."
 rules:
   core/imports:
     on: core
     imports:
       internal: [shared]
-`, `names module "shared", which is not declared`},
+`, `names zone "shared", which is not declared`},
 		"pattern without rules": {`
 pattern: {namespace: acme, name: hexagonal, version: 1.0.0}
-modules:
+zones:
   core: "The core."
 `, "no rules"},
 		"coverage spelled as a language name": {`
 pattern: {namespace: acme, name: hexagonal, version: 1.0.0, coverage: [typescript]}
-modules:
+zones:
   core: "The core."
 rules:
   core/stdlib-only:
@@ -780,7 +778,7 @@ rules:
 `, `pattern.coverage target "typescript": not one of go, ts, py`},
 		"coverage listed twice": {`
 pattern: {namespace: acme, name: hexagonal, version: 1.0.0, coverage: [go, go]}
-modules:
+zones:
   core: "The core."
 rules:
   core/stdlib-only:
@@ -799,7 +797,7 @@ rules:
 }
 
 // TestLoadExtendsBindsAndOverrides proves a repository ruleset adopts a
-// Pattern: every listed Module is bound, the Pattern's Rules arrive
+// Pattern: every listed Zone is bound, the Pattern's Rules arrive
 // first under their qualified ids, Overrides merge onto them, local
 // Rules follow, and the Pattern's Extensions are supplied.
 func TestLoadExtendsBindsAndOverrides(t *testing.T) {
@@ -813,7 +811,7 @@ extends:
       ports: ["internal/ports/**", "internal/api/**"]
       adapters:
         - internal/adapters/**
-modules:
+zones:
   shared: internal/shared/**
 rules:
   acme/hexagonal:core/stdlib-only:
@@ -832,18 +830,18 @@ rules:
     imports:
       internal: [core]
 `, p)
-	if len(cfg.Modules) != 4 {
-		t.Fatalf("modules = %d, want 3 bound + 1 local", len(cfg.Modules))
+	if len(cfg.Zones) != 4 {
+		t.Fatalf("zones = %d, want 3 bound + 1 local", len(cfg.Zones))
 	}
-	core := cfg.Modules[0]
+	core := cfg.Zones[0]
 	if core.Name() != "core" || core.Description() != "The domain core." || !core.Contains("internal/core/x.go") {
 		t.Errorf("bound core = %+v", core)
 	}
-	if ports := cfg.Modules[1]; len(ports.Paths()) != 2 {
+	if ports := cfg.Zones[1]; len(ports.Paths()) != 2 {
 		t.Errorf("bound ports paths = %v", ports.Paths())
 	}
-	if cfg.Modules[3].Name() != "shared" {
-		t.Errorf("local module must follow the bound ones, got %s", cfg.Modules[3].Name())
+	if cfg.Zones[3].Name() != "shared" {
+		t.Errorf("local zone must follow the bound ones, got %s", cfg.Zones[3].Name())
 	}
 	ids := ruleIDs(cfg)
 	if len(ids) != 7 || ids[0] != "acme/hexagonal:core/stdlib-only" || ids[6] != "shared/imports" {
@@ -851,14 +849,14 @@ rules:
 	}
 	if r := ruleByID(t, cfg, "acme/hexagonal:core/stdlib-only"); r.Severity() != rule.SeverityWarning {
 		t.Errorf("override severity = %s", r.Severity())
-	} else if r.Claim().Statement() != "The core imports no other Module and no third-party package." {
+	} else if r.Claim().Statement() != "The core imports no other Zone and no third-party package." {
 		t.Errorf("an override keeps the pattern's description, got %q", r.Claim())
 	}
 	if r := ruleByID(t, cfg, "acme/hexagonal:core/no-panic"); !r.Disabled() {
 		t.Errorf("override disable must disable the pattern rule")
 	}
 	checked := ruleByID(t, cfg, "acme/hexagonal:core/checked")
-	if checked.AppliesToFile("internal/core/generated/x.go", []rule.ModuleName{"core"}) {
+	if checked.AppliesToFile("internal/core/generated/x.go", []rule.ZoneName{"core"}) {
 		t.Errorf("override exclude must narrow the pattern rule")
 	}
 	if _, ok := checked.SuppressionFor("internal/core/legacy/x.go"); !ok {
@@ -874,7 +872,7 @@ rules:
 }
 
 // TestLoadRejectsMalformedAdoption pins the errors an adopting
-// repository meets: unbound or unknown Modules, colliding Modules,
+// repository meets: unbound or unknown Zones, colliding Zones,
 // Overrides of nothing, and Rules that try to redefine a Pattern Rule.
 func TestLoadRejectsMalformedAdoption(t *testing.T) {
 	p := loadSamplePattern(t)
@@ -887,31 +885,31 @@ extends:
       adapters: internal/adapters/**
 `
 	cases := map[string]struct{ document, want string }{
-		"unbound module": {`
+		"unbound zone": {`
 extends:
   - pattern: acme/hexagonal@1.0.0
     bind:
       core: internal/core/**
-`, "unbound modules ports, adapters"},
-		"bind of an unlisted module": {bound + `      extra: internal/extra/**
-`, "bind names modules the pattern does not list: extra"},
+`, "unbound zones ports, adapters"},
+		"bind of an unlisted zone": {bound + `      extra: internal/extra/**
+`, "bind names zones the pattern does not list: extra"},
 		"pattern extended twice": {bound + `  - pattern: acme/hexagonal@1.0.0
     bind:
       core: internal/core/**
       ports: internal/ports/**
       adapters: internal/adapters/**
 `, "extended twice"},
-		"local module collides with a bound one": {bound + `modules:
+		"local zone collides with a bound one": {bound + `zones:
   core: internal/other/**
-`, `module "core" is already bound by an extended pattern`},
+`, `zone "core" is already bound by an extended pattern`},
 		"override of an undistributed rule": {bound + `rules:
   acme/hexagonal:core/missing:
     severity: warning
-`, "no extended pattern distributes rule acme/hexagonal:core/missing"},
+`, "no extended pattern or built-in rule distributes rule acme/hexagonal:core/missing"},
 		"override of an unqualified id": {bound + `rules:
   core/stdlib-only:
     severity: warning
-`, "no extended pattern distributes rule core/stdlib-only"},
+`, "no extended pattern or built-in rule distributes rule core/stdlib-only"},
 		"override with description": {bound + `rules:
   acme/hexagonal:core/stdlib-only:
     description: "rewritten"
@@ -973,7 +971,7 @@ pattern:
   namespace: acme
   name: onion
   version: 2.0.0
-modules:
+zones:
   core: "The core, again."
 rules:
   core/stdlib-only:
@@ -1022,16 +1020,16 @@ extends:
       ports: internal/ports/**
       adapters: internal/adapters/**
 `, p, other)
-	if err == nil || !strings.Contains(err.Error(), `module "core" is already declared with different paths`) {
+	if err == nil || !strings.Contains(err.Error(), `zone "core" is already declared with different paths`) {
 		t.Errorf("error = %v", err)
 	}
 }
 
-// TestLoadScopesPatternAcyclicToItsModules proves a Pattern's
-// `acyclic: {}` names the Pattern's own Modules and nothing the
+// TestLoadScopesPatternAcyclicToItsZones proves a Pattern's
+// `acyclic: {}` names the Pattern's own Zones and nothing the
 // adopting repository or a sibling Pattern declares, while the
-// repository's own `{}` stays open over every declared Module.
-func TestLoadScopesPatternAcyclicToItsModules(t *testing.T) {
+// repository's own `{}` stays open over every declared Zone.
+func TestLoadScopesPatternAcyclicToItsZones(t *testing.T) {
 	p := loadSamplePattern(t)
 	if got := ruleByID(t, mustLoad(t, `
 extends:
@@ -1040,14 +1038,14 @@ extends:
       core: internal/core/**
       ports: internal/ports/**
       adapters: internal/adapters/**
-modules:
+zones:
   source:
     paths: "internal/**"
 rules:
   repo/acyclic:
     acyclic: {}
-`, p), "acme/hexagonal:deps/acyclic").Params().(rule.AcyclicParams).Modules; !reflect.DeepEqual(got, []rule.ModuleName{"core", "ports", "adapters"}) {
-		t.Errorf("a Pattern's acyclic {} must name the Pattern's Modules in order, got %v", got)
+`, p), "acme/hexagonal:deps/acyclic").Params().(rule.AcyclicParams).Zones; !reflect.DeepEqual(got, []rule.ZoneName{"core", "ports", "adapters"}) {
+		t.Errorf("a Pattern's acyclic {} must name the Pattern's Zones in order, got %v", got)
 	}
 	if got := ruleByID(t, mustLoad(t, `
 extends:
@@ -1056,14 +1054,14 @@ extends:
       core: internal/core/**
       ports: internal/ports/**
       adapters: internal/adapters/**
-modules:
+zones:
   source:
     paths: "internal/**"
 rules:
   repo/acyclic:
     acyclic: {}
-`, p), "repo/acyclic").Params().(rule.AcyclicParams).Modules; len(got) != 0 {
-		t.Errorf("the repository's acyclic {} stays open over every declared Module, got %v", got)
+`, p), "repo/acyclic").Params().(rule.AcyclicParams).Zones; len(got) != 0 {
+		t.Errorf("the repository's acyclic {} stays open over every declared Zone, got %v", got)
 	}
 }
 
@@ -1142,12 +1140,12 @@ extends:
 	if source.calls != 1 {
 		t.Errorf("pattern sources consulted %d times, want once", source.calls)
 	}
-	if len(cfg.Rules) != 6 || len(cfg.Modules) != 3 {
-		t.Errorf("adopted %d rules and %d modules", len(cfg.Rules), len(cfg.Modules))
+	if len(cfg.Rules) != 6 || len(cfg.Zones) != 3 {
+		t.Errorf("adopted %d rules and %d zones", len(cfg.Rules), len(cfg.Zones))
 	}
 
 	bare := filepath.Join(dir, "bare.yaml")
-	if err := os.WriteFile(bare, []byte("runtime: [go]\nmodules:\n  m: m/**\n"), 0o644); err != nil {
+	if err := os.WriteFile(bare, []byte("runtime: [go]\nzones:\n  m: m/**\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	source = &countingSource{}

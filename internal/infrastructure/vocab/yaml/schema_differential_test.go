@@ -13,44 +13,62 @@ import (
 	yamlv3 "gopkg.in/yaml.v3"
 
 	"github.com/wixregiga/arclint/internal/domain/vocab"
-	yamlvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/yaml"
 )
 
-// multiContextExample is a representative contexts-shaped document with
-// two bounded contexts, nested sections, and one relation.
+// multiContextExample is a representative domain file: two bounded
+// contexts, every section kind, and one relation.
 const multiContextExample = `version: 1
+project: shop
+description: Selling products to customers.
 
 contexts:
-  - name: Ordering
-    entities:
-      - name: Order
+  ordering:
+    definition: Taking and fulfilling customer orders.
+    aggregates:
+      Order:
         definition: A customer's request to purchase products.
-        aliases:
-          - Purchase Order
-        aggregate: true
-      - name: Customer
-        definition: A person or organization that places Orders.
+        identity: OrderID
+        aliases: [Purchase Order]
+        entities:
+          OrderLine:
+            definition: One product and quantity within an Order.
+        invariants:
+          names-its-customer: Every Order identifies its Customer.
+        assertions:
+          lines-present:
+            on: Place
+            statement: An Order is placed with at least one line.
+        repository: OrderRepository
     value_objects:
-      - name: OrderID
-        definition: The stable identity of an Order.
-      - name: Money
+      Money:
         definition: A monetary amount expressed in a particular currency.
-    invariants:
-      - statement: Every Order must identify its Customer.
-        owner: Order
+        invariants:
+          never-negative: Money is never negative.
     events:
-      - name: OrderPlaced
+      OrderPlaced:
         definition: An Order has been accepted for processing.
+        raised_by: Order
+    services:
+      Pricing:
+        definition: Prices an Order from the catalog.
+    specifications:
+      LargeOrder:
+        definition: An Order above the wholesale threshold.
+    questions:
+      partial-shipment: Can an Order ship in parts?
 
-  - name: Billing
-    entities:
-      - name: Invoice
+  billing:
+    definition: Invoicing accepted orders.
+    aggregates:
+      Invoice:
         definition: A bill issued for an accepted Order.
+        identity: InvoiceID
 
 relations:
-  - from: Ordering
-    to: Billing
+  - from: ordering
+    to: billing
     kind: customer_supplier
+    description: Billing invoices what ordering accepts.
 `
 
 // TestDomainSchemaCompilesAsDraft202012 asserts vocab.Schema() is a
@@ -72,8 +90,8 @@ func repoRoot(t *testing.T) string {
 }
 
 // TestProjectSchemaMatchesDomain is the drift half of the Ubiquitous
-// Language Schema invariant from the project's side: the dogfood copy
-// under .arclint/schemas (what the domain file's modeline points at) is
+// Language Schema invariant from the project's side: the copy under
+// .arclint/schemas (what the domain file's modeline points at) is
 // byte-for-byte what vocab.Schema() produces.
 func TestProjectSchemaMatchesDomain(t *testing.T) {
 	want, err := vocab.Schema()
@@ -162,19 +180,11 @@ func jsonify(value any) any {
 }
 
 // TestMultiContextExampleLoadsAndValidates proves the representative
-// multi-context document both loads through Repository.RecordedLanguage
-// and validates against vocab.Schema().
+// document both loads through Repository.RecordedLanguage and
+// validates against vocab.Schema().
 func TestMultiContextExampleLoadsAndValidates(t *testing.T) {
 	schema := compileDomainSchema(t)
-	dir := t.TempDir()
-	path := filepath.Join(dir, vocab.UbiquitousLanguageFileName)
-	if err := os.WriteFile(path, []byte(multiContextExample), 0o600); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-	repo, err := yamlvocab.NewRepository(dir)
-	if err != nil {
-		t.Fatalf("NewRepository: %v", err)
-	}
+	repo, _ := repository(t, multiContextExample)
 	lang, found, err := repo.RecordedLanguage()
 	if err != nil {
 		t.Fatalf("RecordedLanguage: %v", err)
@@ -182,186 +192,139 @@ func TestMultiContextExampleLoadsAndValidates(t *testing.T) {
 	if !found {
 		t.Fatal("found = false")
 	}
-	counts := lang.Counts()
-	if counts.Contexts != 2 || counts.Entities != 3 || counts.Aggregates != 1 ||
-		counts.ValueObjects != 2 || counts.Invariants != 1 || counts.Events != 1 ||
-		counts.Relations != 1 {
-		t.Fatalf("counts = %+v", counts)
+	want := vocab.Counts{
+		Contexts: 2, Aggregates: 2, Entities: 1, ValueObjects: 1, Invariants: 2, Assertions: 1,
+		Specifications: 1, Events: 1, Services: 1, Questions: 1, Relations: 1,
+	}
+	if got := lang.Counts(); got != want {
+		t.Fatalf("counts = %+v, want %+v", got, want)
 	}
 	if err := validateAgainstSchema(t, schema, []byte(multiContextExample)); err != nil {
-		t.Fatalf("schema rejected multi-context example: %v", err)
+		t.Fatalf("schema rejected the example: %v", err)
 	}
 }
 
 // TestSchemaAgreesWithLoader is the agreement half of the Ubiquitous
 // Language Schema invariant: for every covered case the strict loader
 // and JSON-Schema validation of the same document reach the same
-// verdict, and that verdict is the expected one. Duplicate names and
-// relation-to-undeclared-context are loader-only structural invariants
-// (JSON Schema cannot express them cheaply), so those cases only
-// require the loader to reject. Missing definition is schema-only:
-// the litmus schema requires definition text, while the domain/loader
-// allow empty definition so the terms-carry-definitions showcase can
-// observe incomplete terms through ctx.domain().
+// verdict, and that verdict is the expected one. Cross-entry
+// invariants (a name recorded twice, a relation naming an undeclared
+// context, one pair related twice, an event raised by an unrecorded
+// aggregate) are loader-only: JSON Schema cannot express them, so
+// those cases only require the loader to reject.
 func TestSchemaAgreesWithLoader(t *testing.T) {
 	schema := compileDomainSchema(t)
+	const minimal = "version: 1\nproject: shop\ncontexts:\n  ordering:\n    definition: Taking orders.\n"
 
 	cases := []struct {
-		name             string
-		document         string
-		accepted         bool
-		loaderOnlyFail   bool
-		schemaOnlyReject bool
+		name       string
+		document   string
+		accepted   bool
+		loaderOnly bool
 	}{
-		{"multi-context example", multiContextExample, true, false, false},
-		{"version 2", "version: 2\ncontexts: []\n", false, false, false},
-		{"missing version", "contexts:\n  - name: Ordering\n", false, false, false},
+		{"multi-context example", multiContextExample, true, false},
+		{"minimal context", minimal, true, false},
+		{"version 2", "version: 2\nproject: shop\ncontexts:\n  ordering:\n    definition: d\n", false, false},
+		{"missing version", "project: shop\ncontexts:\n  ordering:\n    definition: d\n", false, false},
+		{"missing project", "version: 1\ncontexts:\n  ordering:\n    definition: d\n", false, false},
+		{"missing contexts", "version: 1\nproject: shop\n", false, false},
+		{"unknown top-level key", minimal + "extra: true\n", false, false},
+		{"contexts as a list", "version: 1\nproject: shop\ncontexts:\n  - name: ordering\n", false, false},
+		{"context name not lowercase", "version: 1\nproject: shop\ncontexts:\n  Ordering:\n    definition: d\n", false, false},
+		{"context without definition", "version: 1\nproject: shop\ncontexts:\n  ordering: {}\n", false, false},
+		{"unknown key on a context", minimal + "    entities: {}\n", false, false},
+		{"section without a value", minimal + "    aggregates:\n", false, false},
+		{"zones is not a context key", minimal + "    zones: [ordering]\n", false, false},
 		{
-			"unknown top-level key", `
-version: 1
-extra: true
-contexts:
-  - name: Ordering
-`, false, false, false,
+			"aggregate without identity", minimal +
+				"    aggregates:\n      Order:\n        definition: A purchase.\n", false, false,
 		},
 		{
-			"aggregate on value_objects", `
-version: 1
-contexts:
-  - name: Ordering
-    value_objects:
-      - name: Money
-        definition: A monetary amount.
-        aggregate: true
-`, false, false, false,
+			"aggregate with a definition and identity", minimal +
+				"    aggregates:\n      Order:\n        definition: A purchase.\n        identity: OrderID\n", true, false,
 		},
 		{
-			"missing definition", `
-version: 1
-contexts:
-  - name: Ordering
-    entities:
-      - name: Order
-`, false, false, true,
+			"unknown key on an aggregate", minimal +
+				"    aggregates:\n      Order:\n        definition: A purchase.\n        identity: OrderID\n        owner: x\n", false, false,
 		},
 		{
-			"missing owner on invariant", `
-version: 1
-contexts:
-  - name: Ordering
-    entities:
-      - name: Order
-        definition: A customer's request.
-    invariants:
-      - statement: Every Order identifies its Customer.
-`, false, false, false,
+			"entity without definition", minimal +
+				"    aggregates:\n      Order:\n        definition: A purchase.\n        identity: OrderID\n        entities:\n          Line: {}\n", false, false,
 		},
 		{
-			"bad relation kind", `
-version: 1
-contexts:
-  - name: Ordering
-  - name: Billing
-relations:
-  - from: Ordering
-    to: Billing
-    kind: not_a_kind
-`, false, false, false,
+			"invariant key not kebab", minimal +
+				"    aggregates:\n      Order:\n        definition: A purchase.\n        identity: OrderID\n        invariants:\n          Total_Sum: The total is the sum.\n", false, false,
 		},
 		{
-			"empty name", `
-version: 1
-contexts:
-  - name: Ordering
-    entities:
-      - name: ""
-        definition: x
-`, false, false, false,
+			"invariant as a mapping", minimal +
+				"    aggregates:\n      Order:\n        definition: A purchase.\n        identity: OrderID\n        invariants:\n          total-sum:\n            statement: The total is the sum.\n", false, false,
 		},
 		{
-			"duplicate context name", `
-version: 1
-contexts:
-  - name: Ordering
-  - name: Ordering
-`, false, true, false,
+			"assertion without on", minimal +
+				"    aggregates:\n      Order:\n        definition: A purchase.\n        identity: OrderID\n        assertions:\n          priced:\n            statement: Every line is priced.\n", false, false,
 		},
 		{
-			"relation to undeclared context", `
-version: 1
-contexts:
-  - name: Ordering
-relations:
-  - from: Ordering
-    to: Billing
-    kind: customer_supplier
-`, false, true, false,
+			"value object with identity", minimal +
+				"    value_objects:\n      Money:\n        definition: An amount.\n        identity: MoneyID\n", false, false,
+		},
+		{"question as a mapping", minimal + "    questions:\n      open:\n        text: Why?\n", false, false},
+		{
+			"bad relation kind", minimal + "  billing:\n    definition: Invoicing.\nrelations:\n  - from: ordering\n    to: billing\n    kind: not_a_kind\n",
+			false, false,
 		},
 		{
-			"duplicate alias", `
-version: 1
-contexts:
-  - name: Ordering
-    entities:
-      - name: Order
-        definition: A customer's request to purchase products.
-        aliases:
-          - Purchase Order
-          - Purchase Order
-`, false, false, false,
+			"relation without kind", minimal + "  billing:\n    definition: Invoicing.\nrelations:\n  - from: ordering\n    to: billing\n",
+			false, false,
+		},
+		{"relations as a mapping", minimal + "relations:\n  ordering: billing\n", false, false},
+		{
+			"same relation twice", minimal + "  billing:\n    definition: Invoicing.\nrelations:\n" +
+				"  - from: ordering\n    to: billing\n    kind: conformist\n" +
+				"  - from: ordering\n    to: billing\n    kind: conformist\n",
+			false, false,
 		},
 		{
-			"duplicate relation", `
-version: 1
-contexts:
-  - name: Ordering
-  - name: Billing
-relations:
-  - from: Ordering
-    to: Billing
-    kind: customer_supplier
-  - from: Ordering
-    to: Billing
-    kind: customer_supplier
-`, false, false, false,
+			"duplicate alias", minimal +
+				"    aggregates:\n      Order:\n        definition: A purchase.\n        identity: OrderID\n        aliases: [Purchase Order, Purchase Order]\n",
+			false, false,
 		},
 		{
-			"minimal context", `
-version: 1
-contexts:
-  - name: Ordering
-`, true, false, false,
+			"same pair related with two kinds", minimal + "  billing:\n    definition: Invoicing.\nrelations:\n" +
+				"  - from: ordering\n    to: billing\n    kind: conformist\n" +
+				"  - from: ordering\n    to: billing\n    kind: customer_supplier\n",
+			false, true,
+		},
+		{
+			"relation to undeclared context", minimal + "relations:\n  - from: ordering\n    to: billing\n    kind: customer_supplier\n",
+			false, true,
+		},
+		{
+			"name recorded twice in a context", minimal +
+				"    aggregates:\n      Order:\n        definition: A purchase.\n        identity: OrderID\n" +
+				"    value_objects:\n      Order:\n        definition: An amount.\n",
+			false, true,
+		},
+		{
+			"event raised by an unrecorded aggregate", minimal +
+				"    events:\n      OrderPlaced:\n        definition: An order was placed.\n        raised_by: Order\n",
+			false, true,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
-			path := filepath.Join(dir, vocab.UbiquitousLanguageFileName)
-			if err := os.WriteFile(path, []byte(tc.document), 0o600); err != nil {
-				t.Fatalf("WriteFile: %v", err)
-			}
-			repo, err := yamlvocab.NewRepository(dir)
-			if err != nil {
-				t.Fatalf("NewRepository: %v", err)
-			}
+			repo, _ := repository(t, tc.document)
 			_, _, loaderErr := repo.RecordedLanguage()
 			schemaErr := validateAgainstSchema(t, schema, []byte(tc.document))
 			loaderAccepts := loaderErr == nil
 			schemaAccepts := schemaErr == nil
 
-			if tc.loaderOnlyFail {
+			if tc.loaderOnly {
 				if loaderAccepts {
-					t.Fatalf("loader accepted loader-only-fail document")
+					t.Fatalf("loader accepted a loader-only document")
 				}
-				return
-			}
-			if tc.schemaOnlyReject {
-				if schemaAccepts {
-					t.Fatalf("schema accepted schema-only-reject document")
-				}
-				if !loaderAccepts {
-					t.Fatalf("loader rejected schema-only-reject document: %v", loaderErr)
+				if !schemaAccepts {
+					t.Fatalf("schema rejected a loader-only document; the case belongs with the agreeing ones: %v", schemaErr)
 				}
 				return
 			}

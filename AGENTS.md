@@ -8,15 +8,13 @@ it drifts). Add hand-written guidance outside the markers.
 <!-- arclint:agents:begin -->
 ## Architecture contracts (arclint)
 
-Enforced from rules.arclint.yaml: 32 rules over languages [go, typescript].
-
-Extended Patterns: `arclint/domain-model@0.1.0` (3 rules, ids qualified `arclint/domain-model:`). A Pattern Rule is listed and reported under its qualified id; change it through an Override under that id in rules.arclint.yaml (`arclint rules <id>` prints it), never by editing the Pattern.
+Enforced from rules.arclint.yaml: 49 rules over languages [go, typescript].
 
 ### Ask arclint first
 
 IMPORTANT: you MUST ask arclint before reading around. The architecture, the rules, and the recorded domain are queryable; run `arclint context` on the paths you expect to touch BEFORE opening source files, and do NOT learn the architecture by reading file after file or guessing from folder names.
 
-- `arclint context [paths...]`: run before editing under any path: the owning modules, their import contracts, and the recorded domain in one answer (`--module <names>`, `--format json`)
+- `arclint context [paths...]`: run before editing under any path: the owning zones, their import contracts, and the recorded domain in one answer (`--zone <names>`, `--format json`)
 - `arclint domain`: the ubiquitous language: contexts, aggregates, value objects, invariants, relations
 - `arclint rules [selector]`: every configured rule with its claim; one match prints the complete rule
 - `arclint check .`: evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings
@@ -28,26 +26,24 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 
 ### The recorded domain
 
-4 contexts, 1 aggregates, 25 invariants (domain.arclint.yaml).
+5 contexts, 1 aggregates, 27 value objects, 25 invariants (domain.arclint.yaml).
 
-- **rule**: Rule [aggregate], Module, Pattern; value objects RuleID, ModuleName, Claim, Assertion, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec
+- **vocabulary**
+- **rule**: aggregates Rule (Zone, Pattern); value objects RuleID, ZoneName, Claim, Assertion, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec
 - **adoption**: value objects Binding, Override, Disablement, Exclusion, Suppression, Installation
 - **conformance**: value objects Violation
 - **distribution**: value objects Catalog, Digest, Index, Manifest, PatternFile, PatternSource, Registry, Selection, VendoredPattern
 
-Relations: rule → conformance (conformist); rule → adoption (conformist); rule → distribution (conformist); distribution → adoption (conformist). Full text: `arclint domain`.
+Relations: vocabulary → rule (conformist); vocabulary → conformance (conformist); rule → conformance (conformist); rule → adoption (conformist); rule → distribution (conformist); distribution → adoption (conformist). Full text: `arclint domain`.
 
 ### Changing the language
 
 If your change speaks about something new, or changes what a recorded term means, record it in `domain.arclint.yaml` before writing code. Invoke the domain-librarian skill for that work: it decides how a concept is classified, what evidence a recording needs, and when an open question is recorded instead of a guess. If your harness does not have the skill, `arclint agents skill` writes it to `.agents/skills/domain-librarian/`.
 
-### Modules and their rules
+### Zones and their rules
 
-- **vocabulary**: The project's recorded Ubiquitous Language vocabulary. (paths domain.arclint.yaml)
-  - arclint/domain-model:vocabulary/terms-carry-definitions: Every recorded term carries a definition.
-  - arclint/domain-model:vocabulary/invariants-name-recorded-owners: Every recorded invariant names a recorded term of its own context as its owner.
 - **domain**: Rule aggregate and domain values; stdlib-only. (paths internal/domain/**)
-  - imports no other module; external imports forbidden
+  - imports no other zone; external imports forbidden
   - rule-is-sole-aggregate: Rule is the only aggregate: it has a root, and no other aggregate root exists.
   - no-panic: Domain code never panics; a representation that cannot become a value is an error.
   - files-speak-the-vocabulary: Domain files are named for the concept they hold, never for a generic container.
@@ -81,25 +77,45 @@ If your change speaks about something new, or changes what a recorded term means
   - main-present: The arclint binary has a main.
 - **source**: Common source invariants for internal packages. (paths internal/**)
   - snake-case: Go file names use snake_case.
+- **vocabulary**: The vocabulary bounded context: the recorded Ubiquitous Language and the meta-model it is checked against. (paths internal/domain/vocab/**)
 - **rule**: The rule bounded context: the Rule aggregate's home. (paths internal/domain/rule/**)
 - **conformance**: The conformance bounded context, downstream conformist of rule. (paths internal/domain/conformance/**)
+- **distribution**: The distribution bounded context: Patterns travelling between repositories. (paths internal/domain/distribution/**)
+
+### Built-in rules
+
+20 rules built in from the DDD meta-model judge the recorded domain against the code; no Pattern distributes them. Change one through an Override under its id in rules.arclint.yaml (severity, or disable with a reason).
+
+- ubiquitous_language/terms-declared-in-code: Every recorded member entity, value object, and identity names one type declaration in the context's code, spelled with the recorded name in the language's type case (in Go, a name the package's own name completes, so rule.ID spells RuleID); a name no declaration spells, or one that two declarations spell with nothing to choose between them, is a finding. Aggregates, events, services, specifications, repositories, and factories state the same for themselves.
+- bounded_context/code-held-by-one-context: A file of a bounded context's code belongs to no other context; two contexts hold the same code only under a recorded shared_kernel relation between them, because a boundary two models straddle is not a boundary.
+- bounded_context/isolated: Code of one bounded context imports code of another only along a recorded relation between the two; an import between contexts the context map does not relate is a finding.
+- context_relation/imports-follow-influence: Under a one-way kind (customer_supplier, conformist, anticorruption_layer, open_host_service, published_language) only the downstream context's code imports the upstream's; under partnership or shared_kernel both may import each other; under separate_ways neither imports the other.
+- domain_isolation/model-imports-nothing-outside-itself: Code of a bounded context imports no code of a declared Zone that no context holds; whatever the architecture, dependencies run toward the model and never out of it. Without a declared Zone there is no outside to judge, and the invariant does not apply.
+- value_object/constructed-through-one-door: A value object with a recorded invariant declares a constructor: a function of its module that returns it, or a constructor or __init__ of its class, or a factory method on it named create, from, of, parse, new, or build; the invariant is enforced there, so a value that violates it never exists.
+- value_object/no-setters: A value object declares no method whose name begins with set; nothing changes a value after construction.
+- invariant/enforced-at-every-mutation: Every constructor and every command of the root calls the ensure method of the aggregate's invariant, so the invariant is evaluated at the completion of every state-mutating operation and a violation fails the operation; a root with no constructor has no door at which to enforce it.
+- assertion/checked-by-its-operation: The root declares both the operation and the checking method (assert followed by the key in the language's method case), and the operation calls the checking method.
+- specification/satisfaction-method: A specification is a declared type carrying a satisfaction method (SatisfiedBy, satisfiedBy, or satisfied_by).
+- aggregate/protects-an-invariant (warning): An aggregate records at least one invariant; a boundary drawn around nothing that must stay consistent is not yet justified, and the finding asks whether the entry is an aggregate or a value.
+- aggregate/root-declared: The root is one declared type spelled with the aggregate's name in the language's type case, found in the context's code; a type that can carry behaviour (a struct or named type in Go, a class in TypeScript and Python) is the root ahead of an interface or alias of the same name, two such declarations with nothing to choose between them are a finding, and none is a finding at the recording.
+- aggregate/invariants-enforced-by-root: For every recorded invariant of the aggregate the root declares the method that enforces it, ensure followed by the key in the language's method case (EnsureLinesFrozen, ensureLinesFrozen, ensure_lines_frozen); the enforcement lives on the root and nowhere else.
+- aggregate/commands-named-for-behavior (warning): The root declares no method whose name begins with set; a change of state is a command named for what it does in the ubiquitous language, and a root made of setters is an anemic model whose rules live somewhere else.
+- aggregate/references-by-identity: No constructor or command of one aggregate's root takes or returns another aggregate's root; what one aggregate needs of another it receives as an identity or a value. Field types are not yet observed, so a root held in a field is not seen, and an import alias hides a root of another package.
+- domain_event/declared: A recorded event is a declared type spelled with the event's name in the language's type case.
+- domain_event/no-setters: An event declares no method whose name begins with set; a record of the past is not edited.
+- domain_service/declared: A recorded service is a declared type spelled with the service's name in the language's type case.
+- repository/declared: A recorded repository is a declared type (interface, or class in a language without interfaces) spelled with the recorded name in the language's type case, declared in the context's code.
+- factory/declared: A recorded factory is a declared type or function spelled with the recorded name in the language's case, declared in the context's code.
 
 ### Repository-wide rules
 
-- arclint/domain-model:contexts/respect-relations (warning): Imports between context-named Modules respect the recorded context-map relations.
 - dependencies/application-inward: Dependencies point inward: application, then domain.
 - infrastructure/composition-only: Only composition imports infrastructure.
 - delivery/cobra-factory-only: Only the CLI factory imports the Cobra adapter.
 - delivery/plain-report-factory-only: Only the report factory imports the plain renderer.
 - delivery/json-report-factory-only: Only the report factory imports the JSON renderer.
 - delivery/lipgloss-report-factory-only: Only the report factory imports the Lipgloss renderer.
-- dependencies/acyclic: Dependencies among the top-level Modules contain no cycle.
-
-### Extension rules
-
-`arclint/domain-model@0.1.0/extensions/domain_model_invariants_name_recorded_owners.ts` default-exports the rule definitions: domain-model/invariants-name-recorded-owners.
-`arclint/domain-model@0.1.0/extensions/domain_model_require_defined_terms.ts` default-exports the rule definitions: domain-model/require-defined-terms.
-`arclint/domain-model@0.1.0/extensions/domain_model_respect_context_relations.ts` default-exports the rule definitions: domain-model/respect-context-relations.
+- dependencies/acyclic: Dependencies among the top-level Zones contain no cycle.
 <!-- arclint:agents:end -->
 
 ## Finish gate

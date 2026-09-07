@@ -4,23 +4,23 @@ import "fmt"
 
 // Installation is the decision to extend one Pattern: the extends entry
 // rules.arclint.yaml records, naming the PatternReference and carrying a
-// Binding for every PatternModule that has paths here. A Module left
+// Binding for every PatternZone that has paths here. A Zone left
 // unbound is listed so the adopter is told what still needs a path.
 type Installation struct {
 	ref      PatternReference
-	modules  []PatternModule
-	bindings map[ModuleName]Binding
+	zones    []PatternZone
+	bindings map[ZoneName]Binding
 }
 
 // NewInstallation drafts the Installation of a Pattern from the paths
-// it suggests: every Module with suggested paths is bound to exactly
-// those paths, every other Module is reported unbound.
+// it suggests: every Zone with suggested paths is bound to exactly
+// those paths, every other Zone is reported unbound.
 func NewInstallation(p Pattern) (Installation, error) {
 	if p.Reference().IsZero() {
 		return Installation{}, fmt.Errorf("installation: unconstructed pattern")
 	}
-	inst := Installation{ref: p.Reference(), modules: p.Modules(), bindings: map[ModuleName]Binding{}}
-	for _, m := range inst.modules {
+	inst := Installation{ref: p.Reference(), zones: p.Zones(), bindings: map[ZoneName]Binding{}}
+	for _, m := range inst.zones {
 		paths := m.SuggestedPaths()
 		if len(paths) == 0 {
 			continue
@@ -34,21 +34,21 @@ func NewInstallation(p Pattern) (Installation, error) {
 	return inst, nil
 }
 
-// Rebind binds one Pattern Module to the given paths, replacing any
-// drafted Binding: the adopter's own paths for a Module win over the
+// Rebind binds one Pattern Zone to the given paths, replacing any
+// drafted Binding: the adopter's own paths for a Zone win over the
 // Pattern's suggestion.
-func (i Installation) Rebind(name ModuleName, paths []Glob) (Installation, error) {
+func (i Installation) Rebind(name ZoneName, paths []Glob) (Installation, error) {
 	if i.IsZero() {
 		return Installation{}, fmt.Errorf("installation: unconstructed")
 	}
-	if _, ok := i.module(name); !ok {
-		return Installation{}, fmt.Errorf("installation of %s: the pattern lists no module %q", i.ref, name)
+	if _, ok := i.zone(name); !ok {
+		return Installation{}, fmt.Errorf("installation of %s: the pattern lists no zone %q", i.ref, name)
 	}
 	b, err := NewBinding(name, paths)
 	if err != nil {
 		return Installation{}, fmt.Errorf("installation of %s: %v", i.ref, err)
 	}
-	out := Installation{ref: i.ref, modules: i.modules, bindings: make(map[ModuleName]Binding, len(i.bindings)+1)}
+	out := Installation{ref: i.ref, zones: i.zones, bindings: make(map[ZoneName]Binding, len(i.bindings)+1)}
 	for k, v := range i.bindings {
 		out.bindings[k] = v
 	}
@@ -59,21 +59,21 @@ func (i Installation) Rebind(name ModuleName, paths []Glob) (Installation, error
 // Reference is the Pattern the Installation extends.
 func (i Installation) Reference() PatternReference { return i.ref }
 
-// Modules lists every Pattern Module in Pattern order, bound or not.
-func (i Installation) Modules() []PatternModule {
-	return append([]PatternModule(nil), i.modules...)
+// Zones lists every Pattern Zone in Pattern order, bound or not.
+func (i Installation) Zones() []PatternZone {
+	return append([]PatternZone(nil), i.zones...)
 }
 
-// Binding returns the Binding of one Pattern Module, if it has one.
-func (i Installation) Binding(name ModuleName) (Binding, bool) {
+// Binding returns the Binding of one Pattern Zone, if it has one.
+func (i Installation) Binding(name ZoneName) (Binding, bool) {
 	b, ok := i.bindings[name]
 	return b, ok
 }
 
-// Bindings are the Module bindings, in Pattern Module order.
+// Bindings are the Zone bindings, in Pattern Zone order.
 func (i Installation) Bindings() []Binding {
 	out := make([]Binding, 0, len(i.bindings))
-	for _, m := range i.modules {
+	for _, m := range i.zones {
 		if b, ok := i.bindings[m.Name()]; ok {
 			out = append(out, b)
 		}
@@ -81,11 +81,11 @@ func (i Installation) Bindings() []Binding {
 	return out
 }
 
-// Unbound lists the Pattern Modules that still have no paths, in
-// Pattern Module order.
-func (i Installation) Unbound() []PatternModule {
-	var out []PatternModule
-	for _, m := range i.modules {
+// Unbound lists the Pattern Zones that still have no paths, in
+// Pattern Zone order.
+func (i Installation) Unbound() []PatternZone {
+	var out []PatternZone
+	for _, m := range i.zones {
 		if _, ok := i.bindings[m.Name()]; !ok {
 			out = append(out, m)
 		}
@@ -96,11 +96,11 @@ func (i Installation) Unbound() []PatternModule {
 // IsZero reports an unconstructed value.
 func (i Installation) IsZero() bool { return i.ref.IsZero() }
 
-func (i Installation) module(name ModuleName) (PatternModule, bool) {
-	for _, m := range i.modules {
+func (i Installation) zone(name ZoneName) (PatternZone, bool) {
+	for _, m := range i.zones {
 		if m.Name() == name {
 			return m, true
 		}
 	}
-	return PatternModule{}, false
+	return PatternZone{}, false
 }

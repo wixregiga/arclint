@@ -81,7 +81,7 @@ func activeVerticalIDs(t *testing.T, root string) (code int, ids []string, messa
 
 // TestVerticalInitExtendsThePattern proves init --pattern writes an
 // adopting ruleset: the Pattern is extended by exact reference, every
-// Module it lists is bound, and no extension source is copied into the
+// Zone it lists is bound, and no extension source is copied into the
 // repository because the Pattern supplies its own extensions in memory.
 func TestVerticalInitExtendsThePattern(t *testing.T) {
 	root := initVertical(t)
@@ -244,7 +244,7 @@ func TestPatternExtensionsSuppliedOnlyWhenExtended(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "go.mod", "module fixture\n\ngo 1.22\n")
 	write(t, root, "rules.arclint.yaml", `runtime: [go]
-modules:
+zones:
   application: internal/*/application/**
 rules:
   application/usecase-contract:

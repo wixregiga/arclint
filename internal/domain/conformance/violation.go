@@ -100,8 +100,8 @@ func NewViolation(spec ViolationSpec) (Violation, error) {
 	}
 	path := spec.Path
 	if path == "" {
-		if spec.Subject.Kind() == rule.SubjectModule {
-			return fail(fmt.Errorf("module-subject violation requires an anchor path"))
+		if !spec.Subject.IsPath() {
+			return fail(fmt.Errorf("%s-subject violation requires an anchor path", spec.Subject.Kind()))
 		}
 		path = spec.Subject.Identity()
 	}

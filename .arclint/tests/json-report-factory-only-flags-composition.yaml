@@ -18,4 +18,4 @@ expect:
   - kind: violation
     path: cmd/arclint/main.go
     line: 3
-    message: "Module \"json_report\" is protected (importable only by [\"report_factory\"]); import of \"fixture/internal/delivery/cli/adapters/report/json\" from Module(s) [\"composition\"]"
+    message: "Zone \"json_report\" is protected (importable only by [\"report_factory\"]); import of \"fixture/internal/delivery/cli/adapters/report/json\" from Zone(s) [\"composition\"]"

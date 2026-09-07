@@ -59,7 +59,7 @@ func TestAgentsCommandSurfaceMatchesCLI(t *testing.T) {
 // TestAgentsBlockForBoxoffice generates the block for the boxoffice
 // proving ground and verifies it as a superset of the hand-modeled
 // spec: every section heading of the hand block, the imperative
-// ask-first prohibition, every module, and every non-consumes rule, with
+// ask-first prohibition, every zone, and every non-consumes rule, with
 // expectations derived from the binary's own query commands, never
 // frozen fixtures.
 func TestAgentsBlockForBoxoffice(t *testing.T) {
@@ -119,17 +119,17 @@ func TestAgentsBlockForBoxoffice(t *testing.T) {
 		t.Fatalf("context exit %d\nstderr: %s", code, stderr)
 	}
 	var ctx struct {
-		Modules []struct{ Name string }
+		Zones []struct{ Name string }
 	}
 	if err := json.Unmarshal([]byte(stdout), &ctx); err != nil {
 		t.Fatalf("context json: %v\n%s", err, stdout)
 	}
-	if len(ctx.Modules) == 0 {
-		t.Fatalf("context reports no modules")
+	if len(ctx.Zones) == 0 {
+		t.Fatalf("context reports no zones")
 	}
-	for _, m := range ctx.Modules {
+	for _, m := range ctx.Zones {
 		if !strings.Contains(block, "- **"+m.Name+"**") {
-			t.Errorf("generated block lacks module %q", m.Name)
+			t.Errorf("generated block lacks zone %q", m.Name)
 		}
 	}
 }

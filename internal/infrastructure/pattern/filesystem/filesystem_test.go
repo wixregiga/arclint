@@ -16,11 +16,11 @@ pattern:
   name: sample
   version: 1.0.0
   coverage: [go]
-modules:
+zones:
   core: "The core of the sample."
 rules:
   core/stdlib-only:
-    description: "The core imports no other Module and no third-party package."
+    description: "The core imports no other Zone and no third-party package."
     on: core
     imports:
       internal: []
@@ -136,7 +136,7 @@ func TestAvailableAbsenceAndLayout(t *testing.T) {
 	}
 
 	headerless := t.TempDir()
-	writePackage(t, headerless, "acme", "broken", "modules:\n  core: \"core/**\"\n", nil)
+	writePackage(t, headerless, "acme", "broken", "zones:\n  core: \"core/**\"\n", nil)
 	source, err = filesystempattern.NewSource(headerless)
 	if err != nil {
 		t.Fatalf("NewSource: %v", err)

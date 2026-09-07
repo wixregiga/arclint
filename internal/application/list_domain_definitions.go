@@ -62,17 +62,10 @@ func (uc ListDomainDefinitions) Execute(listing, context string) (DomainListing,
 	}
 
 	if out.Context != "" {
-		// Reject unknown context names as usage so callers can distinguish
-		// "empty context" from "typo".
-		var known bool
-		for _, ctx := range lang.ListContexts() {
-			if ctx.Name == out.Context {
-				known = true
-				break
-			}
-		}
-		if !known {
-			return DomainListing{}, fmt.Errorf("%w: unknown context %q", ErrDomainUsage, out.Context)
+		// A context nobody recorded is a typo, told apart from a
+		// recorded context that lists nothing.
+		if _, ok := lang.Context(out.Context); !ok {
+			return DomainListing{}, fmt.Errorf("%w: unknown context %q; recorded: %s", ErrDomainUsage, out.Context, strings.Join(lang.ContextNames(), ", "))
 		}
 	}
 

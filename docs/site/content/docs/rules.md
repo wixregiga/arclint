@@ -12,20 +12,21 @@ detail output.
 ## The shape of a Rule
 
 `rules:` is a map keyed by Rule ID. Every entry carries exactly one
-assertion key, and the assertion key decides the Rule Type:
+assertion key, and the assertion key decides the Rule Type; an entry
+with no assertion key is an Override of a Pattern rule or of a
+[built-in rule](/docs/contracts/), keyed by that rule's id:
 
 | assertion key | Rule Type | judges |
 |---|---|---|
-| `imports` | consumes | the Modules under `on` |
-| `structure` | structure | the Modules under `on` |
-| `naming` | naming | the Modules under `on`, narrowed by `files` |
-| `content` | content | the Modules under `on` or the repository, narrowed by `files` |
-| `invariants` | invariants | the Modules under `on` |
-| `uses` (+ `with`) | extension | the Modules under `on` or the repository, narrowed by `files` |
-| `imported_by` | protected | the one Module under `on` |
-| `layers` | layers | the repository (the key names its Modules) |
+| `imports` | consumes | the Zones under `on` |
+| `structure` | structure | the Zones under `on` |
+| `naming` | naming | the Zones under `on`, narrowed by `files` |
+| `content` | content | the Zones under `on` or the repository, narrowed by `files` |
+| `uses` (+ `with`) | extension | the Zones under `on` or the repository, narrowed by `files` |
+| `imported_by` | protected | the one Zone under `on` |
+| `layers` | layers | the repository (the key names its Zones) |
 | `independent` | independence | the repository (the key names its folders) |
-| `acyclic` | acyclic | the repository (the key names its Modules) |
+| `acyclic` | acyclic | the repository (the key names its Zones) |
 
 The common keys beside the assertion:
 
@@ -33,9 +34,9 @@ The common keys beside the assertion:
 |---|---|
 | `description` | the Claim: the architectural proposition the Rule states, printed by `arclint rules`, `arclint context`, and `AGENTS.md` (derived from the assertion when absent) |
 | `severity` | `error` (default), `warning`, or `info`; independent from Assurance |
-| `on` | one Module name or a list; required, optional, or forbidden per the table above |
+| `on` | one Zone name or a list; required, optional, or forbidden per the table above |
 | `files` | one glob or a list narrowing the judged files; accepted by naming, content, and uses only |
-| `exclude` | `{paths, modules, reason}`: files the Rule does not judge |
+| `exclude` | `{paths, zones, reason}`: files the Rule does not judge |
 | `suppress` | `{paths, reason}`: files whose findings are kept but not active |
 
 A Rule ID is `LOCAL` or `NAMESPACE/NAME:LOCAL`, where the local part is
@@ -46,24 +47,24 @@ two Patterns may distribute the same local ID without colliding. An
 entry with no assertion key is an Override of a Pattern Rule; see
 [Patterns](/docs/patterns/).
 
-## modules
+## zones
 
 Name the parts of your repository; Rules refer to these names.
 
-- where: top-level `modules:`
+- where: top-level `zones:`
 
-A Module is a named set of files selected by path globs. A glob matches
+A Zone is a named set of files selected by path globs. A glob matches
 files directly, and a glob naming a directory owns the whole subtree.
-A Module is logical: its globs may span many roots, and `*` in a
+A Zone is logical: its globs may span many roots, and `*` in a
 middle segment selects the same layer inside every slice of a
-vertically sliced tree. Overlapping Modules are legal: a file may
+vertically sliced tree. Overlapping Zones are legal: a file may
 belong to several at once. Three spellings are accepted: one glob, a
 list of globs, or an object with `paths` and `description`. The
 description is what `arclint context` and the generated `AGENTS.md` say
-about the Module, so give real Modules one.
+about the Zone, so give real Zones one.
 
 ```yaml
-modules:
+zones:
   cmd: "cmd/**"
   toolchain: ["Makefile", "go.mod", ".golangci.yml"]
   entities:
@@ -72,27 +73,27 @@ modules:
   transport: ["internal/*/http/**", "internal/*/grpc/**"]
 ```
 
-Inspect declared Modules with `arclint context` (repository scope) or
-`arclint context --module <name>`.
+Inspect declared Zones with `arclint context` (repository scope) or
+`arclint context --zone <name>`.
 
 ## imports
 
-What a Module may import: other Modules, third-party, stdlib.
+What a Zone may import: other Zones, third-party, stdlib.
 
 - assertion key: `imports`
 - Rule Type: `consumes`
 - Assurance: `exact`
 - `on`: required
 
-`internal` names declared Modules this Module may import; absent means
-unrestricted internal imports, and `[]` means no other declared Module.
-The owning Module is always permitted implicitly. `external` and
+`internal` names declared Zones this Zone may import; absent means
+unrestricted internal imports, and `[]` means no other declared Zone.
+The owning Zone is always permitted implicitly. `external` and
 `stdlib` are `allow` (default) or `forbid`.
 
 ```yaml
 rules:
   entities/stdlib-only:
-    description: "The entities layer imports no other Module and no third-party package."
+    description: "The entities layer imports no other Zone and no third-party package."
     on: entities
     imports:
       internal: []
@@ -197,28 +198,31 @@ rules:
       forbid: '\bfmt\.Print|\blog\.(Print|Fatal|Panic)'
 ```
 
-## invariants
+## built-in domain rules
 
-Recorded domain contracts are visible in source.
+Composed from the recorded domain, never spelled.
 
-- assertion key: `invariants`
-- Rule Type: `invariants`
+- assertion key: none; the id is the meta-model invariant (`aggregate/root-declared`, `invariant/enforced-at-every-mutation`, ...)
+- Rule Type: `domain`
 - Assurance: `exact`
-- `on`: required
+- `on`: none; the recorded contexts and their aggregates locate the code, narrowed by a Zone only when the ruleset declares one spelled with the context's name
 
-Every cluster invariant, assertion, and specification recorded in
-`domain.arclint.yaml` for the owners that live in the Module must
-exist as a named method called from its join points. `{}` takes the
-default posture; `closed: true` additionally requires every exported
-error-returning function in the owner's files to call the cluster
-method. See [Domain Contracts](/docs/contracts/).
+When `domain.arclint.yaml` records at least one context, the built-in
+rules apply on their own: the aggregate has a root, the root declares
+and calls an `Ensure` method per invariant key and an `Assert` method
+per assertion key, a value object with an invariant has one
+constructor, contexts import each other only along recorded relations.
+`arclint rules` lists them with the origin `built in from the DDD
+meta-model`. An entry under the id adopts one: severity, `disable`
+with a reason, `exclude`, or `suppress`. See
+[Domain Contracts](/docs/contracts/).
 
 ```yaml
 rules:
-  entities/contracts-visible:
-    description: "Every aggregate's invariants are visible through its cluster method."
-    on: entities
-    invariants: {}
+  aggregate/protects-an-invariant:
+    severity: error
+  aggregate/references-by-identity:
+    disable: "the legacy Order.Fulfill(Shipment) signature predates this rule; tracked in ISSUE-142"
 ```
 
 ## uses
@@ -249,16 +253,16 @@ rules:
 
 ## imported_by
 
-Who may import one Module.
+Who may import one Zone.
 
 - assertion key: `imported_by`
 - Rule Type: `protected`
 - Assurance: `exact`
-- `on`: required, exactly one Module
+- `on`: required, exactly one Zone
 
-Protection is checked from the importer side. The Module under `on`
-may import itself; each Module in the list may also import it. A file
-is an allowed importer when any of its Modules is in that set. `[]`
+Protection is checked from the importer side. The Zone under `on`
+may import itself; each Zone in the list may also import it. A file
+is an allowed importer when any of its Zones is in that set. `[]`
 means nothing else imports it.
 
 ```yaml
@@ -271,15 +275,15 @@ rules:
 
 ## layers
 
-An ordered stack: a Module imports only same or lower layers.
+An ordered stack: a Zone imports only same or lower layers.
 
 - assertion key: `layers`
 - Rule Type: `layers`
 - Assurance: `exact`
 - `on`: not accepted
 
-Orders Modules highest first. A Module may import its own layer or
-lower layers, never a higher one. At least two Modules, no duplicates.
+Orders Zones highest first. A Zone may import its own layer or
+lower layers, never a higher one. At least two Zones, no duplicates.
 
 ```yaml
 rules:
@@ -298,7 +302,7 @@ Sibling folders selected by globs may not import each other.
 - `on`: not accepted
 
 Each glob selects member folders from observed files. A candidate is
-dropped when a declared Module owns that folder's subtree.
+dropped when a declared Zone owns that folder's subtree.
 
 ```yaml
 rules:
@@ -309,23 +313,23 @@ rules:
 
 ## acyclic
 
-No import cycles among the named Modules.
+No import cycles among the named Zones.
 
 - assertion key: `acyclic`
 - Rule Type: `acyclic`
 - Assurance: `exact`
 - `on`: not accepted
 
-A list names the Modules to check (at least two); `{}` covers every
-declared Module. Inside a Pattern file, `{}` covers every Module the
+A list names the Zones to check (at least two); `{}` covers every
+declared Zone. Inside a Pattern file, `{}` covers every Zone the
 Pattern declares and nothing the adopting repository or another
-extended Pattern adds, so a distributed Rule never judges Modules its
+extended Pattern adds, so a distributed Rule never judges Zones its
 author never saw.
 
 ```yaml
 rules:
   dependencies/acyclic:
-    description: "Dependencies among the layer Modules contain no cycle."
+    description: "Dependencies among the layer Zones contain no cycle."
     acyclic: [composition, delivery, infrastructure, application, domain]
 ```
 
@@ -388,11 +392,11 @@ runtime: [go, ts]
 
 ## extends
 
-Adopt a Pattern's Rules by reference, binding its Modules to paths.
+Adopt a Pattern's Rules by reference, binding its Zones to paths.
 
 - where: top-level `extends:`
 
-Each entry names one Pattern by exact reference and binds every Module
+Each entry names one Pattern by exact reference and binds every Zone
 the Pattern lists to the paths it owns here. The Pattern's Rules then
 load under their namespaced IDs, and Overrides under those IDs adjust
 severity, disable with a reason, exclude, or suppress. The complete

@@ -10,26 +10,29 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
+// The Lipgloss renderer speaks the same grammar as the plain one and
+// colors the anchors: a found source as a path, a missing one at
+// warning weight.
 func TestLipglossContextScopedDomainGrammarAndAnchorColors(t *testing.T) {
 	dk := &application.DomainKnowledge{
 		Source:  "domain.arclint.yaml",
-		Counts:  vocab.Counts{Contexts: 2, Entities: 1, Aggregates: 1, ValueObjects: 2, Invariants: 3},
+		Counts:  vocab.Counts{Contexts: 2, Aggregates: 1, Entities: 1, ValueObjects: 2, Invariants: 3},
 		Scoped:  true,
-		Shown:   vocab.Counts{Contexts: 1, Entities: 1, Aggregates: 1, ValueObjects: 1, Invariants: 3},
+		Shown:   vocab.Counts{Contexts: 1, Aggregates: 1, Entities: 1, ValueObjects: 1, Invariants: 3},
 		Located: true,
 		Contexts: []application.DomainContextKnowledge{{
 			Name:         "catalog",
-			Entities:     []application.DomainEntityRef{{Name: "Event", Aggregate: true}},
+			Aggregates:   []application.DomainAggregateRef{{Name: "Event", Identity: "EventID", Entities: []string{"Organizer"}}},
 			ValueObjects: []string{"Price"},
 			Invariants: []application.DomainInvariantRef{
-				{Statement: "A published Event never changes.", Owner: "Event", ID: "published-frozen", Source: "event/event.go:90", Anchor: application.AnchorFound},
-				{Statement: "An Event has one Venue.", Owner: "Event", Anchor: application.AnchorUnanchorable, Reason: "owner Event is an aggregate and the invariant has no id, so no method is named to carry it"},
-				{Statement: "A Price is never negative.", Owner: "Price", Anchor: application.AnchorMissing},
+				{Key: "published-frozen", Statement: "A published Event never changes.", Owner: "Event", OwnerConcept: vocab.ConceptAggregate, Source: "event/event.go:90", Anchor: application.AnchorFound},
+				{Key: "one-venue", Statement: "An Event has one Venue.", Owner: "Event", OwnerConcept: vocab.ConceptAggregate, Anchor: application.AnchorMissing},
+				{Key: "never-negative", Statement: "A Price is never negative.", Owner: "Price", OwnerConcept: vocab.ConceptValueObject, Anchor: application.AnchorMissing},
 			},
 		}},
 		Unanchored: []application.UnanchoredContract{
-			{Kind: application.ContractInvariant, Context: "catalog", Owner: "Event", Statement: "An Event has one Venue.", Anchor: application.AnchorUnanchorable, Reason: "owner Event is an aggregate and the invariant has no id, so no method is named to carry it"},
-			{Kind: application.ContractInvariant, Context: "catalog", Owner: "Price", Statement: "A Price is never negative.", Anchor: application.AnchorMissing},
+			{Kind: application.ContractInvariant, Context: "catalog", Owner: "Event", Key: "one-venue", Statement: "An Event has one Venue.", Expected: "method OneVenue on Event"},
+			{Kind: application.ContractInvariant, Context: "catalog", Owner: "Price", Key: "never-negative", Statement: "A Price is never negative.", Expected: "constructor of Price"},
 		},
 	}
 	var buf bytes.Buffer
@@ -38,9 +41,6 @@ func TestLipglossContextScopedDomainGrammarAndAnchorColors(t *testing.T) {
 		t.Fatal(err)
 	}
 	raw := buf.String()
-	if !strings.Contains(raw, "\x1b[31munanchorable\x1b[0m") {
-		t.Errorf("unanchorable is not rendered in the error color: %q", raw)
-	}
 	if !strings.Contains(raw, "\x1b[33mmissing\x1b[0m") {
 		t.Errorf("missing is not rendered in the warning color: %q", raw)
 	}
@@ -49,17 +49,17 @@ func TestLipglossContextScopedDomainGrammarAndAnchorColors(t *testing.T) {
 	}
 	out := stripANSI(raw)
 	for _, want := range []string{
-		"project domain (domain.arclint.yaml): 1 of 2 contexts, 1 of 1 entity, 1 of 2 value objects, 3 of 3 invariants anchor into this scope; --full shows the whole model\n",
-		"      A published Event never changes. (owner: Event, id: published-frozen) event/event.go:90\n",
-		"      An Event has one Venue. (owner: Event) unanchorable\n",
-		"      A Price is never negative. (owner: Price) missing\n",
-		"  unanchored contracts: 1 unanchorable, 1 missing\n",
-		"    unanchorable: 1 invariant owned by Event (context catalog)\n",
-		"      owner Event is an aggregate and the invariant has no id, so no method is named to carry it\n",
-		"    missing: 1 invariant owned by Price (context catalog)\n",
-		"      no constructor declared for Price\n",
-		"    an unanchorable contract needs its recording changed before any source can carry it\n",
-		"    an invariants Rule on the owning Module reports each missing contract as a Violation\n",
+		"project domain (domain.arclint.yaml): 1 of 2 contexts, 1 of 1 aggregate, 1 of 1 entity, 1 of 2 value objects, 3 of 3 invariants anchor into this scope; --full shows the whole model\n",
+		"    aggregates: Event (EventID; Organizer)\n",
+		"      published-frozen (Event): A published Event never changes. event/event.go:90\n",
+		"      one-venue (Event): An Event has one Venue. missing\n",
+		"      never-negative (Price): A Price is never negative. missing\n",
+		"  unanchored contracts: 2 missing\n",
+		"    missing: invariant one-venue of Event (context catalog)\n",
+		"      expected method OneVenue on Event\n",
+		"    missing: invariant never-negative of Price (context catalog)\n",
+		"      expected constructor of Price\n",
+		"    arclint check reports each as a Violation of the built-in rule of its block\n",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("grammar lacks %q:\n%s", want, out)

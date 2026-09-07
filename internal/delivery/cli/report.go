@@ -106,7 +106,7 @@ func (DomainListReport) report() {}
 
 // DomainShowReport is the product of `arclint domain show`.
 type DomainShowReport struct {
-	View application.DomainDefinitionView
+	View application.DomainEntryView
 }
 
 func (DomainShowReport) report() {}
@@ -121,15 +121,12 @@ type DomainExplainReport struct {
 
 func (DomainExplainReport) report() {}
 
-// DomainDefineReport is the product of `arclint domain define`.
-// Request fields needed by plain/JSON docs are copied so adapters do
-// not depend on the live request value. Definition is the pointer from
-// the request (nil when unset); empty string means cleared.
+// DomainDefineReport is the product of `arclint domain define`: what
+// was done, and the change that was asked for, so a renderer can say
+// whether a changed property was set or cleared.
 type DomainDefineReport struct {
-	Result       application.DomainDefineResult
-	Definition   *string
-	ClearAliases bool
-	Owner        string
+	Result application.DomainDefineResult
+	Change vocab.Change
 }
 
 func (DomainDefineReport) report() {}
@@ -208,12 +205,8 @@ type SDKInitReport struct {
 
 func (SDKInitReport) report() {}
 
-// NewDomainDefineReport copies the define request fields adapters need.
+// NewDomainDefineReport pairs the define result with the change that
+// was asked for.
 func NewDomainDefineReport(result application.DomainDefineResult, req application.DefineDomainRequest) DomainDefineReport {
-	return DomainDefineReport{
-		Result:       result,
-		ClearAliases: req.ClearAliases,
-		Owner:        req.Owner,
-		Definition:   req.Definition,
-	}
+	return DomainDefineReport{Result: result, Change: req.Change}
 }

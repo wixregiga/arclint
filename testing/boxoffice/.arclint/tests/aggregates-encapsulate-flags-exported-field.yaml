@@ -4,12 +4,14 @@ rule: "entities/aggregates-encapsulate"
 files:
   domain.arclint.yaml: |
     version: 1
+    project: boxoffice
     contexts:
-      - name: catalog
-        entities:
-          - name: Event
+      catalog:
+        definition: What is on sale.
+        aggregates:
+          Event:
             definition: One show an organizer puts on sale.
-            aggregate: true
+            identity: EventID
   internal/entities/event/event.go: |
     package event
 

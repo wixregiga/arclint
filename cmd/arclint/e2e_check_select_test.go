@@ -13,7 +13,7 @@ import (
 
 const selectRules = `runtime: [go]
 
-modules:
+zones:
   core: core/**
 
 rules:

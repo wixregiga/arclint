@@ -26,7 +26,7 @@ func InsufficientInfoQuestions() []ClarificationQuestion {
 		},
 		{
 			Question: "Do experts pass this predicate around as a thing they name, rather than as a rule that simply holds?",
-			Decides:  "specifications[] vs invariant or assertion",
+			Decides:  "specification vs invariant or assertion",
 		},
 		{
 			Question: "Is this a property of the value itself (constructor) or of the cluster that must stay consistent on every command?",

@@ -126,19 +126,18 @@ const aggregateEncapsulation = defineRule({
     const prefix = root.endsWith("/") ? root : root + "/";
     const domain = ctx.domain();
     for (const context of domain.contexts) {
-      for (const entity of context.entities) {
-        if (!entity.aggregate) continue;
-        const slice = ctx.caseTerm(entity.name, "flatcase");
+      for (const aggregate of context.aggregates) {
+        const slice = ctx.caseTerm(aggregate.name, "flatcase");
         for (const f of ctx.files(prefix + slice + "/*.go")) {
           if (f.name.endsWith("_test.go")) continue;
           const facts = ctx.facts(f.path);
           if (!facts) continue;
           for (const decl of facts.decls) {
-            if (decl.kind === "field" && decl.owner === entity.name && decl.exported) {
+            if (decl.kind === "field" && decl.owner === aggregate.name && decl.exported) {
               ctx.report({
                 path: f.path,
                 line: decl.startLine,
-                message: `aggregate ${entity.name} exposes exported field ${decl.name}; invariants live behind methods`,
+                message: `aggregate ${aggregate.name} exposes exported field ${decl.name}; invariants live behind methods`,
                 fixHint: "unexport the field and route changes through the aggregate's methods",
               });
             }

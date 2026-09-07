@@ -15,9 +15,9 @@ func contextFixture(t *testing.T) rule.Configured {
 	if err != nil {
 		t.Fatalf("NewAllowList: %v", err)
 	}
-	scope, err := rule.ModuleApplicability([]rule.ModuleName{"m"})
+	scope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ModuleApplicability: %v", err)
+		t.Fatalf("ZoneApplicability: %v", err)
 	}
 	consumes, err := rule.New(rule.Spec{
 		ID:            "t/p:m/imports",
@@ -35,7 +35,7 @@ func contextFixture(t *testing.T) rule.Configured {
 	protected, err := rule.New(rule.Spec{
 		ID:            "t/p:deps/protected-m",
 		Type:          rule.TypeProtected,
-		Params:        rule.ProtectedParams{Module: "m"},
+		Params:        rule.ProtectedParams{Zone: "m"},
 		Applicability: repo,
 	})
 	if err != nil {
@@ -54,18 +54,18 @@ func TestArchitecturalContextForPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if len(ctx.Modules) != 1 || ctx.Modules[0].Name != "m" {
-		t.Fatalf("owning modules = %+v, want m", ctx.Modules)
+	if len(ctx.Zones) != 1 || ctx.Zones[0].Name != "m" {
+		t.Fatalf("owning zones = %+v, want m", ctx.Zones)
 	}
-	policy := ctx.Modules[0]
+	policy := ctx.Zones[0]
 	if !policy.InternalRestricted || len(policy.Internal) != 0 || policy.External != "forbid" {
-		t.Errorf("module policy = %+v, want restricted-empty internal and forbidden external", policy)
+		t.Errorf("zone policy = %+v, want restricted-empty internal and forbidden external", policy)
 	}
 	reasons := map[string]string{}
 	for _, r := range ctx.Rules {
 		reasons[r.Summary.ID] = r.Reason
 	}
-	if !strings.Contains(reasons["t/p:m/snake"], "Module(s) m") {
+	if !strings.Contains(reasons["t/p:m/snake"], "Zone(s) m") {
 		t.Errorf("naming reason = %q", reasons["t/p:m/snake"])
 	}
 	if !strings.Contains(reasons["t/p:deps/protected-m"], "protected") {
@@ -79,8 +79,8 @@ func TestArchitecturalContextForPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if len(outside.Modules) != 0 {
-		t.Errorf("a path outside every module must own no modules, got %+v", outside.Modules)
+	if len(outside.Zones) != 0 {
+		t.Errorf("a path outside every zone must own no zones, got %+v", outside.Zones)
 	}
 }
 
@@ -128,7 +128,7 @@ func TestInitializeRepositoryDraftsStarter(t *testing.T) {
 	if path != "rules.arclint.yaml" || !scaffold.force {
 		t.Errorf("path = %q, force = %v", path, scaffold.force)
 	}
-	for _, want := range []string{"runtime: [go, ts]\n", "modules:\n", "  source: \"**\"\n", "rules:\n", "  source/dependencies:\n", "    on: source\n", "      internal: []\n"} {
+	for _, want := range []string{"runtime: [go, ts]\n", "zones:\n", "  source: \"**\"\n", "rules:\n", "  source/dependencies:\n", "    on: source\n", "      internal: []\n"} {
 		if !strings.Contains(scaffold.content, want) {
 			t.Errorf("starter ruleset lacks %q:\n%s", want, scaffold.content)
 		}
@@ -196,7 +196,7 @@ func TestInitializeRepositoryAdoptsPattern(t *testing.T) {
 }
 
 // patternFixture distributes the fixture's naming Rule under the
-// arclint namespace with two Modules: m with a suggested path, and
+// arclint namespace with two Zones: m with a suggested path, and
 // unbound with none.
 func patternFixture(t *testing.T, version string) rule.Pattern {
 	t.Helper()
@@ -209,9 +209,9 @@ func namespacedPatternFixture(t *testing.T, namespace, version string) rule.Patt
 	if err != nil {
 		t.Fatalf("NewCaseSpec: %v", err)
 	}
-	scope, err := rule.ModuleApplicability([]rule.ModuleName{"m"})
+	scope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ModuleApplicability: %v", err)
+		t.Fatalf("ZoneApplicability: %v", err)
 	}
 	r, err := rule.New(rule.Spec{
 		ID:            namespace + "/ddd-flat:m/snake",
@@ -226,13 +226,13 @@ func namespacedPatternFixture(t *testing.T, namespace, version string) rule.Patt
 	if err != nil {
 		t.Fatalf("NewGlob: %v", err)
 	}
-	m, err := rule.NewPatternModule("m", "The m module.", []rule.Glob{glob})
+	m, err := rule.NewPatternZone("m", "The m zone.", []rule.Glob{glob})
 	if err != nil {
-		t.Fatalf("NewPatternModule: %v", err)
+		t.Fatalf("NewPatternZone: %v", err)
 	}
-	unbound, err := rule.NewPatternModule("unbound", "A module with no suggested path.", nil)
+	unbound, err := rule.NewPatternZone("unbound", "A zone with no suggested path.", nil)
 	if err != nil {
-		t.Fatalf("NewPatternModule: %v", err)
+		t.Fatalf("NewPatternZone: %v", err)
 	}
 	p, err := rule.NewPattern(rule.PatternSpec{
 		Namespace:     namespace,
@@ -240,7 +240,7 @@ func namespacedPatternFixture(t *testing.T, namespace, version string) rule.Patt
 		Version:       version,
 		Documentation: "https://example.test/ddd-flat",
 		Coverage:      []rule.Language{rule.LanguageGo},
-		Modules:       []rule.PatternModule{m, unbound},
+		Zones:         []rule.PatternZone{m, unbound},
 		Rules:         []rule.Rule{r},
 	})
 	if err != nil {
@@ -265,31 +265,31 @@ func TestArchitecturalContextWorksite(t *testing.T) {
 		t.Fatalf("NewGetArchitecturalContext: %v", err)
 	}
 	ctx, err := uc.Execute(application.ContextRequest{
-		Paths:   []string{"m/service.go", "m/other.go"},
-		Modules: []string{"m"},
+		Paths: []string{"m/service.go", "m/other.go"},
+		Zones: []string{"m"},
 	})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if len(ctx.Paths) != 2 || ctx.Paths[0].Modules[0] != "m" || ctx.Paths[1].Modules[0] != "m" {
+	if len(ctx.Paths) != 2 || ctx.Paths[0].Zones[0] != "m" || ctx.Paths[1].Zones[0] != "m" {
 		t.Errorf("path bindings = %+v", ctx.Paths)
 	}
-	// The module card appears once although three scope parts share it.
-	if len(ctx.Modules) != 1 || ctx.Modules[0].Name != "m" {
-		t.Errorf("modules = %+v, want one deduplicated card", ctx.Modules)
+	// The zone card appears once although three scope parts share it.
+	if len(ctx.Zones) != 1 || ctx.Zones[0].Name != "m" {
+		t.Errorf("zones = %+v, want one deduplicated card", ctx.Zones)
 	}
 	for _, r := range ctx.Rules {
 		if len(r.Via) == 0 {
 			t.Errorf("rule %s carries no via in a multi-part scope", r.Summary.ID)
 		}
 	}
-	if ctx.Scope != "m/service.go, m/other.go, module m" {
+	if ctx.Scope != "m/service.go, m/other.go, zone m" {
 		t.Errorf("scope = %q", ctx.Scope)
 	}
 
-	if _, err := uc.Execute(application.ContextRequest{Modules: []string{"ghost"}}); err == nil ||
+	if _, err := uc.Execute(application.ContextRequest{Zones: []string{"ghost"}}); err == nil ||
 		!strings.Contains(err.Error(), "not declared") {
-		t.Errorf("unknown module err = %v", err)
+		t.Errorf("unknown zone err = %v", err)
 	}
 }
 

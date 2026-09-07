@@ -5,17 +5,20 @@ rule: "domain-model/aggregate-skeleton"
 files:
   domain.arclint.yaml: |
     version: 1
+    project: fixture
     contexts:
-      - name: ordering
-        entities:
-          - name: Order
+      ordering:
+        definition: Customers turning products into orders.
+        aggregates:
+          Order:
             definition: A customer's request to purchase products.
-            aggregate: true
-      - name: billing
-        entities:
-          - name: Invoice
+            identity: OrderID
+      billing:
+        definition: Turning confirmed orders into money owed.
+        aggregates:
+          Invoice:
             definition: The bill issued for a confirmed order.
-            aggregate: true
+            identity: InvoiceID
   internal/domain/order/root.go: |
     package order
 
@@ -24,12 +27,12 @@ expect:
   - kind: violation
     path: internal/domain/order/repository.go
     line: 0
-    message: "Module \"domain\" is missing a required file matching \"internal/domain/order/repository.go\""
+    message: "Zone \"domain\" is missing a required file matching \"internal/domain/order/repository.go\""
   - kind: violation
     path: internal/domain/invoice/root.go
     line: 0
-    message: "Module \"domain\" is missing a required file matching \"internal/domain/invoice/root.go\""
+    message: "Zone \"domain\" is missing a required file matching \"internal/domain/invoice/root.go\""
   - kind: violation
     path: internal/domain/invoice/repository.go
     line: 0
-    message: "Module \"domain\" is missing a required file matching \"internal/domain/invoice/repository.go\""
+    message: "Zone \"domain\" is missing a required file matching \"internal/domain/invoice/repository.go\""

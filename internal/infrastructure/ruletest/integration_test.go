@@ -19,7 +19,7 @@ import (
 const integrationRuleset = `runtime: [go]
 scan:
   unknown_imports: error
-modules:
+zones:
   core: core/**
   util: util/**
 rules:
@@ -41,12 +41,12 @@ files:
   core/other.go: "package core\n"
 expect:
   - path: core/doc.go
-    message: 'Module "core" is missing a required file matching "core/doc.go"'
+    message: 'Zone "core" is missing a required file matching "core/doc.go"'
 `
 
 // The consumes test asserts complete conformance over a fixture whose
 // Go source, parsed by the production Go fact producer, imports a
-// Module outside the empty allow-list: it fails with one unexpected
+// Zone outside the empty allow-list: it fails with one unexpected
 // violation.
 const consumesTest = `rule: "core/consumes"
 files:
@@ -108,7 +108,7 @@ func TestRunRuleTestsEndToEnd(t *testing.T) {
 		Kind:    rule.FindingViolation,
 		Path:    "core/a.go",
 		Line:    3,
-		Message: `import "example.com/app/util" resolves to Module(s) ["util"], not in the allow-list of Module "core"`,
+		Message: `import "example.com/app/util" resolves to Zone(s) ["util"], not in the allow-list of Zone "core"`,
 	}
 	if failing.Unexpected[0] != wantFinding {
 		t.Errorf("unexpected finding = %+v, want %+v", failing.Unexpected[0], wantFinding)
@@ -125,7 +125,7 @@ func TestRunRuleTestsEndToEnd(t *testing.T) {
 }
 
 const extensionRuleset = `runtime: [go]
-modules:
+zones:
   m: m/**
 rules:
   m/no-panic:
@@ -226,49 +226,54 @@ func TestRuleTestExtensionReadsFixtureContent(t *testing.T) {
 }
 
 const vocabularyRuleset = `runtime: [go]
-modules:
+zones:
   vocabulary: domain.arclint.yaml
 rules:
-  vocabulary/terms-carry-definitions:
+  vocabulary/events-name-their-raiser:
     on: vocabulary
     files: "domain.arclint.yaml"
-    uses: require-defined-terms
+    uses: require-raised-by
 `
 
-// fixtureVocabulary records one term without a definition. Its two
-// multi-line definitions are what a line-1 anchor hides: the undefined
-// term is nowhere near the top of the file.
+// fixtureVocabulary records one domain event that names nothing that
+// raises it. The multi-line definitions above it are what a line-1
+// anchor hides: the event is nowhere near the top of the file.
 const fixtureVocabulary = `version: 1
+project: boxoffice
 contexts:
-  - name: catalog
-    entities:
-      - name: Event
+  catalog:
+    definition: What is on sale.
+    aggregates:
+      Event:
         definition: >-
           One show an Organizer puts on sale: its title, when and
           where it happens, and its TicketTiers.
-        aggregate: true
-      - name: Organizer
-        definition: |
-          The person whose page it is: they create Events, price the
-          TicketTiers, and publish a draft when it is ready.
-      - name: Venue
+        identity: EventID
+        entities:
+          Organizer:
+            definition: |
+              The person whose page it is: they create Events, price the
+              TicketTiers, and publish a draft when it is ready.
+    events:
+      EventPublished:
+        definition: The draft went on sale.
 `
 
-// requireDefinedTermsExtension anchors each finding at the line the
-// term is written on, which is what ctx.domain() term lines are for.
-const requireDefinedTermsExtension = `import { defineRule } from "arclint";
+// requireRaisedByExtension anchors each finding at the line the event
+// is written on, which is what ctx.domain() lines are for.
+const requireRaisedByExtension = `import { defineRule } from "arclint";
 
 export default defineRule({
-  type: "require-defined-terms",
-  description: "every recorded vocabulary term carries a definition",
+  type: "require-raised-by",
+  description: "every recorded domain event names the aggregate that raises it",
   check(ctx) {
     for (const bound of ctx.domain().contexts) {
-      for (const term of bound.entities) {
-        if (!term.definition) {
+      for (const event of bound.events) {
+        if (!event.raisedBy) {
           ctx.report({
             path: "domain.arclint.yaml",
-            line: term.line,
-            message: 'entity "' + term.name + '" has no definition recorded',
+            line: event.line,
+            message: 'event "' + event.name + '" names nothing that raises it',
           });
         }
       }
@@ -296,22 +301,22 @@ func TestVocabularyFindingAnchorsAtTheRecordedTerm(t *testing.T) {
 	}
 	wantLine := 0
 	for i, line := range strings.Split(fixtureVocabulary, "\n") {
-		if strings.TrimSpace(line) == "- name: Venue" {
+		if strings.TrimSpace(line) == "EventPublished:" {
 			wantLine = i + 1
 		}
 	}
 	if wantLine < 2 {
-		t.Fatalf("fixture writes Venue on line %d; it must sit below line 1 to prove anything", wantLine)
+		t.Fatalf("fixture writes EventPublished on line %d; it must sit below line 1 to prove anything", wantLine)
 	}
 
 	write("rules.arclint.yaml", vocabularyRuleset)
-	write(".arclint/extensions/require_defined_terms.ts", requireDefinedTermsExtension)
-	write(".arclint/tests/vocabulary_term_anchor.yaml",
-		"rule: \"vocabulary/terms-carry-definitions\"\nfiles:\n"+
+	write(".arclint/extensions/require_raised_by.ts", requireRaisedByExtension)
+	write(".arclint/tests/vocabulary_event_anchor.yaml",
+		"rule: \"vocabulary/events-name-their-raiser\"\nfiles:\n"+
 			"  domain.arclint.yaml: |\n"+nestFixture(fixtureVocabulary)+
 			"expect:\n  - path: domain.arclint.yaml\n"+
 			fmt.Sprintf("    line: %d\n", wantLine)+
-			"    message: 'entity \"Venue\" has no definition recorded'\n")
+			"    message: 'event \"EventPublished\" names nothing that raises it'\n")
 
 	repo, err := yamlrule.NewRepository(filepath.Join(root, "rules.arclint.yaml"), nil)
 	if err != nil {
@@ -334,7 +339,7 @@ func TestVocabularyFindingAnchorsAtTheRecordedTerm(t *testing.T) {
 		t.Fatalf("results = %d, want 1", len(results))
 	}
 	if got := results[0]; !got.Passed() {
-		t.Fatalf("result = %+v, want the finding anchored at line %d, where Venue is written",
+		t.Fatalf("result = %+v, want the finding anchored at line %d, where EventPublished is written",
 			got, wantLine)
 	}
 }

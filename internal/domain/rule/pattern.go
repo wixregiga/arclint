@@ -86,75 +86,75 @@ func (r PatternReference) String() string {
 	return r.namespace + "/" + r.name + "@" + r.version
 }
 
-// PatternModule is one Module a Pattern speaks about without owning
+// PatternZone is one Zone a Pattern speaks about without owning
 // its paths: a name, a description, and optionally the paths the
 // Pattern suggests, which an adopting repository may accept as its
-// Binding or replace. A Pattern Rule names a PatternModule; the paths
+// Binding or replace. A Pattern Rule names a PatternZone; the paths
 // arrive when the repository extends the Pattern.
-type PatternModule struct {
-	name           ModuleName
+type PatternZone struct {
+	name           ZoneName
 	description    string
 	suggestedPaths []Glob
 }
 
-// NewPatternModule requires a valid name and a description; suggested
+// NewPatternZone requires a valid name and a description; suggested
 // paths are optional.
-func NewPatternModule(name ModuleName, description string, suggestedPaths []Glob) (PatternModule, error) {
+func NewPatternZone(name ZoneName, description string, suggestedPaths []Glob) (PatternZone, error) {
 	if err := name.validate(); err != nil {
-		return PatternModule{}, err
+		return PatternZone{}, err
 	}
 	if strings.TrimSpace(description) == "" {
-		return PatternModule{}, fmt.Errorf("pattern module %s: description required", name)
+		return PatternZone{}, fmt.Errorf("pattern zone %s: description required", name)
 	}
 	for _, g := range suggestedPaths {
 		if g.IsZero() {
-			return PatternModule{}, fmt.Errorf("pattern module %s: unconstructed suggested path", name)
+			return PatternZone{}, fmt.Errorf("pattern zone %s: unconstructed suggested path", name)
 		}
 	}
-	return PatternModule{
+	return PatternZone{
 		name:           name,
 		description:    strings.TrimSpace(description),
 		suggestedPaths: append([]Glob(nil), suggestedPaths...),
 	}, nil
 }
 
-// Name is the ModuleName Pattern Rules and Bindings use.
-func (m PatternModule) Name() ModuleName { return m.name }
+// Name is the ZoneName Pattern Rules and Bindings use.
+func (m PatternZone) Name() ZoneName { return m.name }
 
-// Description is the Pattern's statement of what the Module is for.
-func (m PatternModule) Description() string { return m.description }
+// Description is the Pattern's statement of what the Zone is for.
+func (m PatternZone) Description() string { return m.description }
 
 // SuggestedPaths are the paths the Pattern proposes for its Binding.
-func (m PatternModule) SuggestedPaths() []Glob {
+func (m PatternZone) SuggestedPaths() []Glob {
 	return append([]Glob(nil), m.suggestedPaths...)
 }
 
-// Binding gives one PatternModule its paths in an adopting repository.
+// Binding gives one PatternZone its paths in an adopting repository.
 type Binding struct {
-	module ModuleName
-	paths  []Glob
+	zone  ZoneName
+	paths []Glob
 }
 
-// NewBinding requires a valid Module name and at least one path.
-func NewBinding(module ModuleName, paths []Glob) (Binding, error) {
-	if err := module.validate(); err != nil {
+// NewBinding requires a valid Zone name and at least one path.
+func NewBinding(zone ZoneName, paths []Glob) (Binding, error) {
+	if err := zone.validate(); err != nil {
 		return Binding{}, err
 	}
 	if len(paths) == 0 {
-		return Binding{}, fmt.Errorf("binding %s: at least one path required", module)
+		return Binding{}, fmt.Errorf("binding %s: at least one path required", zone)
 	}
 	for _, g := range paths {
 		if g.IsZero() {
-			return Binding{}, fmt.Errorf("binding %s: unconstructed path", module)
+			return Binding{}, fmt.Errorf("binding %s: unconstructed path", zone)
 		}
 	}
-	return Binding{module: module, paths: append([]Glob(nil), paths...)}, nil
+	return Binding{zone: zone, paths: append([]Glob(nil), paths...)}, nil
 }
 
-// Module is the bound PatternModule's name.
-func (b Binding) Module() ModuleName { return b.module }
+// Zone is the bound PatternZone's name.
+func (b Binding) Zone() ZoneName { return b.zone }
 
-// Paths are the globs the repository gives the Module.
+// Paths are the globs the repository gives the Zone.
 func (b Binding) Paths() []Glob { return append([]Glob(nil), b.paths...) }
 
 // PatternSpec is the complete input for constructing a Pattern.
@@ -164,13 +164,13 @@ type PatternSpec struct {
 	Version       string
 	Documentation string
 	Coverage      []Language
-	Modules       []PatternModule
+	Zones         []PatternZone
 	Rules         []Rule
 	Extensions    []PatternExtension
 }
 
 // Pattern is a named, versioned, namespaced, tested collection of Rules
-// and the Modules they speak about, dressed for distribution. A
+// and the Zones they speak about, dressed for distribution. A
 // published version is immutable; every included Rule retains its own
 // Rule ID under the Pattern's namespace; Pattern order creates no
 // implicit Rule precedence.
@@ -178,14 +178,14 @@ type Pattern struct {
 	ref           PatternReference
 	documentation string
 	coverage      []Language
-	modules       []PatternModule
+	zones         []PatternZone
 	rules         []Rule
 	extensions    []PatternExtension
 }
 
 // NewPattern requires an exact identity and at least one valid Rule.
 // Each carried Rule is stamped with this Pattern's provenance, must
-// carry the Pattern's namespace, and may name only Modules the Pattern
+// carry the Pattern's namespace, and may name only Zones the Pattern
 // lists.
 func NewPattern(spec PatternSpec) (Pattern, error) {
 	ref, err := NewPatternReference(spec.Namespace, spec.Name, spec.Version)
@@ -195,17 +195,17 @@ func NewPattern(spec PatternSpec) (Pattern, error) {
 	if len(spec.Rules) == 0 {
 		return Pattern{}, fmt.Errorf("pattern %s: no rules", ref)
 	}
-	declared := map[ModuleName]bool{}
-	modules := make([]PatternModule, 0, len(spec.Modules))
-	for _, m := range spec.Modules {
+	declared := map[ZoneName]bool{}
+	zones := make([]PatternZone, 0, len(spec.Zones))
+	for _, m := range spec.Zones {
 		if m.name == "" {
-			return Pattern{}, fmt.Errorf("pattern %s: unconstructed module", ref)
+			return Pattern{}, fmt.Errorf("pattern %s: unconstructed zone", ref)
 		}
 		if declared[m.name] {
-			return Pattern{}, fmt.Errorf("pattern %s: duplicate module %q", ref, m.name)
+			return Pattern{}, fmt.Errorf("pattern %s: duplicate zone %q", ref, m.name)
 		}
 		declared[m.name] = true
-		modules = append(modules, m)
+		zones = append(zones, m)
 	}
 	seen := map[string]bool{}
 	stamped := make([]Rule, 0, len(spec.Rules))
@@ -221,9 +221,9 @@ func NewPattern(spec PatternSpec) (Pattern, error) {
 			return Pattern{}, fmt.Errorf("pattern %s: duplicate rule id %q", ref, qualified)
 		}
 		seen[qualified] = true
-		for _, m := range r.ReferencedModules() {
+		for _, m := range r.ReferencedZones() {
 			if !declared[m] {
-				return Pattern{}, fmt.Errorf("pattern %s: rule %s names module %q the pattern does not list", ref, r.id, m)
+				return Pattern{}, fmt.Errorf("pattern %s: rule %s names zone %q the pattern does not list", ref, r.id, m)
 			}
 		}
 		r.provenance = &ref
@@ -250,7 +250,7 @@ func NewPattern(spec PatternSpec) (Pattern, error) {
 		ref:           ref,
 		documentation: strings.TrimSpace(spec.Documentation),
 		coverage:      append([]Language(nil), spec.Coverage...),
-		modules:       modules,
+		zones:         zones,
 		rules:         stamped,
 		extensions:    copiedExt,
 	}, nil
@@ -263,10 +263,10 @@ func (p Pattern) Reference() PatternReference { return p.ref }
 // empty when it publishes none.
 func (p Pattern) Documentation() string { return p.documentation }
 
-// Modules returns the Modules the Pattern speaks about, in declared
+// Zones returns the Zones the Pattern speaks about, in declared
 // order.
-func (p Pattern) Modules() []PatternModule {
-	return append([]PatternModule(nil), p.modules...)
+func (p Pattern) Zones() []PatternZone {
+	return append([]PatternZone(nil), p.zones...)
 }
 
 // Rules returns the Rules carried by the Pattern, each with Pattern
@@ -281,36 +281,36 @@ func (p Pattern) Extensions() []PatternExtension {
 	return append([]PatternExtension(nil), p.extensions...)
 }
 
-// Bind gives every Module the Pattern lists its repository paths. Every
-// listed Module must be bound and no Binding may name a Module the
-// Pattern does not list; the result is the concrete Modules, in the
+// Bind gives every Zone the Pattern lists its repository paths. Every
+// listed Zone must be bound and no Binding may name a Zone the
+// Pattern does not list; the result is the concrete Zones, in the
 // Pattern's declared order, each carrying the Pattern's description.
-func (p Pattern) Bind(bindings []Binding) ([]Module, error) {
-	byName := map[ModuleName]Binding{}
+func (p Pattern) Bind(bindings []Binding) ([]Zone, error) {
+	byName := map[ZoneName]Binding{}
 	for _, b := range bindings {
-		if _, dup := byName[b.module]; dup {
-			return nil, fmt.Errorf("pattern %s: module %q bound twice", p.ref, b.module)
+		if _, dup := byName[b.zone]; dup {
+			return nil, fmt.Errorf("pattern %s: zone %q bound twice", p.ref, b.zone)
 		}
-		byName[b.module] = b
+		byName[b.zone] = b
 	}
-	declared := map[ModuleName]bool{}
-	out := make([]Module, 0, len(p.modules))
+	declared := map[ZoneName]bool{}
+	out := make([]Zone, 0, len(p.zones))
 	var unbound []string
-	for _, m := range p.modules {
+	for _, m := range p.zones {
 		declared[m.name] = true
 		b, ok := byName[m.name]
 		if !ok {
 			unbound = append(unbound, string(m.name))
 			continue
 		}
-		mod, err := NewModule(m.name, m.description, b.paths)
+		mod, err := NewZone(m.name, m.description, b.paths)
 		if err != nil {
 			return nil, fmt.Errorf("pattern %s: %v", p.ref, err)
 		}
 		out = append(out, mod)
 	}
 	if len(unbound) > 0 {
-		return nil, fmt.Errorf("pattern %s: unbound modules %s; bind each under extends[].bind", p.ref, strings.Join(unbound, ", "))
+		return nil, fmt.Errorf("pattern %s: unbound zones %s; bind each under extends[].bind", p.ref, strings.Join(unbound, ", "))
 	}
 	var unknown []string
 	for name := range byName {
@@ -320,7 +320,7 @@ func (p Pattern) Bind(bindings []Binding) ([]Module, error) {
 	}
 	if len(unknown) > 0 {
 		sort.Strings(unknown)
-		return nil, fmt.Errorf("pattern %s: bind names modules the pattern does not list: %s", p.ref, strings.Join(unknown, ", "))
+		return nil, fmt.Errorf("pattern %s: bind names zones the pattern does not list: %s", p.ref, strings.Join(unknown, ", "))
 	}
 	return out, nil
 }

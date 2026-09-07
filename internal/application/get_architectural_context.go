@@ -4,26 +4,27 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
-// ContextRequest selects the scope: no paths and no modules means the
+// ContextRequest selects the scope: no paths and no zones means the
 // repository; Paths are repo-relative files or folders (a folder
-// matches through the Module path globs), and Modules name declared
-// Modules directly. Full keeps the whole recorded domain in a worksite
+// matches through the Zone path globs), and Zones name declared
+// Zones directly. Full keeps the whole recorded domain in a worksite
 // answer instead of the part that anchors into the scope.
 type ContextRequest struct {
-	Paths   []string
-	Modules []string
-	Full    bool
+	Paths []string
+	Zones []string
+	Full  bool
 }
 
-// PathBinding maps one requested path to the declared Modules owning
+// PathBinding maps one requested path to the declared Zones owning
 // it.
 type PathBinding struct {
-	Path    string
-	Modules []string
+	Path  string
+	Zones []string
 }
 
 // KindInUse pairs one Rule Type appearing in the configuration with
@@ -33,14 +34,14 @@ type KindInUse struct {
 	Meaning string
 }
 
-// ModulePolicy is the plain view of one declared Module and its
+// ZonePolicy is the plain view of one declared Zone and its
 // dependency policy, derived from the consumes Rule bound to it.
-type ModulePolicy struct {
+type ZonePolicy struct {
 	Name        string
 	Description string
 	Paths       []string
-	// Internal is the allow-list of other Modules; nil when
-	// unrestricted, empty when the Module may import no other Module.
+	// Internal is the allow-list of other Zones; nil when
+	// unrestricted, empty when the Zone may import no other Zone.
 	Internal           []string
 	InternalRestricted bool
 	External           string // allow or forbid
@@ -57,7 +58,7 @@ type AppliedRule struct {
 }
 
 // ArchitecturalContext is the human- and agent-readable view of the
-// Rules, Modules, and applicability reasons for one scope: the same
+// Rules, Zones, and applicability reasons for one scope: the same
 // facts for both audiences, distinguishing intended Rules from
 // observed code.
 type ArchitecturalContext struct {
@@ -65,13 +66,13 @@ type ArchitecturalContext struct {
 	Scope     string
 	Languages []string
 	RuleCount int
-	// Modules holds every declared Module for repository scope, the
-	// involved Modules for a worksite scope.
-	Modules []ModulePolicy
+	// Zones holds every declared Zone for repository scope, the
+	// involved Zones for a worksite scope.
+	Zones []ZonePolicy
 	// Rules holds, for a worksite scope, each Rule that applies and
 	// why, deduplicated across the scope parts.
 	Rules []AppliedRule
-	// Paths maps each requested path to its owning Modules; empty for
+	// Paths maps each requested path to its owning Zones; empty for
 	// repository scope.
 	Paths []PathBinding
 	// Kinds lists the Rule Types the configuration uses with their
@@ -86,33 +87,36 @@ type ArchitecturalContext struct {
 	Domain *DomainKnowledge `json:"domain,omitempty"`
 }
 
-// DomainEntityRef is one entity name inside a bounded-context summary,
-// with aggregate designation when set.
-type DomainEntityRef struct {
-	Name      string `json:"name"`
-	Aggregate bool   `json:"aggregate,omitempty"`
+// DomainAggregateRef is one aggregate inside a bounded-context
+// summary: its root's name, the identity it is known by, and its
+// member entities.
+type DomainAggregateRef struct {
+	Name     string   `json:"name"`
+	Identity string   `json:"identity,omitempty"`
+	Entities []string `json:"entities,omitempty"`
 }
 
-// DomainInvariantRef is one invariant statement with its owner and the
-// outcome of looking for it in source.
+// DomainInvariantRef is one invariant with its owner and the outcome
+// of looking for it in source: an aggregate's invariant is carried by
+// the root method its key names, a value object's by the constructor.
 type DomainInvariantRef struct {
+	Key       string `json:"key"`
 	Statement string `json:"statement"`
 	Owner     string `json:"owner"`
-	ID        string `json:"id,omitempty"`
-	// Source is file:line of the contract method or constructor when
-	// Anchor is found; empty otherwise.
+	// OwnerConcept is aggregate or value_object.
+	OwnerConcept vocab.Concept `json:"ownerConcept"`
+	// Source is file:line of the carrying declaration when Anchor is
+	// found; empty otherwise.
 	Source string         `json:"source,omitempty"`
 	Anchor ContractAnchor `json:"anchor,omitempty"`
-	// Reason says which recorded shape makes the invariant
-	// unanchorable; empty for the other anchors.
-	Reason string `json:"reason,omitempty"`
 }
 
-// DomainAssertionRef is one assertion with its operation.
+// DomainAssertionRef is one assertion with the operation it is on and
+// the outcome of looking for the root method its key names.
 type DomainAssertionRef struct {
+	Key       string         `json:"key"`
 	Statement string         `json:"statement"`
 	Owner     string         `json:"owner"`
-	ID        string         `json:"id"`
 	On        string         `json:"on"`
 	Source    string         `json:"source,omitempty"`
 	Anchor    ContractAnchor `json:"anchor,omitempty"`
@@ -134,15 +138,17 @@ type DomainRelationRef struct {
 }
 
 // DomainContextKnowledge is one bounded context projected into
-// architectural context: canonical names only, aggregates marked.
+// architectural context: canonical names only, with every recorded
+// contract.
 type DomainContextKnowledge struct {
 	Name           string                   `json:"name"`
-	Entities       []DomainEntityRef        `json:"entities,omitempty"`
+	Aggregates     []DomainAggregateRef     `json:"aggregates,omitempty"`
 	ValueObjects   []string                 `json:"valueObjects,omitempty"`
 	Invariants     []DomainInvariantRef     `json:"invariants,omitempty"`
 	Assertions     []DomainAssertionRef     `json:"assertions,omitempty"`
 	Specifications []DomainSpecificationRef `json:"specifications,omitempty"`
 	Events         []string                 `json:"events,omitempty"`
+	Services       []string                 `json:"services,omitempty"`
 }
 
 // UnanchoredContract is one listed contract that no observed
@@ -152,13 +158,14 @@ type UnanchoredContract struct {
 	Kind    ContractKind `json:"kind"`
 	Context string       `json:"context"`
 	Owner   string       `json:"owner,omitempty"`
-	ID      string       `json:"id,omitempty"`
+	Key     string       `json:"key,omitempty"`
 	// Statement carries the invariant or assertion statement; Name the
 	// specification name.
-	Statement string         `json:"statement,omitempty"`
-	Name      string         `json:"name,omitempty"`
-	Anchor    ContractAnchor `json:"anchor"`
-	Reason    string         `json:"reason,omitempty"`
+	Statement string `json:"statement,omitempty"`
+	Name      string `json:"name,omitempty"`
+	// Expected names the declaration the recording says carries the
+	// contract, the one no observed file declares.
+	Expected string `json:"expected"`
 }
 
 // DomainKnowledge is the project's recorded domain model summary as
@@ -175,12 +182,11 @@ type DomainKnowledge struct {
 	Located   bool                     `json:"located"`
 	Contexts  []DomainContextKnowledge `json:"contexts,omitempty"`
 	Relations []DomainRelationRef      `json:"relations,omitempty"`
-	// Unanchored lists every listed contract whose Anchor is not
-	// found, unanchorable first.
+	// Unanchored lists every listed contract whose Anchor is missing.
 	Unanchored []UnanchoredContract `json:"unanchored,omitempty"`
 }
 
-// GetArchitecturalContext projects Rules, Modules, and applicability
+// GetArchitecturalContext projects Rules, Zones, and applicability
 // reasons for a selected scope.
 type GetArchitecturalContext struct {
 	rules        rule.Repository
@@ -208,9 +214,9 @@ func (uc GetArchitecturalContext) WithObservations(observations ObservationSourc
 }
 
 // Execute projects the context for one scope: an empty request means
-// the repository (every Module, the Rule kinds in use, and the
-// enforcement posture); paths and named Modules select a worksite (its
-// per-path bindings, the involved Modules, the deduplicated Rules
+// the repository (every Zone, the Rule kinds in use, and the
+// enforcement posture); paths and named Zones select a worksite (its
+// per-path bindings, the involved Zones, the deduplicated Rules
 // that govern it, and the recorded domain anchored into it).
 func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalContext, error) {
 	cfg, err := uc.rules.ConfiguredRules()
@@ -221,25 +227,13 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 	for _, l := range cfg.Languages {
 		out.Languages = append(out.Languages, string(l))
 	}
-	lang, found, err := uc.knowledge.RecordedLanguage()
+	carriers, err := uc.recordedDomain(&out, cfg)
 	if err != nil {
-		return ArchitecturalContext{}, fmt.Errorf("load domain model: %w", err)
+		return ArchitecturalContext{}, err
 	}
-	var idx []declHit
-	if found {
-		out.Domain = domainKnowledgeOf(lang)
-		if uc.observations != nil {
-			obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, []rule.Fact{rule.FactDeclarations})
-			if err != nil {
-				return ArchitecturalContext{}, fmt.Errorf("observe contracts: %w", err)
-			}
-			idx = indexDeclarations(obs)
-			locateDomainContracts(out.Domain, lang, idx)
-		}
-	}
-	if len(req.Paths) == 0 && len(req.Modules) == 0 {
-		for _, m := range cfg.Modules {
-			out.Modules = append(out.Modules, modulePolicy(m, cfg.Rules))
+	if len(req.Paths) == 0 && len(req.Zones) == 0 {
+		for _, m := range cfg.Zones {
+			out.Zones = append(out.Zones, zonePolicy(m, cfg.Rules))
 		}
 		out.Kinds = kindsInUse(cfg.Rules)
 		policy := cfg.Scan.UnknownImports
@@ -248,7 +242,7 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 		}
 		out.UnknownImports = string(policy)
 		if out.Domain != nil {
-			out.Domain.Unanchored = unanchoredContracts(out.Domain)
+			out.Domain.Unanchored = unanchoredContracts(out.Domain, cfg.Languages)
 		}
 		return out, nil
 	}
@@ -258,26 +252,56 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 	}
 	if out.Domain != nil {
 		if !req.Full {
-			out.Domain = scopeDomainKnowledge(out.Domain, idx, worksiteScope(cfg, req))
+			out.Domain = scopeDomainKnowledge(out.Domain, carriers, worksiteScope(cfg, req))
 		}
-		out.Domain.Unanchored = unanchoredContracts(out.Domain)
+		out.Domain.Unanchored = unanchoredContracts(out.Domain, cfg.Languages)
 	}
 	return out, nil
 }
 
-// worksite assembles the scoped view: per-path Module bindings, each
-// involved Module once, and the union of governing Rules with the
+// recordedDomain projects the recorded language into the context and,
+// when an observation source is lent, locates its contracts in source.
+// Without a recorded domain the context carries none and no carriers
+// are read.
+func (uc GetArchitecturalContext) recordedDomain(out *ArchitecturalContext, cfg rule.Configured) (conformance.Carriers, error) {
+	lang, found, err := uc.knowledge.RecordedLanguage()
+	if err != nil {
+		return conformance.Carriers{}, fmt.Errorf("load domain model: %w", err)
+	}
+	if !found {
+		return conformance.Carriers{}, nil
+	}
+	out.Domain = domainKnowledgeOf(lang)
+	if uc.observations == nil {
+		return conformance.Carriers{}, nil
+	}
+	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, []rule.Fact{rule.FactDeclarations})
+	if err != nil {
+		return conformance.Carriers{}, fmt.Errorf("observe contracts: %w", err)
+	}
+	carriers, err := conformance.NewCarriers(obs, lang, cfg.Zones)
+	if err != nil {
+		return conformance.Carriers{}, fmt.Errorf("locate contracts: %w", err)
+	}
+	if err := locateDomainContracts(out.Domain, carriers); err != nil {
+		return conformance.Carriers{}, fmt.Errorf("locate contracts: %w", err)
+	}
+	return carriers, nil
+}
+
+// worksite assembles the scoped view: per-path Zone bindings, each
+// involved Zone once, and the union of governing Rules with the
 // scope parts that pulled each in.
 func worksite(out ArchitecturalContext, cfg rule.Configured, req ContextRequest) (ArchitecturalContext, error) {
-	declared := map[rule.ModuleName]rule.Module{}
-	for _, m := range cfg.Modules {
+	declared := map[rule.ZoneName]rule.Zone{}
+	for _, m := range cfg.Zones {
 		declared[m.Name()] = m
 	}
-	seenCard := map[rule.ModuleName]bool{}
-	addCard := func(name rule.ModuleName) {
+	seenCard := map[rule.ZoneName]bool{}
+	addCard := func(name rule.ZoneName) {
 		if !seenCard[name] {
 			seenCard[name] = true
-			out.Modules = append(out.Modules, modulePolicy(declared[name], cfg.Rules))
+			out.Zones = append(out.Zones, zonePolicy(declared[name], cfg.Rules))
 		}
 	}
 	ruleIndex := map[string]int{}
@@ -294,11 +318,11 @@ func worksite(out ArchitecturalContext, cfg rule.Configured, req ContextRequest)
 	var scopeParts []string
 	for _, p := range req.Paths {
 		binding := PathBinding{Path: p}
-		var owning []rule.ModuleName
-		for _, m := range cfg.Modules {
+		var owning []rule.ZoneName
+		for _, m := range cfg.Zones {
 			if m.Contains(p) {
 				owning = append(owning, m.Name())
-				binding.Modules = append(binding.Modules, string(m.Name()))
+				binding.Zones = append(binding.Zones, string(m.Name()))
 				addCard(m.Name())
 			}
 		}
@@ -310,17 +334,17 @@ func worksite(out ArchitecturalContext, cfg rule.Configured, req ContextRequest)
 			}
 		}
 	}
-	for _, name := range req.Modules {
-		mn := rule.ModuleName(name)
+	for _, name := range req.Zones {
+		mn := rule.ZoneName(name)
 		if _, ok := declared[mn]; !ok {
 			return ArchitecturalContext{}, fmt.Errorf(
-				"module %q is not declared; declared modules: %s", name, declaredNames(cfg.Modules))
+				"zone %q is not declared; declared zones: %s", name, declaredNames(cfg.Zones))
 		}
 		addCard(mn)
-		part := "module " + name
+		part := "zone " + name
 		scopeParts = append(scopeParts, part)
 		for _, r := range cfg.Rules {
-			if reason, applies := appliesToModule(r, mn); applies {
+			if reason, applies := appliesToZone(r, mn); applies {
 				addRule(r, reason, part)
 			}
 		}
@@ -359,18 +383,18 @@ func appendUnique(list []string, v string) []string {
 	return append(list, v)
 }
 
-func declaredNames(modules []rule.Module) string {
-	names := make([]string, 0, len(modules))
-	for _, m := range modules {
+func declaredNames(zones []rule.Zone) string {
+	names := make([]string, 0, len(zones))
+	for _, m := range zones {
 		names = append(names, string(m.Name()))
 	}
 	return strings.Join(names, ", ")
 }
 
-// modulePolicy derives one Module's dependency policy from the
+// zonePolicy derives one Zone's dependency policy from the
 // consumes Rule bound to it, when any.
-func modulePolicy(m rule.Module, rules []rule.Rule) ModulePolicy {
-	p := ModulePolicy{
+func zonePolicy(m rule.Zone, rules []rule.Rule) ZonePolicy {
+	p := ZonePolicy{
 		Name:        string(m.Name()),
 		Description: m.Description(),
 		External:    string(rule.ImportAllow),
@@ -381,13 +405,13 @@ func modulePolicy(m rule.Module, rules []rule.Rule) ModulePolicy {
 	}
 	for _, r := range rules {
 		params, ok := r.Params().(rule.ConsumesParams)
-		if !ok || !r.Applicability().WouldSelectModule(m.Name()) {
+		if !ok || !r.Applicability().WouldSelectZone(m.Name()) {
 			continue
 		}
 		if params.Internal != nil {
 			p.InternalRestricted = true
 			p.Internal = []string{}
-			for _, name := range params.Internal.Modules() {
+			for _, name := range params.Internal.Zones() {
 				p.Internal = append(p.Internal, string(name))
 			}
 		}
@@ -404,18 +428,18 @@ func modulePolicy(m rule.Module, rules []rule.Rule) ModulePolicy {
 
 // appliesToScope decides whether one Rule binds a path and states the
 // reason in domain language.
-func appliesToScope(r rule.Rule, path string, owning []rule.ModuleName) (string, bool) {
+func appliesToScope(r rule.Rule, path string, owning []rule.ZoneName) (string, bool) {
 	switch params := r.Params().(type) {
 	case rule.ConsumesParams, rule.StructureParams, rule.NamingParams, rule.ContentParams, rule.ExtensionParams:
 		_ = params
 		if r.AppliesToFile(path, owning) {
-			shared := sharedModules(r, owning)
+			shared := sharedZones(r, owning)
 			if len(shared) == 0 {
 				// Repository-scoped content and extension Rules select
-				// every file without any Module in common.
+				// every file without any Zone in common.
 				return "selects the file repository-wide", true
 			}
-			return fmt.Sprintf("selects the file through Module(s) %s", joinNames(shared)), true
+			return fmt.Sprintf("selects the file through Zone(s) %s", joinNames(shared)), true
 		}
 		if r.Applicability().ExcludedFile(path) && r.Applicability().WouldSelectFile(path, owning) {
 			return "excluded from this Rule's Applicability", true
@@ -423,61 +447,61 @@ func appliesToScope(r rule.Rule, path string, owning []rule.ModuleName) (string,
 	case rule.LayersParams:
 		for _, name := range params.Layers {
 			if nameIn(owning, name) {
-				return fmt.Sprintf("Module %q is layered by this Rule", name), true
+				return fmt.Sprintf("Zone %q is layered by this Rule", name), true
 			}
 		}
 	case rule.ProtectedParams:
-		if nameIn(owning, params.Module) {
-			return fmt.Sprintf("Module %q is protected by this Rule", params.Module), true
+		if nameIn(owning, params.Zone) {
+			return fmt.Sprintf("Zone %q is protected by this Rule", params.Zone), true
 		}
 	case rule.AcyclicParams:
-		scope := params.Modules
+		scope := params.Zones
 		if len(scope) == 0 {
 			if len(owning) > 0 {
-				return "every declared Module is in the acyclic scope", true
+				return "every declared Zone is in the acyclic scope", true
 			}
 			return "", false
 		}
 		for _, name := range scope {
 			if nameIn(owning, name) {
-				return fmt.Sprintf("Module %q is in the acyclic scope", name), true
+				return fmt.Sprintf("Zone %q is in the acyclic scope", name), true
 			}
 		}
 	}
 	return "", false
 }
 
-// appliesToModule decides whether one Rule binds a declared Module
+// appliesToZone decides whether one Rule binds a declared Zone
 // named directly in the scope.
-func appliesToModule(r rule.Rule, name rule.ModuleName) (string, bool) {
+func appliesToZone(r rule.Rule, name rule.ZoneName) (string, bool) {
 	switch params := r.Params().(type) {
 	case rule.ConsumesParams, rule.StructureParams, rule.NamingParams, rule.ContentParams, rule.ExtensionParams:
 		_ = params
-		if r.Applicability().WouldSelectModule(name) {
-			return fmt.Sprintf("selects Module %q", name), true
+		if r.Applicability().WouldSelectZone(name) {
+			return fmt.Sprintf("selects Zone %q", name), true
 		}
 	case rule.LayersParams:
 		if nameIn(params.Layers, name) {
-			return fmt.Sprintf("Module %q is layered by this Rule", name), true
+			return fmt.Sprintf("Zone %q is layered by this Rule", name), true
 		}
 	case rule.ProtectedParams:
-		if params.Module == name {
-			return fmt.Sprintf("Module %q is protected by this Rule", params.Module), true
+		if params.Zone == name {
+			return fmt.Sprintf("Zone %q is protected by this Rule", params.Zone), true
 		}
 	case rule.AcyclicParams:
-		if len(params.Modules) == 0 {
-			return "every declared Module is in the acyclic scope", true
+		if len(params.Zones) == 0 {
+			return "every declared Zone is in the acyclic scope", true
 		}
-		if nameIn(params.Modules, name) {
-			return fmt.Sprintf("Module %q is in the acyclic scope", name), true
+		if nameIn(params.Zones, name) {
+			return fmt.Sprintf("Zone %q is in the acyclic scope", name), true
 		}
 	}
 	return "", false
 }
 
-func sharedModules(r rule.Rule, owning []rule.ModuleName) []rule.ModuleName {
-	var out []rule.ModuleName
-	for _, m := range r.Applicability().Modules() {
+func sharedZones(r rule.Rule, owning []rule.ZoneName) []rule.ZoneName {
+	var out []rule.ZoneName
+	for _, m := range r.Applicability().Zones() {
 		if nameIn(owning, m) {
 			out = append(out, m)
 		}
@@ -485,7 +509,7 @@ func sharedModules(r rule.Rule, owning []rule.ModuleName) []rule.ModuleName {
 	return out
 }
 
-func nameIn(list []rule.ModuleName, name rule.ModuleName) bool {
+func nameIn(list []rule.ZoneName, name rule.ZoneName) bool {
 	for _, v := range list {
 		if v == name {
 			return true
@@ -494,7 +518,7 @@ func nameIn(list []rule.ModuleName, name rule.ModuleName) bool {
 	return false
 }
 
-func joinNames(names []rule.ModuleName) string {
+func joinNames(names []rule.ZoneName) string {
 	out := ""
 	for i, n := range names {
 		if i > 0 {
@@ -506,38 +530,41 @@ func joinNames(names []rule.ModuleName) string {
 }
 
 // domainKnowledgeOf projects a recorded Ubiquitous Language into the
-// context summary: per-context term groups, aggregate designation on
-// entities, invariant statements with owners, and relations.
+// context summary: per-context aggregates with their members, value
+// objects, every contract with its owner, events, services, and the
+// context map.
 func domainKnowledgeOf(lang vocab.UbiquitousLanguage) *DomainKnowledge {
 	dk := &DomainKnowledge{
 		Source: vocab.UbiquitousLanguageFileName,
 		Counts: lang.Counts(),
 		Shown:  lang.Counts(),
 	}
-	for _, ctx := range lang.ListContexts() {
+	for _, ctx := range lang.Contexts {
 		summary := DomainContextKnowledge{Name: ctx.Name}
-		for _, e := range ctx.Entities {
-			summary.Entities = append(summary.Entities, DomainEntityRef{
-				Name:      e.Name,
-				Aggregate: e.Aggregate,
-			})
+		for _, a := range ctx.Aggregates {
+			ref := DomainAggregateRef{Name: a.Name, Identity: a.Identity}
+			for _, e := range a.Entities {
+				ref.Entities = append(ref.Entities, e.Name)
+			}
+			summary.Aggregates = append(summary.Aggregates, ref)
 		}
 		for _, v := range ctx.ValueObjects {
 			summary.ValueObjects = append(summary.ValueObjects, v.Name)
 		}
-		for _, inv := range ctx.Invariants {
+		for _, oi := range ctx.Invariants() {
 			summary.Invariants = append(summary.Invariants, DomainInvariantRef{
-				Statement: inv.Statement,
-				Owner:     inv.Owner,
-				ID:        inv.ID,
+				Key:          oi.Invariant.Key,
+				Statement:    oi.Invariant.Statement,
+				Owner:        oi.Owner,
+				OwnerConcept: oi.OwnerConcept,
 			})
 		}
-		for _, a := range ctx.Assertions {
+		for _, oa := range ctx.Assertions() {
 			summary.Assertions = append(summary.Assertions, DomainAssertionRef{
-				Statement: a.Statement,
-				Owner:     a.Owner,
-				ID:        a.ID,
-				On:        a.On,
+				Key:       oa.Assertion.Key,
+				Statement: oa.Assertion.Statement,
+				Owner:     oa.Owner,
+				On:        oa.Assertion.On,
 			})
 		}
 		for _, s := range ctx.Specifications {
@@ -545,6 +572,9 @@ func domainKnowledgeOf(lang vocab.UbiquitousLanguage) *DomainKnowledge {
 		}
 		for _, e := range ctx.Events {
 			summary.Events = append(summary.Events, e.Name)
+		}
+		for _, s := range ctx.Services {
+			summary.Services = append(summary.Services, s.Name)
 		}
 		dk.Contexts = append(dk.Contexts, summary)
 	}
@@ -559,38 +589,74 @@ func domainKnowledgeOf(lang vocab.UbiquitousLanguage) *DomainKnowledge {
 }
 
 // unanchoredContracts collects every listed contract whose Anchor is
-// not found, unanchorable before missing, in listing order within each
-// group. Empty when the contracts were never located.
-func unanchoredContracts(dk *DomainKnowledge) []UnanchoredContract {
+// missing, in listing order, each naming the declaration the recording
+// expects, spelled the way the project's languages spell a method.
+// Empty when the contracts were never located.
+func unanchoredContracts(dk *DomainKnowledge, languages []rule.Language) []UnanchoredContract {
 	if !dk.Located {
 		return nil
 	}
-	var unanchorable, missing []UnanchoredContract
-	add := func(c UnanchoredContract) {
-		switch c.Anchor {
-		case AnchorUnanchorable:
-			unanchorable = append(unanchorable, c)
-		case AnchorMissing:
-			missing = append(missing, c)
-		case AnchorFound:
-		}
-	}
+	var out []UnanchoredContract
 	for _, ctx := range dk.Contexts {
 		for _, inv := range ctx.Invariants {
-			add(UnanchoredContract{
-				Kind: ContractInvariant, Context: ctx.Name, Owner: inv.Owner, ID: inv.ID,
-				Statement: inv.Statement, Anchor: inv.Anchor, Reason: inv.Reason,
+			if inv.Anchor != AnchorMissing {
+				continue
+			}
+			out = append(out, UnanchoredContract{
+				Kind: ContractInvariant, Context: ctx.Name, Owner: inv.Owner, Key: inv.Key,
+				Statement: inv.Statement, Expected: expectedInvariantCarrier(inv, languages),
 			})
 		}
 		for _, a := range ctx.Assertions {
-			add(UnanchoredContract{
-				Kind: ContractAssertion, Context: ctx.Name, Owner: a.Owner, ID: a.ID,
-				Statement: a.Statement, Anchor: a.Anchor,
+			if a.Anchor != AnchorMissing {
+				continue
+			}
+			out = append(out, UnanchoredContract{
+				Kind: ContractAssertion, Context: ctx.Name, Owner: a.Owner, Key: a.Key,
+				Statement: a.Statement, Expected: expectedMethod(conformance.AssertKey(a.Key), a.Owner, languages),
 			})
 		}
 		for _, s := range ctx.Specifications {
-			add(UnanchoredContract{Kind: ContractSpecification, Context: ctx.Name, Name: s.Name, Anchor: s.Anchor})
+			if s.Anchor != AnchorMissing {
+				continue
+			}
+			out = append(out, UnanchoredContract{
+				Kind: ContractSpecification, Context: ctx.Name, Name: s.Name,
+				Expected: fmt.Sprintf("satisfaction method on %s", s.Name),
+			})
 		}
 	}
-	return append(unanchorable, missing...)
+	return out
+}
+
+// expectedInvariantCarrier names the declaration an invariant's
+// recording says carries it.
+func expectedInvariantCarrier(inv DomainInvariantRef, languages []rule.Language) string {
+	if inv.OwnerConcept == vocab.ConceptValueObject {
+		return fmt.Sprintf("constructor of %s", inv.Owner)
+	}
+	return expectedMethod(conformance.EnsureKey(inv.Key), inv.Owner, languages)
+}
+
+// expectedMethod names the method a kebab-case key expects on its
+// owner, spelled per configured language and labelled with the
+// language when several are configured; a project with no language
+// configured is told the key.
+func expectedMethod(key, owner string, languages []rule.Language) string {
+	var spellings []string
+	for _, lang := range languages {
+		name, err := conformance.MethodName(key, lang)
+		if err != nil {
+			continue
+		}
+		if len(languages) == 1 {
+			spellings = append(spellings, name)
+			continue
+		}
+		spellings = append(spellings, fmt.Sprintf("%s (%s)", name, lang))
+	}
+	if len(spellings) == 0 {
+		return fmt.Sprintf("method %s on %s", key, owner)
+	}
+	return fmt.Sprintf("method %s on %s", strings.Join(spellings, " or "), owner)
 }

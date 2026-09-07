@@ -24,5 +24,5 @@ type ExtensionFinding struct {
 // recorded domain model, empty when none is recorded.
 type ExtensionEvaluator interface {
 	Evaluate(extension string, params map[string]any, subjects []string,
-		modules []rule.Module, obs Observations, knowledge vocab.UbiquitousLanguage) ([]ExtensionFinding, error)
+		zones []rule.Zone, obs Observations, knowledge vocab.UbiquitousLanguage) ([]ExtensionFinding, error)
 }
