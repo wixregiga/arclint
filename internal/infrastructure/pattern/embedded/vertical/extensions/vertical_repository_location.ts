@@ -2,13 +2,13 @@ import { defineRule, s } from "arclint";
 
 export default defineRule({
   type: "vertical/repository-location",
-  description: "require repository types to live in the application module",
+  description: "require repository types to live in the application zone",
   capability: "heuristic",
   params: s.object({
-    module: s.string(),
+    zone: s.string(),
   }),
   check(ctx, params) {
-    const allowed = String(params.module);
+    const allowed = String(params.zone);
     for (const file of ctx.files()) {
       const facts = ctx.facts(file.path);
       let earliest = 0;
@@ -29,9 +29,9 @@ export default defineRule({
       if (!byName && earliest === 0) {
         continue;
       }
-      const mods = ctx.moduleOf(file.path);
+      const zones = ctx.zoneOf(file.path);
       let allowedHere = false;
-      for (const m of mods) {
+      for (const m of zones) {
         if (m === allowed) {
           allowedHere = true;
           break;
@@ -43,7 +43,7 @@ export default defineRule({
       ctx.report({
         path: file.path,
         line: earliest || 1,
-        message: `repository types must live in module "${allowed}"`,
+        message: `repository types must live in zone "${allowed}"`,
       });
     }
   },

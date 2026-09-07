@@ -1,6 +1,7 @@
 package application_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -10,14 +11,14 @@ import (
 )
 
 // agentsFixture extends contextFixture with an extension Rule bound to
-// module "m" and a repository-scoped extension Rule, so every block
+// zone "m" and a repository-scoped extension Rule, so every block
 // section has material.
 func agentsFixture(t *testing.T) rule.Configured {
 	t.Helper()
 	cfg := contextFixture(t)
-	scope, err := rule.ModuleApplicability([]rule.ModuleName{"m"})
+	scope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ModuleApplicability: %v", err)
+		t.Fatalf("ZoneApplicability: %v", err)
 	}
 	bound, err := rule.New(rule.Spec{
 		ID:            "t/p:m/technology-free",
@@ -48,20 +49,24 @@ func agentsFixture(t *testing.T) rule.Configured {
 
 func recordedKnowledge(t *testing.T) *fakeKnowledge {
 	t.Helper()
-	lang, err := vocab.NewUbiquitousLanguage([]vocab.BoundedContext{
+	lang, err := vocab.NewUbiquitousLanguage("boxoffice", "", []vocab.BoundedContext{
 		{
-			Name: "catalog",
-			Entities: []vocab.Entity{
-				{Definition: vocab.Definition{Name: "Event", Definition: "one show"}, Aggregate: true},
-				{Definition: vocab.Definition{Name: "Organizer", Definition: "whose page it is"}},
-			},
-			ValueObjects: []vocab.Definition{{Name: "Price", Definition: "whole cents"}},
-			Invariants:   []vocab.Invariant{{Statement: "an Event sells only while published", Owner: "Event"}},
-			Events:       []vocab.Definition{{Name: "EventPublished", Definition: "the draft went on sale"}},
+			Name:       "catalog",
+			Definition: "what is on sale",
+			Aggregates: []vocab.Aggregate{{
+				Name:       "Event",
+				Definition: "one show",
+				Identity:   "EventID",
+				Entities:   []vocab.Entity{{Name: "Organizer", Definition: "whose page it is"}},
+				Invariants: []vocab.Invariant{{Key: "sells-while-published", Statement: "an Event sells only while published"}},
+			}},
+			ValueObjects: []vocab.ValueObject{{Name: "Price", Definition: "whole cents"}},
+			Events:       []vocab.DomainEvent{{Name: "EventPublished", Definition: "the draft went on sale", RaisedBy: "Event"}},
 		},
 		{
-			Name:     "ordering",
-			Entities: []vocab.Entity{{Definition: vocab.Definition{Name: "Order", Definition: "the deal as struck"}, Aggregate: true}},
+			Name:       "ordering",
+			Definition: "the deals struck",
+			Aggregates: []vocab.Aggregate{{Name: "Order", Definition: "the deal as struck", Identity: "OrderID"}},
 		},
 	}, []vocab.ContextRelation{{From: "catalog", To: "ordering", Kind: vocab.RelationConformist}})
 	if err != nil {
@@ -110,9 +115,9 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 		"BEFORE opening source files",
 		"do NOT learn the architecture by reading file after file",
 		"### The recorded domain",
-		"2 contexts, 2 aggregates, 1 invariants (domain.arclint.yaml).",
-		"- **catalog**: Event [aggregate], Organizer; value objects Price; events EventPublished",
-		"- **ordering**: Order [aggregate]",
+		"2 contexts, 2 aggregates, 1 value objects, 1 invariants (domain.arclint.yaml).",
+		"- **catalog**: aggregates Event (Organizer); value objects Price; events EventPublished",
+		"- **ordering**: aggregates Order",
 		"Relations: catalog → ordering (conformist). Full text: `arclint domain`.",
 		"### Changing the language",
 		"If your change speaks about something new, or changes what a recorded term means, " +
@@ -121,13 +126,13 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 			"what evidence a recording needs, and when an open question is recorded instead of a guess. " +
 			"If your harness does not have the skill, `arclint agents skill` writes it to " +
 			"`.agents/skills/domain-librarian/`.",
-		"### Modules and their rules",
-		"- **m**: test module (paths m/**)",
-		"  - imports no other module; external imports forbidden",
+		"### Zones and their rules",
+		"- **m**: test zone (paths m/**)",
+		"  - imports no other zone; external imports forbidden",
 		"  - snake: file names use snake_case",
 		`  - technology-free (warning): satisfies extension rule "forbid-content" (pattern: "net/http")`,
 		"### Repository-wide rules",
-		`- deps/protected-m: Module "m" is imported by no other Module`,
+		`- deps/protected-m: Zone "m" is imported by no other Zone`,
 		`- fsd/slice-isolation: satisfies extension rule "fsd-slice-isolation" (layers: [a, b])`,
 		"### Extension rules",
 		"`.arclint/extensions/local.ts` default-exports the rule definitions: forbid-content, fsd-slice-isolation.",
@@ -137,13 +142,13 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 		}
 	}
 	// The changing-the-language section sits between the recorded domain
-	// and the module rules.
+	// and the zone rules.
 	domainAt := strings.Index(block, "### The recorded domain")
 	changingAt := strings.Index(block, "### Changing the language")
-	modulesAt := strings.Index(block, "### Modules and their rules")
-	if !(domainAt >= 0 && domainAt < changingAt && changingAt < modulesAt) {
-		t.Errorf("section order wrong: recorded domain at %d, changing the language at %d, modules at %d:\n%s",
-			domainAt, changingAt, modulesAt, block)
+	zonesAt := strings.Index(block, "### Zones and their rules")
+	if !(domainAt >= 0 && domainAt < changingAt && changingAt < zonesAt) {
+		t.Errorf("section order wrong: recorded domain at %d, changing the language at %d, zones at %d:\n%s",
+			domainAt, changingAt, zonesAt, block)
 	}
 	// The command surface renders every entry as an invocable bullet.
 	for _, c := range application.AgentCommandSurface() {
@@ -153,7 +158,7 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 	}
 	// The consumes Rule folds into the imports line, never repeats as a
 	// nested rule, and the block carries no self-disclaimer.
-	for _, reject := range []string{"imports no other declared Module", "_Generated by"} {
+	for _, reject := range []string{"imports no other declared Zone", "_Generated by"} {
 		if strings.Contains(block, reject) {
 			t.Errorf("block must not contain %q:\n%s", reject, block)
 		}
@@ -188,7 +193,7 @@ func TestPublishAgentsContextOmitsAbsentSections(t *testing.T) {
 	// recorded domain, and never gates on installed skill files.
 	for _, want := range []string{
 		"### Ask arclint first", "### Changing the language",
-		"### Modules and their rules", "- **m**",
+		"### Zones and their rules", "- **m**",
 	} {
 		if !strings.Contains(block, want) {
 			t.Errorf("block lacks %q:\n%s", want, block)
@@ -202,9 +207,9 @@ func TestPublishAgentsContextSpellsPatternRulesQualified(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParsePatternReference: %v", err)
 	}
-	scope, err := rule.ModuleApplicability([]rule.ModuleName{"m"})
+	scope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ModuleApplicability: %v", err)
+		t.Fatalf("ZoneApplicability: %v", err)
 	}
 	repo, err := rule.RepositoryApplicability()
 	if err != nil {
@@ -253,7 +258,7 @@ func TestPublishAgentsContextSpellsPatternRulesQualified(t *testing.T) {
 		"  - acme/layers:m/has-root: ",
 		"- acme/layers:deps/acyclic: ",
 		"  - snake: file names use snake_case",
-		`- deps/protected-m: Module "m" is imported by no other Module`,
+		`- deps/protected-m: Zone "m" is imported by no other Zone`,
 	} {
 		if !strings.Contains(block, want) {
 			t.Errorf("block lacks %q:\n%s", want, block)
@@ -262,6 +267,52 @@ func TestPublishAgentsContextSpellsPatternRulesQualified(t *testing.T) {
 	for _, reject := range []string{"  - has-root: ", "\n- deps/acyclic: "} {
 		if strings.Contains(block, reject) {
 			t.Errorf("a Pattern Rule must not lose its namespace (%q):\n%s", reject, block)
+		}
+	}
+}
+
+// The built-in Rules a recorded domain composes get their own section
+// that says where they come from and how a ruleset adopts one; they
+// never masquerade as repository-wide Rules the ruleset wrote.
+func TestPublishAgentsContextSectionsTheBuiltInRules(t *testing.T) {
+	cfg := agentsFixture(t)
+	builtIn, err := rule.BuiltIn()
+	if err != nil {
+		t.Fatalf("BuiltIn: %v", err)
+	}
+	cfg.Rules = append(cfg.Rules, builtIn...)
+	publish, err := application.NewPublishAgentsContext(
+		fakeRepository{cfg}, recordedKnowledge(t), fakeExtensionInventory{}, &fakePublisher{})
+	if err != nil {
+		t.Fatalf("NewPublishAgentsContext: %v", err)
+	}
+	block, err := publish.Render()
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	intro := fmt.Sprintf("%d rules %s judge the recorded domain against the code; no Pattern distributes them. "+
+		"Change one through an Override under its id in rules.arclint.yaml (severity, or disable with a reason).",
+		len(builtIn), application.BuiltInOrigin)
+	for _, want := range []string{
+		fmt.Sprintf("%d rules over languages [go]", 5+len(builtIn)),
+		"### Built-in rules\n\n" + intro + "\n\n- ",
+		"\n- aggregate/root-declared: ",
+		"\n- bounded_context/isolated: ",
+		"\n- aggregate/protects-an-invariant (warning): ",
+	} {
+		if !strings.Contains(block, want) {
+			t.Errorf("block lacks %q:\n%s", want, block)
+		}
+	}
+	builtInAt := strings.Index(block, "### Built-in rules")
+	repositoryAt := strings.Index(block, "### Repository-wide rules")
+	if !(builtInAt >= 0 && builtInAt < repositoryAt) {
+		t.Errorf("built-in rules must precede the repository-wide ones: %d, %d:\n%s", builtInAt, repositoryAt, block)
+	}
+	repository := block[repositoryAt:]
+	for _, r := range builtIn {
+		if strings.Contains(repository, "\n- "+r.ID().Qualified()+": ") {
+			t.Errorf("built-in %s listed again under the repository-wide rules:\n%s", r.ID().Qualified(), repository)
 		}
 	}
 }

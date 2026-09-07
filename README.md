@@ -31,9 +31,13 @@ Use arclint for that check. Or not. It's up to you.
 - Want to know which rules govern a file or directory? Tubular. Run
   `arclint context <path>`.
 - DDD crazy? Rad. Keep your terms in a committed
-  `domain.arclint.yaml`, then write rules like "each aggregate
-  lives in `internal/<snake_case>/`, imports no third-party code, and
-  declares a repository interface." You can even enforce [Visible Domain Contracts](docs/site/content/docs/contracts.md) that ensure your code implements your documented invariants and specifications.
+  `domain.arclint.yaml`. The moment you record a bounded context, the
+  built-in rules judge the code against it: every aggregate has a
+  root, every invariant is a method the root calls at every
+  mutation, contexts import each other only along the relations you
+  recorded. No pattern to install. See [Domain Contracts](docs/site/content/docs/contracts.md).
+  Then write rules of your own like "each aggregate lives in
+  `internal/<snake_case>/` and declares a repository interface."
 - Want vertically sliced hexagons? Write a rule for it.
 - Want features to live in a certain file? Write a rule for it.
 - Want to test your rule out first? Write a test for it in
@@ -82,7 +86,7 @@ arclint init       # draft a commented starter rules.arclint.yaml
 arclint check .    # evaluate it
 ```
 
-Grow the starter module by module. A module is logical, not a folder:
+Grow the starter zone by zone. A zone is logical, not a folder:
 `internal/*/domain/**` is the domain layer of every vertical slice, and
 a list of globs gathers files from as many roots as you like. A real
 contract set is one map of rules, each keyed by its id, each carrying
@@ -91,7 +95,7 @@ one claim and one assertion:
 ```yaml
 runtime: [go]
 
-modules:
+zones:
   domain:
     paths: "internal/domain/**"
     description: "Aggregates and domain values; stdlib-only."
@@ -103,10 +107,10 @@ modules:
 
 rules:
   domain/stdlib-only:
-    description: "The domain imports no other Module and no third-party package."
+    description: "The domain imports no other Zone and no third-party package."
     on: domain
     imports:
-      internal: []        # may import no other declared module
+      internal: []        # may import no other declared zone
       external: forbid
 
   domain/no-panic:
@@ -129,11 +133,11 @@ rules:
     imported_by: [composition]
 
   dependencies/acyclic:
-    description: "Module dependencies contain no cycle."
+    description: "Zone dependencies contain no cycle."
     acyclic: {}
 ```
 
-Or adopt a pattern by reference and bind its modules to your tree
+Or adopt a pattern by reference and bind its zones to your tree
 (`arclint patterns install vertical` writes this for you); its rules
 load under its namespace, and you override them in place:
 
@@ -164,16 +168,16 @@ extend it. The assertion key a rule carries decides its type:
 
 | assertion | type | claim shape |
 |---|---|---|
-| `imports` | consumes | what a module may import: internal allow-list, external and stdlib policy |
-| `structure` | structure | files a module must contain or must not contain (globs; `each:` expands them per recorded domain term) |
+| `imports` | consumes | what a zone may import: internal allow-list, external and stdlib policy |
+| `structure` | structure | files a zone must contain or must not contain (globs; `each:` expands them per recorded domain term) |
 | `naming` | naming | file-name case vocabulary (`snake_case`, `kebab-case`, `camelCase`, `PascalCase`, `regex:`) |
 | `content` | content | no line of the selected files matches a regular expression |
 | `invariants` | invariants | recorded domain invariants, assertions, and specifications are visible in source |
 | `uses` + `with` | extension | enforcement supplied by a TypeScript extension |
-| `imported_by` | protected | who may import one module |
-| `layers` | layers | modules ordered highest first; imports go same-or-lower only |
+| `imported_by` | protected | who may import one zone |
+| `layers` | layers | zones ordered highest first; imports go same-or-lower only |
 | `independent` | independence | sibling folders never import each other |
-| `acyclic` | acyclic | no dependency cycles among declared modules |
+| `acyclic` | acyclic | no dependency cycles among declared zones |
 
 Import analysis is exact, never heuristic: Go classification follows
 the toolchain (embedded `go list std` table, module-path ownership,
@@ -223,7 +227,7 @@ The loop is schema-guided, trialed live, then pinned:
    expect:
      - kind: violation
        path: internal/domain/pattern/pattern.go
-       message: "path forbidden by structure rule \"internal/domain/pattern/**\" of Module \"domain\""
+       message: "path forbidden by structure rule \"internal/domain/pattern/**\" of Zone \"domain\""
    ```
 
 ## Extensions
@@ -265,8 +269,8 @@ undetermined, never proof of conformance.
 Three commands do the agent-facing work:
 
 - `arclint context <paths...>`: give it the files an agent touched
-  (and/or `--module <names>`) and one payload answers what governs the
-  set: each path mapped to its owning modules, each involved module
+  (and/or `--zone <names>`) and one payload answers what governs the
+  set: each path mapped to its owning zones, each involved zone
   once, and the union of applicable rules with the scope parts that
   pulled them in, boundary rules included. With a recorded domain it
   adds the contexts, terms, and contracts that anchor into those
@@ -274,7 +278,7 @@ Three commands do the agent-facing work:
   `missing` or `unanchorable`, and closes with the unanchored
   contracts so they cannot be skimmed past; `--full` lists the whole
   model. Bare `arclint context` explains the repository instead: every
-  module and its import policy, the rule kinds in use with their
+  zone and its import policy, the rule kinds in use with their
   meanings, the unknown-imports posture, and the whole recorded domain.
 - `arclint agents --write`: generates the AGENTS.md block from the
   ruleset (this repository's [AGENTS.md](AGENTS.md) is produced this
@@ -320,7 +324,7 @@ check [path]        evaluate the repository (--no-baseline, --only/--exclude <se
 rules [selector]    list the configured rules; one match shows the complete rule
 rules schema        print the JSON Schema for rules.arclint.yaml; --write puts it under .arclint/schemas (--dir)
 rules test [name]   run the rule tests under .arclint/tests; failures exit 1
-context [paths...]  the architecture, or everything binding the given paths (--module)
+context [paths...]  the architecture, or everything binding the given paths (--zone)
 domain              inspect and maintain the project's ubiquitous language (init/overview/list/show/explain/define/remove/schema)
 agents              AGENTS.md block (--write); skill bundle (skill); SKILL.md only (md|agentmd|markdown)
 baseline capture    adopt current findings   ·  baseline refresh: drop stale entries
@@ -330,7 +334,7 @@ patterns vendor     copy one pattern under .arclint/patterns/<namespace>/<name>/
 patterns export     publish one pattern into a registry tree on disk (--dir)
 sdk init            write arclint.d.ts + tsconfig.json for extension authors
 init                draft a starter rules.arclint.yaml (--pattern bare|<reference> --languages go,ts,py --force)
-completion <shell>  shell completion with live rule ids and module names (bash|zsh|fish|powershell)
+completion <shell>  shell completion with live rule ids and zone names (bash|zsh|fish|powershell)
 ```
 
 `--format human|json` selects one renderer for every semantic command

@@ -17,14 +17,23 @@ func writeRuleRows(w io.Writer, rows []application.RuleSummary) error {
 		if row.Disabled {
 			marker = fmt.Sprintf("  (disabled: %s)", row.DisabledReason)
 		}
-		provenance := ""
-		if row.Provenance != "" {
-			provenance = "  from " + row.Provenance
-		}
 		p.Printf("%s  [%s/%s/%s]  %s%s%s\n",
-			row.ID, row.Type, row.Severity, row.Assurance, row.Claim, provenance, marker)
+			row.ID, row.Type, row.Severity, row.Assurance, row.Claim, ruleOrigin(row), marker)
 	}
 	return p.Err
+}
+
+// ruleOrigin is the listing's note on where a Rule comes from when it
+// is not the repository's own: the Pattern that distributed it, or the
+// meta-model arclint composes it from.
+func ruleOrigin(row application.RuleSummary) string {
+	switch {
+	case row.Provenance != "":
+		return "  from " + row.Provenance
+	case row.BuiltIn:
+		return "  " + application.BuiltInOrigin
+	}
+	return ""
 }
 
 func writeRuleDetail(w io.Writer, d application.RuleDetail) error {
@@ -42,7 +51,7 @@ func writeRuleDetail(w io.Writer, d application.RuleDetail) error {
 	if d.EntireRepository {
 		write("applies to", "the entire repository")
 	} else {
-		write("modules", strings.Join(d.Modules, ", "))
+		write("zones", strings.Join(d.Zones, ", "))
 		write("files", strings.Join(d.Files, ", "))
 	}
 	write("evidence", d.Evidence)
@@ -56,6 +65,9 @@ func writeRuleDetail(w io.Writer, d application.RuleDetail) error {
 	write("facts", strings.Join(d.Facts, ", "))
 	write("limitations", strings.Join(d.Limitations, "; "))
 	write("provenance", d.Summary.Provenance)
+	if d.Summary.BuiltIn {
+		write("origin", application.BuiltInOrigin+"; adopt it with an override under its id")
+	}
 	for _, e := range d.Exclusions {
 		write("excluded", fmt.Sprintf("%s (%s)", strings.Join(e.Selectors, ", "), e.Reason))
 	}

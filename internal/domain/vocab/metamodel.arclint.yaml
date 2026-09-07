@@ -1,0 +1,1263 @@
+# The Domain-Driven Design meta-model: the language arclint speaks about
+# a project's domain.
+#
+# Everything arclint says about a domain stems from this file. Each
+# building block below is one term of the canonical language, defined
+# with its sources. What a project may record about an instance of a
+# building block is the block's `records` shape, and together those
+# shapes are the shape of domain.arclint.yaml. Every structural rule
+# arclint applies to a recorded instance is an invariant of its building
+# block, cited to the source that states it and classified by how it is
+# enforced. Everything that is advice rather than a checkable
+# proposition is guidance, cited the same way, and never enforced.
+#
+# A building block's invariants are one consistency unit. When a project
+# records an instance, the loader evaluates every recording-level
+# invariant of the block against it and either admits the whole
+# instance or rejects it with every failure named; there is no partially
+# recorded instance. When `arclint check` evaluates the instance, every
+# check-level invariant of the block is evaluated together with the
+# invariants the instance records for itself, and the instance conforms
+# only when all of them hold. An invariant at warning severity never
+# rejects an instance; it is reported as a finding at warning severity
+# and the instance is admitted. Nothing in this file is redefinable by a
+# project: a project records instances and adopts the check-level
+# invariants as built-in Rules through Overrides in rules.arclint.yaml
+# (severity, disable, exclude, suppress); it never rewrites what an
+# invariant states.
+#
+# The meta-model asks nothing of the architecture around the model. A
+# project declares Zones in rules.arclint.yaml for whatever architecture
+# it has, layered, hexagonal, or its own; the only architectural demand
+# Domain-Driven Design makes is that the model be isolated, and that
+# demand is the domain_isolation block below. Define the language and
+# the block invariants apply at once: an aggregate without an identity,
+# a value object with a setter, or a bounded context that imports across
+# an unrecorded relation is a finding before any Pattern is installed.
+#
+# The generated artifacts (VOCAB.yaml, `arclint domain explain`, the
+# domain schema descriptions, the concepts page, and the domain-librarian
+# skill's reference) are derived from this file, never written by hand.
+# The binary carries this file as a generated Go table, metamodel_gen.go,
+# written by `go generate` through tools/genmetamodel; a test regenerates
+# it and fails when the table and this file disagree.
+
+version: 1
+name: ddd
+title: Domain-Driven Design
+description: >-
+  The vocabulary of Domain-Driven Design as arclint records and enforces
+  it: strategic design names the models in play and the boundaries and
+  relationships between them; tactical design names the building blocks
+  a model is built from and the consistency rules each one carries.
+
+# Every citation below is `{work, page}` or `{work, chapter, page}` into
+# this bibliography. `verification` says how the cited pages were
+# checked while this file was written: `text` means the work's text was
+# extracted and the cited passages read; `fetched` means the page was
+# retrieved and the quoted sentences read; `carried` means the chapter
+# and page numbers were carried from the draft this file was made from
+# and have not been checked against the print edition, so treat them
+# as approximate until someone with the book confirms them.
+works:
+  evans2015:
+    title: "Domain-Driven Design Reference: Definitions and Pattern Summaries"
+    author: Eric Evans
+    year: 2015
+    url: https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf
+    license: CC BY 4.0
+    verification: text
+  evans2003:
+    title: "Domain-Driven Design: Tackling Complexity in the Heart of Software"
+    author: Eric Evans
+    publisher: Addison-Wesley
+    year: 2003
+    isbn: "978-0321125217"
+    verification: carried
+  vernon2013:
+    title: Implementing Domain-Driven Design
+    author: Vaughn Vernon
+    publisher: Addison-Wesley
+    year: 2013
+    isbn: "978-0321834577"
+    verification: carried
+  evans-fowler-1997:
+    title: Specifications
+    authors: [Eric Evans, Martin Fowler]
+    year: 1997
+    url: https://martinfowler.com/apsupp/spec.pdf
+    verification: text
+  fowler-aggregate:
+    title: DDD_Aggregate
+    author: Martin Fowler
+    date: 2013-04-23
+    url: https://martinfowler.com/bliki/DDD_Aggregate.html
+    verification: fetched
+  fowler-bounded-context:
+    title: BoundedContext
+    author: Martin Fowler
+    date: 2014-01-15
+    url: https://martinfowler.com/bliki/BoundedContext.html
+    verification: fetched
+  fowler-ubiquitous-language:
+    title: UbiquitousLanguage
+    author: Martin Fowler
+    date: 2006-10-31
+    url: https://martinfowler.com/bliki/UbiquitousLanguage.html
+    verification: fetched
+  fowler-evans-classification:
+    title: EvansClassification
+    author: Martin Fowler
+    date: 2005-12-14
+    url: https://martinfowler.com/bliki/EvansClassification.html
+    verification: fetched
+  fowler-value-object:
+    title: ValueObject
+    author: Martin Fowler
+    date: 2016-11-14
+    url: https://martinfowler.com/bliki/ValueObject.html
+    verification: fetched
+  fowler-domain-event:
+    title: Domain Event
+    author: Martin Fowler
+    date: 2005-12-12
+    url: https://martinfowler.com/eaaDev/DomainEvent.html
+    verification: fetched
+  fowler-architecture:
+    title: Software Architecture Guide
+    author: Martin Fowler
+    date: 2019-08-01
+    url: https://martinfowler.com/architecture/
+    verification: fetched
+  fowler-anemic-domain-model:
+    title: AnemicDomainModel
+    author: Martin Fowler
+    date: 2003-11-25
+    url: https://martinfowler.com/bliki/AnemicDomainModel.html
+    verification: fetched
+
+# The facts arclint observes in source today, one entry per Fact in
+# internal/domain/rule/enforcement.go. An invariant is enforceable across
+# every supported language without an extension only when the facts it
+# needs are emitted for every language.
+facts:
+  file_tree:
+    definition: The walked repository file list.
+    languages: all
+  imports:
+    definition: The classified per-file import view, each import resolved to stdlib, a declared Zone, a manifest dependency, or unknown.
+    languages: all
+  declarations:
+    definition: >-
+      The per-file declaration view: kind, name, owner, exported, lines,
+      and the syntactic signature of functions and methods. Go emits
+      struct, interface, type, func, method, field, const, and var;
+      TypeScript emits class, interface, type, enum, func, method, field,
+      const, and var; Python emits class, method, and func only.
+    languages: all
+  calls:
+    definition: "The per-file call view: callee identifier, line, and enclosing function, parser-exact and unresolved."
+    languages: all
+
+# Facts arclint does not observe yet. An invariant whose enforcement
+# names one of these is a milestone, not a rejected idea: the rule is
+# binary and sourced, only the observation is missing.
+milestones:
+  field-declarations:
+    needs: Field declarations from the Python adapter, which emits class, method, and func today.
+    unlocks: [value_object/no-identity, domain_event/occurrence-time, domain_service/stateless]
+  field-types:
+    needs: The declared type of every field, so that a field of the recorded identity type can be told from any other, and a root held in a field from an identity held there.
+    unlocks: [entity/identity, aggregate/root-only-references]
+  field-mutability:
+    needs: Whether a field can be assigned after construction, in each language's own idiom.
+    unlocks: [value_object/immutable-fields, domain_event/immutable]
+  resolved-calls:
+    needs: The declaration a call resolves to, so that a call from an aggregate into a repository, or an equality check that compares identities, is a fact rather than a name match.
+    unlocks: [repository/not-called-from-aggregates, entity/equality-by-identity]
+  transaction-facts:
+    needs: The unit of work a repository save belongs to, which no syntactic fact carries.
+    unlocks: [aggregate/one-per-transaction]
+
+phases:
+  - name: strategic
+    title: Strategic design
+    definition:
+      text: >-
+        The part of Domain-Driven Design that decides which models are in
+        play, where each applies, and how they relate: bounded contexts,
+        the ubiquitous language inside each, the context map between
+        them, and the distillation that separates the core domain from
+        the rest.
+      sources:
+        - {work: evans2015, page: 28, section: Context Mapping for Strategic Design}
+        - {work: evans2015, page: 40, section: Core Domain}
+  - name: tactical
+    title: Tactical design
+    definition:
+      text: >-
+        The building blocks a single model is built from and the
+        consistency rules each carries: entities, value objects,
+        aggregates and their invariants, domain events, services,
+        repositories, factories, modules, and the supple-design
+        practices of assertions and specifications.
+      sources:
+        - {work: evans2015, page: 9, section: Building Blocks of a Model-Driven Design}
+        - {work: evans2015, page: 19, section: Supple Design}
+  - name: structural
+    title: Structural vocabulary
+    definition:
+      text: >-
+        arclint's own terms for the physical layout of a codebase: what
+        it observes and where its rules apply. They are defined here and
+        not cited, because arclint is their source; they are not part of
+        Domain-Driven Design and never appear in a project's domain file.
+
+# `records` is how a project records an instance of the block in
+# domain.arclint.yaml: the section the instance is written under, and
+# its properties. Wherever a section is a map, the instance's name is
+# its key; the YAML parser rejects a name recorded twice in one section
+# and names the line. `invariants` are the structural rules arclint
+# applies to every recorded instance. `guidance` is design advice,
+# cited, never enforced; guidance marked `fundamental: true` is the
+# pattern's own directive (the "Therefore" of the Reference, or one of
+# Vernon's numbered aggregate rules), so an instance that ignores it is
+# a misuse of the block even though arclint cannot observe the misuse.
+# Guidance without the mark is advice about doing the block well.
+#
+# `enforcement.by` names the evaluator: `loader` when the loader
+# evaluates the invariant against the domain file alone and refuses a
+# recording that breaks it; `domain` when `arclint check` evaluates it
+# as a built-in Rule of the same id, applied to every recorded instance
+# the moment the domain file records one, with no Pattern installed and
+# nothing written in rules.arclint.yaml; or `planned` when no evaluator
+# exists yet. `facts` are the observed facts the invariant reads; a
+# `domain` invariant that reads none is decided from the domain file
+# alone. `needs` names a
+# milestone: the invariant is sourced and binary, only the observation
+# is missing, and it carries no evaluator until the milestone lands.
+# `languages` is `all` when every supported language emits the facts the
+# invariant needs. `severity` is `error` unless stated; `warning` marks
+# an invariant whose violation is reported but never rejects an instance
+# or fails a check.
+#
+# The level an invariant is evaluated at (recording, check, or
+# milestone) is never written here: it follows from `by` and `needs`.
+# An invariant the loader evaluates is a recording-level invariant; one
+# that needs a milestone is a milestone; every other one is evaluated at
+# check. The generated Go table computes it, and a test pins each `by`
+# to the code so this file cannot describe an enforcement the binary
+# does not have.
+building_blocks:
+
+  - term: domain
+    title: Domain
+    phase: strategic
+    definition:
+      text: >-
+        A sphere of knowledge, influence, or activity. The subject area
+        to which the user applies a program is the domain of the
+        software.
+      sources:
+        - {work: evans2015, page: vi, section: Definitions}
+    records:
+      section: top
+      note: A project's domain is the whole of its domain.arclint.yaml; the file names it once at the top.
+      properties:
+        - {name: project, required: true, definition: The name of the software whose domain the file records.}
+        - {name: description, required: false, definition: "The domain in a few sentences, as the people in it would tell a newcomer."}
+        - {name: contexts, required: true, definition: "The bounded contexts in play, a map keyed by context name; one model each."}
+        - {name: relations, required: false, definition: "The context map: the relations between the recorded contexts, each upstream first."}
+
+  - term: model
+    title: Model
+    phase: strategic
+    definition:
+      text: >-
+        A system of abstractions that describes selected aspects of a
+        domain and can be used to solve problems related to that
+        domain. A model has meaning only inside a bounded context.
+      sources:
+        - {work: evans2015, page: vi, section: Definitions}
+        - {work: evans2015, page: 2, section: Bounded Context}
+    records:
+      section: none
+      note: One model per bounded context; the context's recorded terms are the model.
+
+  - term: ubiquitous_language
+    title: Ubiquitous Language
+    phase: strategic
+    definition:
+      text: >-
+        A language structured around the domain model and used by all
+        team members within a bounded context to connect all the
+        activities of the team with the software. The model is the
+        backbone of the language; the code uses the same terms as the
+        conversation, and a change in the language is a change to the
+        model.
+      sources:
+        - {work: evans2015, page: vi, section: Definitions}
+        - {work: evans2015, page: 4, section: Ubiquitous Language}
+        - {work: fowler-ubiquitous-language}
+        - {work: evans2003, chapter: 2, page: 24}
+    records:
+      section: none
+      note: A project's Ubiquitous Language is the whole of domain.arclint.yaml, one file per repository, one section per bounded context.
+    invariants:
+      - id: ubiquitous_language/terms-carry-definitions
+        statement: Every recorded term carries a non-empty definition; an identity an aggregate or entity names is the one term recorded without an entry of its own.
+        sources:
+          - {work: evans2015, page: 4, section: Ubiquitous Language}
+        enforcement: {by: loader, languages: all}
+      - id: ubiquitous_language/one-meaning-per-name
+        statement: A name is recorded once within a bounded context, whatever the section; the same name recorded as an aggregate and again as a value object, or as an identity and again as an event, is rejected, because one context has one model. A name recorded twice in one section is rejected by the parser before the loader sees it.
+        sources:
+          - {work: evans2015, page: 2, section: Bounded Context}
+          - {work: evans2015, page: vi, section: Definitions}
+        enforcement: {by: loader, languages: all}
+      - id: ubiquitous_language/terms-declared-in-code
+        statement: Every recorded member entity, value object, and identity names one type declaration in the context's code, spelled with the recorded name in the language's type case (in Go, a name the package's own name completes, so rule.ID spells RuleID); a name no declaration spells, or one that two declarations spell with nothing to choose between them, is a finding. Aggregates, events, services, specifications, repositories, and factories state the same for themselves.
+        sources:
+          - {work: evans2015, page: 4, section: Ubiquitous Language}
+          - {work: evans2015, page: 20, section: Intention-Revealing Interfaces}
+        enforcement: {by: domain, facts: [file_tree, declarations], languages: all}
+    guidance:
+      - text: Name classes and operations to describe their effect and purpose, without reference to the means by which they do what they promise, and make those names conform to the ubiquitous language.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 20, section: Intention-Revealing Interfaces}
+      - text: Identifiers in the model carry no technical jargon; a term the domain expert would not say is a translation, and translation blunts communication.
+        sources:
+          - {work: evans2015, page: 3, section: Ubiquitous Language}
+          - {work: vernon2013, chapter: 2, page: 53}
+
+  - term: context
+    title: Context
+    phase: strategic
+    definition:
+      text: >-
+        The setting in which a word or statement appears that
+        determines its meaning. Statements about a model can only be
+        understood in a context.
+      sources:
+        - {work: evans2015, page: vi, section: Definitions}
+    records:
+      section: none
+      note: The general notion; a project records bounded contexts.
+
+  - term: bounded_context
+    title: Bounded Context
+    phase: strategic
+    definition:
+      text: >-
+        A description of a boundary, typically a subsystem or the work
+        of a particular team, within which a particular model is
+        defined and applicable. The boundary is set explicitly in terms
+        of team organization, usage within specific parts of the
+        application, and physical manifestations such as code bases and
+        database schemas.
+      sources:
+        - {work: evans2015, page: vi, section: Definitions}
+        - {work: evans2015, page: 2, section: Bounded Context}
+        - {work: fowler-bounded-context}
+        - {work: vernon2013, chapter: 2, page: 62}
+    records:
+      section: contexts
+      note: "A map keyed by context name; the key is the name. The context's code is located from its recorded terms: the declarations that spell them, found in the repository, and the code is the packages or files holding its aggregate roots plus the file of every other term. When rules.arclint.yaml declares a Zone spelled with the context's name, the terms are looked for in that Zone alone and every file of the Zone is the context's code."
+      properties:
+        - {name: name, required: true, definition: "The context's name, lowercase, part of the ubiquitous language; the map key."}
+        - {name: definition, required: true, definition: What the context is responsible for and which model it holds.}
+        - {name: aggregates, required: false, definition: "The context's aggregates, each with its identity, member entities, invariants, assertions, repository, and factory."}
+        - {name: value_objects, required: false, definition: "Value objects of the context, each with its invariants."}
+        - {name: events, required: false, definition: The context's domain events.}
+        - {name: services, required: false, definition: The context's domain services.}
+        - {name: specifications, required: false, definition: The context's specifications.}
+        - {name: questions, required: false, definition: "Open questions about the model, keyed, recorded in place of a guess; a question is never a rule and nothing is enforced from it."}
+    invariants:
+      - id: bounded_context/named-once
+        statement: A bounded context has a non-empty name, and no two contexts share one.
+        sources:
+          - {work: evans2015, page: 29, section: Context Map}
+        enforcement: {by: loader, languages: all}
+      - id: bounded_context/code-held-by-one-context
+        statement: A file of a bounded context's code belongs to no other context; two contexts hold the same code only under a recorded shared_kernel relation between them, because a boundary two models straddle is not a boundary.
+        sources:
+          - {work: evans2015, page: 2, section: Bounded Context}
+          - {work: evans2015, page: 31, section: Shared Kernel}
+          - {work: evans2003, chapter: 14, page: 335}
+        enforcement: {by: domain, facts: [file_tree, declarations], languages: all}
+      - id: bounded_context/isolated
+        statement: Code of one bounded context imports code of another only along a recorded relation between the two; an import between contexts the context map does not relate is a finding.
+        sources:
+          - {work: evans2015, page: 2, section: Bounded Context}
+          - {work: evans2015, page: 28, section: upstream-downstream}
+          - {work: evans2003, chapter: 14, page: 335}
+        enforcement: {by: domain, facts: [file_tree, declarations, imports], languages: all}
+    guidance:
+      - text: Keep model concepts and terms strictly consistent within the bounds, and standardize a single development process within the context, which need not be used elsewhere.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 2, section: Bounded Context}
+      - text: Two contexts do not share a database schema or a memory space; sharing either dissolves the boundary.
+        sources:
+          - {work: vernon2013, chapter: 2, page: 68}
+
+  - term: context_map
+    title: Context Map
+    phase: strategic
+    definition:
+      text: >-
+        The named bounded contexts in play on a project and the points
+        of contact between their models: the translation for any
+        communication, what is shared, what is isolated, and which way
+        influence runs. It maps the existing terrain; transformations
+        come later.
+      sources:
+        - {work: evans2015, page: 29, section: Context Map}
+        - {work: fowler-bounded-context}
+        - {work: vernon2013, chapter: 3, page: 87}
+    records:
+      section: relations
+      note: The context map is the set of recorded relations; it has no entry of its own.
+    invariants:
+      - id: context_map/relations-name-recorded-contexts
+        statement: A relation names two recorded bounded contexts, upstream first, and the same relation is not recorded twice.
+        sources:
+          - {work: evans2015, page: 29, section: Context Map}
+        enforcement: {by: loader, languages: all}
+      - id: context_map/one-relation-per-pair
+        statement: A relation joins two distinct contexts, and one pair of contexts carries at most one relation; a context related to itself, or a pair recorded under two kinds, is rejected.
+        sources:
+          - {work: evans2015, page: 29, section: Context Map}
+          - {work: evans2015, page: 28, section: upstream-downstream}
+        enforcement: {by: loader, languages: all}
+    guidance:
+      - text: Identify each model in play on the project, including the implicit models of non-object-oriented subsystems, and give each bounded context a name that is part of the ubiquitous language.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 29, section: Context Map}
+
+  - term: context_relation
+    title: Context Relation
+    phase: strategic
+    definition:
+      text: >-
+        One point of contact on the context map, a relationship between
+        an upstream context, whose actions affect the downstream
+        context's success, and a downstream context, whose actions do
+        not significantly affect the upstream. Its kind is one of the
+        published relationship patterns.
+      sources:
+        - {work: evans2015, page: 28, section: upstream-downstream}
+        - {work: evans2015, page: 29, section: Context Map}
+    records:
+      section: relations
+      properties:
+        - {name: from, required: true, definition: The upstream context.}
+        - {name: to, required: true, definition: The downstream context.}
+        - {name: kind, required: true, definition: One of the published kinds below.}
+        - {name: description, required: false, definition: "What passes between the two contexts and which way, in the ubiquitous language."}
+      kinds:
+        - name: partnership
+          definition: The two contexts succeed or fail together; the teams coordinate planning and the evolution of their interfaces. Influence runs both ways.
+          sources: [{work: evans2015, page: 30, section: Partnership}]
+        - name: shared_kernel
+          definition: An explicitly bounded subset of the model, and the code and database design associated with it, that the two teams agree to share and change only in consultation. Influence runs both ways.
+          sources: [{work: evans2015, page: 31, section: Shared Kernel}]
+        - name: customer_supplier
+          definition: The downstream team is the upstream team's customer; downstream priorities factor into upstream planning and jointly developed acceptance tests validate the interface.
+          sources: [{work: evans2015, page: 32, section: Customer/Supplier Development}]
+        - name: conformist
+          definition: The downstream team eliminates translation by adhering to the upstream model as it is, sharing the upstream's ubiquitous language.
+          sources: [{work: evans2015, page: 33, section: Conformist}]
+        - name: anticorruption_layer
+          definition: The downstream context isolates itself with a layer that presents the upstream's functionality in terms of the downstream's own model, translating in one or both directions.
+          sources: [{work: evans2015, page: 34, section: Anticorruption Layer}]
+        - name: open_host_service
+          definition: The upstream context defines an open protocol giving access to its subsystem as a set of services, augmented by one-off translators only for idiosyncratic clients.
+          sources: [{work: evans2015, page: 35, section: Open-host Service}]
+        - name: published_language
+          definition: The two contexts translate through a well-documented shared language that can express the necessary domain information, often combined with an open-host service.
+          sources: [{work: evans2015, page: 36, section: Published Language}]
+        - name: separate_ways
+          definition: The two contexts have no connection at all, so each may find simple, specialized solutions within its own scope.
+          sources: [{work: evans2015, page: 37, section: Separate Ways}]
+    invariants:
+      - id: context_relation/published-kind
+        statement: A relation's kind is one of the published kinds; any other spelling is rejected.
+        sources:
+          - {work: evans2015, page: 29, section: Context Map}
+        enforcement: {by: loader, languages: all}
+      - id: context_relation/imports-follow-influence
+        statement: Under a one-way kind (customer_supplier, conformist, anticorruption_layer, open_host_service, published_language) only the downstream context's code imports the upstream's; under partnership or shared_kernel both may import each other; under separate_ways neither imports the other.
+        sources:
+          - {work: evans2015, page: 28, section: upstream-downstream}
+          - {work: evans2015, page: 37, section: Separate Ways}
+        enforcement: {by: domain, facts: [file_tree, declarations, imports], languages: all}
+
+  - term: core_domain
+    title: Core Domain
+    phase: strategic
+    definition:
+      text: >-
+        The critical core of the model, the real business asset,
+        boiled down and kept small so it can be distinguished from the
+        mass of supporting model and code, and where the deepest model
+        and the best developers are invested.
+      sources:
+        - {work: evans2015, page: 40, section: Core Domain}
+    records:
+      section: none
+      note: A designation of a context, not a recorded entry; the ruleset's Zones and Rules carry the investment it asks for.
+    guidance:
+      - text: Justify investment in any other part of the system by how it supports the distilled core.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 40, section: Core Domain}
+
+  - term: generic_subdomain
+    title: Generic Subdomain
+    phase: strategic
+    definition:
+      text: >-
+        A cohesive subdomain that is not the motivation for the
+        project, factored out into a separate module as a generic
+        model, kept free of the project's specialties, and developed
+        with lower priority than the core domain.
+      sources:
+        - {work: evans2015, page: 41, section: Generic Subdomains}
+    records:
+      section: none
+      note: A designation of a context or Zone, not a recorded entry.
+    guidance:
+      - text: Consider off-the-shelf solutions or published models for a generic subdomain, and avoid assigning core developers to it.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 41, section: Generic Subdomains}
+
+  - term: big_ball_of_mud
+    title: Big Ball of Mud
+    phase: strategic
+    definition:
+      text: >-
+        A part of a system where models are mixed and boundaries are
+        inconsistent, designated as such by drawing a boundary around
+        the whole mess so that no sophisticated modeling is attempted
+        inside it and it is kept from sprawling into other contexts.
+      sources:
+        - {work: evans2015, page: 38, section: Big Ball of Mud}
+    records:
+      section: none
+      note: A designation of a context; in a ruleset it is a Zone other Zones may not import from.
+
+  - term: domain_isolation
+    title: Isolating the Domain
+    phase: tactical
+    definition:
+      text: >-
+        The expression of the domain model and the business logic kept
+        free of any dependency on infrastructure, user interface, or
+        application logic that is not business logic, so that the
+        domain objects, relieved of displaying, storing, and managing
+        themselves, can be focused on expressing the model. The key
+        goal is isolation; a layered architecture is one way to reach
+        it, and hexagonal and related patterns serve as well or better
+        to the degree that they keep the model's expression free of
+        references to other system concerns. Domain-Driven Design
+        demands the isolation, not any one architecture around it.
+      sources:
+        - {work: evans2015, page: 10, section: Layered Architecture}
+        - {work: evans2003, chapter: 4, section: Isolating the Domain}
+        - {work: fowler-architecture}
+    records:
+      section: none
+      note: The architecture, whichever one, is the Zones of rules.arclint.yaml and the Rules between them; the domain file does not repeat it, and the isolation can only be judged where the ruleset declares Zones. The only demand the meta-model makes of the architecture is the isolation below.
+    invariants:
+      - id: domain_isolation/model-imports-nothing-outside-itself
+        statement: Code of a bounded context imports no code of a declared Zone that no context holds; whatever the architecture, dependencies run toward the model and never out of it. Without a declared Zone there is no outside to judge, and the invariant does not apply.
+        sources:
+          - {work: evans2015, page: 10, section: Layered Architecture}
+        enforcement: {by: domain, facts: [file_tree, declarations, imports], languages: all}
+    guidance:
+      - text: Concentrate all the code related to the domain model in one place and isolate it from the user interface, application, and infrastructure code.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 10, section: Layered Architecture}
+
+  - term: entity
+    title: Entity
+    phase: tactical
+    definition:
+      text: >-
+        An object defined primarily by its identity rather than its
+        attributes: a thread of identity that runs through time and
+        often across distinct representations, whose attributes may
+        change while it stays the same thing. The model defines what it
+        means to be the same thing.
+      sources:
+        - {work: evans2015, page: 11, section: Entities}
+        - {work: fowler-evans-classification}
+        - {work: vernon2013, chapter: 5, page: 171}
+    records:
+      section: entities
+      note: Every entity is either the root of an aggregate, recorded as the aggregate itself, or a member of one, recorded under that aggregate's entities; there is no entity outside an aggregate. A member's identity is local, distinct only inside its aggregate.
+      properties:
+        - {name: name, required: true, definition: "The entity's name in the ubiquitous language, the name of its type in the code; the map key."}
+        - {name: definition, required: true, definition: What the entity is and what identity means for it.}
+        - {name: identity, required: false, definition: "The value object that is the member's local identity, when the member has one worth naming."}
+        - {name: aliases, required: false, definition: Other names the team uses for the same term.}
+    invariants:
+      - id: entity/identity
+        statement: An entity declares a field whose type is its recorded identity, distinguishing it from every other object of its kind regardless of attributes.
+        sources:
+          - {work: evans2015, page: 11, section: Entities}
+          - {work: vernon2013, chapter: 5, page: 173}
+        enforcement: {needs: field-types, facts: [declarations], languages: []}
+      - id: entity/equality-by-identity
+        statement: Two entities are the same when their identities are the same, whatever their attributes.
+        sources:
+          - {work: evans2015, page: 11, section: Entities}
+          - {work: vernon2013, chapter: 5, page: 174}
+        enforcement: {needs: resolved-calls, facts: [declarations, calls], languages: []}
+    guidance:
+      - text: When an object is distinguished by its identity rather than its attributes, make this primary to its definition in the model; keep the class definition simple and focused on life cycle continuity and identity.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 11, section: Entities}
+      - text: Move descriptive attributes and their logic into value objects, so the entity is left with identity and life cycle.
+        sources:
+          - {work: evans2015, page: 11, section: Entities}
+          - {work: vernon2013, chapter: 10, page: 382}
+      - text: An entity inside an aggregate has a local identity that needs to be distinguishable only within the aggregate; only the root carries a global one.
+        sources:
+          - {work: evans2003, chapter: 6, page: 127}
+          - {work: evans2015, page: 16, section: Aggregates}
+
+  - term: value_object
+    title: Value Object
+    phase: tactical
+    definition:
+      text: >-
+        An object that describes or computes some characteristic of a
+        thing and has no conceptual identity: it matters only as the
+        combination of its attributes, two with the same attribute
+        values are equal, and it is treated as immutable, with every
+        operation a side-effect-free function.
+      sources:
+        - {work: evans2015, page: 12, section: Value Objects}
+        - {work: fowler-value-object}
+        - {work: fowler-evans-classification}
+        - {work: vernon2013, chapter: 6, page: 219}
+    records:
+      section: value_objects
+      note: A map keyed by name. An identity named by an aggregate or a member entity is a value object of the context whether or not it is recorded here; record it only when there is more to say than that it identifies its entity.
+      properties:
+        - {name: name, required: true, definition: "The value object's name, the name of its type in the code; the map key."}
+        - {name: definition, required: true, definition: What the value describes and what makes two of them equal.}
+        - {name: aliases, required: false, definition: Other names the team uses for the same term.}
+        - {name: invariants, required: false, definition: "The conditions a value of this kind always satisfies, a map from key to statement; a value that would violate one is never constructed."}
+    invariants:
+      - id: value_object/constructed-through-one-door
+        statement: "A value object with a recorded invariant declares a constructor: a function of its module that returns it, or a constructor or __init__ of its class, or a factory method on it named create, from, of, parse, new, or build; the invariant is enforced there, so a value that violates it never exists."
+        sources:
+          - {work: evans2015, page: 12, section: Value Objects}
+          - {work: evans2015, page: 18, section: Factories}
+          - {work: vernon2013, chapter: 6, page: 221}
+        enforcement: {by: domain, facts: [file_tree, declarations], languages: all}
+      - id: value_object/no-setters
+        statement: A value object declares no method whose name begins with set; nothing changes a value after construction.
+        sources:
+          - {work: evans2015, page: 12, section: Value Objects}
+          - {work: fowler-value-object}
+          - {work: vernon2013, chapter: 6, page: 221}
+        enforcement: {by: domain, facts: [file_tree, declarations], languages: all}
+      - id: value_object/no-identity
+        statement: A value object declares no identity field; identity is what makes an entity, and a value object has none.
+        sources:
+          - {work: evans2015, page: 12, section: Value Objects}
+          - {work: vernon2013, chapter: 6, page: 221}
+        enforcement: {needs: field-declarations, facts: [declarations], languages: [go, typescript]}
+      - id: value_object/immutable-fields
+        statement: Every field of a value object is immutable after construction.
+        sources:
+          - {work: evans2015, page: 12, section: Value Objects}
+          - {work: fowler-value-object}
+          - {work: vernon2013, chapter: 6, page: 221}
+        enforcement: {needs: field-mutability, facts: [declarations], languages: []}
+    guidance:
+      - text: Make all operations of a value object side-effect-free functions that do not depend on any mutable state, and move complex logic into value objects when a concept fitting the responsibility presents itself.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 21, section: Side-Effect-Free Functions}
+          - {work: vernon2013, chapter: 6, page: 228}
+
+  - term: invariant
+    title: Invariant
+    phase: tactical
+    definition:
+      text: >-
+        A consistency rule that must hold whenever the objects it
+        constrains can be observed: an aggregate's invariants hold at
+        the end of every operation on the aggregate, and a value
+        object's invariants hold for every value that exists. The
+        aggregate root, or the value object's constructor, is
+        responsible for enforcing it, so that a state violating it is
+        never reachable. In the code an invariant is stated as an
+        assertion.
+      sources:
+        - {work: evans2015, page: 16, section: Aggregates}
+        - {work: evans2015, page: 22, section: Assertions}
+        - {work: vernon2013, chapter: 10, page: 353}
+    records:
+      section: invariants
+      note: A map from key to statement, recorded under the aggregate or value object that owns it; the owner is the nesting, never a reference.
+      properties:
+        - {name: key, required: true, definition: "The rule's name in kebab-case, unique within its owner and stable across edits: it is how a finding, a suppression, and a baseline refer to the rule. For an aggregate's invariant it also names the root method that enforces it: ensure followed by the key, spelled in the language's method case, so lines-frozen is enforced by EnsureLinesFrozen in Go, ensureLinesFrozen in TypeScript, and ensure_lines_frozen in Python."}
+        - {name: statement, required: true, definition: "The rule in the ubiquitous language, as a domain expert would state it."}
+    invariants:
+      - id: invariant/owned-by-aggregate-or-value-object
+        statement: An invariant is owned by exactly one recorded aggregate or value object; an invariant written under a member entity, an event, or under nothing, is rejected.
+        sources:
+          - {work: evans2015, page: 16, section: Aggregates}
+          - {work: evans2015, page: 22, section: Assertions}
+        enforcement: {by: loader, languages: all}
+      - id: invariant/keyed-within-owner
+        statement: Every invariant carries a kebab-case key, unique within its owner and distinct from the owner's assertion keys; the parser rejects a key recorded twice under one owner, and the loader rejects an empty key or an empty statement.
+        sources:
+          - {work: evans2015, page: 22, section: Assertions}
+          - {work: vernon2013, chapter: 10, page: 353}
+        enforcement: {by: loader, languages: all}
+      - id: invariant/key-names-the-rule
+        statement: An invariant's key names the rule it protects, in the ubiquitous language; a key that names only the act of checking (validate, check, verify, is-valid, check-rules, ensure, assert, guard) is rejected, because a name that describes the means says nothing about the effect.
+        sources:
+          - {work: evans2015, page: 20, section: Intention-Revealing Interfaces}
+          - {work: evans2015, page: 4, section: Ubiquitous Language}
+        enforcement: {by: loader, languages: all}
+      - id: invariant/enforced-at-every-mutation
+        statement: Every constructor and every command of the root calls the ensure method of the aggregate's invariant, so the invariant is evaluated at the completion of every state-mutating operation and a violation fails the operation; a root with no constructor has no door at which to enforce it.
+        sources:
+          - {work: evans2015, page: 16, section: Aggregates}
+          - {work: vernon2013, chapter: 10, page: 354}
+        enforcement: {by: domain, facts: [file_tree, declarations, calls], languages: all}
+    guidance:
+      - text: Model true invariants in consistency boundaries; a rule that can tolerate a delay is not an invariant of the aggregate and belongs to eventual consistency outside it.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 16, section: Aggregates}
+          - {work: vernon2013, chapter: 10, page: 353}
+      - text: Report a refused operation under the name of the rule that refused it, so that the interface tells which rule failed without a trace through the implementation.
+        sources:
+          - {work: evans2015, page: 20, section: Intention-Revealing Interfaces}
+      - text: Keep the rule's logic on the aggregate or value object that owns it; a model whose objects are bags of getters and setters, with the rules pushed out to services, is anemic and has none of the benefits of a domain model.
+        sources:
+          - {work: fowler-anemic-domain-model}
+          - {work: evans2015, page: 16, section: Aggregates}
+
+  - term: assertion
+    title: Assertion
+    phase: tactical
+    definition:
+      text: >-
+        A stated post-condition of an operation or invariant of a class
+        or aggregate, made explicit so that the effect of an operation
+        can be known without tracing its implementation. Assertions
+        define the contracts of services and entity modifiers and the
+        invariants on aggregates; where they cannot be coded directly,
+        they are written as automated unit tests.
+      sources:
+        - {work: evans2015, page: 22, section: Assertions}
+        - {work: evans2003, chapter: 10, page: 255}
+        - {work: vernon2013, chapter: 5, page: 208}
+    records:
+      section: assertions
+      note: A map keyed by the assertion's name, recorded under the aggregate whose operation it constrains.
+      properties:
+        - {name: key, required: true, definition: "The assertion's name in kebab-case, unique within its owner; the root's method that checks it is assert followed by the key, spelled in the language's method case (AssertHasLines, assertHasLines, assert_has_lines)."}
+        - {name: "on", required: true, definition: The operation of the root whose completion the assertion constrains.}
+        - {name: statement, required: true, definition: The post-condition in the ubiquitous language.}
+    invariants:
+      - id: assertion/names-owner-operation-and-check
+        statement: An assertion carries a statement, names the operation it constrains, and carries a key naming the method that checks it.
+        sources:
+          - {work: evans2015, page: 22, section: Assertions}
+        enforcement: {by: loader, languages: all}
+      - id: assertion/owned-by-an-aggregate
+        statement: An assertion is recorded under one aggregate; an assertion under a value object, a member entity, or nothing is rejected.
+        sources:
+          - {work: evans2015, page: 22, section: Assertions}
+        enforcement: {by: loader, languages: all}
+      - id: assertion/checked-by-its-operation
+        statement: The root declares both the operation and the checking method (assert followed by the key in the language's method case), and the operation calls the checking method.
+        sources:
+          - {work: evans2015, page: 22, section: Assertions}
+        enforcement: {by: domain, facts: [file_tree, declarations, calls], languages: all}
+    guidance:
+      - text: State post-conditions of operations and invariants of classes and aggregates explicitly; where they cannot be coded directly, write automated unit tests for them.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 22, section: Assertions}
+      - text: Seek models with coherent sets of concepts that lead a developer to infer the intended assertions.
+        sources:
+          - {work: evans2015, page: 22, section: Assertions}
+          - {work: evans2003, chapter: 10, page: 256}
+
+  - term: specification
+    title: Specification
+    phase: tactical
+    definition:
+      text: >-
+        A predicate-like value object that tells whether a candidate
+        object matches some criteria, separating the statement of what
+        kind of objects can be selected from the object that does the
+        selecting. It answers through one operation, isSatisfiedBy, and
+        can be combined with other specifications.
+      sources:
+        - {work: evans-fowler-1997, page: 2}
+        - {work: evans2015, page: 25, section: Declarative Design}
+    records:
+      section: specifications
+      properties:
+        - {name: name, required: true, definition: "The specification's name, the name of its type in the code; the map key."}
+        - {name: definition, required: true, definition: "The criteria it states, in the ubiquitous language."}
+    invariants:
+      - id: specification/satisfaction-method
+        statement: A specification is a declared type carrying a satisfaction method (SatisfiedBy, satisfiedBy, or satisfied_by).
+        sources:
+          - {work: evans-fowler-1997, page: 2}
+        enforcement: {by: domain, facts: [file_tree, declarations], languages: all}
+
+  - term: business_rule
+    title: Business Rule
+    phase: tactical
+    definition:
+      text: >-
+        A rule of the business as a domain expert states it, before the
+        model has placed it. Once placed it is either an invariant,
+        when it must hold at all times for an aggregate or a value, or
+        an assertion, when it is a post-condition of one operation. It
+        is never recorded as its own section.
+      sources:
+        - {work: evans2015, page: 22, section: Assertions}
+        - {work: vernon2013, chapter: 10, page: 353}
+    records:
+      section: none
+      note: Recorded as an invariant or an assertion with one owner.
+
+  - term: aggregate
+    title: Aggregate
+    phase: tactical
+    definition:
+      text: >-
+        A cluster of entities and value objects with a boundary around
+        it, treated as a single unit for the purpose of data changes.
+        The one boundary is three things at once. It is a consistency
+        boundary: properties and invariants are defined for the
+        aggregate as a whole, the root enforces them, and inside the
+        boundary consistency rules apply synchronously while across it
+        updates are handled asynchronously. It is a transactional
+        boundary: the aggregate is loaded, saved, and removed whole,
+        one transaction changes one aggregate, and transactions do not
+        cross the boundary. It is a reference boundary: one entity is
+        the root, external objects hold references to the root only,
+        a member's identity is local to the aggregate, and what one
+        aggregate keeps of another is that aggregate's identity.
+      sources:
+        - {work: evans2015, page: 16, section: Aggregates}
+        - {work: fowler-aggregate}
+        - {work: evans2003, chapter: 6, page: 127}
+        - {work: vernon2013, chapter: 10, page: 347}
+    records:
+      section: aggregates
+      note: "A map keyed by the aggregate's name, which is the root's name; the entry is the root. The aggregate's code is where its root is declared: the package in Go, the file in TypeScript and Python."
+      properties:
+        - {name: name, required: true, definition: "The aggregate's name, which is the name of its root entity and of the root's type in the code; the map key."}
+        - {name: definition, required: true, definition: What the aggregate is and what changes together inside it.}
+        - {name: identity, required: true, definition: "The value object that is the root's global identity, a term of the context."}
+        - {name: aliases, required: false, definition: Other names the team uses for the same term.}
+        - {name: entities, required: false, definition: "The aggregate's member entities other than the root, a map keyed by name; each has a local identity."}
+        - {name: invariants, required: false, definition: "The aggregate's invariants, a map from key to statement; each key names the rule, and ensure followed by the key names the root method that enforces it."}
+        - {name: assertions, required: false, definition: "Post-conditions of the root's operations, a map keyed by the assertion's name."}
+        - {name: repository, required: false, definition: The name of the aggregate's repository type when the aggregate needs global access.}
+        - {name: factory, required: false, definition: The name of the factory that assembles the aggregate when construction is complex.}
+    invariants:
+      - id: aggregate/one-root
+        statement: An aggregate entry is its root, an entity spelled with the aggregate's name and carrying the aggregate's identity; a name is never both an aggregate and a member entity, in its own aggregate or another.
+        sources:
+          - {work: evans2015, page: 16, section: Aggregates}
+          - {work: fowler-aggregate}
+          - {work: vernon2013, chapter: 10, page: 380}
+        enforcement: {by: loader, languages: all}
+      - id: aggregate/identity-recorded
+        statement: An aggregate names its identity, and the identity is a value object of the same context, recorded there or implied by the naming; an aggregate without an identity, or whose identity is recorded as anything but a value object, is rejected.
+        sources:
+          - {work: evans2015, page: 11, section: Entities}
+          - {work: evans2015, page: 16, section: Aggregates}
+          - {work: vernon2013, chapter: 5, page: 173}
+        enforcement: {by: loader, languages: all}
+      - id: aggregate/every-entity-has-an-aggregate
+        statement: Every entity is an aggregate or a member of exactly one aggregate; an entity recorded outside every aggregate is rejected, because the cluster with no boundary around it is what aggregates exist to prevent.
+        sources:
+          - {work: evans2015, page: 16, section: Aggregates}
+        enforcement: {by: loader, languages: all}
+      - id: aggregate/protects-an-invariant
+        statement: An aggregate records at least one invariant; a boundary drawn around nothing that must stay consistent is not yet justified, and the finding asks whether the entry is an aggregate or a value.
+        sources:
+          - {work: evans2015, page: 16, section: Aggregates}
+          - {work: vernon2013, chapter: 10, page: 353}
+        enforcement: {by: domain, languages: all, severity: warning}
+      - id: aggregate/root-declared
+        statement: The root is one declared type spelled with the aggregate's name in the language's type case, found in the context's code; a type that can carry behaviour (a struct or named type in Go, a class in TypeScript and Python) is the root ahead of an interface or alias of the same name, two such declarations with nothing to choose between them are a finding, and none is a finding at the recording.
+        sources:
+          - {work: evans2015, page: 16, section: Aggregates}
+          - {work: evans2015, page: 4, section: Ubiquitous Language}
+        enforcement: {by: domain, facts: [file_tree, declarations], languages: all}
+      - id: aggregate/invariants-enforced-by-root
+        statement: For every recorded invariant of the aggregate the root declares the method that enforces it, ensure followed by the key in the language's method case (EnsureLinesFrozen, ensureLinesFrozen, ensure_lines_frozen); the enforcement lives on the root and nowhere else.
+        sources:
+          - {work: evans2015, page: 16, section: Aggregates}
+          - {work: evans2015, page: 20, section: Intention-Revealing Interfaces}
+          - {work: vernon2013, chapter: 10, page: 354}
+        enforcement: {by: domain, facts: [file_tree, declarations], languages: all}
+      - id: aggregate/commands-named-for-behavior
+        statement: The root declares no method whose name begins with set; a change of state is a command named for what it does in the ubiquitous language, and a root made of setters is an anemic model whose rules live somewhere else.
+        sources:
+          - {work: evans2015, page: 20, section: Intention-Revealing Interfaces}
+          - {work: evans2015, page: 21, section: Side-Effect-Free Functions}
+          - {work: fowler-anemic-domain-model}
+        enforcement: {by: domain, facts: [file_tree, declarations], languages: all, severity: warning}
+      - id: aggregate/references-by-identity
+        statement: No constructor or command of one aggregate's root takes or returns another aggregate's root; what one aggregate needs of another it receives as an identity or a value. Field types are not yet observed, so a root held in a field is not seen, and an import alias hides a root of another package.
+        sources:
+          - {work: evans2015, page: 16, section: Aggregates}
+          - {work: fowler-aggregate}
+          - {work: vernon2013, chapter: 10, page: 359}
+        enforcement: {by: domain, facts: [file_tree, declarations, imports], languages: all}
+      - id: aggregate/root-only-references
+        statement: Nothing outside the aggregate holds a reference to a member other than the root; references to members are passed out for use within a single operation only.
+        sources:
+          - {work: evans2015, page: 16, section: Aggregates}
+          - {work: fowler-aggregate}
+        enforcement: {needs: field-types, facts: [declarations], languages: []}
+      - id: aggregate/one-per-transaction
+        statement: One transaction modifies one aggregate instance; transactions do not cross aggregate boundaries.
+        sources:
+          - {work: evans2015, page: 16, section: Aggregates}
+          - {work: fowler-aggregate}
+          - {work: vernon2013, chapter: 10, page: 360}
+        enforcement: {needs: transaction-facts, facts: [], languages: []}
+    guidance:
+      - text: Cluster into an aggregate what a true invariant requires to change atomically, and only that; a rule that only needs to hold eventually does not join two things into one aggregate.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 16, section: Aggregates}
+          - {work: vernon2013, chapter: 10, page: 353}
+      - text: Design small aggregates; do not cluster on the shape of the database or a parent-child relation, and reconsider the model when the boundaries are not guiding transactional and distributional decisions well.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 16, section: Aggregates}
+          - {work: vernon2013, chapter: 10, page: 355}
+      - text: Refer to another aggregate by its identity, never by holding its root.
+        fundamental: true
+        sources:
+          - {work: vernon2013, chapter: 10, page: 359}
+          - {work: fowler-aggregate}
+      - text: Use eventual consistency outside the boundary; across aggregates, handle updates asynchronously, and ask whose job it is to bring the other aggregate up to date.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 16, section: Aggregates}
+          - {work: vernon2013, chapter: 10, page: 364}
+      - text: Load, save, and remove an aggregate whole; a member shares its root's life cycle, is stored and deleted with it, and never outlives it.
+        fundamental: true
+        sources:
+          - {work: fowler-aggregate}
+          - {work: evans2015, page: 17, section: Repositories}
+          - {work: evans2003, chapter: 6, page: 128}
+      - text: Ask an aggregate whether something is allowed through a side-effect-free function named for the capability, or through a specification; a command changes state and returns no domain information.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 21, section: Side-Effect-Free Functions}
+          - {work: evans-fowler-1997, page: 2}
+      - text: Favor value object parts over entity parts inside an aggregate.
+        sources:
+          - {work: vernon2013, chapter: 10, page: 382}
+      - text: Tell the aggregate what to do rather than asking it for state and deciding outside it; follow the Law of Demeter.
+        sources:
+          - {work: vernon2013, chapter: 10, page: 382}
+      - text: Keep an aggregate together on one server, and allow different aggregates to be distributed among nodes; where concurrent modification is possible, carry a version for optimistic concurrency.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 16, section: Aggregates}
+          - {work: vernon2013, chapter: 10, page: 350}
+
+  - term: aggregate_root
+    title: Aggregate Root
+    phase: tactical
+    definition:
+      text: >-
+        The one entity of an aggregate that external objects may hold
+        references to, that carries the aggregate's globally unique
+        identity, and that is responsible for enforcing the aggregate's
+        invariants.
+      sources:
+        - {work: evans2015, page: 16, section: Aggregates}
+        - {work: fowler-aggregate}
+        - {work: vernon2013, chapter: 10, page: 380}
+    records:
+      section: aggregates
+      note: The root is the aggregate's entry itself; the aggregate's name is the root's name and the aggregate's identity is the root's.
+
+  - term: domain_event
+    title: Domain Event
+    phase: tactical
+    definition:
+      text: >-
+        A full-fledged part of the domain model representing something
+        that happened in the domain that domain experts care about, as
+        distinct from a system event. It is ordinarily immutable, being
+        a record of the past, and typically carries the time it
+        occurred and the identities of the entities involved.
+      sources:
+        - {work: evans2015, page: 13, section: Domain Events}
+        - {work: fowler-domain-event}
+        - {work: vernon2013, chapter: 8, page: 285}
+    records:
+      section: events
+      note: A map keyed by the event's name.
+      properties:
+        - {name: name, required: true, definition: "The event's name, the name of its type in the code, phrased as something that happened; the map key."}
+        - {name: definition, required: true, definition: What happened and who cares.}
+        - {name: raised_by, required: false, definition: The aggregate whose operation raises it.}
+    invariants:
+      - id: domain_event/raised-by-an-aggregate
+        statement: An event that records what raises it names an aggregate of its own context; an event raised by a value object, a service, or a name the context does not record is rejected.
+        sources:
+          - {work: evans2015, page: 13, section: Domain Events}
+          - {work: vernon2013, chapter: 8, page: 287}
+        enforcement: {by: loader, languages: all}
+      - id: domain_event/declared
+        statement: A recorded event is a declared type spelled with the event's name in the language's type case.
+        sources:
+          - {work: evans2015, page: 13, section: Domain Events}
+        enforcement: {by: domain, facts: [file_tree, declarations], languages: all}
+      - id: domain_event/no-setters
+        statement: An event declares no method whose name begins with set; a record of the past is not edited.
+        sources:
+          - {work: evans2015, page: 13, section: Domain Events}
+          - {work: fowler-domain-event}
+          - {work: vernon2013, chapter: 8, page: 291}
+        enforcement: {by: domain, facts: [file_tree, declarations], languages: all}
+      - id: domain_event/occurrence-time
+        statement: An event declares a field carrying the time it occurred.
+        sources:
+          - {work: evans2015, page: 13, section: Domain Events}
+          - {work: fowler-domain-event}
+          - {work: vernon2013, chapter: 8, page: 291}
+        enforcement: {needs: field-declarations, facts: [declarations], languages: [go, typescript]}
+      - id: domain_event/immutable
+        statement: Every field of an event is immutable after construction.
+        sources:
+          - {work: evans2015, page: 13, section: Domain Events}
+          - {work: fowler-domain-event}
+        enforcement: {needs: field-mutability, facts: [declarations], languages: []}
+    guidance:
+      - text: Name an event in the past tense for what happened, and name a time point clearly for which time it is, occurrence or notice.
+        sources:
+          - {work: fowler-domain-event}
+          - {work: vernon2013, chapter: 8, page: 288}
+      - text: Ignore irrelevant domain activity; make explicit the events the domain experts want to track or be notified of, or which are associated with state change in other model objects.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 13, section: Domain Events}
+
+  - term: domain_service
+    title: Domain Service
+    phase: tactical
+    definition:
+      text: >-
+        A standalone operation in the domain for a significant process
+        or transformation that is not a natural responsibility of an
+        entity or value object, declared as an interface with a name
+        that is part of the ubiquitous language and a contract stated
+        as assertions.
+      sources:
+        - {work: evans2015, page: 14, section: Services}
+        - {work: fowler-evans-classification}
+        - {work: vernon2013, chapter: 7, page: 267}
+    records:
+      section: services
+      note: A map keyed by the service's name.
+      properties:
+        - {name: name, required: true, definition: "The service's name, the name of its type in the code; the map key."}
+        - {name: definition, required: true, definition: The process or transformation it performs and across which aggregates.}
+    invariants:
+      - id: domain_service/declared
+        statement: A recorded service is a declared type spelled with the service's name in the language's type case.
+        sources:
+          - {work: evans2015, page: 14, section: Services}
+        enforcement: {by: domain, facts: [file_tree, declarations], languages: all}
+      - id: domain_service/stateless
+        statement: A service declares no field that holds state across invocations.
+        sources:
+          - {work: evans2015, page: 14, section: Services}
+          - {work: vernon2013, chapter: 7, page: 268}
+        enforcement: {needs: field-declarations, facts: [declarations], languages: [go, typescript]}
+      - id: domain_service/not-injected-into-aggregates
+        statement: No constructor or command of an aggregate root takes a domain service as a parameter.
+        sources:
+          - {work: vernon2013, chapter: 10, page: 387}
+        enforcement: {by: planned, facts: [file_tree, declarations], languages: [go, typescript]}
+    guidance:
+      - text: Use a domain service for an operation that spans aggregates; look up what it needs ahead of invoking aggregate behavior rather than reaching out from inside the aggregate.
+        sources:
+          - {work: vernon2013, chapter: 7, page: 268}
+          - {work: vernon2013, chapter: 10, page: 362}
+
+  - term: application_service
+    title: Application Service
+    phase: tactical
+    definition:
+      text: >-
+        An operation of the application layer that coordinates a use
+        case: it fetches aggregates through repositories, invokes their
+        behavior, and commits, holding application logic that is not
+        business logic and never the domain rules themselves.
+      sources:
+        - {work: evans2015, page: 10, section: Layered Architecture}
+        - {work: evans2015, page: 17, section: Repositories}
+    records:
+      section: none
+      note: Application services are the use cases of the application Zone in rules.arclint.yaml; the domain file does not record them.
+
+  - term: repository
+    title: Repository
+    phase: tactical
+    definition:
+      text: >-
+        For each type of aggregate that needs global access, a service
+        that provides the illusion of an in-memory collection of all
+        objects of that aggregate's root type, with methods to add and
+        remove objects and to select them by criteria meaningful to
+        domain experts, encapsulating the storage and query technology.
+      sources:
+        - {work: evans2015, page: 17, section: Repositories}
+        - {work: vernon2013, chapter: 12, page: 402}
+    records:
+      section: aggregates
+      note: Recorded as the `repository` property of its aggregate; it has no entry of its own.
+    invariants:
+      - id: repository/for-aggregate-roots-only
+        statement: A repository is recorded on an aggregate; a repository for an entity that is not an aggregate root, or for a value object, is rejected.
+        sources:
+          - {work: evans2015, page: 17, section: Repositories}
+        enforcement: {by: loader, languages: all}
+      - id: repository/declared
+        statement: A recorded repository is a declared type (interface, or class in a language without interfaces) spelled with the recorded name in the language's type case, declared in the context's code.
+        sources:
+          - {work: evans2015, page: 17, section: Repositories}
+        enforcement: {by: domain, facts: [file_tree, declarations], languages: all}
+      - id: repository/not-called-from-aggregates
+        statement: No method of an aggregate root or of its members calls a repository.
+        sources:
+          - {work: vernon2013, chapter: 7, page: 266}
+          - {work: vernon2013, chapter: 10, page: 387}
+        enforcement: {needs: resolved-calls, facts: [declarations, calls], languages: []}
+    guidance:
+      - text: Provide repositories only for aggregate roots that actually need direct access; keep application logic focused on the model, delegating all object storage and access to the repositories.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 17, section: Repositories}
+
+  - term: factory
+    title: Factory
+    phase: tactical
+    definition:
+      text: >-
+        A separate object that encapsulates the creation of an entire,
+        internally consistent aggregate, or of a complex value object,
+        when construction becomes complicated or would reveal too much
+        internal structure; it creates the whole as a piece, enforcing
+        its invariants, without requiring the client to reference the
+        concrete classes being instantiated.
+      sources:
+        - {work: evans2015, page: 18, section: Factories}
+        - {work: vernon2013, chapter: 11, page: 389}
+    records:
+      section: aggregates
+      note: Recorded as the `factory` property of its aggregate; it has no entry of its own.
+    invariants:
+      - id: factory/declared
+        statement: A recorded factory is a declared type or function spelled with the recorded name in the language's case, declared in the context's code.
+        sources:
+          - {work: evans2015, page: 18, section: Factories}
+        enforcement: {by: domain, facts: [file_tree, declarations], languages: all}
+      - id: factory/returns-the-aggregate
+        statement: A recorded factory's operations return the aggregate's root type.
+        sources:
+          - {work: evans2015, page: 18, section: Factories}
+        enforcement: {by: planned, facts: [file_tree, declarations], languages: [go, typescript]}
+    guidance:
+      - text: Create an entire aggregate as a piece, enforcing its invariants; create a complex value object as a piece, possibly after assembling the elements with a builder.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 18, section: Factories}
+
+  - term: module
+    title: Module
+    phase: tactical
+    definition:
+      text: >-
+        A named partition of the code that tells the story of the
+        system and contains a cohesive set of concepts, its name part
+        of the ubiquitous language and reflecting insight into the
+        domain, chosen so that the concepts inside can be understood
+        and reasoned about independently.
+      sources:
+        - {work: evans2015, page: 15, section: Modules}
+        - {work: vernon2013, chapter: 9, page: 337}
+    records:
+      section: none
+      note: "A Module is a partition of the model, and arclint's partition of the code is the Zone. The domain file records nothing for it: an aggregate's code is the package or file its root is declared in, and a context's code is what its recorded terms are declared in."
+    invariants:
+      - id: module/named-for-the-domain
+        statement: A package or file that declares an aggregate's root, or a Zone spelled with a context's name, is spelled in the ubiquitous language.
+        sources:
+          - {work: evans2015, page: 15, section: Modules}
+        enforcement: {by: planned, languages: all}
+    guidance:
+      - text: Choose modules that tell the story of the system and contain a cohesive set of concepts, and give them names that become part of the ubiquitous language.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 15, section: Modules}
+      - text: When modules are coupled, look for a way to change the model to disentangle the concepts, or for an overlooked concept that might be the basis of a module that would bring the elements together.
+        sources:
+          - {work: evans2015, page: 15, section: Modules}
+
+  - term: zone
+    title: Zone
+    phase: structural
+    definition:
+      text: >-
+        A named, physical partition of the codebase resolved via file
+        paths or directory boundaries. It acts as a jurisdictional area
+        where a specific set of architectural rules, technology
+        constraints, and dependency rules are strictly enforced.
+    records:
+      section: none
+      note: "Zones are declared in rules.arclint.yaml with the paths they own; the domain file never names one. A Zone spelled with a bounded context's name says the Zone is that context: its terms are looked for there alone and every file of the Zone is the context's code, which is needed when the repository declares a recorded term more than once or when files that declare no recorded term are still the context's."
+
+  - term: question
+    title: Open Question
+    phase: structural
+    definition:
+      text: >-
+        Something about a bounded context's model that the team has not
+        settled, recorded in the domain file in place of a guess so
+        that the gap is visible and can be answered. A question is
+        never a rule; arclint enforces nothing from it and reports it
+        only when asked what is open.
+    records:
+      section: questions
+      note: A map from key to the question's text, under the context it is about; the loader rejects an empty key, a key that is not kebab-case, or empty text.
+      properties:
+        - {name: key, required: true, definition: "The question's name in kebab-case, unique within its context; the map key."}
+        - {name: text, required: true, definition: "The question, as the team would ask a domain expert."}

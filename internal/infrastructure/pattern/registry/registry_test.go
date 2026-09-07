@@ -12,8 +12,58 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/distribution"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	embeddedpattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/embedded"
+	patternfiles "github.com/wixregiga/arclint/internal/infrastructure/pattern/files"
 	registrypattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/registry"
 )
+
+// hexagonalPattern is a second, authored Pattern published beside the
+// built-in so the tests see an index with more than one entry. It
+// sorts before arclint/vertical.
+const hexagonalPattern = `pattern:
+  namespace: acme
+  name: hexagonal
+  version: 1.0.0
+  coverage: [go]
+  documentation: |
+    Ports and adapters: the domain knows nothing outside itself.
+
+zones:
+  domain:
+    description: "The domain model; stdlib-only."
+    paths: internal/domain/**
+
+rules:
+  domain/stdlib-only:
+    description: "The domain imports no other zone and no third-party package."
+    on: domain
+    imports:
+      internal: []
+      external: forbid
+`
+
+// authored returns the hexagonal Pattern as an Available authored in
+// place, exactly as a repository's own .arclint/patterns entry loads.
+func authored(t *testing.T) distribution.Available {
+	t.Helper()
+	file, err := distribution.NewPatternFile(distribution.PatternFileName, []byte(hexagonalPattern))
+	if err != nil {
+		t.Fatalf("NewPatternFile: %v", err)
+	}
+	files := []distribution.PatternFile{file}
+	p, err := patternfiles.Load(files, "acme/hexagonal")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	v, err := distribution.Vendor(p.Reference(), files)
+	if err != nil {
+		t.Fatalf("Vendor: %v", err)
+	}
+	a, err := distribution.NewAvailable(distribution.SourceLocal, p, v, true)
+	if err != nil {
+		t.Fatalf("NewAvailable: %v", err)
+	}
+	return a
+}
 
 // builtIn returns the named built-in Pattern with its files.
 func builtIn(t *testing.T, name string) distribution.Available {
@@ -52,7 +102,7 @@ func TestPublishThenFetchOverFileURL(t *testing.T) {
 		published.IndexPath != filepath.Join(dir, "index.json") {
 		t.Errorf("published = %+v", published)
 	}
-	if _, err := publisher.Publish(dir, builtIn(t, "domain-model")); err != nil {
+	if _, err := publisher.Publish(dir, authored(t)); err != nil {
 		t.Fatalf("Publish second: %v", err)
 	}
 	again, err := publisher.Publish(dir, vertical)
@@ -78,7 +128,7 @@ func TestPublishThenFetchOverFileURL(t *testing.T) {
 	if err := json.Unmarshal(indexData, &indexDoc); err != nil {
 		t.Fatalf("index.json: %v", err)
 	}
-	if len(indexDoc.Patterns) != 2 || indexDoc.Patterns[0].Pattern != "arclint/domain-model@0.1.0" ||
+	if len(indexDoc.Patterns) != 2 || indexDoc.Patterns[0].Pattern != "acme/hexagonal@1.0.0" ||
 		indexDoc.Patterns[1].Pattern != "arclint/vertical@0.1.0" {
 		t.Errorf("index lists %+v", indexDoc.Patterns)
 	}
@@ -137,7 +187,7 @@ func TestPublishThenFetchOverFileURL(t *testing.T) {
 
 func TestFetchOverHTTPSendsTheToken(t *testing.T) {
 	dir := t.TempDir()
-	if _, err := registrypattern.NewPublisher().Publish(dir, builtIn(t, "domain-model")); err != nil {
+	if _, err := registrypattern.NewPublisher().Publish(dir, builtIn(t, "vertical")); err != nil {
 		t.Fatalf("Publish: %v", err)
 	}
 	var sawToken bool
@@ -158,15 +208,15 @@ func TestFetchOverHTTPSendsTheToken(t *testing.T) {
 		t.Fatalf("Index: %v", err)
 	}
 	refs := index.References()
-	if len(refs) != 1 || refs[0].String() != "arclint/domain-model@0.1.0" {
+	if len(refs) != 1 || refs[0].String() != "arclint/vertical@0.1.0" {
 		t.Errorf("index = %v", refs)
 	}
 	fetched, err := client.Fetch(reg, refs[0])
 	if err != nil {
 		t.Fatalf("Fetch: %v", err)
 	}
-	if len(fetched.Pattern.Extensions()) != 3 {
-		t.Errorf("fetched %d extensions, want 3", len(fetched.Pattern.Extensions()))
+	if len(fetched.Pattern.Extensions()) != 5 {
+		t.Errorf("fetched %d extensions, want 5", len(fetched.Pattern.Extensions()))
 	}
 	if !sawToken {
 		t.Errorf("the bearer token was not sent")

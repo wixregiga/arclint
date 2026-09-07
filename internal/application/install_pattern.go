@@ -20,10 +20,10 @@ type InstallPatternRequest struct {
 	Languages []string
 }
 
-// BoundModule is one drafted Binding as the install report shows it.
-type BoundModule struct {
-	Module string
-	Paths  []string
+// BoundZone is one drafted Binding as the install report shows it.
+type BoundZone struct {
+	Zone  string
+	Paths []string
 }
 
 // InstallPatternResult reports everything the install touched.
@@ -44,11 +44,11 @@ type InstallPatternResult struct {
 	// extended before, "" when the extends entry is new.
 	RulesetReplaced string
 	// Bound lists the Bindings written: the ruleset's own paths for a
-	// Module it already declared, the Pattern's suggested paths otherwise.
-	Bound []BoundModule
-	// Unbound lists the Pattern Modules the owner still has to bind.
+	// Zone it already declared, the Pattern's suggested paths otherwise.
+	Bound []BoundZone
+	// Unbound lists the Pattern Zones the owner still has to bind.
 	Unbound []string
-	// Adopted lists the Modules the ruleset declared itself that are now
+	// Adopted lists the Zones the ruleset declared itself that are now
 	// bound through the Pattern instead.
 	Adopted []string
 }
@@ -153,13 +153,13 @@ func (uc InstallPattern) Execute(req InstallPatternRequest) (InstallPatternResul
 }
 
 // describeBindings spells an Installation for the report.
-func describeBindings(inst rule.Installation) (bound []BoundModule, unbound []string) {
+func describeBindings(inst rule.Installation) (bound []BoundZone, unbound []string) {
 	for _, b := range inst.Bindings() {
 		paths := make([]string, 0, len(b.Paths()))
 		for _, g := range b.Paths() {
 			paths = append(paths, g.String())
 		}
-		bound = append(bound, BoundModule{Module: b.Module().String(), Paths: paths})
+		bound = append(bound, BoundZone{Zone: b.Zone().String(), Paths: paths})
 	}
 	for _, m := range inst.Unbound() {
 		unbound = append(unbound, m.Name().String())

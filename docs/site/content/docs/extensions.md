@@ -83,7 +83,7 @@ identity, Claim, and Applicability belong to the Rule, not the
 TypeScript file:
 
 ```yaml
-modules:
+zones:
   domain: "internal/domain/**"
 
 rules:
@@ -97,9 +97,9 @@ rules:
       packages: [bufio, database/sql, io, log, net, os, syscall]
 ```
 
-`uses` is the registered extension name. `on` names the Module or
-Modules whose members the Extension sees; omit it to inspect files
-outside every declared Module, which is repository-scoped enforcement
+`uses` is the registered extension name. `on` names the Zone or
+Zones whose members the Extension sees; omit it to inspect files
+outside every declared Zone, which is repository-scoped enforcement
 with the same Rule Type. `files` narrows the selected files (one glob
 or a list). `with` is validated host-side against the extension's
 published schema before `check` runs, and is rejected on any Rule
@@ -111,7 +111,7 @@ rules:
     description: "Repository interfaces are declared only in application packages."
     uses: repository-location
     with:
-      module: application
+      zone: application
 ```
 
 Extensions a Pattern carries are supplied to the runtime when the
@@ -125,7 +125,7 @@ extension unless the Pattern is extended; the check fails with
 
 During `check`, the host lends exactly this read-only surface. File-scoped
 calls are limited to the Rule's selected subjects: paths outside
-Applicability are invisible to `files` / `imports` / `facts` / `moduleOf`
+Applicability are invisible to `files` / `imports` / `facts` / `zoneOf`
 and unreadable via `read`. `ctx.domain()` is project-wide recorded
 knowledge, not path-scoped. No ambient filesystem, network, or Node
 globals.
@@ -135,9 +135,9 @@ globals.
 | `ctx.files(glob?)` | selected subjects as `FileInfo`, optionally filtered by a doublestar glob |
 | `ctx.read(path)` | one selected file's content; throws when out of scope or unreadable |
 | `ctx.imports(path)` | classified imports (`stdlib` \| `internal` \| `external` \| `unknown` \| `cgo`) with `targetDir` / `targetFile` when resolved |
-| `ctx.modules()` | declared Module names to their **selected** member paths |
+| `ctx.zones()` | declared Zone names to their **selected** member paths |
 | `ctx.facts(path)` | declaration facts, or `null` when the language did not supply them |
-| `ctx.moduleOf(path)` | sorted Module names containing the path (empty when out of scope) |
+| `ctx.zoneOf(path)` | sorted Zone names containing the path (empty when out of scope) |
 | `ctx.report(v)` | record one finding |
 | `ctx.domain()` | the project's recorded domain model (`DomainInfo`); empty `contexts` and `relations` when none is recorded |
 
@@ -151,82 +151,81 @@ globals.
 owns it. Legacy per-finding `severity`, `contract`, and `blame` fields are
 ignored if present.
 
-`ctx.domain()` returns read-only `DomainInfo` (camelCase JSON):
+`ctx.domain()` returns read-only `DomainInfo` (camelCase JSON), the
+same shape `arclint domain --format json` prints:
 
 ```ts
 {
-  source: string; // repository-relative path of the domain file
+  source: string;  // repository-relative path of the domain file
+  project: string;
   contexts: Array<{
     name: string;
-    entities: Array<{
+    definition: string;
+    aggregates: Array<{
       name: string;
-      definition?: string;
+      definition: string;
+      identity: string;      // the value object that identifies the root
       aliases?: string[];
-      aggregate?: boolean;
+      entities: Array<{ name: string; definition: string; identity?: string; aliases?: string[]; line: number }>;
+      invariants: Array<{ key: string; statement: string; line: number }>;
+      assertions: Array<{ key: string; on: string; statement: string; line: number }>;
+      repository?: string;
+      factory?: string;
       line: number;
     }>;
     valueObjects: Array<{
       name: string;
-      definition?: string;
+      definition: string;
       aliases?: string[];
+      invariants: Array<{ key: string; statement: string; line: number }>;
       line: number;
     }>;
-    invariants: Array<{
-      statement: string;
-      owner: string;
-      line: number;
-    }>;
-    assertions: Array<{
-      statement: string;
-      owner: string;
-      id: string;
-      on: string;
-      line: number;
-    }>;
-    specifications: Array<{
-      name: string;
-      definition?: string;
-      line: number;
-    }>;
-    events: Array<{
-      name: string;
-      definition?: string;
-      aliases?: string[];
-      line: number;
-    }>;
+    events: Array<{ name: string; definition: string; raisedBy?: string; line: number }>;
+    services: Array<{ name: string; definition: string; line: number }>;
+    specifications: Array<{ name: string; definition: string; line: number }>;
+    questions: Array<{ key: string; text: string; line: number }>;
     line: number;
   }>;
   relations: Array<{
     from: string;
     to: string;
     kind: string; // partnership | shared_kernel | customer_supplier | ...
+    description?: string;
     line: number;
   }>;
 }
 ```
 
 Collections are always arrays (empty when the project records none or
-the file is absent). Each term lives inside a named bounded context.
-`aggregate` is an entity designation, never a separate collection.
-Invariants carry a statement and exactly one owner. `source` is the
-repository-relative path of the domain file (`domain.arclint.yaml`), and
-every entry carries the `line` it is written on there, so a finding
+the file is absent). Each term lives inside a named bounded context;
+entities, invariants, and assertions live under the aggregate that
+owns them, and a value object carries its own invariants. `source` is
+the repository-relative path of the domain file (`domain.arclint.yaml`),
+and every entry carries the `line` it is written on there, so a finding
 about a context, term, invariant, or relation anchors at the entry
 instead of at the top of the file, without the Extension spelling the
 file name:
 
 ```ts
 const domain = ctx.domain();
-ctx.report({
-  path: domain.source,
-  line: term.line,
-  message: `entity "${term.name}" has no definition recorded`,
-});
+for (const context of domain.contexts) {
+  for (const aggregate of context.aggregates) {
+    if (aggregate.repository === undefined) {
+      ctx.report({
+        path: domain.source,
+        line: aggregate.line,
+        message: `aggregate "${aggregate.name}" records no repository`,
+      });
+    }
+  }
+}
 ```
 
-`line` is 0 for a vocabulary that was not read from a file. Declaring
-knowledge never creates a Diagnostic by itself; an Extension only
-surfaces findings when its `check` calls `ctx.report`.
+`line` is 0 for a vocabulary that was not read from a file. The
+built-in rules already judge the recorded language against the code
+(see [Domain Contracts](/docs/contracts/)); an Extension adds what the
+project wants beyond them, and surfaces findings only when its `check`
+calls `ctx.report`.
 
 Rule Tests exercise `ctx.domain()` the same way they exercise files: a
 fixture that authors `domain.arclint.yaml` at its tree root is

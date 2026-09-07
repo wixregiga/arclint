@@ -54,7 +54,7 @@ func TestJSONDomainOverviewMissing(t *testing.T) {
 	if !ok {
 		t.Fatalf("counts missing: %v", doc)
 	}
-	for _, key := range []string{"contexts", "entities", "aggregates", "valueObjects", "invariants", "assertions", "specifications", "events", "relations"} {
+	for _, key := range []string{"contexts", "aggregates", "entities", "valueObjects", "invariants", "assertions", "specifications", "events", "services", "questions", "relations"} {
 		if _, ok := counts[key]; !ok {
 			t.Fatalf("counts missing %s: %v", key, counts)
 		}
@@ -64,11 +64,12 @@ func TestJSONDomainOverviewMissing(t *testing.T) {
 func TestJSONDomainShowKeys(t *testing.T) {
 	var buf bytes.Buffer
 	err := New().Render(&buf, cli.DomainShowReport{
-		View: application.DomainDefinitionView{
-			Concept:    vocab.ConceptEntity,
-			Context:    "Ordering",
-			Definition: vocab.Definition{Name: "Order", Definition: "A request"},
-			Aggregate:  true,
+		View: application.DomainEntryView{
+			Concept: vocab.ConceptEntity,
+			Context: "ordering",
+			Owner:   "Order",
+			Name:    "OrderLine",
+			Entity:  vocab.Entity{Name: "OrderLine", Definition: "One ticket type on an Order.", Identity: "LineID"},
 		},
 	})
 	if err != nil {
@@ -78,11 +79,135 @@ func TestJSONDomainShowKeys(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc["type"] != "entity" || doc["name"] != "Order" {
+	if doc["type"] != "entity" || doc["name"] != "OrderLine" || doc["context"] != "ordering" || doc["owner"] != "Order" {
 		t.Fatalf("doc = %v", doc)
 	}
-	if doc["aggregate"] != true {
-		t.Fatalf("aggregate = %v", doc["aggregate"])
+	if doc["definition"] != "One ticket type on an Order." || doc["identity"] != "LineID" {
+		t.Fatalf("entity properties = %v", doc)
+	}
+}
+
+// An aggregate carries its whole consistency unit: identity, entities,
+// invariants, assertions, and the declared repository and factory.
+func TestJSONDomainShowAggregate(t *testing.T) {
+	var buf bytes.Buffer
+	err := New().Render(&buf, cli.DomainShowReport{
+		View: application.DomainEntryView{
+			Concept: vocab.ConceptAggregate,
+			Context: "catalog",
+			Name:    "Event",
+			Aggregate: vocab.Aggregate{
+				Name: "Event", Definition: "A scheduled performance.", Identity: "EventID",
+				Entities:   []vocab.Entity{{Name: "Organizer", Definition: "Who runs it."}},
+				Invariants: []vocab.Invariant{{Key: "published-frozen", Statement: "A published Event never changes."}},
+				Assertions: []vocab.Assertion{{Key: "capacity-fits", On: "Publish", Statement: "Capacity fits the venue."}},
+				Repository: "EventRepository",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Type     string `json:"type"`
+		Identity string `json:"identity"`
+		Entities []struct {
+			Name string `json:"name"`
+		}
+		Invariants []struct {
+			Key       string `json:"key"`
+			Statement string `json:"statement"`
+		}
+		Assertions []struct {
+			Key string `json:"key"`
+			On  string `json:"on"`
+		}
+		Repository string  `json:"repository"`
+		Factory    *string `json:"factory"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.Type != "aggregate" || doc.Identity != "EventID" || doc.Repository != "EventRepository" || doc.Factory != nil {
+		t.Fatalf("doc = %+v", doc)
+	}
+	if len(doc.Entities) != 1 || doc.Entities[0].Name != "Organizer" {
+		t.Fatalf("entities = %+v", doc.Entities)
+	}
+	if len(doc.Invariants) != 1 || doc.Invariants[0].Key != "published-frozen" {
+		t.Fatalf("invariants = %+v", doc.Invariants)
+	}
+	if len(doc.Assertions) != 1 || doc.Assertions[0].On != "Publish" {
+		t.Fatalf("assertions = %+v", doc.Assertions)
+	}
+}
+
+// A define names the outcome, the entry, and each changed property with
+// the value it now holds; a cleared list is an empty list, not null.
+func TestJSONDomainDefineCarriesValues(t *testing.T) {
+	var buf bytes.Buffer
+	err := New().Render(&buf, cli.DomainDefineReport{
+		Result: application.DomainDefineResult{
+			Outcome: vocab.OutcomeUpdated, Concept: vocab.ConceptValueObject, Context: "catalog", Name: "Price",
+			Changed: []string{"definition", "aliases"},
+		},
+		Change: vocab.Change{SetDefinition: true, Definition: "Money asked for a seat.", SetAliases: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Result  string   `json:"result"`
+		Type    string   `json:"type"`
+		Name    string   `json:"name"`
+		Context string   `json:"context"`
+		Changed []string `json:"changed"`
+		Values  struct {
+			Definition string   `json:"definition"`
+			Aliases    []string `json:"aliases"`
+		} `json:"values"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.Result != "updated" || doc.Type != "value_object" || doc.Name != "Price" || doc.Context != "catalog" {
+		t.Fatalf("doc = %+v", doc)
+	}
+	if len(doc.Changed) != 2 || doc.Values.Definition != "Money asked for a seat." {
+		t.Fatalf("changed = %+v values = %+v", doc.Changed, doc.Values)
+	}
+	if doc.Values.Aliases == nil || len(doc.Values.Aliases) != 0 {
+		t.Fatalf("cleared aliases = %#v, want an empty list", doc.Values.Aliases)
+	}
+}
+
+func TestJSONDomainRemoveCarriesConsequences(t *testing.T) {
+	var buf bytes.Buffer
+	err := New().Render(&buf, cli.DomainRemoveReport{
+		Result: application.DomainRemoveResult{
+			Concept: vocab.ConceptAggregate, Context: "catalog", Name: "Event",
+			Also: []string{"entity Organizer removed with it", "event EventPublished no longer names what raises it"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Type    string   `json:"type"`
+		Name    string   `json:"name"`
+		Result  string   `json:"result"`
+		Context string   `json:"context"`
+		Also    []string `json:"also"`
+		Changed bool     `json:"sourceFilesChanged"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.Type != "aggregate" || doc.Name != "Event" || doc.Result != "removed" || doc.Context != "catalog" || doc.Changed {
+		t.Fatalf("doc = %+v", doc)
+	}
+	if len(doc.Also) != 2 {
+		t.Fatalf("also = %v", doc.Also)
 	}
 }
 
@@ -113,6 +238,32 @@ func TestJSONRuleListLowerCamel(t *testing.T) {
 	if _, ok := d["ID"]; ok {
 		t.Fatal("must not emit PascalCase ID")
 	}
+	if _, ok := d["builtIn"]; ok {
+		t.Fatalf("a distributed Rule must not carry builtIn: %v", d)
+	}
+}
+
+func TestJSONRuleListMarksBuiltIns(t *testing.T) {
+	var buf bytes.Buffer
+	err := New().Render(&buf, cli.RuleListReport{
+		Rules: []application.RuleSummary{{
+			ID: "aggregate/root-declared", Type: "domain", Severity: "error",
+			Claim: "c", Assurance: "exact", BuiltIn: true,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var docs []map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &docs); err != nil {
+		t.Fatal(err)
+	}
+	if len(docs) != 1 || docs[0]["builtIn"] != true {
+		t.Fatalf("docs = %v, want builtIn true", docs)
+	}
+	if _, ok := docs[0]["provenance"]; ok {
+		t.Fatalf("a built-in Rule has no Pattern provenance: %v", docs[0])
+	}
 }
 
 func TestJSONRuleDetailLowerCamel(t *testing.T) {
@@ -122,7 +273,7 @@ func TestJSONRuleDetailLowerCamel(t *testing.T) {
 			Summary:    application.RuleSummary{ID: "r1", Type: "layers", Severity: "warning", Claim: "c", Assurance: "exact"},
 			Asserts:    "dependencies point inward: app, then domain",
 			Evidence:   "static",
-			Modules:    []string{"app"},
+			Zones:      []string{"app"},
 			Exclusions: []application.PolicyNote{{Selectors: []string{"x"}, Reason: "y"}},
 		},
 	})
@@ -272,7 +423,7 @@ func TestJSONPatternVendorInstallExportLowerCamel(t *testing.T) {
 	err = New().Render(&buf, cli.PatternInstallReport{Result: application.InstallPatternResult{
 		Reference: "acme/layers@1.0.0", Digest: "sha256:abc", Source: distribution.SourceEmbedded,
 		RulesetPath: "rules.arclint.yaml", RulesetReplaced: "0.9.0",
-		Bound:   []application.BoundModule{{Module: "domain", Paths: []string{"src/domain/**"}}},
+		Bound:   []application.BoundZone{{Zone: "domain", Paths: []string{"src/domain/**"}}},
 		Adopted: []string{"domain"},
 	}})
 	if err != nil {
@@ -287,7 +438,7 @@ func TestJSONPatternVendorInstallExportLowerCamel(t *testing.T) {
 	}
 	bound, _ := install["bound"].([]any)
 	unbound, _ := install["unbound"].([]any)
-	if len(bound) != 1 || bound[0].(map[string]any)["module"] != "domain" || unbound == nil || len(unbound) != 0 {
+	if len(bound) != 1 || bound[0].(map[string]any)["zone"] != "domain" || unbound == nil || len(unbound) != 0 {
 		t.Fatalf("install bindings = %v / %v", install["bound"], install["unbound"])
 	}
 	if _, present := install["vendoredPath"]; present {
@@ -329,7 +480,7 @@ func TestJSONSDKInitLowerCamel(t *testing.T) {
 func TestJSONDomainInitLowerCamel(t *testing.T) {
 	var buf bytes.Buffer
 	err := New().Render(&buf, cli.DomainInitReport{
-		Result: application.InitDomainResult{Source: "domain.arclint.yaml", Created: true},
+		Result: application.InitDomainResult{Source: "domain.arclint.yaml", Project: "boxoffice", Created: true},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -338,7 +489,7 @@ func TestJSONDomainInitLowerCamel(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
 		t.Fatal(err)
 	}
-	if doc["source"] != "domain.arclint.yaml" || doc["created"] != true {
+	if doc["source"] != "domain.arclint.yaml" || doc["project"] != "boxoffice" || doc["created"] != true {
 		t.Fatalf("doc = %v", doc)
 	}
 }
@@ -352,7 +503,7 @@ func TestJSONContextPreservesEstablishedKeys(t *testing.T) {
 			RuleCount: 1,
 			Domain: &application.DomainKnowledge{
 				Source: "domain.arclint.yaml",
-				Counts: vocab.Counts{Entities: 1},
+				Counts: vocab.Counts{Aggregates: 1},
 			},
 		},
 	})
@@ -371,8 +522,8 @@ func TestJSONContextPreservesEstablishedKeys(t *testing.T) {
 		t.Fatalf("domain missing: %v", doc)
 	}
 	counts, ok := domain["counts"].(map[string]any)
-	if !ok || counts["Entities"] != float64(1) {
-		t.Fatalf("domain counts established keys lost: %v", domain)
+	if !ok || counts["aggregates"] != float64(1) {
+		t.Fatalf("domain counts must be lowerCamel like the overview: %v", domain)
 	}
 }
 
@@ -389,17 +540,17 @@ func TestJSONContextCarriesScopeAndAnchors(t *testing.T) {
 				Located: true,
 				Contexts: []application.DomainContextKnowledge{{
 					Name:         "catalog",
-					Entities:     []application.DomainEntityRef{{Name: "Event", Aggregate: true}},
+					Aggregates:   []application.DomainAggregateRef{{Name: "Event", Identity: "EventID", Entities: []string{"Organizer"}}},
 					ValueObjects: []string{"Price"},
 					Invariants: []application.DomainInvariantRef{
-						{Statement: "A published Event never changes.", Owner: "Event", ID: "published-frozen", Source: "event/event.go:90", Anchor: application.AnchorFound},
-						{Statement: "An Event has one Venue.", Owner: "Event", Anchor: application.AnchorUnanchorable, Reason: "owner Event is an aggregate and the invariant has no id, so no method is named to carry it"},
+						{Key: "published-frozen", Statement: "A published Event never changes.", Owner: "Event", OwnerConcept: vocab.ConceptAggregate, Source: "event/event.go:90", Anchor: application.AnchorFound},
+						{Key: "one-venue", Statement: "An Event has one Venue.", Owner: "Event", OwnerConcept: vocab.ConceptAggregate, Anchor: application.AnchorMissing},
 					},
 					Specifications: []application.DomainSpecificationRef{{Name: "LateOrder", Anchor: application.AnchorMissing}},
 				}},
 				Unanchored: []application.UnanchoredContract{
-					{Kind: application.ContractInvariant, Context: "catalog", Owner: "Event", Statement: "An Event has one Venue.", Anchor: application.AnchorUnanchorable, Reason: "owner Event is an aggregate and the invariant has no id, so no method is named to carry it"},
-					{Kind: application.ContractSpecification, Context: "catalog", Name: "LateOrder", Anchor: application.AnchorMissing},
+					{Kind: application.ContractInvariant, Context: "catalog", Owner: "Event", Key: "one-venue", Statement: "An Event has one Venue.", Expected: "method OneVenue on Event"},
+					{Kind: application.ContractSpecification, Context: "catalog", Name: "LateOrder", Expected: "satisfaction method on LateOrder"},
 				},
 			},
 		},
@@ -412,18 +563,24 @@ func TestJSONContextCarriesScopeAndAnchors(t *testing.T) {
 			Scoped  bool `json:"scoped"`
 			Located bool `json:"located"`
 			Counts  struct {
-				Invariants int `json:"Invariants"`
+				Invariants int `json:"invariants"`
 			} `json:"counts"`
 			Shown struct {
-				Contexts   int `json:"Contexts"`
-				Invariants int `json:"Invariants"`
+				Contexts   int `json:"contexts"`
+				Invariants int `json:"invariants"`
 			} `json:"shown"`
 			Contexts []struct {
+				Aggregates []struct {
+					Name     string   `json:"name"`
+					Identity string   `json:"identity"`
+					Entities []string `json:"entities"`
+				} `json:"aggregates"`
 				Invariants []struct {
-					ID     string `json:"id"`
-					Source string `json:"source"`
-					Anchor string `json:"anchor"`
-					Reason string `json:"reason"`
+					Key          string `json:"key"`
+					Owner        string `json:"owner"`
+					OwnerConcept string `json:"ownerConcept"`
+					Source       string `json:"source"`
+					Anchor       string `json:"anchor"`
 				} `json:"invariants"`
 				Specifications []struct {
 					Name   string `json:"name"`
@@ -434,10 +591,10 @@ func TestJSONContextCarriesScopeAndAnchors(t *testing.T) {
 				Kind      string `json:"kind"`
 				Context   string `json:"context"`
 				Owner     string `json:"owner"`
+				Key       string `json:"key"`
 				Name      string `json:"name"`
 				Statement string `json:"statement"`
-				Anchor    string `json:"anchor"`
-				Reason    string `json:"reason"`
+				Expected  string `json:"expected"`
 			} `json:"unanchored"`
 		} `json:"domain"`
 	}
@@ -454,12 +611,15 @@ func TestJSONContextCarriesScopeAndAnchors(t *testing.T) {
 	if len(d.Contexts) != 1 || len(d.Contexts[0].Invariants) != 2 {
 		t.Fatalf("contexts = %+v", d.Contexts)
 	}
+	if agg := d.Contexts[0].Aggregates; len(agg) != 1 || agg[0].Identity != "EventID" || len(agg[0].Entities) != 1 || agg[0].Entities[0] != "Organizer" {
+		t.Fatalf("aggregates = %+v", agg)
+	}
 	inv := d.Contexts[0].Invariants
-	if inv[0].Anchor != "found" || inv[0].Source != "event/event.go:90" || inv[0].Reason != "" {
+	if inv[0].Key != "published-frozen" || inv[0].Anchor != "found" || inv[0].Source != "event/event.go:90" || inv[0].OwnerConcept != "aggregate" {
 		t.Fatalf("found invariant = %+v", inv[0])
 	}
-	if inv[1].Anchor != "unanchorable" || inv[1].Source != "" || !strings.Contains(inv[1].Reason, "has no id") {
-		t.Fatalf("unanchorable invariant = %+v", inv[1])
+	if inv[1].Key != "one-venue" || inv[1].Anchor != "missing" || inv[1].Source != "" {
+		t.Fatalf("missing invariant = %+v", inv[1])
 	}
 	if spec := d.Contexts[0].Specifications; len(spec) != 1 || spec[0].Anchor != "missing" {
 		t.Fatalf("specifications = %+v", spec)
@@ -467,14 +627,14 @@ func TestJSONContextCarriesScopeAndAnchors(t *testing.T) {
 	if len(d.Unanchored) != 2 {
 		t.Fatalf("unanchored = %+v", d.Unanchored)
 	}
-	if u := d.Unanchored[0]; u.Kind != "invariant" || u.Context != "catalog" || u.Owner != "Event" || u.Anchor != "unanchorable" || u.Statement == "" || u.Reason == "" {
+	if u := d.Unanchored[0]; u.Kind != "invariant" || u.Context != "catalog" || u.Owner != "Event" || u.Key != "one-venue" || u.Statement == "" || u.Expected != "method OneVenue on Event" {
 		t.Fatalf("unanchored[0] = %+v", u)
 	}
-	if u := d.Unanchored[1]; u.Kind != "specification" || u.Name != "LateOrder" || u.Anchor != "missing" || u.Owner != "" || u.Reason != "" {
+	if u := d.Unanchored[1]; u.Kind != "specification" || u.Name != "LateOrder" || u.Owner != "" || u.Key != "" || u.Expected != "satisfaction method on LateOrder" {
 		t.Fatalf("unanchored[1] = %+v", u)
 	}
 	raw := buf.String()
-	for _, absent := range []string{`"owner":""`, `"reason":""`, `"source":""`} {
+	for _, absent := range []string{`"owner":""`, `"key":""`, `"source":""`} {
 		if strings.Contains(raw, absent) {
 			t.Fatalf("empty %s should be omitted:\n%s", absent, raw)
 		}
@@ -525,4 +685,37 @@ func (s *shortWriter) Write(p []byte) (int, error) {
 	}
 	s.n -= len(p)
 	return len(p), nil
+}
+
+// Explain carries each source as an object naming the work and the
+// parts that narrow it, beside the readable citation.
+func TestJSONDomainExplainCarriesSources(t *testing.T) {
+	var buf bytes.Buffer
+	concept := vocab.ConceptAggregate.Doc()
+	if len(concept.Sources) == 0 {
+		t.Fatal("aggregate cites no source in the meta-model")
+	}
+	err := New().Render(&buf, cli.DomainExplainReport{Docs: []vocab.ConceptDoc{concept}, Single: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	sources, ok := doc["sources"].([]any)
+	if !ok || len(sources) != len(concept.Sources) {
+		t.Fatalf("sources = %v, want %d objects", doc["sources"], len(concept.Sources))
+	}
+	first, ok := sources[0].(map[string]any)
+	if !ok {
+		t.Fatalf("sources[0] = %v", sources[0])
+	}
+	want := concept.Sources[0]
+	if first["work"] != want.Work.Key || first["title"] != want.Work.Title || first["citation"] != want.String() {
+		t.Fatalf("sources[0] = %v, want work %q title %q citation %q", first, want.Work.Key, want.Work.Title, want.String())
+	}
+	if want.Page != "" && first["page"] != want.Page {
+		t.Fatalf("page = %v, want %q", first["page"], want.Page)
+	}
 }

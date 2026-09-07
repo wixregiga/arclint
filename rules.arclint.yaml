@@ -7,7 +7,7 @@
 #
 # Every Rule is keyed by its id and carries exactly one assertion:
 # imports, structure, naming, content, layers, imported_by,
-# independent, acyclic, invariants, or uses. `on` names the Module(s)
+# independent, acyclic, or uses. `on` names the Zone(s)
 # it judges. Query commands: arclint rules [selector] · arclint context <path>
 
 # go for the engine itself; ts for the embedded extension SDK sources.
@@ -20,25 +20,20 @@ scan:
     - ".wixregiga-ignore/**"
     - "**/generated/**"
     - "**/mock_*.go"
+    - "**/*_test.go"
     # The boxoffice proving ground is its own repository in spirit:
     # its own go.mod, rules.arclint.yaml, and vocabulary. It must not land
     # in this build or this scan.
     - "testing/**"
 
-# The vocabulary rules are not written here: they come from the
-# arclint/domain-model Pattern this binary embeds, exactly as any
-# adopter receives them. Recorded terms carry definitions, recorded
-# invariants name recorded owners, and imports between context-named
-# Modules respect the context map. Adopt it with
-# `arclint patterns install domain-model`; its Rule IDs are qualified
-# (arclint/domain-model:vocabulary/terms-carry-definitions) so a finding always
-# says whether it came from the Pattern or from this file.
-extends:
-  - pattern: arclint/domain-model@0.1.0
-    bind:
-      vocabulary: "domain.arclint.yaml"
+# The vocabulary rules are not written here: they are the built-in
+# rules every recorded building block carries, exactly as any adopter
+# receives them the moment domain.arclint.yaml records a term. Each is
+# listed under the invariant's id (aggregate/root-declared,
+# context_relation/imports-follow-influence, ...) and adjusted, when
+# it must be, through an Override under that id.
 
-modules:
+zones:
   domain:
     paths: "internal/domain/**"
     description: "Rule aggregate and domain values; stdlib-only."
@@ -78,21 +73,31 @@ modules:
   source:
     paths: "internal/**"
     description: "Common source invariants for internal packages."
-  # Context-named modules: each bounded context recorded in the
-  # vocabulary binds to the module of the same name, which is how the
-  # Pattern's contexts/respect-relations rule observes the context map.
+  # Context-named zones: a bounded context recorded in
+  # domain.arclint.yaml locates its code from the declarations that
+  # spell its recorded terms, searched across the whole repository. A
+  # Zone spelled with the context's name narrows that search to its
+  # paths; these four give the built-in context rules the full extent
+  # of each context's code. adoption names no Zone: its values are
+  # declared directly in the rule package, found the same way.
+  vocabulary:
+    paths: "internal/domain/vocab/**"
+    description: "The vocabulary bounded context: the recorded Ubiquitous Language and the meta-model it is checked against."
   rule:
     paths: "internal/domain/rule/**"
     description: "The rule bounded context: the Rule aggregate's home."
   conformance:
     paths: "internal/domain/conformance/**"
     description: "The conformance bounded context, downstream conformist of rule."
+  distribution:
+    paths: "internal/domain/distribution/**"
+    description: "The distribution bounded context: Patterns travelling between repositories."
 
 rules:
   # ---- domain --------------------------------------------------------
 
   domain/stdlib-only:
-    description: "The domain imports no other Module and no third-party package."
+    description: "The domain imports no other Zone and no third-party package."
     on: domain
     imports:
       internal: []
@@ -223,7 +228,7 @@ rules:
       external: forbid
 
   # delivery is allowed because the neutral CLI Interface the factory
-  # selects for lives in the delivery module.
+  # selects for lives in the delivery zone.
   delivery/cli-factory-dependencies:
     description: "The CLI factory imports application, domain, the Cobra adapter, and delivery, and no third-party package."
     on: cli_factory
@@ -232,7 +237,7 @@ rules:
       external: forbid
 
   # delivery is allowed because the adapter translates the neutral
-  # commands owned by the delivery module; the seal is enforced by the
+  # commands owned by the delivery zone; the seal is enforced by the
   # cobra-factory-only rule, not by this allow-list.
   delivery/cobra-sealed:
     description: "The Cobra adapter imports application, domain, and delivery."
@@ -241,7 +246,7 @@ rules:
       internal: [application, domain, delivery]
 
   # delivery is allowed because the sealed Report/Renderer port the
-  # factory selects for lives in the delivery module.
+  # factory selects for lives in the delivery zone.
   delivery/report-factory-dependencies:
     description: "The report factory imports delivery and the three renderers, and no third-party package."
     on: report_factory
@@ -278,7 +283,7 @@ rules:
   # Report adapters are deliberately absent: composition selects them
   # only through report_factory by RendererName.
   composition/selects-adapters:
-    description: "Composition imports every Module it wires except the report renderers."
+    description: "Composition imports every Zone it wires except the report renderers."
     on: composition
     imports:
       internal: [delivery, infrastructure, application, domain, cli_factory, cobra_adapter, report_factory]
@@ -331,7 +336,7 @@ rules:
   # cli_interface, cli_factory, cobra_adapter, report_factory, and the
   # report adapters are excluded: their paths nest inside delivery's,
   # and overlapping membership lifts intra-delivery imports into
-  # artificial module cycles.
+  # artificial zone cycles.
   dependencies/acyclic:
-    description: "Dependencies among the top-level Modules contain no cycle."
+    description: "Dependencies among the top-level Zones contain no cycle."
     acyclic: [composition, delivery, infrastructure, application, domain]

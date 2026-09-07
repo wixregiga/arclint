@@ -14,15 +14,24 @@ import (
 // RuleSummary is the plain result value describing one configured
 // Rule.
 type RuleSummary struct {
-	ID             string
-	Type           string
-	Severity       string
-	Claim          string
-	Assurance      string
-	Provenance     string // "namespace/name@version", or "" for repository-local Rules
+	ID         string
+	Type       string
+	Severity   string
+	Claim      string
+	Assurance  string
+	Provenance string // "namespace/name@version", or "" for repository-local Rules
+	// BuiltIn marks a Rule arclint composes from the Domain-Driven
+	// Design meta-model for the recorded domain; no ruleset spells it,
+	// and a ruleset adopts it with an Override under its id.
+	BuiltIn        bool
 	Disabled       bool
 	DisabledReason string
 }
+
+// BuiltInOrigin is how a listing says a Rule is built in: the phrase
+// every renderer prints beside a built-in Rule where a distributed Rule
+// names its Pattern.
+const BuiltInOrigin = "built in from the DDD meta-model"
 
 // ListRules lists the repository's configured Rules through the
 // domain-owned read port.

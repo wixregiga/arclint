@@ -12,26 +12,29 @@ func recordedLanguage() vocab.UbiquitousLanguage {
 	return vocab.UbiquitousLanguage{Contexts: []vocab.BoundedContext{
 		{
 			Name: "ordering",
-			Entities: []vocab.Entity{
-				{Definition: vocab.Definition{Name: "Order"}, Aggregate: true},
-				{Definition: vocab.Definition{Name: "Order Line"}},
-			},
-			ValueObjects: []vocab.Definition{{Name: "Money"}},
-			Events:       []vocab.Definition{{Name: "OrderPlaced"}},
-			Invariants: []vocab.Invariant{
-				{Statement: "Lines never change.", Owner: "Order", ID: "lines-frozen"},
-				{Statement: "Money is never negative.", Owner: "Money"},
-			},
-			Assertions: []vocab.Assertion{
-				{Statement: "Priced before place.", Owner: "Order", ID: "lines-priced", On: "Place"},
-			},
+			Aggregates: []vocab.Aggregate{{
+				Name:     "Order",
+				Identity: "OrderID",
+				Entities: []vocab.Entity{{Name: "Order Line"}},
+				Invariants: []vocab.Invariant{
+					{Key: "lines-frozen", Statement: "Lines never change."},
+				},
+				Assertions: []vocab.Assertion{
+					{Key: "lines-priced", On: "Place", Statement: "Priced before place."},
+				},
+			}},
+			ValueObjects: []vocab.ValueObject{{
+				Name:       "Money",
+				Invariants: []vocab.Invariant{{Key: "never-negative", Statement: "Money is never negative."}},
+			}},
+			Events: []vocab.DomainEvent{{Name: "OrderPlaced", RaisedBy: "Order"}},
 			Specifications: []vocab.Specification{
 				{Name: "PreferredCustomer", Definition: "A named predicate."},
 			},
 		},
 		{
-			Name:     "billing",
-			Entities: []vocab.Entity{{Definition: vocab.Definition{Name: "Invoice"}, Aggregate: true}},
+			Name:       "billing",
+			Aggregates: []vocab.Aggregate{{Name: "Invoice", Identity: "InvoiceID"}},
 		},
 	}}
 }
@@ -66,10 +69,10 @@ func TestExpansionSourcesSelectTheRecordedCollections(t *testing.T) {
 	counts := map[string]int{
 		"domain.aggregates":     2, // Order, Invoice
 		"domain.entities":       3, // + Order Line
-		"domain.value_objects":  1, // Money
+		"domain.value_objects":  3, // Money, and the implied OrderID, InvoiceID
 		"domain.events":         1, // OrderPlaced
 		"domain.contexts":       2, // ordering, billing
-		"domain.invariants":     2, // lines-frozen, Money
+		"domain.invariants":     2, // lines-frozen, never-negative
 		"domain.assertions":     1, // lines-priced
 		"domain.specifications": 1, // PreferredCustomer
 	}
@@ -149,11 +152,11 @@ func expandedRule(t *testing.T, lang vocab.UbiquitousLanguage) rule.Rule {
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	name, err := rule.NewModuleName("domain")
+	name, err := rule.NewZoneName("domain")
 	if err != nil {
-		t.Fatalf("module name: %v", err)
+		t.Fatalf("zone name: %v", err)
 	}
-	scope, err := rule.ModuleApplicability([]rule.ModuleName{name})
+	scope, err := rule.ZoneApplicability([]rule.ZoneName{name})
 	if err != nil {
 		t.Fatalf("applicability: %v", err)
 	}

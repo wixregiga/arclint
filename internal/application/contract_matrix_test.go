@@ -1,7 +1,6 @@
 package application
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
@@ -9,309 +8,108 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
-func TestLocateSpecificationFindsSatisfiedBy(t *testing.T) {
-	idx := declsOn(t, "order/spec.go", rule.LanguageGo, []conformance.Declaration{
-		{Kind: "struct", Name: "HighValueOrder", Exported: true, StartLine: 10, EndLine: 12},
-		{Kind: "method", Name: "SatisfiedBy", Owner: "HighValueOrder", Exported: true, StartLine: 34, EndLine: 36},
-	})
-	got, found := locateSpecification(idx, "HighValueOrder")
-	if !found || got != "order/spec.go:34" {
-		t.Fatalf("locateSpecification = %q, %v, want order/spec.go:34, true", got, found)
+// A value object's invariant is carried by its constructor and an
+// aggregate's by the root method its key names; with nothing observed,
+// both are missing.
+func TestLocateInvariantDispatchesOnTheOwnersConcept(t *testing.T) {
+	carriers := catalogCarriers(t)
+	price := DomainInvariantRef{Owner: "Price", OwnerConcept: vocab.ConceptValueObject, Key: "never-negative"}
+	src, found, err := locateInvariant(carriers, "catalog", price)
+	if err != nil || src != "event/event.go:8" || !found {
+		t.Fatalf("locateInvariant Price = %q, %v, %v; want the constructor at event/event.go:8", src, found, err)
+	}
+	event := DomainInvariantRef{Owner: "Event", OwnerConcept: vocab.ConceptAggregate, Key: "published-frozen"}
+	src, found, err = locateInvariant(carriers, "catalog", event)
+	if err != nil || src != "event/event.go:90" || !found {
+		t.Fatalf("locateInvariant Event = %q, %v, %v; want the method at event/event.go:90", src, found, err)
+	}
+	for _, inv := range []DomainInvariantRef{price, event} {
+		src, found, err := locateInvariant(conformance.Carriers{}, "catalog", inv)
+		if err != nil || src != "" || found {
+			t.Fatalf("locateInvariant %s without declarations = %q, %v, %v; want missing", inv.Owner, src, found, err)
+		}
 	}
 }
 
-func TestLocateSpecificationTypeWithoutSatisfiedByIsMissing(t *testing.T) {
-	idx := declsOn(t, "order/spec.go", rule.LanguageGo, []conformance.Declaration{
-		{Kind: "struct", Name: "HighValueOrder", Exported: true, StartLine: 10, EndLine: 12},
-	})
-	got, found := locateSpecification(idx, "HighValueOrder")
-	if found || got != "" {
-		t.Fatalf("locateSpecification = %q, %v, want empty, false", got, found)
+// A key no case can spell surfaces as an error naming the contract, so
+// the listing never reports a spelling failure as a missing anchor.
+func TestLocateDomainContractsReportsAnUnspellableKey(t *testing.T) {
+	dk := &DomainKnowledge{Contexts: []DomainContextKnowledge{{
+		Name:       "catalog",
+		Invariants: []DomainInvariantRef{{Owner: "Event", OwnerConcept: vocab.ConceptAggregate, Key: ""}},
+	}}}
+	err := locateDomainContracts(dk, catalogCarriers(t))
+	if err == nil {
+		t.Fatalf("locateDomainContracts accepted an empty key")
 	}
 }
 
-func TestLocateSpecificationAbsentIsMissing(t *testing.T) {
-	got, found := locateSpecification(declsOn(t, "order/spec.go", rule.LanguageGo, nil), "HighValueOrder")
-	if found || got != "" {
-		t.Fatalf("locateSpecification = %q, %v, want empty, false", got, found)
+// The projection lists every contract with its owner and the owner's
+// concept, in file order: the aggregate's invariants and assertions,
+// then each value object's invariants.
+func TestDomainKnowledgeOfProjectsEveryContract(t *testing.T) {
+	dk := domainKnowledgeOf(catalogLanguage(t))
+	if dk.Located || dk.Source != vocab.UbiquitousLanguageFileName {
+		t.Fatalf("projection = %+v", dk)
 	}
-}
-
-func TestLocateInvariantValueIntegrityUsesConstructor(t *testing.T) {
-	idx := declsOn(t, "event/event.go", rule.LanguageGo, []conformance.Declaration{
-		{Kind: "func", Name: "NewPrice", Results: []string{"Price", "error"}, StartLine: 8, EndLine: 14},
-	})
-	src, anchor, reason := locateInvariant(idx, catalogContext(t), DomainInvariantRef{Owner: "Price"})
-	if src != "event/event.go:8" || anchor != AnchorFound || reason != "" {
-		t.Fatalf("locateInvariant Price = %q, %s, %q; want event/event.go:8, found, no reason", src, anchor, reason)
+	if len(dk.Contexts) != 1 || dk.Contexts[0].Name != "catalog" {
+		t.Fatalf("contexts = %+v", dk.Contexts)
 	}
-}
-
-func TestLocateInvariantValueIntegrityWithoutConstructorIsMissing(t *testing.T) {
-	src, anchor, reason := locateInvariant(nil, catalogContext(t), DomainInvariantRef{Owner: "Price"})
-	if src != "" || anchor != AnchorMissing || reason != "" {
-		t.Fatalf("locateInvariant Price = %q, %s, %q; want empty, missing, no reason", src, anchor, reason)
+	ctx := dk.Contexts[0]
+	if len(ctx.Aggregates) != 1 || ctx.Aggregates[0].Name != "Event" || ctx.Aggregates[0].Identity != "EventID" || len(ctx.Aggregates[0].Entities) != 1 || ctx.Aggregates[0].Entities[0] != "Venue" {
+		t.Fatalf("aggregates = %+v", ctx.Aggregates)
 	}
-}
-
-func TestLocateInvariantClusterUsesNamedMethod(t *testing.T) {
-	idx := declsOn(t, "event/event.go", rule.LanguageGo, []conformance.Declaration{
-		{Kind: "method", Name: "PublishedFrozen", Owner: "Event", Exported: true, StartLine: 90, EndLine: 96},
-	})
-	src, anchor, reason := locateInvariant(idx, catalogContext(t), DomainInvariantRef{Owner: "Event", ID: "published-frozen"})
-	if src != "event/event.go:90" || anchor != AnchorFound || reason != "" {
-		t.Fatalf("locateInvariant Event = %q, %s, %q; want event/event.go:90, found, no reason", src, anchor, reason)
+	if len(ctx.ValueObjects) != 2 || ctx.ValueObjects[0] != "Price" || ctx.ValueObjects[1] != "Discount" {
+		t.Fatalf("value objects = %+v", ctx.ValueObjects)
 	}
-}
-
-func TestLocateInvariantClusterWithoutMethodIsMissing(t *testing.T) {
-	src, anchor, reason := locateInvariant(nil, catalogContext(t), DomainInvariantRef{Owner: "Event", ID: "published-frozen"})
-	if src != "" || anchor != AnchorMissing || reason != "" {
-		t.Fatalf("locateInvariant Event = %q, %s, %q; want empty, missing, no reason", src, anchor, reason)
+	want := []DomainInvariantRef{
+		{Key: "published-frozen", Statement: "A published Event never changes.", Owner: "Event", OwnerConcept: vocab.ConceptAggregate},
+		{Key: "one-venue", Statement: "An Event has at most one Venue.", Owner: "Event", OwnerConcept: vocab.ConceptAggregate},
+		{Key: "never-negative", Statement: "A Price is never negative.", Owner: "Price", OwnerConcept: vocab.ConceptValueObject},
+		{Key: "within-the-whole", Statement: "A Discount never exceeds the whole.", Owner: "Discount", OwnerConcept: vocab.ConceptValueObject},
 	}
-}
-
-// Each recorded shape that names no declaration is unanchorable, and
-// the reason names the shape: an aggregate without an id, a value
-// object with one, an entity that is no aggregate, and an owner the
-// context never recorded.
-func TestLocateInvariantUnanchorableShapes(t *testing.T) {
-	ctx := catalogContext(t)
-	idx := declsOn(t, "event/event.go", rule.LanguageGo, []conformance.Declaration{
-		{Kind: "func", Name: "NewPrice", Results: []string{"Price", "error"}, StartLine: 8},
-		{Kind: "method", Name: "PublishedFrozen", Owner: "Event", Exported: true, StartLine: 90},
-		{Kind: "method", Name: "Named", Owner: "Venue", Exported: true, StartLine: 120},
-	})
-	tests := []struct {
-		name   string
-		inv    DomainInvariantRef
-		reason string
-	}{
-		{"aggregate without id", DomainInvariantRef{Owner: "Event"}, "owner Event is an aggregate and the invariant has no id"},
-		{"value object with id", DomainInvariantRef{Owner: "Price", ID: "positive"}, "owner Price is a value object and the invariant carries id positive"},
-		{"entity that is no aggregate", DomainInvariantRef{Owner: "Venue", ID: "named"}, "owner Venue is an entity that is not an aggregate"},
-		{"unrecorded owner", DomainInvariantRef{Owner: "Nobody", ID: "x"}, "owner Nobody is not a recorded entity or value object of context catalog"},
+	if len(ctx.Invariants) != len(want) {
+		t.Fatalf("invariants = %+v", ctx.Invariants)
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			src, anchor, reason := locateInvariant(idx, ctx, tc.inv)
-			if src != "" || anchor != AnchorUnanchorable {
-				t.Fatalf("locateInvariant = %q, %s; want empty source, unanchorable", src, anchor)
-			}
-			if !strings.Contains(reason, tc.reason) {
-				t.Fatalf("reason = %q, want it to contain %q", reason, tc.reason)
-			}
-		})
+	for i, inv := range ctx.Invariants {
+		if inv != want[i] {
+			t.Errorf("invariant %d = %+v, want %+v", i, inv, want[i])
+		}
 	}
-}
-
-func TestLocateNamedMethodMissingIsMissing(t *testing.T) {
-	got, found := locateNamedMethod(declsOn(t, "event/event.go", rule.LanguageGo, nil), "Event", "published-frozen")
-	if found || got != "" {
-		t.Fatalf("locateNamedMethod = %q, %v, want empty, false", got, found)
+	if len(ctx.Assertions) != 1 || ctx.Assertions[0] != (DomainAssertionRef{Key: "tiers-priced", Statement: "Tiers are priced.", Owner: "Event", On: "Publish"}) {
+		t.Fatalf("assertions = %+v", ctx.Assertions)
 	}
-}
-
-func TestLocateNamedMethodUsesLanguageCase(t *testing.T) {
-	idx := declsOn(t, "event.ts", rule.LanguageTypeScript, []conformance.Declaration{
-		{Kind: "method", Name: "publishedFrozen", Owner: "Event", Exported: true, StartLine: 4, EndLine: 6},
-	})
-	got, found := locateNamedMethod(idx, "Event", "published-frozen")
-	if !found || got != "event.ts:4" {
-		t.Fatalf("locateNamedMethod ts = %q, %v, want event.ts:4, true", got, found)
+	if len(ctx.Specifications) != 2 || len(ctx.Events) != 1 || ctx.Events[0] != "Published" || len(ctx.Services) != 1 || ctx.Services[0] != "Pricing" {
+		t.Fatalf("specifications %+v events %+v services %+v", ctx.Specifications, ctx.Events, ctx.Services)
 	}
-}
-
-func TestLocateConstructorVariants(t *testing.T) {
-	tests := []struct {
-		name  string
-		lang  rule.Language
-		path  string
-		decls []conformance.Declaration
-		typ   string
-		want  string
-		found bool
-	}{
-		{
-			name: "go NewType",
-			lang: rule.LanguageGo,
-			path: "price.go",
-			decls: []conformance.Declaration{
-				{Kind: "func", Name: "NewPrice", Results: []string{"Price", "error"}, StartLine: 3},
-			},
-			typ:   "Price",
-			want:  "price.go:3",
-			found: true,
-		},
-		{
-			name: "go New returning pointer",
-			lang: rule.LanguageGo,
-			path: "event.go",
-			decls: []conformance.Declaration{
-				{Kind: "func", Name: "New", Results: []string{"*Event", "error"}, StartLine: 11},
-			},
-			typ:   "Event",
-			want:  "event.go:11",
-			found: true,
-		},
-		{
-			name: "typescript constructor",
-			lang: rule.LanguageTypeScript,
-			path: "event.ts",
-			decls: []conformance.Declaration{
-				{Kind: "method", Name: "constructor", Owner: "Event", StartLine: 2},
-			},
-			typ:   "Event",
-			want:  "event.ts:2",
-			found: true,
-		},
-		{
-			name: "python init",
-			lang: rule.LanguagePython,
-			path: "event.py",
-			decls: []conformance.Declaration{
-				{Kind: "method", Name: "__init__", Owner: "Event", StartLine: 5},
-			},
-			typ:   "Event",
-			want:  "event.py:5",
-			found: true,
-		},
-		{
-			name: "missing",
-			lang: rule.LanguageGo,
-			path: "empty.go",
-			typ:  "Price",
-		},
+	if dk.Counts != catalogLanguage(t).Counts() || dk.Shown != dk.Counts {
+		t.Fatalf("counts = %+v shown = %+v", dk.Counts, dk.Shown)
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			got, found := locateConstructor(declsOn(t, tc.path, tc.lang, tc.decls), tc.typ)
-			if got != tc.want || found != tc.found {
-				t.Fatalf("locateConstructor = %q, %v, want %q, %v", got, found, tc.want, tc.found)
-			}
-		})
-	}
-}
-
-func TestTypeDeclarationPathsListsEachFileOnce(t *testing.T) {
-	obs, err := conformance.NewObservations(
-		[]conformance.ObservedFile{{Path: "a/event.go"}, {Path: "b/event.ts"}, {Path: "c/other.go"}},
-		map[string]conformance.LanguageFacts{
-			"a/event.go": {
-				Language:              rule.LanguageGo,
-				DeclarationsAvailable: true,
-				Declarations: []conformance.Declaration{
-					{Kind: "struct", Name: "Event", StartLine: 3},
-					{Kind: "interface", Name: "Event", StartLine: 9},
-					{Kind: "func", Name: "Event", StartLine: 20},
-				},
-			},
-			"b/event.ts": {
-				Language:              rule.LanguageTypeScript,
-				DeclarationsAvailable: true,
-				Declarations:          []conformance.Declaration{{Kind: "class", Name: "Event", StartLine: 1}},
-			},
-			"c/other.go": {
-				Language:              rule.LanguageGo,
-				DeclarationsAvailable: true,
-				Declarations:          []conformance.Declaration{{Kind: "struct", Name: "Price", StartLine: 1}},
-			},
-		},
-	)
-	if err != nil {
-		t.Fatalf("NewObservations: %v", err)
-	}
-	got := typeDeclarationPaths(indexDeclarations(obs), "Event")
-	if len(got) != 2 || got[0] != "a/event.go" || got[1] != "b/event.ts" {
-		t.Fatalf("typeDeclarationPaths = %v, want [a/event.go b/event.ts]", got)
-	}
-	if got := typeDeclarationPaths(indexDeclarations(obs), "Ghost"); len(got) != 0 {
-		t.Fatalf("typeDeclarationPaths Ghost = %v, want none", got)
-	}
-}
-
-func TestOwnerKind(t *testing.T) {
-	ctx := catalogContext(t)
-	if agg, vo := ownerKind(ctx, "Event"); !agg || vo {
-		t.Fatalf("Event: aggregate=%v valueObject=%v", agg, vo)
-	}
-	if agg, vo := ownerKind(ctx, "Venue"); agg || vo {
-		t.Fatalf("Venue: aggregate=%v valueObject=%v", agg, vo)
-	}
-	if agg, vo := ownerKind(ctx, "Price"); agg || !vo {
-		t.Fatalf("Price: aggregate=%v valueObject=%v", agg, vo)
-	}
-	if agg, vo := ownerKind(ctx, "Ghost"); agg || vo {
-		t.Fatalf("Ghost: aggregate=%v valueObject=%v", agg, vo)
-	}
-}
-
-func TestMethodCase(t *testing.T) {
-	if got := methodCase(rule.LanguageGo); got != "PascalCase" {
-		t.Fatalf("go = %q", got)
-	}
-	if got := methodCase(rule.LanguageTypeScript); got != "camelCase" {
-		t.Fatalf("ts = %q", got)
-	}
-	if got := methodCase(rule.LanguagePython); got != "snake_case" {
-		t.Fatalf("py = %q", got)
-	}
-	if got := methodCase(""); got != "PascalCase" {
-		t.Fatalf("default = %q", got)
-	}
-}
-
-func TestIndexDeclarationsSkipsUnusableFacts(t *testing.T) {
-	obs, err := conformance.NewObservations(
-		[]conformance.ObservedFile{{Path: "ok.go"}, {Path: "bad.go"}, {Path: "empty.go"}},
-		map[string]conformance.LanguageFacts{
-			"ok.go": {
-				Language:              rule.LanguageGo,
-				DeclarationsAvailable: true,
-				Declarations:          []conformance.Declaration{{Kind: "func", Name: "New", StartLine: 1}},
-			},
-			"bad.go": {
-				Language:              rule.LanguageGo,
-				DeclarationsAvailable: true,
-				ParseFailure:          "parse: boom",
-			},
-			"empty.go": {
-				Language:              rule.LanguageGo,
-				DeclarationsAvailable: false,
-			},
-		},
-	)
-	if err != nil {
-		t.Fatalf("NewObservations: %v", err)
-	}
-	idx := indexDeclarations(obs)
-	if len(idx) != 1 || idx[0].path != "ok.go" {
-		t.Fatalf("indexDeclarations = %+v, want one hit on ok.go", idx)
+	if len(dk.Relations) != 0 {
+		t.Fatalf("relations = %+v", dk.Relations)
 	}
 }
 
 func TestLocateDomainContractsFillsSourcesAndAnchors(t *testing.T) {
-	lang := catalogLanguage(t)
-	dk := domainKnowledgeOf(lang)
-	if dk.Located {
-		t.Fatalf("projection reports Located before any observation")
+	dk := domainKnowledgeOf(catalogLanguage(t))
+	if err := locateDomainContracts(dk, catalogCarriers(t)); err != nil {
+		t.Fatalf("locateDomainContracts: %v", err)
 	}
-	locateDomainContracts(dk, lang, indexDeclarations(catalogObservations(t)))
 	if !dk.Located {
 		t.Fatalf("projection does not report Located after locating")
 	}
 	inv := dk.Contexts[0].Invariants
 	if inv[0].Source != "event/event.go:90" || inv[0].Anchor != AnchorFound {
-		t.Fatalf("cluster = %+v", inv[0])
+		t.Fatalf("aggregate invariant with its method = %+v", inv[0])
 	}
-	if inv[1].Source != "event/event.go:8" || inv[1].Anchor != AnchorFound {
-		t.Fatalf("value integrity = %+v", inv[1])
+	if inv[1].Source != "" || inv[1].Anchor != AnchorMissing {
+		t.Fatalf("aggregate invariant without its method = %+v, want missing", inv[1])
 	}
-	if inv[2].Source != "" || inv[2].Anchor != AnchorUnanchorable || inv[2].Reason == "" {
-		t.Fatalf("aggregate without id = %+v, want unanchorable with a reason", inv[2])
+	if inv[2].Source != "event/event.go:8" || inv[2].Anchor != AnchorFound {
+		t.Fatalf("value object with a constructor = %+v", inv[2])
 	}
-	if inv[3].Source != "" || inv[3].Anchor != AnchorMissing || inv[3].Reason != "" {
-		t.Fatalf("value object without constructor = %+v, want missing without a reason", inv[3])
+	if inv[3].Source != "" || inv[3].Anchor != AnchorMissing {
+		t.Fatalf("value object without constructor = %+v, want missing", inv[3])
 	}
 	if a := dk.Contexts[0].Assertions[0]; a.Source != "event/event.go:120" || a.Anchor != AnchorFound {
 		t.Fatalf("assertion = %+v", a)
@@ -325,77 +123,99 @@ func TestLocateDomainContractsFillsSourcesAndAnchors(t *testing.T) {
 }
 
 func TestLocateDomainContractsNilIsSafe(t *testing.T) {
-	locateDomainContracts(nil, vocab.UbiquitousLanguage{}, nil)
+	if err := locateDomainContracts(nil, conformance.Carriers{}); err != nil {
+		t.Fatalf("locateDomainContracts(nil) = %v", err)
+	}
 }
 
-// The unanchored listing puts every unanchorable contract before every
-// missing one and never lists a found contract; a projection that was
-// never located lists nothing, since nothing was looked for.
-func TestUnanchoredContractsOrdersUnanchorableFirst(t *testing.T) {
-	lang := catalogLanguage(t)
-	dk := domainKnowledgeOf(lang)
-	if got := unanchoredContracts(dk); got != nil {
+// The unanchored listing names every missing contract with the
+// declaration the recording expects, spelled the way the project's
+// languages spell a method, in listing order, and never a found one; a
+// projection that was never located lists nothing, since nothing was
+// looked for.
+func TestUnanchoredContractsNameTheExpectedCarrier(t *testing.T) {
+	dk := domainKnowledgeOf(catalogLanguage(t))
+	if got := unanchoredContracts(dk, []rule.Language{rule.LanguageGo}); got != nil {
 		t.Fatalf("unanchored before locating = %+v, want none", got)
 	}
-	locateDomainContracts(dk, lang, indexDeclarations(catalogObservations(t)))
-	got := unanchoredContracts(dk)
-	if len(got) != 3 {
-		t.Fatalf("unanchored = %+v, want 3", got)
+	if err := locateDomainContracts(dk, catalogCarriers(t)); err != nil {
+		t.Fatalf("locateDomainContracts: %v", err)
 	}
-	if got[0].Kind != "invariant" || got[0].Owner != "Event" || got[0].Anchor != AnchorUnanchorable || got[0].Reason == "" {
-		t.Fatalf("first = %+v, want the unanchorable Event invariant with its reason", got[0])
+	got := unanchoredContracts(dk, []rule.Language{rule.LanguageGo})
+	want := []UnanchoredContract{
+		{Kind: ContractInvariant, Context: "catalog", Owner: "Event", Key: "one-venue", Statement: "An Event has at most one Venue.", Expected: "method EnsureOneVenue on Event"},
+		{Kind: ContractInvariant, Context: "catalog", Owner: "Discount", Key: "within-the-whole", Statement: "A Discount never exceeds the whole.", Expected: "constructor of Discount"},
+		{Kind: ContractSpecification, Context: "catalog", Name: "LateOrder", Expected: "satisfaction method on LateOrder"},
 	}
-	if got[1].Kind != "invariant" || got[1].Owner != "Discount" || got[1].Anchor != AnchorMissing {
-		t.Fatalf("second = %+v, want the missing Discount invariant", got[1])
+	if len(got) != len(want) {
+		t.Fatalf("unanchored = %+v, want %d", got, len(want))
 	}
-	if got[2].Kind != "specification" || got[2].Name != "LateOrder" || got[2].Anchor != AnchorMissing {
-		t.Fatalf("third = %+v, want the missing LateOrder specification", got[2])
-	}
-	for _, c := range got {
-		if c.Context != "catalog" {
-			t.Fatalf("contract %+v names context %q, want catalog", c, c.Context)
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("unanchored %d = %+v, want %+v", i, got[i], want[i])
 		}
 	}
 }
 
-func catalogContext(t *testing.T) vocab.BoundedContext {
-	t.Helper()
-	return vocab.BoundedContext{
-		Name: "catalog",
-		Entities: []vocab.Entity{
-			{Definition: vocab.Definition{Name: "Event", Definition: "A show."}, Aggregate: true},
-			{Definition: vocab.Definition{Name: "Venue", Definition: "A hall."}},
-		},
-		ValueObjects: []vocab.Definition{{Name: "Price", Definition: "Whole cents."}},
+// A project in several languages is told each spelling with its
+// language; one with no language configured is told the key itself.
+func TestExpectedMethodSpellsPerLanguage(t *testing.T) {
+	cases := []struct {
+		languages []rule.Language
+		want      string
+	}{
+		{[]rule.Language{rule.LanguageGo}, "method EnsureOneVenue on Event"},
+		{[]rule.Language{rule.LanguageTypeScript}, "method ensureOneVenue on Event"},
+		{[]rule.Language{rule.LanguagePython}, "method ensure_one_venue on Event"},
+		{[]rule.Language{rule.LanguageGo, rule.LanguageTypeScript}, "method EnsureOneVenue (go) or ensureOneVenue (typescript) on Event"},
+		{nil, "method ensure-one-venue on Event"},
+	}
+	for _, c := range cases {
+		if got := expectedMethod(conformance.EnsureKey("one-venue"), "Event", c.languages); got != c.want {
+			t.Errorf("expectedMethod(%v) = %q, want %q", c.languages, got, c.want)
+		}
 	}
 }
 
+// catalogCarriers locates the catalog language in the catalog
+// observations with no Zone declared.
+func catalogCarriers(t *testing.T) conformance.Carriers {
+	t.Helper()
+	carriers, err := conformance.NewCarriers(catalogObservations(t), catalogLanguage(t), nil)
+	if err != nil {
+		t.Fatalf("NewCarriers: %v", err)
+	}
+	return carriers
+}
+
 // catalogLanguage records one context whose contracts cover every
-// anchor outcome: a found cluster invariant, a found value integrity,
-// an unanchorable aggregate invariant without an id, a missing value
-// integrity, a found assertion, and one found and one missing
-// specification.
+// anchor outcome: an aggregate invariant with and without its method,
+// a value object invariant with and without a constructor, a found
+// assertion, and one found and one missing specification.
 func catalogLanguage(t *testing.T) vocab.UbiquitousLanguage {
 	t.Helper()
-	lang, err := vocab.NewUbiquitousLanguage([]vocab.BoundedContext{{
-		Name: "catalog",
-		Entities: []vocab.Entity{{
-			Definition: vocab.Definition{Name: "Event", Definition: "A show."},
-			Aggregate:  true,
+	lang, err := vocab.NewUbiquitousLanguage("boxoffice", "", []vocab.BoundedContext{{
+		Name:       "catalog",
+		Definition: "What is on sale.",
+		Aggregates: []vocab.Aggregate{{
+			Name:       "Event",
+			Definition: "A show.",
+			Identity:   "EventID",
+			Entities:   []vocab.Entity{{Name: "Venue", Definition: "A hall."}},
+			Invariants: []vocab.Invariant{
+				{Key: "published-frozen", Statement: "A published Event never changes."},
+				{Key: "one-venue", Statement: "An Event has at most one Venue."},
+			},
+			Assertions: []vocab.Assertion{
+				{Key: "tiers-priced", On: "Publish", Statement: "Tiers are priced."},
+			},
 		}},
-		ValueObjects: []vocab.Definition{
-			{Name: "Price", Definition: "Whole cents."},
-			{Name: "Discount", Definition: "A percentage off."},
+		ValueObjects: []vocab.ValueObject{
+			{Name: "Price", Definition: "Whole cents.", Invariants: []vocab.Invariant{{Key: "never-negative", Statement: "A Price is never negative."}}},
+			{Name: "Discount", Definition: "A percentage off.", Invariants: []vocab.Invariant{{Key: "within-the-whole", Statement: "A Discount never exceeds the whole."}}},
 		},
-		Invariants: []vocab.Invariant{
-			{Statement: "A published Event never changes.", Owner: "Event", ID: "published-frozen"},
-			{Statement: "A Price is never negative.", Owner: "Price"},
-			{Statement: "An Event has at most one Venue.", Owner: "Event"},
-			{Statement: "A Discount never exceeds the whole.", Owner: "Discount"},
-		},
-		Assertions: []vocab.Assertion{
-			{Statement: "Tiers are priced.", Owner: "Event", ID: "tiers-priced", On: "Publish"},
-		},
+		Events:   []vocab.DomainEvent{{Name: "Published", Definition: "An Event went on sale.", RaisedBy: "Event"}},
+		Services: []vocab.DomainService{{Name: "Pricing", Definition: "Prices tiers."}},
 		Specifications: []vocab.Specification{
 			{Name: "HighValueOrder", Definition: "Orders above a threshold."},
 			{Name: "LateOrder", Definition: "Orders after the doors."},
@@ -407,6 +227,10 @@ func catalogLanguage(t *testing.T) vocab.UbiquitousLanguage {
 	return lang
 }
 
+// catalogObservations declares the types the catalog context records,
+// the constructor of Price, the methods carrying one invariant and the
+// assertion of Event, and the satisfaction method of HighValueOrder;
+// Discount and LateOrder are declared without their carriers.
 func catalogObservations(t *testing.T) conformance.Observations {
 	t.Helper()
 	obs, err := conformance.NewObservations(
@@ -419,8 +243,9 @@ func catalogObservations(t *testing.T) conformance.Observations {
 					{Kind: "struct", Name: "Event", Exported: true, StartLine: 3},
 					{Kind: "struct", Name: "Price", Exported: true, StartLine: 6},
 					{Kind: "func", Name: "NewPrice", Results: []string{"Price", "error"}, StartLine: 8},
-					{Kind: "method", Name: "PublishedFrozen", Owner: "Event", Exported: true, StartLine: 90},
-					{Kind: "method", Name: "TiersPriced", Owner: "Event", Exported: true, StartLine: 120},
+					{Kind: "struct", Name: "Discount", Exported: true, StartLine: 40},
+					{Kind: "method", Name: "EnsurePublishedFrozen", Owner: "Event", Exported: true, StartLine: 90},
+					{Kind: "method", Name: "AssertTiersPriced", Owner: "Event", Exported: true, StartLine: 120},
 				},
 			},
 			"order/spec.go": {
@@ -438,22 +263,4 @@ func catalogObservations(t *testing.T) conformance.Observations {
 		t.Fatalf("NewObservations: %v", err)
 	}
 	return obs
-}
-
-func declsOn(t *testing.T, path string, lang rule.Language, decls []conformance.Declaration) []declHit {
-	t.Helper()
-	obs, err := conformance.NewObservations(
-		[]conformance.ObservedFile{{Path: path}},
-		map[string]conformance.LanguageFacts{
-			path: {
-				Language:              lang,
-				DeclarationsAvailable: true,
-				Declarations:          decls,
-			},
-		},
-	)
-	if err != nil {
-		t.Fatalf("NewObservations: %v", err)
-	}
-	return indexDeclarations(obs)
 }

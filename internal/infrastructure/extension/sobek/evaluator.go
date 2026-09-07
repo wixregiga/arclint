@@ -83,7 +83,7 @@ func SuppliedSourceName(ext rule.ConfiguredExtension) string {
 
 // Evaluate runs one extension rule over the selected subjects.
 func (e *Evaluator) Evaluate(extension string, params map[string]any, subjects []string,
-	modules []rule.Module, obs conformance.Observations, knowledge vocab.UbiquitousLanguage,
+	zones []rule.Zone, obs conformance.Observations, knowledge vocab.UbiquitousLanguage,
 ) ([]conformance.ExtensionFinding, error) {
 	e.load()
 	if e.loadErr != nil {
@@ -98,7 +98,7 @@ func (e *Evaluator) Evaluate(extension string, params map[string]any, subjects [
 	if err != nil {
 		return nil, err
 	}
-	reported, err := ruleType.Check(e.host(subjects, modules, obs, knowledge), validated)
+	reported, err := ruleType.Check(e.host(subjects, zones, obs, knowledge), validated)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func (e *Evaluator) RegisteredExtensionRules() ([]application.RegisteredExtensio
 // host lends the read-only capability surface, scoped to the selected
 // subjects: files outside the Rule's Applicability are invisible and
 // unreadable, so exclusions hold mechanically.
-func (e *Evaluator) host(subjects []string, modules []rule.Module, obs conformance.Observations, knowledge vocab.UbiquitousLanguage) Host {
+func (e *Evaluator) host(subjects []string, zones []rule.Zone, obs conformance.Observations, knowledge vocab.UbiquitousLanguage) Host {
 	inScope := make(map[string]bool, len(subjects))
 	for _, s := range subjects {
 		inScope[s] = true
@@ -229,9 +229,9 @@ func (e *Evaluator) host(subjects []string, modules []rule.Module, obs conforman
 			}
 			return info
 		},
-		Modules: func() map[string][]string {
+		Zones: func() map[string][]string {
 			out := map[string][]string{}
-			for _, m := range modules {
+			for _, m := range zones {
 				members := []string{}
 				for _, f := range subjects {
 					if m.Contains(f) {
@@ -242,12 +242,12 @@ func (e *Evaluator) host(subjects []string, modules []rule.Module, obs conforman
 			}
 			return out
 		},
-		ModuleOf: func(path string) []string {
+		ZoneOf: func(path string) []string {
 			if !inScope[path] {
 				return nil
 			}
 			var out []string
-			for _, m := range modules {
+			for _, m := range zones {
 				if m.Contains(path) {
 					out = append(out, string(m.Name()))
 				}
@@ -274,17 +274,19 @@ func emptyDomainInfo() DomainInfo {
 // shape, guaranteeing non-nil slices (never null in JS).
 func domainInfoFrom(lang vocab.UbiquitousLanguage) DomainInfo {
 	info := emptyDomainInfo()
+	info.Project = lang.Project
 	if len(lang.Contexts) > 0 {
 		info.Contexts = make([]DomainContextInfo, len(lang.Contexts))
 		for i, c := range lang.Contexts {
 			info.Contexts[i] = DomainContextInfo{
 				Name:           c.Name,
-				Entities:       entityInfos(c.Entities),
-				ValueObjects:   definitionInfos(c.ValueObjects),
-				Invariants:     invariantInfos(c.Invariants),
-				Assertions:     assertionInfos(c.Assertions),
+				Definition:     c.Definition,
+				Aggregates:     aggregateInfos(c.Aggregates),
+				ValueObjects:   valueObjectInfos(c.ValueObjects),
+				Events:         eventInfos(c.Events),
+				Services:       serviceInfos(c.Services),
 				Specifications: specificationInfos(c.Specifications),
-				Events:         definitionInfos(c.Events),
+				Questions:      questionInfos(c.Questions),
 				Line:           c.Line,
 			}
 		}
@@ -293,59 +295,70 @@ func domainInfoFrom(lang vocab.UbiquitousLanguage) DomainInfo {
 		info.Relations = make([]DomainRelationInfo, len(lang.Relations))
 		for i, r := range lang.Relations {
 			info.Relations[i] = DomainRelationInfo{
-				From: r.From,
-				To:   r.To,
-				Kind: string(r.Kind),
-				Line: r.Line,
+				From:        r.From,
+				To:          r.To,
+				Kind:        string(r.Kind),
+				Description: r.Description,
+				Line:        r.Line,
 			}
 		}
 	}
 	return info
 }
 
-func entityInfos(entities []vocab.Entity) []DomainDefinitionInfo {
-	if len(entities) == 0 {
-		return []DomainDefinitionInfo{}
+func aggregateInfos(aggregates []vocab.Aggregate) []DomainAggregateInfo {
+	out := make([]DomainAggregateInfo, len(aggregates))
+	for i, a := range aggregates {
+		out[i] = DomainAggregateInfo{
+			Name:       a.Name,
+			Definition: a.Definition,
+			Identity:   a.Identity,
+			Aliases:    a.Aliases,
+			Entities:   entityInfos(a.Entities),
+			Invariants: invariantInfos(a.Invariants),
+			Assertions: assertionInfos(a.Assertions),
+			Repository: a.Repository,
+			Factory:    a.Factory,
+			Line:       a.Line,
+		}
 	}
-	out := make([]DomainDefinitionInfo, len(entities))
+	return out
+}
+
+func entityInfos(entities []vocab.Entity) []DomainEntityInfo {
+	out := make([]DomainEntityInfo, len(entities))
 	for i, e := range entities {
-		out[i] = DomainDefinitionInfo{
+		out[i] = DomainEntityInfo{
 			Name:       e.Name,
-			Definition: e.Definition.Definition,
+			Definition: e.Definition,
+			Identity:   e.Identity,
 			Aliases:    e.Aliases,
-			Aggregate:  e.Aggregate,
 			Line:       e.Line,
 		}
 	}
 	return out
 }
 
-func definitionInfos(defs []vocab.Definition) []DomainDefinitionInfo {
-	if len(defs) == 0 {
-		return []DomainDefinitionInfo{}
-	}
-	out := make([]DomainDefinitionInfo, len(defs))
-	for i, d := range defs {
-		out[i] = DomainDefinitionInfo{
-			Name:       d.Name,
-			Definition: d.Definition,
-			Aliases:    d.Aliases,
-			Line:       d.Line,
+func valueObjectInfos(values []vocab.ValueObject) []DomainValueObjectInfo {
+	out := make([]DomainValueObjectInfo, len(values))
+	for i, v := range values {
+		out[i] = DomainValueObjectInfo{
+			Name:       v.Name,
+			Definition: v.Definition,
+			Aliases:    v.Aliases,
+			Invariants: invariantInfos(v.Invariants),
+			Line:       v.Line,
 		}
 	}
 	return out
 }
 
 func invariantInfos(invs []vocab.Invariant) []DomainInvariantInfo {
-	if len(invs) == 0 {
-		return []DomainInvariantInfo{}
-	}
 	out := make([]DomainInvariantInfo, len(invs))
 	for i, inv := range invs {
 		out[i] = DomainInvariantInfo{
+			Key:       inv.Key,
 			Statement: inv.Statement,
-			Owner:     inv.Owner,
-			ID:        inv.ID,
 			Line:      inv.Line,
 		}
 	}
@@ -353,33 +366,51 @@ func invariantInfos(invs []vocab.Invariant) []DomainInvariantInfo {
 }
 
 func assertionInfos(assertions []vocab.Assertion) []DomainAssertionInfo {
-	if len(assertions) == 0 {
-		return []DomainAssertionInfo{}
-	}
 	out := make([]DomainAssertionInfo, len(assertions))
 	for i, a := range assertions {
 		out[i] = DomainAssertionInfo{
-			Statement: a.Statement,
-			Owner:     a.Owner,
-			ID:        a.ID,
+			Key:       a.Key,
 			On:        a.On,
+			Statement: a.Statement,
 			Line:      a.Line,
 		}
 	}
 	return out
 }
 
-func specificationInfos(specs []vocab.Specification) []DomainSpecificationInfo {
-	if len(specs) == 0 {
-		return []DomainSpecificationInfo{}
-	}
-	out := make([]DomainSpecificationInfo, len(specs))
-	for i, s := range specs {
-		out[i] = DomainSpecificationInfo{
-			Name:       s.Name,
-			Definition: s.Definition,
-			Line:       s.Line,
+func eventInfos(events []vocab.DomainEvent) []DomainEventInfo {
+	out := make([]DomainEventInfo, len(events))
+	for i, e := range events {
+		out[i] = DomainEventInfo{
+			Name:       e.Name,
+			Definition: e.Definition,
+			RaisedBy:   e.RaisedBy,
+			Line:       e.Line,
 		}
+	}
+	return out
+}
+
+func serviceInfos(services []vocab.DomainService) []DomainTermInfo {
+	out := make([]DomainTermInfo, len(services))
+	for i, s := range services {
+		out[i] = DomainTermInfo{Name: s.Name, Definition: s.Definition, Line: s.Line}
+	}
+	return out
+}
+
+func specificationInfos(specs []vocab.Specification) []DomainTermInfo {
+	out := make([]DomainTermInfo, len(specs))
+	for i, s := range specs {
+		out[i] = DomainTermInfo{Name: s.Name, Definition: s.Definition, Line: s.Line}
+	}
+	return out
+}
+
+func questionInfos(questions []vocab.Question) []DomainQuestionInfo {
+	out := make([]DomainQuestionInfo, len(questions))
+	for i, q := range questions {
+		out[i] = DomainQuestionInfo{Key: q.Key, Text: q.Text, Line: q.Line}
 	}
 	return out
 }

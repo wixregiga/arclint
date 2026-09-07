@@ -1,198 +1,210 @@
 # yaml-language-server: $schema=.arclint/schemas/domain.arclint.schema.json
 version: 1
+
+project: boxoffice
+
+description: >-
+  Organizers put shows on sale. Attendees buy tickets. The box office keeps
+  the deal as struck and makes only promises that fit the room.
+
 contexts:
-  - name: catalog
-    entities:
-      - name: Event
+  catalog:
+    definition: >-
+      The show an Organizer puts on sale: its story, when and where it
+      happens, and what each TicketTier buys.
+
+    aggregates:
+      Event:
         definition: >-
-          One show an Organizer puts on sale: its title, its story,
-          when and where it happens, and its TicketTiers. An Event
-          stays a draft until its Organizer publishes it, and only a
-          published Event sells. An Organizer who calls a published
-          show off cancels the Event, which takes it off sale for
-          good.
-        aggregate: true
-      - name: Organizer
-        definition: >-
-          The person whose page it is: they create Events, write the
-          stories, price the TicketTiers, decide when a draft is ready
-          to publish, and call a published show off when it cannot
-          happen. Someone who only buys tickets is never an Organizer.
+          One show an Organizer puts on sale: its title, its story, when and
+          where it happens, and its TicketTiers. An Event stays a draft
+          until its Organizer publishes it, and only a published Event
+          sells. An Organizer who calls a published show off cancels the
+          Event, which takes it off sale for good.
+        identity: EventID
+        invariants:
+          published-only: An Event sells tickets only while it is published.
+          published-frozen: >-
+            A published Event's story, its when and where, and its
+            TicketTiers never change.
+          cancel-published-only: Only a published Event can be cancelled.
+          cancellation-final: A cancelled Event never returns to sale.
+          cancelled-tickets-refunded: >-
+            When an Event is cancelled, every ticket sold for it is
+            refunded.
+        assertions:
+          tiers-priced:
+            on: Publish
+            statement: >-
+              Every TicketTier carries a Price before its Event can be
+              published.
+
     value_objects:
-      - name: TicketTier
+      TicketTier:
         definition: >-
-          One named offer within an Event, like general or front-row:
-          what it buys and its Price. A TicketTier without a Price is
-          not on sale, no matter how big the room is.
-      - name: Price
+          One named offer within an Event, like general or front-row: what
+          it buys and its Price. A TicketTier without a Price is not on
+          sale, no matter how big the room is.
+
+      Price:
         definition: >-
           What one ticket of a TicketTier costs, in whole cents of one
-          currency. The organizer spells it once; everywhere a deal
-          refers to it, the Price is copied, never recomputed.
-    invariants:
-      - statement: >-
-          An Event sells tickets only while it is published.
-        owner: Event
-      - statement: >-
-          A draft Event is invisible to ordering and capacity alike.
-        owner: Event
-      - statement: >-
-          A Price is whole cents of one currency, never negative.
-        owner: Price
-      - statement: >-
-          An Organizer alone creates, edits, publishes, and cancels
-          Events.
-        owner: Organizer
-      - statement: >-
-          A draft Event is visible to its Organizer alone.
-        owner: Event
-      - statement: >-
-          A published Event's story, its when and where, and its
-          TicketTiers never change.
-        owner: Event
-        id: published-frozen
-      - statement: >-
-          Only a published Event can be cancelled.
-        owner: Event
-      - statement: >-
-          A cancelled Event never returns to sale.
-        owner: Event
-      - statement: >-
-          When an Event is cancelled, every ticket sold for it is
-          refunded.
-        owner: Event
-    assertions:
-      - statement: >-
-          Every TicketTier carries a Price before its Event can be
-          published.
-        owner: Event
-        id: tiers-priced
-        on: Publish
-  - name: ordering
-    entities:
-      - name: Order
+          currency. The organizer spells it once; everywhere a deal refers
+          to it, the Price is copied, never recomputed.
+        invariants:
+          whole-nonnegative-cents: >-
+            A Price is whole cents of one currency, never negative.
+
+    questions:
+      organizer-in-the-model: >-
+        The Organizer is the person whose page it is: they create Events,
+        write the stories, price the TicketTiers, publish a draft when it
+        is ready, and call a published show off; someone who only buys
+        tickets is never an Organizer. Only its Organizer edits, publishes,
+        or cancels an Event, and only its Event's Organizer comps an
+        Order. The code declares no Organizer type: the organizer gate in
+        the app layer enforces both rules before any aggregate is touched.
+        Is the Organizer a term of the catalog model with something to
+        keep consistent, or an actor the application knows and the model
+        only names?
+      draft-visibility: >-
+        A draft Event is visible to its Organizer alone, and a comped
+        Order shows it was comped only to its Organizer. Both are access
+        policies, not consistency rules of an aggregate; which part of the
+        system owns them, and where are they recorded?
+      cancellation-and-refunds: >-
+        When is an Event considered cancelled: when it goes off sale, or
+        only after every ticket sold for it has been refunded?
+
+  ordering:
+    definition: >-
+      The deal as struck, the Attendee it promises seats to, and the Refunds
+      recorded beside it.
+
+    aggregates:
+      Order:
         definition: >-
-          The deal as struck: which TicketTiers, how many of each, and
-          the Price of each at the moment of placement, kept as
-          OrderLines. A placed Order is a promise the box office
-          keeps to its Attendee. Tickets can come back, and when they
-          do the Order records a Refund beside the deal instead of
-          rewriting it. Most Orders are placed by the Attendee who
-          wants the seats. An Organizer can comp one instead, which
-          places an Order whose tickets cost its Attendee nothing. A
-          comped Order is an Order like any other: it promises the
-          same seats, the room counts them the same way, and tickets
+          The deal as struck: which TicketTiers, how many of each, and the
+          Price of each at the moment of placement, kept as OrderLines. A
+          placed Order is a promise the box office keeps to its Attendee.
+          Tickets can come back, and when they do the Order records a Refund
+          beside the deal instead of rewriting it. Most Orders are placed by
+          the Attendee who wants the seats. An Organizer can comp one
+          instead, which places an Order whose tickets cost its Attendee
+          nothing. A comped Order is an Order like any other: it promises
+          the same seats, the room counts them the same way, and tickets
           come back from it through a Refund.
-        aggregate: true
+        identity: OrderID
+        invariants:
+          published-tiers-only: >-
+            An Order references only TicketTiers of a published Event at
+            placement.
+          lines-frozen: >-
+            A placed Order's OrderLines and their Prices never change, not
+            even when tickets are given back.
+          attendee-pays-tier-price: >-
+            An Order placed by its Attendee pays the Price of every
+            TicketTier on it.
+
     value_objects:
-      - name: OrderLine
+      OrderLine:
         definition: >-
-          One TicketTier inside an Order: the tier, the quantity, and
-          the Price captured at placement. Later catalog edits never
-          reach a captured OrderLine.
-      - name: Attendee
+          One TicketTier inside an Order: the tier, the quantity, and the
+          Price captured at placement. Later catalog edits never reach a
+          captured OrderLine.
+
+      Attendee:
         definition: >-
-          The person a placed Order promises seats to: a name and a
-          way to reach them, captured on the Order. An Attendee
-          exists only as part of their Order; there is nothing to
-          sign up for.
-      - name: Refund
+          The person a placed Order promises seats to: a name and a way to
+          reach them, captured on the Order. An Attendee exists only as part
+          of their Order; there is nothing to sign up for.
+
+      Refund:
         definition: >-
-          Tickets given back from a placed Order: which TicketTier and
-          how many. The Organizer gives them back, either one buyer's
-          tickets at a time or all of them at once when the Event is
-          cancelled. The deal as struck stays as struck; the Refund is
-          recorded beside it, and the seats it returns stop being
-          spoken for.
-    events:
-      - name: OrderPlaced
+          Tickets given back from a placed Order: which TicketTier and how
+          many. The Organizer gives them back, either one buyer's tickets at
+          a time or all of them at once when the Event is cancelled. The
+          deal as struck stays as struck; the Refund is recorded beside it,
+          and the seats it returns stop being spoken for.
+        invariants:
+          within-unrefunded-tickets: >-
+            A Refund never gives back more tickets of a TicketTier than its
+            Order bought on that tier and has not already had refunded.
+
+    questions:
+      order-placed-event: >-
+        The moment a deal is struck matters to capacity, because held seats
+        become seats spoken for right then. The code has no OrderPlaced
+        type: the place-order use case makes a plain call from ordering to
+        capacity. Is OrderPlaced a domain event the Order raises, or the
+        name of that call? If it is an event, does it also name the moment
+        an Organizer comps an Order, which promises the same seats?
+
+  capacity:
+    definition: >-
+      Whether one more promise fits the room: seats available, seats held,
+      and seats spoken for.
+
+    aggregates:
+      Capacity:
         definition: >-
-          A deal was struck: an Attendee placed an Order. The capacity
-          ledger cares, because this is the moment held seats become
-          seats spoken for. It is a name for that moment, not
-          messaging machinery; in boxoffice it is a plain call from
-          ordering to capacity.
-    invariants:
-      - statement: >-
-          An Order references only TicketTiers of a published Event
-          at placement.
-        owner: Order
-      - statement: >-
-          A placed Order's OrderLines and their Prices never change,
-          not even when tickets are given back.
-        owner: Order
-        id: lines-frozen
-      - statement: >-
-          A Refund never gives back more tickets of a TicketTier than
-          its Order bought on that tier and has not already had
-          refunded.
-        owner: Refund
-      - statement: >-
-          An Order is comped only by its Event's Organizer.
-        owner: Order
-      - statement: >-
-          An Order placed by its Attendee pays the Price of every
-          TicketTier on it.
-        owner: Order
-      - statement: >-
-          A comped Order shows it was comped only on its own page and
-          to its Organizer.
-        owner: Order
-  - name: capacity
-    entities:
-      - name: Capacity
-        definition: >-
-          The seat count for one Event: how many seats each TicketTier
-          has, how many are spoken for, and which Holds are still
-          pending. The seats a TicketTier has are the amount the
-          Organizer published, and they stay put while seats spoken
-          for rise with each Order and fall with each Refund. It has
-          no opinion on stories or Prices, only on whether one more
-          promise fits the room; when nothing more fits, the
-          TicketTier is sold out.
-        aggregate: true
+          The seat count for one Event: how many seats each TicketTier has,
+          how many are spoken for, and which Holds are still pending. The
+          seats a TicketTier has are the amount the Organizer published, and
+          they stay put while seats spoken for rise with each Order and fall
+          with each Refund. It has no opinion on stories or Prices, only on
+          whether one more promise fits the room; when nothing more fits,
+          the TicketTier is sold out.
+        identity: CapacityID
+        invariants:
+          seat-budget: >-
+            A Capacity never lets seats spoken for plus seats held exceed
+            the seats a TicketTier has.
+          sold-out-refuses-holds: >-
+            While every seat of a TicketTier is spoken for or held, a
+            Capacity refuses new Holds on it.
+          refunds-only: >-
+            A Capacity's seats spoken for come back only through a Refund.
+          refund-within-spoken-for: >-
+            A Capacity frees no more seats of a TicketTier than that tier
+            has spoken for.
+
     value_objects:
-      - name: Hold
+      Hold:
         definition: >-
           Seats set aside for someone still deciding, before any Order
-          exists. A Hold carries a deadline from birth, and an expired
-          Hold frees its seats.
-    invariants:
-      - statement: >-
-          A Capacity never lets seats spoken for plus seats held
-          exceed the seats a TicketTier has.
-        owner: Capacity
-        id: seat-budget
-      - statement: >-
-          While every seat of a TicketTier is spoken for or held, a
-          Capacity refuses new Holds on it.
-        owner: Capacity
-      - statement: >-
-          An expired Hold frees its seats.
-        owner: Hold
-      - statement: >-
-          An expired Hold never becomes part of an Order.
-        owner: Hold
-      - statement: >-
-          A Capacity's seats spoken for come back only through a
-          Refund.
-        owner: Capacity
-      - statement: >-
-          A Capacity frees no more seats of a TicketTier than that
-          tier has spoken for.
-        owner: Capacity
+          exists. A Hold carries a deadline from birth, and an expired Hold
+          frees its seats.
+        invariants:
+          expiry-frees-seats: An expired Hold frees its seats.
+          expired-hold-never-ordered: >-
+            An expired Hold never becomes part of an Order.
+
+    questions:
+      capacity-identity: >-
+        Does Capacity have its own identity, or is it identified by the
+        Event it counts seats for? CapacityID is the recorded default until
+        this is settled.
+
 relations:
-  # ordering and capacity both take the catalog's model of Event and
-  # TicketTier as-is; dependence flows downstream and never back.
   - from: catalog
     to: ordering
     kind: conformist
+    description: >-
+      ordering takes the catalog's model of Event and TicketTier as-is;
+      dependence flows downstream and never back.
+
   - from: catalog
     to: capacity
     kind: conformist
-  # ordering is capacity's customer: it asks for Holds when someone
-  # is deciding and for seats spoken for when an Order is placed, and
-  # capacity answers with seats or a refusal.
+    description: >-
+      capacity takes the catalog's model of Event and TicketTier as-is;
+      dependence flows downstream and never back.
+
   - from: capacity
     to: ordering
     kind: customer_supplier
+    description: >-
+      ordering is capacity's customer: it asks for Holds when someone is
+      deciding and for seats spoken for when an Order is placed, and
+      capacity answers with seats or a refusal.

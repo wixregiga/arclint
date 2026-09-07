@@ -91,18 +91,18 @@ func writeBindings(p *out.Printer, res application.InstallPatternResult) {
 	if len(res.Bound) > 0 {
 		p.Println("bound:")
 		for _, b := range res.Bound {
-			p.Printf("  %s: %s\n", b.Module, strings.Join(b.Paths, ", "))
+			p.Printf("  %s: %s\n", b.Zone, strings.Join(b.Paths, ", "))
 		}
 	}
 	if len(res.Adopted) > 0 {
-		p.Printf("adopted declared module(s): %s\n", strings.Join(res.Adopted, ", "))
+		p.Printf("adopted declared zone(s): %s\n", strings.Join(res.Adopted, ", "))
 	}
 	if len(res.Unbound) > 0 {
 		p.Println("unbound (bind each under extends[].bind before the ruleset loads):")
 		for _, m := range res.Unbound {
 			p.Printf("  %s\n", m)
 		}
-		p.Println("next: bind the unbound modules, then run `arclint check .`")
+		p.Println("next: bind the unbound zones, then run `arclint check .`")
 		return
 	}
 	p.Println("next: run `arclint check .`")

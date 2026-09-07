@@ -7,7 +7,7 @@ import (
 )
 
 // Glob is a validated repo-relative path pattern used by Applicability,
-// Module membership, Rule Exclusions, and structure Rules. Matching is
+// Zone membership, Rule Exclusions, and structure Rules. Matching is
 // segment-wise: `*` and `?` never cross `/`, a segment consisting solely
 // of `**` matches any number of whole segments including none, and
 // `[...]` matches one character by set or range (negate with `^` or
@@ -78,7 +78,7 @@ func (g Glob) Match(path string) bool {
 
 // MatchesSubtree reports whether the path satisfies the pattern
 // directly, or lies inside a directory the pattern names. This is the
-// Module-membership convenience: a glob that names a directory claims
+// Zone-membership convenience: a glob that names a directory claims
 // the directory's whole subtree.
 func (g Glob) MatchesSubtree(path string) bool {
 	if g.IsZero() {

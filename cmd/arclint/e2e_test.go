@@ -12,6 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/wixregiga/arclint/internal/application"
+	"github.com/wixregiga/arclint/internal/domain/rule"
 )
 
 var binPath string
@@ -130,18 +133,30 @@ func TestRulesListsRuleset(t *testing.T) {
 		t.Fatalf("rules exit %d\nstderr: %s", code, stderr)
 	}
 	lines := strings.Split(strings.TrimSpace(stdout), "\n")
-	if len(lines) != 32 {
-		t.Errorf("rules listed = %d, want 32\n%s", len(lines), stdout)
+	// The listing is the built-in Rules arclint composes for the
+	// recorded domain, each saying so, and then the repository's own.
+	builtIns, err := rule.BuiltIn()
+	if err != nil {
+		t.Fatalf("BuiltIn: %v", err)
+	}
+	const local = 29
+	if len(lines) != len(builtIns)+local {
+		t.Errorf("rules listed = %d, want %d built in and %d local\n%s", len(lines), len(builtIns), local, stdout)
+	}
+	marked := 0
+	for _, line := range lines {
+		if strings.HasSuffix(line, "  "+application.BuiltInOrigin) {
+			marked++
+		}
+	}
+	if marked != len(builtIns) {
+		t.Errorf("%d rules say they are built in, want %d\n%s", marked, len(builtIns), stdout)
 	}
 	for _, want := range []string{
+		"aggregate/root-declared  [domain/error/exact]",
+		"domain_isolation/model-imports-nothing-outside-itself  [domain/error/exact]",
 		"domain/stdlib-only", "domain/no-panic",
 		"domain-model/aggregate-skeleton",
-		// The vocabulary rules come from the embedded Pattern the
-		// repository extends, so they list under qualified ids with
-		// their provenance.
-		"arclint/domain-model:contexts/respect-relations",
-		"arclint/domain-model:vocabulary/terms-carry-definitions  [extension/error/heuristic]",
-		"from arclint/domain-model@0.1.0",
 		"delivery/report-factory-dependencies",
 		"delivery/lipgloss-sealed",
 		"delivery/cli-interface-dependencies",
@@ -149,6 +164,9 @@ func TestRulesListsRuleset(t *testing.T) {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("missing %s in listing", want)
 		}
+	}
+	if strings.Contains(stdout, "arclint/domain-model") {
+		t.Errorf("the domain-model Pattern is folded into the built-in rules and must not list:\n%s", stdout)
 	}
 }
 
@@ -164,14 +182,14 @@ func TestRuleDetailAndContext(t *testing.T) {
 		t.Fatalf("context exit %d\nstderr: %s", code, stderr)
 	}
 	var ctx struct {
-		Modules []struct{ Name string }
-		Rules   []struct{ Reason string }
+		Zones []struct{ Name string }
+		Rules []struct{ Reason string }
 	}
 	if err := json.Unmarshal([]byte(stdout), &ctx); err != nil {
 		t.Fatalf("context json: %v\n%s", err, stdout)
 	}
 	names := map[string]bool{}
-	for _, m := range ctx.Modules {
+	for _, m := range ctx.Zones {
 		names[m.Name] = true
 	}
 	if !names["domain"] || len(ctx.Rules) == 0 {
@@ -241,7 +259,7 @@ func TestAgentsGroupHelpOnly(t *testing.T) {
 func TestContentRuleGates(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "rules.arclint.yaml", `runtime: [go]
-modules:
+zones:
   src: src/**
 rules:
   src/no-panic:
@@ -307,7 +325,7 @@ func TestInitVerticalLoads(t *testing.T) {
 func TestBaselineLifecycle(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "rules.arclint.yaml", `runtime: [go]
-modules:
+zones:
   src: src/**
 rules:
   src/snake:
@@ -353,7 +371,7 @@ rules:
 func TestLegacyFormatRejected(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "rules.arclint.yaml", `runtime: [go]
-modules:
+zones:
   src: ["src/**"]
 contracts:
   src:
@@ -407,7 +425,7 @@ export default defineRule({
 });
 `)
 	write(t, root, "rules.arclint.yaml", `runtime: [go, ts]
-modules:
+zones:
   src: src/**
 rules:
   src/inventory:

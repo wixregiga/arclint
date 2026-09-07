@@ -15,9 +15,9 @@ func assess(t *testing.T, paths ...string) conformance.Assessment {
 	if err != nil {
 		t.Fatalf("NewGlob: %v", err)
 	}
-	module, err := rule.NewModule("m", "", []rule.Glob{glob})
+	zone, err := rule.NewZone("m", "", []rule.Glob{glob})
 	if err != nil {
-		t.Fatalf("NewModule: %v", err)
+		t.Fatalf("NewZone: %v", err)
 	}
 	files := make([]conformance.ObservedFile, 0, len(paths))
 	for _, p := range paths {
@@ -31,9 +31,9 @@ func assess(t *testing.T, paths ...string) conformance.Assessment {
 	if err != nil {
 		t.Fatalf("NewCaseSpec: %v", err)
 	}
-	scope, err := rule.ModuleApplicability([]rule.ModuleName{"m"})
+	scope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ModuleApplicability: %v", err)
+		t.Fatalf("ZoneApplicability: %v", err)
 	}
 	r, err := rule.New(rule.Spec{
 		ID:            "t/p:m/snake",
@@ -46,7 +46,7 @@ func assess(t *testing.T, paths ...string) conformance.Assessment {
 	}
 	a, err := conformance.Run(conformance.Request{
 		Rules:        []rule.Rule{r},
-		Modules:      []rule.Module{module},
+		Zones:        []rule.Zone{zone},
 		Observations: obs,
 	})
 	if err != nil {

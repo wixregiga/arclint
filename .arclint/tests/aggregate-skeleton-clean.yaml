@@ -4,12 +4,14 @@ rule: "domain-model/aggregate-skeleton"
 files:
   domain.arclint.yaml: |
     version: 1
+    project: fixture
     contexts:
-      - name: ordering
-        entities:
-          - name: Order
+      ordering:
+        definition: Customers turning products into orders.
+        aggregates:
+          Order:
             definition: A customer's request to purchase products.
-            aggregate: true
+            identity: OrderID
   internal/domain/order/root.go: |
     package order
 

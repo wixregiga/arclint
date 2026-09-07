@@ -3,19 +3,19 @@ package rule
 import "fmt"
 
 // Exclusion is a Pattern Consumer decision removing selected Files,
-// Folders, or Modules from one Rule's Applicability. It applies to
+// Folders, or Zones from one Rule's Applicability. It applies to
 // exactly one Rule (through attachment to the aggregate) and produces
 // not-applicable rather than a Violation.
 type Exclusion struct {
-	paths   []Glob
-	modules []ModuleName
-	reason  string
+	paths  []Glob
+	zones  []ZoneName
+	reason string
 }
 
 // NewExclusion requires at least one concrete subject selector and a
 // reason: an exclusion is policy, not configuration.
-func NewExclusion(paths []Glob, modules []ModuleName, reason string) (Exclusion, error) {
-	if len(paths)+len(modules) == 0 {
+func NewExclusion(paths []Glob, zones []ZoneName, reason string) (Exclusion, error) {
+	if len(paths)+len(zones) == 0 {
 		return Exclusion{}, fmt.Errorf("exclusion: no subject selector")
 	}
 	if reason == "" {
@@ -26,13 +26,13 @@ func NewExclusion(paths []Glob, modules []ModuleName, reason string) (Exclusion,
 			return Exclusion{}, fmt.Errorf("exclusion: unconstructed path glob")
 		}
 	}
-	if err := uniqueValidModules("exclusion", modules); err != nil {
+	if err := uniqueValidZones("exclusion", zones); err != nil {
 		return Exclusion{}, err
 	}
 	return Exclusion{
-		paths:   append([]Glob(nil), paths...),
-		modules: append([]ModuleName(nil), modules...),
-		reason:  reason,
+		paths:  append([]Glob(nil), paths...),
+		zones:  append([]ZoneName(nil), zones...),
+		reason: reason,
 	}, nil
 }
 
@@ -47,10 +47,10 @@ func (e Exclusion) ExcludesFile(path string) bool {
 	return false
 }
 
-// ExcludesModule decides whether a candidate Module is outside Rule
+// ExcludesZone decides whether a candidate Zone is outside Rule
 // Applicability.
-func (e Exclusion) ExcludesModule(name ModuleName) bool {
-	for _, m := range e.modules {
+func (e Exclusion) ExcludesZone(name ZoneName) bool {
+	for _, m := range e.zones {
 		if m == name {
 			return true
 		}
@@ -61,8 +61,8 @@ func (e Exclusion) ExcludesModule(name ModuleName) bool {
 // Paths returns the path selectors.
 func (e Exclusion) Paths() []Glob { return append([]Glob(nil), e.paths...) }
 
-// Modules returns the Module selectors.
-func (e Exclusion) Modules() []ModuleName { return append([]ModuleName(nil), e.modules...) }
+// Zones returns the Zone selectors.
+func (e Exclusion) Zones() []ZoneName { return append([]ZoneName(nil), e.zones...) }
 
 // Reason returns why the subjects were excluded.
 func (e Exclusion) Reason() string { return e.reason }

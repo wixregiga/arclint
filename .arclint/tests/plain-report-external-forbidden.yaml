@@ -18,4 +18,4 @@ expect:
   - kind: violation
     path: internal/delivery/cli/adapters/report/plain/plain.go
     line: 3
-    message: "external import \"github.com/charmbracelet/lipgloss\" is forbidden for Module \"plain_report\""
+    message: "external import \"github.com/charmbracelet/lipgloss\" is forbidden for Zone \"plain_report\""

@@ -4,7 +4,7 @@ template = "index.html"
 
 # Architecture rules as data
 
-ArcLint evaluates Rules against Files, Folders, and Modules. It reports
+ArcLint evaluates Rules against Files, Folders, and Zones. It reports
 what it proved, what it suspects, and what it could not determine. Go,
 TypeScript, and Python repositories use the same static binary.
 
@@ -13,14 +13,14 @@ arclint init --languages go,ts
 arclint check .
 ```
 
-`init` drafts a starter `rules.arclint.yaml`. Define Modules, then add Rules that
-state what those Modules may import and which invariants their Files must
+`init` drafts a starter `rules.arclint.yaml`. Define Zones, then add Rules that
+state what those Zones may import and which invariants their Files must
 satisfy:
 
 ```yaml
 runtime: [go]
 
-modules:
+zones:
   domain:
     paths: ["internal/domain/**"]
 
@@ -38,8 +38,8 @@ contracts:
         case: snake_case
 ```
 
-The published Rule Types cover Module imports, required or forbidden
-paths, naming, dependency layers, protected Modules, dependency cycles,
+The published Rule Types cover Zone imports, required or forbidden
+paths, naming, dependency layers, protected Zones, dependency cycles,
 and TypeScript Extension enforcement. Extensions run in-process through
 a scoped SDK when the built-in Rule Types cannot express a check.
 

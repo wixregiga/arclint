@@ -5,75 +5,75 @@ import (
 	"fmt"
 )
 
-// ModuleName is the non-empty repository-local name of a Module.
-type ModuleName string
+// ZoneName is the non-empty repository-local name of a Zone.
+type ZoneName string
 
-// NewModuleName validates a Module name.
-func NewModuleName(s string) (ModuleName, error) {
-	m := ModuleName(s)
+// NewZoneName validates a Zone name.
+func NewZoneName(s string) (ZoneName, error) {
+	m := ZoneName(s)
 	if err := m.validate(); err != nil {
 		return "", err
 	}
 	return m, nil
 }
 
-func (m ModuleName) validate() error {
+func (m ZoneName) validate() error {
 	if m == "" {
-		return errors.New("module name: empty")
+		return errors.New("zone name: empty")
 	}
 	for _, r := range string(m) {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_', r == '-':
 		default:
-			return fmt.Errorf("module name %q: contains %q (allowed: a-z 0-9 _ -)", string(m), r)
+			return fmt.Errorf("zone name %q: contains %q (allowed: a-z 0-9 _ -)", string(m), r)
 		}
 	}
 	return nil
 }
 
-func (m ModuleName) String() string { return string(m) }
+func (m ZoneName) String() string { return string(m) }
 
-// Module is a named logical grouping of Files and Folders, defined by
-// the Pattern Consumer through membership globs. Modules may overlap;
+// Zone is a named logical grouping of Files and Folders, defined by
+// the Pattern Consumer through membership globs. Zones may overlap;
 // membership does not imply exclusive ownership.
-type Module struct {
-	name        ModuleName
+type Zone struct {
+	name        ZoneName
 	description string
 	paths       []Glob
 }
 
-// NewModule requires a valid name and at least one membership selector.
-func NewModule(name ModuleName, description string, paths []Glob) (Module, error) {
+// NewZone requires a valid name and at least one membership selector.
+func NewZone(name ZoneName, description string, paths []Glob) (Zone, error) {
 	if err := name.validate(); err != nil {
-		return Module{}, err
+		return Zone{}, err
 	}
 	if len(paths) == 0 {
-		return Module{}, fmt.Errorf("module %q: no membership selector", name)
+		return Zone{}, fmt.Errorf("zone %q: no membership selector", name)
 	}
 	for _, g := range paths {
 		if g.IsZero() {
-			return Module{}, fmt.Errorf("module %q: unconstructed membership glob", name)
+			return Zone{}, fmt.Errorf("zone %q: unconstructed membership glob", name)
 		}
 	}
-	return Module{
+	return Zone{
 		name: name, description: description,
 		paths: append([]Glob(nil), paths...),
 	}, nil
 }
 
-// Name returns the repository-local Module name.
-func (m Module) Name() ModuleName { return m.name }
+// Name returns the repository-local Zone name.
+func (m Zone) Name() ZoneName { return m.name }
 
 // Description returns the authoring description, possibly empty.
-func (m Module) Description() string { return m.description }
+func (m Zone) Description() string { return m.description }
 
 // Paths returns the membership selectors.
-func (m Module) Paths() []Glob { return append([]Glob(nil), m.paths...) }
+func (m Zone) Paths() []Glob { return append([]Glob(nil), m.paths...) }
 
 // Contains determines membership of a repo-relative file path: a
 // selector matches the path directly, or names a directory whose whole
-// subtree belongs to the Module.
-func (m Module) Contains(path string) bool {
+// subtree belongs to the Zone.
+func (m Zone) Contains(path string) bool {
 	for _, g := range m.paths {
 		if g.MatchesSubtree(path) {
 			return true

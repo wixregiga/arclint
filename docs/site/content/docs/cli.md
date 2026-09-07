@@ -7,18 +7,18 @@ weight = 6
 | command | does |
 |---|---|
 | `arclint init` | draft a starter `rules.arclint.yaml`; `--pattern bare` (default) or a Pattern to extend by exact reference or name (`arclint/vertical@0.1.0`, `vertical`), which drafts the `extends` block with the Pattern's suggested bindings; `--languages go,ts,py` selects runtime targets and `--force` permits replacing an existing file |
-| `arclint patterns` | list the Patterns that resolve offline: those embedded in the binary (`arclint/vertical@0.1.0`, `arclint/domain-model@0.1.0`), then vendored and authored packages under `.arclint/patterns/<namespace>/<name>/`; `--remote` lists what the Registry publishes instead (`--registry <url>` or `ARCLINT_REGISTRY` names one; `file://` trees work) |
-| `arclint patterns install <pattern>` | extend `rules.arclint.yaml` with one Pattern named by reference, `namespace/name`, or bare name, binding every Module it lists; vendors it first when it came from the Registry; drafts `rules.arclint.yaml` when none exists (`--languages`) |
+| `arclint patterns` | list the Patterns that resolve offline: the one embedded in the binary (`arclint/vertical@0.1.0`), then vendored and authored packages under `.arclint/patterns/<namespace>/<name>/`; `--remote` lists what the Registry publishes instead (`--registry <url>` or `ARCLINT_REGISTRY` names one; `file://` trees work) |
+| `arclint patterns install <pattern>` | extend `rules.arclint.yaml` with one Pattern named by reference, `namespace/name`, or bare name, binding every Zone it lists; vendors it first when it came from the Registry; drafts `rules.arclint.yaml` when none exists (`--languages`) |
 | `arclint patterns vendor <pattern>` | copy one Pattern under `.arclint/patterns/<namespace>/<name>/` with its `manifest.json`, so every load verifies it and the Registry is never needed again |
 | `arclint patterns export <pattern> --dir <tree>` | publish one offline Pattern into a Registry tree on disk: `<tree>/<namespace>/<name>/<version>/` plus `<tree>/index.json` |
 | `arclint check [path]` | evaluate configured Rules; accepts `--no-baseline` and `--only` / `--exclude` Rule selectors |
 | `arclint baseline capture` | replace `.arclint/baseline.v2.json` with the active findings from one complete assessment |
 | `arclint baseline refresh` | reassess and replace the Baseline, dropping stale entries |
-| `arclint context [paths...]` | explain the repository or everything binding the selected paths; `--module` adds named Modules, `--full` lists the whole recorded domain instead of the part anchored into the scope |
+| `arclint context [paths...]` | explain the repository or everything binding the selected paths; `--zone` adds named Zones, `--full` lists the whole recorded domain instead of the part anchored into the scope |
 | `arclint domain` | shorthand for `arclint domain overview`; inspect and maintain the project's ubiquitous language |
 | `arclint domain init` | create an empty, schema-hinted `domain.arclint.yaml` beside the resolved `rules.arclint.yaml`; leave an existing file unchanged |
 | `arclint domain overview` | summarize the project's ubiquitous language for understanding |
-| `arclint domain list [type]` | list domain definitions, optionally filtered to `entities`, `value_objects`, `invariants`, `assertions`, `specifications`, or `events` |
+| `arclint domain list [type]` | list domain definitions, optionally filtered to `contexts`, `aggregates`, `entities`, `value_objects`, `invariants`, `assertions`, `specifications`, `events`, `services`, or `questions`; `--context` narrows to one context |
 | `arclint domain show <type> <name>` | show one domain definition by singular type and canonical name |
 | `arclint domain explain [type]` | explain ArcLint's supported domain concepts |
 | `arclint domain define <type> <name>` | create or update a domain definition inside a bounded context; `--guided` starts interactive authoring |
@@ -55,7 +55,7 @@ $ arclint rules acme/hexagonal:dependencies/acyclic
 id:          acme/hexagonal:dependencies/acyclic
 type:        acyclic
 severity:    error
-claim:       Module dependencies contain no cycle.
+claim:       Zone dependencies contain no cycle.
 asserts:     dependencies among ["core", "ports", "adapters"] contain no cycle
 applies to:  the entire repository
 ```
@@ -85,14 +85,14 @@ bound:
   app: internal/app/**
 unbound (bind each under extends[].bind before the ruleset loads):
   domain
-next: bind the unbound modules, then run `arclint check .`
+next: bind the unbound zones, then run `arclint check .`
 ```
 
 `install` reports the source it resolved from (`embedded`, `local`, or
 `registry`), the short digest of the exact files, where the vendored
 copy went, whether `rules.arclint.yaml` was written or extended (and which
 version an existing entry moved from), every binding it wrote, the
-declared Modules it folded into bindings, and the Modules still to
+declared Zones it folded into bindings, and the Zones still to
 bind. `vendor` reports the directory written or that an identical copy
 was already there; `export` reports the version directory and the
 index it updated.
@@ -131,7 +131,7 @@ With `--format json`:
 repository carries under `.arclint/patterns` regardless of `source`.
 `install` emits `{reference, digest, source, vendoredPath?,
 vendorReplaced?, rulesetPath, rulesetCreated, rulesetReplaced?,
-bound: [{module, paths}], unbound: [], adopted?}`; `vendor` emits
+bound: [{zone, paths}], unbound: [], adopted?}`; `vendor` emits
 `{reference, digest, source, path?, replaced?, unchanged}`; `export`
 emits `{reference, digest, versionDir, indexPath, replaced}`.
 
@@ -169,9 +169,9 @@ that stays empty asserts exactly that, not a stronger conformance outcome.
 
 The `message` field is an exact Diagnostic contract. Paste the
 CLI-emitted text verbatim (Go-quoted). Do not hand-format or reconstruct
-it: consumes, for example, renders quoted Module lists as
-`Module(s) ["adapters"]`, not bare `"adapters"`. With
-`core: "core/**"` and `adapters: "adapters/**"` declared as Modules and
+it: consumes, for example, renders quoted Zone lists as
+`Zone(s) ["adapters"]`, not bare `"adapters"`. With
+`core: "core/**"` and `adapters: "adapters/**"` declared as Zones and
 `core/consumes` asserting `imports: {internal: []}` on `core`, a failure
 for the fixture above looks like:
 
@@ -181,7 +181,7 @@ FAIL disallowed-adapters-import (core/consumes)
     - kind: violation
       path: core/a.go
       line: 3
-      message: "import \"example.com/app/adapters\" resolves to Module(s) [\"adapters\"], not in the allow-list of Module \"core\""
+      message: "import \"example.com/app/adapters\" resolves to Zone(s) [\"adapters\"], not in the allow-list of Zone \"core\""
 0 passed · 1 failed
 ```
 
@@ -189,20 +189,20 @@ Adopt that block into `expect:` and re-run until the case passes.
 
 ## Context for agents
 
-`arclint context <path|module>` answers "what is architecturally true
+`arclint context <path|zone>` answers "what is architecturally true
 where I am about to edit?" without loading the whole ruleset into a
-prompt: the modules owning the path, their descriptions, what they may
+prompt: the zones owning the path, their descriptions, what they may
 import, every rule binding them, and the command that verifies the
-result. A file path, a directory, or a declared module name all
-resolve; an exact module name wins when both match. `--format json`
+result. A file path, a directory, or a declared zone name all
+resolve; an exact zone name wins when both match. `--format json`
 emits the machine shape for coding agents.
 
 When `domain.arclint.yaml` is present, `context` also carries the
 recorded domain, disclosed progressively. A worksite lists only what
 anchors into it: a term whose type declaration lies under a selected
-path or inside a selected Module, an invariant or assertion whose
+path or inside a selected Zone, an invariant or assertion whose
 carrying declaration lies there, and a whole bounded context whenever a
-selected Module is named for it. The headline counts the listing
+selected Zone is named for it. The headline counts the listing
 against the whole model (`1 of 4 contexts, 3 of 25 invariants anchor
 into this scope`) and names `--full`, which lists the whole recorded
 model instead; bare `arclint context` always lists it whole. Each
@@ -215,7 +215,7 @@ shape names no declaration at all. The listing closes with an
 `unanchored contracts:` block that groups every missing and
 unanchorable contract by owner and cause so an agent cannot skim past
 them: an unanchorable contract needs its recording changed before any
-source can carry it, and an `invariants` Rule on the owning Module
+source can carry it, and an `invariants` Rule on the owning Zone
 turns each missing contract into a Violation under `arclint check`.
 The JSON shape carries the same facts under `domain.scoped`,
 `domain.shown`, `domain.located`, per-contract `anchor` and `reason`,
@@ -225,7 +225,7 @@ and `domain.unanchored`.
 ruleset, the recorded vocabulary, and the local extension registry into
 a generated block inside `AGENTS.md`: an ask-arclint-first directive,
 the full command surface with when-to-use guidance, a recorded-domain
-snapshot, every module with its rule claims, repository-wide rules, and
+snapshot, every zone with its rule claims, repository-wide rules, and
 the local extension inventory. Agents see the architecture before
 writing code. The block sits between markers; hand-written content
 around it survives regeneration, and the block never carries
@@ -236,8 +236,8 @@ vocabulary.
 
 `arclint completion bash|zsh|fish|powershell` emits the shell script.
 Completion uses the resolved `rules.arclint.yaml` when available: Rule IDs for
-`rules` and the `check --only` / `--exclude` selectors, Module names for
-`context --module`, supported languages for `init --languages` and
+`rules` and the `check --only` / `--exclude` selectors, Zone names for
+`context --zone`, supported languages for `init --languages` and
 `patterns install --languages`, `bare` plus every visible Pattern
 reference for `init --pattern`, every offline Pattern reference for the
 `patterns install`, `vendor`, and `export` argument, and the closed
@@ -262,7 +262,7 @@ in the complete Conformance Assessment. The stable shape is:
     "line": 3,
     "severity": "error",
     "status": "active",
-    "message": "import resolves to Module \"infra\", not allowed by Module \"application\"",
+    "message": "import resolves to Zone \"infra\", not allowed by Zone \"application\"",
     "remediation": "depend on the inward-owned port"
   }
 ]
@@ -315,34 +315,37 @@ Domain Model in a committed `domain.arclint.yaml` beside the
 resolved `rules.arclint.yaml`. ArcLint does not search for the model
 independently; `--rules <path>` moves both files' project root together.
 
-The file is organized by bounded context:
+The file is organized by bounded context, names as keys:
 
 ```yaml
 version: 1
+project: shop
 contexts:
-  - name: billing
-    entities:
-      - name: Invoice
-        definition: ...
-        aggregate: true
+  billing:
+    definition: Where an Invoice is issued and paid.
+    aggregates:
+      Invoice:
+        definition: One bill sent to a customer.
+        identity: InvoiceID
         aliases: [bill]
+        invariants:
+          total-non-negative: An Invoice total is non-negative.
+        assertions:
+          payment-received:
+            on: Process
+            statement: A processed Invoice marks payment received.
     value_objects:
-      - name: Money
-        definition: ...
-    invariants:
-      - statement: An Invoice total is non-negative
-        owner: Invoice
-    assertions:
-      - statement: "A processed Invoice marks payment received"
-        owner: "Invoice"
-        id: "payment-received"
-        on: "Process"
+      Money:
+        definition: An amount in one currency.
     specifications:
-      - name: "PaidInvoice"
-        definition: "An invoice fully paid."
+      PaidInvoice:
+        definition: An invoice fully paid.
     events:
-      - name: InvoiceIssued
-        definition: ...
+      InvoiceIssued:
+        definition: An Invoice went out to its customer.
+        raised_by: Invoice
+  catalog:
+    definition: What is on sale.
 relations:
   - from: billing
     to: catalog
@@ -352,11 +355,19 @@ relations:
 Relation `kind` is one of `partnership`, `shared_kernel`,
 `customer_supplier`, `conformist`, `anticorruption_layer`,
 `open_host_service`, `published_language`, or `separate_ways`. Concept
-spellings use underscores (`entity`, `value_object`, `invariant`,
-`assertion`, `specification`, `aggregate`, `aggregate_root`, `domain_event`,
-`bounded_context`, `business_rule`). An aggregate is a designation on an
-entity (`aggregate: true`), not a separate stored object.
-`business_rule` records as an invariant. `assertion` and `specification` record in their own separate collections. Defining a term targets a bounded context.
+spellings use underscores (`bounded_context`, `aggregate`, `entity`,
+`value_object`, `invariant`, `assertion`, `business_rule`,
+`domain_event`, `domain_service`, `specification`, `question`). An
+aggregate is recorded in its own right with its identity; an entity is
+recorded under the aggregate that owns it (`--owner`); an invariant is
+recorded under the aggregate or value object that enforces it; an
+assertion under the aggregate whose operation (`--on`) checks it.
+`business_rule` records as an invariant, or as an assertion when `--on`
+is passed. A context's code is located from where its recorded terms
+are declared, anywhere in the repository; a Zone spelled with the
+context's name narrows that search when the repository declares a
+recorded term more than once. Recording a context turns on the
+[built-in rules](/docs/contracts/).
 
 Fresh files get a YAML language-server modeline pointing at
 `.arclint/schemas/domain.arclint.schema.json` when that path exists

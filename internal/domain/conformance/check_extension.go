@@ -22,7 +22,7 @@ import (
 // operational Diagnostics identify the breach. The check still returns
 // a complete Assessment (no error) so other Rules keep reporting.
 func evaluateExtensionRule(r rule.Rule, mem membership, obs Observations,
-	evaluator ExtensionEvaluator, modules []rule.Module, knowledge vocab.UbiquitousLanguage,
+	evaluator ExtensionEvaluator, zones []rule.Zone, knowledge vocab.UbiquitousLanguage,
 ) ([]Evaluation, []Diagnostic, error) {
 	params, ok := r.Params().(rule.ExtensionParams)
 	if !ok {
@@ -33,7 +33,7 @@ func evaluateExtensionRule(r rule.Rule, mem membership, obs Observations,
 		return es, nil, err
 	}
 	selected, excluded := partitionFiles(r, mem)
-	findings, err := evaluator.Evaluate(params.Uses, params.With, selected, modules, obs, knowledge)
+	findings, err := evaluator.Evaluate(params.Uses, params.With, selected, zones, obs, knowledge)
 	if err != nil {
 		return nil, nil, fmt.Errorf("rule %s: %v", r.ID(), err)
 	}

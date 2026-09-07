@@ -1,7 +1,7 @@
 package main
 
 // The context command is the worksite call: one invocation answers
-// what governs a set of paths and modules, and the bare form explains
+// what governs a set of paths and zones, and the bare form explains
 // the repository. The JSON shape asserted here is the agent contract.
 
 import (
@@ -20,11 +20,11 @@ func TestContextWorksite(t *testing.T) {
 	var ctx struct {
 		Scope string
 		Paths []struct {
-			Path    string
-			Modules []string
+			Path  string
+			Zones []string
 		}
-		Modules []struct{ Name string }
-		Rules   []struct {
+		Zones []struct{ Name string }
+		Rules []struct {
 			Summary struct{ ID string }
 			Via     []string
 		}
@@ -37,22 +37,22 @@ func TestContextWorksite(t *testing.T) {
 	}
 	bound := map[string]bool{}
 	for _, b := range ctx.Paths {
-		for _, m := range b.Modules {
+		for _, m := range b.Zones {
 			bound[b.Path+"→"+m] = true
 		}
 	}
 	if !bound["internal/domain/rule/root.go→domain"] || !bound["internal/infrastructure/rule/yaml/yaml.go→infrastructure"] {
-		t.Errorf("bindings missing expected modules: %+v", ctx.Paths)
+		t.Errorf("bindings missing expected zones: %+v", ctx.Paths)
 	}
 	cards := map[string]bool{}
-	for _, m := range ctx.Modules {
+	for _, m := range ctx.Zones {
 		if cards[m.Name] {
-			t.Errorf("module card %q duplicated", m.Name)
+			t.Errorf("zone card %q duplicated", m.Name)
 		}
 		cards[m.Name] = true
 	}
 	if !cards["domain"] || !cards["infrastructure"] {
-		t.Errorf("module cards = %v", cards)
+		t.Errorf("zone cards = %v", cards)
 	}
 	rules := map[string][]string{}
 	for _, r := range ctx.Rules {
@@ -68,10 +68,10 @@ func TestContextWorksite(t *testing.T) {
 	}
 }
 
-func TestContextModuleScopeAndErrors(t *testing.T) {
-	stdout, _, code := runBin(t, repoRoot(t), os.Environ(), "context", "--module", "domain", "--format", "json")
+func TestContextZoneScopeAndErrors(t *testing.T) {
+	stdout, _, code := runBin(t, repoRoot(t), os.Environ(), "context", "--zone", "domain", "--format", "json")
 	if code != 0 {
-		t.Fatalf("context --module: exit %d", code)
+		t.Fatalf("context --zone: exit %d", code)
 	}
 	var ctx struct {
 		Scope string
@@ -82,7 +82,7 @@ func TestContextModuleScopeAndErrors(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &ctx); err != nil {
 		t.Fatalf("json: %v", err)
 	}
-	if ctx.Scope != "module domain" {
+	if ctx.Scope != "zone domain" {
 		t.Errorf("scope = %q", ctx.Scope)
 	}
 	ids := map[string]bool{}
@@ -90,12 +90,12 @@ func TestContextModuleScopeAndErrors(t *testing.T) {
 		ids[r.Summary.ID] = true
 	}
 	if !ids["domain/stdlib-only"] {
-		t.Errorf("module scope misses the module's own consumes rule: %v", ids)
+		t.Errorf("zone scope misses the zone's own consumes rule: %v", ids)
 	}
 
-	_, stderr, code := runBin(t, repoRoot(t), os.Environ(), "context", "--module", "ghost")
+	_, stderr, code := runBin(t, repoRoot(t), os.Environ(), "context", "--zone", "ghost")
 	if code != 2 || !strings.Contains(stderr, "not declared") {
-		t.Errorf("unknown module: exit %d, stderr %s", code, stderr)
+		t.Errorf("unknown zone: exit %d, stderr %s", code, stderr)
 	}
 }
 
@@ -106,7 +106,7 @@ func TestContextRepositoryTeaches(t *testing.T) {
 	}
 	for _, want := range []string{
 		"rule types in use:",
-		"protected: restricts which Modules may import one Module",
+		"protected: restricts which Zones may import one Zone",
 		"unknown imports: error",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -125,20 +125,21 @@ func TestContextWorksiteScopesDomain(t *testing.T) {
 		t.Fatalf("context worksite: exit %d\nstderr: %s", code, stderr)
 	}
 	for _, want := range []string{
-		"project domain (domain.arclint.yaml): 1 of 4 contexts,",
+		"project domain (domain.arclint.yaml): 1 of 5 contexts,",
 		"anchor into this scope; --full shows the whole model\n",
 		"  context rule:\n",
-		"    entities: Rule [aggregate]\n",
-		"  unanchored contracts: 3 unanchorable\n",
-		"    unanchorable: 3 invariants owned by Rule (context rule)\n",
-		"      owner Rule is an aggregate and the invariant has no id, so no method is named to carry it\n",
-		"    an unanchorable contract needs its recording changed before any source can carry it\n",
+		"    aggregates: Rule (RuleID; Zone, Pattern)\n",
+		"    invariants:\n",
+		"  unanchored contracts: 5 missing\n",
+		"    missing: invariant unique-qualified-id of Rule (context rule)\n",
+		"      expected method EnsureUniqueQualifiedId (go) or ensureUniqueQualifiedId (typescript) on Rule\n",
+		"    arclint check reports each as a Violation of the built-in rule of its block\n",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("scoped context missing %q:\n%s", want, stdout)
 		}
 	}
-	for _, absent := range []string{"context adoption:", "context conformance:", "context distribution:"} {
+	for _, absent := range []string{"context vocabulary:", "context adoption:", "context conformance:", "context distribution:"} {
 		if strings.Contains(stdout, absent) {
 			t.Errorf("scoped context leaks %q:\n%s", absent, stdout)
 		}
@@ -151,7 +152,7 @@ func TestContextWorksiteScopesDomain(t *testing.T) {
 	if strings.Contains(full, "--full") {
 		t.Errorf("a full listing must not point at --full:\n%s", full)
 	}
-	for _, want := range []string{"context rule:", "context adoption:", "context conformance:", "context distribution:", "unanchored contracts: 5 unanchorable, 8 missing"} {
+	for _, want := range []string{"context vocabulary:", "context rule:", "context adoption:", "context conformance:", "context distribution:", "unanchored contracts: 10 missing"} {
 		if !strings.Contains(full, want) {
 			t.Errorf("full context missing %q:\n%s", want, full)
 		}
@@ -172,11 +173,11 @@ func TestContextWorksiteScopesDomain(t *testing.T) {
 				Invariants []struct {
 					Owner  string
 					Anchor string
-					Reason string
+					Source string
 				}
 			}
 			Unanchored []struct {
-				Kind, Context, Owner, Anchor, Reason string
+				Kind, Context, Owner, Key, Expected string
 			}
 		}
 	}
@@ -187,22 +188,22 @@ func TestContextWorksiteScopesDomain(t *testing.T) {
 	if !d.Scoped || !d.Located {
 		t.Fatalf("scoped=%v located=%v", d.Scoped, d.Located)
 	}
-	if d.Counts.Contexts != 4 || d.Shown.Contexts != 1 || d.Shown.Invariants != 3 {
+	if d.Counts.Contexts != 5 || d.Shown.Contexts != 1 || d.Shown.Invariants != 5 {
 		t.Fatalf("counts %+v shown %+v", d.Counts, d.Shown)
 	}
 	if len(d.Contexts) != 1 || d.Contexts[0].Name != "rule" {
 		t.Fatalf("contexts = %+v", d.Contexts)
 	}
 	for _, inv := range d.Contexts[0].Invariants {
-		if inv.Owner != "Rule" || inv.Anchor != "unanchorable" || inv.Reason == "" {
+		if inv.Owner != "Rule" || inv.Anchor != "missing" || inv.Source != "" {
 			t.Errorf("invariant = %+v", inv)
 		}
 	}
-	if len(d.Unanchored) != 3 {
+	if len(d.Unanchored) != 5 {
 		t.Fatalf("unanchored = %+v", d.Unanchored)
 	}
 	for _, u := range d.Unanchored {
-		if u.Kind != "invariant" || u.Context != "rule" || u.Owner != "Rule" || u.Anchor != "unanchorable" || u.Reason == "" {
+		if u.Kind != "invariant" || u.Context != "rule" || u.Owner != "Rule" || u.Key == "" || !strings.HasPrefix(u.Expected, "method ") {
 			t.Errorf("unanchored entry = %+v", u)
 		}
 	}
@@ -216,7 +217,7 @@ func TestContextOutsideDomainSaysSo(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("context main.go: exit %d\nstderr: %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "project domain (domain.arclint.yaml): nothing recorded anchors into this scope; --full shows the whole model (4 contexts,") {
+	if !strings.Contains(stdout, "project domain (domain.arclint.yaml): nothing recorded anchors into this scope; --full shows the whole model (5 contexts ·") {
 		t.Fatalf("empty-scope headline missing:\n%s", stdout)
 	}
 	if strings.Contains(stdout, "  context ") || strings.Contains(stdout, "unanchored contracts:") {
@@ -224,35 +225,37 @@ func TestContextOutsideDomainSaysSo(t *testing.T) {
 	}
 }
 
-// TestContextModuleNamedForContextKeepsItWhole pins the Module route
-// into the domain: a Module whose name matches a recorded context
+// TestContextZoneNamedForContextKeepsItWhole pins the Zone route
+// into the domain: a Zone whose name matches a recorded context
 // keeps that context whole.
-func TestContextModuleNamedForContextKeepsItWhole(t *testing.T) {
-	stdout, stderr, code := runBin(t, repoRoot(t), os.Environ(), "context", "--module", "rule", "--format", "json")
+func TestContextZoneNamedForContextKeepsItWhole(t *testing.T) {
+	stdout, stderr, code := runBin(t, repoRoot(t), os.Environ(), "context", "--zone", "rule", "--format", "json")
 	if code != 0 {
-		t.Fatalf("context --module rule: exit %d\nstderr: %s", code, stderr)
+		t.Fatalf("context --zone rule: exit %d\nstderr: %s", code, stderr)
+	}
+	type context struct {
+		Name       string
+		Aggregates []struct {
+			Name     string
+			Identity string
+			Entities []string
+		}
+		ValueObjects []string
+		Invariants   []struct{ Key string }
 	}
 	var ctx struct {
 		Domain struct {
 			Scoped   bool
-			Contexts []struct {
-				Name         string
-				Entities     []struct{ Name string }
-				ValueObjects []string
-			}
+			Contexts []context
 		}
 	}
 	if err := json.Unmarshal([]byte(stdout), &ctx); err != nil {
 		t.Fatalf("context json: %v\n%s", err, stdout)
 	}
 	if !ctx.Domain.Scoped {
-		t.Fatalf("module scope must be scoped: %+v", ctx.Domain)
+		t.Fatalf("zone scope must be scoped: %+v", ctx.Domain)
 	}
-	var ruleCtx *struct {
-		Name         string
-		Entities     []struct{ Name string }
-		ValueObjects []string
-	}
+	var ruleCtx *context
 	for i := range ctx.Domain.Contexts {
 		if ctx.Domain.Contexts[i].Name == "rule" {
 			ruleCtx = &ctx.Domain.Contexts[i]
@@ -261,18 +264,21 @@ func TestContextModuleNamedForContextKeepsItWhole(t *testing.T) {
 	if ruleCtx == nil {
 		t.Fatalf("context rule missing: %+v", ctx.Domain.Contexts)
 	}
-	if len(ruleCtx.Entities) != 3 || len(ruleCtx.ValueObjects) < 10 {
+	if len(ruleCtx.Aggregates) != 1 || ruleCtx.Aggregates[0].Name != "Rule" || ruleCtx.Aggregates[0].Identity != "RuleID" || len(ruleCtx.Aggregates[0].Entities) != 2 {
 		t.Fatalf("context rule is not whole: %+v", *ruleCtx)
+	}
+	if len(ruleCtx.ValueObjects) != 11 || len(ruleCtx.Invariants) != 9 {
+		t.Fatalf("context rule is not whole: %d value objects, %d invariants in %+v", len(ruleCtx.ValueObjects), len(ruleCtx.Invariants), *ruleCtx)
 	}
 }
 
-func TestCompletionModuleNames(t *testing.T) {
-	stdout, _, code := runBin(t, repoRoot(t), os.Environ(), "__complete", "context", "--module", "")
+func TestCompletionZoneNames(t *testing.T) {
+	stdout, _, code := runBin(t, repoRoot(t), os.Environ(), "__complete", "context", "--zone", "")
 	if code != 0 || !strings.Contains(stdout, "domain\t") {
-		t.Errorf("--module completion: exit %d\n%s", code, stdout)
+		t.Errorf("--zone completion: exit %d\n%s", code, stdout)
 	}
-	stdout, _, code = runBin(t, repoRoot(t), os.Environ(), "__complete", "context", "--module", "domain,")
+	stdout, _, code = runBin(t, repoRoot(t), os.Environ(), "__complete", "context", "--zone", "domain,")
 	if code != 0 || !strings.Contains(stdout, "domain,application\t") {
-		t.Errorf("--module comma completion: exit %d\n%s", code, stdout)
+		t.Errorf("--zone comma completion: exit %d\n%s", code, stdout)
 	}
 }

@@ -7,19 +7,19 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/rule"
 )
 
-func mustModuleApplicability(t *testing.T, names ...string) rule.Applicability {
+func mustZoneApplicability(t *testing.T, names ...string) rule.Applicability {
 	t.Helper()
-	modules := make([]rule.ModuleName, 0, len(names))
+	zones := make([]rule.ZoneName, 0, len(names))
 	for _, n := range names {
-		m, err := rule.NewModuleName(n)
+		m, err := rule.NewZoneName(n)
 		if err != nil {
-			t.Fatalf("NewModuleName(%q): %v", n, err)
+			t.Fatalf("NewZoneName(%q): %v", n, err)
 		}
-		modules = append(modules, m)
+		zones = append(zones, m)
 	}
-	a, err := rule.ModuleApplicability(modules)
+	a, err := rule.ZoneApplicability(zones)
 	if err != nil {
-		t.Fatalf("ModuleApplicability(%v): %v", names, err)
+		t.Fatalf("ZoneApplicability(%v): %v", names, err)
 	}
 	return a
 }
@@ -48,7 +48,7 @@ func validConsumesSpec(t *testing.T) rule.Spec {
 		ID:            "arclint/ddd-flat:domain/stdlib-only",
 		Type:          rule.TypeConsumes,
 		Params:        rule.ConsumesParams{Internal: emptyAllowList(t), External: rule.ImportForbid},
-		Applicability: mustModuleApplicability(t, "domain"),
+		Applicability: mustZoneApplicability(t, "domain"),
 	}
 }
 
@@ -83,7 +83,7 @@ func TestInvalidRulesCannotBeConstructed(t *testing.T) {
 			s.Params = rule.ConsumesParams{}
 			return s
 		}()},
-		{"consumes without module scope", func() rule.Spec {
+		{"consumes without zone scope", func() rule.Spec {
 			s := validConsumesSpec(t)
 			s.Applicability = mustRepoApplicability(t)
 			return s
@@ -91,26 +91,26 @@ func TestInvalidRulesCannotBeConstructed(t *testing.T) {
 		{"layers with one layer", rule.Spec{
 			ID:            "t/p:one-layer",
 			Type:          rule.TypeLayers,
-			Params:        rule.LayersParams{Layers: []rule.ModuleName{"a"}},
+			Params:        rule.LayersParams{Layers: []rule.ZoneName{"a"}},
 			Applicability: mustRepoApplicability(t),
 		}},
-		{"layers with module scope", rule.Spec{
+		{"layers with zone scope", rule.Spec{
 			ID:            "t/p:layers-scope",
 			Type:          rule.TypeLayers,
-			Params:        rule.LayersParams{Layers: []rule.ModuleName{"a", "b"}},
-			Applicability: mustModuleApplicability(t, "a"),
+			Params:        rule.LayersParams{Layers: []rule.ZoneName{"a", "b"}},
+			Applicability: mustZoneApplicability(t, "a"),
 		}},
 		{"structure without globs", rule.Spec{
 			ID:            "t/p:structure-empty",
 			Type:          rule.TypeStructure,
 			Params:        rule.StructureParams{},
-			Applicability: mustModuleApplicability(t, "a"),
+			Applicability: mustZoneApplicability(t, "a"),
 		}},
 		{"naming without case", rule.Spec{
 			ID:            "t/p:naming-empty",
 			Type:          rule.TypeNaming,
 			Params:        rule.NamingParams{},
-			Applicability: mustModuleApplicability(t, "a"),
+			Applicability: mustZoneApplicability(t, "a"),
 		}},
 		{"independence without folders", rule.Spec{
 			ID:            "t/p:independence-empty",
@@ -124,11 +124,11 @@ func TestInvalidRulesCannotBeConstructed(t *testing.T) {
 			Params:        rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*"), mustGlob(t, "internal/*")}},
 			Applicability: mustRepoApplicability(t),
 		}},
-		{"independence with module scope", rule.Spec{
+		{"independence with zone scope", rule.Spec{
 			ID:            "t/p:independence-scope",
 			Type:          rule.TypeIndependence,
 			Params:        rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*")}},
-			Applicability: mustModuleApplicability(t, "a"),
+			Applicability: mustZoneApplicability(t, "a"),
 		}},
 	}
 	for _, c := range cases {
@@ -144,7 +144,7 @@ func TestDerivedClaim(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 	claim := r.Claim().Statement()
-	for _, want := range []string{`Module "domain"`, "no other declared Module", "no external imports"} {
+	for _, want := range []string{`Zone "domain"`, "no other declared Zone", "no external imports"} {
 		if !strings.Contains(claim, want) {
 			t.Errorf("derived claim %q lacks %q", claim, want)
 		}
@@ -182,7 +182,7 @@ func TestConfigurationPreservesIdentity(t *testing.T) {
 		t.Fatalf("NewExclusion: %v", err)
 	}
 	excluded := r.Exclude(exclusion)
-	member := []rule.ModuleName{"domain"}
+	member := []rule.ZoneName{"domain"}
 	if excluded.AppliesToFile("internal/domain/legacy/x.go", member) {
 		t.Errorf("excluded subject still selected")
 	}
@@ -275,28 +275,28 @@ func TestCaseSpec(t *testing.T) {
 	}
 }
 
-func mustPatternModule(t *testing.T, name, description string, paths ...string) rule.PatternModule {
+func mustPatternZone(t *testing.T, name, description string, paths ...string) rule.PatternZone {
 	t.Helper()
-	n, err := rule.NewModuleName(name)
+	n, err := rule.NewZoneName(name)
 	if err != nil {
-		t.Fatalf("NewModuleName(%q): %v", name, err)
+		t.Fatalf("NewZoneName(%q): %v", name, err)
 	}
 	globs, err := rule.NewGlobs(paths)
 	if err != nil {
 		t.Fatalf("NewGlobs(%v): %v", paths, err)
 	}
-	m, err := rule.NewPatternModule(n, description, globs)
+	m, err := rule.NewPatternZone(n, description, globs)
 	if err != nil {
-		t.Fatalf("NewPatternModule(%q): %v", name, err)
+		t.Fatalf("NewPatternZone(%q): %v", name, err)
 	}
 	return m
 }
 
 func mustBinding(t *testing.T, name string, paths ...string) rule.Binding {
 	t.Helper()
-	n, err := rule.NewModuleName(name)
+	n, err := rule.NewZoneName(name)
 	if err != nil {
-		t.Fatalf("NewModuleName(%q): %v", name, err)
+		t.Fatalf("NewZoneName(%q): %v", name, err)
 	}
 	globs, err := rule.NewGlobs(paths)
 	if err != nil {
@@ -320,7 +320,7 @@ func validPatternSpec(t *testing.T) rule.PatternSpec {
 		Name:      "ddd-flat",
 		Version:   "1.0.0",
 		Coverage:  []rule.Language{rule.LanguageGo},
-		Modules:   []rule.PatternModule{mustPatternModule(t, "domain", "The model.", "internal/domain/**")},
+		Zones:     []rule.PatternZone{mustPatternZone(t, "domain", "The model.", "internal/domain/**")},
 		Rules:     []rule.Rule{r},
 	}
 }
@@ -347,10 +347,10 @@ func TestPatternReferenceParsing(t *testing.T) {
 	}
 }
 
-func TestPatternModuleAndBinding(t *testing.T) {
-	m := mustPatternModule(t, "domain", "  The model.  ", "internal/domain/**")
+func TestPatternZoneAndBinding(t *testing.T) {
+	m := mustPatternZone(t, "domain", "  The model.  ", "internal/domain/**")
 	if m.Name().String() != "domain" || m.Description() != "The model." {
-		t.Errorf("module = %+v", m)
+		t.Errorf("zone = %+v", m)
 	}
 	if paths := m.SuggestedPaths(); len(paths) != 1 || paths[0].String() != "internal/domain/**" {
 		t.Errorf("suggested paths = %v", paths)
@@ -360,17 +360,17 @@ func TestPatternModuleAndBinding(t *testing.T) {
 	if again := m.SuggestedPaths(); again[0].IsZero() {
 		t.Errorf("SuggestedPaths must return a copy")
 	}
-	if _, err := rule.NewPatternModule("domain", "   ", nil); err == nil {
-		t.Errorf("a pattern module without a description must be rejected")
+	if _, err := rule.NewPatternZone("domain", "   ", nil); err == nil {
+		t.Errorf("a pattern zone without a description must be rejected")
 	}
-	if _, err := rule.NewPatternModule("Bad Name", "desc", nil); err == nil {
-		t.Errorf("an invalid module name must be rejected")
+	if _, err := rule.NewPatternZone("Bad Name", "desc", nil); err == nil {
+		t.Errorf("an invalid zone name must be rejected")
 	}
-	if _, err := rule.NewPatternModule("domain", "desc", []rule.Glob{{}}); err == nil {
+	if _, err := rule.NewPatternZone("domain", "desc", []rule.Glob{{}}); err == nil {
 		t.Errorf("an unconstructed suggested path must be rejected")
 	}
 	b := mustBinding(t, "domain", "src/domain/**", "lib/domain/**")
-	if b.Module().String() != "domain" || len(b.Paths()) != 2 {
+	if b.Zone().String() != "domain" || len(b.Paths()) != 2 {
 		t.Errorf("binding = %+v", b)
 	}
 	if _, err := rule.NewBinding("domain", nil); err == nil {
@@ -396,8 +396,8 @@ func TestPatternStampsProvenance(t *testing.T) {
 	if p.Documentation() != "https://example.test/ddd-flat" {
 		t.Errorf("documentation = %q", p.Documentation())
 	}
-	if mods := p.Modules(); len(mods) != 1 || mods[0].Name().String() != "domain" {
-		t.Errorf("modules = %+v", mods)
+	if mods := p.Zones(); len(mods) != 1 || mods[0].Name().String() != "domain" {
+		t.Errorf("zones = %+v", mods)
 	}
 	if cov := p.Coverage(); len(cov) != 1 || cov[0] != rule.LanguageGo {
 		t.Errorf("coverage = %v", cov)
@@ -413,7 +413,7 @@ func TestPatternRejectsMalformedSpecs(t *testing.T) {
 		ID:            "other/ddd-flat:domain/stdlib-only",
 		Type:          rule.TypeConsumes,
 		Params:        rule.ConsumesParams{Internal: emptyAllowList(t), External: rule.ImportForbid},
-		Applicability: mustModuleApplicability(t, "domain"),
+		Applicability: mustZoneApplicability(t, "domain"),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -422,23 +422,23 @@ func TestPatternRejectsMalformedSpecs(t *testing.T) {
 		ID:            "arclint/other:domain/stdlib-only",
 		Type:          rule.TypeConsumes,
 		Params:        rule.ConsumesParams{Internal: emptyAllowList(t), External: rule.ImportForbid},
-		Applicability: mustModuleApplicability(t, "domain"),
+		Applicability: mustZoneApplicability(t, "domain"),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	cases := map[string]func(*rule.PatternSpec){
-		"duplicate rule ids":             func(s *rule.PatternSpec) { s.Rules = []rule.Rule{r, r} },
-		"inexact version":                func(s *rule.PatternSpec) { s.Version = "latest" },
-		"no rules":                       func(s *rule.PatternSpec) { s.Rules = nil },
-		"unconstructed rule":             func(s *rule.PatternSpec) { s.Rules = []rule.Rule{{}} },
-		"rule outside the namespace":     func(s *rule.PatternSpec) { s.Rules = []rule.Rule{foreign} },
-		"rule of a sibling pattern":      func(s *rule.PatternSpec) { s.Rules = []rule.Rule{sibling} },
-		"rule naming an unlisted module": func(s *rule.PatternSpec) { s.Modules = nil },
-		"duplicate module":               func(s *rule.PatternSpec) { s.Modules = append(s.Modules, s.Modules[0]) },
-		"unconstructed module":           func(s *rule.PatternSpec) { s.Modules = []rule.PatternModule{{}} },
-		"invalid coverage":               func(s *rule.PatternSpec) { s.Coverage = []rule.Language{"cobol"} },
-		"unconstructed extension":        func(s *rule.PatternSpec) { s.Extensions = []rule.PatternExtension{{}} },
+		"duplicate rule ids":           func(s *rule.PatternSpec) { s.Rules = []rule.Rule{r, r} },
+		"inexact version":              func(s *rule.PatternSpec) { s.Version = "latest" },
+		"no rules":                     func(s *rule.PatternSpec) { s.Rules = nil },
+		"unconstructed rule":           func(s *rule.PatternSpec) { s.Rules = []rule.Rule{{}} },
+		"rule outside the namespace":   func(s *rule.PatternSpec) { s.Rules = []rule.Rule{foreign} },
+		"rule of a sibling pattern":    func(s *rule.PatternSpec) { s.Rules = []rule.Rule{sibling} },
+		"rule naming an unlisted zone": func(s *rule.PatternSpec) { s.Zones = nil },
+		"duplicate zone":               func(s *rule.PatternSpec) { s.Zones = append(s.Zones, s.Zones[0]) },
+		"unconstructed zone":           func(s *rule.PatternSpec) { s.Zones = []rule.PatternZone{{}} },
+		"invalid coverage":             func(s *rule.PatternSpec) { s.Coverage = []rule.Language{"cobol"} },
+		"unconstructed extension":      func(s *rule.PatternSpec) { s.Extensions = []rule.PatternExtension{{}} },
 	}
 	for name, mutate := range cases {
 		spec := validPatternSpec(t)
@@ -451,7 +451,7 @@ func TestPatternRejectsMalformedSpecs(t *testing.T) {
 
 func TestPatternBind(t *testing.T) {
 	spec := validPatternSpec(t)
-	spec.Modules = append(spec.Modules, mustPatternModule(t, "application", "Use cases."))
+	spec.Zones = append(spec.Zones, mustPatternZone(t, "application", "Use cases."))
 	p, err := rule.NewPattern(spec)
 	if err != nil {
 		t.Fatalf("NewPattern: %v", err)
@@ -470,8 +470,8 @@ func TestPatternBind(t *testing.T) {
 		t.Errorf("bound domain = %+v", bound[0])
 	}
 	if _, err := p.Bind([]rule.Binding{mustBinding(t, "domain", "internal/domain/**")}); err == nil ||
-		!strings.Contains(err.Error(), "unbound modules application") {
-		t.Errorf("unbound module: got %v", err)
+		!strings.Contains(err.Error(), "unbound zones application") {
+		t.Errorf("unbound zone: got %v", err)
 	}
 	if _, err := p.Bind([]rule.Binding{
 		mustBinding(t, "domain", "a/**"), mustBinding(t, "application", "b/**"), mustBinding(t, "shared", "c/**"),
@@ -545,10 +545,13 @@ func TestPatternExtensionsReturnsCopy(t *testing.T) {
 
 func TestAssertionKeysSpellEveryType(t *testing.T) {
 	keys := rule.AssertionKeys()
-	if len(keys) != len(rule.Types()) {
-		t.Fatalf("AssertionKeys = %v, want one per Type", keys)
+	if len(keys) != len(rule.AuthoredTypes()) {
+		t.Fatalf("AssertionKeys = %v, want one per authored Type", keys)
 	}
-	for i, typ := range rule.Types() {
+	if rule.TypeDomain.Authored() || len(rule.AuthoredTypes()) != len(rule.Types())-1 {
+		t.Errorf("the domain Type is built in, never authored; AuthoredTypes = %v", rule.AuthoredTypes())
+	}
+	for i, typ := range rule.AuthoredTypes() {
 		if typ.AssertionKey() != keys[i] {
 			t.Errorf("%s: AssertionKey %q != AssertionKeys()[%d] %q", typ, typ.AssertionKey(), i, keys[i])
 		}
@@ -572,12 +575,12 @@ func TestAssertionKeysSpellEveryType(t *testing.T) {
 
 func TestTypeScopeAndFiles(t *testing.T) {
 	for typ, want := range map[rule.Type]rule.Scope{
-		rule.TypeConsumes: rule.ScopeModules, rule.TypeStructure: rule.ScopeModules,
-		rule.TypeNaming: rule.ScopeModules, rule.TypeInvariants: rule.ScopeModules,
-		rule.TypeProtected: rule.ScopeOneModule,
+		rule.TypeConsumes: rule.ScopeZones, rule.TypeStructure: rule.ScopeZones,
+		rule.TypeNaming:    rule.ScopeZones,
+		rule.TypeProtected: rule.ScopeOneZone,
 		rule.TypeLayers:    rule.ScopeRepository, rule.TypeIndependence: rule.ScopeRepository,
-		rule.TypeAcyclic: rule.ScopeRepository,
-		rule.TypeContent: rule.ScopeModulesOrRepository, rule.TypeExtension: rule.ScopeModulesOrRepository,
+		rule.TypeAcyclic: rule.ScopeRepository, rule.TypeDomain: rule.ScopeRepository,
+		rule.TypeContent: rule.ScopeZonesOrRepository, rule.TypeExtension: rule.ScopeZonesOrRepository,
 	} {
 		if got := typ.Scope(); got != want {
 			t.Errorf("%s.Scope() = %v, want %v", typ, got, want)
@@ -598,7 +601,7 @@ func TestContentParams(t *testing.T) {
 		ID:            "domain/no-panic",
 		Type:          rule.TypeContent,
 		Params:        rule.ContentParams{Forbid: `\bpanic\(`},
-		Applicability: mustModuleApplicability(t, "domain"),
+		Applicability: mustZoneApplicability(t, "domain"),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -615,7 +618,7 @@ func TestContentParams(t *testing.T) {
 			ID:            "domain/no-panic",
 			Type:          rule.TypeContent,
 			Params:        rule.ContentParams{Forbid: forbid},
-			Applicability: mustModuleApplicability(t, "domain"),
+			Applicability: mustZoneApplicability(t, "domain"),
 		}); err == nil {
 			t.Errorf("%s forbid: expected error", name)
 		}
@@ -629,12 +632,12 @@ func TestContentParams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a content Rule ranges over the repository when on is omitted: %v", err)
 	}
-	if len(repoWide.ReferencedModules()) != 0 {
-		t.Errorf("a repository-wide content Rule names no Module")
+	if len(repoWide.ReferencedZones()) != 0 {
+		t.Errorf("a repository-wide content Rule names no Zone")
 	}
 }
 
-func TestReferencedModules(t *testing.T) {
+func TestReferencedZones(t *testing.T) {
 	allow, err := rule.NewAllowList("domain", "shared")
 	if err != nil {
 		t.Fatalf("NewAllowList: %v", err)
@@ -643,55 +646,55 @@ func TestReferencedModules(t *testing.T) {
 		ID:            "application/imports",
 		Type:          rule.TypeConsumes,
 		Params:        rule.ConsumesParams{Internal: &allow, External: rule.ImportAllow},
-		Applicability: mustModuleApplicability(t, "application", "domain"),
+		Applicability: mustZoneApplicability(t, "application", "domain"),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if got := names(consumes.ReferencedModules()); got != "application,domain,shared" {
-		t.Errorf("consumes ReferencedModules = %s", got)
+	if got := names(consumes.ReferencedZones()); got != "application,domain,shared" {
+		t.Errorf("consumes ReferencedZones = %s", got)
 	}
 	protected, err := rule.New(rule.Spec{
 		ID:            "infra/only-composition",
 		Type:          rule.TypeProtected,
-		Params:        rule.ProtectedParams{Module: "infra", Allow: []rule.ModuleName{"composition", "infra"}},
+		Params:        rule.ProtectedParams{Zone: "infra", Allow: []rule.ZoneName{"composition", "infra"}},
 		Applicability: mustRepoApplicability(t),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if got := names(protected.ReferencedModules()); got != "infra,composition" {
-		t.Errorf("protected ReferencedModules = %s", got)
+	if got := names(protected.ReferencedZones()); got != "infra,composition" {
+		t.Errorf("protected ReferencedZones = %s", got)
 	}
 	layers, err := rule.New(rule.Spec{
 		ID:            "deps/inward",
 		Type:          rule.TypeLayers,
-		Params:        rule.LayersParams{Layers: []rule.ModuleName{"app", "domain"}},
+		Params:        rule.LayersParams{Layers: []rule.ZoneName{"app", "domain"}},
 		Applicability: mustRepoApplicability(t),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if got := names(layers.ReferencedModules()); got != "app,domain" {
-		t.Errorf("layers ReferencedModules = %s", got)
+	if got := names(layers.ReferencedZones()); got != "app,domain" {
+		t.Errorf("layers ReferencedZones = %s", got)
 	}
 	acyclic, err := rule.New(rule.Spec{
 		ID:            "deps/acyclic",
 		Type:          rule.TypeAcyclic,
-		Params:        rule.AcyclicParams{Modules: []rule.ModuleName{"a", "b"}},
+		Params:        rule.AcyclicParams{Zones: []rule.ZoneName{"a", "b"}},
 		Applicability: mustRepoApplicability(t),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if got := names(acyclic.ReferencedModules()); got != "a,b" {
-		t.Errorf("acyclic ReferencedModules = %s", got)
+	if got := names(acyclic.ReferencedZones()); got != "a,b" {
+		t.Errorf("acyclic ReferencedZones = %s", got)
 	}
 }
 
-func names(modules []rule.ModuleName) string {
-	parts := make([]string, 0, len(modules))
-	for _, m := range modules {
+func names(zones []rule.ZoneName) string {
+	parts := make([]string, 0, len(zones))
+	for _, m := range zones {
 		parts = append(parts, m.String())
 	}
 	return strings.Join(parts, ",")

@@ -52,9 +52,9 @@ func (e Editor) Exists() (bool, error) {
 // Extend writes the Installation into the extends list. An entry that
 // already extends the same Pattern (any version) is moved to the
 // Installation's version and keeps its bindings. Otherwise a new entry
-// is appended; a Module the ruleset declares itself under a Pattern
-// Module's name is bound to its declared paths and the declaration is
-// removed, because a Module cannot be both declared and bound.
+// is appended; a Zone the ruleset declares itself under a Pattern
+// Zone's name is bound to its declared paths and the declaration is
+// removed, because a Zone cannot be both declared and bound.
 func (e Editor) Extend(inst rule.Installation) (application.RulesetChange, error) {
 	if inst.IsZero() {
 		return application.RulesetChange{}, fmt.Errorf("extend ruleset: unconstructed installation")
@@ -173,10 +173,10 @@ func (d *editableDocument) extend(inst rule.Installation) (application.RulesetCh
 			return d.replaceEntry(existing, inst)
 		}
 	}
-	// Fold declared Modules of the same names into the Bindings; the
+	// Fold declared Zones of the same names into the Bindings; the
 	// Pattern now owns them and a declaration beside a Binding is an
 	// error at load.
-	adopted, err := d.foldDeclaredModules(&inst)
+	adopted, err := d.foldDeclaredZones(&inst)
 	if err != nil {
 		return application.RulesetChange{}, err
 	}
@@ -237,8 +237,8 @@ func (d *editableDocument) replaceEntry(item *yaml.Node, inst rule.Installation)
 			return application.RulesetChange{}, err
 		}
 		for _, b := range bindings {
-			if inst, err = inst.Rebind(b.Module(), b.Paths()); err != nil {
-				return application.RulesetChange{}, fmt.Errorf("the existing bind names a module %s does not list: %w", inst.Reference(), err)
+			if inst, err = inst.Rebind(b.Zone(), b.Paths()); err != nil {
+				return application.RulesetChange{}, fmt.Errorf("the existing bind names a zone %s does not list: %w", inst.Reference(), err)
 			}
 		}
 	}
@@ -294,12 +294,12 @@ func (d *editableDocument) replaceEmptyFlowExtends(keyNode *yaml.Node, inst rule
 	return nil
 }
 
-// insertExtendsBlock adds a whole extends section before modules, else
+// insertExtendsBlock adds a whole extends section before zones, else
 // before rules, else at the end of the document.
 func (d *editableDocument) insertExtendsBlock(inst rule.Installation) {
 	block := append([]string{"extends:"}, entryLines(inst, "  ")...)
 	at := len(d.lines)
-	for _, name := range []string{keyModules, keyRules} {
+	for _, name := range []string{keyZones, keyRules} {
 		if keyNode, _, _ := d.key(name); keyNode != nil {
 			at = d.headStart(keyNode.Line-1, "")
 			break
@@ -314,39 +314,39 @@ func (d *editableDocument) insertExtendsBlock(inst rule.Installation) {
 	d.edits = append(d.edits, lineEdit{start: at, end: at, replacement: block})
 }
 
-// foldDeclaredModules rebinds every Pattern Module the ruleset declares
-// under modules to the declared paths and removes the declarations.
-func (d *editableDocument) foldDeclaredModules(inst *rule.Installation) ([]rule.ModuleName, error) {
-	_, modulesVal, modulesIdx := d.key(keyModules)
-	if modulesVal == nil || modulesVal.Kind != yaml.MappingNode {
+// foldDeclaredZones rebinds every Pattern Zone the ruleset declares
+// under zones to the declared paths and removes the declarations.
+func (d *editableDocument) foldDeclaredZones(inst *rule.Installation) ([]rule.ZoneName, error) {
+	_, zonesVal, zonesIdx := d.key(keyZones)
+	if zonesVal == nil || zonesVal.Kind != yaml.MappingNode {
 		return nil, nil
 	}
-	if modulesVal.Style&yaml.FlowStyle != 0 {
-		return nil, d.foldFlowModules(modulesVal, inst)
+	if zonesVal.Style&yaml.FlowStyle != 0 {
+		return nil, d.foldFlowZones(zonesVal, inst)
 	}
-	entries, err := parseModules(modulesVal, false)
+	entries, err := parseZones(zonesVal, false)
 	if err != nil {
 		return nil, err
 	}
-	declared := map[rule.ModuleName][]rule.Glob{}
+	declared := map[rule.ZoneName][]rule.Glob{}
 	for _, m := range entries {
 		declared[m.name] = m.paths
 	}
-	var adopted []rule.ModuleName
+	var adopted []rule.ZoneName
 	var removeKeys []int
-	for _, m := range inst.Modules() {
+	for _, m := range inst.Zones() {
 		paths, ok := declared[m.Name()]
 		if !ok {
 			continue
 		}
 		rebound, err := inst.Rebind(m.Name(), paths)
 		if err != nil {
-			return nil, fmt.Errorf("adopt declared module %s: %w", m.Name(), err)
+			return nil, fmt.Errorf("adopt declared zone %s: %w", m.Name(), err)
 		}
 		*inst = rebound
 		adopted = append(adopted, m.Name())
-		for i := 0; i+1 < len(modulesVal.Content); i += 2 {
-			if modulesVal.Content[i].Value == m.Name().String() {
+		for i := 0; i+1 < len(zonesVal.Content); i += 2 {
+			if zonesVal.Content[i].Value == m.Name().String() {
 				removeKeys = append(removeKeys, i)
 			}
 		}
@@ -354,21 +354,21 @@ func (d *editableDocument) foldDeclaredModules(inst *rule.Installation) ([]rule.
 	if len(removeKeys) == 0 {
 		return nil, nil
 	}
-	if len(removeKeys)*2 == len(modulesVal.Content) {
-		keyNode, _, _ := d.key(keyModules)
+	if len(removeKeys)*2 == len(zonesVal.Content) {
+		keyNode, _, _ := d.key(keyZones)
 		start := d.headStart(keyNode.Line-1, "")
-		end := d.blockEnd(d.nextTopKeyLine(modulesIdx), keyNode.Line)
+		end := d.blockEnd(d.nextTopKeyLine(zonesIdx), keyNode.Line)
 		d.edits = append(d.edits, lineEdit{start: start, end: end})
 		return adopted, nil
 	}
-	sectionEnd := d.nextTopKeyLine(modulesIdx)
+	sectionEnd := d.nextTopKeyLine(zonesIdx)
 	for _, i := range removeKeys {
-		keyNode := modulesVal.Content[i]
+		keyNode := zonesVal.Content[i]
 		indent := strings.Repeat(" ", keyNode.Column-1)
 		start := d.headStart(keyNode.Line-1, indent)
 		end := sectionEnd
-		if i+2 < len(modulesVal.Content) {
-			end = modulesVal.Content[i+2].Line - 1
+		if i+2 < len(zonesVal.Content) {
+			end = zonesVal.Content[i+2].Line - 1
 		}
 		end = d.blockEnd(end, keyNode.Line)
 		d.edits = append(d.edits, lineEdit{start: start, end: end})
@@ -376,12 +376,12 @@ func (d *editableDocument) foldDeclaredModules(inst *rule.Installation) ([]rule.
 	return adopted, nil
 }
 
-// foldFlowModules refuses to edit a flow-style modules map, which has
+// foldFlowZones refuses to edit a flow-style zones map, which has
 // no line structure to splice; the owner rewrites it as a block map.
-func (d *editableDocument) foldFlowModules(modulesVal *yaml.Node, inst *rule.Installation) error {
-	for _, m := range inst.Modules() {
-		if mappingValue(modulesVal, m.Name().String()) != nil {
-			return fmt.Errorf("modules declares %q, which the pattern binds, as part of a flow map; write modules as a block map and retry", m.Name())
+func (d *editableDocument) foldFlowZones(zonesVal *yaml.Node, inst *rule.Installation) error {
+	for _, m := range inst.Zones() {
+		if mappingValue(zonesVal, m.Name().String()) != nil {
+			return fmt.Errorf("zones declares %q, which the pattern binds, as part of a flow map; write zones as a block map and retry", m.Name())
 		}
 	}
 	return nil
@@ -453,10 +453,10 @@ func (d *editableDocument) bytes() []byte {
 }
 
 // entryLines renders one extends item at the given dash indent: the
-// reference, then a bind entry per Pattern Module, commented out when
-// the Installation leaves the Module unbound. When nothing is bound the
+// reference, then a bind entry per Pattern Zone, commented out when
+// the Installation leaves the Zone unbound. When nothing is bound the
 // whole bind block is commented, so the document stays valid and the
-// loader names the unbound Modules.
+// loader names the unbound Zones.
 func entryLines(inst rule.Installation, indent string) []string {
 	lines := []string{indent + "- pattern: " + inst.Reference().String()}
 	off := ""
@@ -464,7 +464,7 @@ func entryLines(inst rule.Installation, indent string) []string {
 		off = "# "
 	}
 	lines = append(lines, indent+"  "+off+"bind:")
-	for _, m := range inst.Modules() {
+	for _, m := range inst.Zones() {
 		b, ok := inst.Binding(m.Name())
 		if !ok {
 			lines = append(lines, indent+"    # "+m.Description())

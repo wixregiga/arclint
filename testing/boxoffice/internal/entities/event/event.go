@@ -63,7 +63,7 @@ func New(id, title string) (Event, error) {
 		return Event{}, ErrIdentityMissing
 	}
 	e := Event{id: id, title: title, status: StatusDraft}
-	if err := e.PublishedFrozen(); err != nil {
+	if err := e.EnsurePublishedFrozen(); err != nil {
 		return Event{}, err
 	}
 	return e, nil
@@ -78,18 +78,38 @@ func NewPrice(cents int64) (Price, error) {
 	return Price(cents), nil
 }
 
-// PublishedFrozen is the cluster contract: a published Event's story,
-// when and where, and TicketTiers never change. Reshape commands
-// still refuse through refuseUnlessDraft; this named method is the
-// join every command calls.
-func (e Event) PublishedFrozen() error {
+// EnsurePublishedFrozen is the cluster invariant: a published Event's
+// story, its when and where, and its TicketTiers never change.
+// Reshape commands refuse through refuseUnlessDraft before they ever
+// touch those fields, so once the Event has left draft the only way
+// this invariant could break is a corrupted TicketTier; this
+// re-validates every tier is still the well-formed one refuseUnlessDraft
+// let through, the same way SeatBudget re-validates the seat count on
+// every capacity command.
+func (e Event) EnsurePublishedFrozen() error {
+	if e.status == StatusDraft {
+		return nil
+	}
+	seen := make(map[string]bool, len(e.tiers))
+	for _, t := range e.tiers {
+		if t.Name == "" {
+			return ErrTierNameMissing
+		}
+		if t.Price < 0 {
+			return ErrPriceNegative
+		}
+		if seen[t.Name] {
+			return ErrTierDuplicate
+		}
+		seen[t.Name] = true
+	}
 	return nil
 }
 
-// TiersPriced is the assertion checked from Publish: every TicketTier
-// carries a Price before the Event can be published.
-func (e Event) TiersPriced() error {
-	if err := e.PublishedFrozen(); err != nil {
+// AssertTiersPriced is the assertion checked from Publish: every
+// TicketTier carries a Price before the Event can be published.
+func (e Event) AssertTiersPriced() error {
+	if err := e.EnsurePublishedFrozen(); err != nil {
 		return err
 	}
 	for _, t := range e.tiers {
@@ -117,7 +137,7 @@ func (e Event) refuseUnlessDraft() error {
 // Tell sets the story and the when and where of the Event. Drafts
 // only: a published Event is a promise already made.
 func (e *Event) Tell(story, when, where string) error {
-	if err := e.PublishedFrozen(); err != nil {
+	if err := e.EnsurePublishedFrozen(); err != nil {
 		return err
 	}
 	if err := e.refuseUnlessDraft(); err != nil {
@@ -129,7 +149,7 @@ func (e *Event) Tell(story, when, where string) error {
 
 // AddTier adds one TicketTier to a draft Event.
 func (e *Event) AddTier(name string, price Price) error {
-	if err := e.PublishedFrozen(); err != nil {
+	if err := e.EnsurePublishedFrozen(); err != nil {
 		return err
 	}
 	if err := e.refuseUnlessDraft(); err != nil {
@@ -157,7 +177,7 @@ func (e *Event) AddTier(name string, price Price) error {
 // and removed tiers all land at once. Drafts only; every tier needs
 // a name, names stay unique, and a Price is never negative.
 func (e *Event) ReplaceTiers(tiers []TicketTier) error {
-	if err := e.PublishedFrozen(); err != nil {
+	if err := e.EnsurePublishedFrozen(); err != nil {
 		return err
 	}
 	if err := e.refuseUnlessDraft(); err != nil {
@@ -195,10 +215,10 @@ func (e *Event) Publish() error {
 	if len(e.tiers) == 0 {
 		return ErrNothingToSell
 	}
-	if err := e.TiersPriced(); err != nil {
+	if err := e.AssertTiersPriced(); err != nil {
 		return err
 	}
-	if err := e.PublishedFrozen(); err != nil {
+	if err := e.EnsurePublishedFrozen(); err != nil {
 		return err
 	}
 	e.status = StatusPublished
@@ -217,7 +237,7 @@ func (e *Event) Cancel() error {
 	case StatusDraft:
 		return ErrEventNotPublished
 	}
-	if err := e.PublishedFrozen(); err != nil {
+	if err := e.EnsurePublishedFrozen(); err != nil {
 		return err
 	}
 	e.status = StatusCancelled

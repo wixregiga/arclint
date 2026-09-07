@@ -88,71 +88,115 @@ type ViolationInput struct {
 	FixHint string `json:"fixHint,omitempty"`
 }
 
-// DomainDefinitionInfo is one recorded project domain definition as
-// exposed through ctx.domain(). Line is where the term is written in
-// domain.arclint.yaml, so a finding about the term can anchor at
-// the term; 0 when the vocabulary was not read from a file.
-type DomainDefinitionInfo struct {
-	Name       string   `json:"name"`
-	Definition string   `json:"definition,omitempty"`
-	Aliases    []string `json:"aliases,omitempty"`
-	Aggregate  bool     `json:"aggregate,omitempty"`
-	Line       int      `json:"line"`
-}
-
-// DomainInvariantInfo is one recorded invariant (statement + owner)
-// inside a bounded context as exposed through ctx.domain(). Line is
-// where the invariant is written in domain.arclint.yaml. ID is
-// the cluster identity when the owner is an aggregate named contract.
+// DomainInvariantInfo is one recorded invariant as exposed through
+// ctx.domain(): the key that names the method enforcing it (an
+// aggregate's) or the constructor that enforces it (a value object's),
+// and the statement. Line is where it is written in domain.arclint.yaml;
+// 0 when the vocabulary was not read from a file.
 type DomainInvariantInfo struct {
+	Key       string `json:"key"`
 	Statement string `json:"statement"`
-	Owner     string `json:"owner"`
-	ID        string `json:"id,omitempty"`
 	Line      int    `json:"line"`
 }
 
 // DomainAssertionInfo is one recorded assertion as exposed through
-// ctx.domain(). ID names the checking method; On names the operation
-// that must call it.
+// ctx.domain(). Key names the checking method on the root; On names
+// the operation that must call it.
 type DomainAssertionInfo struct {
-	Statement string `json:"statement"`
-	Owner     string `json:"owner"`
-	ID        string `json:"id"`
+	Key       string `json:"key"`
 	On        string `json:"on"`
+	Statement string `json:"statement"`
 	Line      int    `json:"line"`
 }
 
-// DomainSpecificationInfo is one recorded specification as exposed
-// through ctx.domain(): a named predicate, never a flag on a value
-// object.
-type DomainSpecificationInfo struct {
+// DomainEntityInfo is one member entity of an aggregate as exposed
+// through ctx.domain(). Identity names the value object that
+// identifies it; empty when implied.
+type DomainEntityInfo struct {
+	Name       string   `json:"name"`
+	Definition string   `json:"definition"`
+	Identity   string   `json:"identity,omitempty"`
+	Aliases    []string `json:"aliases,omitempty"`
+	Line       int      `json:"line"`
+}
+
+// DomainAggregateInfo is one recorded aggregate as exposed through
+// ctx.domain(): its root carries the aggregate's name; Identity names
+// the value object identifying the root; Entities are the members;
+// Repository and Factory name the declarations when recorded.
+type DomainAggregateInfo struct {
+	Name       string                `json:"name"`
+	Definition string                `json:"definition"`
+	Identity   string                `json:"identity"`
+	Aliases    []string              `json:"aliases,omitempty"`
+	Entities   []DomainEntityInfo    `json:"entities"`
+	Invariants []DomainInvariantInfo `json:"invariants"`
+	Assertions []DomainAssertionInfo `json:"assertions"`
+	Repository string                `json:"repository,omitempty"`
+	Factory    string                `json:"factory,omitempty"`
+	Line       int                   `json:"line"`
+}
+
+// DomainValueObjectInfo is one recorded value object as exposed
+// through ctx.domain(), with the invariants its constructor enforces.
+type DomainValueObjectInfo struct {
+	Name       string                `json:"name"`
+	Definition string                `json:"definition"`
+	Aliases    []string              `json:"aliases,omitempty"`
+	Invariants []DomainInvariantInfo `json:"invariants"`
+	Line       int                   `json:"line"`
+}
+
+// DomainEventInfo is one recorded domain event as exposed through
+// ctx.domain(). RaisedBy names the aggregate that raises it; empty
+// when not recorded.
+type DomainEventInfo struct {
 	Name       string `json:"name"`
-	Definition string `json:"definition,omitempty"`
+	Definition string `json:"definition"`
+	RaisedBy   string `json:"raisedBy,omitempty"`
 	Line       int    `json:"line"`
+}
+
+// DomainTermInfo is one recorded term that carries a name and a
+// definition and nothing else: a domain service or a specification.
+type DomainTermInfo struct {
+	Name       string `json:"name"`
+	Definition string `json:"definition"`
+	Line       int    `json:"line"`
+}
+
+// DomainQuestionInfo is one open question recorded in a bounded
+// context as exposed through ctx.domain().
+type DomainQuestionInfo struct {
+	Key  string `json:"key"`
+	Text string `json:"text"`
+	Line int    `json:"line"`
 }
 
 // DomainContextInfo is one bounded context and its recorded terms as
 // exposed through ctx.domain(). Line is where the context is written
 // in domain.arclint.yaml.
 type DomainContextInfo struct {
-	Name           string                    `json:"name"`
-	Entities       []DomainDefinitionInfo    `json:"entities"`
-	ValueObjects   []DomainDefinitionInfo    `json:"valueObjects"`
-	Invariants     []DomainInvariantInfo     `json:"invariants"`
-	Assertions     []DomainAssertionInfo     `json:"assertions"`
-	Specifications []DomainSpecificationInfo `json:"specifications"`
-	Events         []DomainDefinitionInfo    `json:"events"`
-	Line           int                       `json:"line"`
+	Name           string                  `json:"name"`
+	Definition     string                  `json:"definition"`
+	Aggregates     []DomainAggregateInfo   `json:"aggregates"`
+	ValueObjects   []DomainValueObjectInfo `json:"valueObjects"`
+	Events         []DomainEventInfo       `json:"events"`
+	Services       []DomainTermInfo        `json:"services"`
+	Specifications []DomainTermInfo        `json:"specifications"`
+	Questions      []DomainQuestionInfo    `json:"questions"`
+	Line           int                     `json:"line"`
 }
 
 // DomainRelationInfo is one context-map edge as exposed through
 // ctx.domain(). Line is where the relation is written in
 // domain.arclint.yaml.
 type DomainRelationInfo struct {
-	From string `json:"from"`
-	To   string `json:"to"`
-	Kind string `json:"kind"`
-	Line int    `json:"line"`
+	From        string `json:"from"`
+	To          string `json:"to"`
+	Kind        string `json:"kind"`
+	Description string `json:"description,omitempty"`
+	Line        int    `json:"line"`
 }
 
 // DomainInfo is the project's recorded domain model as exposed through
@@ -160,9 +204,11 @@ type DomainRelationInfo struct {
 // Read-only: declaring knowledge never creates a diagnostic by itself.
 // Source is the repository-relative path of the domain file the model
 // is (or would be) recorded in, so a finding about a recorded term
-// anchors there without the extension spelling the file name.
+// anchors there without the extension spelling the file name. Project
+// names the software whose domain is recorded.
 type DomainInfo struct {
 	Source    string               `json:"source"`
+	Project   string               `json:"project"`
 	Contexts  []DomainContextInfo  `json:"contexts"`
 	Relations []DomainRelationInfo `json:"relations"`
 }

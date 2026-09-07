@@ -1,5 +1,5 @@
 # Violating case: a domain file imports a declared external dependency;
-# the consumes rule forbids external imports for the domain Module.
+# the consumes rule forbids external imports for the domain Zone.
 rule: "domain/stdlib-only"
 files:
   go.mod: |
@@ -22,4 +22,4 @@ expect:
   - kind: violation
     path: internal/domain/rule/thing.go
     line: 6
-    message: "external import \"github.com/pkg/errors\" is forbidden for Module \"domain\""
+    message: "external import \"github.com/pkg/errors\" is forbidden for Zone \"domain\""

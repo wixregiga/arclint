@@ -48,7 +48,7 @@ func TestPlainPatternInstallBytes(t *testing.T) {
 		Reference: "acme/layers@1.2.0", Digest: "sha256:9b1c2d3e4f5a6666", Source: distribution.SourceRegistry,
 		VendoredPath: ".arclint/patterns/acme/layers", VendorReplaced: "1.1.0",
 		RulesetPath: "rules.arclint.yaml", RulesetReplaced: "1.1.0",
-		Bound:   []application.BoundModule{{Module: "domain", Paths: []string{"internal/domain/**", "pkg/domain/**"}}},
+		Bound:   []application.BoundZone{{Zone: "domain", Paths: []string{"internal/domain/**", "pkg/domain/**"}}},
 		Unbound: []string{"app"},
 		Adopted: []string{"domain"},
 	}})
@@ -60,10 +60,10 @@ func TestPlainPatternInstallBytes(t *testing.T) {
 		"extended rules.arclint.yaml, moving the entry from 1.1.0\n" +
 		"bound:\n" +
 		"  domain: internal/domain/**, pkg/domain/**\n" +
-		"adopted declared module(s): domain\n" +
+		"adopted declared zone(s): domain\n" +
 		"unbound (bind each under extends[].bind before the ruleset loads):\n" +
 		"  app\n" +
-		"next: bind the unbound modules, then run `arclint check .`\n"
+		"next: bind the unbound zones, then run `arclint check .`\n"
 	if buf.String() != want {
 		t.Fatalf("bytes = %q, want %q", buf.String(), want)
 	}
@@ -72,7 +72,7 @@ func TestPlainPatternInstallBytes(t *testing.T) {
 	err = New().Render(&buf, cli.PatternInstallReport{Result: application.InstallPatternResult{
 		Reference: "arclint/vertical@0.1.0", Digest: "sha256:3f2a9c1e5b7d0000", Source: distribution.SourceEmbedded,
 		RulesetPath: "rules.arclint.yaml", RulesetCreated: true,
-		Bound: []application.BoundModule{{Module: "domain", Paths: []string{"internal/*/domain/**"}}},
+		Bound: []application.BoundZone{{Zone: "domain", Paths: []string{"internal/*/domain/**"}}},
 	}})
 	if err != nil {
 		t.Fatal(err)

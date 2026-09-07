@@ -1,12 +1,15 @@
-# Violating case: the upstream rule module imports the downstream
-# conformance module, against the recorded conformist relation.
-rule: "arclint/domain-model:contexts/respect-relations"
+# Violating case: the upstream rule context imports the downstream
+# conformance context, against the recorded conformist relation.
+rule: "context_relation/imports-follow-influence"
 files:
   domain.arclint.yaml: |
     version: 1
+    project: fixture
     contexts:
-      - name: rule
-      - name: conformance
+      rule:
+        definition: The rules an architecture is held to.
+      conformance:
+        definition: The judgement of code against the rules.
     relations:
       - from: rule
         to: conformance
@@ -29,4 +32,4 @@ expect:
   - kind: violation
     path: internal/domain/rule/root.go
     line: 3
-    message: "module \"rule\" must not import module \"conformance\": the recorded conformist relation (\"rule\" -> \"conformance\") forbids it"
+    message: "context rule imports context conformance (fixture/internal/domain/conformance) against the recorded conformist relation: rule is upstream of conformance, and only the downstream imports the upstream"

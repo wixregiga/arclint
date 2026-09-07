@@ -10,6 +10,7 @@ import (
 	"github.com/muesli/termenv"
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/delivery/cli"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 func ansiRenderer() cli.Renderer {
@@ -35,7 +36,7 @@ func TestLipglossInitPreservesGrammar(t *testing.T) {
 	if !strings.Contains(out, "arclint check .") {
 		t.Fatalf("next-step grammar changed: %q", out)
 	}
-	if out != "wrote rules.arclint.yaml\nnext: declare your modules, then run `arclint check .`\n" {
+	if out != "wrote rules.arclint.yaml\nnext: declare your zones, then run `arclint check .`\n" {
 		t.Fatalf("stripped grammar = %q", out)
 	}
 }
@@ -95,6 +96,27 @@ func TestLipglossRuleListMutesIDAndColorsSeverity(t *testing.T) {
 	}
 }
 
+func TestLipglossRuleListMutesTheBuiltInOrigin(t *testing.T) {
+	var buf bytes.Buffer
+	err := ansiRenderer().Render(&buf, cli.RuleListReport{
+		Rules: []application.RuleSummary{{
+			ID: "aggregate/root-declared", Type: "domain", Severity: "error",
+			Claim: "composed", Assurance: "exact", BuiltIn: true,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := buf.String()
+	if !strings.Contains(raw, "\x1b[2m  built in from the DDD meta-model\x1b[0m") {
+		t.Fatalf("built-in origin is not muted: %q", raw)
+	}
+	want := "aggregate/root-declared  [domain/error/exact]  composed  built in from the DDD meta-model\n"
+	if out := stripANSI(raw); out != want {
+		t.Fatalf("stripped grammar = %q, want %q", out, want)
+	}
+}
+
 func TestLipglossShortWrite(t *testing.T) {
 	err := ansiRenderer().Render(&shortWriter{n: 1}, cli.SDKInitReport{Paths: []string{"a.d.ts"}})
 	if err == nil {
@@ -139,4 +161,29 @@ func stripANSI(s string) string {
 		b.WriteByte(c)
 	}
 	return b.String()
+}
+
+// Explain keeps the plain grammar: bold section headers, sources muted
+// between the meaning and the questions.
+func TestLipglossDomainExplainPrintsSources(t *testing.T) {
+	var buf bytes.Buffer
+	doc := vocab.ConceptAggregate.Doc()
+	if len(doc.Sources) == 0 {
+		t.Fatal("aggregate cites no source in the meta-model")
+	}
+	err := ansiRenderer().Render(&buf, cli.DomainExplainReport{Docs: []vocab.ConceptDoc{doc}, Single: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := stripANSI(buf.String())
+	sources := strings.Index(out, "\nSources:\n\n")
+	ask := strings.Index(out, "\nAsk:\n\n")
+	if sources < 0 || ask < 0 || sources > ask {
+		t.Fatalf("Sources must come before Ask:\n%s", out)
+	}
+	for _, s := range doc.Sources {
+		if !strings.Contains(out, "  "+s.String()+"\n") {
+			t.Fatalf("missing source %q:\n%s", s, out)
+		}
+	}
 }

@@ -95,7 +95,7 @@ func writeSyntheticRepo(t *testing.T, root string, pkgs, filesPer int) {
 	}
 	write("go.mod", "module example.com/synth\n\ngo 1.24\n\nrequire github.com/pkg/errors v0.9.1\n")
 	write("rules.arclint.yaml", `runtime: [go]
-modules:
+zones:
   entities: "internal/entities/**"
   features: "internal/features/**"
   shared: "internal/shared/**"
@@ -117,7 +117,7 @@ rules:
     files: "internal/features/**/*.go"
     naming: snake_case
   dependencies/acyclic:
-    description: "Module dependencies contain no cycle."
+    description: "Zone dependencies contain no cycle."
     acyclic: {}
 `)
 	for p := 0; p < pkgs; p++ {

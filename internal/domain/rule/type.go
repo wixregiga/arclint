@@ -4,40 +4,47 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 // Type is one value from the finite ArcLint-owned set of supported Rule
 // shapes: consumes, structure, naming, layers, protected, independence,
-// acyclic, invariants, content, and extension. Pattern and Extension
+// acyclic, domain, content, and extension. Pattern and Extension
 // authors configure existing values; they do not add new ones; custom
 // logic plugs into the extension kind through the SDK, it never grows
 // this enum. In rules.arclint.yaml a Type is never spelled: the one Assertion
-// key a Rule carries decides it (see AssertionKey).
+// key a Rule carries decides it (see AssertionKey); the domain Type has
+// no key because its Rules are built in, never authored.
 type Type string
 
 const (
-	// TypeConsumes states what a Module may import: other declared
-	// Modules by allow-list, external and standard-library imports by
+	// TypeConsumes states what a Zone may import: other declared
+	// Zones by allow-list, external and standard-library imports by
 	// policy.
 	TypeConsumes Type = "consumes"
 	// TypeStructure requires or forbids files matching globs inside a
-	// Module.
+	// Zone.
 	TypeStructure Type = "structure"
-	// TypeNaming constrains file names within a Module to a finite case
+	// TypeNaming constrains file names within a Zone to a finite case
 	// vocabulary.
 	TypeNaming Type = "naming"
-	// TypeLayers orders Modules highest first; a Module may import same
+	// TypeLayers orders Zones highest first; a Zone may import same
 	// or lower layers, never higher.
 	TypeLayers Type = "layers"
-	// TypeProtected restricts which Modules may import one Module.
+	// TypeProtected restricts which Zones may import one Zone.
 	TypeProtected Type = "protected"
 	// TypeIndependence forbids imports between sibling Folders.
 	TypeIndependence Type = "independence"
-	// TypeAcyclic forbids dependency cycles among declared Modules.
+	// TypeAcyclic forbids dependency cycles among declared Zones.
 	TypeAcyclic Type = "acyclic"
-	// TypeInvariants requires recorded domain contracts to be visible
-	// in source as named methods called from their join points.
-	TypeInvariants Type = "invariants"
+	// TypeDomain evaluates one invariant of a Domain-Driven Design
+	// building block against every instance the recorded domain holds.
+	// Its Rules are built in: arclint composes one per check-level block
+	// invariant under the invariant's own id the moment a domain is
+	// recorded (see BuiltIn), and a ruleset adopts them through
+	// Overrides only.
+	TypeDomain Type = "domain"
 	// TypeContent forbids lines matching a regular expression in the
 	// Rule's Subjects: the built-in evaluator over file bytes.
 	TypeContent Type = "content"
@@ -51,15 +58,16 @@ const (
 func Types() []Type {
 	return []Type{
 		TypeConsumes, TypeStructure, TypeNaming,
-		TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic, TypeInvariants,
+		TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic, TypeDomain,
 		TypeContent, TypeExtension,
 	}
 }
 
-// assertionKeys maps each Type to the one rules.arclint.yaml key that spells
-// its Assertion. The key is the Type's whole public spelling: a Rule
-// written with that key is a Rule of that Type, and no rule carries
-// two keys.
+// assertionKeys maps each authored Type to the one rules.arclint.yaml
+// key that spells its Assertion. The key is the Type's whole public
+// spelling: a Rule written with that key is a Rule of that Type, and
+// no rule carries two keys. The domain Type has no key: its Rules are
+// never written.
 var assertionKeys = map[Type]string{
 	TypeConsumes:     "imports",
 	TypeStructure:    "structure",
@@ -68,20 +76,37 @@ var assertionKeys = map[Type]string{
 	TypeProtected:    "imported_by",
 	TypeIndependence: "independent",
 	TypeAcyclic:      "acyclic",
-	TypeInvariants:   "invariants",
 	TypeContent:      "content",
 	TypeExtension:    "uses",
 }
 
 // AssertionKey returns the rules.arclint.yaml key that spells this Type's
-// Assertion.
+// Assertion, or "" for the domain Type, which is never authored.
 func (t Type) AssertionKey() string { return assertionKeys[t] }
+
+// Authored reports whether a ruleset can spell a Rule of this Type:
+// every Type but domain, whose Rules are built in.
+func (t Type) Authored() bool { return assertionKeys[t] != "" }
+
+// AuthoredTypes returns the Types a ruleset can spell, in published
+// order.
+func AuthoredTypes() []Type {
+	out := make([]Type, 0, len(assertionKeys))
+	for _, t := range Types() {
+		if t.Authored() {
+			out = append(out, t)
+		}
+	}
+	return out
+}
 
 // AssertionKeys returns every Assertion key in published Type order.
 func AssertionKeys() []string {
 	out := make([]string, 0, len(assertionKeys))
 	for _, t := range Types() {
-		out = append(out, assertionKeys[t])
+		if t.Authored() {
+			out = append(out, assertionKeys[t])
+		}
 	}
 	return out
 }
@@ -96,35 +121,35 @@ func TypeOfAssertionKey(key string) (Type, bool) {
 	return "", false
 }
 
-// Scope is the Applicability shape a Type demands: which Modules a
+// Scope is the Applicability shape a Type demands: which Zones a
 // Rule of the Type judges and how rules.arclint.yaml spells that.
 type Scope int
 
 const (
-	// ScopeModules judges the members of the Modules named under on;
+	// ScopeZones judges the members of the Zones named under on;
 	// on is required.
-	ScopeModules Scope = iota
-	// ScopeOneModule judges exactly one Module named under on.
-	ScopeOneModule
-	// ScopeRepository ranges over the repository's Module graph or
+	ScopeZones Scope = iota
+	// ScopeOneZone judges exactly one Zone named under on.
+	ScopeOneZone
+	// ScopeRepository ranges over the repository's Zone graph or
 	// its files; on is not accepted.
 	ScopeRepository
-	// ScopeModulesOrRepository judges the Modules named under on, or
+	// ScopeZonesOrRepository judges the Zones named under on, or
 	// the whole repository when on is omitted.
-	ScopeModulesOrRepository
+	ScopeZonesOrRepository
 )
 
 // Scope returns the Applicability shape the Type demands.
 func (t Type) Scope() Scope {
 	switch t {
-	case TypeConsumes, TypeStructure, TypeNaming, TypeInvariants:
-		return ScopeModules
+	case TypeConsumes, TypeStructure, TypeNaming:
+		return ScopeZones
 	case TypeProtected:
-		return ScopeOneModule
-	case TypeLayers, TypeIndependence, TypeAcyclic:
+		return ScopeOneZone
+	case TypeLayers, TypeIndependence, TypeAcyclic, TypeDomain:
 		return ScopeRepository
 	case TypeContent, TypeExtension:
-		return ScopeModulesOrRepository
+		return ScopeZonesOrRepository
 	}
 	return ScopeRepository
 }
@@ -166,21 +191,21 @@ func (t Type) Valid() bool {
 func (t Type) Meaning() string {
 	switch t {
 	case TypeConsumes:
-		return "states what a Module may import: declared Modules by allow-list, external and standard-library imports by policy"
+		return "states what a Zone may import: declared Zones by allow-list, external and standard-library imports by policy"
 	case TypeStructure:
-		return "requires or forbids files matching globs inside a Module"
+		return "requires or forbids files matching globs inside a Zone"
 	case TypeNaming:
-		return "constrains file names within a Module to a finite case vocabulary"
+		return "constrains file names within a Zone to a finite case vocabulary"
 	case TypeLayers:
-		return "orders Modules highest first; a Module may import same or lower layers, never higher"
+		return "orders Zones highest first; a Zone may import same or lower layers, never higher"
 	case TypeProtected:
-		return "restricts which Modules may import one Module"
+		return "restricts which Zones may import one Zone"
 	case TypeIndependence:
 		return "forbids imports between sibling Folders selected by globs"
 	case TypeAcyclic:
-		return "forbids dependency cycles among declared Modules"
-	case TypeInvariants:
-		return "requires recorded domain contracts to be visible in source as named methods called from their join points"
+		return "forbids dependency cycles among declared Zones"
+	case TypeDomain:
+		return "evaluates one invariant of a Domain-Driven Design building block against every instance the recorded domain holds"
 	case TypeContent:
 		return "forbids lines matching a regular expression in the selected files"
 	case TypeExtension:
@@ -204,45 +229,45 @@ func (t Type) Accepts(p Params) error {
 type Params interface {
 	Type() Type
 	// proposition states the parameters' architectural claim in domain
-	// language, without naming the Modules the Rule applies to; it seeds
+	// language, without naming the Zones the Rule applies to; it seeds
 	// the canonical Claim when a representation carries none.
 	proposition() string
 	validate() error
 }
 
-// AllowList is a declared Module allow-list. The empty list is
-// meaningful: it permits no other declared Module. The owning Module
+// AllowList is a declared Zone allow-list. The empty list is
+// meaningful: it permits no other declared Zone. The owning Zone
 // itself is always permitted implicitly.
 type AllowList struct {
-	modules []ModuleName
+	zones []ZoneName
 }
 
-// NewAllowList validates the listed Module names and rejects
+// NewAllowList validates the listed Zone names and rejects
 // duplicates.
-func NewAllowList(modules ...ModuleName) (AllowList, error) {
-	seen := map[ModuleName]bool{}
-	out := make([]ModuleName, 0, len(modules))
-	for _, m := range modules {
+func NewAllowList(zones ...ZoneName) (AllowList, error) {
+	seen := map[ZoneName]bool{}
+	out := make([]ZoneName, 0, len(zones))
+	for _, m := range zones {
 		if err := m.validate(); err != nil {
 			return AllowList{}, err
 		}
 		if seen[m] {
-			return AllowList{}, fmt.Errorf("allow-list: duplicate module %q", m)
+			return AllowList{}, fmt.Errorf("allow-list: duplicate zone %q", m)
 		}
 		seen[m] = true
 		out = append(out, m)
 	}
-	return AllowList{modules: out}, nil
+	return AllowList{zones: out}, nil
 }
 
-// Modules returns the allowed Module names.
-func (l AllowList) Modules() []ModuleName {
-	return append([]ModuleName(nil), l.modules...)
+// Zones returns the allowed Zone names.
+func (l AllowList) Zones() []ZoneName {
+	return append([]ZoneName(nil), l.zones...)
 }
 
-// Permits reports whether the named Module is on the list.
-func (l AllowList) Permits(m ModuleName) bool {
-	for _, a := range l.modules {
+// Permits reports whether the named Zone is on the list.
+func (l AllowList) Permits(m ZoneName) bool {
+	for _, a := range l.zones {
 		if a == m {
 			return true
 		}
@@ -280,8 +305,8 @@ func (p ImportPolicy) valid() bool {
 	return p == "" || p == ImportAllow || p == ImportForbid
 }
 
-// ConsumesParams state what the Rule's Module may import. Internal nil
-// means other declared Modules are unrestricted.
+// ConsumesParams state what the Rule's Zone may import. Internal nil
+// means other declared Zones are unrestricted.
 type ConsumesParams struct {
 	Internal *AllowList
 	External ImportPolicy
@@ -307,10 +332,10 @@ func (p ConsumesParams) validate() error {
 func (p ConsumesParams) proposition() string {
 	var parts []string
 	if p.Internal != nil {
-		if len(p.Internal.modules) == 0 {
-			parts = append(parts, "imports no other declared Module")
+		if len(p.Internal.zones) == 0 {
+			parts = append(parts, "imports no other declared Zone")
 		} else {
-			parts = append(parts, fmt.Sprintf("imports only the declared Modules %s", moduleList(p.Internal.modules)))
+			parts = append(parts, fmt.Sprintf("imports only the declared Zones %s", zoneList(p.Internal.zones)))
 		}
 	}
 	if p.External.Forbids() {
@@ -375,9 +400,9 @@ func (p NamingParams) proposition() string {
 	return fmt.Sprintf("file names use %s", p.Case)
 }
 
-// LayersParams order Modules highest first.
+// LayersParams order Zones highest first.
 type LayersParams struct {
-	Layers []ModuleName
+	Layers []ZoneName
 }
 
 // Type returns TypeLayers.
@@ -387,34 +412,34 @@ func (p LayersParams) validate() error {
 	if len(p.Layers) < 2 {
 		return fmt.Errorf("layers: fewer than two layers")
 	}
-	return uniqueValidModules("layers", p.Layers)
+	return uniqueValidZones("layers", p.Layers)
 }
 
 func (p LayersParams) proposition() string {
-	return fmt.Sprintf("Modules layer highest first as %s; a Module never imports a higher layer", moduleList(p.Layers))
+	return fmt.Sprintf("Zones layer highest first as %s; a Zone never imports a higher layer", zoneList(p.Layers))
 }
 
-// ProtectedParams restrict who may import one Module.
+// ProtectedParams restrict who may import one Zone.
 type ProtectedParams struct {
-	Module ModuleName
-	Allow  []ModuleName
+	Zone  ZoneName
+	Allow []ZoneName
 }
 
 // Type returns TypeProtected.
 func (p ProtectedParams) Type() Type { return TypeProtected }
 
 func (p ProtectedParams) validate() error {
-	if err := p.Module.validate(); err != nil {
+	if err := p.Zone.validate(); err != nil {
 		return fmt.Errorf("protected: %v", err)
 	}
-	return uniqueValidModules("protected allow", p.Allow)
+	return uniqueValidZones("protected allow", p.Allow)
 }
 
 func (p ProtectedParams) proposition() string {
 	if len(p.Allow) == 0 {
-		return fmt.Sprintf("Module %q is imported by no other Module", p.Module)
+		return fmt.Sprintf("Zone %q is imported by no other Zone", p.Zone)
 	}
-	return fmt.Sprintf("Module %q is imported only by %s", p.Module, moduleList(p.Allow))
+	return fmt.Sprintf("Zone %q is imported only by %s", p.Zone, zoneList(p.Allow))
 }
 
 // ExtensionParams bind a Rule to Extension-supplied enforcement: the
@@ -440,24 +465,24 @@ func (p ExtensionParams) proposition() string {
 }
 
 // AcyclicParams scope the no-cycles proposition; an empty scope means
-// every Module the repository declares. A Pattern never distributes an
-// empty scope: its loader resolves {} to the Pattern's own Modules.
+// every Zone the repository declares. A Pattern never distributes an
+// empty scope: its loader resolves {} to the Pattern's own Zones.
 type AcyclicParams struct {
-	Modules []ModuleName
+	Zones []ZoneName
 }
 
 // Type returns TypeAcyclic.
 func (p AcyclicParams) Type() Type { return TypeAcyclic }
 
 func (p AcyclicParams) validate() error {
-	return uniqueValidModules("acyclic", p.Modules)
+	return uniqueValidZones("acyclic", p.Zones)
 }
 
 func (p AcyclicParams) proposition() string {
-	if len(p.Modules) == 0 {
-		return "declared Module dependencies contain no cycle"
+	if len(p.Zones) == 0 {
+		return "declared Zone dependencies contain no cycle"
 	}
-	return fmt.Sprintf("dependencies among %s contain no cycle", moduleList(p.Modules))
+	return fmt.Sprintf("dependencies among %s contain no cycle", zoneList(p.Zones))
 }
 
 // IndependenceParams configures an independence Rule: sibling Folders
@@ -491,24 +516,50 @@ func (p IndependenceParams) proposition() string {
 	return fmt.Sprintf("sibling Folders matching %s may not import each other", globList(p.Folders))
 }
 
-// InvariantsParams configure an invariants Rule. Closed, default false,
-// additionally requires every exported error-returning function in the
-// owner's files to call the cluster method; child constructors that
-// return errors are then extra failures.
-type InvariantsParams struct {
-	Closed bool
+// DomainParams name the one block invariant of the Domain-Driven
+// Design meta-model a domain Rule evaluates: an invariant the domain
+// evaluator enforces, by its id.
+type DomainParams struct {
+	Invariant string
 }
 
-// Type returns TypeInvariants.
-func (p InvariantsParams) Type() Type { return TypeInvariants }
+// Type returns TypeDomain.
+func (p DomainParams) Type() Type { return TypeDomain }
 
-func (p InvariantsParams) validate() error { return nil }
-
-func (p InvariantsParams) proposition() string {
-	if p.Closed {
-		return "recorded domain contracts are visible in source as named methods called from their join points (closed)"
+func (p DomainParams) validate() error {
+	inv, ok := vocab.DDD().Invariant(p.Invariant)
+	if !ok {
+		return fmt.Errorf("domain: %q is not a block invariant of the %s meta-model", p.Invariant, vocab.DDD().Name)
 	}
-	return "recorded domain contracts are visible in source as named methods called from their join points"
+	if inv.Enforcement.By != vocab.EvaluatorDomain {
+		return fmt.Errorf("domain: %s is not evaluated by the domain evaluator (enforcement: %s)", inv.ID, describeEnforcement(inv))
+	}
+	return nil
+}
+
+func (p DomainParams) proposition() string {
+	inv, _ := vocab.DDD().Invariant(p.Invariant)
+	return inv.Statement
+}
+
+// BlockInvariant returns the meta-model invariant the parameters name.
+// Construction validated the name, so a miss means the value was built
+// outside New.
+func (p DomainParams) BlockInvariant() (vocab.BlockInvariant, error) {
+	inv, ok := vocab.DDD().Invariant(p.Invariant)
+	if !ok {
+		return vocab.BlockInvariant{}, fmt.Errorf("domain: %q is not a block invariant of the %s meta-model", p.Invariant, vocab.DDD().Name)
+	}
+	return inv, nil
+}
+
+// describeEnforcement spells how a meta-model invariant is enforced,
+// for diagnostics about Rules that name one.
+func describeEnforcement(inv vocab.BlockInvariant) string {
+	if inv.Enforcement.Needs != "" {
+		return "milestone " + inv.Enforcement.Needs
+	}
+	return string(inv.Enforcement.By)
 }
 
 // ContentParams configure a content Rule: no line of any selected file
@@ -544,23 +595,23 @@ func (p ContentParams) Regexp() (*regexp.Regexp, error) {
 	return re, nil
 }
 
-func uniqueValidModules(what string, modules []ModuleName) error {
-	seen := map[ModuleName]bool{}
-	for _, m := range modules {
+func uniqueValidZones(what string, zones []ZoneName) error {
+	seen := map[ZoneName]bool{}
+	for _, m := range zones {
 		if err := m.validate(); err != nil {
 			return fmt.Errorf("%s: %v", what, err)
 		}
 		if seen[m] {
-			return fmt.Errorf("%s: duplicate module %q", what, m)
+			return fmt.Errorf("%s: duplicate zone %q", what, m)
 		}
 		seen[m] = true
 	}
 	return nil
 }
 
-func moduleList(modules []ModuleName) string {
-	names := make([]string, len(modules))
-	for i, m := range modules {
+func zoneList(zones []ZoneName) string {
+	names := make([]string, len(zones))
+	for i, m := range zones {
 		names[i] = fmt.Sprintf("%q", string(m))
 	}
 	return "[" + strings.Join(names, ", ") + "]"

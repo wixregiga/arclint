@@ -33,9 +33,9 @@ type InitializeRepositoryRequest struct {
 }
 
 // InitializeRepository drafts a repository ruleset from explicit
-// choices: a commented starter the owner grows into real Modules and
+// choices: a commented starter the owner grows into real Zones and
 // Rules, or a ruleset that extends an available Pattern with every
-// Pattern Module bound to its suggested paths. The draft loads through
+// Pattern Zone bound to its suggested paths. The draft loads through
 // the same strict loader that governs every ruleset; it is never a
 // copy of the Pattern's Rules.
 type InitializeRepository struct {
@@ -153,39 +153,39 @@ func scanBlock() string {
 		"  unknown_imports: warn\n\n"
 }
 
-// starterRuleset renders the commented draft. It declares one Module
+// starterRuleset renders the commented draft. It declares one Zone
 // covering the repository and one vacuously-satisfied imports Rule so
-// the owner sees the shape to grow: real Modules, real allow-lists.
+// the owner sees the shape to grow: real Zones, real allow-lists.
 func starterRuleset(languages []string) string {
 	var b strings.Builder
 	b.WriteString("# ArcLint architecture contracts.\n")
-	b.WriteString("# Grow this file module by module: declare real Modules under `modules`,\n")
+	b.WriteString("# Grow this file zone by zone: declare real Zones under `zones`,\n")
 	b.WriteString("# then state what each may import under `rules`.\n")
 	b.WriteString("# Query commands: arclint rules [selector] · arclint context <path>\n\n")
 	b.WriteString(runtimeLine(languages))
 	b.WriteString(scanBlock())
-	b.WriteString("modules:\n")
-	b.WriteString("  # A Module is a name and the paths it owns: one glob, a list of globs,\n")
-	b.WriteString("  # or {paths, description}. Split into real Modules as the architecture\n")
+	b.WriteString("zones:\n")
+	b.WriteString("  # A Zone is a name and the paths it owns: one glob, a list of globs,\n")
+	b.WriteString("  # or {paths, description}. Split into real Zones as the architecture\n")
 	b.WriteString("  # takes shape.\n")
 	b.WriteString("  source: \"**\"\n\n")
 	b.WriteString("rules:\n")
-	b.WriteString("  # Every Rule has an id, the Module(s) it judges under `on`, and exactly\n")
+	b.WriteString("  # Every Rule has an id, the Zone(s) it judges under `on`, and exactly\n")
 	b.WriteString("  # one assertion: imports, structure, naming, content, layers,\n")
-	b.WriteString("  # imported_by, independent, acyclic, invariants, or uses.\n")
+	b.WriteString("  # imported_by, independent, acyclic, or uses.\n")
 	b.WriteString("  source/dependencies:\n")
-	b.WriteString("    description: \"Source imports no other declared Module.\"\n")
+	b.WriteString("    description: \"Source imports no other declared Zone.\"\n")
 	b.WriteString("    on: source\n")
 	b.WriteString("    imports:\n")
-	b.WriteString("      # An allow-list of other declared Modules. Empty means this Module\n")
-	b.WriteString("      # may import no other declared Module; with one Module this is\n")
-	b.WriteString("      # vacuously true and starts binding the moment you split Modules.\n")
+	b.WriteString("      # An allow-list of other declared Zones. Empty means this Zone\n")
+	b.WriteString("      # may import no other declared Zone; with one Zone this is\n")
+	b.WriteString("      # vacuously true and starts binding the moment you split Zones.\n")
 	b.WriteString("      internal: []\n")
 	return b.String()
 }
 
 // adoptingRuleset renders a ruleset that extends the Pattern with the
-// drafted Installation. A Module the Installation leaves unbound is
+// drafted Installation. A Zone the Installation leaves unbound is
 // written as a commented bind entry: the loader then names it unbound,
 // so the owner binds it before the first check.
 func adoptingRuleset(p rule.Pattern, inst rule.Installation, languages []string) string {
@@ -217,21 +217,21 @@ func adoptingRuleset(p rule.Pattern, inst rule.Installation, languages []string)
 }
 
 // extendsEntry renders one extends list item at the given indent: the
-// reference, then a bind entry per Pattern Module, commented out when
-// the Installation leaves the Module unbound. When nothing is bound the
+// reference, then a bind entry per Pattern Zone, commented out when
+// the Installation leaves the Zone unbound. When nothing is bound the
 // whole bind block is commented, so the document stays valid and the
-// loader names the unbound Modules.
+// loader names the unbound Zones.
 func extendsEntry(inst rule.Installation, indent string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s- pattern: %s\n", indent, inst.Reference())
-	fmt.Fprintf(&b, "%s  # bind maps every Pattern Module to the paths it owns here. Paths live\n", indent)
+	fmt.Fprintf(&b, "%s  # bind maps every Pattern Zone to the paths it owns here. Paths live\n", indent)
 	fmt.Fprintf(&b, "%s  # only in bind: the Pattern's Rules never change when a folder moves.\n", indent)
 	off := ""
 	if len(inst.Bindings()) == 0 {
 		off = "# "
 	}
 	fmt.Fprintf(&b, "%s  %sbind:\n", indent, off)
-	for _, m := range inst.Modules() {
+	for _, m := range inst.Zones() {
 		fmt.Fprintf(&b, "%s    # %s\n", indent, m.Description())
 		bound, ok := inst.Binding(m.Name())
 		if !ok {

@@ -43,8 +43,8 @@ type RulesetEditor interface {
 	// Exists reports whether the ruleset file is present.
 	Exists() (bool, error)
 	// Extend adds the extends entry, or replaces the entry of the same
-	// namespace and name keeping its bindings. A Module the ruleset
-	// already declares under the Pattern Module's name is bound to the
+	// namespace and name keeping its bindings. A Zone the ruleset
+	// already declares under the Pattern Zone's name is bound to the
 	// declared paths, and the declaration is folded into the Binding.
 	Extend(inst rule.Installation) (RulesetChange, error)
 }
@@ -57,10 +57,10 @@ type RulesetChange struct {
 	// Pattern was moved from, "" when the entry is new.
 	Replaced string
 	// Installation is the extends entry as written, with any Binding
-	// taken over from a declared Module.
+	// taken over from a declared Zone.
 	Installation rule.Installation
-	// Adopted lists the declared Modules folded into Bindings.
-	Adopted []rule.ModuleName
+	// Adopted lists the declared Zones folded into Bindings.
+	Adopted []rule.ZoneName
 }
 
 // PatternPublisher writes one Available Pattern into a Registry tree

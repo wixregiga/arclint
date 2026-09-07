@@ -86,6 +86,9 @@ func New(spec Spec) (Rule, error) {
 	if err := acceptsParams(spec.Type, spec.Params, spec.Expansion); err != nil {
 		return fail(err)
 	}
+	if err := respectsBuiltIn(id, spec); err != nil {
+		return fail(err)
+	}
 	severity, err := ParseSeverity(spec.Severity)
 	if err != nil {
 		return fail(err)
@@ -94,6 +97,12 @@ func New(spec Spec) (Rule, error) {
 		return fail(err)
 	}
 	enforcement := BuiltinEnforcement(spec.Type)
+	if inv, ok := builtInInvariant(id); ok {
+		enforcement, err = builtInEnforcement(inv)
+		if err != nil {
+			return fail(err)
+		}
+	}
 	if spec.Enforcement != nil {
 		enforcement = *spec.Enforcement
 	}
@@ -167,10 +176,10 @@ func acceptsParams(t Type, p Params, e *Expansion) error {
 // expanded structure Rule: the source it ranges over and the globs the
 // recorded language currently derives.
 func deriveExpandedClaim(a Applicability, p StructureParams, e Expansion) string {
-	modules := a.Modules()
-	scope := fmt.Sprintf("Modules %s", moduleList(modules))
-	if len(modules) == 1 {
-		scope = fmt.Sprintf("Module %q", modules[0])
+	zones := a.Zones()
+	scope := fmt.Sprintf("Zones %s", zoneList(zones))
+	if len(zones) == 1 {
+		scope = fmt.Sprintf("Zone %q", zones[0])
 	}
 	if len(p.Require)+len(p.Forbid) == 0 {
 		return fmt.Sprintf("%s: derives structure obligations from each recorded %s; none recorded yet", scope, e.Source())
@@ -179,15 +188,15 @@ func deriveExpandedClaim(a Applicability, p StructureParams, e Expansion) string
 }
 
 // validateScope keeps Applicability coherent with the Rule Type:
-// module-scoped Types bind to at least one Module; graph Types range
-// over the repository's Module graph.
+// zone-scoped Types bind to at least one Zone; graph Types range
+// over the repository's Zone graph.
 func validateScope(t Type, a Applicability) error {
 	switch t {
-	case TypeConsumes, TypeStructure, TypeNaming, TypeInvariants:
-		if len(a.Modules()) == 0 {
-			return fmt.Errorf("%s rule requires module applicability", t)
+	case TypeConsumes, TypeStructure, TypeNaming:
+		if len(a.Zones()) == 0 {
+			return fmt.Errorf("%s rule requires zone applicability", t)
 		}
-	case TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic:
+	case TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic, TypeDomain:
 		if !a.EntireRepository() {
 			return fmt.Errorf("%s rule requires repository applicability", t)
 		}
@@ -204,21 +213,21 @@ func validateScope(t Type, a Applicability) error {
 func deriveClaim(a Applicability, p Params) string {
 	proposition := p.proposition()
 	switch p.Type() {
-	case TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic:
+	case TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic, TypeDomain:
 		return proposition
-	case TypeConsumes, TypeStructure, TypeNaming, TypeInvariants, TypeContent, TypeExtension:
-		// Module-scoped Types: the Claim carries the Modules below.
+	case TypeConsumes, TypeStructure, TypeNaming, TypeContent, TypeExtension:
+		// Zone-scoped Types: the Claim carries the Zones below.
 	}
-	modules := a.Modules()
-	switch len(modules) {
+	zones := a.Zones()
+	switch len(zones) {
 	case 0:
-		// Only content and extension Rules reach here without Modules:
+		// Only content and extension Rules reach here without Zones:
 		// repository applicability, so the proposition stands alone.
 		return proposition
 	case 1:
-		return fmt.Sprintf("Module %q: %s", modules[0], proposition)
+		return fmt.Sprintf("Zone %q: %s", zones[0], proposition)
 	}
-	return fmt.Sprintf("Modules %s: %s", moduleList(modules), proposition)
+	return fmt.Sprintf("Zones %s: %s", zoneList(zones), proposition)
 }
 
 // ID returns the stable Rule identity.
@@ -262,6 +271,14 @@ func (r Rule) Suppressions() []Suppression {
 
 // Tests returns the Rule's deterministic scenarios.
 func (r Rule) Tests() []Test { return append([]Test(nil), r.tests...) }
+
+// BuiltIn reports whether arclint composes this Rule from the
+// Domain-Driven Design meta-model rather than a ruleset spelling it:
+// its id is a check-level block invariant (see BuiltIn).
+func (r Rule) BuiltIn() bool {
+	_, ok := builtInInvariant(r.id)
+	return ok
+}
 
 // Provenance returns the distributing Pattern reference, when any.
 func (r Rule) Provenance() (PatternReference, bool) {
@@ -314,21 +331,21 @@ func (r Rule) Disablement() (Disablement, bool) {
 }
 
 // AppliesToFile decides whether a File is a Rule Subject, given its
-// resolved Module membership.
-func (r Rule) AppliesToFile(path string, memberOf []ModuleName) bool {
+// resolved Zone membership.
+func (r Rule) AppliesToFile(path string, memberOf []ZoneName) bool {
 	return r.applicability.SelectsFile(path, memberOf)
 }
 
-// ReferencedModules returns every ModuleName the Rule speaks about:
-// the Modules it applies to plus any its parameters name (an import
-// allow-list, a layer order, a protected Module and its allowed
-// importers, an acyclic Module set). Each name appears once, in first
+// ReferencedZones returns every ZoneName the Rule speaks about:
+// the Zones it applies to plus any its parameters name (an import
+// allow-list, a layer order, a protected Zone and its allowed
+// importers, an acyclic Zone set). Each name appears once, in first
 // mention order. A Rule is well-formed only when every name here is a
-// declared Module.
-func (r Rule) ReferencedModules() []ModuleName {
-	var out []ModuleName
-	seen := map[ModuleName]bool{}
-	add := func(names ...ModuleName) {
+// declared Zone.
+func (r Rule) ReferencedZones() []ZoneName {
+	var out []ZoneName
+	seen := map[ZoneName]bool{}
+	add := func(names ...ZoneName) {
 		for _, n := range names {
 			if seen[n] {
 				continue
@@ -337,19 +354,19 @@ func (r Rule) ReferencedModules() []ModuleName {
 			out = append(out, n)
 		}
 	}
-	add(r.applicability.Modules()...)
+	add(r.applicability.Zones()...)
 	switch p := r.params.(type) {
 	case ConsumesParams:
 		if p.Internal != nil {
-			add(p.Internal.Modules()...)
+			add(p.Internal.Zones()...)
 		}
 	case LayersParams:
 		add(p.Layers...)
 	case ProtectedParams:
-		add(p.Module)
+		add(p.Zone)
 		add(p.Allow...)
 	case AcyclicParams:
-		add(p.Modules...)
+		add(p.Zones...)
 	}
 	return out
 }

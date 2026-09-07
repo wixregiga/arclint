@@ -121,7 +121,7 @@ func evaluateContent(r rule.Rule, mem membership, obs Observations) ([]Evaluatio
 	return appendNotApplicable(out, r, excluded)
 }
 
-// evaluateStructure judges each selected Module: every require glob
+// evaluateStructure judges each selected Zone: every require glob
 // must match a member file, no member file may match a forbid glob.
 func evaluateStructure(r rule.Rule, mem membership) ([]Evaluation, error) {
 	p, ok := r.Params().(rule.StructureParams)
@@ -129,12 +129,12 @@ func evaluateStructure(r rule.Rule, mem membership) ([]Evaluation, error) {
 		return nil, fmt.Errorf("rule %s: structure rule with %T params", r.ID(), r.Params())
 	}
 	var out []Evaluation
-	for _, name := range sortedModules(r.Applicability().Modules()) {
-		subject, err := rule.ModuleSubject(name)
+	for _, name := range sortedZones(r.Applicability().Zones()) {
+		subject, err := rule.ZoneSubject(name)
 		if err != nil {
 			return nil, fmt.Errorf("structure: %w", err)
 		}
-		if r.Applicability().ExcludedModule(name) {
+		if r.Applicability().ExcludedZone(name) {
 			e, err := simpleEvaluation(r, subject, OutcomeNotApplicable)
 			if err != nil {
 				return nil, err
@@ -142,7 +142,7 @@ func evaluateStructure(r rule.Rule, mem membership) ([]Evaluation, error) {
 			out = append(out, e)
 			continue
 		}
-		members := mem.moduleFiles[name]
+		members := mem.zoneFiles[name]
 		var vs []Violation
 		for _, req := range p.Require {
 			found := false
@@ -154,7 +154,7 @@ func evaluateStructure(r rule.Rule, mem membership) ([]Evaluation, error) {
 			}
 			if !found {
 				v, err := newViolation(r, subject, staticPrefix(req.String()), 0,
-					fmt.Sprintf("Module %q is missing a required file matching %q", name, req),
+					fmt.Sprintf("Zone %q is missing a required file matching %q", name, req),
 					fmt.Sprintf("create a file matching %q", req))
 				if err != nil {
 					return nil, err
@@ -178,7 +178,7 @@ func evaluateStructure(r rule.Rule, mem membership) ([]Evaluation, error) {
 					Severity:    r.Severity(),
 					Assurance:   r.Enforcement().Assurance(),
 					Evidence:    r.Enforcement().Evidence(),
-					Message:     fmt.Sprintf("path forbidden by structure rule %q of Module %q", forbid, name),
+					Message:     fmt.Sprintf("path forbidden by structure rule %q of Zone %q", forbid, name),
 					Remediation: "remove or relocate the file",
 					Provenance:  ruleProvenance(r),
 				})
@@ -214,8 +214,8 @@ func appendNotApplicable(out []Evaluation, r rule.Rule, excluded []string) ([]Ev
 	return out, nil
 }
 
-func sortedModules(names []rule.ModuleName) []rule.ModuleName {
-	out := append([]rule.ModuleName(nil), names...)
+func sortedZones(names []rule.ZoneName) []rule.ZoneName {
+	out := append([]rule.ZoneName(nil), names...)
 	for i := 1; i < len(out); i++ {
 		for j := i; j > 0 && out[j] < out[j-1]; j-- {
 			out[j], out[j-1] = out[j-1], out[j]

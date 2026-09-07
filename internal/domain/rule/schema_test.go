@@ -68,10 +68,13 @@ func TestSchemaPublishesDomainEnums(t *testing.T) {
 func TestSchemaCoversEveryRuleType(t *testing.T) {
 	doc := schemaTree(t)
 	alternatives, ok := dig(t, doc, "$defs", "rule", "oneOf").([]any)
-	if !ok || len(alternatives) != len(rule.Types())+1 {
-		t.Fatalf("rule oneOf = %v, want one shape per Type plus the override", alternatives)
+	if !ok || len(alternatives) != len(rule.AuthoredTypes())+1 {
+		t.Fatalf("rule oneOf = %v, want one shape per authored Type plus the override", alternatives)
 	}
-	for i, typ := range rule.Types() {
+	if _, ok := dig(t, doc, "$defs").(map[string]any)["domainRule"]; ok {
+		t.Errorf("a domain Rule is built in and has no authored shape")
+	}
+	for i, typ := range rule.AuthoredTypes() {
 		def := string(typ) + "Rule"
 		if ref := alternatives[i].(map[string]any)["$ref"]; ref != "#/$defs/"+def {
 			t.Errorf("rule oneOf[%d] = %v, want %s", i, ref, def)
@@ -94,7 +97,7 @@ func TestSchemaCoversEveryRuleType(t *testing.T) {
 		}
 		_, hasOn := props["on"]
 		switch typ.Scope() {
-		case rule.ScopeModules, rule.ScopeOneModule:
+		case rule.ScopeZones, rule.ScopeOneZone:
 			if !hasOn || !containsString(required, "on") {
 				t.Errorf("%s must require on", def)
 			}
@@ -102,7 +105,7 @@ func TestSchemaCoversEveryRuleType(t *testing.T) {
 			if hasOn {
 				t.Errorf("%s must not accept on", def)
 			}
-		case rule.ScopeModulesOrRepository:
+		case rule.ScopeZonesOrRepository:
 			if !hasOn || containsString(required, "on") {
 				t.Errorf("%s must accept an optional on", def)
 			}
@@ -135,7 +138,7 @@ func TestSchemaRejectsUnknownKeys(t *testing.T) {
 		t.Errorf("document additionalProperties = %v, want false", got)
 	}
 	shapes := []string{"override", "exclusion", "suppression"}
-	for _, typ := range rule.Types() {
+	for _, typ := range rule.AuthoredTypes() {
 		shapes = append(shapes, string(typ)+"Rule")
 	}
 	for _, name := range shapes {
@@ -157,8 +160,8 @@ func TestSchemaRejectsUnknownKeys(t *testing.T) {
 		}
 	}
 	patternRules, ok := dig(t, doc, "then", "properties", "rules", "additionalProperties", "oneOf").([]any)
-	if !ok || len(patternRules) != len(rule.Types()) {
-		t.Fatalf("pattern branch rules oneOf = %v, want one alternative per Type and no override", patternRules)
+	if !ok || len(patternRules) != len(rule.AuthoredTypes()) {
+		t.Fatalf("pattern branch rules oneOf = %v, want one alternative per authored Type and no override", patternRules)
 	}
 	for _, alt := range patternRules {
 		if ref := alt.(map[string]any)["$ref"]; ref == "#/$defs/override" {

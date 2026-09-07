@@ -24,7 +24,7 @@ type RuleDetail struct {
 	Facts            []string
 	Limitations      []string
 	EntireRepository bool
-	Modules          []string
+	Zones            []string
 	Files            []string
 	Exclusions       []PolicyNote
 	Suppressions     []PolicyNote
@@ -65,8 +65,8 @@ func (uc ShowRule) Execute(id string) (RuleDetail, error) {
 		detail.Facts = append(detail.Facts, string(f))
 	}
 	detail.Limitations = r.Enforcement().Limitations()
-	for _, m := range r.Applicability().Modules() {
-		detail.Modules = append(detail.Modules, string(m))
+	for _, m := range r.Applicability().Zones() {
+		detail.Zones = append(detail.Zones, string(m))
 	}
 	for _, g := range r.Applicability().Files() {
 		detail.Files = append(detail.Files, g.String())
@@ -76,7 +76,7 @@ func (uc ShowRule) Execute(id string) (RuleDetail, error) {
 		for _, g := range e.Paths() {
 			note.Selectors = append(note.Selectors, g.String())
 		}
-		for _, m := range e.Modules() {
+		for _, m := range e.Zones() {
 			note.Selectors = append(note.Selectors, string(m))
 		}
 		detail.Exclusions = append(detail.Exclusions, note)
@@ -114,6 +114,7 @@ func summarize(r rule.Rule) RuleSummary {
 		Severity:  string(r.Severity()),
 		Claim:     r.Claim().Statement(),
 		Assurance: string(r.Enforcement().Assurance()),
+		BuiltIn:   r.BuiltIn(),
 	}
 	if ref, ok := r.Provenance(); ok {
 		s.Provenance = ref.String()

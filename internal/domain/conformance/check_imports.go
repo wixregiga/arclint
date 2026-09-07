@@ -8,7 +8,7 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/rule"
 )
 
-// evaluateConsumes judges every code file of the Rule's Modules
+// evaluateConsumes judges every code file of the Rule's Zones
 // against the import policy. Files in languages without produced facts
 // evaluate unsupported; analysis failures evaluate failed.
 func evaluateConsumes(r rule.Rule, mem membership, obs Observations) ([]Evaluation, error) {
@@ -17,9 +17,9 @@ func evaluateConsumes(r rule.Rule, mem membership, obs Observations) ([]Evaluati
 		return nil, fmt.Errorf("rule %s: consumes rule with %T params", r.ID(), r.Params())
 	}
 	var out []Evaluation
-	for _, name := range sortedModules(r.Applicability().Modules()) {
-		if r.Applicability().ExcludedModule(name) {
-			subject, err := rule.ModuleSubject(name)
+	for _, name := range sortedZones(r.Applicability().Zones()) {
+		if r.Applicability().ExcludedZone(name) {
+			subject, err := rule.ZoneSubject(name)
 			if err != nil {
 				return nil, fmt.Errorf("consumes: %w", err)
 			}
@@ -30,7 +30,7 @@ func evaluateConsumes(r rule.Rule, mem membership, obs Observations) ([]Evaluati
 			out = append(out, e)
 			continue
 		}
-		selected, excluded := partitionModuleFiles(r, name, mem)
+		selected, excluded := partitionZoneFiles(r, name, mem)
 		var err error
 		out, err = appendNotApplicable(out, r, excluded)
 		if err != nil {
@@ -84,7 +84,7 @@ func evaluateConsumes(r rule.Rule, mem membership, obs Observations) ([]Evaluati
 	return out, nil
 }
 
-func consumesViolations(r rule.Rule, p rule.ConsumesParams, self rule.ModuleName,
+func consumesViolations(r rule.Rule, p rule.ConsumesParams, self rule.ZoneName,
 	subject rule.Subject, path string, imports []Import, mem membership,
 ) ([]Violation, error) {
 	var vs []Violation
@@ -101,16 +101,16 @@ func consumesViolations(r rule.Rule, p rule.ConsumesParams, self rule.ModuleName
 		case ImportStdlib:
 			if p.Stdlib.Forbids() {
 				if err := add(imp.Line,
-					fmt.Sprintf("standard-library import %q is forbidden for Module %q", imp.Path, self),
-					"remove the import or allow standard-library imports for the Module"); err != nil {
+					fmt.Sprintf("standard-library import %q is forbidden for Zone %q", imp.Path, self),
+					"remove the import or allow standard-library imports for the Zone"); err != nil {
 					return nil, err
 				}
 			}
 		case ImportExternal:
 			if p.External.Forbids() {
 				if err := add(imp.Line,
-					fmt.Sprintf("external import %q is forbidden for Module %q", imp.Path, self),
-					"remove the import or allow external imports for the Module"); err != nil {
+					fmt.Sprintf("external import %q is forbidden for Zone %q", imp.Path, self),
+					"remove the import or allow external imports for the Zone"); err != nil {
 					return nil, err
 				}
 			}
@@ -118,9 +118,9 @@ func consumesViolations(r rule.Rule, p rule.ConsumesParams, self rule.ModuleName
 			if p.Internal == nil {
 				continue
 			}
-			targets := mem.targetModules(imp)
-			if moduleIn(targets, self) {
-				continue // the Module itself, never a violation
+			targets := mem.targetZones(imp)
+			if zoneIn(targets, self) {
+				continue // the Zone itself, never a violation
 			}
 			permitted := false
 			for _, t := range targets {
@@ -135,15 +135,15 @@ func consumesViolations(r rule.Rule, p rule.ConsumesParams, self rule.ModuleName
 			var message string
 			switch {
 			case imp.TargetDir == "" && imp.TargetFile == "":
-				message = fmt.Sprintf("import %q is internal but does not resolve into the repository, and Module %q restricts internal imports", imp.Path, self)
+				message = fmt.Sprintf("import %q is internal but does not resolve into the repository, and Zone %q restricts internal imports", imp.Path, self)
 			case len(targets) == 0:
-				message = fmt.Sprintf("import %q resolves to code outside any declared Module, not allowed for Module %q", imp.Path, self)
+				message = fmt.Sprintf("import %q resolves to code outside any declared Zone, not allowed for Zone %q", imp.Path, self)
 			default:
-				message = fmt.Sprintf("import %q resolves to Module(s) %s, not in the allow-list of Module %q",
-					imp.Path, quotedModules(targets), self)
+				message = fmt.Sprintf("import %q resolves to Zone(s) %s, not in the allow-list of Zone %q",
+					imp.Path, quotedZones(targets), self)
 			}
 			if err := add(imp.Line, message,
-				"add the target Module to the allow-list or remove the import"); err != nil {
+				"add the target Zone to the allow-list or remove the import"); err != nil {
 				return nil, err
 			}
 		case ImportUnknown, ImportCgo:
@@ -155,30 +155,30 @@ func consumesViolations(r rule.Rule, p rule.ConsumesParams, self rule.ModuleName
 	return vs, nil
 }
 
-// edge is one internal import occurrence lifted to Module level.
-// from is "" when the importing file belongs to no declared Module.
+// edge is one internal import occurrence lifted to Zone level.
+// from is "" when the importing file belongs to no declared Zone.
 type edge struct {
-	from, to   rule.ModuleName
+	from, to   rule.ZoneName
 	path       string
 	line       int
 	importPath string
 }
 
-// moduleEdges lifts the file-level import graph to declared Modules,
+// zoneEdges lifts the file-level import graph to declared Zones,
 // preserving file order for deterministic reporting.
-func moduleEdges(mem membership, obs Observations) []edge {
+func zoneEdges(mem membership, obs Observations) []edge {
 	var out []edge
 	for _, f := range mem.files {
 		facts, ok := obs.FactsFor(f)
 		if !ok || !facts.Supports(rule.FactImports) {
 			continue
 		}
-		froms := mem.fileModules[f]
+		froms := mem.fileZones[f]
 		for _, imp := range facts.Imports {
 			if imp.Class != ImportInternal {
 				continue
 			}
-			for _, to := range mem.targetModules(imp) {
+			for _, to := range mem.targetZones(imp) {
 				if len(froms) == 0 {
 					out = append(out, edge{from: "", to: to, path: f, line: imp.Line, importPath: imp.Path})
 					continue
@@ -198,7 +198,7 @@ func moduleEdges(mem membership, obs Observations) []edge {
 // evaluateGraph judges layers, protected, independence, and acyclic
 // Rules over the observed import graph.
 func evaluateGraph(r rule.Rule, mem membership, obs Observations) ([]Evaluation, error) {
-	edges := moduleEdges(mem, obs)
+	edges := zoneEdges(mem, obs)
 	switch p := r.Params().(type) {
 	case rule.LayersParams:
 		return evaluateLayers(r, p, edges)
@@ -207,22 +207,75 @@ func evaluateGraph(r rule.Rule, mem membership, obs Observations) ([]Evaluation,
 	case rule.IndependenceParams:
 		return evaluateIndependence(r, p, mem, obs)
 	case rule.AcyclicParams:
+		if r.BuiltIn() {
+			edges = betweenSeparateCodes(edges, mem, obs)
+		}
 		return evaluateAcyclic(r, p, edges, mem)
 	}
 	return nil, fmt.Errorf("rule %s: graph rule with %T params", r.ID(), r.Params())
 }
 
-// evaluateLayers judges each layered Module: it may import same or
+// betweenSeparateCodes keeps the edges that are dependencies between two
+// codes, for the built-in acyclic rule. It drops the edges between a
+// Zone and a Zone nested inside it, where one Zone's observed files are
+// all files of the other, since an import across that pair is movement
+// within one code; and it drops the imports of a Go external test
+// package (package name ending in _test), which Go compiles as a
+// separate package, so its imports are the test's and not the Zone's.
+func betweenSeparateCodes(edges []edge, mem membership, obs Observations) []edge {
+	held := map[rule.ZoneName]map[string]bool{}
+	for name, files := range mem.zoneFiles {
+		set := make(map[string]bool, len(files))
+		for _, f := range files {
+			set[f] = true
+		}
+		held[name] = set
+	}
+	within := func(inner, outer rule.ZoneName) bool {
+		if len(held[inner]) == 0 {
+			return false
+		}
+		for f := range held[inner] {
+			if !held[outer][f] {
+				return false
+			}
+		}
+		return true
+	}
+	out := make([]edge, 0, len(edges))
+	for _, e := range edges {
+		if e.from != "" && (within(e.from, e.to) || within(e.to, e.from)) {
+			continue
+		}
+		if externalTestPackage(e.path, obs) {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
+// externalTestPackage reports whether the file is Go code declared in
+// an external test package.
+func externalTestPackage(file string, obs Observations) bool {
+	facts, ok := obs.FactsFor(file)
+	if !ok || facts.Language != rule.LanguageGo {
+		return false
+	}
+	return strings.HasSuffix(facts.Package, "_test")
+}
+
+// evaluateLayers judges each layered Zone: it may import same or
 // lower layers, never higher.
 func evaluateLayers(r rule.Rule, p rule.LayersParams, edges []edge) ([]Evaluation, error) {
-	index := map[rule.ModuleName]int{}
+	index := map[rule.ZoneName]int{}
 	for i, name := range p.Layers {
 		index[name] = i
 	}
 	var out []Evaluation
 	for _, name := range p.Layers {
-		if r.Applicability().ExcludedModule(name) {
-			subject, err := rule.ModuleSubject(name)
+		if r.Applicability().ExcludedZone(name) {
+			subject, err := rule.ZoneSubject(name)
 			if err != nil {
 				return nil, fmt.Errorf("layers: %w", err)
 			}
@@ -233,7 +286,7 @@ func evaluateLayers(r rule.Rule, p rule.LayersParams, edges []edge) ([]Evaluatio
 			out = append(out, e)
 			continue
 		}
-		subject, err := rule.ModuleSubject(name)
+		subject, err := rule.ZoneSubject(name)
 		if err != nil {
 			return nil, fmt.Errorf("layers: %w", err)
 		}
@@ -247,9 +300,9 @@ func evaluateLayers(r rule.Rule, p rule.LayersParams, edges []edge) ([]Evaluatio
 				continue
 			}
 			v, err := newViolation(r, subject, w.path, w.line,
-				fmt.Sprintf("Module %q (layer %d) may not import higher layer %q (layer %d): import of %q",
+				fmt.Sprintf("Zone %q (layer %d) may not import higher layer %q (layer %d): import of %q",
 					name, index[name], w.to, ti, w.importPath),
-				"depend only on Modules at the same or a lower layer")
+				"depend only on Zones at the same or a lower layer")
 			if err != nil {
 				return nil, err
 			}
@@ -264,22 +317,22 @@ func evaluateLayers(r rule.Rule, p rule.LayersParams, edges []edge) ([]Evaluatio
 	return out, nil
 }
 
-// evaluateProtected judges the protected Module: an importer is
-// allowed when any of its Modules is the protected Module or on the
+// evaluateProtected judges the protected Zone: an importer is
+// allowed when any of its Zones is the protected Zone or on the
 // allow-list. One Violation per import occurrence.
 func evaluateProtected(r rule.Rule, p rule.ProtectedParams, edges []edge, mem membership) ([]Evaluation, error) {
-	subject, err := rule.ModuleSubject(p.Module)
+	subject, err := rule.ZoneSubject(p.Zone)
 	if err != nil {
 		return nil, fmt.Errorf("protected: %w", err)
 	}
-	if r.Applicability().ExcludedModule(p.Module) {
+	if r.Applicability().ExcludedZone(p.Zone) {
 		e, err := simpleEvaluation(r, subject, OutcomeNotApplicable)
 		if err != nil {
 			return nil, err
 		}
 		return []Evaluation{e}, nil
 	}
-	allowed := append([]rule.ModuleName{p.Module}, p.Allow...)
+	allowed := append([]rule.ZoneName{p.Zone}, p.Allow...)
 	type occurrence struct {
 		path string
 		line int
@@ -287,13 +340,13 @@ func evaluateProtected(r rule.Rule, p rule.ProtectedParams, edges []edge, mem me
 	seen := map[occurrence]bool{}
 	var vs []Violation
 	for _, w := range edges {
-		if w.to != p.Module {
+		if w.to != p.Zone {
 			continue
 		}
-		importers := mem.fileModules[w.path]
+		importers := mem.fileZones[w.path]
 		permitted := false
 		for _, m := range importers {
-			if moduleIn(allowed, m) {
+			if zoneIn(allowed, m) {
 				permitted = true
 				break
 			}
@@ -306,14 +359,14 @@ func evaluateProtected(r rule.Rule, p rule.ProtectedParams, edges []edge, mem me
 			continue
 		}
 		seen[occ] = true
-		source := fmt.Sprintf("Module(s) %s", quotedModules(importers))
+		source := fmt.Sprintf("Zone(s) %s", quotedZones(importers))
 		if len(importers) == 0 {
-			source = "code outside any declared Module"
+			source = "code outside any declared Zone"
 		}
 		v, err := newViolation(r, subject, w.path, w.line,
-			fmt.Sprintf("Module %q is protected (importable only by %s); import of %q from %s",
-				p.Module, quotedModules(p.Allow), w.importPath, source),
-			fmt.Sprintf("add the importer to the allow-list protecting %q or remove the import", p.Module))
+			fmt.Sprintf("Zone %q is protected (importable only by %s); import of %q from %s",
+				p.Zone, quotedZones(p.Allow), w.importPath, source),
+			fmt.Sprintf("add the importer to the allow-list protecting %q or remove the import", p.Zone))
 		if err != nil {
 			return nil, err
 		}
@@ -327,7 +380,7 @@ func evaluateProtected(r rule.Rule, p rule.ProtectedParams, edges []edge, mem me
 }
 
 // evaluateIndependence judges sibling Folders: a file under member A
-// may not import a target under member B. Module-owned candidates are
+// may not import a target under member B. Zone-owned candidates are
 // not members. Fewer than two members is vacuously satisfied.
 func evaluateIndependence(r rule.Rule, p rule.IndependenceParams, mem membership, obs Observations) ([]Evaluation, error) {
 	members := independenceMembers(p, mem)
@@ -397,7 +450,7 @@ func independenceMembers(p rule.IndependenceParams, mem membership) []string {
 			if seen[candidate] || !g.Match(candidate) {
 				continue
 			}
-			if independenceModuleOwns(mem, candidate) {
+			if independenceZoneOwns(mem, candidate) {
 				continue
 			}
 			seen[candidate] = true
@@ -408,9 +461,9 @@ func independenceMembers(p rule.IndependenceParams, mem membership) []string {
 	return out
 }
 
-func independenceModuleOwns(mem membership, folder string) bool {
+func independenceZoneOwns(mem membership, folder string) bool {
 	for _, name := range mem.names {
-		if mem.modules[name].Contains(folder) {
+		if mem.zones[name].Contains(folder) {
 			return true
 		}
 	}
@@ -444,23 +497,23 @@ func independenceSubject(members []string, p rule.IndependenceParams) (rule.Subj
 	return subject, nil
 }
 
-// evaluateAcyclic judges each Module in scope: it participates in no
+// evaluateAcyclic judges each Zone in scope: it participates in no
 // dependency cycle. Every cycle member reports with its own witness
 // edge inside the cycle.
 func evaluateAcyclic(r rule.Rule, p rule.AcyclicParams, edges []edge, mem membership) ([]Evaluation, error) {
-	scope := p.Modules
+	scope := p.Zones
 	if len(scope) == 0 {
 		scope = mem.names
 	}
-	scope = sortedModules(scope)
+	scope = sortedZones(scope)
 	cycles := stronglyConnected(scope, edges)
 	var out []Evaluation
 	for _, name := range scope {
-		subject, err := rule.ModuleSubject(name)
+		subject, err := rule.ZoneSubject(name)
 		if err != nil {
 			return nil, fmt.Errorf("acyclic: %w", err)
 		}
-		if r.Applicability().ExcludedModule(name) {
+		if r.Applicability().ExcludedZone(name) {
 			e, err := simpleEvaluation(r, subject, OutcomeNotApplicable)
 			if err != nil {
 				return nil, err
@@ -473,11 +526,11 @@ func evaluateAcyclic(r rule.Rule, p rule.AcyclicParams, edges []edge, mem member
 		if len(cycle) > 1 {
 			witness, found := witnessEdge(name, cycle, edges)
 			if !found {
-				return nil, fmt.Errorf("rule %s: module %q in cycle without witness edge", r.ID(), name)
+				return nil, fmt.Errorf("rule %s: zone %q in cycle without witness edge", r.ID(), name)
 			}
 			v, err := newViolation(r, subject, witness.path, witness.line,
-				fmt.Sprintf("Module %q participates in a dependency cycle: %s",
-					name, joinModules(cycle, " -> ")),
+				fmt.Sprintf("Zone %q participates in a dependency cycle: %s",
+					name, joinZones(cycle, " -> ")),
 				"break the cycle by inverting or removing one dependency")
 			if err != nil {
 				return nil, err
@@ -493,35 +546,35 @@ func evaluateAcyclic(r rule.Rule, p rule.AcyclicParams, edges []edge, mem member
 	return out, nil
 }
 
-// stronglyConnected maps each Module to its strongly connected
+// stronglyConnected maps each Zone to its strongly connected
 // component of size > 1 (its cycle), using Tarjan's algorithm with
 // iteration order fixed by sorted names.
-func stronglyConnected(nodes []rule.ModuleName, edges []edge) map[rule.ModuleName][]rule.ModuleName {
-	inScope := map[rule.ModuleName]bool{}
+func stronglyConnected(nodes []rule.ZoneName, edges []edge) map[rule.ZoneName][]rule.ZoneName {
+	inScope := map[rule.ZoneName]bool{}
 	for _, n := range nodes {
 		inScope[n] = true
 	}
-	adj := map[rule.ModuleName][]rule.ModuleName{}
-	seen := map[[2]rule.ModuleName]bool{}
+	adj := map[rule.ZoneName][]rule.ZoneName{}
+	seen := map[[2]rule.ZoneName]bool{}
 	for _, w := range edges {
 		if w.from == "" || w.from == w.to || !inScope[w.from] || !inScope[w.to] {
 			continue
 		}
-		key := [2]rule.ModuleName{w.from, w.to}
+		key := [2]rule.ZoneName{w.from, w.to}
 		if !seen[key] {
 			seen[key] = true
 			adj[w.from] = append(adj[w.from], w.to)
 		}
 	}
 
-	index := map[rule.ModuleName]int{}
-	low := map[rule.ModuleName]int{}
-	onStack := map[rule.ModuleName]bool{}
-	var stack []rule.ModuleName
+	index := map[rule.ZoneName]int{}
+	low := map[rule.ZoneName]int{}
+	onStack := map[rule.ZoneName]bool{}
+	var stack []rule.ZoneName
 	next := 0
-	cycles := map[rule.ModuleName][]rule.ModuleName{}
-	var strongconnect func(v rule.ModuleName)
-	strongconnect = func(v rule.ModuleName) {
+	cycles := map[rule.ZoneName][]rule.ZoneName{}
+	var strongconnect func(v rule.ZoneName)
+	strongconnect = func(v rule.ZoneName) {
 		index[v] = next
 		low[v] = next
 		next++
@@ -538,7 +591,7 @@ func stronglyConnected(nodes []rule.ModuleName, edges []edge) map[rule.ModuleNam
 			}
 		}
 		if low[v] == index[v] {
-			var scc []rule.ModuleName
+			var scc []rule.ZoneName
 			for {
 				n := len(stack) - 1
 				w := stack[n]
@@ -550,14 +603,14 @@ func stronglyConnected(nodes []rule.ModuleName, edges []edge) map[rule.ModuleNam
 				}
 			}
 			if len(scc) > 1 {
-				scc = sortedModules(scc)
+				scc = sortedZones(scc)
 				for _, m := range scc {
 					cycles[m] = scc
 				}
 			}
 		}
 	}
-	for _, v := range sortedModules(nodes) {
+	for _, v := range sortedZones(nodes) {
 		if _, ok := index[v]; !ok {
 			strongconnect(v)
 		}
@@ -565,18 +618,18 @@ func stronglyConnected(nodes []rule.ModuleName, edges []edge) map[rule.ModuleNam
 	return cycles
 }
 
-// witnessEdge finds the first import occurrence from the Module to
+// witnessEdge finds the first import occurrence from the Zone to
 // another cycle member.
-func witnessEdge(from rule.ModuleName, cycle []rule.ModuleName, edges []edge) (edge, bool) {
+func witnessEdge(from rule.ZoneName, cycle []rule.ZoneName, edges []edge) (edge, bool) {
 	for _, w := range edges {
-		if w.from == from && moduleIn(cycle, w.to) {
+		if w.from == from && zoneIn(cycle, w.to) {
 			return w, true
 		}
 	}
 	return edge{}, false
 }
 
-func moduleIn(list []rule.ModuleName, m rule.ModuleName) bool {
+func zoneIn(list []rule.ZoneName, m rule.ZoneName) bool {
 	for _, v := range list {
 		if v == m {
 			return true
@@ -585,11 +638,11 @@ func moduleIn(list []rule.ModuleName, m rule.ModuleName) bool {
 	return false
 }
 
-func quotedModules(names []rule.ModuleName) string {
+func quotedZones(names []rule.ZoneName) string {
 	if len(names) == 0 {
 		return "[]"
 	}
-	sorted := append([]rule.ModuleName(nil), names...)
+	sorted := append([]rule.ZoneName(nil), names...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
 	quoted := make([]string, len(sorted))
 	for i, n := range sorted {
@@ -598,7 +651,7 @@ func quotedModules(names []rule.ModuleName) string {
 	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
-func joinModules(names []rule.ModuleName, sep string) string {
+func joinZones(names []rule.ZoneName, sep string) string {
 	parts := make([]string, len(names))
 	for i, n := range names {
 		parts[i] = string(n)

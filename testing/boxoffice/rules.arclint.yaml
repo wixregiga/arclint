@@ -5,7 +5,7 @@
 # domain-only.
 #
 # Every Rule is keyed by its id and carries exactly one assertion;
-# `on` names the Module(s) it judges. Rules with no `on` range over
+# `on` names the Zone(s) it judges. Rules with no `on` range over
 # the whole repository.
 
 runtime: [go, ts]
@@ -17,7 +17,7 @@ scan:
     - "web/node_modules/**"
     - "web/dist/**"
 
-modules:
+zones:
   composition:
     paths: "cmd/**"
     description: "Composition root: flags, wiring, the http server."
@@ -62,16 +62,11 @@ rules:
   # ---- entities ------------------------------------------------------
 
   entities/domain-only-imports:
-    description: "The entities layer imports no other Module and no third-party package."
+    description: "The entities layer imports no other Zone and no third-party package."
     on: entities
     imports:
       internal: []
       external: forbid
-
-  entities/contracts-visible:
-    description: "Every aggregate's invariants are visible through its cluster method."
-    on: entities
-    invariants: {}
 
   # The expansion showcase: every recorded aggregate owes a slice
   # named after it, its repository interface, and its tests.
@@ -204,7 +199,7 @@ rules:
   # ---- shared --------------------------------------------------------
 
   shared/kit-stands-alone:
-    description: "The shared kit imports no other Module and no third-party package."
+    description: "The shared kit imports no other Zone and no third-party package."
     on: shared
     imports:
       internal: []
@@ -213,7 +208,7 @@ rules:
   # ---- composition ---------------------------------------------------
 
   composition/selects-everything:
-    description: "Composition imports every server Module it wires."
+    description: "Composition imports every server Zone it wires."
     on: composition
     imports:
       internal: [app, features, entities, shared, web_embed]
@@ -230,7 +225,7 @@ rules:
   # ---- web embed -----------------------------------------------------
 
   web-embed/stdlib-only:
-    description: "The embedded web app carrier imports no other Module and no third-party package."
+    description: "The embedded web app carrier imports no other Zone and no third-party package."
     on: web_embed
     imports:
       internal: []
@@ -255,7 +250,7 @@ rules:
   # ---- web shared ----------------------------------------------------
 
   web-shared/kit-stands-alone:
-    description: "The web shared kit imports no other Module."
+    description: "The web shared kit imports no other Zone."
     on: web_shared
     imports:
       internal: []
@@ -358,5 +353,5 @@ rules:
     layers: [web_app, web_pages, web_features, web_shared]
 
   dependencies/acyclic:
-    description: "Dependencies among the layer Modules contain no cycle."
+    description: "Dependencies among the layer Zones contain no cycle."
     acyclic: [composition, app, features, entities, shared, web_embed, web_app, web_pages, web_features, web_shared]

@@ -1,10 +1,11 @@
 // Package vocab holds the project's recorded Ubiquitous Language
 // vocabulary: the domain definitions a project declares in
-// domain.arclint.yaml, the ArcLint-owned concept kinds and their
-// meanings, the mutation semantics for maintaining the vocabulary, its
-// published JSON Schema, the domain-librarian skill taxonomy, and the
-// Repository port that persists it. UbiquitousLanguage is a value with
-// invariants, not a second aggregate root: Rule stays the sole aggregate.
+// domain.arclint.yaml, the Domain-Driven Design meta-model that defines
+// every concept arclint speaks about, the mutation semantics for
+// maintaining the vocabulary, its published JSON Schema, the
+// domain-librarian skill taxonomy, and the Repository port that persists
+// it. UbiquitousLanguage is a value with invariants, not a second
+// aggregate root: Rule stays the sole aggregate.
 package vocab
 
 import (
@@ -13,15 +14,16 @@ import (
 )
 
 // Concept is one value from the finite ArcLint-owned set of domain
-// concept kinds. Spellings use underscores (hyphen forms are rejected).
+// concept kinds a project records. Every Concept is the term of a
+// building block of the meta-model, which is where its meaning lives.
+// Spellings use underscores (hyphen forms are rejected).
 type Concept string
 
-// The published concept kinds. Aggregate and AggregateRoot are Entity
-// designations, not separate stored objects. assertion records into
-// the assertions section. specification records into specifications.
-// business_rule always resolves to an invariant or an assertion, never
-// to its own section. domain_event records into the events section.
-// bounded_context is the context itself.
+// The published concept kinds. An aggregate is recorded as its root;
+// aggregate_root is the same entry. An entity is a member of an
+// aggregate. business_rule always resolves to an invariant or an
+// assertion, never to its own section. bounded_context is the context
+// itself. question is an open question of a context, never a rule.
 const (
 	ConceptEntity         Concept = "entity"
 	ConceptValueObject    Concept = "value_object"
@@ -31,8 +33,10 @@ const (
 	ConceptAggregate      Concept = "aggregate"
 	ConceptAggregateRoot  Concept = "aggregate_root"
 	ConceptDomainEvent    Concept = "domain_event"
+	ConceptDomainService  Concept = "domain_service"
 	ConceptBoundedContext Concept = "bounded_context"
 	ConceptBusinessRule   Concept = "business_rule"
+	ConceptQuestion       Concept = "question"
 )
 
 // Concepts returns the published enum in stable explain order.
@@ -46,8 +50,10 @@ func Concepts() []Concept {
 		ConceptAggregate,
 		ConceptAggregateRoot,
 		ConceptDomainEvent,
+		ConceptDomainService,
 		ConceptBoundedContext,
 		ConceptBusinessRule,
+		ConceptQuestion,
 	}
 }
 
@@ -71,29 +77,35 @@ func ParseListing(s string) (Concept, error) {
 	return "", fmt.Errorf("domain listing %q: not one of %s", s, joinListings(Concepts()))
 }
 
-// Listing returns the plural spelling used by list filters and headers.
+// Listing returns the plural spelling used by list filters and
+// headers: the domain file's section name wherever the concept has a
+// section.
 func Listing(c Concept) string {
 	switch c {
 	case ConceptEntity:
-		return "entities"
+		return string(SectionEntities)
 	case ConceptValueObject:
-		return "value_objects"
+		return string(SectionValueObjects)
 	case ConceptInvariant:
-		return "invariants"
+		return string(SectionInvariants)
 	case ConceptAssertion:
-		return "assertions"
+		return string(SectionAssertions)
 	case ConceptSpecification:
-		return "specifications"
+		return string(SectionSpecifications)
 	case ConceptAggregate:
-		return "aggregates"
+		return string(SectionAggregates)
 	case ConceptAggregateRoot:
 		return "aggregate_roots"
 	case ConceptDomainEvent:
-		return "domain_events"
+		return string(SectionEvents)
+	case ConceptDomainService:
+		return string(SectionServices)
 	case ConceptBoundedContext:
-		return "bounded_contexts"
+		return string(SectionContexts)
 	case ConceptBusinessRule:
 		return "business_rules"
+	case ConceptQuestion:
+		return string(SectionQuestions)
 	default:
 		return string(c)
 	}
@@ -101,11 +113,14 @@ func Listing(c Concept) string {
 
 // ConceptDoc is the ArcLint-owned meaning of one Concept: the single
 // source of truth reused by help, explain, guided authoring, JSON
-// output, docs, and the extension SDK.
+// output, docs, and the extension SDK. Title, Meaning, and Sources are
+// the meta-model's building block of the same term; Questions and
+// Supplies are arclint's authoring guidance for recording one.
 type ConceptDoc struct {
 	Concept   Concept
 	Title     string
 	Meaning   string
+	Sources   []Reference
 	Questions []string
 	// Supplies is the closer naming what the project records for this
 	// concept.
@@ -113,123 +128,90 @@ type ConceptDoc struct {
 }
 
 // Doc returns the ArcLint-owned documentation for this Concept.
-// Meaning text is the vocabulary term one-liner from VOCAB.yaml.
 func (c Concept) Doc() ConceptDoc {
+	doc := ConceptDoc{Concept: c, Title: string(c)}
+	model := DDD()
+	if block, ok := model.Block(string(c)); ok {
+		doc.Title = block.Title
+		doc.Meaning = block.Definition.Text
+		doc.Sources = model.References(block.Definition.Sources)
+	}
 	switch c {
 	case ConceptEntity:
-		return ConceptDoc{
-			Concept: ConceptEntity,
-			Title:   "Entity",
-			Meaning: TermDefinition(TermEntity),
-			Questions: []string{
-				"Does this have an identity that survives attribute changes?",
-				"What must the project distinguish from other similar things?",
-			},
-			Supplies: "The project supplies the Entity's name, definition, and aliases.",
+		doc.Questions = []string{
+			"Does this have an identity that survives attribute changes?",
+			"Which aggregate does it belong to, and what tells two of them apart inside it?",
 		}
+		doc.Supplies = "The project supplies the member entity's name, definition, and the aggregate it belongs to; its local identity and aliases are optional."
 	case ConceptValueObject:
-		return ConceptDoc{
-			Concept: ConceptValueObject,
-			Title:   "Value Object",
-			Meaning: TermDefinition(TermValueObject),
-			Questions: []string{
-				"Are two instances with identical values interchangeable?",
-				"Does replacing it with an equal value change nothing?",
-			},
-			Supplies: "The project supplies the Value Object's name, definition, and aliases.",
+		doc.Questions = []string{
+			"Are two instances with identical values interchangeable?",
+			"Does replacing it with an equal value change nothing?",
 		}
+		doc.Supplies = "The project supplies the value object's name, definition, and aliases, and the invariants every value of its kind satisfies."
 	case ConceptInvariant:
-		return ConceptDoc{
-			Concept: ConceptInvariant,
-			Title:   "Invariant",
-			Meaning: TermDefinition(TermInvariant),
-			Questions: []string{
-				"What must never be violated, even for an instant?",
-				"What concrete violation does this forbid a naive implementation from doing?",
-			},
-			Supplies: "The project supplies the Invariant's statement and exactly one owner.",
+		doc.Questions = []string{
+			"What must never be violated, even for an instant?",
+			"What concrete violation does this forbid a naive implementation from doing?",
 		}
+		doc.Supplies = "The project supplies the invariant's key, its statement, and the one aggregate or value object it is recorded under."
 	case ConceptAssertion:
-		return ConceptDoc{
-			Concept: ConceptAssertion,
-			Title:   "Assertion",
-			Meaning: TermDefinition(TermAssertion),
-			Questions: []string{
-				"Does this hold when a named operation occurs, rather than at all times?",
-				"Which operation must call the method that checks it?",
-			},
-			Supplies: "The project supplies the Assertion's statement, owner, id, and the operation it is on.",
+		doc.Questions = []string{
+			"Does this hold when a named operation occurs, rather than at all times?",
+			"Which operation must call the method that checks it?",
 		}
+		doc.Supplies = "The project supplies the assertion's key, its statement, the aggregate it is recorded under, and the root operation it is on."
 	case ConceptSpecification:
-		return ConceptDoc{
-			Concept: ConceptSpecification,
-			Title:   "Specification",
-			Meaning: TermDefinition(TermSpecification),
-			Questions: []string{
-				"Do experts pass this predicate around as a thing, not just a rule that holds?",
-				"Would you say this to an expert who never saw the language?",
-			},
-			Supplies: "The project supplies the Specification's name and definition; source shows a type of that name with a satisfaction method.",
+		doc.Questions = []string{
+			"Do experts pass this predicate around as a thing, not just a rule that holds?",
+			"Would you say this to an expert who never saw the language?",
 		}
+		doc.Supplies = "The project supplies the specification's name and definition; source shows a type of that name with a satisfaction method."
 	case ConceptAggregate:
-		return ConceptDoc{
-			Concept: ConceptAggregate,
-			Title:   "Aggregate",
-			Meaning: TermDefinition(TermAggregate),
-			Questions: []string{
-				"What is the smallest cluster that must stay consistent in one transaction?",
-				"Which Entity do other objects reference by identity rather than reach inside?",
-			},
-			Supplies: "The project supplies the Aggregate as an Entity designation (aggregate: true).",
+		doc.Questions = []string{
+			"What is the smallest cluster that must stay consistent in one transaction?",
+			"Which entity do other objects reference by identity rather than reach inside?",
 		}
+		doc.Supplies = "The project supplies the aggregate's name, definition, and identity; its member entities, invariants, assertions, repository, and factory are recorded under it."
 	case ConceptAggregateRoot:
-		return ConceptDoc{
-			Concept: ConceptAggregateRoot,
-			Title:   "Aggregate Root",
-			Meaning: TermDefinition(TermAggregateRoot),
-			Questions: []string{
-				"Which single entity is the entry point of the aggregate?",
-				"What must stay internally consistent when the project changes this cluster?",
-			},
-			Supplies: "The project supplies the Aggregate Root as an Entity designation (aggregate: true).",
+		doc.Questions = []string{
+			"Which single entity is the entry point of the aggregate?",
+			"What must stay internally consistent when the project changes this cluster?",
 		}
+		doc.Supplies = "The project records the aggregate root as the aggregate's own entry: the aggregate's name is the root's name and its identity is the root's."
 	case ConceptDomainEvent:
-		return ConceptDoc{
-			Concept: ConceptDomainEvent,
-			Title:   "Domain Event",
-			Meaning: TermDefinition(TermDomainEvent),
-			Questions: []string{
-				"What completed occurrence do experts name in past tense?",
-				"What would the project mention in its history of what happened?",
-			},
-			Supplies: "The project supplies the Domain Event's name and definition.",
+		doc.Questions = []string{
+			"What completed occurrence do experts name in past tense?",
+			"What would the project mention in its history of what happened?",
 		}
+		doc.Supplies = "The project supplies the domain event's name and definition, and the aggregate that raises it when the model records that."
+	case ConceptDomainService:
+		doc.Questions = []string{
+			"Is this an operation no aggregate or value object is the natural home of?",
+			"Which aggregates does it span?",
+		}
+		doc.Supplies = "The project supplies the domain service's name and definition."
 	case ConceptBoundedContext:
-		return ConceptDoc{
-			Concept: ConceptBoundedContext,
-			Title:   "Bounded Context",
-			Meaning: TermDefinition(TermBoundedContext),
-			Questions: []string{
-				"Which people or teams use this term, and do they mean the same thing?",
-				"Is a party that must be informed its own context?",
-			},
-			Supplies: "The project supplies the Bounded Context's name and the terms inside it.",
+		doc.Questions = []string{
+			"Which people or teams use this term, and do they mean the same thing?",
+			"Is a party that must be informed its own context?",
 		}
+		doc.Supplies = "The project supplies the bounded context's name and definition and the terms inside it; its code is located from the declarations that spell those terms."
 	case ConceptBusinessRule:
-		return ConceptDoc{
-			Concept: ConceptBusinessRule,
-			Title:   "Business Rule",
-			Meaning: TermDefinition(TermBusinessRule),
-			Questions: []string{
-				"Does this resolve to an invariant or an assertion?",
-				"Which entity, aggregate root, or value object owns enforcement?",
-			},
-			// business_rule always resolves to invariant or assertion; never specification.
-			Supplies: "The project records a business_rule as an invariant or assertion with exactly one owner; it is never stored as its own section, and it never becomes a specification.",
+		doc.Questions = []string{
+			"Does this resolve to an invariant or an assertion?",
+			"Which aggregate or value object owns enforcement?",
 		}
-	default:
-		return ConceptDoc{Concept: c, Title: string(c)}
+		// business_rule always resolves to invariant or assertion; never specification.
+		doc.Supplies = "The project records a business_rule as an invariant or an assertion under one owner; it is never stored as its own section, and it never becomes a specification."
+	case ConceptQuestion:
+		doc.Questions = []string{
+			"What about the model is unsettled, and who can settle it?",
+			"Is this a question, or a decision nobody has written down?",
+		}
+		doc.Supplies = "The project supplies the question's key and its text under the context it is about; nothing is enforced from it."
 	}
+	return doc
 }
 
 func joinConcepts(cs []Concept) string {

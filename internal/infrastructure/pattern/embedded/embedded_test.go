@@ -32,7 +32,7 @@ func TestBuiltInPatternsAreAvailableWithDigests(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Available: %v", err)
 	}
-	want := []string{"arclint/domain-model@0.1.0", "arclint/vertical@0.1.0"}
+	want := []string{"arclint/vertical@0.1.0"}
 	if len(available) != len(want) {
 		t.Fatalf("available = %d, want %d", len(available), len(want))
 	}
@@ -54,68 +54,8 @@ func TestBuiltInPatternsAreAvailableWithDigests(t *testing.T) {
 		}
 	}
 	names, err := source.Names()
-	if err != nil || len(names) != 2 || names[0] != "domain-model" || names[1] != "vertical" {
+	if err != nil || len(names) != 1 || names[0] != "vertical" {
 		t.Errorf("Names = %v, %v", names, err)
-	}
-}
-
-func TestDomainModelPatternLoads(t *testing.T) {
-	patterns, err := embeddedpattern.NewSource().Patterns()
-	if err != nil {
-		t.Fatalf("Patterns: %v", err)
-	}
-	var p rule.Pattern
-	for _, candidate := range patterns {
-		if candidate.Reference().Name() == "domain-model" {
-			p = candidate
-		}
-	}
-	if p.Reference().IsZero() {
-		t.Fatal("arclint/domain-model is not embedded")
-	}
-	wantUses := map[string]string{
-		"arclint/domain-model:vocabulary/terms-carry-definitions":         "domain-model/require-defined-terms",
-		"arclint/domain-model:vocabulary/invariants-name-recorded-owners": "domain-model/invariants-name-recorded-owners",
-		"arclint/domain-model:contexts/respect-relations":                 "domain-model/respect-context-relations",
-	}
-	if len(p.Rules()) != len(wantUses) {
-		t.Errorf("rules = %d, want %d", len(p.Rules()), len(wantUses))
-	}
-	for _, r := range p.Rules() {
-		id := r.ID().Qualified()
-		uses, ok := wantUses[id]
-		if !ok {
-			t.Errorf("unexpected rule %s", id)
-			continue
-		}
-		params, isExt := r.Params().(rule.ExtensionParams)
-		if !isExt || params.Uses != uses {
-			t.Errorf("%s uses = %v, want %q", id, r.Params(), uses)
-		}
-		delete(wantUses, id)
-		if id == "arclint/domain-model:contexts/respect-relations" && r.Severity() != rule.SeverityWarning {
-			t.Errorf("%s severity = %s, want warning", id, r.Severity())
-		}
-	}
-	if len(wantUses) != 0 {
-		t.Errorf("missing rules: %v", wantUses)
-	}
-	modules := p.Modules()
-	if len(modules) != 1 || modules[0].Name().String() != "vocabulary" || len(modules[0].SuggestedPaths()) != 1 ||
-		modules[0].SuggestedPaths()[0].String() != "domain.arclint.yaml" {
-		t.Errorf("modules = %+v, want vocabulary suggesting domain.arclint.yaml", modules)
-	}
-	exts := p.Extensions()
-	if len(exts) != 3 {
-		t.Fatalf("extensions = %d, want 3", len(exts))
-	}
-	for _, e := range exts {
-		if !strings.Contains(e.Source(), `type: "domain-model/`) {
-			t.Errorf("%s: the extension type must carry the pattern name", e.FileName())
-		}
-	}
-	if len(p.Coverage()) != 2 {
-		t.Errorf("coverage = %v, want go and ts", p.Coverage())
 	}
 }
 
@@ -165,17 +105,17 @@ func TestVerticalPatternLoads(t *testing.T) {
 	if strings.TrimSpace(p.Documentation()) == "" {
 		t.Errorf("the vertical pattern must document itself")
 	}
-	modules := p.Modules()
-	wantModules := []string{"domain", "application", "infra", "app", "shared", "composition"}
-	if len(modules) != len(wantModules) {
-		t.Fatalf("modules = %d, want %d", len(modules), len(wantModules))
+	zones := p.Zones()
+	wantZones := []string{"domain", "application", "infra", "app", "shared", "composition"}
+	if len(zones) != len(wantZones) {
+		t.Fatalf("zones = %d, want %d", len(zones), len(wantZones))
 	}
-	for i, m := range modules {
-		if m.Name().String() != wantModules[i] {
-			t.Errorf("modules[%d] = %q, want %q", i, m.Name(), wantModules[i])
+	for i, m := range zones {
+		if m.Name().String() != wantZones[i] {
+			t.Errorf("zones[%d] = %q, want %q", i, m.Name(), wantZones[i])
 		}
 		if m.Description() == "" || len(m.SuggestedPaths()) == 0 {
-			t.Errorf("module %s must carry a description and suggested paths", m.Name())
+			t.Errorf("zone %s must carry a description and suggested paths", m.Name())
 		}
 	}
 	for _, r := range p.Rules() {

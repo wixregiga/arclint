@@ -18,7 +18,7 @@ const acmePattern = `pattern:
   coverage: [go]
   documentation: "Two layers: a domain that imports nothing, and an app above it."
 
-modules:
+zones:
   domain: "The domain model; stdlib-only."
   app:
     description: "Application code above the domain."
@@ -26,11 +26,33 @@ modules:
 
 rules:
   domain/stdlib-only:
-    description: "The domain imports no other Module and no third-party package."
+    description: "The domain imports no other Zone and no third-party package."
     on: domain
     imports:
       internal: []
       external: forbid
+`
+
+// docsPattern is a second authored Pattern whose Zone clashes with
+// nothing the embedded one binds, so a ruleset can extend both.
+const docsPattern = `pattern:
+  namespace: acme
+  name: docs
+  version: 1.0.0
+  coverage: [go]
+  documentation: "Documentation stays out of the code tree."
+
+zones:
+  docs:
+    description: "Documentation and examples."
+    paths: docs/**
+
+rules:
+  docs/imports-nothing:
+    description: "Documentation imports no Zone."
+    on: docs
+    imports:
+      internal: []
 `
 
 // authorAcmePattern writes acme/layers under <root>/.arclint/patterns
@@ -48,10 +70,13 @@ func TestPatternsListsEmbeddedAndLocalCopies(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("patterns: exit %d\nstderr: %s", code, stderr)
 	}
-	for _, want := range []string{"arclint/vertical@0.1.0", "arclint/domain-model@0.1.0", "acme/layers@1.0.0", "authored", "embedded"} {
+	for _, want := range []string{"arclint/vertical@0.1.0", "acme/layers@1.0.0", "authored", "embedded"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("patterns listing misses %q:\n%s", want, stdout)
 		}
+	}
+	if strings.Contains(stdout, "domain-model") {
+		t.Errorf("the domain-model Pattern is folded into the built-in rules and must not list:\n%s", stdout)
 	}
 
 	stdout, stderr, code = runBin(t, root, os.Environ(), "--format=json", "patterns")
@@ -71,10 +96,10 @@ func TestPatternsListsEmbeddedAndLocalCopies(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &doc); err != nil {
 		t.Fatalf("patterns json: %v\n%s", err, stdout)
 	}
-	if len(doc.Patterns) != 3 {
+	if len(doc.Patterns) != 2 {
 		t.Fatalf("patterns = %+v", doc.Patterns)
 	}
-	acme := doc.Patterns[2]
+	acme := doc.Patterns[1]
 	if acme.Reference != "acme/layers@1.0.0" || acme.Source != "local" || !acme.Authored || acme.Vendored ||
 		!strings.HasPrefix(acme.Digest, "sha256:") || acme.Rules != 1 {
 		t.Errorf("authored pattern row = %+v", acme)
@@ -86,11 +111,12 @@ func TestPatternsListsEmbeddedAndLocalCopies(t *testing.T) {
 
 func TestPatternsInstallDraftsThenExtendsAndChecks(t *testing.T) {
 	root := t.TempDir()
-	stdout, stderr, code := runBin(t, root, os.Environ(), "patterns", "install", "domain-model")
+	write(t, root, filepath.Join(".arclint", "patterns", "acme", "docs", "pattern.yaml"), docsPattern)
+	stdout, stderr, code := runBin(t, root, os.Environ(), "patterns", "install", "vertical")
 	if code != 0 {
 		t.Fatalf("install: exit %d\nstderr: %s", code, stderr)
 	}
-	for _, want := range []string{"installed arclint/domain-model@0.1.0 (embedded, ", "wrote ", "vocabulary: domain.arclint.yaml", "next: run `arclint check .`"} {
+	for _, want := range []string{"installed arclint/vertical@0.1.0 (embedded, ", "wrote ", "  domain: internal/*/domain/**", "next: run `arclint check .`"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("install output misses %q:\n%s", want, stdout)
 		}
@@ -99,26 +125,26 @@ func TestPatternsInstallDraftsThenExtendsAndChecks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(ruleset), "extends:\n  - pattern: arclint/domain-model@0.1.0\n") {
+	if !strings.Contains(string(ruleset), "extends:\n  - pattern: arclint/vertical@0.1.0\n") {
 		t.Errorf("drafted ruleset does not extend the pattern:\n%s", ruleset)
 	}
-	if _, err := os.Stat(filepath.Join(root, ".arclint")); !os.IsNotExist(err) {
-		t.Errorf("installing an embedded pattern must not write .arclint, stat err = %v", err)
+	if _, err := os.Stat(filepath.Join(root, ".arclint", "patterns", "arclint")); !os.IsNotExist(err) {
+		t.Errorf("installing an embedded pattern must not vendor it, stat err = %v", err)
 	}
 
-	stdout, stderr, code = runBin(t, root, os.Environ(), "patterns", "install", "vertical")
+	stdout, stderr, code = runBin(t, root, os.Environ(), "patterns", "install", "acme/docs")
 	if code != 0 {
 		t.Fatalf("second install: exit %d\nstderr: %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "extended ") || !strings.Contains(stdout, "  domain: internal/*/domain/**") {
+	if !strings.Contains(stdout, "extended ") || !strings.Contains(stdout, "  docs: docs/**") {
 		t.Errorf("second install output:\n%s", stdout)
 	}
 	ruleset, err = os.ReadFile(filepath.Join(root, "rules.arclint.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(ruleset), "  - pattern: arclint/domain-model@0.1.0\n") ||
-		!strings.Contains(string(ruleset), "  - pattern: arclint/vertical@0.1.0\n    bind:\n      domain: \"internal/*/domain/**\"\n") {
+	if !strings.Contains(string(ruleset), "  - pattern: arclint/vertical@0.1.0\n") ||
+		!strings.Contains(string(ruleset), "  - pattern: acme/docs@1.0.0\n    bind:\n      docs: \"docs/**\"\n") {
 		t.Errorf("ruleset after the second install:\n%s", ruleset)
 	}
 
@@ -126,11 +152,11 @@ func TestPatternsInstallDraftsThenExtendsAndChecks(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("check after installs: exit %d\nstderr: %s\n%s", code, stderr, stdout)
 	}
-	if !strings.Contains(stdout, "19 rule(s) applied") {
+	if !strings.Contains(stdout, "17 rule(s) applied") {
 		t.Errorf("both patterns' rules must apply:\n%s", stdout)
 	}
 
-	stdout, stderr, code = runBin(t, root, os.Environ(), "patterns", "install", "vertical")
+	stdout, stderr, code = runBin(t, root, os.Environ(), "patterns", "install", "acme/docs")
 	if code != 0 || strings.Contains(stdout, "moving the entry") {
 		t.Errorf("installing the extended version again changes nothing: exit %d\n%s%s", code, stdout, stderr)
 	}
@@ -140,11 +166,11 @@ func TestPatternsInstallDraftsThenExtendsAndChecks(t *testing.T) {
 	}
 }
 
-func TestPatternsInstallFoldsDeclaredModules(t *testing.T) {
+func TestPatternsInstallFoldsDeclaredZones(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "rules.arclint.yaml", `runtime: [go]
 
-modules:
+zones:
   # The domain model.
   domain: "pkg/domain/**"
   web: "cmd/web/**"
@@ -160,7 +186,7 @@ rules:
 	if code != 0 {
 		t.Fatalf("install: exit %d\nstderr: %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "adopted declared module(s): domain") || !strings.Contains(stdout, "  domain: pkg/domain/**") {
+	if !strings.Contains(stdout, "adopted declared zone(s): domain") || !strings.Contains(stdout, "  domain: pkg/domain/**") {
 		t.Errorf("install must report the adopted declaration and its paths:\n%s", stdout)
 	}
 	ruleset, err := os.ReadFile(filepath.Join(root, "rules.arclint.yaml"))
@@ -168,9 +194,9 @@ rules:
 		t.Fatal(err)
 	}
 	if strings.Contains(string(ruleset), "  # The domain model.\n") || strings.Contains(string(ruleset), "\n  domain: \"pkg/domain/**\"\n") {
-		t.Errorf("the declared module must be folded into the binding:\n%s", ruleset)
+		t.Errorf("the declared zone must be folded into the binding:\n%s", ruleset)
 	}
-	if !strings.Contains(string(ruleset), "      domain: \"pkg/domain/**\"\n") || !strings.Contains(string(ruleset), "modules:\n  web: \"cmd/web/**\"\n") {
+	if !strings.Contains(string(ruleset), "      domain: \"pkg/domain/**\"\n") || !strings.Contains(string(ruleset), "zones:\n  web: \"cmd/web/**\"\n") {
 		t.Errorf("ruleset after folding:\n%s", ruleset)
 	}
 	if _, stderr, code := runBin(t, root, os.Environ(), "check", "."); code != 0 {
@@ -235,11 +261,11 @@ func TestPatternsVendorExportAndInstallFromRegistry(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(vendoredDir, "manifest.json")); err != nil {
 		t.Errorf("manifest.json not vendored: %v", err)
 	}
-	// The install left one Module unbound, so the ruleset says so until
+	// The install left one Zone unbound, so the ruleset says so until
 	// the owner binds it.
 	_, stderr, code = runBin(t, consumer, os.Environ(), "check", ".")
-	if code != 2 || !strings.Contains(stderr, "unbound modules domain") {
-		t.Errorf("check with an unbound module: exit %d\nstderr: %s", code, stderr)
+	if code != 2 || !strings.Contains(stderr, "unbound zones domain") {
+		t.Errorf("check with an unbound zone: exit %d\nstderr: %s", code, stderr)
 	}
 	ruleset, err := os.ReadFile(filepath.Join(consumer, "rules.arclint.yaml"))
 	if err != nil {

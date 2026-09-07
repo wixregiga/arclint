@@ -6,8 +6,11 @@ import (
 )
 
 // VocabularyYAML returns the domain-librarian VOCAB.yaml content
-// byte-exact to the litmus vocabulary file. Hand-assembled so comments
-// and flow-style lines match; yaml.Marshal is never used.
+// byte-exact to the litmus vocabulary file. The vocabulary is the
+// meta-model's building blocks, one term per block in meta-model order
+// with a comment naming each phase, followed by the context relation
+// kinds. Hand-assembled so comments and flow-style lines match;
+// yaml.Marshal is never used.
 func VocabularyYAML() string {
 	var b strings.Builder
 	b.WriteString(VOCABHeaderComment)
@@ -16,16 +19,32 @@ func VocabularyYAML() string {
 	b.WriteString(strconv.Itoa(UbiquitousLanguageVersion))
 	b.WriteString("\n\n")
 
+	model := DDD()
 	b.WriteString("vocabulary:\n")
-	for _, term := range VocabularyTerms() {
-		b.WriteString("  ")
-		b.WriteString(string(term.Term))
-		b.WriteString(": ")
-		if term.Term == TermContextRelation {
-			b.WriteString(ContextRelationFlowYAML())
-		} else {
-			b.WriteString(term.Definition)
+	phase := ""
+	for _, block := range model.Blocks {
+		if block.Phase != phase {
+			phase = block.Phase
+			if p, ok := model.Phase(phase); ok {
+				b.WriteString("  # ")
+				b.WriteString(p.Title)
+				b.WriteString("\n")
+			}
 		}
+		b.WriteString("  ")
+		b.WriteString(block.Term)
+		b.WriteString(": ")
+		b.WriteString(yamlDoubleQuoted(block.Definition.Text))
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+
+	b.WriteString("context_relation_kinds:\n")
+	for _, d := range RelationKindDocs() {
+		b.WriteString("  ")
+		b.WriteString(string(d.Kind))
+		b.WriteString(": ")
+		b.WriteString(yamlDoubleQuoted(d.Meaning))
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")

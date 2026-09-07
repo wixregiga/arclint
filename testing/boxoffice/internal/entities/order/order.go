@@ -88,15 +88,29 @@ func New(id, eventID string, a Attendee, lines []Line) (Order, error) {
 		seen[l.TierName] = true
 	}
 	o := Order{id: id, eventID: eventID, attendee: a, lines: cp}
-	if err := o.LinesFrozen(); err != nil {
+	if err := o.EnsureLinesFrozen(); err != nil {
 		return Order{}, err
 	}
 	return o, nil
 }
 
-// LinesFrozen is the cluster contract: a placed Order's OrderLines
-// and Prices never change, including when tickets are given back.
-func (o Order) LinesFrozen() error {
+// EnsureLinesFrozen is the cluster invariant: a placed Order's
+// OrderLines and Prices never change, including when tickets are
+// given back. No command in this file writes to lines once New has
+// captured them; this re-validates they are still the well-formed
+// set New captured, the same way EnsureSeatBudget re-validates the
+// seat count on every capacity command.
+func (o Order) EnsureLinesFrozen() error {
+	seen := make(map[string]bool, len(o.lines))
+	for _, l := range o.lines {
+		if l.TierName == "" || l.Quantity <= 0 || l.UnitCents < 0 {
+			return ErrLineInvalid
+		}
+		if seen[l.TierName] {
+			return ErrLineDuplicate
+		}
+		seen[l.TierName] = true
+	}
 	return nil
 }
 
@@ -187,7 +201,7 @@ func (o *Order) Refund(tierName string, quantity int) error {
 	next := make([]Refund, len(o.refunds), len(o.refunds)+1)
 	copy(next, o.refunds)
 	o.refunds = append(next, Refund{TierName: tierName, Quantity: quantity})
-	return o.LinesFrozen()
+	return o.EnsureLinesFrozen()
 }
 
 // RefundAll gives back every ticket the Order still holds, which is

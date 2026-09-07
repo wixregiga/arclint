@@ -29,7 +29,7 @@ export default defineRule({
 });
 `)
 	write(t, root, "rules.arclint.yaml", `runtime: [go]
-modules:
+zones:
   src: src/**
 rules:
   src/report-outside:

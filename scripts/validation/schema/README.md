@@ -39,7 +39,7 @@ The following areas require deeper investigation or domain alignment when time p
 
 3. **String `minLength: 1` Constraints** (`string-fields-min-length`):
    - Currently set to `severity: info`.
-   - *Consideration*: Free-form string properties (like module descriptions) currently permit empty strings `""`. Determine whether empty descriptions are valid application states or authoring omissions.
+   - *Consideration*: Free-form string properties (like zone descriptions) currently permit empty strings `""`. Determine whether empty descriptions are valid application states or authoring omissions.
 
 4. **Regex Pattern Anchoring & Syntax Verification**:
    - Deferred for future evaluation.

@@ -34,13 +34,13 @@ export interface Ctx {
   read(path: string): string;
   /** Classified imports of one file, for every active language target. */
   imports(path: string): ImportInfo[];
-  /** Declared module names to their member file paths. */
-  modules(): Record<string, string[]>;
+  /** Declared zone names to their member file paths. */
+  zones(): Record<string, string[]>;
   /** Cross-language declaration facts for one file; null when its
    * language did not supply declarations. */
   facts(path: string): FactsInfo | null;
-  /** The sorted module names a file belongs to. */
-  moduleOf(path: string): string[];
+  /** The sorted zone names a file belongs to. */
+  zoneOf(path: string): string[];
   /** The project's recorded domain model (domain.arclint.yaml);
    * empty collections when the project records none. Read-only:
    * declaring knowledge never creates a diagnostic by itself. */

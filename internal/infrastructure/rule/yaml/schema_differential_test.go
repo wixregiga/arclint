@@ -192,10 +192,10 @@ func TestSchemaAgreesWithLoader(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read repository %s: %v", rule.RulesetFileName, err)
 	}
-	// oneModule is the smallest repository ruleset every Rule case is
+	// oneZone is the smallest repository ruleset every Rule case is
 	// written against.
-	const oneModule = "modules:\n  core: core/**\n"
-	const twoModules = "modules:\n  core: core/**\n  app: app/**\n"
+	const oneZone = "zones:\n  core: core/**\n"
+	const twoZones = "zones:\n  core: core/**\n  app: app/**\n"
 	const header = "pattern:\n  namespace: acme\n  name: hexagonal\n  version: 1.0.0\n"
 
 	cases := []struct {
@@ -206,32 +206,32 @@ func TestSchemaAgreesWithLoader(t *testing.T) {
 		{"repository " + rule.RulesetFileName, string(realRuleset), true},
 		{"empty file", "", false},
 		{"empty document", "{}\n", true},
-		{"runtime, scan, modules, empty rules", `
+		{"runtime, scan, zones, empty rules", `
 runtime: [go, ts]
 scan:
   unknown_imports: ignore
   exclude: ["vendor/**"]
   include_testdata: true
-modules:
+zones:
   core: core/**
 rules: {}
 `, true},
 
-		// ---- module sugar ------------------------------------------------
-		{"module as a glob", "modules:\n  core: core/**\n", true},
-		{"module as a glob list", "modules:\n  core: [\"core/**\", \"pkg/core/**\"]\n", true},
-		{"module as an object", "modules:\n  core:\n    paths: core/**\n    description: \"The core.\"\n", true},
-		{"module object with a paths list", "modules:\n  core:\n    paths: [\"core/**\"]\n", true},
-		{"module object without paths", "modules:\n  core:\n    description: \"The core.\"\n", false},
-		{"module object with an unknown key", "modules:\n  core:\n    paths: core/**\n    globs: [\"core/**\"]\n", false},
-		{"module with an empty glob list", "modules:\n  core: []\n", false},
-		{"module with a brace glob", "modules:\n  core: \"core/{a,b}/**\"\n", false},
-		{"module listing a glob twice", "modules:\n  core: [\"core/**\", \"core/**\"]\n", false},
-		{"module object listing a glob twice", "modules:\n  core:\n    paths: [\"core/**\", \"core/**\"]\n", false},
-		{"module name with uppercase", "modules:\n  Core: core/**\n", false},
+		// ---- zone sugar ------------------------------------------------
+		{"zone as a glob", "zones:\n  core: core/**\n", true},
+		{"zone as a glob list", "zones:\n  core: [\"core/**\", \"pkg/core/**\"]\n", true},
+		{"zone as an object", "zones:\n  core:\n    paths: core/**\n    description: \"The core.\"\n", true},
+		{"zone object with a paths list", "zones:\n  core:\n    paths: [\"core/**\"]\n", true},
+		{"zone object without paths", "zones:\n  core:\n    description: \"The core.\"\n", false},
+		{"zone object with an unknown key", "zones:\n  core:\n    paths: core/**\n    globs: [\"core/**\"]\n", false},
+		{"zone with an empty glob list", "zones:\n  core: []\n", false},
+		{"zone with a brace glob", "zones:\n  core: \"core/{a,b}/**\"\n", false},
+		{"zone listing a glob twice", "zones:\n  core: [\"core/**\", \"core/**\"]\n", false},
+		{"zone object listing a glob twice", "zones:\n  core:\n    paths: [\"core/**\", \"core/**\"]\n", false},
+		{"zone name with uppercase", "zones:\n  Core: core/**\n", false},
 
 		// ---- one minimal Rule per assertion --------------------------------
-		{"imports with an internal allow-list", oneModule + `
+		{"imports with an internal allow-list", oneZone + `
 rules:
   core/stdlib-only:
     description: "The core imports nothing else."
@@ -241,55 +241,55 @@ rules:
       external: forbid
       stdlib: allow
 `, true},
-		{"imports forbidding external only", oneModule + `
+		{"imports forbidding external only", oneZone + `
 rules:
   core/no-external:
     on: core
     imports:
       external: forbid
 `, true},
-		{"imports on several modules", twoModules + `
+		{"imports on several zones", twoZones + `
 rules:
   core/imports:
     on: [core, app]
     imports:
       internal: []
 `, true},
-		{"imports declaring no restriction", oneModule + `
+		{"imports declaring no restriction", oneZone + `
 rules:
   core/imports:
     on: core
     imports: {}
 `, false},
-		{"imports allowing external explicitly with nothing else", oneModule + `
+		{"imports allowing external explicitly with nothing else", oneZone + `
 rules:
   core/imports:
     on: core
     imports:
       external: allow
 `, false},
-		{"structure requiring files", oneModule + `
+		{"structure requiring files", oneZone + `
 rules:
   core/root-present:
     on: core
     structure:
       require: ["core/root.go"]
 `, true},
-		{"structure forbidding files", oneModule + `
+		{"structure forbidding files", oneZone + `
 rules:
   core/no-util:
     on: core
     structure:
       forbid: ["core/**/util.go"]
 `, true},
-		{"structure requiring a glob twice", oneModule + `
+		{"structure requiring a glob twice", oneZone + `
 rules:
   core/shape:
     on: core
     structure:
       require: ["root.go", "root.go"]
 `, false},
-		{"structure with each listing a glob twice", oneModule + `
+		{"structure with each listing a glob twice", oneZone + `
 rules:
   core/aggregates:
     on: core
@@ -297,14 +297,14 @@ rules:
       each: domain.aggregates
       require: ["core/{name:flatcase}/root.go", "core/{name:flatcase}/root.go"]
 `, false},
-		{"structure with empty require", oneModule + `
+		{"structure with empty require", oneZone + `
 rules:
   core/root-present:
     on: core
     structure:
       require: []
 `, false},
-		{"structure with each", oneModule + `
+		{"structure with each", oneZone + `
 rules:
   core/aggregates:
     severity: warning
@@ -313,7 +313,7 @@ rules:
       each: domain.aggregates
       require: ["core/{name:flatcase}/root.go", "core/{name:flatcase}/repository.go"]
 `, true},
-		{"structure with each over a plain glob", oneModule + `
+		{"structure with each over a plain glob", oneZone + `
 rules:
   core/aggregates:
     on: core
@@ -321,7 +321,7 @@ rules:
       each: domain.aggregates
       require: ["core/root.go"]
 `, true},
-		{"structure with each from an unknown source", oneModule + `
+		{"structure with each from an unknown source", oneZone + `
 rules:
   core/aggregates:
     on: core
@@ -329,7 +329,7 @@ rules:
       each: domain.services
       require: ["core/{name:flatcase}/root.go"]
 `, false},
-		{"structure with each and an unknown term case", oneModule + `
+		{"structure with each and an unknown term case", oneZone + `
 rules:
   core/aggregates:
     on: core
@@ -337,7 +337,7 @@ rules:
       each: domain.aggregates
       require: ["core/{name:bogus}/root.go"]
 `, false},
-		{"structure with each and a stray brace", oneModule + `
+		{"structure with each and a stray brace", oneZone + `
 rules:
   core/aggregates:
     on: core
@@ -345,21 +345,21 @@ rules:
       each: domain.aggregates
       require: ["core/{name:flatcase/root.go"]
 `, false},
-		{"structure placeholder without each", oneModule + `
+		{"structure placeholder without each", oneZone + `
 rules:
   core/aggregates:
     on: core
     structure:
       require: ["core/{name:flatcase}/root.go"]
 `, false},
-		{"naming as a scalar", oneModule + `
+		{"naming as a scalar", oneZone + `
 rules:
   core/snake:
     on: core
     files: "core/**/*.go"
     naming: snake_case
 `, true},
-		{"naming as an object with a regex alternative", oneModule + `
+		{"naming as an object with a regex alternative", oneZone + `
 rules:
   core/kebab-or-digits:
     severity: warning
@@ -367,19 +367,19 @@ rules:
     naming:
       case: "kebab-case|regex:[0-9]+"
 `, true},
-		{"naming with an unknown case", oneModule + `
+		{"naming with an unknown case", oneZone + `
 rules:
   core/naming:
     on: core
     naming: SCREAMING_CASE
 `, false},
-		{"naming object without case", oneModule + `
+		{"naming object without case", oneZone + `
 rules:
   core/naming:
     on: core
     naming: {}
 `, false},
-		{"naming with each", oneModule + `
+		{"naming with each", oneZone + `
 rules:
   core/naming:
     on: core
@@ -387,7 +387,7 @@ rules:
       case: snake_case
       each: domain.aggregates
 `, false},
-		{"content on a module", oneModule + `
+		{"content on a zone", oneZone + `
 rules:
   core/no-panic:
     on: core
@@ -402,68 +402,54 @@ rules:
     content:
       forbid: "TODO"
 `, true},
-		{"content without forbid", oneModule + `
+		{"content without forbid", oneZone + `
 rules:
   core/content:
     on: core
     content: {}
 `, false},
-		{"content with a blank forbid", oneModule + `
+		{"content with a blank forbid", oneZone + `
 rules:
   core/content:
     on: core
     content:
       forbid: "  "
 `, false},
-		{"invariants open", oneModule + `
+		{"retired invariants assertion", oneZone + `
 rules:
   core/invariants:
     on: core
     invariants: {}
-`, true},
-		{"invariants closed", oneModule + `
-rules:
-  core/invariants:
-    on: core
-    invariants:
-      closed: true
-`, true},
-		{"invariants with an unknown key", oneModule + `
-rules:
-  core/invariants:
-    on: core
-    invariants:
-      strict: true
 `, false},
-		{"layers", twoModules + `
+		{"layers", twoZones + `
 rules:
   deps/inward:
     layers: [app, core]
 `, true},
-		{"layers with one module", oneModule + `
+		{"layers with one zone", oneZone + `
 rules:
   deps/inward:
     layers: [core]
 `, false},
-		{"layers with on", twoModules + `
+		{"layers with on", twoZones + `
 rules:
   deps/inward:
     on: core
     layers: [app, core]
 `, false},
-		{"imported_by", twoModules + `
+		{"imported_by", twoZones + `
 rules:
   core/app-only:
     on: core
     imported_by: [app]
 `, true},
-		{"imported_by nobody", oneModule + `
+		{"imported_by nobody", oneZone + `
 rules:
   core/sealed:
     on: core
     imported_by: []
 `, true},
-		{"imported_by with two protected modules", twoModules + `
+		{"imported_by with two protected zones", twoZones + `
 rules:
   core/app-only:
     on: [core, app]
@@ -479,22 +465,22 @@ rules:
   features/independent:
     independent: []
 `, false},
-		{"acyclic over every module", `
+		{"acyclic over every zone", `
 rules:
   deps/acyclic:
     acyclic: {}
 `, true},
-		{"acyclic over a list", twoModules + `
+		{"acyclic over a list", twoZones + `
 rules:
   deps/acyclic:
     acyclic: [core, app]
 `, true},
-		{"acyclic over one module", oneModule + `
+		{"acyclic over one zone", oneZone + `
 rules:
   deps/acyclic:
     acyclic: [core]
 `, false},
-		{"uses on a module with parameters", oneModule + `
+		{"uses on a zone with parameters", oneZone + `
 rules:
   core/checked:
     on: core
@@ -508,14 +494,14 @@ rules:
   repo/checked:
     uses: acme/check
 `, true},
-		{"uses with each", oneModule + `
+		{"uses with each", oneZone + `
 rules:
   core/checked:
     on: core
     uses: acme/check
     each: domain.aggregates
 `, false},
-		{"uses with a blank name", oneModule + `
+		{"uses with a blank name", oneZone + `
 rules:
   core/checked:
     on: core
@@ -523,7 +509,7 @@ rules:
 `, false},
 
 		// ---- the Rule envelope -------------------------------------------
-		{"rule with two assertions", oneModule + `
+		{"rule with two assertions", oneZone + `
 rules:
   core/two:
     on: core
@@ -531,41 +517,41 @@ rules:
       internal: []
     naming: snake_case
 `, false},
-		{"rule with a retired kind key", oneModule + `
+		{"rule with a retired kind key", oneZone + `
 rules:
   core/naming:
     kind: naming
     on: core
     case: snake_case
 `, false},
-		{"imports without on", oneModule + `
+		{"imports without on", oneZone + `
 rules:
   core/imports:
     imports:
       internal: []
 `, false},
-		{"imports naming a module twice", twoModules + `
+		{"imports naming a zone twice", twoZones + `
 rules:
   core/imports:
     on: [core, core]
     imports:
       internal: []
 `, false},
-		{"imports allowing a module twice", twoModules + `
+		{"imports allowing a zone twice", twoZones + `
 rules:
   core/imports:
     on: core
     imports:
       internal: [app, app]
 `, false},
-		{"imports with an empty on", oneModule + `
+		{"imports with an empty on", oneZone + `
 rules:
   core/imports:
     on: []
     imports:
       internal: []
 `, false},
-		{"files on imports", oneModule + `
+		{"files on imports", oneZone + `
 rules:
   core/imports:
     on: core
@@ -573,7 +559,7 @@ rules:
     imports:
       internal: []
 `, false},
-		{"with on imports", oneModule + `
+		{"with on imports", oneZone + `
 rules:
   core/imports:
     on: core
@@ -582,7 +568,7 @@ rules:
     with:
       depth: 1
 `, false},
-		{"unknown severity", oneModule + `
+		{"unknown severity", oneZone + `
 rules:
   core/imports:
     severity: critical
@@ -590,7 +576,7 @@ rules:
     imports:
       internal: []
 `, false},
-		{"disable with a reason", oneModule + `
+		{"disable with a reason", oneZone + `
 rules:
   core/imports:
     on: core
@@ -598,7 +584,7 @@ rules:
       internal: []
     disable: "the core is being rewritten; re-enable after AL-42"
 `, true},
-		{"disable without a reason", oneModule + `
+		{"disable without a reason", oneZone + `
 rules:
   core/imports:
     on: core
@@ -606,7 +592,7 @@ rules:
       internal: []
     disable: ""
 `, false},
-		{"exclude paths with a reason", oneModule + `
+		{"exclude paths with a reason", oneZone + `
 rules:
   core/imports:
     on: core
@@ -616,15 +602,15 @@ rules:
       paths: ["core/generated/**"]
       reason: "generated code is not authored"
 `, true},
-		{"exclude modules with a reason", twoModules + `
+		{"exclude zones with a reason", twoZones + `
 rules:
   deps/acyclic:
     acyclic: {}
     exclude:
-      modules: [app]
+      zones: [app]
       reason: "app is the composition root"
 `, true},
-		{"exclude listing a path twice", oneModule + `
+		{"exclude listing a path twice", oneZone + `
 rules:
   core/imports:
     on: core
@@ -634,15 +620,15 @@ rules:
       paths: ["core/generated/**", "core/generated/**"]
       reason: "generated code is not authored"
 `, false},
-		{"exclude listing a module twice", twoModules + `
+		{"exclude listing a zone twice", twoZones + `
 rules:
   deps/acyclic:
     acyclic: {}
     exclude:
-      modules: [app, app]
+      zones: [app, app]
       reason: "app is the composition root"
 `, false},
-		{"exclude without a reason", oneModule + `
+		{"exclude without a reason", oneZone + `
 rules:
   core/imports:
     on: core
@@ -651,7 +637,7 @@ rules:
     exclude:
       paths: ["core/generated/**"]
 `, false},
-		{"exclude naming no subject", oneModule + `
+		{"exclude naming no subject", oneZone + `
 rules:
   core/imports:
     on: core
@@ -660,7 +646,7 @@ rules:
     exclude:
       reason: "why"
 `, false},
-		{"suppress paths with a reason", oneModule + `
+		{"suppress paths with a reason", oneZone + `
 rules:
   core/imports:
     on: core
@@ -670,7 +656,7 @@ rules:
       paths: ["core/legacy/**"]
       reason: "adopted debt tracked in the baseline"
 `, true},
-		{"suppress listing a path twice", oneModule + `
+		{"suppress listing a path twice", oneZone + `
 rules:
   core/imports:
     on: core
@@ -680,7 +666,7 @@ rules:
       paths: ["core/legacy/**", "core/legacy/**"]
       reason: "adopted debt tracked in the baseline"
 `, false},
-		{"suppress without paths", oneModule + `
+		{"suppress without paths", oneZone + `
 rules:
   core/imports:
     on: core
@@ -689,26 +675,26 @@ rules:
     suppress:
       reason: "why"
 `, false},
-		{"rule id starting with a slash", oneModule + `
+		{"rule id starting with a slash", oneZone + `
 rules:
   /core:
     on: core
     imports:
       internal: []
 `, false},
-		{"rule id ending with a slash", oneModule + `
+		{"rule id ending with a slash", oneZone + `
 rules:
   core/:
     on: core
     imports:
       internal: []
 `, false},
-		{"rules as a list", oneModule + `
+		{"rules as a list", oneZone + `
 rules:
   - id: core/imports
 `, false},
 		{"unknown top-level key", "rulesets: []\n", false},
-		{"retired contracts key", oneModule + `
+		{"retired contracts key", oneZone + `
 contracts:
   core:
     consumes:
@@ -727,18 +713,18 @@ repository:
 		{"scan with an unknown policy", "scan:\n  unknown_imports: explode\n", false},
 		{"scan with an unknown key", "scan:\n  follow_symlinks: true\n", false},
 		{"scan excluding a glob twice", "scan:\n  exclude: [\"vendor/**\", \"vendor/**\"]\n", false},
-		{"extends listing a pattern twice", "extends:\n  - pattern: arclint/domain-model@0.1.0\n  - pattern: arclint/domain-model@0.1.0\n", false},
+		{"extends listing a pattern twice", "extends:\n  - pattern: arclint/vertical@0.1.0\n  - pattern: arclint/vertical@0.1.0\n", false},
 		{"extends entry without pattern", "extends:\n  - bind:\n      core: core/**\n", false},
 		{"extends with an inexact version", "extends:\n  - pattern: acme/hexagonal@latest\n", false},
 		{"extends with a bind list", "extends:\n  - pattern: acme/hexagonal@1.0.0\n    bind: [core]\n", false},
 		{"extends with an unknown key", "extends:\n  - pattern: acme/hexagonal@1.0.0\n    version: 1.0.0\n", false},
-		{"override with a description", oneModule + `
+		{"override with a description", oneZone + `
 rules:
   acme/hexagonal:core/stdlib-only:
     description: "rewritten"
     severity: warning
 `, false},
-		{"override with on", oneModule + `
+		{"override with on", oneZone + `
 rules:
   acme/hexagonal:core/stdlib-only:
     on: core
@@ -751,7 +737,7 @@ rules:
 
 		// ---- pattern distribution files ----------------------------------
 		{"pattern file", header + `
-modules:
+zones:
   core: "The domain core."
   ports:
     description: "Inbound and outbound ports."
@@ -771,7 +757,7 @@ pattern:
   version: 1.0.0-beta.1
   coverage: [go, ts]
   documentation: https://example.test/hexagonal
-modules:
+zones:
   core: "The domain core."
 rules:
   core/stdlib-only:
@@ -781,7 +767,7 @@ rules:
 `, true},
 		{"pattern file with runtime", header + `
 runtime: [go]
-modules:
+zones:
   core: "The domain core."
 rules:
   core/stdlib-only:
@@ -792,7 +778,7 @@ rules:
 		{"pattern file with scan", header + `
 scan:
   unknown_imports: warn
-modules:
+zones:
   core: "The domain core."
 rules:
   core/stdlib-only:
@@ -802,7 +788,7 @@ rules:
 `, false},
 		{"pattern file with extends", header + `
 extends: []
-modules:
+zones:
   core: "The domain core."
 rules:
   core/stdlib-only:
@@ -810,8 +796,8 @@ rules:
     imports:
       internal: []
 `, false},
-		{"pattern file with a glob-list module", header + `
-modules:
+		{"pattern file with a glob-list zone", header + `
+zones:
   core: ["core/**"]
 rules:
   core/stdlib-only:
@@ -819,8 +805,8 @@ rules:
     imports:
       internal: []
 `, false},
-		{"pattern file module without a description", header + `
-modules:
+		{"pattern file zone without a description", header + `
+zones:
   core:
     paths: ["core/**"]
 rules:
@@ -829,8 +815,8 @@ rules:
     imports:
       internal: []
 `, false},
-		{"pattern file module with a blank description", header + `
-modules:
+		{"pattern file zone with a blank description", header + `
+zones:
   core: " "
 rules:
   core/stdlib-only:
@@ -839,7 +825,7 @@ rules:
       internal: []
 `, false},
 		{"pattern file with an override", header + `
-modules:
+zones:
   core: "The domain core."
 rules:
   core/stdlib-only:
@@ -854,9 +840,9 @@ rules:
 		{"pattern header with repeated coverage", header[:len(header)-1] + "\n  coverage: [go, go]\n", false},
 	}
 
-	// The repository ruleset extends the embedded domain-model Pattern,
-	// so the loader resolves it against the embedded source; the schema
-	// judges the document alone.
+	// The loader resolves extends against the embedded source, so a
+	// case naming a built-in Pattern exercises real resolution; the
+	// schema judges the document alone.
 	embedded, err := embeddedpattern.NewSource().Patterns()
 	if err != nil {
 		t.Fatalf("embedded patterns: %v", err)

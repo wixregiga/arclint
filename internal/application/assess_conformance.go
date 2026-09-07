@@ -103,7 +103,7 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 	}
 	assessment, err := conformance.Run(conformance.Request{
 		Rules:          rules,
-		Modules:        cfg.Modules,
+		Zones:          cfg.Zones,
 		Observations:   observations,
 		UnknownImports: cfg.Scan.UnknownImports,
 		Extensions:     uc.extensions,

@@ -12,7 +12,7 @@ import (
 )
 
 // ruleTestConfig builds one configured repository for Rule Test runs:
-// module "m" with a snake_case naming Rule and one Suppression
+// zone "m" with a snake_case naming Rule and one Suppression
 // covering m/BadTwo.go.
 func ruleTestConfig(t *testing.T) rule.Configured {
 	t.Helper()
@@ -20,17 +20,17 @@ func ruleTestConfig(t *testing.T) rule.Configured {
 	if err != nil {
 		t.Fatalf("NewGlob: %v", err)
 	}
-	module, err := rule.NewModule("m", "test module", []rule.Glob{glob})
+	zone, err := rule.NewZone("m", "test zone", []rule.Glob{glob})
 	if err != nil {
-		t.Fatalf("NewModule: %v", err)
+		t.Fatalf("NewZone: %v", err)
 	}
 	snake, err := rule.NewCaseSpec("snake_case")
 	if err != nil {
 		t.Fatalf("NewCaseSpec: %v", err)
 	}
-	scope, err := rule.ModuleApplicability([]rule.ModuleName{"m"})
+	scope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ModuleApplicability: %v", err)
+		t.Fatalf("ZoneApplicability: %v", err)
 	}
 	r, err := rule.New(rule.Spec{
 		ID:            "t/p:m/snake",
@@ -51,7 +51,7 @@ func ruleTestConfig(t *testing.T) rule.Configured {
 	}
 	return rule.Configured{
 		Rules:     []rule.Rule{r.Suppress(suppression)},
-		Modules:   []rule.Module{module},
+		Zones:     []rule.Zone{zone},
 		Languages: []rule.Language{rule.LanguageGo},
 	}
 }
@@ -206,16 +206,16 @@ type failingExtensions struct {
 }
 
 func (f failingExtensions) Evaluate(string, map[string]any, []string,
-	[]rule.Module, conformance.Observations, vocab.UbiquitousLanguage,
+	[]rule.Zone, conformance.Observations, vocab.UbiquitousLanguage,
 ) ([]conformance.ExtensionFinding, error) {
 	return nil, f.err
 }
 
 func TestRunRuleTestsContainsConformanceErrorAndContinues(t *testing.T) {
 	cfg := ruleTestConfig(t)
-	extScope, err := rule.ModuleApplicability([]rule.ModuleName{"m"})
+	extScope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ModuleApplicability: %v", err)
+		t.Fatalf("ZoneApplicability: %v", err)
 	}
 	extRule, err := rule.New(rule.Spec{
 		ID:            "t/p:m/ext",
@@ -277,7 +277,7 @@ type recordingExtensions struct {
 }
 
 func (r *recordingExtensions) Evaluate(_ string, _ map[string]any, _ []string,
-	_ []rule.Module, _ conformance.Observations, knowledge vocab.UbiquitousLanguage,
+	_ []rule.Zone, _ conformance.Observations, knowledge vocab.UbiquitousLanguage,
 ) ([]conformance.ExtensionFinding, error) {
 	r.knowledge = knowledge
 	return nil, nil
@@ -285,9 +285,9 @@ func (r *recordingExtensions) Evaluate(_ string, _ map[string]any, _ []string,
 
 func TestRunRuleTestsFeedsFixtureVocabularyToExtensions(t *testing.T) {
 	cfg := ruleTestConfig(t)
-	extScope, err := rule.ModuleApplicability([]rule.ModuleName{"m"})
+	extScope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ModuleApplicability: %v", err)
+		t.Fatalf("ZoneApplicability: %v", err)
 	}
 	extRule, err := rule.New(rule.Spec{
 		ID:            "t/p:m/ext",
@@ -300,10 +300,11 @@ func TestRunRuleTestsFeedsFixtureVocabularyToExtensions(t *testing.T) {
 	}
 	cfg.Rules = append(cfg.Rules, extRule)
 
-	const authored = "version: 1\ncontexts:\n  - name: Ordering\n    entities:\n      - name: Order\n"
-	recorded := vocab.UbiquitousLanguage{Contexts: []vocab.BoundedContext{{
-		Name:     "Ordering",
-		Entities: []vocab.Entity{{Definition: vocab.Definition{Name: "Order"}}},
+	const authored = "version: 2\nproject: shop\ncontexts:\n  ordering:\n    definition: Orders.\n    aggregates:\n      Order:\n        definition: A deal.\n        identity: OrderID\n"
+	recorded := vocab.UbiquitousLanguage{Project: "shop", Contexts: []vocab.BoundedContext{{
+		Name:       "ordering",
+		Definition: "Orders.",
+		Aggregates: []vocab.Aggregate{{Name: "Order", Definition: "A deal.", Identity: "OrderID"}},
 	}}}
 	files := []rule.TestFile{
 		{Path: "m/all_good.go"},
@@ -330,9 +331,9 @@ func TestRunRuleTestsFeedsFixtureVocabularyToExtensions(t *testing.T) {
 		t.Errorf("parsed content = %q, want the authored fixture bytes", vocabulary.content)
 	}
 	if len(recorder.knowledge.Contexts) != 1 ||
-		len(recorder.knowledge.Contexts[0].Entities) != 1 ||
-		recorder.knowledge.Contexts[0].Entities[0].Name != "Order" {
-		t.Errorf("evaluator knowledge = %+v, want the parsed Order entity", recorder.knowledge)
+		len(recorder.knowledge.Contexts[0].Aggregates) != 1 ||
+		recorder.knowledge.Contexts[0].Aggregates[0].Name != "Order" {
+		t.Errorf("evaluator knowledge = %+v, want the parsed Order aggregate", recorder.knowledge)
 	}
 }
 

@@ -3,6 +3,7 @@ package application
 import (
 	"fmt"
 
+	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
@@ -69,7 +70,14 @@ func (uc GetDomainOverview) Execute() (DomainOverview, error) {
 			return DomainOverview{}, fmt.Errorf("observe contracts: %w", err)
 		}
 		matrix := domainKnowledgeOf(lang)
-		locateDomainContracts(matrix, lang, indexDeclarations(obs))
+		carriers, err := conformance.NewCarriers(obs, lang, cfg.Zones)
+		if err != nil {
+			return DomainOverview{}, fmt.Errorf("locate contracts: %w", err)
+		}
+		if err := locateDomainContracts(matrix, carriers); err != nil {
+			return DomainOverview{}, fmt.Errorf("locate contracts: %w", err)
+		}
+		matrix.Unanchored = unanchoredContracts(matrix, cfg.Languages)
 		out.Matrix = matrix
 	}
 	return out, nil

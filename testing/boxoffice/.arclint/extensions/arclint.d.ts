@@ -127,65 +127,114 @@ declare module "arclint" {
     fixHint?: string;
   }
   /**
-   * DomainDefinitionInfo is one recorded project domain definition as
-   * exposed through ctx.domain(). Line is where the term is written in
-   * domain.arclint.yaml, so a finding about the term can anchor at
-   * the term; 0 when the vocabulary was not read from a file.
-   */
-  export interface DomainDefinitionInfo {
-    name: string;
-    definition?: string;
-    aliases?: string[];
-    aggregate?: boolean;
-    line: number /* int */;
-  }
-  /**
-   * DomainInvariantInfo is one recorded invariant (statement + owner)
-   * inside a bounded context as exposed through ctx.domain(). Line is
-   * where the invariant is written in domain.arclint.yaml. ID is
-   * the cluster identity when the owner is an aggregate named contract.
+   * DomainInvariantInfo is one recorded invariant as exposed through
+   * ctx.domain(): the key that names the method enforcing it (an
+   * aggregate's) or the constructor that enforces it (a value object's),
+   * and the statement. Line is where it is written in domain.arclint.yaml;
+   * 0 when the vocabulary was not read from a file.
    */
   export interface DomainInvariantInfo {
+    key: string;
     statement: string;
-    owner: string;
-    id?: string;
     line: number /* int */;
   }
   /**
    * DomainAssertionInfo is one recorded assertion as exposed through
-   * ctx.domain(). ID names the checking method; On names the operation
-   * that must call it.
+   * ctx.domain(). Key names the checking method on the root; On names
+   * the operation that must call it.
    */
   export interface DomainAssertionInfo {
-    statement: string;
-    owner: string;
-    id: string;
+    key: string;
     on: string;
+    statement: string;
     line: number /* int */;
   }
   /**
-   * DomainSpecificationInfo is one recorded specification as exposed
-   * through ctx.domain(): a named predicate, never a flag on a value
-   * object.
+   * DomainEntityInfo is one member entity of an aggregate as exposed
+   * through ctx.domain(). Identity names the value object that
+   * identifies it; empty when implied.
    */
-  export interface DomainSpecificationInfo {
+  export interface DomainEntityInfo {
     name: string;
-    definition?: string;
+    definition: string;
+    identity?: string;
+    aliases?: string[];
+    line: number /* int */;
+  }
+  /**
+   * DomainAggregateInfo is one recorded aggregate as exposed through
+   * ctx.domain(): its root carries the aggregate's name; Identity names
+   * the value object identifying the root; Entities are the members;
+   * Repository and Factory name the declarations when recorded.
+   */
+  export interface DomainAggregateInfo {
+    name: string;
+    definition: string;
+    identity: string;
+    aliases?: string[];
+    entities: DomainEntityInfo[];
+    invariants: DomainInvariantInfo[];
+    assertions: DomainAssertionInfo[];
+    repository?: string;
+    factory?: string;
+    line: number /* int */;
+  }
+  /**
+   * DomainValueObjectInfo is one recorded value object as exposed
+   * through ctx.domain(), with the invariants its constructor enforces.
+   */
+  export interface DomainValueObjectInfo {
+    name: string;
+    definition: string;
+    aliases?: string[];
+    invariants: DomainInvariantInfo[];
+    line: number /* int */;
+  }
+  /**
+   * DomainEventInfo is one recorded domain event as exposed through
+   * ctx.domain(). RaisedBy names the aggregate that raises it; empty
+   * when not recorded.
+   */
+  export interface DomainEventInfo {
+    name: string;
+    definition: string;
+    raisedBy?: string;
+    line: number /* int */;
+  }
+  /**
+   * DomainTermInfo is one recorded term that carries a name and a
+   * definition and nothing else: a domain service or a specification.
+   */
+  export interface DomainTermInfo {
+    name: string;
+    definition: string;
+    line: number /* int */;
+  }
+  /**
+   * DomainQuestionInfo is one open question recorded in a bounded
+   * context as exposed through ctx.domain().
+   */
+  export interface DomainQuestionInfo {
+    key: string;
+    text: string;
     line: number /* int */;
   }
   /**
    * DomainContextInfo is one bounded context and its recorded terms as
-   * exposed through ctx.domain(). Line is where the context is written
-   * in domain.arclint.yaml.
+   * exposed through ctx.domain(). Zones lists the Zones of
+   * rules.arclint.yaml the context is implemented in, when recorded.
+   * Line is where the context is written in domain.arclint.yaml.
    */
   export interface DomainContextInfo {
     name: string;
-    entities: DomainDefinitionInfo[];
-    valueObjects: DomainDefinitionInfo[];
-    invariants: DomainInvariantInfo[];
-    assertions: DomainAssertionInfo[];
-    specifications: DomainSpecificationInfo[];
-    events: DomainDefinitionInfo[];
+    definition: string;
+    zones?: string[];
+    aggregates: DomainAggregateInfo[];
+    valueObjects: DomainValueObjectInfo[];
+    events: DomainEventInfo[];
+    services: DomainTermInfo[];
+    specifications: DomainTermInfo[];
+    questions: DomainQuestionInfo[];
     line: number /* int */;
   }
   /**
@@ -197,6 +246,7 @@ declare module "arclint" {
     from: string;
     to: string;
     kind: string;
+    description?: string;
     line: number /* int */;
   }
   /**
@@ -205,10 +255,12 @@ declare module "arclint" {
    * Read-only: declaring knowledge never creates a diagnostic by itself.
    * Source is the repository-relative path of the domain file the model
    * is (or would be) recorded in, so a finding about a recorded term
-   * anchors there without the extension spelling the file name.
+   * anchors there without the extension spelling the file name. Project
+   * names the software whose domain is recorded.
    */
   export interface DomainInfo {
     source: string;
+    project: string;
     contexts: DomainContextInfo[];
     relations: DomainRelationInfo[];
   }
@@ -233,13 +285,13 @@ declare module "arclint" {
     read(path: string): string;
     /** Classified imports of one file, for every active language target. */
     imports(path: string): ImportInfo[];
-    /** Declared module names to their member file paths. */
-    modules(): Record<string, string[]>;
+    /** Declared zone names to their member file paths. */
+    zones(): Record<string, string[]>;
     /** Cross-language declaration facts for one file; null when its
      * language did not supply declarations. */
     facts(path: string): FactsInfo | null;
-    /** The sorted module names a file belongs to. */
-    moduleOf(path: string): string[];
+    /** The sorted zone names a file belongs to. */
+    zoneOf(path: string): string[];
     /** The project's recorded domain model (domain.arclint.yaml);
      * empty collections when the project records none. Read-only:
      * declaring knowledge never creates a diagnostic by itself. */

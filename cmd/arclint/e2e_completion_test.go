@@ -15,7 +15,7 @@ import (
 // completionRules is a minimal but real ruleset: one naming Rule
 // whose id the completion callbacks must surface.
 const completionRules = `runtime: [go]
-modules:
+zones:
   src: src/**
 rules:
   src/snake:

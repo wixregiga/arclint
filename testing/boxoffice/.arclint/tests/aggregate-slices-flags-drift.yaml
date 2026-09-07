@@ -4,17 +4,20 @@ rule: "entities/aggregate-slices"
 files:
   domain.arclint.yaml: |
     version: 1
+    project: boxoffice
     contexts:
-      - name: catalog
-        entities:
-          - name: Event
+      catalog:
+        definition: What is on sale.
+        aggregates:
+          Event:
             definition: One show an organizer puts on sale.
-            aggregate: true
-      - name: capacity
-        entities:
-          - name: Capacity
+            identity: EventID
+      capacity:
+        definition: Whether one more promise fits the room.
+        aggregates:
+          Capacity:
             definition: The seat count for one event.
-            aggregate: true
+            identity: CapacityID
   internal/entities/event/event.go: |
     package event
 
@@ -29,16 +32,16 @@ expect:
   - kind: violation
     path: internal/entities/event/event_test.go
     line: 0
-    message: "Module \"entities\" is missing a required file matching \"internal/entities/event/event_test.go\""
+    message: "Zone \"entities\" is missing a required file matching \"internal/entities/event/event_test.go\""
   - kind: violation
     path: internal/entities/capacity/capacity.go
     line: 0
-    message: "Module \"entities\" is missing a required file matching \"internal/entities/capacity/capacity.go\""
+    message: "Zone \"entities\" is missing a required file matching \"internal/entities/capacity/capacity.go\""
   - kind: violation
     path: internal/entities/capacity/repository.go
     line: 0
-    message: "Module \"entities\" is missing a required file matching \"internal/entities/capacity/repository.go\""
+    message: "Zone \"entities\" is missing a required file matching \"internal/entities/capacity/repository.go\""
   - kind: violation
     path: internal/entities/capacity/capacity_test.go
     line: 0
-    message: "Module \"entities\" is missing a required file matching \"internal/entities/capacity/capacity_test.go\""
+    message: "Zone \"entities\" is missing a required file matching \"internal/entities/capacity/capacity_test.go\""

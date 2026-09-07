@@ -24,7 +24,7 @@ const (
 // Skill frontmatter (SKILL.md).
 const (
 	SkillName        = "domain-librarian"
-	SkillDescription = "Distill domain concepts from user input or analysis into a bounded-context-organized ubiquitous-language library file. Use when categorizing domain terms (entity, value_object, invariant, assertion, specification, event), recording or maintaining a project's ubiquitous language, or resolving term conflicts across bounded contexts."
+	SkillDescription = "Distill domain concepts from user input or analysis into a bounded-context-organized ubiquitous-language library file. Use when categorizing domain terms (aggregate, entity, value_object, invariant, assertion, specification, event, service), recording or maintaining a project's ubiquitous language, or resolving term conflicts across bounded contexts."
 )
 
 // Skill protocol body constants (SKILL.md), char-exact to the litmus file.
@@ -49,12 +49,12 @@ func SkillProtocolRules() []string {
 		"**Carried values.** An attribute the input says is carried, kept, or supplied by another term is that term's value; its identity question is already answered; asking it is a failure. Measurements, units, and amounts are value_object evidence and usually carry an invariant.",
 		"**Code is not domain evidence.** Classification evidence comes from the input and the recorded language only. What the current implementation permits or forbids can flag a conflict; it can never close a candidate model.",
 		"**Structure follows classification.** Files, repositories, and API slices a toolchain would require are consequences of a classification and count for nothing toward one. VOCAB's rules read one way only: they constrain designs and reject wrong boundaries; reading one backwards as classification evidence is a protocol violation. Needing to store or list something is design, not domain.",
-		"**Boundaries.** A party that must be informed or notified is a second bounded_context: record it and its relation even when empty. Decisions ABOUT other terms (exclude, suppress, disable, override, snapshot) form their own governance context. Collapse synonyms to one canonical term with aliases. Mark `aggregate: true` only with quoted consistency evidence.",
-		"**Ask or record, never guess.** One question per blocked concept, chosen from VOCAB's question banks by what it decides. A structural fork among surviving candidates (new aggregate versus value on an existing term, a new context, bypassing existing machinery) is a question for the domain expert regardless of partial evidence. Asking is always possible: the harness's question tool reaches the domain expert, and a subagent's question routes through its parent session; never assume nobody can answer. Zero unresolved terms is a red flag: re-scan definition-only evidence and skipped re-tests before finalizing. Having tools changes nothing; a write tool does not authorize resolving what the evidence cannot.",
+		"**Boundaries.** A party that must be informed or notified is a second bounded_context: record it and its relation even when empty. Decisions ABOUT other terms (exclude, suppress, disable, override, snapshot) form their own governance context. Collapse synonyms to one canonical term with aliases. Record a term under `aggregates` only with quoted consistency evidence: an invariant spanning a cluster that must change in one transaction; every other entity is a member of the aggregate that owns it, and an entity that belongs to no aggregate is a question, not an entry.",
+		"**Ask or record, never guess.** One question per blocked concept, chosen from VOCAB's question banks by what it decides. A structural fork among surviving candidates (new aggregate versus value on an existing term, a new context, bypassing existing machinery) is a question for the domain expert regardless of partial evidence. Asking is always possible: the harness's question tool reaches the domain expert, and a subagent's question routes through its parent session; never assume nobody can answer. A question nobody can answer this session is written under the context's `questions`, keyed, so the library shows what is undecided. Zero unresolved terms is a red flag: re-scan definition-only evidence and skipped re-tests before finalizing. Having tools changes nothing; a write tool does not authorize resolving what the evidence cannot.",
 		"**Precedence.** The conflict protocol outranks every other rule; routing around a conflict is a conflict. The conflict question fires when any CANDIDATE model would change a recorded entry's meaning, not only when an edit is made; choosing a different candidate to avoid the change while the question is unanswered is a protocol violation. No recorded entry's name, kind, or definition changes without an answered conflict question; inherited re-tests and language-fidelity renames PROPOSE changes, never authorize them.",
-		"**Invariant gate.** A recorded invariant must forbid something a naive implementation could do, and it is one violation, one complete sentence in the domain's own voice, with the owning term as its subject. Always-true rules belong in invariants[]; a post-condition of a named operation belongs in assertions[] with id and on; a predicate experts pass around as a thing belongs in specifications[], never as a flag on a value object. Value integrity is an invariant whose owner is a value object (no id, constructor only); a cluster invariant's owner is an aggregate and requires id. Never record a programming-only guard. Would you say this to an expert who never saw the language? An \"and\" joining independently violable clauses is several entries; the narrative that connects them belongs in the owning term's definition. Restating a definition is not an invariant, and \"the system shall\" is not the domain speaking.",
+		"**Invariant gate.** A recorded invariant must forbid something a naive implementation could do, and it is one violation, one complete sentence in the domain's own voice, with the owning term as its subject. Always-true rules go under their owner's `invariants`, keyed; a post-condition of a named operation goes under the aggregate's `assertions` with `on`; a predicate experts pass around as a thing goes under `specifications`, never as a flag on a value object. Value integrity is an invariant under a value object (constructor only); a cluster invariant is under an aggregate and its key names the root method that enforces it. Never record a programming-only guard. Would you say this to an expert who never saw the language? An \"and\" joining independently violable clauses is several entries; the narrative that connects them belongs in the owning term's definition. Restating a definition is not an invariant, and \"the system shall\" is not the domain speaking.",
 		"**Completeness sweep.** Before finishing, re-scan the source text for must/never promises no recorded invariant carries; record each under its owner or raise it as a question. A promise living only in tests or views is unrecorded.",
-		"**Output.** ALWAYS emit or write the complete library file per VOCAB's `library_file.shape`; a summary of it is a failure. Preserve unrelated entries byte-identical; edits surgical, additions alphabetized. Record business_rule inputs as resolved invariants or assertions with an owner; never as a specification.",
+		"**Output.** ALWAYS emit or write the complete library file per VOCAB's `library_file.shape`; a summary of it is a failure. Preserve unrelated entries byte-identical; edits surgical, additions alphabetized. Record business_rule inputs as resolved invariants or assertions under an owner; never as a specification.",
 		"**Description style.** Definitions read like a document their humans own: plain sentences, no em dashes. Anything object-level a definition names must itself be recorded, or the mention is reworded into plain language. A term that lines up with a code object uses the code's exact spelling (TermCase, RuleID), never a prose-spaced variant.",
 	}
 }
@@ -73,9 +73,7 @@ type LibraryFile struct {
 	Shape string
 	// ShapeComment is the inline comment on the shape: | line.
 	ShapeComment string
-	// RelationsShapeComment is the trailing comment on the relations shape line.
-	RelationsShapeComment string
-	Rules                 []string
+	Rules        []string
 }
 
 // LibraryFileSpec returns the library_file section data char-exact to VOCAB.yaml.
@@ -88,22 +86,34 @@ func LibraryFileSpec() LibraryFile {
 		HeaderComment:     "first line of every written library file",
 		ShapeComment:      "human-readable summary; " + SchemaFileName + " is authoritative; on any divergence, the schema wins",
 		Shape: `    version: 1
+    project: <name>
+    description: <the domain in a few sentences>?
     contexts:
-      - name: <context>
-        entities: [{name, definition, aggregate: true?, aliases: []?}]
-        value_objects: [{name, definition, aliases: []?}]
-        invariants: [{statement, owner, id?}]
-        assertions: [{statement, owner, id, on}]
-        specifications: [{name, definition}]
-        events: [{name, definition}]
-    relations: [{from, to, kind}]   # kind = one context_relation key; omit when single context
+      <context>:
+        definition: <what the context is responsible for>
+        aggregates:
+          <Aggregate>:
+            definition: <text>
+            identity: <ValueObject>
+            aliases: [<name>]?
+            entities: {<Entity>: {definition, identity?, aliases?}}?
+            invariants: {<key>: <statement>}?    # key names the root method that enforces it
+            assertions: {<key>: {on: <Operation>, statement}}?
+            repository: <Name>?
+            factory: <Name>?
+        value_objects: {<ValueObject>: {definition, aliases?, invariants: {<key>: <statement>}?}}
+        events: {<Event>: {definition, raised_by: <Aggregate>?}}
+        services: {<Service>: {definition}}
+        specifications: {<Specification>: {definition}}
+        questions: {<key>: <text>}
+    relations: [{from, to, kind, description?}]   # kind = one context_relation key; omit when single context
 `,
-		RelationsShapeComment: "kind = one context_relation key; omit when single context",
 		Rules: []string{
 			"Every term carries a definition; no definition, no entry.",
 			"A term lives in exactly one context; same word elsewhere is a second term.",
 			"Aliases point at the canonical term; never duplicate definitions.",
-			"Unresolved classifications are never written; ask first, record after.",
+			"Every entity lives under the aggregate that owns it; an aggregate names its identity; an invariant lives under the one aggregate or value object that enforces it.",
+			"Unresolved classifications are never written; an open question is written under `questions`, keyed, and nothing is enforced from it.",
 			"Definitions read as plain human sentences, without em dashes; humans own the document.",
 			"Anything object-level a definition names is itself recorded, or the mention is reworded in plain language.",
 			"A term matching a code object uses the code's exact spelling (TermCase, RuleID), never a prose-spaced variant.",
@@ -114,68 +124,15 @@ func LibraryFileSpec() LibraryFile {
 // VOCABHeaderComment is line 1 of VOCAB.yaml.
 const VOCABHeaderComment = "# domain-librarian core reference: DDD vocabulary, distillation rules, clarification protocol."
 
-// Schema document scaffolding (domain.arclint.schema.json). Descriptions that
-// embed taxonomy data are built in schema.go; these are fixed prose.
+// Schema document scaffolding (domain.arclint.schema.json). Every
+// property description comes from the meta-model's recordings; these
+// are the fixed prose of the document itself.
 const (
 	SchemaID    = "https://raw.githubusercontent.com/wixregiga/arclint/main/docs/schemas/" + SchemaFileName
 	SchemaDraft = "https://json-schema.org/draft/2020-12/schema"
 	SchemaTitle = "domain-librarian ubiquitous-language library"
 
-	SchemaDescription = "The project's recorded Ubiquitous Language, organized by bounded context. The domain-librarian has sole write custody; humans review and edit under the same rules: every term carries a definition, a term lives in exactly one context, aliases point at the canonical term, and unresolved classifications are never written."
+	SchemaDescription = "The project's recorded Ubiquitous Language, organized by bounded context. The domain-librarian has sole write custody; humans review and edit under the same rules. Every term carries a definition, and a term lives in exactly one context. Every entity lives under its aggregate, and every invariant lives under the term that enforces it. Aliases point at the canonical term. Unresolved classifications are written as questions, never guessed."
 
 	SchemaVersionDescription = "Document version. This library accepts version 1 only."
-
-	SchemaContextsDescription = "One entry per bounded context: an explicit boundary within which one model applies and every term has exactly one meaning."
-
-	SchemaContextNameDescription = "The bounded context's name. A party that must be informed or notified is its own context, recorded even while empty."
-
-	SchemaEntitiesDescription = "Domain concepts defined by identity that persists across attribute change (identity-test: it stays the same thing when its attributes change)."
-
-	SchemaValueObjectsDescription = "Immutable, identity-less concepts described entirely by their values (value-test: two with identical values are interchangeable). Measurements, units, and amounts belong here."
-
-	SchemaInvariantsDescription = "Must-always/must-never rules that hold at all times within this context.\n\nA valid invariant forbids something a naive implementation could do. Restating a definition is not an invariant.\n\nThe owner decides the enforcement. A value object owner means value integrity: no id, enforced at that type's constructor. An aggregate owner with an id means a cluster invariant: a method named from the id, called from the constructor and every exported command."
-
-	SchemaAssertionsDescription = "Post-conditions of a named operation.\n\nUnlike an invariant, an assertion holds when that operation occurs, not at all times.\n\nThe id names the method that checks the post-condition; on names the operation that must call that method."
-
-	SchemaSpecificationsDescription = "Named predicates experts pass around as a thing.\n\nA type of this name carries an Evans satisfaction method, spelled SatisfiedBy, satisfiedBy, or satisfied_by in the language's method case.\n\nA specification is not an invariant and is not a flag on a value object. A name may not appear in both value_objects and specifications."
-
-	SchemaEventsDescription = "Domain events: things that happened that experts care about, named in past-tense expert language (event-detection). Technical changes are not events."
-
-	SchemaRelationsDescription = "Context-map edges between bounded contexts. Omit when a single context exists."
-
-	SchemaCanonicalNameDescription = "Canonical term, exactly as domain experts say it (language-fidelity). A term that lines up with a code object uses the code's exact spelling (TermCase, RuleID), never a prose-spaced variant."
-
-	SchemaEntityDefinitionDescription = "What the term means, grounded in expert language. A term without a definition is rejected, not stored. Written for humans first: plain sentences, no em dashes; anything object-level it names must be recorded in this library or reworded in plain language."
-
-	SchemaValueDefinitionDescription = "What the value describes. A term without a definition is rejected, not stored. Written for humans first: plain sentences, no em dashes; anything object-level it names must be recorded in this library or reworded in plain language."
-
-	SchemaEntityAliasesDescription = "Synonyms collapsed onto this canonical term (synonym-collapse). Aliases never carry their own definitions."
-
-	SchemaValueAliasesDescription = "Synonyms collapsed onto this canonical term. Aliases never carry their own definitions."
-
-	SchemaAggregateFlagDescription = "True only with quoted consistency evidence: an invariant spanning a cluster that must change in one transaction. Never true by default."
-
-	SchemaStatementDescription = "The rule, phrased so the concrete forbidden violation is clear."
-
-	SchemaOwnerDescription = "Exactly one enforcing term in this context. An aggregate owner enforces a cluster invariant, and a named contract requires an id. A value object owner enforces value integrity at construction and carries no id."
-
-	SchemaAssertionOwnerDescription = "The entity whose named operation must satisfy this post-condition. Must be a recorded entity in this context."
-
-	SchemaInvariantIDDescription = "Stable identity of a cluster invariant, unique within the bounded context. Required when the owner is an aggregate and this is a named cluster contract; forbidden when the owner is a value object.\n\nThe enforcing method is this id rendered in the language's method case: PascalCase, camelCase, or snake_case."
-
-	SchemaAssertionIDDescription = "Stable identity of the assertion, unique within the bounded context. Names the method that checks the post-condition, rendered in the language's method case."
-
-	SchemaAssertionOnDescription = "The operation that must call the assertion's method.\n\nWrite the operation's method name: Publish, not publishEvent."
-
-	SchemaSpecificationNameDescription = "Canonical name of the specification, exactly as domain experts say it. A type of this name in source carries the satisfaction method."
-
-	SchemaSpecificationDefinitionDescription = "What the predicate means, grounded in expert language. A term without a definition is rejected, not stored. Written for humans first: plain sentences, no em dashes; anything object-level it names must be recorded in this library or reworded in plain language."
-
-	SchemaEventNameDescription = "Past-tense event name, e.g. OrderConfirmed."
-
-	SchemaEventDefinitionDescription = "What happened and who cares, including any party that must be informed. Written for humans first: plain sentences, no em dashes; anything object-level it names must be recorded in this library or reworded in plain language."
-
-	SchemaFromDescription = "Upstream context name (must match a contexts[].name)."
-
-	SchemaToDescription = "Downstream context name (must match a contexts[].name)."
 )
