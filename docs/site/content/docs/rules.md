@@ -4,7 +4,7 @@ description = "Every published Rule Type: its assertion key in rules.arclint.yam
 weight = 3
 +++
 
-The published Rule Types are a finite ArcLint-owned enum. Configure them
+The published Rule Types (formally ConstraintKind in the domain) are a finite ArcLint-owned enum. Configure them
 in `rules.arclint.yaml`; Extensions do not add new types. The same shapes power
 `arclint rules schema`, editor completion, and `arclint rules <id>`
 detail output.
@@ -16,7 +16,7 @@ assertion key, and the assertion key decides the Rule Type; an entry
 with no assertion key is an Override of a Pattern rule or of a
 [built-in rule](/docs/contracts/), keyed by that rule's id:
 
-| assertion key | Rule Type | judges |
+| assertion key | Rule Type (ConstraintKind) | judges |
 |---|---|---|
 | `imports` | consumes | the Zones under `on` |
 | `structure` | structure | the Zones under `on` |

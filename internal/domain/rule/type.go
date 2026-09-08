@@ -8,59 +8,91 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
-// Type is one value from the finite ArcLint-owned set of supported Rule
-// shapes: consumes, structure, naming, layers, protected, independence,
+// ConstraintKind is one value from the finite ArcLint-owned set of supported
+// constraint shapes: consumes, structure, naming, layers, protected, independence,
 // acyclic, domain, content, and extension. Pattern and Extension
 // authors configure existing values; they do not add new ones; custom
 // logic plugs into the extension kind through the SDK, it never grows
-// this enum. In rules.arclint.yaml a Type is never spelled: the one Assertion
-// key a Rule carries decides it (see AssertionKey); the domain Type has
+// this enum. In rules.arclint.yaml a ConstraintKind is never spelled: the one Assertion
+// key a Rule carries decides it (see AssertionKey); the domain kind has
 // no key because its Rules are built in, never authored.
-type Type string
+type ConstraintKind string
+
+// Type is an alias for ConstraintKind preserving compatibility across packages.
+type Type = ConstraintKind
 
 const (
-	// TypeConsumes states what a Zone may import: other declared
+	// ConstraintKindConsumes states what a Zone may import: other declared
 	// Zones by allow-list, external and standard-library imports by
 	// policy.
-	TypeConsumes Type = "consumes"
-	// TypeStructure requires or forbids files matching globs inside a
+	ConstraintKindConsumes ConstraintKind = "consumes"
+	// ConstraintKindStructure requires or forbids files matching globs inside a
 	// Zone.
-	TypeStructure Type = "structure"
-	// TypeNaming constrains file names within a Zone to a finite case
+	ConstraintKindStructure ConstraintKind = "structure"
+	// ConstraintKindNaming constrains file names within a Zone to a finite case
 	// vocabulary.
-	TypeNaming Type = "naming"
-	// TypeLayers orders Zones highest first; a Zone may import same
+	ConstraintKindNaming ConstraintKind = "naming"
+	// ConstraintKindLayers orders Zones highest first; a Zone may import same
 	// or lower layers, never higher.
-	TypeLayers Type = "layers"
-	// TypeProtected restricts which Zones may import one Zone.
-	TypeProtected Type = "protected"
-	// TypeIndependence forbids imports between sibling Folders.
-	TypeIndependence Type = "independence"
-	// TypeAcyclic forbids dependency cycles among declared Zones.
-	TypeAcyclic Type = "acyclic"
-	// TypeDomain evaluates one invariant of a Domain-Driven Design
+	ConstraintKindLayers ConstraintKind = "layers"
+	// ConstraintKindProtected restricts which Zones may import one Zone.
+	ConstraintKindProtected ConstraintKind = "protected"
+	// ConstraintKindIndependence forbids imports between sibling Folders.
+	ConstraintKindIndependence ConstraintKind = "independence"
+	// ConstraintKindAcyclic forbids dependency cycles among declared Zones.
+	ConstraintKindAcyclic ConstraintKind = "acyclic"
+	// ConstraintKindDomain evaluates one invariant of a Domain-Driven Design
 	// building block against every instance the recorded domain holds.
 	// Its Rules are built in: arclint composes one per check-level block
 	// invariant under the invariant's own id the moment a domain is
 	// recorded (see BuiltIn), and a ruleset adopts them through
 	// Overrides only.
-	TypeDomain Type = "domain"
-	// TypeContent forbids lines matching a regular expression in the
+	ConstraintKindDomain ConstraintKind = "domain"
+	// ConstraintKindContent forbids lines matching a regular expression in the
 	// Rule's Subjects: the built-in evaluator over file bytes.
-	TypeContent Type = "content"
-	// TypeExtension delegates enforcement to a named Extension through
+	ConstraintKindContent ConstraintKind = "content"
+	// ConstraintKindExtension delegates enforcement to a named Extension through
 	// the sandboxed SDK; parameters are validated host-side against the
 	// extension's published schema before any extension code runs.
-	TypeExtension Type = "extension"
+	ConstraintKindExtension ConstraintKind = "extension"
 )
+
+// Backward-compatibility aliases for legacy Type* identifiers.
+const (
+	// TypeConsumes is an alias for ConstraintKindConsumes.
+	TypeConsumes = ConstraintKindConsumes
+	// TypeStructure is an alias for ConstraintKindStructure.
+	TypeStructure = ConstraintKindStructure
+	// TypeNaming is an alias for ConstraintKindNaming.
+	TypeNaming = ConstraintKindNaming
+	// TypeLayers is an alias for ConstraintKindLayers.
+	TypeLayers = ConstraintKindLayers
+	// TypeProtected is an alias for ConstraintKindProtected.
+	TypeProtected = ConstraintKindProtected
+	// TypeIndependence is an alias for ConstraintKindIndependence.
+	TypeIndependence = ConstraintKindIndependence
+	// TypeAcyclic is an alias for ConstraintKindAcyclic.
+	TypeAcyclic = ConstraintKindAcyclic
+	// TypeDomain is an alias for ConstraintKindDomain.
+	TypeDomain = ConstraintKindDomain
+	// TypeContent is an alias for ConstraintKindContent.
+	TypeContent = ConstraintKindContent
+	// TypeExtension is an alias for ConstraintKindExtension.
+	TypeExtension = ConstraintKindExtension
+)
+
+// ConstraintKinds returns the published enum in stable order.
+func ConstraintKinds() []ConstraintKind {
+	return []ConstraintKind{
+		ConstraintKindConsumes, ConstraintKindStructure, ConstraintKindNaming,
+		ConstraintKindLayers, ConstraintKindProtected, ConstraintKindIndependence, ConstraintKindAcyclic, ConstraintKindDomain,
+		ConstraintKindContent, ConstraintKindExtension,
+	}
+}
 
 // Types returns the published enum in stable order.
 func Types() []Type {
-	return []Type{
-		TypeConsumes, TypeStructure, TypeNaming,
-		TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic, TypeDomain,
-		TypeContent, TypeExtension,
-	}
+	return ConstraintKinds()
 }
 
 // assertionKeys maps each authored Type to the one rules.arclint.yaml
@@ -165,14 +197,19 @@ func (t Type) AcceptsFiles() bool {
 	}
 }
 
-// ParseType accepts only a published enum value.
-func ParseType(s string) (Type, error) {
-	for _, t := range Types() {
-		if Type(s) == t {
-			return t, nil
+// ParseConstraintKind accepts only a published enum value.
+func ParseConstraintKind(s string) (ConstraintKind, error) {
+	for _, k := range ConstraintKinds() {
+		if ConstraintKind(s) == k {
+			return k, nil
 		}
 	}
-	return "", fmt.Errorf("rule type %q: not a published ArcLint Rule Type %v", s, Types())
+	return "", fmt.Errorf("constraint kind %q: not a published ArcLint Constraint Kind %v", s, ConstraintKinds())
+}
+
+// ParseType accepts only a published enum value.
+func ParseType(s string) (Type, error) {
+	return ParseConstraintKind(s)
 }
 
 // Valid reports whether the value is a published enum member.
