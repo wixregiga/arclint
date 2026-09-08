@@ -543,6 +543,22 @@ func TestPatternExtensionsReturnsCopy(t *testing.T) {
 	}
 }
 
+func TestConstraintKinds(t *testing.T) {
+	kinds := rule.ConstraintKinds()
+	if len(kinds) != 10 {
+		t.Fatalf("ConstraintKinds() returned %d kinds, want 10", len(kinds))
+	}
+	for _, k := range kinds {
+		parsed, err := rule.ParseConstraintKind(string(k))
+		if err != nil || parsed != k {
+			t.Errorf("ParseConstraintKind(%q) = %v, err: %v", k, parsed, err)
+		}
+	}
+	if _, err := rule.ParseConstraintKind("nonexistent"); err == nil {
+		t.Errorf("ParseConstraintKind(nonexistent) expected error, got nil")
+	}
+}
+
 func TestAssertionKeysSpellEveryType(t *testing.T) {
 	keys := rule.AssertionKeys()
 	if len(keys) != len(rule.AuthoredTypes()) {

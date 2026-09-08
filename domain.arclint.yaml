@@ -112,6 +112,13 @@ contexts:
           imported_by, independent, acyclic, content, or uses. The key
           alone decides how the Rule is evaluated; a Rule never carries
           two.
+      ConstraintKind:
+        definition: >-
+          One value from the finite ArcLint-owned set of supported
+          constraint shapes: consumes, structure, naming, layers,
+          protected, independence, acyclic, domain, content, and
+          extension. The constraint key spelled in rules.arclint.yaml
+          decides it.
       Severity:
         definition: >-
           Gate importance of a finding: error, warning, or info.
