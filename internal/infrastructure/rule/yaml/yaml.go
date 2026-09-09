@@ -24,6 +24,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/wixregiga/arclint/internal/domain/adoption"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
@@ -953,7 +954,7 @@ func (d *document) repository(lang vocab.UbiquitousLanguage, available []rule.Pa
 				return fail("%s: rule %s is overridden twice", e.where, q)
 			}
 			seen[q] = true
-			overridden, err := e.applyOverride(rules[i])
+			overridden, err := e.applyOverride(id, rules[i])
 			if err != nil {
 				return fail("%v", err)
 			}
@@ -1011,10 +1012,22 @@ func sameGlobs(a, b []rule.Glob) bool {
 	return true
 }
 
-// applyOverride merges the entry's adoption decisions onto a Pattern
-// Rule. An Override carries no constraint, no description, and no
-// applicability of its own.
-func (e ruleEntry) applyOverride(r rule.Rule) (rule.Rule, error) {
+// applyOverride translates the entry and preserves its location on domain errors.
+func (e ruleEntry) applyOverride(id rule.ID, r rule.Rule) (rule.Rule, error) {
+	override, err := e.buildOverride(id)
+	if err != nil {
+		return rule.Rule{}, err
+	}
+	overridden, err := override.Apply(r)
+	if err != nil {
+		return rule.Rule{}, fmt.Errorf("%s: %w", e.where, err)
+	}
+	return overridden, nil
+}
+
+// buildOverride decodes adoption decisions without giving an Override a
+// constraint, description, parameters, or applicability of its own.
+func (e ruleEntry) buildOverride(id rule.ID) (adoption.Override, error) {
 	for _, bad := range []struct {
 		set  bool
 		key  string
@@ -1026,48 +1039,83 @@ func (e ruleEntry) applyOverride(r rule.Rule) (rule.Rule, error) {
 		{e.withPresent, keyWith, "a pattern rule keeps its own parameters"},
 	} {
 		if bad.set {
-			return rule.Rule{}, fmt.Errorf("%s: an override does not accept %s (%s); to change what the rule asserts, disable it with a reason and add a local Rule under a new ID",
+			return adoption.Override{}, fmt.Errorf("%s: an override does not accept %s (%s); to change what the rule asserts, disable it with a reason and add a local Rule under a new ID",
 				e.where, bad.key, bad.hint)
 		}
 	}
-	if e.severity == "" && e.disable == nil && e.exclude == nil && e.suppress == nil {
-		return rule.Rule{}, fmt.Errorf("%s: an override changes something: severity, disable, exclude, or suppress", e.where)
+	values, err := e.decodeAdoption()
+	if err != nil {
+		return adoption.Override{}, err
 	}
-	return e.adopt(r)
+	override, err := adoption.NewOverride(id, values.severity, values.exclusion, values.suppression, values.disablement)
+	if err != nil {
+		return adoption.Override{}, fmt.Errorf("%s: %w", e.where, err)
+	}
+	return override, nil
 }
 
-// adopt applies severity, exclude, suppress, and disable, in that
-// order, to a Rule.
-func (e ruleEntry) adopt(r rule.Rule) (rule.Rule, error) {
+// adoptionValues holds the decoded values shared by local Rule entries and
+// Override entries; source locations belong to decoding, not domain decisions.
+type adoptionValues struct {
+	severity    rule.Severity
+	exclusion   *rule.Exclusion
+	suppression *rule.Suppression
+	disablement *rule.Disablement
+}
+
+func (e ruleEntry) decodeAdoption() (adoptionValues, error) {
+	var values adoptionValues
 	if e.severity != "" {
 		s, err := rule.ParseSeverity(e.severity)
 		if err != nil {
-			return rule.Rule{}, fmt.Errorf("%s.severity: %v", e.where, err)
+			return adoptionValues{}, fmt.Errorf("%s.severity: %v", e.where, err)
 		}
-		if r, err = r.WithSeverity(s); err != nil {
-			return rule.Rule{}, fmt.Errorf("%s: %v", e.where, err)
-		}
+		values.severity = s
 	}
 	if e.exclude != nil {
 		ex, err := rule.NewExclusion(e.exclude.paths, e.exclude.zones, e.exclude.reason)
 		if err != nil {
-			return rule.Rule{}, fmt.Errorf("%s.exclude: %v", e.where, err)
+			return adoptionValues{}, fmt.Errorf("%s.exclude: %v", e.where, err)
 		}
-		r = r.Exclude(ex)
+		values.exclusion = &ex
 	}
 	if e.suppress != nil {
 		su, err := rule.NewSuppression(e.suppress.paths, e.suppress.reason)
 		if err != nil {
-			return rule.Rule{}, fmt.Errorf("%s.suppress: %v", e.where, err)
+			return adoptionValues{}, fmt.Errorf("%s.suppress: %v", e.where, err)
 		}
-		r = r.Suppress(su)
+		values.suppression = &su
 	}
 	if e.disable != nil {
 		dis, err := rule.NewDisablement(*e.disable)
 		if err != nil {
-			return rule.Rule{}, fmt.Errorf("%s.disable: %v", e.where, err)
+			return adoptionValues{}, fmt.Errorf("%s.disable: %v", e.where, err)
 		}
-		r = r.Disable(dis)
+		values.disablement = &dis
+	}
+	return values, nil
+}
+
+// adopt applies the adoption decisions carried by a local Rule entry.
+func (e ruleEntry) adopt(r rule.Rule) (rule.Rule, error) {
+	values, err := e.decodeAdoption()
+	if err != nil {
+		return rule.Rule{}, err
+	}
+	if values.severity != "" {
+		r, err = r.WithSeverity(values.severity)
+		if err != nil {
+			return rule.Rule{}, fmt.Errorf("%s: %v", e.where, err)
+		}
+	}
+	if values.exclusion != nil {
+		r = r.Exclude(*values.exclusion)
+	}
+	if values.suppression != nil {
+		r = r.Suppress(*values.suppression)
+	}
+	if values.disablement != nil {
+		r = r.Disable(*values.disablement)
 	}
 	return r, nil
 }

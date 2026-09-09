@@ -8,7 +8,7 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/rule"
 )
 
-// PatternSource is one place Patterns resolve from without the
+// PatternSource loads one domain PatternSource without the
 // network: the binary's embedded Patterns or the repository's own
 // .arclint/patterns tree. Each Pattern comes with the exact files it
 // was loaded from, so its Digest is known wherever it is listed.
@@ -78,15 +78,19 @@ type PublishedPattern struct {
 
 // loadCatalog folds the resolving sources into one Catalog.
 func loadCatalog(sources []PatternSource) (distribution.Catalog, error) {
-	batches := make([][]distribution.Available, 0, len(sources))
+	loaded := make([]distribution.PatternSource, 0, len(sources))
 	for _, s := range sources {
 		available, err := s.Available()
 		if err != nil {
 			return distribution.Catalog{}, fmt.Errorf("resolve patterns: %w", err)
 		}
-		batches = append(batches, available)
+		source, err := distribution.NewPatternSource(available)
+		if err != nil {
+			return distribution.Catalog{}, fmt.Errorf("resolve patterns: %w", err)
+		}
+		loaded = append(loaded, source)
 	}
-	catalog, err := distribution.NewCatalog(batches...)
+	catalog, err := distribution.NewCatalog(loaded...)
 	if err != nil {
 		return distribution.Catalog{}, fmt.Errorf("resolve patterns: %w", err)
 	}
@@ -135,17 +139,17 @@ func (r patternResolver) resolve(selection, location string) (resolved, error) {
 	if err != nil {
 		return resolved{}, err
 	}
-	refs, err := distribution.Selection(selection, catalog.References())
+	choice, err := distribution.NewSelection(selection)
 	if err != nil {
 		return resolved{}, fmt.Errorf("%w; available: %s", err, strings.Join(catalog.Spellings(), ", "))
 	}
-	switch len(refs) {
-	case 1:
-		a, _ := catalog.Lookup(refs[0])
-		return resolved{Available: a, copies: catalog.Copies(refs[0])}, nil
-	case 0:
-	default:
-		return resolved{}, ambiguous(selection, refs)
+	ref, err := choice.Resolve(catalog.References())
+	if err != nil {
+		return resolved{}, fmt.Errorf("%w; available: %s", err, strings.Join(catalog.Spellings(), ", "))
+	}
+	if !ref.IsZero() {
+		a, _ := catalog.Lookup(ref)
+		return resolved{Available: a, copies: catalog.Copies(ref)}, nil
 	}
 	if location == "" || r.registry == nil {
 		return resolved{}, fmt.Errorf("pattern %q is not embedded in this binary and not under .arclint/patterns; available: %s",
@@ -159,32 +163,24 @@ func (r patternResolver) resolve(selection, location string) (resolved, error) {
 	if err != nil {
 		return resolved{}, fmt.Errorf("pattern %q is not embedded in this binary and not under .arclint/patterns, and the registry could not be read: %w", selection, err)
 	}
-	refs, err = distribution.Selection(selection, index.References())
+	ref, err = choice.Resolve(index.References())
 	if err != nil {
 		return resolved{}, fmt.Errorf("%w; published at %s: %s", err, reg, strings.Join(spellings(index.References()), ", "))
 	}
-	switch len(refs) {
-	case 1:
-		entry, _ := index.Lookup(refs[0])
-		a, err := r.registry.Fetch(reg, refs[0])
-		if err != nil {
-			return resolved{}, fmt.Errorf("pattern %q: %w", selection, err)
-		}
-		if !a.Digest().Equals(entry.Digest()) {
-			return resolved{}, fmt.Errorf("pattern %s fetched from %s has digest %s, the registry index records %s; the published files and the index disagree",
-				refs[0], reg, a.Digest().Short(), entry.Digest().Short())
-		}
-		return resolved{Available: a}, nil
-	case 0:
+	if ref.IsZero() {
 		return resolved{}, fmt.Errorf("pattern %q is not embedded, not under .arclint/patterns, and not published at %s; run arclint patterns --remote to list the registry",
 			selection, reg)
-	default:
-		return resolved{}, ambiguous(selection, refs)
 	}
-}
-
-func ambiguous(selection string, refs []rule.PatternReference) error {
-	return fmt.Errorf("pattern name %q is ambiguous; use one of %s", selection, strings.Join(spellings(refs), ", "))
+	entry, _ := index.Lookup(ref)
+	a, err := r.registry.Fetch(reg, ref)
+	if err != nil {
+		return resolved{}, fmt.Errorf("pattern %q: %w", selection, err)
+	}
+	if !a.Digest().Equals(entry.Digest()) {
+		return resolved{}, fmt.Errorf("pattern %s fetched from %s has digest %s, the registry index records %s; the published files and the index disagree",
+			ref, reg, a.Digest().Short(), entry.Digest().Short())
+	}
+	return resolved{Available: a}, nil
 }
 
 func spellings(refs []rule.PatternReference) []string {

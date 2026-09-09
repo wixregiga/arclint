@@ -276,3 +276,32 @@ func TestExportPatternPublishesOfflinePatterns(t *testing.T) {
 		t.Error("unknown pattern accepted")
 	}
 }
+
+func TestVendorPatternRejectsAmbiguityBeforeFetching(t *testing.T) {
+	patterns := []rule.Pattern{patternFixture(t, "1.0.0"), namespacedPatternFixture(t, "acme", "2.0.0")}
+	for _, offline := range []bool{true, false} {
+		t.Run(fmt.Sprintf("offline=%t", offline), func(t *testing.T) {
+			registry := &fakeRegistry{published: patterns}
+			store := &fakeStore{}
+			source := fakePatternSource{}
+			if offline {
+				source.patterns = patterns
+			}
+			vendor, err := application.NewVendorPattern(store, registry, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = vendor.Execute(application.VendorPatternRequest{Selection: "ddd-flat", Registry: "https://example.test/registry"})
+			if err == nil || !strings.Contains(err.Error(), "ambiguous") ||
+				!strings.Contains(err.Error(), "arclint/ddd-flat@1.0.0") || !strings.Contains(err.Error(), "acme/ddd-flat@2.0.0") {
+				t.Fatalf("ambiguity must name both references: %v", err)
+			}
+			if len(registry.fetched) != 0 || len(store.written) != 0 {
+				t.Fatal("ambiguous selection fetched or wrote a pattern")
+			}
+			if offline && registry.indexed != 0 {
+				t.Fatal("offline ambiguity consulted registry")
+			}
+		})
+	}
+}

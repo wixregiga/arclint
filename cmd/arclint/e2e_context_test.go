@@ -152,7 +152,7 @@ func TestContextWorksiteScopesDomain(t *testing.T) {
 	if strings.Contains(full, "--full") {
 		t.Errorf("a full listing must not point at --full:\n%s", full)
 	}
-	for _, want := range []string{"context vocabulary:", "context rule:", "context adoption:", "context conformance:", "context distribution:", "unanchored contracts: 10 missing"} {
+	for _, want := range []string{"context vocabulary:", "context rule:", "context adoption:", "context conformance:", "context distribution:", "unanchored contracts: 5 missing"} {
 		if !strings.Contains(full, want) {
 			t.Errorf("full context missing %q:\n%s", want, full)
 		}
