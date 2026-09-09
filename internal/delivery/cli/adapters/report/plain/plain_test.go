@@ -31,9 +31,9 @@ func TestPlainRuleListNamesTheOrigin(t *testing.T) {
 	var buf bytes.Buffer
 	err := New().Render(&buf, cli.RuleListReport{
 		Rules: []application.RuleSummary{
-			{ID: "ns/n:x", Type: "structure", Severity: "error", Claim: "distributed", Assurance: "exact", Provenance: "ns/n@1"},
-			{ID: "aggregate/root-declared", Type: "domain", Severity: "error", Claim: "composed", Assurance: "exact", BuiltIn: true},
-			{ID: "local/own", Type: "content", Severity: "warning", Claim: "written here", Assurance: "exact"},
+			{ID: "ns/n:x", Type: "structure", Severity: "error", Proposition: "distributed", Assurance: "exact", Provenance: "ns/n@1"},
+			{ID: "aggregate/root-declared", Type: "domain", Severity: "error", Proposition: "composed", Assurance: "exact", BuiltIn: true},
+			{ID: "local/own", Type: "content", Severity: "warning", Proposition: "written here", Assurance: "exact"},
 		},
 	})
 	if err != nil {
@@ -50,7 +50,7 @@ func TestPlainRuleListNamesTheOrigin(t *testing.T) {
 func TestPlainRuleDetailOfABuiltInSaysHowToAdoptIt(t *testing.T) {
 	var buf bytes.Buffer
 	err := New().Render(&buf, cli.RuleDetailReport{Detail: application.RuleDetail{
-		Summary:          application.RuleSummary{ID: "aggregate/root-declared", Type: "domain", Severity: "error", Claim: "composed", Assurance: "exact", BuiltIn: true},
+		Summary:          application.RuleSummary{ID: "aggregate/root-declared", Type: "domain", Severity: "error", Proposition: "composed", Assurance: "exact", BuiltIn: true},
 		EntireRepository: true,
 		Schema:           "schema",
 	}})
@@ -59,6 +59,31 @@ func TestPlainRuleDetailOfABuiltInSaysHowToAdoptIt(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "origin:      built in from the DDD meta-model; adopt it with an override under its id\n") {
 		t.Fatalf("detail = %q", buf.String())
+	}
+}
+
+func TestPlainRuleDetailSeparatesConstraintAndOptionalRationale(t *testing.T) {
+	for _, rationale := range []string{"", "Keep technology outside the domain."} {
+		var buf bytes.Buffer
+		err := New().Render(&buf, cli.RuleDetailReport{Detail: application.RuleDetail{
+			Summary: application.RuleSummary{ID: "r1", Proposition: "dependencies point inward", Rationale: rationale},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := buf.String()
+		if !strings.Contains(text, "constraint:  dependencies point inward\n") {
+			t.Fatalf("constraint missing: %q", text)
+		}
+		if strings.Contains(text, "rationale:") != (rationale != "") {
+			t.Fatalf("rationale presence changed: %q", text)
+		}
+		if rationale != "" && !strings.Contains(text, rationale) {
+			t.Fatalf("authored rationale missing: %q", text)
+		}
+		if strings.Contains(text, "claim:") || strings.Contains(text, "asserts:") {
+			t.Fatalf("legacy rule terminology leaked: %q", text)
+		}
 	}
 }
 

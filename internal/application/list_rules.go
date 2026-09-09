@@ -14,18 +14,28 @@ import (
 // RuleSummary is the plain result value describing one configured
 // Rule.
 type RuleSummary struct {
-	ID         string
-	Type       string
-	Severity   string
-	Claim      string
-	Assurance  string
-	Provenance string // "namespace/name@version", or "" for repository-local Rules
+	ID          string
+	Type        string
+	Severity    string
+	Proposition string
+	Rationale   string
+	Assurance   string
+	Provenance  string // "namespace/name@version", or "" for repository-local Rules
 	// BuiltIn marks a Rule arclint composes from the Domain-Driven
 	// Design meta-model for the recorded domain; no ruleset spells it,
 	// and a ruleset adopts it with an Override under its id.
 	BuiltIn        bool
 	Disabled       bool
 	DisabledReason string
+}
+
+// Text returns the authored explanation when supplied, otherwise the
+// canonical proposition, for compact listings and completion hints.
+func (s RuleSummary) Text() string {
+	if s.Rationale != "" {
+		return s.Rationale
+	}
+	return s.Proposition
 }
 
 // BuiltInOrigin is how a listing says a Rule is built in: the phrase

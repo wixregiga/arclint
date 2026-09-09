@@ -9,7 +9,7 @@ const (
 	// OutcomeConforms means sufficient evaluation found no violation
 	// within its declared limit.
 	OutcomeConforms Outcome = "conforms"
-	// OutcomeViolates means sufficient evidence proves the Claim is
+	// OutcomeViolates means sufficient evidence proves the Constraint is
 	// broken.
 	OutcomeViolates Outcome = "violates"
 	// OutcomeSuspectedViolation means heuristic evidence indicates a

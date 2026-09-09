@@ -31,7 +31,7 @@ func (s Status) Valid() bool {
 	return false
 }
 
-// Violation is a Diagnostic value reporting that a Rule Claim is
+// Violation is a Diagnostic value reporting that a Rule Constraint is
 // violated, or suspected to be violated, for one Rule Subject. It
 // carries Severity independently from Assurance.
 type Violation struct {

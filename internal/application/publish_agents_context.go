@@ -54,7 +54,7 @@ func AgentCommandSurface() []AgentCommandDoc {
 	return []AgentCommandDoc{
 		{"context", "context [paths...]", "run before editing under any path: the owning zones, their import contracts, and the recorded domain in one answer (`--zone <names>`, `--format json`)"},
 		{"domain", "domain", "the ubiquitous language: contexts, aggregates, value objects, invariants, relations"},
-		{"rules", "rules [selector]", "every configured rule with its claim; one match prints the complete rule"},
+		{"rules", "rules [selector]", "every configured rule with its constraint and rationale; one match prints the complete rule"},
 		{"check", "check .", "evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings"},
 		{"rules test", "rules test", "run the rule fixtures under `.arclint/tests` after changing any rule"},
 		{"sdk init", "sdk init", "regenerate the extension SDK artifacts under `.arclint/extensions`"},
@@ -278,7 +278,7 @@ func writeChangingLanguage(b *strings.Builder) {
 }
 
 // writeZoneRules lists every declared Zone with its import
-// contract and the Rules bound to it, Claims included; the consumes
+// contract and the Rules bound to it, propositions included; the consumes
 // Rule is folded into the imports line rather than repeated.
 func writeZoneRules(b *strings.Builder, cfg rule.Configured) {
 	if len(cfg.Zones) == 0 {
@@ -299,8 +299,8 @@ func writeZoneRules(b *strings.Builder, cfg rule.Configured) {
 			if r.Type() == rule.TypeConsumes || !nameIn(r.Applicability().Zones(), m.Name()) {
 				continue
 			}
-			claim := strings.TrimPrefix(r.Claim().Statement(), fmt.Sprintf("Zone %q: ", m.Name()))
-			b.WriteString("  - " + ruleLine(ruleName(r, true), r, claim) + "\n")
+			proposition := strings.TrimPrefix(r.Proposition(), fmt.Sprintf("Zone %q: ", m.Name()))
+			b.WriteString("  - " + ruleLine(ruleName(r, true), r, proposition) + "\n")
 		}
 	}
 	b.WriteString("\n")
@@ -336,7 +336,7 @@ func writeBuiltInRules(b *strings.Builder, cfg rule.Configured) {
 		if !r.BuiltIn() {
 			continue
 		}
-		lines = append(lines, "- "+ruleLine(ruleName(r, false), r, r.Claim().Statement()))
+		lines = append(lines, "- "+ruleLine(ruleName(r, false), r, r.Proposition()))
 	}
 	if len(lines) == 0 {
 		return
@@ -360,7 +360,7 @@ func writeRepositoryRules(b *strings.Builder, cfg rule.Configured) {
 		if r.Type() == rule.TypeConsumes || r.BuiltIn() || len(r.Applicability().Zones()) > 0 {
 			continue
 		}
-		lines = append(lines, "- "+ruleLine(ruleName(r, false), r, r.Claim().Statement()))
+		lines = append(lines, "- "+ruleLine(ruleName(r, false), r, r.Proposition()))
 	}
 	if len(lines) == 0 {
 		return
@@ -397,8 +397,8 @@ func writeExtensionInventory(b *strings.Builder, registered []RegisteredExtensio
 }
 
 // ruleLine renders one Rule as name, non-default annotations, and the
-// Claim; an extension Rule also states its validated parameters.
-func ruleLine(name string, r rule.Rule, claim string) string {
+// proposition and optional rationale; an extension Rule also states its validated parameters.
+func ruleLine(name string, r rule.Rule, proposition string) string {
 	var notes []string
 	if r.Severity() != rule.DefaultSeverity {
 		notes = append(notes, string(r.Severity()))
@@ -410,9 +410,12 @@ func ruleLine(name string, r rule.Rule, claim string) string {
 		name += " (" + strings.Join(notes, ", ") + ")"
 	}
 	if params, ok := r.Params().(rule.ExtensionParams); ok && len(params.With) > 0 {
-		claim += " (" + formatExtensionParams(params.With) + ")"
+		proposition += " (" + formatExtensionParams(params.With) + ")"
 	}
-	return name + ": " + claim
+	if rationale := r.Rationale().String(); rationale != "" {
+		proposition += " Rationale: " + rationale
+	}
+	return name + ": " + proposition
 }
 
 // ruleName spells a Rule in the block. A Rule an extended Pattern

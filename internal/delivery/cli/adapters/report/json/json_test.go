@@ -216,7 +216,7 @@ func TestJSONRuleListLowerCamel(t *testing.T) {
 	err := New().Render(&buf, cli.RuleListReport{
 		Rules: []application.RuleSummary{{
 			ID: "arclint:x", Type: "structure", Severity: "error",
-			Claim: "c", Assurance: "exact", Provenance: "ns/n@1",
+			Proposition: "c", Assurance: "exact", Provenance: "ns/n@1",
 		}},
 	})
 	if err != nil {
@@ -230,13 +230,18 @@ func TestJSONRuleListLowerCamel(t *testing.T) {
 		t.Fatalf("len = %d", len(docs))
 	}
 	d := docs[0]
-	for _, key := range []string{"id", "type", "severity", "claim", "assurance", "provenance"} {
+	for _, key := range []string{"id", "type", "severity", "proposition", "assurance", "provenance"} {
 		if _, ok := d[key]; !ok {
 			t.Fatalf("missing %s: %v", key, d)
 		}
 	}
 	if _, ok := d["ID"]; ok {
 		t.Fatal("must not emit PascalCase ID")
+	}
+	for _, absent := range []string{"claim", "rationale"} {
+		if _, ok := d[absent]; ok {
+			t.Fatalf("unexpected %s field: %v", absent, d)
+		}
 	}
 	if _, ok := d["builtIn"]; ok {
 		t.Fatalf("a distributed Rule must not carry builtIn: %v", d)
@@ -248,7 +253,7 @@ func TestJSONRuleListMarksBuiltIns(t *testing.T) {
 	err := New().Render(&buf, cli.RuleListReport{
 		Rules: []application.RuleSummary{{
 			ID: "aggregate/root-declared", Type: "domain", Severity: "error",
-			Claim: "c", Assurance: "exact", BuiltIn: true,
+			Proposition: "c", Assurance: "exact", BuiltIn: true,
 		}},
 	})
 	if err != nil {
@@ -270,8 +275,7 @@ func TestJSONRuleDetailLowerCamel(t *testing.T) {
 	var buf bytes.Buffer
 	err := New().Render(&buf, cli.RuleDetailReport{
 		Detail: application.RuleDetail{
-			Summary:    application.RuleSummary{ID: "r1", Type: "layers", Severity: "warning", Claim: "c", Assurance: "exact"},
-			Asserts:    "dependencies point inward: app, then domain",
+			Summary:    application.RuleSummary{ID: "r1", Type: "layers", Severity: "warning", Proposition: "dependencies point inward: app, then domain", Rationale: "Keep technology outside the domain.", Assurance: "exact"},
 			Evidence:   "static",
 			Zones:      []string{"app"},
 			Exclusions: []application.PolicyNote{{Selectors: []string{"x"}, Reason: "y"}},
@@ -291,8 +295,11 @@ func TestJSONRuleDetailLowerCamel(t *testing.T) {
 	if doc["evidence"] != "static" {
 		t.Fatalf("evidence = %v", doc["evidence"])
 	}
-	if doc["asserts"] != "dependencies point inward: app, then domain" {
-		t.Fatalf("asserts = %v", doc["asserts"])
+	if sum["proposition"] != "dependencies point inward: app, then domain" || sum["rationale"] != "Keep technology outside the domain." {
+		t.Fatalf("summary = %v", sum)
+	}
+	if _, ok := doc["asserts"]; ok {
+		t.Fatalf("legacy asserts field leaked: %v", doc)
 	}
 }
 
@@ -524,6 +531,40 @@ func TestJSONContextPreservesEstablishedKeys(t *testing.T) {
 	counts, ok := domain["counts"].(map[string]any)
 	if !ok || counts["aggregates"] != float64(1) {
 		t.Fatalf("domain counts must be lowerCamel like the overview: %v", domain)
+	}
+}
+
+func TestJSONContextSeparatesPropositionAndOptionalRationale(t *testing.T) {
+	for _, rationale := range []string{"", "Keep filenames predictable."} {
+		var buf bytes.Buffer
+		err := New().Render(&buf, cli.ContextReport{
+			Context: application.ArchitecturalContext{Rules: []application.AppliedRule{{
+				Summary: application.RuleSummary{ID: "r1", Proposition: "file names use snake_case", Rationale: rationale},
+			}}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc struct {
+			Rules []struct{ Summary map[string]any }
+		}
+		if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
+			t.Fatal(err)
+		}
+		if len(doc.Rules) != 1 {
+			t.Fatalf("rules = %+v", doc.Rules)
+		}
+		summary := doc.Rules[0].Summary
+		if summary["Proposition"] != "file names use snake_case" {
+			t.Fatalf("canonical proposition lost: %v", summary)
+		}
+		text, present := summary["Rationale"]
+		if present != (rationale != "") || (present && text != rationale) {
+			t.Fatalf("authored rationale changed: %v", summary)
+		}
+		if _, present := summary["Claim"]; present {
+			t.Fatalf("legacy Claim field leaked: %v", summary)
+		}
 	}
 }
 

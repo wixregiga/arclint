@@ -14,11 +14,10 @@ type PolicyNote struct {
 }
 
 // RuleDetail is the plain result value showing one Rule completely:
-// identity, claim, applicability, enforcement, attached policy, and
+// identity, proposition, rationale, applicability, enforcement, attached policy, and
 // the accepted configuration of its Type.
 type RuleDetail struct {
 	Summary          RuleSummary
-	Asserts          string // the parameters' canonical assertion
 	Evidence         string
 	Languages        []string // empty = language-independent
 	Facts            []string
@@ -53,7 +52,6 @@ func (uc ShowRule) Execute(id string) (RuleDetail, error) {
 	}
 	detail := RuleDetail{
 		Summary:          summarize(r),
-		Asserts:          r.Assertion(),
 		Evidence:         r.Enforcement().Evidence().Describe(),
 		EntireRepository: r.Applicability().EntireRepository(),
 		Schema:           r.Type().Schema().Describe(),
@@ -109,12 +107,13 @@ func findRule(rules rule.Repository, id string) (rule.Rule, error) {
 // summarize is the shared Rule-to-summary projection.
 func summarize(r rule.Rule) RuleSummary {
 	s := RuleSummary{
-		ID:        r.ID().Qualified(),
-		Type:      string(r.Type()),
-		Severity:  string(r.Severity()),
-		Claim:     r.Claim().Statement(),
-		Assurance: string(r.Enforcement().Assurance()),
-		BuiltIn:   r.BuiltIn(),
+		ID:          r.ID().Qualified(),
+		Type:        string(r.Type()),
+		Severity:    string(r.Severity()),
+		Proposition: r.Proposition(),
+		Rationale:   r.Rationale().String(),
+		Assurance:   string(r.Enforcement().Assurance()),
+		BuiltIn:     r.BuiltIn(),
 	}
 	if ref, ok := r.Provenance(); ok {
 		s.Provenance = ref.String()

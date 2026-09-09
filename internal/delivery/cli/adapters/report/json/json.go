@@ -184,7 +184,8 @@ type ruleSummaryDoc struct {
 	ID             string `json:"id"`
 	Type           string `json:"type"`
 	Severity       string `json:"severity"`
-	Claim          string `json:"claim"`
+	Proposition    string `json:"proposition"`
+	Rationale      string `json:"rationale,omitempty"`
 	Assurance      string `json:"assurance"`
 	Provenance     string `json:"provenance,omitempty"`
 	BuiltIn        bool   `json:"builtIn,omitempty"`
@@ -197,7 +198,8 @@ func ruleSummaryDocOf(s application.RuleSummary) ruleSummaryDoc {
 		ID:             s.ID,
 		Type:           s.Type,
 		Severity:       s.Severity,
-		Claim:          s.Claim,
+		Proposition:    s.Proposition,
+		Rationale:      s.Rationale,
 		Assurance:      s.Assurance,
 		Provenance:     s.Provenance,
 		BuiltIn:        s.BuiltIn,
@@ -221,7 +223,6 @@ type policyNoteDoc struct {
 
 type ruleDetailDocT struct {
 	Summary          ruleSummaryDoc  `json:"summary"`
-	Asserts          string          `json:"asserts,omitempty"`
 	Evidence         string          `json:"evidence,omitempty"`
 	Languages        []string        `json:"languages,omitempty"`
 	Facts            []string        `json:"facts,omitempty"`
@@ -237,7 +238,6 @@ type ruleDetailDocT struct {
 func ruleDetailDoc(d application.RuleDetail) ruleDetailDocT {
 	doc := ruleDetailDocT{
 		Summary:          ruleSummaryDocOf(d.Summary),
-		Asserts:          d.Asserts,
 		Evidence:         d.Evidence,
 		Languages:        append([]string(nil), d.Languages...),
 		Facts:            append([]string(nil), d.Facts...),
@@ -355,7 +355,8 @@ type ruleSummaryPassthrough struct {
 	ID             string `json:"ID"`
 	Type           string `json:"Type"`
 	Severity       string `json:"Severity"`
-	Claim          string `json:"Claim"`
+	Proposition    string `json:"Proposition"`
+	Rationale      string `json:"Rationale,omitempty"`
 	Assurance      string `json:"Assurance"`
 	Provenance     string `json:"Provenance"`
 	BuiltIn        bool   `json:"BuiltIn"`
@@ -458,7 +459,8 @@ func contextDoc(c application.ArchitecturalContext) contextJSON {
 				ID:             r.Summary.ID,
 				Type:           r.Summary.Type,
 				Severity:       r.Summary.Severity,
-				Claim:          r.Summary.Claim,
+				Proposition:    r.Summary.Proposition,
+				Rationale:      r.Summary.Rationale,
 				Assurance:      r.Summary.Assurance,
 				Provenance:     r.Summary.Provenance,
 				BuiltIn:        r.Summary.BuiltIn,

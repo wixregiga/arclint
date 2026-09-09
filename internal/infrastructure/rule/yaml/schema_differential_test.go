@@ -750,6 +750,18 @@ rules:
       internal: []
       external: forbid
 `, true},
+		{"pattern file with canonical rationale", header + `
+zones:
+  core:
+    description: "The domain core."
+rules:
+  core/stdlib-only:
+    rationale: "Keep the domain independent of adapters."
+    on: core
+    imports:
+      internal: []
+      external: forbid
+`, true},
 		{"pattern file with coverage and documentation", `
 pattern:
   namespace: acme

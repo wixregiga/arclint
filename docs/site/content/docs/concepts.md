@@ -54,9 +54,14 @@ limits: computed specifiers like `import(x)` or
 
 ## Rules and constraints
 
-`rules:` is one map keyed by Rule ID. Every Rule states one Claim
-(`description`), judges the Zones named under `on`, and carries
-exactly one constraint key; that key selects the Constraint:
+`rules:` is one map keyed by Rule ID. Every Rule carries one Constraint:
+the checkable proposition that must hold within its scope. The constraint
+key selects its shape, and `on` names the Zones it judges. An optional
+Rationale (`rationale`) records the author's reason for requiring it.
+ArcLint derives the proposition from the Constraint and scope; it never
+derives a Rationale when the author supplies none. Rule `description`
+remains a deprecated alias for `rationale`, and using both is rejected.
+Zone and Pattern descriptions keep their existing meanings.
 
 - Zone-scoped: `imports` (what the Zone may depend on),
   `structure` (files it must or must not contain), `naming`,
@@ -66,7 +71,7 @@ exactly one constraint key; that key selects the Constraint:
   `imported_by` (who may import the one Zone under `on`),
   `independent`, and `acyclic`.
 
-A Rule with two constraint keys is rejected: give each claim its own ID.
+A Rule with two constraint keys is rejected: give each Constraint its own ID.
 The [rule reference](/docs/rules/) lists every published Rule Type and
 paste-ready YAML. `arclint rules` lists configured Rules;
 `arclint rules <id>` shows one complete Rule when the selector matches
@@ -89,12 +94,12 @@ its manifest on every load; a check never reaches the network. See
 
 ## Assurance
 
-Every Rule Type states how strongly Enforcement can decide its Claim.
+Every Rule Type states how strongly Enforcement can decide its Constraint.
 Findings and Rule detail carry the label:
 
 | Assurance | basis |
 |---|---|
-| `exact` | fully decides the Claim within a documented analysis limit |
+| `exact` | fully decides the Constraint within a documented analysis limit |
 | `partial` | reported Violations are trustworthy, but some cases may be unobservable |
 | `heuristic` | may produce false positives or false negatives |
 | `advisory` | guidance without automated truth judgment |
@@ -108,7 +113,7 @@ Assurance.
 ## Rule identity
 
 Rule IDs are stable strings of the form `segment/segment`
-(`domain/stdlib-only`). A material Claim change needs a new ID. Rules an
+(`domain/stdlib-only`). A material Constraint change needs a new ID. Rules an
 extended Pattern distributes carry the Pattern's namespace/name
 (`arclint/vertical:domain/stdlib-only`), so the prefix selector
 `arclint/vertical:` narrows to what that Pattern distributes and
@@ -189,7 +194,7 @@ enough to extend the architecture:
 - The built-in `invariant/enforced-at-every-mutation` rule requires
   every recorded invariant of an aggregate to be a method of the root
   that every constructor and command calls, so recording an invariant
-  states a Claim the next `arclint check` evaluates.
+  adds a Constraint the next `arclint check` evaluates.
 
 The boxoffice proving ground under `testing/boxoffice` runs all three
 (the first through its own `aggregate-slices` structure Rule, the other

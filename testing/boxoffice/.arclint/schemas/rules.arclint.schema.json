@@ -3,6 +3,12 @@
     "acyclicRule": {
       "additionalProperties": false,
       "description": "An acyclic Rule: forbids dependency cycles among declared Zones.",
+      "not": {
+        "required": [
+          "rationale",
+          "description"
+        ]
+      },
       "properties": {
         "acyclic": {
           "description": "Cycle scope: a list of declared Zones, or an empty mapping for every declared Zone; inside a Pattern the empty mapping means every Zone the Pattern declares.",
@@ -26,7 +32,8 @@
           ]
         },
         "description": {
-          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "deprecated": true,
+          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
           "type": "string"
         },
         "disable": {
@@ -36,6 +43,11 @@
         "exclude": {
           "$ref": "#/$defs/exclusion",
           "description": "Removes paths or Zones from what the Rule judges; excluded subjects evaluate not applicable."
+        },
+        "rationale": {
+          "description": "The optional authored reason for this Rule. Nonblank when supplied and never derived from the Constraint; omit it when no reason is recorded.",
+          "pattern": "\\S",
+          "type": "string"
         },
         "severity": {
           "$ref": "#/$defs/severity",
@@ -77,9 +89,16 @@
     "consumesRule": {
       "additionalProperties": false,
       "description": "An imports Rule: states what a Zone may import: declared Zones by allow-list, external and standard-library imports by policy.",
+      "not": {
+        "required": [
+          "rationale",
+          "description"
+        ]
+      },
       "properties": {
         "description": {
-          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "deprecated": true,
+          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
           "type": "string"
         },
         "disable": {
@@ -151,6 +170,11 @@
           "$ref": "#/$defs/judgedZones",
           "description": "The declared Zone or Zones the Rule judges: one Zone name or a non-empty list."
         },
+        "rationale": {
+          "description": "The optional authored reason for this Rule. Nonblank when supplied and never derived from the Constraint; omit it when no reason is recorded.",
+          "pattern": "\\S",
+          "type": "string"
+        },
         "severity": {
           "$ref": "#/$defs/severity",
           "description": "Gate importance of a Violation."
@@ -169,6 +193,12 @@
     "contentRule": {
       "additionalProperties": false,
       "description": "A content Rule: forbids lines matching a regular expression in the selected files.",
+      "not": {
+        "required": [
+          "rationale",
+          "description"
+        ]
+      },
       "properties": {
         "content": {
           "additionalProperties": false,
@@ -186,7 +216,8 @@
           "type": "object"
         },
         "description": {
-          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "deprecated": true,
+          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
           "type": "string"
         },
         "disable": {
@@ -204,6 +235,11 @@
         "on": {
           "$ref": "#/$defs/judgedZonesOrRepository",
           "description": "The declared Zone or Zones the Rule judges: one Zone name or a non-empty list. Absent means the whole repository."
+        },
+        "rationale": {
+          "description": "The optional authored reason for this Rule. Nonblank when supplied and never derived from the Constraint; omit it when no reason is recorded.",
+          "pattern": "\\S",
+          "type": "string"
         },
         "severity": {
           "$ref": "#/$defs/severity",
@@ -311,9 +347,16 @@
     "extensionRule": {
       "additionalProperties": false,
       "description": "An uses Rule: delegates enforcement to a named Extension through the sandboxed SDK.",
+      "not": {
+        "required": [
+          "rationale",
+          "description"
+        ]
+      },
       "properties": {
         "description": {
-          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "deprecated": true,
+          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
           "type": "string"
         },
         "disable": {
@@ -331,6 +374,11 @@
         "on": {
           "$ref": "#/$defs/judgedZonesOrRepository",
           "description": "The declared Zone or Zones the Rule judges: one Zone name or a non-empty list. Absent means the whole repository."
+        },
+        "rationale": {
+          "description": "The optional authored reason for this Rule. Nonblank when supplied and never derived from the Constraint; omit it when no reason is recorded.",
+          "pattern": "\\S",
+          "type": "string"
         },
         "severity": {
           "$ref": "#/$defs/severity",
@@ -373,9 +421,16 @@
     "independenceRule": {
       "additionalProperties": false,
       "description": "An independent Rule: forbids imports between sibling Folders selected by globs.",
+      "not": {
+        "required": [
+          "rationale",
+          "description"
+        ]
+      },
       "properties": {
         "description": {
-          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "deprecated": true,
+          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
           "type": "string"
         },
         "disable": {
@@ -395,6 +450,11 @@
           "minItems": 1,
           "type": "array",
           "uniqueItems": true
+        },
+        "rationale": {
+          "description": "The optional authored reason for this Rule. Nonblank when supplied and never derived from the Constraint; omit it when no reason is recorded.",
+          "pattern": "\\S",
+          "type": "string"
         },
         "severity": {
           "$ref": "#/$defs/severity",
@@ -467,9 +527,16 @@
     "layersRule": {
       "additionalProperties": false,
       "description": "A layers Rule: orders Zones highest first; a Zone may import same or lower layers, never higher.",
+      "not": {
+        "required": [
+          "rationale",
+          "description"
+        ]
+      },
       "properties": {
         "description": {
-          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "deprecated": true,
+          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
           "type": "string"
         },
         "disable": {
@@ -490,6 +557,11 @@
           "type": "array",
           "uniqueItems": true
         },
+        "rationale": {
+          "description": "The optional authored reason for this Rule. Nonblank when supplied and never derived from the Constraint; omit it when no reason is recorded.",
+          "pattern": "\\S",
+          "type": "string"
+        },
         "severity": {
           "$ref": "#/$defs/severity",
           "description": "Gate importance of a Violation."
@@ -507,9 +579,16 @@
     "namingRule": {
       "additionalProperties": false,
       "description": "A naming Rule: constrains file names within a Zone to a finite case vocabulary.",
+      "not": {
+        "required": [
+          "rationale",
+          "description"
+        ]
+      },
       "properties": {
         "description": {
-          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "deprecated": true,
+          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
           "type": "string"
         },
         "disable": {
@@ -551,6 +630,11 @@
           "$ref": "#/$defs/judgedZones",
           "description": "The declared Zone or Zones the Rule judges: one Zone name or a non-empty list."
         },
+        "rationale": {
+          "description": "The optional authored reason for this Rule. Nonblank when supplied and never derived from the Constraint; omit it when no reason is recorded.",
+          "pattern": "\\S",
+          "type": "string"
+        },
         "severity": {
           "$ref": "#/$defs/severity",
           "description": "Gate importance of a Violation."
@@ -568,7 +652,7 @@
     },
     "override": {
       "additionalProperties": false,
-      "description": "An Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID. It carries no constraint and no description: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID.",
+      "description": "An Override of a distributed or built-in Rule, keyed by that Rule's ID. It carries no constraint, rationale, or legacy description: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID.",
       "minProperties": 1,
       "properties": {
         "disable": {
@@ -627,9 +711,16 @@
     "protectedRule": {
       "additionalProperties": false,
       "description": "An imported_by Rule: restricts which Zones may import one Zone.",
+      "not": {
+        "required": [
+          "rationale",
+          "description"
+        ]
+      },
       "properties": {
         "description": {
-          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "deprecated": true,
+          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
           "type": "string"
         },
         "disable": {
@@ -652,6 +743,11 @@
         "on": {
           "$ref": "#/$defs/protectedZone",
           "description": "The one declared Zone the Rule protects."
+        },
+        "rationale": {
+          "description": "The optional authored reason for this Rule. Nonblank when supplied and never derived from the Constraint; omit it when no reason is recorded.",
+          "pattern": "\\S",
+          "type": "string"
         },
         "severity": {
           "$ref": "#/$defs/severity",
@@ -756,7 +852,7 @@
         },
         {
           "$ref": "#/$defs/override",
-          "description": "An Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID. It carries no constraint and no description: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID."
+          "description": "An Override of a distributed or built-in Rule, keyed by that Rule's ID. It carries no constraint, rationale, or legacy description: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID."
         }
       ]
     },
@@ -778,9 +874,16 @@
     "structureRule": {
       "additionalProperties": false,
       "description": "A structure Rule: requires or forbids files matching globs inside a Zone.",
+      "not": {
+        "required": [
+          "rationale",
+          "description"
+        ]
+      },
       "properties": {
         "description": {
-          "description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+          "deprecated": true,
+          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
           "type": "string"
         },
         "disable": {
@@ -794,6 +897,11 @@
         "on": {
           "$ref": "#/$defs/judgedZones",
           "description": "The declared Zone or Zones the Rule judges: one Zone name or a non-empty list."
+        },
+        "rationale": {
+          "description": "The optional authored reason for this Rule. Nonblank when supplied and never derived from the Constraint; omit it when no reason is recorded.",
+          "pattern": "\\S",
+          "type": "string"
         },
         "severity": {
           "$ref": "#/$defs/severity",

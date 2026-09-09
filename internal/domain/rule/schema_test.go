@@ -224,3 +224,34 @@ func assertStrings(t *testing.T, what string, got any, want []string) {
 		}
 	}
 }
+
+func TestSchemaSeparatesRationaleFromConstraint(t *testing.T) {
+	doc := schemaTree(t)
+	for _, typ := range rule.AuthoredTypes() {
+		def := string(typ) + "Rule"
+		rationale := dig(t, doc, "$defs", def, "properties", "rationale").(map[string]any)
+		if rationale["type"] != "string" || rationale["pattern"] != `\S` {
+			t.Errorf("%s rationale accepts blank reasons: %v", def, rationale)
+		}
+		if dig(t, doc, "$defs", def, "properties", "description", "deprecated") != true {
+			t.Errorf("%s description not deprecated", def)
+		}
+		assertStrings(t, def+" aliases", dig(t, doc, "$defs", def, "not", "required"), []string{"rationale", "description"})
+		for _, field := range typ.Schema().Common {
+			if field.Name == "rationale" && (field.Required || field.Default != "") {
+				t.Errorf("%s invents or requires rationale", typ)
+			}
+		}
+	}
+	props := dig(t, doc, "$defs", "override", "properties").(map[string]any)
+	for _, key := range []string{"rationale", "description"} {
+		if _, ok := props[key]; ok {
+			t.Errorf("override accepts %s", key)
+		}
+	}
+	for _, field := range rule.TypeDomain.Schema().Common {
+		if field.Name == "rationale" || field.Name == "description" {
+			t.Errorf("built-in schema inspection advertises %s", field.Name)
+		}
+	}
+}

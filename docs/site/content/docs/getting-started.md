@@ -105,7 +105,7 @@ zones:
 
 rules:
   # Every Rule has an id, the Zone(s) it judges under `on`, and exactly
-  # one assertion: imports, structure, naming, content, layers,
+  # one constraint: imports, structure, naming, content, layers,
   # imported_by, independent, acyclic, or uses.
   source/dependencies:
     description: "Source imports no other declared Zone."
@@ -117,7 +117,10 @@ rules:
       internal: []
 ```
 
-A grown file reads the same way, one Rule per architectural claim:
+A grown file reads the same way, one Rule per Constraint. An optional
+`rationale` explains why the author requires it. Rule `description`, used
+in the examples here, remains a deprecated alias; using both keys is
+rejected. Zone descriptions are unchanged:
 
 ```yaml
 runtime: [go]

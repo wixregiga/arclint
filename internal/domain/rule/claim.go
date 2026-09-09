@@ -5,9 +5,9 @@ import (
 	"strings"
 )
 
-// Claim is the architectural proposition a Rule attempts to evaluate.
-// It states one coherent proposition in domain language and describes
-// required truth, never parser or traversal mechanics.
+// Claim preserves the legacy Rule display value for existing Go callers.
+// Deprecated: use Rationale for authored reasons and Rule.Proposition for
+// the computed architectural proposition.
 type Claim struct {
 	statement string
 }

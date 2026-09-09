@@ -171,8 +171,11 @@ func TestListRulesSummarizes(t *testing.T) {
 	if row.ID != "t/p:m/snake" || row.Type != "naming" || row.Severity != "error" {
 		t.Errorf("row = %+v", row)
 	}
-	if !strings.Contains(row.Claim, "snake_case") {
-		t.Errorf("claim %q lacks the case vocabulary", row.Claim)
+	if !strings.Contains(row.Proposition, "snake_case") {
+		t.Errorf("proposition %q lacks the case vocabulary", row.Proposition)
+	}
+	if row.Rationale != "" || row.Text() != row.Proposition {
+		t.Errorf("an unauthored rationale must remain absent: %+v", row)
 	}
 	if !row.Disabled || row.DisabledReason != "retired" {
 		t.Errorf("disablement not surfaced: %+v", row)
@@ -288,8 +291,8 @@ func TestShowRule(t *testing.T) {
 	if detail.Summary.ID != "t/p:m/snake" || len(detail.Zones) != 1 || detail.Zones[0] != "m" {
 		t.Errorf("detail = %+v", detail)
 	}
-	if detail.Asserts != cfg.Rules[0].Assertion() || !strings.Contains(detail.Asserts, "snake_case") {
-		t.Errorf("asserts = %q", detail.Asserts)
+	if detail.Summary.Proposition != cfg.Rules[0].Proposition() || !strings.Contains(detail.Summary.Proposition, "snake_case") {
+		t.Errorf("proposition = %q", detail.Summary.Proposition)
 	}
 	if len(detail.Exclusions) != 1 || detail.Exclusions[0].Reason != "adopted as-is" {
 		t.Errorf("exclusions = %+v", detail.Exclusions)
@@ -299,6 +302,35 @@ func TestShowRule(t *testing.T) {
 	}
 	if _, err := show.Execute("t/p:m/ghost"); err == nil {
 		t.Errorf("unknown rule id must be an error")
+	}
+}
+
+func TestShowRuleSeparatesRationaleFromProposition(t *testing.T) {
+	cfg, _ := fixture(t, "m/ok.go")
+	prior := cfg.Rules[0]
+	r, err := rule.New(rule.Spec{
+		ID: prior.ID().Qualified(), Constraint: prior.Constraint(),
+		Applicability: prior.Applicability(),
+		Rationale:     "Keep filenames predictable for contributors.",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Rules[0] = r
+	show, err := application.NewShowRule(fakeRepository{cfg})
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail, err := show.Execute(r.ID().Qualified())
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary := detail.Summary
+	if summary.Proposition != prior.Proposition() || summary.Rationale != "Keep filenames predictable for contributors." {
+		t.Fatalf("constraint and explanation must remain separate: %+v", summary)
+	}
+	if summary.Text() != summary.Rationale {
+		t.Fatalf("compact summary lost authored explanation: %+v", summary)
 	}
 }
 

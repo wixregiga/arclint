@@ -26,7 +26,7 @@ func writeRuleRows(p *out.Printer, th Theme, rows []application.RuleSummary) {
 			th.Muted.Render(row.Type+"/") +
 			th.severity(row.Severity).Render(row.Severity) +
 			th.Muted.Render("/"+row.Assurance+"]")
-		p.Printf("%s  %s  %s%s%s\n", th.Muted.Render(row.ID), meta, row.Claim, provenance, marker)
+		p.Printf("%s  %s  %s%s%s\n", th.Muted.Render(row.ID), meta, row.Text(), provenance, marker)
 	}
 }
 
@@ -44,8 +44,8 @@ func writeRuleDetail(p *out.Printer, th Theme, d application.RuleDetail) {
 		label := fmt.Sprintf("%-12s", "severity:")
 		p.Printf("%s %s\n", th.Bold.Render(label), th.severity(d.Summary.Severity).Render(d.Summary.Severity))
 	}
-	write("claim", d.Summary.Claim)
-	write("asserts", d.Asserts)
+	write("constraint", d.Summary.Proposition)
+	write("rationale", d.Summary.Rationale)
 	if d.EntireRepository {
 		write("applies to", "the entire repository")
 	} else {

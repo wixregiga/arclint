@@ -41,7 +41,6 @@ func builtInSpec(inv vocab.BlockInvariant) (Spec, bool) {
 	}
 	spec := Spec{
 		ID:            inv.ID,
-		Claim:         inv.Statement,
 		Severity:      inv.Enforcement.Severity,
 		Applicability: applicability,
 	}

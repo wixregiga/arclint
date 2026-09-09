@@ -76,7 +76,7 @@ func completeRuleIDs(list application.ListRules) func(args []string, toComplete 
 		}
 		candidates := make([]AutoCompleteCandidate, 0, len(rows))
 		for _, row := range rows {
-			candidates = append(candidates, AutoCompleteCandidate{Value: row.ID, Doc: row.Claim})
+			candidates = append(candidates, AutoCompleteCandidate{Value: row.ID, Doc: row.Text()})
 		}
 		return candidates
 	}
