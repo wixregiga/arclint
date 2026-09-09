@@ -1054,7 +1054,7 @@ func (e ruleEntry) applyOverride(id rule.ID, r rule.Rule) (rule.Rule, error) {
 }
 
 // buildOverride decodes adoption decisions without giving an Override a
-// constraint, rationale, parameters, or applicability of its own.
+// constraint, rationale, parameters, or scope of its own.
 func (e ruleEntry) buildOverride(id rule.ID) (adoption.Override, error) {
 	for _, bad := range []struct {
 		set  bool
@@ -1137,7 +1137,10 @@ func (e ruleEntry) adopt(r rule.Rule) (rule.Rule, error) {
 		}
 	}
 	if values.exclusion != nil {
-		r = r.Exclude(*values.exclusion)
+		r, err = r.Exclude(*values.exclusion)
+		if err != nil {
+			return rule.Rule{}, fmt.Errorf("%s: %v", e.where, err)
+		}
 	}
 	if values.suppression != nil {
 		r = r.Suppress(*values.suppression)
@@ -1174,37 +1177,20 @@ func (e ruleEntry) build(lang vocab.UbiquitousLanguage, declared map[rule.ZoneNa
 	}
 	spec := rule.Spec{ID: e.id, Rationale: e.rationale, Severity: e.severity}
 	var err error
-	switch t.Scope() {
-	case rule.ScopeZones:
-		if !e.onPresent {
-			return rule.Rule{}, fmt.Errorf("%s: %s requires on (the zone or zones it judges)", e.where, e.constraint)
-		}
-		if spec.Applicability, err = rule.ZoneApplicability(e.on, e.files...); err != nil {
-			return rule.Rule{}, fmt.Errorf("%s.on: %v", e.where, err)
-		}
-	case rule.ScopeOneZone:
+	// A protected Rule names its target in on, but evaluates importers across
+	// the repository. Other Rules use on directly as their selected Zones.
+	if t == rule.TypeProtected {
 		if len(e.on) != 1 {
 			return rule.Rule{}, fmt.Errorf("%s: %s requires on naming exactly one zone", e.where, e.constraint)
 		}
-		if spec.Applicability, err = rule.RepositoryApplicability(); err != nil {
-			return rule.Rule{}, fmt.Errorf("%s: %v", e.where, err)
-		}
-	case rule.ScopeRepository:
-		if e.onPresent {
-			return rule.Rule{}, fmt.Errorf("%s: %s names zones itself, so it has no on", e.where, e.constraint)
-		}
-		if spec.Applicability, err = rule.RepositoryApplicability(); err != nil {
-			return rule.Rule{}, fmt.Errorf("%s: %v", e.where, err)
-		}
-	case rule.ScopeZonesOrRepository:
-		if e.onPresent {
-			spec.Applicability, err = rule.ZoneApplicability(e.on, e.files...)
-		} else {
-			spec.Applicability, err = rule.RepositoryApplicability(e.files...)
-		}
-		if err != nil {
-			return rule.Rule{}, fmt.Errorf("%s: %v", e.where, err)
-		}
+		spec.Scope, err = rule.RepositoryScope()
+	} else if e.onPresent {
+		spec.Scope, err = rule.ZoneScope(e.on, e.files...)
+	} else {
+		spec.Scope, err = rule.RepositoryScope(e.files...)
+	}
+	if err != nil {
+		return rule.Rule{}, fmt.Errorf("%s: %v", e.where, err)
 	}
 	where := e.where + "." + e.constraint
 	switch t {

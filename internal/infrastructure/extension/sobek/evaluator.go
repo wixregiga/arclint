@@ -131,7 +131,7 @@ func (e *Evaluator) RegisteredExtensionRules() ([]application.RegisteredExtensio
 }
 
 // host lends the read-only capability surface, scoped to the selected
-// subjects: files outside the Rule's Applicability are invisible and
+// subjects: files outside the Rule's Scope are invisible and
 // unreadable, so exclusions hold mechanically.
 func (e *Evaluator) host(subjects []string, zones []rule.Zone, obs conformance.Observations, knowledge vocab.UbiquitousLanguage) Host {
 	inScope := make(map[string]bool, len(subjects))
@@ -172,7 +172,7 @@ func (e *Evaluator) host(subjects []string, zones []rule.Zone, obs conformance.O
 		},
 		Read: func(path string) (string, error) {
 			if !inScope[path] {
-				return "", fmt.Errorf("%s is outside this rule's applicability", path)
+				return "", fmt.Errorf("%s is outside this rule's scope", path)
 			}
 			content := obs.Content()
 			if content == nil {

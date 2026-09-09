@@ -17,8 +17,8 @@ func evaluateConsumes(r rule.Rule, mem membership, obs Observations) ([]Evaluati
 		return nil, fmt.Errorf("rule %s: consumes rule with %T params", r.ID(), r.Params())
 	}
 	var out []Evaluation
-	for _, name := range sortedZones(r.Applicability().Zones()) {
-		if r.Applicability().ExcludedZone(name) {
+	for _, name := range sortedZones(r.Scope().Zones()) {
+		if r.Scope().ExcludedZone(name) {
 			subject, err := rule.ZoneSubject(name)
 			if err != nil {
 				return nil, fmt.Errorf("consumes: %w", err)
@@ -274,7 +274,7 @@ func evaluateLayers(r rule.Rule, p rule.LayersParams, edges []edge) ([]Evaluatio
 	}
 	var out []Evaluation
 	for _, name := range p.Layers {
-		if r.Applicability().ExcludedZone(name) {
+		if r.Scope().ExcludedZone(name) {
 			subject, err := rule.ZoneSubject(name)
 			if err != nil {
 				return nil, fmt.Errorf("layers: %w", err)
@@ -325,7 +325,7 @@ func evaluateProtected(r rule.Rule, p rule.ProtectedParams, edges []edge, mem me
 	if err != nil {
 		return nil, fmt.Errorf("protected: %w", err)
 	}
-	if r.Applicability().ExcludedZone(p.Zone) {
+	if r.Scope().ExcludedZone(p.Zone) {
 		e, err := simpleEvaluation(r, subject, OutcomeNotApplicable)
 		if err != nil {
 			return nil, err
@@ -513,7 +513,7 @@ func evaluateAcyclic(r rule.Rule, p rule.AcyclicParams, edges []edge, mem member
 		if err != nil {
 			return nil, fmt.Errorf("acyclic: %w", err)
 		}
-		if r.Applicability().ExcludedZone(name) {
+		if r.Scope().ExcludedZone(name) {
 			e, err := simpleEvaluation(r, subject, OutcomeNotApplicable)
 			if err != nil {
 				return nil, err

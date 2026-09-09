@@ -19,7 +19,7 @@ type ExtensionFinding struct {
 // subjects with host-validated parameters, and return its complete
 // findings. Extensions operate only through deterministic host
 // capabilities and cannot bypass diagnostic truthfulness; a finding
-// outside the selected subjects is an Applicability breach the check
+// outside the selected subjects is an Scope breach the check
 // contains without aborting the Assessment. Knowledge is the project's
 // recorded domain model, empty when none is recorded.
 type ExtensionEvaluator interface {

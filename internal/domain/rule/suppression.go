@@ -4,7 +4,7 @@ import "fmt"
 
 // Suppression is a Pattern Consumer decision retaining a produced
 // Violation while removing its configured reporting or gate effect for
-// selected subjects. It never changes Applicability or the Evaluation
+// selected subjects. It never changes Scope or the Evaluation
 // Outcome, and never turns a Violation into conformance.
 type Suppression struct {
 	paths  []Glob

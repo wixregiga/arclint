@@ -1,6 +1,6 @@
 package main
 
-// An Extension that reports a logical path outside its Rule Applicability
+// An Extension that reports a logical path outside its Rule Scope
 // must not abort check: the Assessment stays complete, the gate fails via
 // an operational Diagnostic (exit 1), and no Violation is invented.
 
@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestExtensionOutsideApplicabilityContained(t *testing.T) {
+func TestExtensionOutsideScopeContained(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, ".arclint/extensions/report_outside.ts", `
 import { defineRule } from "arclint";
@@ -64,13 +64,13 @@ rules:
 		t.Errorf("active violations = %+v, want none (breach must not invent Violations)", active)
 	}
 	if len(operational) != 1 {
-		t.Fatalf("operational diagnostics = %+v, want exactly one error-severity Applicability breach", operational)
+		t.Fatalf("operational diagnostics = %+v, want exactly one error-severity Scope breach", operational)
 	}
 	op := operational[0]
 	if op.Severity != "error" || op.RuleID != "src/report-outside" || op.Path != "elsewhere/secret.go" || op.Line != 1 {
 		t.Errorf("operational = %+v, want error on src/report-outside at elsewhere/secret.go:1", op)
 	}
-	wantMsg := `rule src/report-outside: extension "report-outside" reported "elsewhere/secret.go", which is outside the rule's applicability`
+	wantMsg := `rule src/report-outside: extension "report-outside" reported "elsewhere/secret.go", which is outside the rule's scope`
 	if op.Message != wantMsg {
 		t.Errorf("message = %q\nwant    %q", op.Message, wantMsg)
 	}

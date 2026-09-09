@@ -58,7 +58,7 @@ type AppliedRule struct {
 }
 
 // ArchitecturalContext is the human- and agent-readable view of the
-// Rules, Zones, and applicability reasons for one scope: the same
+// Rules, Zones, and reasons each Rule applies to the requested code: the same
 // facts for both audiences, distinguishing intended Rules from
 // observed code.
 type ArchitecturalContext struct {
@@ -186,8 +186,8 @@ type DomainKnowledge struct {
 	Unanchored []UnanchoredContract `json:"unanchored,omitempty"`
 }
 
-// GetArchitecturalContext projects Rules, Zones, and applicability
-// reasons for a selected scope.
+// GetArchitecturalContext projects Rules, Zones, and reasons each Rule
+// applies to the requested code.
 type GetArchitecturalContext struct {
 	rules        rule.Repository
 	knowledge    vocab.Repository
@@ -405,7 +405,7 @@ func zonePolicy(m rule.Zone, rules []rule.Rule) ZonePolicy {
 	}
 	for _, r := range rules {
 		params, ok := r.Params().(rule.ConsumesParams)
-		if !ok || !r.Applicability().WouldSelectZone(m.Name()) {
+		if !ok || !r.Scope().WouldSelectZone(m.Name()) {
 			continue
 		}
 		if params.Internal != nil {
@@ -441,8 +441,8 @@ func appliesToScope(r rule.Rule, path string, owning []rule.ZoneName) (string, b
 			}
 			return fmt.Sprintf("selects the file through Zone(s) %s", joinNames(shared)), true
 		}
-		if r.Applicability().ExcludedFile(path) && r.Applicability().WouldSelectFile(path, owning) {
-			return "excluded from this Rule's Applicability", true
+		if r.Scope().ExcludedFile(path) && r.Scope().WouldSelectFile(path, owning) {
+			return "excluded from this Rule's Scope", true
 		}
 	case rule.LayersParams:
 		for _, name := range params.Layers {
@@ -477,7 +477,7 @@ func appliesToZone(r rule.Rule, name rule.ZoneName) (string, bool) {
 	switch params := r.Params().(type) {
 	case rule.ConsumesParams, rule.StructureParams, rule.NamingParams, rule.ContentParams, rule.ExtensionParams:
 		_ = params
-		if r.Applicability().WouldSelectZone(name) {
+		if r.Scope().WouldSelectZone(name) {
 			return fmt.Sprintf("selects Zone %q", name), true
 		}
 	case rule.LayersParams:
@@ -501,7 +501,7 @@ func appliesToZone(r rule.Rule, name rule.ZoneName) (string, bool) {
 
 func sharedZones(r rule.Rule, owning []rule.ZoneName) []rule.ZoneName {
 	var out []rule.ZoneName
-	for _, m := range r.Applicability().Zones() {
+	for _, m := range r.Scope().Zones() {
 		if nameIn(owning, m) {
 			out = append(out, m)
 		}

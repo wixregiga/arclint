@@ -14,16 +14,16 @@ import (
 // Zone suggesting a path and one left unbound.
 func installationFixture(t *testing.T, version string) rule.Installation {
 	t.Helper()
-	scope, err := rule.ZoneApplicability([]rule.ZoneName{"domain"})
+	scope, err := rule.ZoneScope([]rule.ZoneName{"domain"})
 	if err != nil {
-		t.Fatalf("ZoneApplicability: %v", err)
+		t.Fatalf("ZoneScope: %v", err)
 	}
 	internal := rule.AllowList{}
 	r, err := rule.New(rule.Spec{
-		ID:            "acme/layers:domain/stdlib-only",
-		Type:          rule.TypeConsumes,
-		Params:        rule.ConsumesParams{Internal: &internal, External: rule.ImportForbid},
-		Applicability: scope,
+		ID:     "acme/layers:domain/stdlib-only",
+		Type:   rule.TypeConsumes,
+		Params: rule.ConsumesParams{Internal: &internal, External: rule.ImportForbid},
+		Scope:  scope,
 	})
 	if err != nil {
 		t.Fatalf("rule.New: %v", err)

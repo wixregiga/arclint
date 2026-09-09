@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Glob is a validated repo-relative path pattern used by Applicability,
+// Glob is a validated repo-relative path pattern used by Scope,
 // Zone membership, Rule Exclusions, and structure Rules. Matching is
 // segment-wise: `*` and `?` never cross `/`, a segment consisting solely
 // of `**` matches any number of whole segments including none, and

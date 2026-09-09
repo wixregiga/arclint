@@ -35,20 +35,20 @@ func mustRule(t *testing.T, spec rule.Spec) rule.Rule {
 	return r
 }
 
-func zoneScope(t *testing.T, names ...rule.ZoneName) rule.Applicability {
+func zoneScope(t *testing.T, names ...rule.ZoneName) rule.Scope {
 	t.Helper()
-	a, err := rule.ZoneApplicability(names)
+	a, err := rule.ZoneScope(names)
 	if err != nil {
-		t.Fatalf("ZoneApplicability(%v): %v", names, err)
+		t.Fatalf("ZoneScope(%v): %v", names, err)
 	}
 	return a
 }
 
-func repoScope(t *testing.T) rule.Applicability {
+func repoScope(t *testing.T) rule.Scope {
 	t.Helper()
-	a, err := rule.RepositoryApplicability()
+	a, err := rule.RepositoryScope()
 	if err != nil {
-		t.Fatalf("RepositoryApplicability: %v", err)
+		t.Fatalf("RepositoryScope: %v", err)
 	}
 	return a
 }
@@ -107,10 +107,10 @@ func scenarioRequest(t *testing.T, policy rule.UnknownImportPolicy) conformance.
 
 	rules := []rule.Rule{
 		mustRule(t, rule.Spec{
-			ID:            "t/p:alpha/imports",
-			Type:          rule.TypeConsumes,
-			Params:        rule.ConsumesParams{Internal: &emptyAllow},
-			Applicability: zoneScope(t, "alpha"),
+			ID:     "t/p:alpha/imports",
+			Type:   rule.TypeConsumes,
+			Params: rule.ConsumesParams{Internal: &emptyAllow},
+			Scope:  zoneScope(t, "alpha"),
 		}),
 		mustRule(t, rule.Spec{
 			ID:   "t/p:beta/shape",
@@ -119,37 +119,37 @@ func scenarioRequest(t *testing.T, policy rule.UnknownImportPolicy) conformance.
 				Require: []rule.Glob{mustGlob(t, "beta/root.go")},
 				Forbid:  []rule.Glob{mustGlob(t, "**/*.yaml")},
 			},
-			Applicability: zoneScope(t, "beta"),
+			Scope: zoneScope(t, "beta"),
 		}),
 		mustRule(t, rule.Spec{
-			ID:            "t/p:src/snake",
-			Type:          rule.TypeNaming,
-			Params:        rule.NamingParams{Case: snake},
-			Applicability: zoneScope(t, "alpha", "beta"),
+			ID:     "t/p:src/snake",
+			Type:   rule.TypeNaming,
+			Params: rule.NamingParams{Case: snake},
+			Scope:  zoneScope(t, "alpha", "beta"),
 		}),
 		mustRule(t, rule.Spec{
-			ID:            "t/p:deps/layers",
-			Type:          rule.TypeLayers,
-			Params:        rule.LayersParams{Layers: []rule.ZoneName{"alpha", "beta"}},
-			Applicability: repoScope(t),
+			ID:     "t/p:deps/layers",
+			Type:   rule.TypeLayers,
+			Params: rule.LayersParams{Layers: []rule.ZoneName{"alpha", "beta"}},
+			Scope:  repoScope(t),
 		}),
 		mustRule(t, rule.Spec{
-			ID:            "t/p:deps/protected-beta",
-			Type:          rule.TypeProtected,
-			Params:        rule.ProtectedParams{Zone: "beta"},
-			Applicability: repoScope(t),
+			ID:     "t/p:deps/protected-beta",
+			Type:   rule.TypeProtected,
+			Params: rule.ProtectedParams{Zone: "beta"},
+			Scope:  repoScope(t),
 		}).Suppress(suppression),
 		mustRule(t, rule.Spec{
-			ID:            "t/p:deps/acyclic",
-			Type:          rule.TypeAcyclic,
-			Params:        rule.AcyclicParams{},
-			Applicability: repoScope(t),
+			ID:     "t/p:deps/acyclic",
+			Type:   rule.TypeAcyclic,
+			Params: rule.AcyclicParams{},
+			Scope:  repoScope(t),
 		}),
 		mustRule(t, rule.Spec{
-			ID:            "t/p:src/disabled",
-			Type:          rule.TypeNaming,
-			Params:        rule.NamingParams{Case: snake},
-			Applicability: zoneScope(t, "alpha"),
+			ID:     "t/p:src/disabled",
+			Type:   rule.TypeNaming,
+			Params: rule.NamingParams{Case: snake},
+			Scope:  zoneScope(t, "alpha"),
 		}).Disable(disablement),
 	}
 	return conformance.Request{
@@ -296,10 +296,10 @@ func TestIndependenceForbidsSiblingImports(t *testing.T) {
 		t.Fatalf("NewObservations: %v", err)
 	}
 	r := mustRule(t, rule.Spec{
-		ID:            "t/p:features/independent",
-		Type:          rule.TypeIndependence,
-		Params:        rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*")}},
-		Applicability: repoScope(t),
+		ID:     "t/p:features/independent",
+		Type:   rule.TypeIndependence,
+		Params: rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*")}},
+		Scope:  repoScope(t),
 	})
 	a, err := conformance.Run(conformance.Request{
 		Rules: []rule.Rule{r}, Zones: zones, Observations: obs,
@@ -336,10 +336,10 @@ func TestIndependenceIsVacuousWithOneMember(t *testing.T) {
 		t.Fatalf("NewObservations: %v", err)
 	}
 	r := mustRule(t, rule.Spec{
-		ID:            "t/p:features/independent",
-		Type:          rule.TypeIndependence,
-		Params:        rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*")}},
-		Applicability: repoScope(t),
+		ID:     "t/p:features/independent",
+		Type:   rule.TypeIndependence,
+		Params: rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*")}},
+		Scope:  repoScope(t),
 	})
 	a, err := conformance.Run(conformance.Request{
 		Rules: []rule.Rule{r}, Observations: obs, UnknownImports: rule.UnknownImportsWarn,

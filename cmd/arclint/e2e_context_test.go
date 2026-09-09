@@ -171,6 +171,7 @@ func TestContextWorksiteScopesDomain(t *testing.T) {
 			Contexts []struct {
 				Name       string
 				Invariants []struct {
+					Key    string
 					Owner  string
 					Anchor string
 					Source string
@@ -188,13 +189,19 @@ func TestContextWorksiteScopesDomain(t *testing.T) {
 	if !d.Scoped || !d.Located {
 		t.Fatalf("scoped=%v located=%v", d.Scoped, d.Located)
 	}
-	if d.Counts.Contexts != 5 || d.Shown.Contexts != 1 || d.Shown.Invariants != 5 {
+	if d.Counts.Contexts != 5 || d.Shown.Contexts != 1 || d.Shown.Invariants != 6 {
 		t.Fatalf("counts %+v shown %+v", d.Counts, d.Shown)
 	}
 	if len(d.Contexts) != 1 || d.Contexts[0].Name != "rule" {
 		t.Fatalf("contexts = %+v", d.Contexts)
 	}
 	for _, inv := range d.Contexts[0].Invariants {
+		if inv.Key == "constraint-accepts-scope" {
+			if inv.Owner != "Rule" || inv.Anchor != "found" || !strings.HasPrefix(inv.Source, "internal/domain/rule/root.go:") {
+				t.Errorf("scope invariant not anchored at the root: %+v", inv)
+			}
+			continue
+		}
 		if inv.Owner != "Rule" || inv.Anchor != "missing" || inv.Source != "" {
 			t.Errorf("invariant = %+v", inv)
 		}
@@ -267,7 +274,7 @@ func TestContextZoneNamedForContextKeepsItWhole(t *testing.T) {
 	if len(ruleCtx.Aggregates) != 1 || ruleCtx.Aggregates[0].Name != "Rule" || ruleCtx.Aggregates[0].Identity != "RuleID" || len(ruleCtx.Aggregates[0].Entities) != 2 {
 		t.Fatalf("context rule is not whole: %+v", *ruleCtx)
 	}
-	if len(ruleCtx.ValueObjects) != 11 || len(ruleCtx.Invariants) != 9 {
+	if len(ruleCtx.ValueObjects) != 12 || len(ruleCtx.Invariants) != 10 {
 		t.Fatalf("context rule is not whole: %d value objects, %d invariants in %+v", len(ruleCtx.ValueObjects), len(ruleCtx.Invariants), *ruleCtx)
 	}
 }

@@ -25,7 +25,7 @@ contexts:
           rules.arclint.yaml. A Rule keeps its RuleID while everything
           human-facing about it can be renamed. Aggregate evidence,
           from the rules.arclint.yaml header: "Rule is the sole
-          aggregate". A Rule's identity, its Rationale, its scope, and its
+          aggregate". A Rule's identity, its Rationale, its Scope, and its
           Severity change together in one edit of rules.arclint.yaml.
         identity: RuleID
         entities:
@@ -54,6 +54,8 @@ contexts:
               sole aggregate and Pattern lives in its home.
             identity: PatternReference
         invariants:
+          constraint-accepts-scope: >-
+            A Rule's Constraint must accept its Scope.
           expansion-only-as-structure: >-
             A Rule may carry an Expansion only as a structure Rule, and
             its parameters must be exactly the Expansion's resolution
@@ -114,6 +116,12 @@ contexts:
           imported_by, independent, acyclic, content, or uses. The key
           alone decides how the Rule is evaluated; a Rule never carries
           two.
+      Scope:
+        definition: >-
+          Which code a Rule applies to: the repository or selected
+          Zones, optionally narrowed by file paths, with Exclusions
+          removing selected code from evaluation. A Scope is carried
+          by its Rule and has no independent identity.
       Severity:
         definition: >-
           Gate importance of a finding: error, warning, or info.

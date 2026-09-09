@@ -218,10 +218,10 @@ func (m membership) targetZones(imp Import) []rule.ZoneName {
 // Subjects and the subjects an Exclusion removed.
 func partitionFiles(r rule.Rule, mem membership) (selected, excluded []string) {
 	for _, f := range mem.files {
-		if !r.Applicability().WouldSelectFile(f, mem.fileZones[f]) {
+		if !r.Scope().WouldSelectFile(f, mem.fileZones[f]) {
 			continue
 		}
-		if r.Applicability().ExcludedFile(f) {
+		if r.Scope().ExcludedFile(f) {
 			excluded = append(excluded, f)
 			continue
 		}
@@ -234,10 +234,10 @@ func partitionFiles(r rule.Rule, mem membership) (selected, excluded []string) {
 // member files, for evaluators that judge per Zone.
 func partitionZoneFiles(r rule.Rule, name rule.ZoneName, mem membership) (selected, excluded []string) {
 	for _, f := range mem.zoneFiles[name] {
-		if !r.Applicability().WouldSelectFile(f, mem.fileZones[f]) {
+		if !r.Scope().WouldSelectFile(f, mem.fileZones[f]) {
 			continue
 		}
-		if r.Applicability().ExcludedFile(f) {
+		if r.Scope().ExcludedFile(f) {
 			excluded = append(excluded, f)
 			continue
 		}

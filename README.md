@@ -260,7 +260,7 @@ Patterns carry their own extensions: extend `arclint/vertical@0.1.0`
 and its rules find `vertical/forbid-imports` without any file landing
 in your tree.
 
-Extensions see exactly the subjects the rule's applicability selects;
+Extensions see exactly the subjects the rule's scope selects;
 findings outside that scope are rejected. The capability surface is
 one interface for every language: `ctx.files`, `ctx.read`,
 `ctx.imports`, and `ctx.facts`, with the same normalized shapes for Go,

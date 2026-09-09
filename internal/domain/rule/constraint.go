@@ -13,7 +13,7 @@ import (
 type Constraint interface {
 	Key() string
 	Kind() Type
-	Scope() Scope
+	AcceptsScope(Scope) bool
 	AcceptsFiles() bool
 	Proposition() string
 	Validate() error
@@ -103,10 +103,10 @@ func (p ConsumesConstraint) Kind() Type { return TypeConsumes }
 // Key returns the authored constraint key; built-in domain constraints have none.
 func (p ConsumesConstraint) Key() string { return "imports" }
 
-// Scope returns the demanded applicability shape.
-func (p ConsumesConstraint) Scope() Scope { return ScopeZones }
+// AcceptsScope reports whether this Constraint can evaluate the selected code.
+func (p ConsumesConstraint) AcceptsScope(s Scope) bool { return len(s.zones) > 0 && len(s.files) == 0 }
 
-// AcceptsFiles reports whether file globs may narrow applicability.
+// AcceptsFiles reports whether file globs may narrow scope.
 func (p ConsumesConstraint) AcceptsFiles() bool { return false }
 
 // Validate rejects an invalid constraint configuration.
@@ -154,10 +154,10 @@ func (p StructureConstraint) Kind() Type { return TypeStructure }
 // Key returns the authored constraint key; built-in domain constraints have none.
 func (p StructureConstraint) Key() string { return "structure" }
 
-// Scope returns the demanded applicability shape.
-func (p StructureConstraint) Scope() Scope { return ScopeZones }
+// AcceptsScope reports whether this Constraint can evaluate the selected code.
+func (p StructureConstraint) AcceptsScope(s Scope) bool { return len(s.zones) > 0 && len(s.files) == 0 }
 
-// AcceptsFiles reports whether file globs may narrow applicability.
+// AcceptsFiles reports whether file globs may narrow scope.
 func (p StructureConstraint) AcceptsFiles() bool { return false }
 
 // Validate rejects an invalid constraint configuration.
@@ -186,7 +186,7 @@ func (p StructureConstraint) Proposition() string {
 }
 
 // NamingConstraint constrain the file-name case of the Rule's Subjects.
-// Narrowing to a subset of member files is Applicability's file
+// Narrowing to a subset of member files is Scope's file
 // dimension, not a parameter.
 type NamingConstraint struct {
 	Case CaseSpec
@@ -198,10 +198,10 @@ func (p NamingConstraint) Kind() Type { return TypeNaming }
 // Key returns the authored constraint key; built-in domain constraints have none.
 func (p NamingConstraint) Key() string { return "naming" }
 
-// Scope returns the demanded applicability shape.
-func (p NamingConstraint) Scope() Scope { return ScopeZones }
+// AcceptsScope reports whether this Constraint can evaluate the selected code.
+func (p NamingConstraint) AcceptsScope(s Scope) bool { return len(s.zones) > 0 }
 
-// AcceptsFiles reports whether file globs may narrow applicability.
+// AcceptsFiles reports whether file globs may narrow scope.
 func (p NamingConstraint) AcceptsFiles() bool { return true }
 
 // Validate rejects an invalid constraint configuration.
@@ -228,10 +228,10 @@ func (p LayersConstraint) Kind() Type { return TypeLayers }
 // Key returns the authored constraint key; built-in domain constraints have none.
 func (p LayersConstraint) Key() string { return "layers" }
 
-// Scope returns the demanded applicability shape.
-func (p LayersConstraint) Scope() Scope { return ScopeRepository }
+// AcceptsScope reports whether this Constraint can evaluate the selected code.
+func (p LayersConstraint) AcceptsScope(s Scope) bool { return s.entireRepository && len(s.files) == 0 }
 
-// AcceptsFiles reports whether file globs may narrow applicability.
+// AcceptsFiles reports whether file globs may narrow scope.
 func (p LayersConstraint) AcceptsFiles() bool { return false }
 
 // Validate rejects an invalid constraint configuration.
@@ -259,10 +259,12 @@ func (p ProtectedConstraint) Kind() Type { return TypeProtected }
 // Key returns the authored constraint key; built-in domain constraints have none.
 func (p ProtectedConstraint) Key() string { return "imported_by" }
 
-// Scope returns the demanded applicability shape.
-func (p ProtectedConstraint) Scope() Scope { return ScopeOneZone }
+// AcceptsScope reports whether this Constraint can evaluate the selected code.
+func (p ProtectedConstraint) AcceptsScope(s Scope) bool {
+	return s.entireRepository && len(s.files) == 0
+}
 
-// AcceptsFiles reports whether file globs may narrow applicability.
+// AcceptsFiles reports whether file globs may narrow scope.
 func (p ProtectedConstraint) AcceptsFiles() bool { return false }
 
 // Validate rejects an invalid constraint configuration.
@@ -295,10 +297,10 @@ func (p ExtensionConstraint) Kind() Type { return TypeExtension }
 // Key returns the authored constraint key; built-in domain constraints have none.
 func (p ExtensionConstraint) Key() string { return "uses" }
 
-// Scope returns the demanded applicability shape.
-func (p ExtensionConstraint) Scope() Scope { return ScopeZonesOrRepository }
+// AcceptsScope reports whether this Constraint can evaluate the selected code.
+func (p ExtensionConstraint) AcceptsScope(s Scope) bool { return !s.IsZero() }
 
-// AcceptsFiles reports whether file globs may narrow applicability.
+// AcceptsFiles reports whether file globs may narrow scope.
 func (p ExtensionConstraint) AcceptsFiles() bool { return true }
 
 // Validate rejects an invalid constraint configuration.
@@ -327,10 +329,10 @@ func (p AcyclicConstraint) Kind() Type { return TypeAcyclic }
 // Key returns the authored constraint key; built-in domain constraints have none.
 func (p AcyclicConstraint) Key() string { return "acyclic" }
 
-// Scope returns the demanded applicability shape.
-func (p AcyclicConstraint) Scope() Scope { return ScopeRepository }
+// AcceptsScope reports whether this Constraint can evaluate the selected code.
+func (p AcyclicConstraint) AcceptsScope(s Scope) bool { return s.entireRepository && len(s.files) == 0 }
 
-// AcceptsFiles reports whether file globs may narrow applicability.
+// AcceptsFiles reports whether file globs may narrow scope.
 func (p AcyclicConstraint) AcceptsFiles() bool { return false }
 
 // Validate rejects an invalid constraint configuration.
@@ -358,10 +360,12 @@ func (p IndependenceConstraint) Kind() Type { return TypeIndependence }
 // Key returns the authored constraint key; built-in domain constraints have none.
 func (p IndependenceConstraint) Key() string { return "independent" }
 
-// Scope returns the demanded applicability shape.
-func (p IndependenceConstraint) Scope() Scope { return ScopeRepository }
+// AcceptsScope reports whether this Constraint can evaluate the selected code.
+func (p IndependenceConstraint) AcceptsScope(s Scope) bool {
+	return s.entireRepository && len(s.files) == 0
+}
 
-// AcceptsFiles reports whether file globs may narrow applicability.
+// AcceptsFiles reports whether file globs may narrow scope.
 func (p IndependenceConstraint) AcceptsFiles() bool { return false }
 
 // Validate rejects an invalid constraint configuration.
@@ -401,10 +405,10 @@ func (p DomainConstraint) Kind() Type { return TypeDomain }
 // Key returns the authored constraint key; built-in domain constraints have none.
 func (p DomainConstraint) Key() string { return "" }
 
-// Scope returns the demanded applicability shape.
-func (p DomainConstraint) Scope() Scope { return ScopeRepository }
+// AcceptsScope reports whether this Constraint can evaluate the selected code.
+func (p DomainConstraint) AcceptsScope(s Scope) bool { return s.entireRepository && len(s.files) == 0 }
 
-// AcceptsFiles reports whether file globs may narrow applicability.
+// AcceptsFiles reports whether file globs may narrow scope.
 func (p DomainConstraint) AcceptsFiles() bool { return false }
 
 // Validate rejects an invalid constraint configuration.
@@ -457,10 +461,10 @@ func (p ContentConstraint) Kind() Type { return TypeContent }
 // Key returns the authored constraint key; built-in domain constraints have none.
 func (p ContentConstraint) Key() string { return "content" }
 
-// Scope returns the demanded applicability shape.
-func (p ContentConstraint) Scope() Scope { return ScopeZonesOrRepository }
+// AcceptsScope reports whether this Constraint can evaluate the selected code.
+func (p ContentConstraint) AcceptsScope(s Scope) bool { return !s.IsZero() }
 
-// AcceptsFiles reports whether file globs may narrow applicability.
+// AcceptsFiles reports whether file globs may narrow scope.
 func (p ContentConstraint) AcceptsFiles() bool { return true }
 
 // Validate rejects an invalid constraint configuration.

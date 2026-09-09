@@ -296,7 +296,7 @@ func writeZoneRules(b *strings.Builder, cfg rule.Configured) {
 			b.WriteString("  - " + imports + "\n")
 		}
 		for _, r := range cfg.Rules {
-			if r.Type() == rule.TypeConsumes || !nameIn(r.Applicability().Zones(), m.Name()) {
+			if r.Type() == rule.TypeConsumes || !nameIn(r.Scope().Zones(), m.Name()) {
 				continue
 			}
 			proposition := strings.TrimPrefix(r.Proposition(), fmt.Sprintf("Zone %q: ", m.Name()))
@@ -357,7 +357,7 @@ func writeBuiltInRules(b *strings.Builder, cfg rule.Configured) {
 func writeRepositoryRules(b *strings.Builder, cfg rule.Configured) {
 	var lines []string
 	for _, r := range cfg.Rules {
-		if r.Type() == rule.TypeConsumes || r.BuiltIn() || len(r.Applicability().Zones()) > 0 {
+		if r.Type() == rule.TypeConsumes || r.BuiltIn() || len(r.Scope().Zones()) > 0 {
 			continue
 		}
 		lines = append(lines, "- "+ruleLine(ruleName(r, false), r, r.Proposition()))

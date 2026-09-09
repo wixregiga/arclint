@@ -15,28 +15,28 @@ func contextFixture(t *testing.T) rule.Configured {
 	if err != nil {
 		t.Fatalf("NewAllowList: %v", err)
 	}
-	scope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
+	scope, err := rule.ZoneScope([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ZoneApplicability: %v", err)
+		t.Fatalf("ZoneScope: %v", err)
 	}
 	consumes, err := rule.New(rule.Spec{
-		ID:            "t/p:m/imports",
-		Type:          rule.TypeConsumes,
-		Params:        rule.ConsumesParams{Internal: &emptyAllow, External: rule.ImportForbid},
-		Applicability: scope,
+		ID:     "t/p:m/imports",
+		Type:   rule.TypeConsumes,
+		Params: rule.ConsumesParams{Internal: &emptyAllow, External: rule.ImportForbid},
+		Scope:  scope,
 	})
 	if err != nil {
 		t.Fatalf("rule.New: %v", err)
 	}
-	repo, err := rule.RepositoryApplicability()
+	repo, err := rule.RepositoryScope()
 	if err != nil {
-		t.Fatalf("RepositoryApplicability: %v", err)
+		t.Fatalf("RepositoryScope: %v", err)
 	}
 	protected, err := rule.New(rule.Spec{
-		ID:            "t/p:deps/protected-m",
-		Type:          rule.TypeProtected,
-		Params:        rule.ProtectedParams{Zone: "m"},
-		Applicability: repo,
+		ID:     "t/p:deps/protected-m",
+		Type:   rule.TypeProtected,
+		Params: rule.ProtectedParams{Zone: "m"},
+		Scope:  repo,
 	})
 	if err != nil {
 		t.Fatalf("rule.New: %v", err)
@@ -209,15 +209,15 @@ func namespacedPatternFixture(t *testing.T, namespace, version string) rule.Patt
 	if err != nil {
 		t.Fatalf("NewCaseSpec: %v", err)
 	}
-	scope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
+	scope, err := rule.ZoneScope([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ZoneApplicability: %v", err)
+		t.Fatalf("ZoneScope: %v", err)
 	}
 	r, err := rule.New(rule.Spec{
-		ID:            namespace + "/ddd-flat:m/snake",
-		Type:          rule.TypeNaming,
-		Params:        rule.NamingParams{Case: snake},
-		Applicability: scope,
+		ID:     namespace + "/ddd-flat:m/snake",
+		Type:   rule.TypeNaming,
+		Params: rule.NamingParams{Case: snake},
+		Scope:  scope,
 	})
 	if err != nil {
 		t.Fatalf("rule.New: %v", err)

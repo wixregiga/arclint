@@ -21,8 +21,8 @@ const (
 var contextSubjectName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 
 // Subject is one concrete File, Folder, Zone, or recorded bounded
-// Context selected by Rule Applicability. A Programming Language
-// filters Applicability but is never a Subject.
+// Context selected by Rule Scope. A Programming Language
+// filters Scope but is never a Subject.
 type Subject struct {
 	kind     SubjectKind
 	identity string

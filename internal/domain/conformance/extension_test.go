@@ -40,10 +40,10 @@ func extensionRequest(t *testing.T, evaluator conformance.ExtensionEvaluator) co
 		t.Fatalf("NewObservations: %v", err)
 	}
 	r := mustRule(t, rule.Spec{
-		ID:            "t/p:m/no-panic",
-		Type:          rule.TypeExtension,
-		Params:        rule.ExtensionParams{Uses: "forbid-content", With: map[string]any{"pattern": `\bpanic\(`}},
-		Applicability: zoneScope(t, "m"),
+		ID:     "t/p:m/no-panic",
+		Type:   rule.TypeExtension,
+		Params: rule.ExtensionParams{Uses: "forbid-content", With: map[string]any{"pattern": `\bpanic\(`}},
+		Scope:  zoneScope(t, "m"),
 	})
 	return conformance.Request{
 		Rules:        []rule.Rule{r},
@@ -87,7 +87,7 @@ func TestExtensionRuleDelegatesHonestly(t *testing.T) {
 	}
 }
 
-func TestExtensionOutOfApplicabilityIsContained(t *testing.T) {
+func TestExtensionOutOfScopeIsContained(t *testing.T) {
 	// One out-of-scope report plus an in-scope finding: the whole
 	// Extension run is untrustworthy, so neither becomes a Violation.
 	outside := &fakeExtensions{findings: []conformance.ExtensionFinding{
@@ -102,11 +102,14 @@ func TestExtensionOutOfApplicabilityIsContained(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExclusion: %v", err)
 	}
-	req.Rules[0] = req.Rules[0].Exclude(ex)
+	req.Rules[0], err = req.Rules[0].Exclude(ex)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	a, err := conformance.Run(req)
 	if err != nil {
-		t.Fatalf("Run: %v (Applicability breach must not abort the Assessment)", err)
+		t.Fatalf("Run: %v (Scope breach must not abort the Assessment)", err)
 	}
 	if !a.HasErrors() {
 		t.Errorf("HasErrors = false; error operational Diagnostics must fail the gate")
@@ -168,14 +171,14 @@ func TestExtensionOutOfApplicabilityIsContained(t *testing.T) {
 		msg := d.Message()
 		if !strings.Contains(msg, `extension "forbid-content"`) ||
 			!strings.Contains(msg, w.path) ||
-			!strings.Contains(msg, "outside the rule's applicability") ||
+			!strings.Contains(msg, "outside the rule's scope") ||
 			!strings.Contains(msg, "t/p:m/no-panic") {
-			t.Errorf("ops[%d].Message = %q, want rule/extension/path/applicability", i, msg)
+			t.Errorf("ops[%d].Message = %q, want rule/extension/path/scope", i, msg)
 		}
 	}
 }
 
-func TestExtensionOutOfApplicabilityWithNoSelectedSubjects(t *testing.T) {
+func TestExtensionOutOfScopeWithNoSelectedSubjects(t *testing.T) {
 	// Declared zone has no observed members: nothing is selected, yet
 	// the Extension still reported a path. Diagnostics only, no
 	// fabricated Evaluation.
@@ -190,10 +193,10 @@ func TestExtensionOutOfApplicabilityWithNoSelectedSubjects(t *testing.T) {
 		t.Fatalf("NewObservations: %v", err)
 	}
 	r := mustRule(t, rule.Spec{
-		ID:            "t/p:m/require-registry",
-		Type:          rule.TypeExtension,
-		Params:        rule.ExtensionParams{Uses: "require-registry"},
-		Applicability: zoneScope(t, "m"),
+		ID:     "t/p:m/require-registry",
+		Type:   rule.TypeExtension,
+		Params: rule.ExtensionParams{Uses: "require-registry"},
+		Scope:  zoneScope(t, "m"),
 	})
 	a, err := conformance.Run(conformance.Request{
 		Rules:        []rule.Rule{r},

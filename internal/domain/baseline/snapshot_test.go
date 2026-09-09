@@ -31,15 +31,15 @@ func assess(t *testing.T, paths ...string) conformance.Assessment {
 	if err != nil {
 		t.Fatalf("NewCaseSpec: %v", err)
 	}
-	scope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
+	scope, err := rule.ZoneScope([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ZoneApplicability: %v", err)
+		t.Fatalf("ZoneScope: %v", err)
 	}
 	r, err := rule.New(rule.Spec{
-		ID:            "t/p:m/snake",
-		Type:          rule.TypeNaming,
-		Params:        rule.NamingParams{Case: snake},
-		Applicability: scope,
+		ID:     "t/p:m/snake",
+		Type:   rule.TypeNaming,
+		Params: rule.NamingParams{Case: snake},
+		Scope:  scope,
 	})
 	if err != nil {
 		t.Fatalf("rule.New: %v", err)

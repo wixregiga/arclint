@@ -3,7 +3,7 @@ package rule
 import "fmt"
 
 // Exclusion is a Pattern Consumer decision removing selected Files,
-// Folders, or Zones from one Rule's Applicability. It applies to
+// Folders, or Zones from one Rule's Scope. It applies to
 // exactly one Rule (through attachment to the aggregate) and produces
 // not-applicable rather than a Violation.
 type Exclusion struct {
@@ -37,7 +37,7 @@ func NewExclusion(paths []Glob, zones []ZoneName, reason string) (Exclusion, err
 }
 
 // ExcludesFile decides whether a candidate path is outside Rule
-// Applicability.
+// Scope.
 func (e Exclusion) ExcludesFile(path string) bool {
 	for _, g := range e.paths {
 		if g.Match(path) {
@@ -48,7 +48,7 @@ func (e Exclusion) ExcludesFile(path string) bool {
 }
 
 // ExcludesZone decides whether a candidate Zone is outside Rule
-// Applicability.
+// Scope.
 func (e Exclusion) ExcludesZone(name ZoneName) bool {
 	for _, m := range e.zones {
 		if m == name {

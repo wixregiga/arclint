@@ -7,7 +7,7 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/rule"
 )
 
-func mustZoneApplicability(t *testing.T, names ...string) rule.Applicability {
+func mustZoneScope(t *testing.T, names ...string) rule.Scope {
 	t.Helper()
 	zones := make([]rule.ZoneName, 0, len(names))
 	for _, n := range names {
@@ -17,18 +17,18 @@ func mustZoneApplicability(t *testing.T, names ...string) rule.Applicability {
 		}
 		zones = append(zones, m)
 	}
-	a, err := rule.ZoneApplicability(zones)
+	a, err := rule.ZoneScope(zones)
 	if err != nil {
-		t.Fatalf("ZoneApplicability(%v): %v", names, err)
+		t.Fatalf("ZoneScope(%v): %v", names, err)
 	}
 	return a
 }
 
-func mustRepoApplicability(t *testing.T) rule.Applicability {
+func mustRepoScope(t *testing.T) rule.Scope {
 	t.Helper()
-	a, err := rule.RepositoryApplicability()
+	a, err := rule.RepositoryScope()
 	if err != nil {
-		t.Fatalf("RepositoryApplicability: %v", err)
+		t.Fatalf("RepositoryScope: %v", err)
 	}
 	return a
 }
@@ -45,10 +45,10 @@ func emptyAllowList(t *testing.T) *rule.AllowList {
 func validConsumesSpec(t *testing.T) rule.Spec {
 	t.Helper()
 	return rule.Spec{
-		ID:            "arclint/ddd-flat:domain/stdlib-only",
-		Type:          rule.TypeConsumes,
-		Params:        rule.ConsumesParams{Internal: emptyAllowList(t), External: rule.ImportForbid},
-		Applicability: mustZoneApplicability(t, "domain"),
+		ID:     "arclint/ddd-flat:domain/stdlib-only",
+		Type:   rule.TypeConsumes,
+		Params: rule.ConsumesParams{Internal: emptyAllowList(t), External: rule.ImportForbid},
+		Scope:  mustZoneScope(t, "domain"),
 	}
 }
 
@@ -85,50 +85,50 @@ func TestInvalidRulesCannotBeConstructed(t *testing.T) {
 		}()},
 		{"consumes without zone scope", func() rule.Spec {
 			s := validConsumesSpec(t)
-			s.Applicability = mustRepoApplicability(t)
+			s.Scope = mustRepoScope(t)
 			return s
 		}()},
 		{"layers with one layer", rule.Spec{
-			ID:            "t/p:one-layer",
-			Type:          rule.TypeLayers,
-			Params:        rule.LayersParams{Layers: []rule.ZoneName{"a"}},
-			Applicability: mustRepoApplicability(t),
+			ID:     "t/p:one-layer",
+			Type:   rule.TypeLayers,
+			Params: rule.LayersParams{Layers: []rule.ZoneName{"a"}},
+			Scope:  mustRepoScope(t),
 		}},
 		{"layers with zone scope", rule.Spec{
-			ID:            "t/p:layers-scope",
-			Type:          rule.TypeLayers,
-			Params:        rule.LayersParams{Layers: []rule.ZoneName{"a", "b"}},
-			Applicability: mustZoneApplicability(t, "a"),
+			ID:     "t/p:layers-scope",
+			Type:   rule.TypeLayers,
+			Params: rule.LayersParams{Layers: []rule.ZoneName{"a", "b"}},
+			Scope:  mustZoneScope(t, "a"),
 		}},
 		{"structure without globs", rule.Spec{
-			ID:            "t/p:structure-empty",
-			Type:          rule.TypeStructure,
-			Params:        rule.StructureParams{},
-			Applicability: mustZoneApplicability(t, "a"),
+			ID:     "t/p:structure-empty",
+			Type:   rule.TypeStructure,
+			Params: rule.StructureParams{},
+			Scope:  mustZoneScope(t, "a"),
 		}},
 		{"naming without case", rule.Spec{
-			ID:            "t/p:naming-empty",
-			Type:          rule.TypeNaming,
-			Params:        rule.NamingParams{},
-			Applicability: mustZoneApplicability(t, "a"),
+			ID:     "t/p:naming-empty",
+			Type:   rule.TypeNaming,
+			Params: rule.NamingParams{},
+			Scope:  mustZoneScope(t, "a"),
 		}},
 		{"independence without folders", rule.Spec{
-			ID:            "t/p:independence-empty",
-			Type:          rule.TypeIndependence,
-			Params:        rule.IndependenceParams{},
-			Applicability: mustRepoApplicability(t),
+			ID:     "t/p:independence-empty",
+			Type:   rule.TypeIndependence,
+			Params: rule.IndependenceParams{},
+			Scope:  mustRepoScope(t),
 		}},
 		{"independence with duplicate folders", rule.Spec{
-			ID:            "t/p:independence-dup",
-			Type:          rule.TypeIndependence,
-			Params:        rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*"), mustGlob(t, "internal/*")}},
-			Applicability: mustRepoApplicability(t),
+			ID:     "t/p:independence-dup",
+			Type:   rule.TypeIndependence,
+			Params: rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*"), mustGlob(t, "internal/*")}},
+			Scope:  mustRepoScope(t),
 		}},
 		{"independence with zone scope", rule.Spec{
-			ID:            "t/p:independence-scope",
-			Type:          rule.TypeIndependence,
-			Params:        rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*")}},
-			Applicability: mustZoneApplicability(t, "a"),
+			ID:     "t/p:independence-scope",
+			Type:   rule.TypeIndependence,
+			Params: rule.IndependenceParams{Folders: []rule.Glob{mustGlob(t, "internal/*")}},
+			Scope:  mustZoneScope(t, "a"),
 		}},
 	}
 	for _, c := range cases {
@@ -181,7 +181,10 @@ func TestConfigurationPreservesIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExclusion: %v", err)
 	}
-	excluded := r.Exclude(exclusion)
+	excluded, err := r.Exclude(exclusion)
+	if err != nil {
+		t.Fatal(err)
+	}
 	member := []rule.ZoneName{"domain"}
 	if excluded.AppliesToFile("internal/domain/legacy/x.go", member) {
 		t.Errorf("excluded subject still selected")
@@ -410,19 +413,19 @@ func TestPatternRejectsMalformedSpecs(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 	foreign, err := rule.New(rule.Spec{
-		ID:            "other/ddd-flat:domain/stdlib-only",
-		Type:          rule.TypeConsumes,
-		Params:        rule.ConsumesParams{Internal: emptyAllowList(t), External: rule.ImportForbid},
-		Applicability: mustZoneApplicability(t, "domain"),
+		ID:     "other/ddd-flat:domain/stdlib-only",
+		Type:   rule.TypeConsumes,
+		Params: rule.ConsumesParams{Internal: emptyAllowList(t), External: rule.ImportForbid},
+		Scope:  mustZoneScope(t, "domain"),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	sibling, err := rule.New(rule.Spec{
-		ID:            "arclint/other:domain/stdlib-only",
-		Type:          rule.TypeConsumes,
-		Params:        rule.ConsumesParams{Internal: emptyAllowList(t), External: rule.ImportForbid},
-		Applicability: mustZoneApplicability(t, "domain"),
+		ID:     "arclint/other:domain/stdlib-only",
+		Type:   rule.TypeConsumes,
+		Params: rule.ConsumesParams{Internal: emptyAllowList(t), External: rule.ImportForbid},
+		Scope:  mustZoneScope(t, "domain"),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -589,19 +592,7 @@ func TestAssertionKeysSpellEveryType(t *testing.T) {
 	}
 }
 
-func TestTypeScopeAndFiles(t *testing.T) {
-	for typ, want := range map[rule.Type]rule.Scope{
-		rule.TypeConsumes: rule.ScopeZones, rule.TypeStructure: rule.ScopeZones,
-		rule.TypeNaming:    rule.ScopeZones,
-		rule.TypeProtected: rule.ScopeOneZone,
-		rule.TypeLayers:    rule.ScopeRepository, rule.TypeIndependence: rule.ScopeRepository,
-		rule.TypeAcyclic: rule.ScopeRepository, rule.TypeDomain: rule.ScopeRepository,
-		rule.TypeContent: rule.ScopeZonesOrRepository, rule.TypeExtension: rule.ScopeZonesOrRepository,
-	} {
-		if got := typ.Scope(); got != want {
-			t.Errorf("%s.Scope() = %v, want %v", typ, got, want)
-		}
-	}
+func TestTypeAcceptsFiles(t *testing.T) {
 	for typ, want := range map[rule.Type]bool{
 		rule.TypeNaming: true, rule.TypeContent: true, rule.TypeExtension: true,
 		rule.TypeConsumes: false, rule.TypeStructure: false, rule.TypeLayers: false,
@@ -614,10 +605,10 @@ func TestTypeScopeAndFiles(t *testing.T) {
 
 func TestContentParams(t *testing.T) {
 	r, err := rule.New(rule.Spec{
-		ID:            "domain/no-panic",
-		Type:          rule.TypeContent,
-		Params:        rule.ContentParams{Forbid: `\bpanic\(`},
-		Applicability: mustZoneApplicability(t, "domain"),
+		ID:     "domain/no-panic",
+		Type:   rule.TypeContent,
+		Params: rule.ContentParams{Forbid: `\bpanic\(`},
+		Scope:  mustZoneScope(t, "domain"),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -631,19 +622,19 @@ func TestContentParams(t *testing.T) {
 	}
 	for name, forbid := range map[string]string{"blank": "  ", "invalid": "("} {
 		if _, err := rule.New(rule.Spec{
-			ID:            "domain/no-panic",
-			Type:          rule.TypeContent,
-			Params:        rule.ContentParams{Forbid: forbid},
-			Applicability: mustZoneApplicability(t, "domain"),
+			ID:     "domain/no-panic",
+			Type:   rule.TypeContent,
+			Params: rule.ContentParams{Forbid: forbid},
+			Scope:  mustZoneScope(t, "domain"),
 		}); err == nil {
 			t.Errorf("%s forbid: expected error", name)
 		}
 	}
 	repoWide, err := rule.New(rule.Spec{
-		ID:            "repo/no-todo",
-		Type:          rule.TypeContent,
-		Params:        rule.ContentParams{Forbid: "TODO"},
-		Applicability: mustRepoApplicability(t),
+		ID:     "repo/no-todo",
+		Type:   rule.TypeContent,
+		Params: rule.ContentParams{Forbid: "TODO"},
+		Scope:  mustRepoScope(t),
 	})
 	if err != nil {
 		t.Fatalf("a content Rule ranges over the repository when on is omitted: %v", err)
@@ -659,10 +650,10 @@ func TestReferencedZones(t *testing.T) {
 		t.Fatalf("NewAllowList: %v", err)
 	}
 	consumes, err := rule.New(rule.Spec{
-		ID:            "application/imports",
-		Type:          rule.TypeConsumes,
-		Params:        rule.ConsumesParams{Internal: &allow, External: rule.ImportAllow},
-		Applicability: mustZoneApplicability(t, "application", "domain"),
+		ID:     "application/imports",
+		Type:   rule.TypeConsumes,
+		Params: rule.ConsumesParams{Internal: &allow, External: rule.ImportAllow},
+		Scope:  mustZoneScope(t, "application", "domain"),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -671,10 +662,10 @@ func TestReferencedZones(t *testing.T) {
 		t.Errorf("consumes ReferencedZones = %s", got)
 	}
 	protected, err := rule.New(rule.Spec{
-		ID:            "infra/only-composition",
-		Type:          rule.TypeProtected,
-		Params:        rule.ProtectedParams{Zone: "infra", Allow: []rule.ZoneName{"composition", "infra"}},
-		Applicability: mustRepoApplicability(t),
+		ID:     "infra/only-composition",
+		Type:   rule.TypeProtected,
+		Params: rule.ProtectedParams{Zone: "infra", Allow: []rule.ZoneName{"composition", "infra"}},
+		Scope:  mustRepoScope(t),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -683,10 +674,10 @@ func TestReferencedZones(t *testing.T) {
 		t.Errorf("protected ReferencedZones = %s", got)
 	}
 	layers, err := rule.New(rule.Spec{
-		ID:            "deps/inward",
-		Type:          rule.TypeLayers,
-		Params:        rule.LayersParams{Layers: []rule.ZoneName{"app", "domain"}},
-		Applicability: mustRepoApplicability(t),
+		ID:     "deps/inward",
+		Type:   rule.TypeLayers,
+		Params: rule.LayersParams{Layers: []rule.ZoneName{"app", "domain"}},
+		Scope:  mustRepoScope(t),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -695,10 +686,10 @@ func TestReferencedZones(t *testing.T) {
 		t.Errorf("layers ReferencedZones = %s", got)
 	}
 	acyclic, err := rule.New(rule.Spec{
-		ID:            "deps/acyclic",
-		Type:          rule.TypeAcyclic,
-		Params:        rule.AcyclicParams{Zones: []rule.ZoneName{"a", "b"}},
-		Applicability: mustRepoApplicability(t),
+		ID:     "deps/acyclic",
+		Type:   rule.TypeAcyclic,
+		Params: rule.AcyclicParams{Zones: []rule.ZoneName{"a", "b"}},
+		Scope:  mustRepoScope(t),
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
