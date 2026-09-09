@@ -43,8 +43,8 @@ func TestBuiltInRulesComposeOnePerCheckLevelInvariant(t *testing.T) {
 		if r.Claim().Statement() != inv.Statement {
 			t.Errorf("%s: claim %q, want the invariant's statement", inv.ID, r.Claim().Statement())
 		}
-		if !r.Applicability().EntireRepository() {
-			t.Errorf("%s: applies to %v, want the whole repository", inv.ID, r.Applicability().Zones())
+		if !r.Scope().EntireRepository() {
+			t.Errorf("%s: applies to %v, want the whole repository", inv.ID, r.Scope().Zones())
 		}
 		p, ok := r.Params().(rule.DomainParams)
 		if r.Type() != rule.TypeDomain || !ok || p.Invariant != inv.ID {
@@ -111,40 +111,40 @@ func TestBuiltInEnforcementFollowsTheInvariantsFacts(t *testing.T) {
 }
 
 func TestBuiltInIDsAreReserved(t *testing.T) {
-	repo := mustRepoApplicability(t)
+	repo := mustRepoScope(t)
 	cases := []struct {
 		name string
 		spec rule.Spec
 	}{
 		{"an authored rule under a built-in id", rule.Spec{
-			ID:            "aggregate/root-declared",
-			Type:          rule.TypeContent,
-			Params:        rule.ContentParams{Forbid: "x"},
-			Applicability: repo,
+			ID:     "aggregate/root-declared",
+			Type:   rule.TypeContent,
+			Params: rule.ContentParams{Forbid: "x"},
+			Scope:  repo,
 		}},
 		{"a domain rule under a foreign id", rule.Spec{
-			ID:            "local/root-declared",
-			Type:          rule.TypeDomain,
-			Params:        rule.DomainParams{Invariant: "aggregate/root-declared"},
-			Applicability: repo,
+			ID:     "local/root-declared",
+			Type:   rule.TypeDomain,
+			Params: rule.DomainParams{Invariant: "aggregate/root-declared"},
+			Scope:  repo,
 		}},
 		{"a domain rule evaluating another invariant", rule.Spec{
-			ID:            "aggregate/root-declared",
-			Type:          rule.TypeDomain,
-			Params:        rule.DomainParams{Invariant: "repository/declared"},
-			Applicability: repo,
+			ID:     "aggregate/root-declared",
+			Type:   rule.TypeDomain,
+			Params: rule.DomainParams{Invariant: "repository/declared"},
+			Scope:  repo,
 		}},
 		{"a domain rule for a loader-level invariant", rule.Spec{
-			ID:            "aggregate/identity-recorded",
-			Type:          rule.TypeDomain,
-			Params:        rule.DomainParams{Invariant: "aggregate/identity-recorded"},
-			Applicability: repo,
+			ID:     "aggregate/identity-recorded",
+			Type:   rule.TypeDomain,
+			Params: rule.DomainParams{Invariant: "aggregate/identity-recorded"},
+			Scope:  repo,
 		}},
 		{"an acyclic rule under a built-in id", rule.Spec{
-			ID:            "aggregate/root-declared",
-			Type:          rule.TypeAcyclic,
-			Params:        rule.AcyclicParams{},
-			Applicability: repo,
+			ID:     "aggregate/root-declared",
+			Type:   rule.TypeAcyclic,
+			Params: rule.AcyclicParams{},
+			Scope:  repo,
 		}},
 	}
 	for _, c := range cases {
@@ -153,10 +153,10 @@ func TestBuiltInIDsAreReserved(t *testing.T) {
 		}
 	}
 	local, err := rule.New(rule.Spec{
-		ID:            "dependencies/acyclic",
-		Type:          rule.TypeAcyclic,
-		Params:        rule.AcyclicParams{},
-		Applicability: repo,
+		ID:     "dependencies/acyclic",
+		Type:   rule.TypeAcyclic,
+		Params: rule.AcyclicParams{},
+		Scope:  repo,
 	})
 	if err != nil {
 		t.Fatalf("a local acyclic rule under its own id: %v", err)

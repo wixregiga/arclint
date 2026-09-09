@@ -79,7 +79,7 @@ Default-export one `defineRule(...)` result, or an array of them. Duplicate
 `type` names across entries fail registration.
 
 Wire the Rule in `rules.arclint.yaml` with `uses` as its constraint. Severity,
-identity, Rationale, and Applicability belong to the Rule, not the
+identity, Rationale, and Scope belong to the Rule, not the
 TypeScript file:
 
 ```yaml
@@ -125,7 +125,7 @@ extension unless the Pattern is extended; the check fails with
 
 During `check`, the host lends exactly this read-only surface. File-scoped
 calls are limited to the Rule's selected subjects: paths outside
-Applicability are invisible to `files` / `imports` / `facts` / `zoneOf`
+Scope are invisible to `files` / `imports` / `facts` / `zoneOf`
 and unreadable via `read`. `ctx.domain()` is project-wide recorded
 knowledge, not path-scoped. No ambient filesystem, network, or Node
 globals.
@@ -301,7 +301,7 @@ error (check exits 2). It does not become a Violation and is not
 silently skipped. During `arclint rules test`, the same failure is that
 test's error; later tests still run.
 
-## Applicability breaches
+## Scope breaches
 
 `ctx.report` accepts any path string. If any reported path falls outside
 the Rule's selected subjects, the whole Extension run is untrustworthy:

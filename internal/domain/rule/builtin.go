@@ -35,14 +35,14 @@ func BuiltIn() ([]Rule, error) {
 // builtInSpec is the Spec of the built-in Rule for a check-level block
 // invariant, and false for an invariant no built-in Rule evaluates.
 func builtInSpec(inv vocab.BlockInvariant) (Spec, bool) {
-	applicability, err := RepositoryApplicability()
+	scope, err := RepositoryScope()
 	if err != nil {
 		return Spec{}, false
 	}
 	spec := Spec{
-		ID:            inv.ID,
-		Severity:      inv.Enforcement.Severity,
-		Applicability: applicability,
+		ID:       inv.ID,
+		Severity: inv.Enforcement.Severity,
+		Scope:    scope,
 	}
 	if inv.Enforcement.By != vocab.EvaluatorDomain {
 		return Spec{}, false

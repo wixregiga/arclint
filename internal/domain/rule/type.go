@@ -197,14 +197,6 @@ func KindOfConstraintKey(key string) (ConstraintKind, bool) {
 // TypeOfAssertionKey preserves the legacy spelling.
 func TypeOfAssertionKey(key string) (Type, bool) { return KindOfConstraintKey(key) }
 
-// Scope delegates to the concrete constraint form.
-func (t Type) Scope() Scope {
-	if c, ok := constraintForms[t]; ok {
-		return c.Scope()
-	}
-	return ScopeRepository
-}
-
 // AcceptsFiles delegates to the concrete constraint form.
 func (t Type) AcceptsFiles() bool {
 	if c, ok := constraintForms[t]; ok {

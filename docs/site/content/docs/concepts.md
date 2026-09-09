@@ -63,6 +63,13 @@ derives a Rationale when the author supplies none. Rule `description`
 remains a deprecated alias for `rationale`, and using both is rejected.
 Zone and Pattern descriptions keep their existing meanings.
 
+Scope is the code the Rule applies to: the repository or selected Zones,
+optionally narrowed by file paths and exclusions. A Rule accepts only a
+Scope its Constraint can evaluate. For example, naming requires selected
+Zones and allows file narrowing; cycle detection needs repository scope.
+The Constraint determines compatibility, and the Rule enforces it when
+constructed or when its Constraint or Scope changes.
+
 - Zone-scoped: `imports` (what the Zone may depend on),
   `structure` (files it must or must not contain), `naming`,
   `content` (lines it must not contain), `invariants` (recorded domain

@@ -89,7 +89,7 @@ func evaluateDomain(r rule.Rule, mem membership, obs Observations, knowledge voc
 	if !ok {
 		return nil, fmt.Errorf("rule %s: no evaluator for block invariant %s", r.ID(), inv.ID)
 	}
-	code, err := resolveDomain(r.Applicability().ExcludedFile, mem, obs, knowledge)
+	code, err := resolveDomain(r.Scope().ExcludedFile, mem, obs, knowledge)
 	if err != nil {
 		return nil, fmt.Errorf("rule %s: %w", r.ID(), err)
 	}

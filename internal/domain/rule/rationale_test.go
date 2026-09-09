@@ -21,7 +21,7 @@ func TestRationaleRequiresAnAuthoredExplanation(t *testing.T) {
 }
 
 func TestRuleSeparatesRationaleFromProposition(t *testing.T) {
-	scope, err := rule.RepositoryApplicability()
+	scope, err := rule.RepositoryScope()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestRuleSeparatesRationaleFromProposition(t *testing.T) {
 		{name: "conflicting", rationale: "Why", legacy: "Another reason", invalid: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			r, err := rule.New(rule.Spec{ID: "acyclic", Constraint: rule.AcyclicConstraint{}, Applicability: scope, Rationale: tc.rationale, Claim: tc.legacy})
+			r, err := rule.New(rule.Spec{ID: "acyclic", Constraint: rule.AcyclicConstraint{}, Scope: scope, Rationale: tc.rationale, Claim: tc.legacy})
 			if tc.invalid {
 				if err == nil {
 					t.Fatal("accepted invalid rationale")
@@ -67,7 +67,7 @@ func TestRuleSeparatesRationaleFromProposition(t *testing.T) {
 func TestReexpandPreservesAuthoredRationale(t *testing.T) {
 	empty := expandedRule(t, vocab.UbiquitousLanguage{})
 	expansion, _ := empty.Expansion()
-	r, err := rule.New(rule.Spec{ID: empty.ID().Qualified(), Constraint: empty.Constraint(), Applicability: empty.Applicability(), Expansion: &expansion, Rationale: "Give each aggregate an identifiable home."})
+	r, err := rule.New(rule.Spec{ID: empty.ID().Qualified(), Constraint: empty.Constraint(), Scope: empty.Scope(), Expansion: &expansion, Rationale: "Give each aggregate an identifiable home."})
 	if err != nil {
 		t.Fatal(err)
 	}

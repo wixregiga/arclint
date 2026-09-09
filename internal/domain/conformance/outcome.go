@@ -21,7 +21,7 @@ const (
 	// OutcomeUnsupported means required enforcement or Language Facts
 	// are unavailable.
 	OutcomeUnsupported Outcome = "unsupported"
-	// OutcomeNotApplicable means Applicability or exclusion removes the
+	// OutcomeNotApplicable means Scope or exclusion removes the
 	// subject.
 	OutcomeNotApplicable Outcome = "not_applicable"
 	// OutcomeFailed means evaluation could not complete correctly.

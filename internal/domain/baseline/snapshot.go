@@ -2,7 +2,7 @@
 // record of the Rules applied and the Violations observed during one
 // Conformance Check, used to distinguish existing findings from later
 // ones. A Baseline never adds later Violations automatically and never
-// changes Rule Applicability or architectural truth.
+// changes Rule Scope or architectural truth.
 package baseline
 
 import (

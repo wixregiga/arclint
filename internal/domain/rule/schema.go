@@ -52,23 +52,23 @@ func (t Type) Schema() TypeSchema {
 	if !t.Authored() {
 		common = common[2:]
 	}
-	switch t.Scope() {
-	case ScopeZones:
+	switch t {
+	case TypeConsumes, TypeStructure, TypeNaming:
 		common = append(common, FieldSchema{
 			Name: "on", Kind: "zone_list", Required: true,
 			Doc: "the declared Zone or Zones the Rule judges",
 		})
-	case ScopeOneZone:
+	case TypeProtected:
 		common = append(common, FieldSchema{
 			Name: "on", Kind: "zone", Required: true,
 			Doc: "the one declared Zone the Rule protects",
 		})
-	case ScopeZonesOrRepository:
+	case TypeContent, TypeExtension:
 		common = append(common, FieldSchema{
 			Name: "on", Kind: "zone_list",
 			Doc: "the declared Zone or Zones the Rule judges; absent means the whole repository",
 		})
-	case ScopeRepository:
+	case TypeLayers, TypeIndependence, TypeAcyclic, TypeDomain:
 		// The constraint itself names the Zones; on is not accepted.
 	}
 	if t.AcceptsFiles() {
@@ -660,16 +660,16 @@ func commonRuleProperties(t Type) (map[string]any, []string) {
 		"suppress": schemaRef("suppression"),
 	}
 	var required []string
-	switch t.Scope() {
-	case ScopeZones:
+	switch t {
+	case TypeConsumes, TypeStructure, TypeNaming:
 		props["on"] = schemaRef("judgedZones")
 		required = append(required, "on")
-	case ScopeOneZone:
+	case TypeProtected:
 		props["on"] = schemaRef("protectedZone")
 		required = append(required, "on")
-	case ScopeZonesOrRepository:
+	case TypeContent, TypeExtension:
 		props["on"] = schemaRef("judgedZonesOrRepository")
-	case ScopeRepository:
+	case TypeLayers, TypeIndependence, TypeAcyclic, TypeDomain:
 		// The constraint itself names the Zones; on is not accepted.
 	}
 	if t.AcceptsFiles() {

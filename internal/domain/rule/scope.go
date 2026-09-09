@@ -2,42 +2,42 @@ package rule
 
 import "fmt"
 
-// Applicability is the composable, inspectable selection of the Files,
+// Scope is the composable, inspectable selection of the Files,
 // Folders, and Zones a Rule evaluates. Selector dimensions intersect;
 // multiple values within one dimension form a union. Rule Exclusions
 // remove only their selected subjects.
-type Applicability struct {
+type Scope struct {
 	entireRepository bool
 	zones            []ZoneName
 	files            []Glob
 	exclusions       []Exclusion
 }
 
-// RepositoryApplicability selects the entire repository, optionally
+// RepositoryScope selects the entire repository, optionally
 // narrowed by file globs.
-func RepositoryApplicability(files ...Glob) (Applicability, error) {
+func RepositoryScope(files ...Glob) (Scope, error) {
 	if err := validFileGlobs(files); err != nil {
-		return Applicability{}, err
+		return Scope{}, err
 	}
-	return Applicability{
+	return Scope{
 		entireRepository: true,
 		files:            append([]Glob(nil), files...),
 	}, nil
 }
 
-// ZoneApplicability selects the members of the named Zones (union),
+// ZoneScope selects the members of the named Zones (union),
 // optionally intersected with file globs.
-func ZoneApplicability(zones []ZoneName, files ...Glob) (Applicability, error) {
+func ZoneScope(zones []ZoneName, files ...Glob) (Scope, error) {
 	if len(zones) == 0 {
-		return Applicability{}, fmt.Errorf("applicability: no zone selected")
+		return Scope{}, fmt.Errorf("scope: no zone selected")
 	}
-	if err := uniqueValidZones("applicability", zones); err != nil {
-		return Applicability{}, err
+	if err := uniqueValidZones("scope", zones); err != nil {
+		return Scope{}, err
 	}
 	if err := validFileGlobs(files); err != nil {
-		return Applicability{}, err
+		return Scope{}, err
 	}
-	return Applicability{
+	return Scope{
 		zones: append([]ZoneName(nil), zones...),
 		files: append([]Glob(nil), files...),
 	}, nil
@@ -46,36 +46,36 @@ func ZoneApplicability(zones []ZoneName, files ...Glob) (Applicability, error) {
 func validFileGlobs(files []Glob) error {
 	for _, g := range files {
 		if g.IsZero() {
-			return fmt.Errorf("applicability: unconstructed file glob")
+			return fmt.Errorf("scope: unconstructed file glob")
 		}
 	}
 	return nil
 }
 
-// IsZero reports an unconstructed Applicability, which selects nothing.
-func (a Applicability) IsZero() bool {
+// IsZero reports an unconstructed Scope, which selects nothing.
+func (a Scope) IsZero() bool {
 	return !a.entireRepository && len(a.zones) == 0
 }
 
 // EntireRepository reports repository-wide selection.
-func (a Applicability) EntireRepository() bool { return a.entireRepository }
+func (a Scope) EntireRepository() bool { return a.entireRepository }
 
 // Zones returns the selected Zone names.
-func (a Applicability) Zones() []ZoneName {
+func (a Scope) Zones() []ZoneName {
 	return append([]ZoneName(nil), a.zones...)
 }
 
 // Files returns the file-glob dimension.
-func (a Applicability) Files() []Glob { return append([]Glob(nil), a.files...) }
+func (a Scope) Files() []Glob { return append([]Glob(nil), a.files...) }
 
 // Exclusions returns the applied Rule Exclusions.
-func (a Applicability) Exclusions() []Exclusion {
+func (a Scope) Exclusions() []Exclusion {
 	return append([]Exclusion(nil), a.exclusions...)
 }
 
-// Excluding returns Applicability with the Exclusion's subjects
+// Excluding returns Scope with the Exclusion's subjects
 // removed.
-func (a Applicability) Excluding(e Exclusion) Applicability {
+func (a Scope) Excluding(e Exclusion) Scope {
 	a.exclusions = append(append([]Exclusion(nil), a.exclusions...), e)
 	return a
 }
@@ -83,7 +83,7 @@ func (a Applicability) Excluding(e Exclusion) Applicability {
 // WouldSelectFile decides selection by the zone and file dimensions
 // alone, ignoring Exclusions. memberOf is the file's resolved Zone
 // membership.
-func (a Applicability) WouldSelectFile(path string, memberOf []ZoneName) bool {
+func (a Scope) WouldSelectFile(path string, memberOf []ZoneName) bool {
 	if a.IsZero() {
 		return false
 	}
@@ -113,7 +113,7 @@ func (a Applicability) WouldSelectFile(path string, memberOf []ZoneName) bool {
 }
 
 // ExcludedFile reports whether an Exclusion removes the path.
-func (a Applicability) ExcludedFile(path string) bool {
+func (a Scope) ExcludedFile(path string) bool {
 	for _, e := range a.exclusions {
 		if e.ExcludesFile(path) {
 			return true
@@ -124,12 +124,12 @@ func (a Applicability) ExcludedFile(path string) bool {
 
 // SelectsFile decides whether the file is a Rule Subject: selected by
 // the dimensions and not excluded.
-func (a Applicability) SelectsFile(path string, memberOf []ZoneName) bool {
+func (a Scope) SelectsFile(path string, memberOf []ZoneName) bool {
 	return a.WouldSelectFile(path, memberOf) && !a.ExcludedFile(path)
 }
 
 // WouldSelectZone decides Zone selection ignoring Exclusions.
-func (a Applicability) WouldSelectZone(name ZoneName) bool {
+func (a Scope) WouldSelectZone(name ZoneName) bool {
 	if a.entireRepository {
 		return true
 	}
@@ -142,7 +142,7 @@ func (a Applicability) WouldSelectZone(name ZoneName) bool {
 }
 
 // ExcludedZone reports whether an Exclusion removes the Zone.
-func (a Applicability) ExcludedZone(name ZoneName) bool {
+func (a Scope) ExcludedZone(name ZoneName) bool {
 	for _, e := range a.exclusions {
 		if e.ExcludesZone(name) {
 			return true
@@ -152,24 +152,6 @@ func (a Applicability) ExcludedZone(name ZoneName) bool {
 }
 
 // SelectsZone decides whether the Zone is a Rule Subject.
-func (a Applicability) SelectsZone(name ZoneName) bool {
+func (a Scope) SelectsZone(name ZoneName) bool {
 	return a.WouldSelectZone(name) && !a.ExcludedZone(name)
 }
-
-// Scope is the Applicability shape a Type demands: which Zones a
-// Rule of the Type judges and how rules.arclint.yaml spells that.
-type Scope int
-
-const (
-	// ScopeZones judges the members of the Zones named under on;
-	// on is required.
-	ScopeZones Scope = iota
-	// ScopeOneZone judges exactly one Zone named under on.
-	ScopeOneZone
-	// ScopeRepository ranges over the repository's Zone graph or
-	// its files; on is not accepted.
-	ScopeRepository
-	// ScopeZonesOrRepository judges the Zones named under on, or
-	// the whole repository when on is omitted.
-	ScopeZonesOrRepository
-)

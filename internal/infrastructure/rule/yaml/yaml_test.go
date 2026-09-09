@@ -396,7 +396,7 @@ rules:
   m/imports:
     imports:
       internal: []
-`, "imports requires on"},
+`, "constraint does not accept its scope"},
 		"on for layers": {`
 zones:
   m: m/**
@@ -405,7 +405,7 @@ rules:
   deps/inward:
     on: m
     layers: [m, n]
-`, "layers names zones itself, so it has no on"},
+`, "constraint does not accept its scope"},
 		"imported_by with two zones": {`
 zones:
   m: m/**

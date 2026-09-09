@@ -96,16 +96,16 @@ func TestSchemaCoversEveryRuleType(t *testing.T) {
 			}
 		}
 		_, hasOn := props["on"]
-		switch typ.Scope() {
-		case rule.ScopeZones, rule.ScopeOneZone:
+		switch typ {
+		case rule.TypeConsumes, rule.TypeStructure, rule.TypeNaming, rule.TypeProtected:
 			if !hasOn || !containsString(required, "on") {
 				t.Errorf("%s must require on", def)
 			}
-		case rule.ScopeRepository:
+		case rule.TypeLayers, rule.TypeIndependence, rule.TypeAcyclic:
 			if hasOn {
 				t.Errorf("%s must not accept on", def)
 			}
-		case rule.ScopeZonesOrRepository:
+		case rule.TypeContent, rule.TypeExtension:
 			if !hasOn || containsString(required, "on") {
 				t.Errorf("%s must accept an optional on", def)
 			}

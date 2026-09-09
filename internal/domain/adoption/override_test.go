@@ -15,11 +15,11 @@ func overrideTarget(t *testing.T, provenance bool) rule.Rule {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope, err := rule.RepositoryApplicability()
+	scope, err := rule.RepositoryScope()
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec := rule.Spec{ID: "acme/checks:no-cycles", Constraint: rule.AcyclicConstraint{}, Applicability: scope}
+	spec := rule.Spec{ID: "acme/checks:no-cycles", Constraint: rule.AcyclicConstraint{}, Scope: scope}
 	if provenance {
 		spec.Provenance = &ref
 	}

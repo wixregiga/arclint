@@ -14,7 +14,7 @@ type PolicyNote struct {
 }
 
 // RuleDetail is the plain result value showing one Rule completely:
-// identity, proposition, rationale, applicability, enforcement, attached policy, and
+// identity, proposition, rationale, scope, enforcement, attached policy, and
 // the accepted configuration of its Type.
 type RuleDetail struct {
 	Summary          RuleSummary
@@ -53,7 +53,7 @@ func (uc ShowRule) Execute(id string) (RuleDetail, error) {
 	detail := RuleDetail{
 		Summary:          summarize(r),
 		Evidence:         r.Enforcement().Evidence().Describe(),
-		EntireRepository: r.Applicability().EntireRepository(),
+		EntireRepository: r.Scope().EntireRepository(),
 		Schema:           r.Type().Schema().Describe(),
 	}
 	for _, l := range r.Enforcement().Languages() {
@@ -63,13 +63,13 @@ func (uc ShowRule) Execute(id string) (RuleDetail, error) {
 		detail.Facts = append(detail.Facts, string(f))
 	}
 	detail.Limitations = r.Enforcement().Limitations()
-	for _, m := range r.Applicability().Zones() {
+	for _, m := range r.Scope().Zones() {
 		detail.Zones = append(detail.Zones, string(m))
 	}
-	for _, g := range r.Applicability().Files() {
+	for _, g := range r.Scope().Files() {
 		detail.Files = append(detail.Files, g.String())
 	}
-	for _, e := range r.Applicability().Exclusions() {
+	for _, e := range r.Scope().Exclusions() {
 		note := PolicyNote{Reason: e.Reason()}
 		for _, g := range e.Paths() {
 			note.Selectors = append(note.Selectors, g.String())

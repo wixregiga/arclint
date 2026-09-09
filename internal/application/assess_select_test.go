@@ -20,9 +20,9 @@ func selectionFixture(t *testing.T) (rule.Configured, conformance.Observations) 
 	if err != nil {
 		t.Fatalf("NewGlob: %v", err)
 	}
-	scope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
+	scope, err := rule.ZoneScope([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ZoneApplicability: %v", err)
+		t.Fatalf("ZoneScope: %v", err)
 	}
 	shared, err := rule.ParsePatternReference("t/shared@1.2.0")
 	if err != nil {
@@ -30,11 +30,11 @@ func selectionFixture(t *testing.T) (rule.Configured, conformance.Observations) 
 	}
 	for _, id := range []string{"t/shared:m/keep", "t/shared:m/keep2"} {
 		r, err := rule.New(rule.Spec{
-			ID:            id,
-			Type:          rule.TypeStructure,
-			Params:        rule.StructureParams{Require: []rule.Glob{keep}},
-			Applicability: scope,
-			Provenance:    &shared,
+			ID:         id,
+			Type:       rule.TypeStructure,
+			Params:     rule.StructureParams{Require: []rule.Glob{keep}},
+			Scope:      scope,
+			Provenance: &shared,
 		})
 		if err != nil {
 			t.Fatalf("rule.New: %v", err)

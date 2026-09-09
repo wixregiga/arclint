@@ -16,30 +16,30 @@ import (
 func agentsFixture(t *testing.T) rule.Configured {
 	t.Helper()
 	cfg := contextFixture(t)
-	scope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
+	scope, err := rule.ZoneScope([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ZoneApplicability: %v", err)
+		t.Fatalf("ZoneScope: %v", err)
 	}
 	bound, err := rule.New(rule.Spec{
-		ID:            "t/p:m/technology-free",
-		Rationale:     "Keep transport choices outside the model.",
-		Type:          rule.TypeExtension,
-		Severity:      "warning",
-		Params:        rule.ExtensionParams{Uses: "forbid-content", With: map[string]any{"pattern": `"net/http"`}},
-		Applicability: scope,
+		ID:        "t/p:m/technology-free",
+		Rationale: "Keep transport choices outside the model.",
+		Type:      rule.TypeExtension,
+		Severity:  "warning",
+		Params:    rule.ExtensionParams{Uses: "forbid-content", With: map[string]any{"pattern": `"net/http"`}},
+		Scope:     scope,
 	})
 	if err != nil {
 		t.Fatalf("rule.New: %v", err)
 	}
-	repo, err := rule.RepositoryApplicability()
+	repo, err := rule.RepositoryScope()
 	if err != nil {
-		t.Fatalf("RepositoryApplicability: %v", err)
+		t.Fatalf("RepositoryScope: %v", err)
 	}
 	isolation, err := rule.New(rule.Spec{
-		ID:            "t/p:fsd/slice-isolation",
-		Type:          rule.TypeExtension,
-		Params:        rule.ExtensionParams{Uses: "fsd-slice-isolation", With: map[string]any{"layers": []any{"a", "b"}}},
-		Applicability: repo,
+		ID:     "t/p:fsd/slice-isolation",
+		Type:   rule.TypeExtension,
+		Params: rule.ExtensionParams{Uses: "fsd-slice-isolation", With: map[string]any{"layers": []any{"a", "b"}}},
+		Scope:  repo,
 	})
 	if err != nil {
 		t.Fatalf("rule.New: %v", err)
@@ -210,34 +210,34 @@ func TestPublishAgentsContextSpellsPatternRulesQualified(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParsePatternReference: %v", err)
 	}
-	scope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
+	scope, err := rule.ZoneScope([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ZoneApplicability: %v", err)
+		t.Fatalf("ZoneScope: %v", err)
 	}
-	repo, err := rule.RepositoryApplicability()
+	repo, err := rule.RepositoryScope()
 	if err != nil {
-		t.Fatalf("RepositoryApplicability: %v", err)
+		t.Fatalf("RepositoryScope: %v", err)
 	}
 	glob, err := rule.NewGlob("m/root.go")
 	if err != nil {
 		t.Fatalf("NewGlob: %v", err)
 	}
 	bound, err := rule.New(rule.Spec{
-		ID:            "acme/layers:m/has-root",
-		Type:          rule.TypeStructure,
-		Params:        rule.StructureParams{Require: []rule.Glob{glob}},
-		Applicability: scope,
-		Provenance:    &shared,
+		ID:         "acme/layers:m/has-root",
+		Type:       rule.TypeStructure,
+		Params:     rule.StructureParams{Require: []rule.Glob{glob}},
+		Scope:      scope,
+		Provenance: &shared,
 	})
 	if err != nil {
 		t.Fatalf("rule.New: %v", err)
 	}
 	wide, err := rule.New(rule.Spec{
-		ID:            "acme/layers:deps/acyclic",
-		Type:          rule.TypeAcyclic,
-		Params:        rule.AcyclicParams{},
-		Applicability: repo,
-		Provenance:    &shared,
+		ID:         "acme/layers:deps/acyclic",
+		Type:       rule.TypeAcyclic,
+		Params:     rule.AcyclicParams{},
+		Scope:      repo,
+		Provenance: &shared,
 	})
 	if err != nil {
 		t.Fatalf("rule.New: %v", err)

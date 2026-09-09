@@ -16,17 +16,17 @@ import (
 // Rule is the aggregate root. Values are immutable: configuration
 // methods return a new Rule with the same identity.
 type Rule struct {
-	id            ID
-	rationale     Rationale
-	severity      Severity
-	constraint    Constraint
-	applicability Applicability
-	enforcement   Enforcement
-	suppressions  []Suppression
-	disablement   *Disablement
-	tests         []Test
-	provenance    *PatternReference
-	expansion     *Expansion
+	id           ID
+	rationale    Rationale
+	severity     Severity
+	constraint   Constraint
+	scope        Scope
+	enforcement  Enforcement
+	suppressions []Suppression
+	disablement  *Disablement
+	tests        []Test
+	provenance   *PatternReference
+	expansion    *Expansion
 }
 
 // Spec is the input to validated Rule construction.
@@ -48,8 +48,8 @@ type Spec struct {
 	Severity string
 	// Params are the Type-specific parameters.
 	Params Params
-	// Applicability selects the Rule Subjects.
-	Applicability Applicability
+	// Scope selects the Rule Subjects.
+	Scope Scope
 	// Enforcement defaults to the built-in Enforcement for the Type.
 	Enforcement *Enforcement
 	// Tests carry the Rule's deterministic scenarios.
@@ -96,9 +96,6 @@ func New(spec Spec) (Rule, error) {
 	}
 	severity, err := ParseSeverity(spec.Severity)
 	if err != nil {
-		return fail(err)
-	}
-	if err := validateScope(c, spec.Applicability); err != nil {
 		return fail(err)
 	}
 	enforcement := BuiltinEnforcement(c.Kind())
@@ -152,17 +149,21 @@ func New(spec Spec) (Rule, error) {
 		e := *spec.Expansion
 		expansion = &e
 	}
-	return Rule{
-		id:            id,
-		rationale:     rationale,
-		severity:      severity,
-		constraint:    c,
-		applicability: spec.Applicability,
-		enforcement:   enforcement,
-		tests:         append([]Test(nil), spec.Tests...),
-		provenance:    provenance,
-		expansion:     expansion,
-	}, nil
+	r := Rule{
+		id:          id,
+		rationale:   rationale,
+		severity:    severity,
+		constraint:  c,
+		scope:       spec.Scope,
+		enforcement: enforcement,
+		tests:       append([]Test(nil), spec.Tests...),
+		provenance:  provenance,
+		expansion:   expansion,
+	}
+	if err := r.EnsureConstraintAcceptsScope(); err != nil {
+		return Rule{}, err
+	}
+	return r, nil
 }
 
 // validateConstraint preserves the one expansion allowance: an
@@ -188,7 +189,7 @@ func validateConstraint(p Constraint, e *Expansion) error {
 // deriveExpandedProposition states the universally quantified proposition of an
 // expanded structure Rule: the source it ranges over and the globs the
 // recorded language currently derives.
-func deriveExpandedProposition(a Applicability, p StructureConstraint, e Expansion) string {
+func deriveExpandedProposition(a Scope, p StructureConstraint, e Expansion) string {
 	zones := a.Zones()
 	scope := fmt.Sprintf("Zones %s", zoneList(zones))
 	if len(zones) == 1 {
@@ -200,32 +201,18 @@ func deriveExpandedProposition(a Applicability, p StructureConstraint, e Expansi
 	return fmt.Sprintf("%s: %s (derived from each recorded %s)", scope, p.Proposition(), e.Source())
 }
 
-// validateScope keeps Applicability coherent with the Rule Type:
-// zone-scoped Types bind to at least one Zone; graph Types range
-// over the repository's Zone graph.
-func validateScope(c Constraint, a Applicability) error {
-	t := c.Kind()
-	switch c.Scope() {
-	case ScopeZones:
-		if len(a.Zones()) == 0 {
-			return fmt.Errorf("%s rule requires zone applicability", t)
-		}
-	case ScopeRepository, ScopeOneZone:
-		// ProtectedConstraint carries its target Zone; its evaluation spans importers.
-		if !a.EntireRepository() {
-			return fmt.Errorf("%s rule requires repository applicability", t)
-		}
-	case ScopeZonesOrRepository:
-		if a.IsZero() {
-			return fmt.Errorf("%s rule requires applicability", t)
-		}
+// EnsureConstraintAcceptsScope enforces the Rule's compatibility invariant.
+// Each concrete Constraint decides whether it can evaluate the selected code.
+func (r Rule) EnsureConstraintAcceptsScope() error {
+	if r.constraint == nil || !r.constraint.AcceptsScope(r.scope) {
+		return fmt.Errorf("rule %s: constraint does not accept its scope", r.id)
 	}
 	return nil
 }
 
 // deriveProposition composes the canonical proposition from the Rule's scope and
 // its parameters' proposition.
-func deriveProposition(a Applicability, p Constraint) string {
+func deriveProposition(a Scope, p Constraint) string {
 	proposition := p.Proposition()
 	switch p.Kind() {
 	case TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic, TypeDomain:
@@ -237,7 +224,7 @@ func deriveProposition(a Applicability, p Constraint) string {
 	switch len(zones) {
 	case 0:
 		// Only content and extension Rules reach here without Zones:
-		// repository applicability, so the proposition stands alone.
+		// repository scope, so the proposition stands alone.
 		return proposition
 	case 1:
 		return fmt.Sprintf("Zone %q: %s", zones[0], proposition)
@@ -275,7 +262,7 @@ func (r Rule) Claim() Claim {
 	return Claim{statement: statement}
 }
 
-// Proposition states the configured Constraint in its applicability and
+// Proposition states the configured Constraint in its scope and
 // expansion context. It never supplies or replaces an author's Rationale.
 func (r Rule) Proposition() string {
 	if r.constraint == nil {
@@ -283,10 +270,10 @@ func (r Rule) Proposition() string {
 	}
 	if r.expansion != nil {
 		if sp, ok := r.constraint.(StructureConstraint); ok {
-			return deriveExpandedProposition(r.applicability, sp, *r.expansion)
+			return deriveExpandedProposition(r.scope, sp, *r.expansion)
 		}
 	}
-	return deriveProposition(r.applicability, r.constraint)
+	return deriveProposition(r.scope, r.constraint)
 }
 
 // Assertion preserves the legacy Rule accessor; meta-model assertions are separate.
@@ -299,8 +286,8 @@ func (r Rule) Severity() Severity { return r.severity }
 // Params returns the Type-specific parameters.
 func (r Rule) Params() Params { return r.constraint }
 
-// Applicability returns the Subject selection, Exclusions applied.
-func (r Rule) Applicability() Applicability { return r.applicability }
+// Scope returns the Subject selection, Exclusions applied.
+func (r Rule) Scope() Scope { return r.scope }
 
 // Enforcement describes how the Rule is evaluated.
 func (r Rule) Enforcement() Enforcement { return r.enforcement }
@@ -344,6 +331,9 @@ func (r Rule) Expansion() (Expansion, bool) {
 // fixture's own vocabulary; a Rule without an Expansion is returned
 // unchanged.
 func (r Rule) Reexpand(lang vocab.UbiquitousLanguage) (Rule, error) {
+	if err := r.EnsureConstraintAcceptsScope(); err != nil {
+		return Rule{}, err
+	}
 	if r.expansion == nil {
 		return r, nil
 	}
@@ -352,6 +342,9 @@ func (r Rule) Reexpand(lang vocab.UbiquitousLanguage) (Rule, error) {
 		return Rule{}, fmt.Errorf("rule %s: %v", r.id, err)
 	}
 	r.constraint = params
+	if err := r.EnsureConstraintAcceptsScope(); err != nil {
+		return Rule{}, err
+	}
 	return r, nil
 }
 
@@ -369,7 +362,7 @@ func (r Rule) Disablement() (Disablement, bool) {
 // AppliesToFile decides whether a File is a Rule Subject, given its
 // resolved Zone membership.
 func (r Rule) AppliesToFile(path string, memberOf []ZoneName) bool {
-	return r.applicability.SelectsFile(path, memberOf)
+	return r.scope.SelectsFile(path, memberOf)
 }
 
 // ReferencedZones returns every ZoneName the Rule speaks about:
@@ -390,7 +383,7 @@ func (r Rule) ReferencedZones() []ZoneName {
 			out = append(out, n)
 		}
 	}
-	add(r.applicability.Zones()...)
+	add(r.scope.Zones()...)
 	switch p := r.constraint.(type) {
 	case ConsumesConstraint:
 		if p.Internal != nil {
@@ -423,7 +416,7 @@ func (r Rule) Validate() error {
 	if r.enforcement.IsZero() {
 		return fmt.Errorf("rule %s: missing enforcement", r.id)
 	}
-	return validateScope(r.constraint, r.applicability)
+	return r.EnsureConstraintAcceptsScope()
 }
 
 // WithSeverity produces a valid repository-specific Rule with the same
@@ -434,14 +427,20 @@ func (r Rule) WithSeverity(s Severity) (Rule, error) {
 		return Rule{}, fmt.Errorf("rule %s: severity %q invalid", r.id, s)
 	}
 	r.severity = s
+	if err := r.EnsureConstraintAcceptsScope(); err != nil {
+		return Rule{}, err
+	}
 	return r, nil
 }
 
-// Exclude removes the Exclusion's subjects from Applicability. The
+// Exclude removes the Exclusion's subjects from Scope. The
 // identity is unchanged; excluded subjects evaluate not-applicable.
-func (r Rule) Exclude(e Exclusion) Rule {
-	r.applicability = r.applicability.Excluding(e)
-	return r
+func (r Rule) Exclude(e Exclusion) (Rule, error) {
+	r.scope = r.scope.Excluding(e)
+	if err := r.EnsureConstraintAcceptsScope(); err != nil {
+		return Rule{}, err
+	}
+	return r, nil
 }
 
 // Suppress retains matching Violations while changing their reporting

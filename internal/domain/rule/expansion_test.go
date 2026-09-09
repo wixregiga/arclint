@@ -156,16 +156,16 @@ func expandedRule(t *testing.T, lang vocab.UbiquitousLanguage) rule.Rule {
 	if err != nil {
 		t.Fatalf("zone name: %v", err)
 	}
-	scope, err := rule.ZoneApplicability([]rule.ZoneName{name})
+	scope, err := rule.ZoneScope([]rule.ZoneName{name})
 	if err != nil {
-		t.Fatalf("applicability: %v", err)
+		t.Fatalf("scope: %v", err)
 	}
 	r, err := rule.New(rule.Spec{
-		ID:            "test/p:domain/aggregate-skeleton",
-		Type:          rule.TypeStructure,
-		Params:        params,
-		Applicability: scope,
-		Expansion:     &e,
+		ID:        "test/p:domain/aggregate-skeleton",
+		Type:      rule.TypeStructure,
+		Params:    params,
+		Scope:     scope,
+		Expansion: &e,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)

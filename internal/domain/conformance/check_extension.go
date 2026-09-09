@@ -16,7 +16,7 @@ import (
 // undetermined, never conformance.
 //
 // A finding that names a path outside the selected subjects is an
-// Applicability breach: every finding from that Extension run is
+// Scope breach: every finding from that Extension run is
 // discarded as untrustworthy, each selected subject evaluates failed,
 // excluded subjects stay not-applicable, and error-severity
 // operational Diagnostics identify the breach. The check still returns
@@ -52,7 +52,7 @@ func evaluateExtensionRule(r rule.Rule, mem membership, obs Observations,
 		byPath[f.Path] = append(byPath[f.Path], f)
 	}
 	if len(breaches) > 0 {
-		return containExtensionApplicabilityBreach(r, params.Uses, selected, excluded, breaches)
+		return containExtensionScopeBreach(r, params.Uses, selected, excluded, breaches)
 	}
 
 	var out []Evaluation
@@ -86,11 +86,11 @@ func evaluateExtensionRule(r rule.Rule, mem membership, obs Observations,
 	return out, nil, err
 }
 
-// containExtensionApplicabilityBreach discards untrustworthy Extension
+// containExtensionScopeBreach discards untrustworthy Extension
 // findings and records failed selected subjects plus operational
 // Diagnostics. When nothing was selected, only the Diagnostics are
 // returned, no fabricated Evaluation.
-func containExtensionApplicabilityBreach(r rule.Rule, extension string,
+func containExtensionScopeBreach(r rule.Rule, extension string,
 	selected, excluded []string, breaches []ExtensionFinding,
 ) ([]Evaluation, []Diagnostic, error) {
 	sort.SliceStable(breaches, func(i, j int) bool {
@@ -110,7 +110,7 @@ func containExtensionApplicabilityBreach(r rule.Rule, extension string,
 	ruleID := r.ID().Qualified()
 	var diags []Diagnostic
 	for _, f := range breaches {
-		msg := fmt.Sprintf("rule %s: extension %q reported %q, which is outside the rule's applicability",
+		msg := fmt.Sprintf("rule %s: extension %q reported %q, which is outside the rule's scope",
 			r.ID(), extension, f.Path)
 		d, err := NewOperational(ruleID, f.Path, f.Line, rule.SeverityError, msg)
 		if err != nil {

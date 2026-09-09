@@ -129,12 +129,12 @@ func evaluateStructure(r rule.Rule, mem membership) ([]Evaluation, error) {
 		return nil, fmt.Errorf("rule %s: structure rule with %T params", r.ID(), r.Params())
 	}
 	var out []Evaluation
-	for _, name := range sortedZones(r.Applicability().Zones()) {
+	for _, name := range sortedZones(r.Scope().Zones()) {
 		subject, err := rule.ZoneSubject(name)
 		if err != nil {
 			return nil, fmt.Errorf("structure: %w", err)
 		}
-		if r.Applicability().ExcludedZone(name) {
+		if r.Scope().ExcludedZone(name) {
 			e, err := simpleEvaluation(r, subject, OutcomeNotApplicable)
 			if err != nil {
 				return nil, err

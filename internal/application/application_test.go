@@ -28,15 +28,15 @@ func fixture(t *testing.T, paths ...string) (rule.Configured, conformance.Observ
 	if err != nil {
 		t.Fatalf("NewCaseSpec: %v", err)
 	}
-	scope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
+	scope, err := rule.ZoneScope([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ZoneApplicability: %v", err)
+		t.Fatalf("ZoneScope: %v", err)
 	}
 	r, err := rule.New(rule.Spec{
-		ID:            "t/p:m/snake",
-		Type:          rule.TypeNaming,
-		Params:        rule.NamingParams{Case: snake},
-		Applicability: scope,
+		ID:     "t/p:m/snake",
+		Type:   rule.TypeNaming,
+		Params: rule.NamingParams{Case: snake},
+		Scope:  scope,
 	})
 	if err != nil {
 		t.Fatalf("rule.New: %v", err)
@@ -278,7 +278,10 @@ func TestShowRule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExclusion: %v", err)
 	}
-	cfg.Rules[0] = cfg.Rules[0].Exclude(exclusion)
+	cfg.Rules[0], err = cfg.Rules[0].Exclude(exclusion)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	show, err := application.NewShowRule(fakeRepository{cfg})
 	if err != nil {
@@ -310,8 +313,8 @@ func TestShowRuleSeparatesRationaleFromProposition(t *testing.T) {
 	prior := cfg.Rules[0]
 	r, err := rule.New(rule.Spec{
 		ID: prior.ID().Qualified(), Constraint: prior.Constraint(),
-		Applicability: prior.Applicability(),
-		Rationale:     "Keep filenames predictable for contributors.",
+		Scope:     prior.Scope(),
+		Rationale: "Keep filenames predictable for contributors.",
 	})
 	if err != nil {
 		t.Fatal(err)

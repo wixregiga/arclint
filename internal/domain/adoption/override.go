@@ -8,7 +8,7 @@ import (
 )
 
 // Override is an adopting repository's decisions for one distributed or
-// built-in Rule. It carries neither a Constraint nor applicability of its own.
+// built-in Rule. It carries neither a Constraint nor scope of its own.
 // Its target identifies the Rule, not an independent identity for the decision.
 type Override struct {
 	target      rule.ID
@@ -84,7 +84,11 @@ func (o Override) Apply(r rule.Rule) (rule.Rule, error) {
 		}
 	}
 	if o.exclusion != nil {
-		r = r.Exclude(*o.exclusion)
+		var err error
+		r, err = r.Exclude(*o.exclusion)
+		if err != nil {
+			return rule.Rule{}, fmt.Errorf("override: %w", err)
+		}
 	}
 	if o.suppression != nil {
 		r = r.Suppress(*o.suppression)

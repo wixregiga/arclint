@@ -228,15 +228,15 @@ func available(t *testing.T, kind distribution.SourceKind, ref, doc string) dist
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope, err := rule.ZoneApplicability([]rule.ZoneName{"core"})
+	scope, err := rule.ZoneScope([]rule.ZoneName{"core"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	rl, err := rule.New(rule.Spec{
-		ID:            r.Qualifier() + ":core/stdlib-only",
-		Type:          rule.TypeConsumes,
-		Params:        rule.ConsumesParams{Internal: &internal, External: rule.ImportForbid},
-		Applicability: scope,
+		ID:     r.Qualifier() + ":core/stdlib-only",
+		Type:   rule.TypeConsumes,
+		Params: rule.ConsumesParams{Internal: &internal, External: rule.ImportForbid},
+		Scope:  scope,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -28,15 +28,15 @@ func ruleTestConfig(t *testing.T) rule.Configured {
 	if err != nil {
 		t.Fatalf("NewCaseSpec: %v", err)
 	}
-	scope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
+	scope, err := rule.ZoneScope([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ZoneApplicability: %v", err)
+		t.Fatalf("ZoneScope: %v", err)
 	}
 	r, err := rule.New(rule.Spec{
-		ID:            "t/p:m/snake",
-		Type:          rule.TypeNaming,
-		Params:        rule.NamingParams{Case: snake},
-		Applicability: scope,
+		ID:     "t/p:m/snake",
+		Type:   rule.TypeNaming,
+		Params: rule.NamingParams{Case: snake},
+		Scope:  scope,
 	})
 	if err != nil {
 		t.Fatalf("rule.New: %v", err)
@@ -213,15 +213,15 @@ func (f failingExtensions) Evaluate(string, map[string]any, []string,
 
 func TestRunRuleTestsContainsConformanceErrorAndContinues(t *testing.T) {
 	cfg := ruleTestConfig(t)
-	extScope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
+	extScope, err := rule.ZoneScope([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ZoneApplicability: %v", err)
+		t.Fatalf("ZoneScope: %v", err)
 	}
 	extRule, err := rule.New(rule.Spec{
-		ID:            "t/p:m/ext",
-		Type:          rule.TypeExtension,
-		Params:        rule.ExtensionParams{Uses: "broken-ext"},
-		Applicability: extScope,
+		ID:     "t/p:m/ext",
+		Type:   rule.TypeExtension,
+		Params: rule.ExtensionParams{Uses: "broken-ext"},
+		Scope:  extScope,
 	})
 	if err != nil {
 		t.Fatalf("extension rule.New: %v", err)
@@ -285,15 +285,15 @@ func (r *recordingExtensions) Evaluate(_ string, _ map[string]any, _ []string,
 
 func TestRunRuleTestsFeedsFixtureVocabularyToExtensions(t *testing.T) {
 	cfg := ruleTestConfig(t)
-	extScope, err := rule.ZoneApplicability([]rule.ZoneName{"m"})
+	extScope, err := rule.ZoneScope([]rule.ZoneName{"m"})
 	if err != nil {
-		t.Fatalf("ZoneApplicability: %v", err)
+		t.Fatalf("ZoneScope: %v", err)
 	}
 	extRule, err := rule.New(rule.Spec{
-		ID:            "t/p:m/ext",
-		Type:          rule.TypeExtension,
-		Params:        rule.ExtensionParams{Uses: "domain-probe"},
-		Applicability: extScope,
+		ID:     "t/p:m/ext",
+		Type:   rule.TypeExtension,
+		Params: rule.ExtensionParams{Uses: "domain-probe"},
+		Scope:  extScope,
 	})
 	if err != nil {
 		t.Fatalf("extension rule.New: %v", err)
