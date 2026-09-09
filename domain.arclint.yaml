@@ -61,7 +61,7 @@ contexts:
             its parameters must be exactly the Expansion's resolution
             against the recorded language. When nothing is recorded the
             parameters are empty and the generated proposition says so.
-          exactly-one-assertion: >-
+          exactly-one-constraint: >-
             A Rule carries exactly one Constraint; a Rule written with
             two constraint keys, or with none and no Override target, is
             rejected at load.

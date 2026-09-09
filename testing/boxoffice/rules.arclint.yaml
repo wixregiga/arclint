@@ -4,7 +4,7 @@
 # expansion, and the technology fences that keep domain logic
 # domain-only.
 #
-# Every Rule is keyed by its id and carries exactly one assertion;
+# Every Rule is keyed by its id and carries exactly one constraint;
 # `on` names the Zone(s) it judges. Rules with no `on` range over
 # the whole repository.
 

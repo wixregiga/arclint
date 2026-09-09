@@ -55,7 +55,7 @@
     {
       "ruleId": "aggregate/invariants-enforced-by-root",
       "subject": "rule",
-      "message": "aggregate Rule: invariant exactly-one-assertion is not enforced by a method of the root; expected EnsureExactlyOneAssertion (go)",
+      "message": "aggregate Rule: invariant exactly-one-constraint is not enforced by a method of the root; expected EnsureExactlyOneConstraint (go)",
       "count": 1
     },
     {

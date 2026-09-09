@@ -5,7 +5,7 @@
 # sealed behind the CLI factory, and report renderers stay sealed
 # behind the report factory (two distinct delivery seams).
 #
-# Every Rule is keyed by its id and carries exactly one assertion:
+# Every Rule is keyed by its id and carries exactly one constraint:
 # imports, structure, naming, content, layers, imported_by,
 # independent, acyclic, or uses. `on` names the Zone(s)
 # it judges. Query commands: arclint rules [selector] · arclint context <path>
