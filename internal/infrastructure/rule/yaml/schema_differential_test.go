@@ -234,7 +234,7 @@ rules: {}
 		{"imports with an internal allow-list", oneZone + `
 rules:
   core/stdlib-only:
-    description: "The core imports nothing else."
+    rationale: "The core imports nothing else."
     on: core
     imports:
       internal: []
@@ -718,10 +718,10 @@ repository:
 		{"extends with an inexact version", "extends:\n  - pattern: acme/hexagonal@latest\n", false},
 		{"extends with a bind list", "extends:\n  - pattern: acme/hexagonal@1.0.0\n    bind: [core]\n", false},
 		{"extends with an unknown key", "extends:\n  - pattern: acme/hexagonal@1.0.0\n    version: 1.0.0\n", false},
-		{"override with a description", oneZone + `
+		{"override with a rationale", oneZone + `
 rules:
   acme/hexagonal:core/stdlib-only:
-    description: "rewritten"
+    rationale: "rewritten"
     severity: warning
 `, false},
 		{"override with on", oneZone + `
@@ -744,7 +744,7 @@ zones:
     paths: ["internal/ports/**"]
 rules:
   core/stdlib-only:
-    description: "The core imports nothing else."
+    rationale: "The core imports nothing else."
     on: core
     imports:
       internal: []

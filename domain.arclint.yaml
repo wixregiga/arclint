@@ -104,10 +104,8 @@ contexts:
           The author's explanation of why a Rule's Constraint is
           needed. It is optional: a Rule with no supplied explanation
           has no Rationale. An Expansion changes the resolved
-          Constraint, never the author's Rationale. Legacy description
-          text is accepted as authored input; the explanation is never
-          generated from the Constraint.
-        aliases: [description]
+          Constraint, never the author's Rationale. The explanation
+          is never generated from the Constraint.
       Constraint:
         definition: >-
           The one checkable proposition a Rule carries, written in

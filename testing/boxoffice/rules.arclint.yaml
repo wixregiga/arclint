@@ -62,7 +62,7 @@ rules:
   # ---- entities ------------------------------------------------------
 
   entities/domain-only-imports:
-    description: "The entities layer imports no other Zone and no third-party package."
+    rationale: "The entities layer imports no other Zone and no third-party package."
     on: entities
     imports:
       internal: []
@@ -71,7 +71,7 @@ rules:
   # The expansion showcase: every recorded aggregate owes a slice
   # named after it, its repository interface, and its tests.
   entities/aggregate-slices:
-    description: "Every recorded aggregate owns a slice with its file, its repository interface, and its tests."
+    rationale: "Every recorded aggregate owns a slice with its file, its repository interface, and its tests."
     severity: warning
     on: entities
     structure:
@@ -84,14 +84,14 @@ rules:
   # Domain logic is domain logic: no transport, no logging, no JSON
   # in the entities layer.
   entities/technology-free:
-    description: "The entities layer names no transport, logging, or JSON package."
+    rationale: "The entities layer names no transport, logging, or JSON package."
     on: entities
     files: "internal/entities/**/*.go"
     content:
       forbid: '"net/http"|"log/slog"|"encoding/json"'
 
   entities/no-panic:
-    description: "The entities layer never panics."
+    rationale: "The entities layer never panics."
     on: entities
     files: "internal/entities/**/*.go"
     content:
@@ -100,7 +100,7 @@ rules:
   # Domain refusals scream their subject; a bare ErrNotFound the
   # package name cannot rescue is forbidden.
   entities/errors-name-their-subject:
-    description: "Entity errors name their subject; a bare ErrNotFound or ErrInvalid is forbidden."
+    rationale: "Entity errors name their subject; a bare ErrNotFound or ErrInvalid is forbidden."
     on: entities
     files: "internal/entities/**/*.go"
     content:
@@ -109,7 +109,7 @@ rules:
   # The domain never reads the clock or rolls dice: now is passed in,
   # and ids are minted in app.
   entities/deterministic:
-    description: "The entities layer never reads the clock or rolls dice."
+    rationale: "The entities layer never reads the clock or rolls dice."
     on: entities
     files: "internal/entities/**/*.go"
     content:
@@ -120,7 +120,7 @@ rules:
   # vocabulary (which types are aggregates) with the code facts (which
   # fields are exported).
   entities/aggregates-encapsulate:
-    description: "The struct of every recorded aggregate has no exported fields."
+    rationale: "The struct of every recorded aggregate has no exported fields."
     on: entities
     files: "internal/entities/**/*.go"
     uses: aggregate-encapsulation
@@ -132,7 +132,7 @@ rules:
   # implementations in entities" check needs type resolution the facts
   # tier does not do; board note.
   entities/no-store-machinery:
-    description: "The entities layer imports no sync machinery."
+    rationale: "The entities layer imports no sync machinery."
     on: entities
     files: "internal/entities/**/*.go"
     content:
@@ -141,7 +141,7 @@ rules:
   # ---- features ------------------------------------------------------
 
   features/orchestrate-entities-only:
-    description: "Use cases import only entities and no third-party package."
+    rationale: "Use cases import only entities and no third-party package."
     on: features
     imports:
       internal: [entities]
@@ -154,7 +154,7 @@ rules:
   # slice under this root"; proving-ground finding for the expansion
   # track; the slice-files extension covers it.
   features/use-cases-tested:
-    description: "Every use-case slice carries its named file and its tests."
+    rationale: "Every use-case slice carries its named file and its tests."
     on: features
     files: "internal/features/**"
     uses: slice-files
@@ -165,7 +165,7 @@ rules:
         - "{slice}_test.go"
 
   features/technology-free:
-    description: "Use cases name no transport, logging, or JSON package."
+    rationale: "Use cases name no transport, logging, or JSON package."
     on: features
     files: "internal/features/**/*.go"
     content:
@@ -173,7 +173,7 @@ rules:
 
   # Use cases stay deterministic the same way the domain does.
   features/deterministic:
-    description: "Use cases never read the clock or roll dice."
+    rationale: "Use cases never read the clock or roll dice."
     on: features
     files: "internal/features/**/*.go"
     content:
@@ -182,13 +182,13 @@ rules:
   # ---- app -----------------------------------------------------------
 
   app/wires-the-sides:
-    description: "The app layer imports features, entities, and shared."
+    rationale: "The app layer imports features, entities, and shared."
     on: app
     imports:
       internal: [features, entities, shared]
 
   app/surface-tested:
-    description: "The app surface and its memory repositories exist with their tests."
+    rationale: "The app surface and its memory repositories exist with their tests."
     on: app
     structure:
       require:
@@ -199,7 +199,7 @@ rules:
   # ---- shared --------------------------------------------------------
 
   shared/kit-stands-alone:
-    description: "The shared kit imports no other Zone and no third-party package."
+    rationale: "The shared kit imports no other Zone and no third-party package."
     on: shared
     imports:
       internal: []
@@ -208,13 +208,13 @@ rules:
   # ---- composition ---------------------------------------------------
 
   composition/selects-everything:
-    description: "Composition imports every server Zone it wires."
+    rationale: "Composition imports every server Zone it wires."
     on: composition
     imports:
       internal: [app, features, entities, shared, web_embed]
 
   composition/main-and-seed-present:
-    description: "The boxoffice binary has its main, its seed, and its version test."
+    rationale: "The boxoffice binary has its main, its seed, and its version test."
     on: composition
     structure:
       require:
@@ -225,7 +225,7 @@ rules:
   # ---- web embed -----------------------------------------------------
 
   web-embed/stdlib-only:
-    description: "The embedded web app carrier imports no other Zone and no third-party package."
+    rationale: "The embedded web app carrier imports no other Zone and no third-party package."
     on: web_embed
     imports:
       internal: []
@@ -235,14 +235,14 @@ rules:
 
   # slog is the one logging voice of the server.
   source/slog-only:
-    description: "The server logs through slog only."
+    rationale: "The server logs through slog only."
     on: server_source
     files: "internal/**/*.go"
     content:
       forbid: '\bfmt\.Print|\blog\.(Print|Fatal|Panic)'
 
   source/snake-case:
-    description: "Go file names use snake_case."
+    rationale: "Go file names use snake_case."
     on: server_source
     files: "internal/**/*.go"
     naming: snake_case
@@ -250,7 +250,7 @@ rules:
   # ---- web shared ----------------------------------------------------
 
   web-shared/kit-stands-alone:
-    description: "The web shared kit imports no other Zone."
+    rationale: "The web shared kit imports no other Zone."
     on: web_shared
     imports:
       internal: []
@@ -259,7 +259,7 @@ rules:
   # its data model and calls one named file in shared/api. FSD's own
   # guidance homes thin-client models here, not in an entities layer.
   web-shared/aggregates-speak-through-api:
-    description: "Every recorded aggregate owns one api file in the web shared layer."
+    rationale: "Every recorded aggregate owns one api file in the web shared layer."
     severity: warning
     on: web_shared
     structure:
@@ -270,7 +270,7 @@ rules:
   # ---- web features --------------------------------------------------
 
   web-features/interactions-downward:
-    description: "Web features import only the web shared layer."
+    rationale: "Web features import only the web shared layer."
     on: web_features
     imports:
       internal: [web_shared]
@@ -278,7 +278,7 @@ rules:
   # FSD makes a public API mandatory for every slice; discovered from
   # the tree, so a new slice needs no edit here.
   web-features/slices-export-public-api:
-    description: "Every web feature slice exports a public API through index.ts."
+    rationale: "Every web feature slice exports a public API through index.ts."
     on: web_features
     files: "web/src/features/**"
     uses: slice-files
@@ -290,13 +290,13 @@ rules:
   # ---- web pages -----------------------------------------------------
 
   web-pages/screens-downward:
-    description: "Web pages import only web features and the web shared layer."
+    rationale: "Web pages import only web features and the web shared layer."
     on: web_pages
     imports:
       internal: [web_features, web_shared]
 
   web-pages/slices-export-public-api:
-    description: "Every web page slice exports a public API through index.ts."
+    rationale: "Every web page slice exports a public API through index.ts."
     on: web_pages
     files: "web/src/pages/**"
     uses: slice-files
@@ -308,7 +308,7 @@ rules:
   # ---- web app -------------------------------------------------------
 
   web-app/composes-the-web:
-    description: "The web app layer imports pages, features, and the shared layer."
+    rationale: "The web app layer imports pages, features, and the shared layer."
     on: web_app
     imports:
       internal: [web_pages, web_features, web_shared]
@@ -322,7 +322,7 @@ rules:
   # ---- toolchain -----------------------------------------------------
 
   toolchain/gates-present:
-    description: "The build and lint gates the repo promises are present."
+    rationale: "The build and lint gates the repo promises are present."
     on: toolchain
     structure:
       require:
@@ -335,7 +335,7 @@ rules:
 
   # FSD slice isolation across both runtimes.
   fsd/slice-isolation:
-    description: "Sibling slices within one FSD layer never import each other."
+    rationale: "Sibling slices within one FSD layer never import each other."
     uses: fsd-slice-isolation
     with:
       layers:
@@ -345,13 +345,13 @@ rules:
         - "web/src/features"
 
   dependencies/server-layers:
-    description: "Server dependencies point inward: app, then features, then entities."
+    rationale: "Server dependencies point inward: app, then features, then entities."
     layers: [app, features, entities]
 
   dependencies/web-layers:
-    description: "Web dependencies point inward: app, then pages, then features, then shared."
+    rationale: "Web dependencies point inward: app, then pages, then features, then shared."
     layers: [web_app, web_pages, web_features, web_shared]
 
   dependencies/acyclic:
-    description: "Dependencies among the layer Zones contain no cycle."
+    rationale: "Dependencies among the layer Zones contain no cycle."
     acyclic: [composition, app, features, entities, shared, web_embed, web_app, web_pages, web_features, web_shared]

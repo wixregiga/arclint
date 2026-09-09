@@ -33,7 +33,6 @@ The common keys beside the constraint:
 | key | meaning |
 |---|---|
 | `rationale` | optional authored reason for requiring the Constraint; it stays absent when none is supplied |
-| `description` | deprecated alias for Rule `rationale`; an entry with both keys is rejected |
 | `severity` | `error` (default), `warning`, or `info`; independent from Assurance |
 | `on` | one Zone name or a list; required, optional, or forbidden per the table above |
 | `files` | one glob or a list narrowing the judged files; accepted by naming, content, and uses only |
@@ -42,8 +41,7 @@ The common keys beside the constraint:
 
 ArcLint derives the checkable proposition from the Constraint and its
 scope. Rule detail prints it as `constraint`, separately from any authored
-`rationale`. The legacy Rule `description` examples below remain accepted;
-Zone and Pattern descriptions are unchanged.
+`rationale`.
 
 A Rule ID is `LOCAL` or `NAMESPACE/NAME:LOCAL`, where the local part is
 `segment/segment` in lower-case kebab. Repository Rules use bare local
@@ -99,7 +97,7 @@ The owning Zone is always permitted implicitly. `external` and
 ```yaml
 rules:
   entities/stdlib-only:
-    description: "The entities layer imports no other Zone and no third-party package."
+    rationale: "The entities layer imports no other Zone and no third-party package."
     on: entities
     imports:
       internal: []
@@ -122,7 +120,7 @@ match a `forbid` glob.
 ```yaml
 rules:
   composition/entrypoint:
-    description: "Every binary has a main.go, and the legacy tree is gone."
+    rationale: "Every binary has a main.go, and the legacy tree is gone."
     on: composition
     structure:
       require: ["cmd/**/main.go"]
@@ -142,7 +140,7 @@ any Rationale the author supplied.
 ```yaml
 rules:
   entities/aggregate-slices:
-    description: "Every recorded aggregate owns a slice with its file, its repository interface, and its tests."
+    rationale: "Every recorded aggregate owns a slice with its file, its repository interface, and its tests."
     on: entities
     structure:
       each: domain.aggregates
@@ -168,7 +166,7 @@ case spec itself, or `{case: ...}`.
 ```yaml
 rules:
   source/snake-case:
-    description: "Go file names use snake_case."
+    rationale: "Go file names use snake_case."
     on: source
     files: "internal/**/*.go"
     naming: snake_case
@@ -191,14 +189,14 @@ technology fences that used to need an Extension: no `panic`, no
 ```yaml
 rules:
   domain/no-panic:
-    description: "Domain code never panics; a representation that cannot become a value is an error."
+    rationale: "Domain code never panics; a representation that cannot become a value is an error."
     on: domain
     files: "internal/domain/**/*.go"
     content:
       forbid: '\bpanic\('
 
   source/slog-only:
-    description: "The server logs through slog only."
+    rationale: "The server logs through slog only."
     on: source
     files: "internal/**/*.go"
     content:
@@ -250,7 +248,7 @@ schema before any extension code runs. See
 ```yaml
 rules:
   entities/aggregates-encapsulate:
-    description: "The struct of every recorded aggregate has no exported fields."
+    rationale: "The struct of every recorded aggregate has no exported fields."
     on: entities
     files: "internal/entities/**/*.go"
     uses: aggregate-encapsulation
@@ -275,7 +273,7 @@ means nothing else imports it.
 ```yaml
 rules:
   infrastructure/composition-only:
-    description: "Only composition imports infrastructure."
+    rationale: "Only composition imports infrastructure."
     on: infrastructure
     imported_by: [composition]
 ```
@@ -295,7 +293,7 @@ lower layers, never a higher one. At least two Zones, no duplicates.
 ```yaml
 rules:
   dependencies/application-inward:
-    description: "Dependencies point inward: application, then domain."
+    rationale: "Dependencies point inward: application, then domain."
     layers: [application, domain]
 ```
 
@@ -314,7 +312,7 @@ dropped when a declared Zone owns that folder's subtree.
 ```yaml
 rules:
   features/independent:
-    description: "Feature folders never import each other."
+    rationale: "Feature folders never import each other."
     independent: ["internal/*"]
 ```
 
@@ -336,7 +334,7 @@ author never saw.
 ```yaml
 rules:
   dependencies/acyclic:
-    description: "Dependencies among the layer Zones contain no cycle."
+    rationale: "Dependencies among the layer Zones contain no cycle."
     acyclic: [composition, delivery, infrastructure, application, domain]
 ```
 
@@ -351,7 +349,7 @@ decision stays inspectable in `arclint rules <id>`.
 ```yaml
 rules:
   source/snake-case:
-    description: "Go file names use snake_case."
+    rationale: "Go file names use snake_case."
     on: source
     files: "internal/**/*.go"
     naming: snake_case

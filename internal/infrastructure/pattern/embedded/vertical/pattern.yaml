@@ -46,93 +46,93 @@ zones:
 
 rules:
   domain/stdlib-only:
-    description: "Domain imports no other zone and no third-party package."
+    rationale: "Domain imports no other zone and no third-party package."
     on: domain
     imports:
       internal: []
       external: forbid
 
   domain/no-context:
-    description: "Domain never imports context; cancellation is an application concern."
+    rationale: "Domain never imports context; cancellation is an application concern."
     on: domain
     uses: vertical/forbid-imports
     with:
       packages: [context]
 
   domain/no-io:
-    description: "Domain performs no I/O; adapters do."
+    rationale: "Domain performs no I/O; adapters do."
     on: domain
     uses: vertical/forbid-imports
     with:
       packages: [bufio, database/sql, io, log, net, os, syscall]
 
   application/use-cases-through-ports:
-    description: "Application imports only the domain and no third-party package."
+    rationale: "Application imports only the domain and no third-party package."
     on: application
     imports:
       internal: [domain]
       external: forbid
 
   application/repository-context:
-    description: "Repository ports take a context as their first parameter."
+    rationale: "Repository ports take a context as their first parameter."
     on: application
     uses: vertical/repository-context
 
   application/usecase-contract:
-    description: "Use cases expose one Execute method."
+    rationale: "Use cases expose one Execute method."
     on: application
     uses: vertical/usecase
 
   infra/outbound-only:
-    description: "Infra imports only application, domain, and shared."
+    rationale: "Infra imports only application, domain, and shared."
     on: infra
     imports:
       internal: [application, domain, shared]
 
   app/driving-and-wiring:
-    description: "App imports application, domain, infra, and shared."
+    rationale: "App imports application, domain, infra, and shared."
     on: app
     imports:
       internal: [application, domain, infra, shared]
 
   shared/mechanism-only:
-    description: "Shared imports no other zone."
+    rationale: "Shared imports no other zone."
     on: shared
     imports:
       internal: []
 
   shared/concerns:
-    description: "Shared packages are named after a recognized cross-cutting concern."
+    rationale: "Shared packages are named after a recognized cross-cutting concern."
     on: shared
     uses: vertical/shared-concerns
     with:
       concerns: [logging, tracing, metrics, config, security, errors, cache, db, validation, events]
 
   composition/selects-adapters:
-    description: "Composition may import every zone to wire adapters."
+    rationale: "Composition may import every zone to wire adapters."
     on: composition
     imports:
       internal: [app, infra, application, domain, shared]
 
   repositories/application-only:
-    description: "Repository interfaces are declared only in application packages."
+    rationale: "Repository interfaces are declared only in application packages."
     uses: vertical/repository-location
     with:
       zone: application
 
   dependencies/inward:
-    description: "Dependencies point inward: app, then application, then domain."
+    rationale: "Dependencies point inward: app, then application, then domain."
     layers: [app, application, domain]
 
   infra/app-and-composition-only:
-    description: "Only app and composition import infra."
+    rationale: "Only app and composition import infra."
     on: infra
     imported_by: [app, composition]
 
   features/independent:
-    description: "Feature folders never import each other."
+    rationale: "Feature folders never import each other."
     independent: ["internal/*"]
 
   dependencies/acyclic:
-    description: "Zone dependencies contain no cycle."
+    rationale: "Zone dependencies contain no cycle."
     acyclic: {}

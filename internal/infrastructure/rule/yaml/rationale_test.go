@@ -17,16 +17,16 @@ func TestRuleRationaleSchemaAndLoader(t *testing.T) {
 		reason   string
 	}{
 		{"canonical", "    rationale: Keep independent changes independent.\n", true, "Keep independent changes independent."},
-		{"legacy", "    description: Keep independent changes independent.\n", true, "Keep independent changes independent."},
+		{"removed description", "    description: Keep independent changes independent.\n", false, ""},
 		{"absent", "", true, ""},
-		{"legacy empty", "    description: ''\n", true, ""},
-		{"legacy whitespace", "    description: '   '\n", true, ""},
+		{"removed empty description", "    description: ''\n", false, ""},
+		{"removed whitespace description", "    description: '   '\n", false, ""},
 		{"canonical empty", "    rationale: ''\n", false, ""},
 		{"canonical whitespace", "    rationale: '   '\n", false, ""},
 		{"canonical null", "    rationale: null\n", false, ""},
-		{"conflicting aliases", "    rationale: Reason\n    description: Legacy\n", false, ""},
-		{"conflicting empty legacy", "    rationale: Reason\n    description: ''\n", false, ""},
-		{"conflicting empty canonical", "    rationale: ''\n    description: Legacy\n", false, ""},
+		{"description alongside rationale", "    rationale: Reason\n    description: Legacy\n", false, ""},
+		{"empty description alongside rationale", "    rationale: Reason\n    description: ''\n", false, ""},
+		{"description alongside blank rationale", "    rationale: ''\n    description: Legacy\n", false, ""},
 		{"both empty", "    rationale: ''\n    description: ''\n", false, ""},
 	}
 	for _, tc := range cases {
@@ -38,6 +38,9 @@ func TestRuleRationaleSchemaAndLoader(t *testing.T) {
 				t.Fatalf("accepted=%v: loader=%v schema=%v", tc.accepted, loadErr, schemaErr)
 			}
 			if !tc.accepted {
+				if strings.Contains(tc.fields, "description:") && !strings.Contains(loadErr.Error(), `unknown key "description"`) {
+					t.Fatalf("removed field accepted or misdiagnosed: %v", loadErr)
+				}
 				return
 			}
 			r := ruleByID(t, doc.Configured, "no-cycles")
@@ -51,7 +54,7 @@ func TestRuleRationaleSchemaAndLoader(t *testing.T) {
 	}
 }
 
-func TestOverrideRejectsRationaleAliasesByPresence(t *testing.T) {
+func TestOverrideRejectsAuthoredExplanations(t *testing.T) {
 	schema := compileRuleSchema(t)
 	pattern := loadSamplePattern(t)
 	for _, key := range []string{"rationale", "description"} {

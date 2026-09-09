@@ -59,9 +59,7 @@ the checkable proposition that must hold within its scope. The constraint
 key selects its shape, and `on` names the Zones it judges. An optional
 Rationale (`rationale`) records the author's reason for requiring it.
 ArcLint derives the proposition from the Constraint and scope; it never
-derives a Rationale when the author supplies none. Rule `description`
-remains a deprecated alias for `rationale`, and using both is rejected.
-Zone and Pattern descriptions keep their existing meanings.
+derives a Rationale when the author supplies none.
 
 Scope is the code the Rule applies to: the repository or selected Zones,
 optionally narrowed by file paths and exclusions. A Rule accepts only a

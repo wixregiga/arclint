@@ -70,7 +70,7 @@ func TestLipglossRuleListMutesIDAndColorsSeverity(t *testing.T) {
 	err := ansiRenderer().Render(&buf, cli.RuleListReport{
 		Rules: []application.RuleSummary{{
 			ID: "arclint:demo", Type: "structure", Severity: "error",
-			Proposition: "claim text", Assurance: "exact", Provenance: "ns/n@1",
+			Proposition: "constraint text", Assurance: "exact", Provenance: "ns/n@1",
 		}},
 	})
 	if err != nil {
@@ -90,7 +90,7 @@ func TestLipglossRuleListMutesIDAndColorsSeverity(t *testing.T) {
 		t.Fatalf("provenance is not muted: %q", raw)
 	}
 	out := stripANSI(raw)
-	want := "arclint:demo  [structure/error/exact]  claim text  from ns/n@1\n"
+	want := "arclint:demo  [structure/error/exact]  constraint text  from ns/n@1\n"
 	if out != want {
 		t.Fatalf("stripped grammar = %q, want %q", out, want)
 	}

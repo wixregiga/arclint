@@ -161,7 +161,7 @@ rules:
 
   # House Rules beside them, under new local ids.
   toolchain/gates-present:
-    description: "The build gates the repo promises are present."
+    rationale: "The build gates the repo promises are present."
     on: toolchain
     structure:
       require: ["Makefile", "go.mod"]
@@ -204,9 +204,8 @@ An Override changes at least one of:
 | `exclude` | `{paths, zones, reason}`: files the Rule does not judge |
 | `suppress` | `{paths, reason}`: findings kept in the Assessment but not active |
 
-An Override never carries `rationale`, its legacy alias `description`,
-`on`, `files`, `with`, or a constraint: a Pattern Rule keeps its own
-Rationale, Zones, and Constraint.
+An Override never carries `rationale`, `on`, `files`, `with`, or a
+constraint: a Pattern Rule keeps its own Rationale, Zones, and Constraint.
 To require something different, disable the Pattern Rule with a reason
 and add a local Rule under a new ID. Writing a local Rule under a
 Pattern Rule's ID is rejected for the same reason, and an Override
@@ -240,32 +239,32 @@ zones:
 
 rules:
   core/stdlib-only:
-    description: "The core imports no other Zone and no third-party package."
+    rationale: "The core imports no other Zone and no third-party package."
     on: core
     imports:
       internal: []
       external: forbid
 
   core/no-adapter-imports:
-    description: "The core never imports an adapter."
+    rationale: "The core never imports an adapter."
     on: core
     imports:
       internal: [ports]
 
   adapters/private:
-    description: "Only the core and the composition root import adapters."
+    rationale: "Only the core and the composition root import adapters."
     on: adapters
     imported_by: [core]
 
   core/checked:
-    description: "Core files pass the acme check."
+    rationale: "Core files pass the acme check."
     on: core
     uses: acme/check
     with:
       strict: true
 
   dependencies/acyclic:
-    description: "Zone dependencies contain no cycle."
+    rationale: "Zone dependencies contain no cycle."
     acyclic: {}
 ```
 

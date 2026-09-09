@@ -34,7 +34,7 @@ zones:
 
 rules:
   domain/stdlib-only:
-    description: "The domain imports no other zone and no third-party package."
+    rationale: "The domain imports no other zone and no third-party package."
     on: domain
     imports:
       internal: []

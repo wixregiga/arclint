@@ -8,7 +8,6 @@ package rule
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
@@ -41,9 +40,6 @@ type Spec struct {
 	Type Type
 	// Rationale optionally explains why the Constraint is needed.
 	Rationale string
-	// Claim accepts the legacy authored description. Supply either it or Rationale.
-	// Deprecated: use Rationale.
-	Claim string
 	// Severity defaults to error.
 	Severity string
 	// Params are the Type-specific parameters.
@@ -111,16 +107,9 @@ func New(spec Spec) (Rule, error) {
 	if enforcement.IsZero() {
 		return fail(fmt.Errorf("missing enforcement"))
 	}
-	if spec.Rationale != "" && spec.Claim != "" {
-		return fail(fmt.Errorf("rationale: cannot combine with legacy claim"))
-	}
-	explanation := spec.Rationale
-	if explanation == "" {
-		explanation = strings.TrimSpace(spec.Claim)
-	}
 	var rationale Rationale
-	if explanation != "" {
-		rationale, err = NewRationale(explanation)
+	if spec.Rationale != "" {
+		rationale, err = NewRationale(spec.Rationale)
 		if err != nil {
 			return fail(err)
 		}
@@ -250,17 +239,6 @@ func (r Rule) Constraint() Constraint {
 
 // Rationale returns the author's explanation, or the zero value when absent.
 func (r Rule) Rationale() Rationale { return r.rationale }
-
-// Claim preserves the legacy display text: the authored description when
-// supplied, otherwise the generated proposition. It is not stored by Rule.
-// Deprecated: use Rationale and Proposition separately.
-func (r Rule) Claim() Claim {
-	statement := r.rationale.String()
-	if statement == "" {
-		statement = r.Proposition()
-	}
-	return Claim{statement: statement}
-}
 
 // Proposition states the configured Constraint in its scope and
 // expansion context. It never supplies or replaces an author's Rationale.

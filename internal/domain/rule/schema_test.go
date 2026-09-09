@@ -233,10 +233,10 @@ func TestSchemaSeparatesRationaleFromConstraint(t *testing.T) {
 		if rationale["type"] != "string" || rationale["pattern"] != `\S` {
 			t.Errorf("%s rationale accepts blank reasons: %v", def, rationale)
 		}
-		if dig(t, doc, "$defs", def, "properties", "description", "deprecated") != true {
-			t.Errorf("%s description not deprecated", def)
+		props := dig(t, doc, "$defs", def, "properties").(map[string]any)
+		if _, exists := props["description"]; exists {
+			t.Errorf("%s accepts the removed Rule description key", def)
 		}
-		assertStrings(t, def+" aliases", dig(t, doc, "$defs", def, "not", "required"), []string{"rationale", "description"})
 		for _, field := range typ.Schema().Common {
 			if field.Name == "rationale" && (field.Required || field.Default != "") {
 				t.Errorf("%s invents or requires rationale", typ)
