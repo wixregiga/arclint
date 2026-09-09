@@ -23,7 +23,7 @@ type FieldSchema struct {
 // TypeSchema is the machine-readable description used to configure,
 // validate, inspect, and autocomplete a complete Rule of one Rule
 // Type: the common Rule fields plus the fields under the Type's
-// Assertion key.
+// Constraint key.
 type TypeSchema struct {
 	Type   Type
 	Key    string
@@ -62,7 +62,7 @@ func (t Type) Schema() TypeSchema {
 			Doc: "the declared Zone or Zones the Rule judges; absent means the whole repository",
 		})
 	case ScopeRepository:
-		// The assertion itself names the Zones; on is not accepted.
+		// The constraint itself names the Zones; on is not accepted.
 	}
 	if t.AcceptsFiles() {
 		common = append(common, FieldSchema{
@@ -129,7 +129,7 @@ func (t Type) Schema() TypeSchema {
 		}
 	case TypeDomain:
 		// Built in: a ruleset never spells a domain Rule, so it has no
-		// assertion fields; an Override under the invariant's id adopts
+		// constraint fields; an Override under the invariant's id adopts
 		// it through the common fields above.
 		params = nil
 	case TypeContent:
@@ -191,7 +191,7 @@ const (
 // JSON Schema (draft 2020-12) document describing the complete ruleset
 // grammar: the document shape, runtime targets, scan settings, extended
 // Patterns and their Bindings, Zone declarations, the rules map with
-// every Assertion shape and the Override shape, and the Pattern
+// every Constraint shape and the Override shape, and the Pattern
 // identity header of a distribution file. Runtime validation and this
 // published editor schema accept the same values; the committed
 // docs/schemas copy holds exactly these bytes, and a differential test
@@ -457,7 +457,7 @@ func schemaDefs() map[string]any {
 
 func assertionDefName(t Type) string { return string(t) + "Rule" }
 
-// assertionRuleDescription names a Rule of one Type by its assertion
+// assertionRuleDescription names a Rule of one Type by its constraint
 // key and states its meaning.
 func assertionRuleDescription(t Type) string {
 	key := t.AssertionKey()
@@ -634,7 +634,7 @@ func patternRuleSchema() map[string]any {
 }
 
 // commonRuleProperties are the keys every Rule entry may carry beside
-// its assertion key.
+// its constraint key.
 func commonRuleProperties(t Type) (map[string]any, []string) {
 	props := map[string]any{
 		"description": map[string]any{
@@ -657,7 +657,7 @@ func commonRuleProperties(t Type) (map[string]any, []string) {
 	case ScopeZonesOrRepository:
 		props["on"] = schemaRef("judgedZonesOrRepository")
 	case ScopeRepository:
-		// The assertion itself names the Zones; on is not accepted.
+		// The constraint itself names the Zones; on is not accepted.
 	}
 	if t.AcceptsFiles() {
 		props["files"] = schemaRef("judgedFiles")

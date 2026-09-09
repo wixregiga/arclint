@@ -1,6 +1,6 @@
 +++
 title = "Rule reference"
-description = "Every published Rule Type: its assertion key in rules.arclint.yaml, and a paste-ready example."
+description = "Every published Rule Type: its constraint key in rules.arclint.yaml, and a paste-ready example."
 weight = 3
 +++
 
@@ -12,11 +12,11 @@ detail output.
 ## The shape of a Rule
 
 `rules:` is a map keyed by Rule ID. Every entry carries exactly one
-assertion key, and the assertion key decides the Rule Type; an entry
-with no assertion key is an Override of a Pattern rule or of a
+constraint key, and the constraint key decides the Rule Type; an entry
+with no constraint key is an Override of a Pattern rule or of a
 [built-in rule](/docs/contracts/), keyed by that rule's id:
 
-| assertion key | Rule Type (ConstraintKind) | judges |
+| constraint key | Rule Type | judges |
 |---|---|---|
 | `imports` | consumes | the Zones under `on` |
 | `structure` | structure | the Zones under `on` |
@@ -28,11 +28,11 @@ with no assertion key is an Override of a Pattern rule or of a
 | `independent` | independence | the repository (the key names its folders) |
 | `acyclic` | acyclic | the repository (the key names its Zones) |
 
-The common keys beside the assertion:
+The common keys beside the constraint:
 
 | key | meaning |
 |---|---|
-| `description` | the Claim: the architectural proposition the Rule states, printed by `arclint rules`, `arclint context`, and `AGENTS.md` (derived from the assertion when absent) |
+| `description` | the Claim: the architectural proposition the Rule states, printed by `arclint rules`, `arclint context`, and `AGENTS.md` (derived from the constraint when absent) |
 | `severity` | `error` (default), `warning`, or `info`; independent from Assurance |
 | `on` | one Zone name or a list; required, optional, or forbidden per the table above |
 | `files` | one glob or a list narrowing the judged files; accepted by naming, content, and uses only |
@@ -44,7 +44,7 @@ A Rule ID is `LOCAL` or `NAMESPACE/NAME:LOCAL`, where the local part is
 IDs (`domain/stdlib-only`); Rules an extended Pattern distributes carry
 the Pattern's namespace/name (`arclint/vertical:domain/stdlib-only`), so
 two Patterns may distribute the same local ID without colliding. An
-entry with no assertion key is an Override of a Pattern Rule; see
+entry with no constraint key is an Override of a Pattern Rule; see
 [Patterns](/docs/patterns/).
 
 ## zones
@@ -80,7 +80,7 @@ Inspect declared Zones with `arclint context` (repository scope) or
 
 What a Zone may import: other Zones, third-party, stdlib.
 
-- assertion key: `imports`
+- constraint key: `imports`
 - Rule Type: `consumes`
 - Assurance: `exact`
 - `on`: required
@@ -104,7 +104,7 @@ rules:
 
 Paths that must exist (`require`) or must not (`forbid`).
 
-- assertion key: `structure`
+- constraint key: `structure`
 - Rule Type: `structure`
 - Assurance: `exact`
 - `on`: required
@@ -148,14 +148,14 @@ rules:
 
 File names follow a case convention or regex.
 
-- assertion key: `naming`
+- constraint key: `naming`
 - Rule Type: `naming`
 - Assurance: `exact`
 - `on`: required; `files` accepted
 
 Applies to the file stem (base name minus the final extension). Cases:
 `kebab-case`, `snake_case`, `camelCase`, `PascalCase`, or
-`regex:<pattern>`; combine alternatives with `|`. The assertion is the
+`regex:<pattern>`; combine alternatives with `|`. The constraint is the
 case spec itself, or `{case: ...}`.
 
 ```yaml
@@ -171,7 +171,7 @@ rules:
 
 No line of a selected file matches a regular expression.
 
-- assertion key: `content`
+- constraint key: `content`
 - Rule Type: `content`
 - Assurance: `exact`
 - `on`: optional (absent means the whole repository); `files` accepted
@@ -202,7 +202,7 @@ rules:
 
 Composed from the recorded domain, never spelled.
 
-- assertion key: none; the id is the meta-model invariant (`aggregate/root-declared`, `invariant/enforced-at-every-mutation`, ...)
+- constraint key: none; the id is the meta-model invariant (`aggregate/root-declared`, `invariant/enforced-at-every-mutation`, ...)
 - Rule Type: `domain`
 - Assurance: `exact`
 - `on`: none; the recorded contexts and their aggregates locate the code, narrowed by a Zone only when the ruleset declares one spelled with the context's name
@@ -229,7 +229,7 @@ rules:
 
 Delegate enforcement to a named Extension.
 
-- assertion key: `uses` with optional `with`
+- constraint key: `uses` with optional `with`
 - Rule Type: `extension`
 - Assurance: `heuristic`
 - `on`: optional (absent means the whole repository); `files` accepted
@@ -255,7 +255,7 @@ rules:
 
 Who may import one Zone.
 
-- assertion key: `imported_by`
+- constraint key: `imported_by`
 - Rule Type: `protected`
 - Assurance: `exact`
 - `on`: required, exactly one Zone
@@ -277,7 +277,7 @@ rules:
 
 An ordered stack: a Zone imports only same or lower layers.
 
-- assertion key: `layers`
+- constraint key: `layers`
 - Rule Type: `layers`
 - Assurance: `exact`
 - `on`: not accepted
@@ -296,7 +296,7 @@ rules:
 
 Sibling folders selected by globs may not import each other.
 
-- assertion key: `independent`
+- constraint key: `independent`
 - Rule Type: `independence`
 - Assurance: `exact`
 - `on`: not accepted
@@ -315,7 +315,7 @@ rules:
 
 No import cycles among the named Zones.
 
-- assertion key: `acyclic`
+- constraint key: `acyclic`
 - Rule Type: `acyclic`
 - Assurance: `exact`
 - `on`: not accepted
@@ -335,7 +335,7 @@ rules:
 
 ## exclude and suppress
 
-Both keys sit beside any assertion, and both are the whole content of
+Both keys sit beside any constraint, and both are the whole content of
 an Override. An Exclusion removes files from what the Rule judges; a
 Suppression keeps the finding in the Assessment and in JSON output but
 takes it out of the active count. Each carries a `reason` so the

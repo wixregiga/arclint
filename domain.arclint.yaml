@@ -60,8 +60,8 @@ contexts:
             against the recorded language. When nothing is recorded the
             parameters are empty and the Claim says so.
           exactly-one-assertion: >-
-            A Rule carries exactly one Assertion; a Rule written with
-            two assertion keys, or with none and no Override target, is
+            A Rule carries exactly one Constraint; a Rule written with
+            two constraint keys, or with none and no Override target, is
             rejected at load.
           unique-qualified-id: >-
             Two Rules with the same qualified RuleID cannot both exist
@@ -104,21 +104,14 @@ contexts:
           Claim of an expanded Rule says what it derives from, and
           says plainly when the vocabulary records nothing yet.
         aliases: [description]
-      Assertion:
+      Constraint:
         definition: >-
           The one checkable proposition a Rule carries, written in
-          rules.arclint.yaml as exactly one assertion key with its
+          rules.arclint.yaml as exactly one constraint key with its
           parameters: imports, structure, naming, invariants, layers,
           imported_by, independent, acyclic, content, or uses. The key
           alone decides how the Rule is evaluated; a Rule never carries
           two.
-      ConstraintKind:
-        definition: >-
-          One value from the finite ArcLint-owned set of supported
-          constraint shapes: consumes, structure, naming, layers,
-          protected, independence, acyclic, domain, content, and
-          extension. The constraint key spelled in rules.arclint.yaml
-          decides it.
       Severity:
         definition: >-
           Gate importance of a finding: error, warning, or info.
@@ -225,7 +218,7 @@ contexts:
             an Override whose RuleID matches no Pattern Rule is
             rejected at load.
           carries-no-assertion: >-
-            An Override carries no Assertion and no Claim; adding
+            An Override carries no Constraint and no Claim; adding
             either is rejected at load with the advice to add a new
             local Rule under a new RuleID.
       Disablement:

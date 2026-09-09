@@ -63,7 +63,7 @@ func TestSchemaPublishesDomainEnums(t *testing.T) {
 
 // TestSchemaCoversEveryRuleType proves each published Rule Type owns
 // exactly one shape in the document schema, named after the Type and
-// requiring the Type's one assertion key, and that the rule entry is
+// requiring the Type's one constraint key, and that the rule entry is
 // the choice among those shapes plus the Override.
 func TestSchemaCoversEveryRuleType(t *testing.T) {
 	doc := schemaTree(t)
@@ -80,19 +80,19 @@ func TestSchemaCoversEveryRuleType(t *testing.T) {
 			t.Errorf("rule oneOf[%d] = %v, want %s", i, ref, def)
 		}
 		required, ok := dig(t, doc, "$defs", def, "required").([]any)
-		if !ok || !containsString(required, typ.AssertionKey()) {
-			t.Errorf("%s required = %v, want the assertion key %q", def, required, typ.AssertionKey())
+		if !ok || !containsString(required, typ.ConstraintKey()) {
+			t.Errorf("%s required = %v, want the constraint key %q", def, required, typ.ConstraintKey())
 		}
 		props := dig(t, doc, "$defs", def, "properties").(map[string]any)
-		if _, ok := props[typ.AssertionKey()]; !ok {
-			t.Errorf("%s lacks its assertion key %q", def, typ.AssertionKey())
+		if _, ok := props[typ.ConstraintKey()]; !ok {
+			t.Errorf("%s lacks its constraint key %q", def, typ.ConstraintKey())
 		}
-		for _, other := range rule.AssertionKeys() {
-			if other == typ.AssertionKey() {
+		for _, other := range rule.ConstraintKeys() {
+			if other == typ.ConstraintKey() {
 				continue
 			}
 			if _, ok := props[other]; ok {
-				t.Errorf("%s accepts a second assertion key %q", def, other)
+				t.Errorf("%s accepts a second constraint key %q", def, other)
 			}
 		}
 		_, hasOn := props["on"]
@@ -118,9 +118,9 @@ func TestSchemaCoversEveryRuleType(t *testing.T) {
 		t.Errorf("rule oneOf last = %v, want the override", ref)
 	}
 	overrideProps := dig(t, doc, "$defs", "override", "properties").(map[string]any)
-	for _, key := range rule.AssertionKeys() {
+	for _, key := range rule.ConstraintKeys() {
 		if _, ok := overrideProps[key]; ok {
-			t.Errorf("override must not accept assertion key %q", key)
+			t.Errorf("override must not accept constraint key %q", key)
 		}
 	}
 	if _, ok := overrideProps["description"]; ok {

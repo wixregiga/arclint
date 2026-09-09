@@ -253,7 +253,7 @@ func TestAgentsGroupHelpOnly(t *testing.T) {
 	}
 }
 
-// TestContentRuleGates proves the built-in content assertion end to
+// TestContentRuleGates proves the built-in content constraint end to
 // end: a forbid pattern over the selected files gates a real fixture
 // repository, no extension required.
 func TestContentRuleGates(t *testing.T) {
