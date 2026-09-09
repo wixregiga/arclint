@@ -230,7 +230,7 @@ rules: {}
 		{"zone object listing a glob twice", "zones:\n  core:\n    paths: [\"core/**\", \"core/**\"]\n", false},
 		{"zone name with uppercase", "zones:\n  Core: core/**\n", false},
 
-		// ---- one minimal Rule per assertion --------------------------------
+		// ---- one minimal Rule per constraint --------------------------------
 		{"imports with an internal allow-list", oneZone + `
 rules:
   core/stdlib-only:
@@ -415,7 +415,7 @@ rules:
     content:
       forbid: "  "
 `, false},
-		{"retired invariants assertion", oneZone + `
+		{"retired invariants constraint", oneZone + `
 rules:
   core/invariants:
     on: core
@@ -509,7 +509,7 @@ rules:
 `, false},
 
 		// ---- the Rule envelope -------------------------------------------
-		{"rule with two assertions", oneZone + `
+		{"rule with two constraints", oneZone + `
 rules:
   core/two:
     on: core

@@ -176,9 +176,9 @@ func ruleIDs(cfg rule.Configured) []string {
 	return out
 }
 
-// TestLoadEveryAssertionShape proves each assertion key, each zone
+// TestLoadEveryConstraintShape proves each constraint key, each zone
 // sugar, and each optional key loads into the Rule Type it spells.
-func TestLoadEveryAssertionShape(t *testing.T) {
+func TestLoadEveryConstraintShape(t *testing.T) {
 	cfg := mustLoad(t, `
 runtime: [go, ts]
 scan:
@@ -362,15 +362,15 @@ contracts:
       id: "repo/p:m/imports"
       internal: []
 `, `unknown key "contracts"`},
-		"rule without assertion and without extends": {`
+		"rule without constraint and without extends": {`
 zones:
   m: m/**
 rules:
   m/imports:
     description: "nothing"
     on: m
-`, "carries no assertion"},
-		"two assertions": {`
+`, "carries no constraint"},
+		"two constraints": {`
 zones:
   m: m/**
 rules:
@@ -379,7 +379,7 @@ rules:
     imports:
       internal: []
     naming: snake_case
-`, "carries 2 assertions"},
+`, "carries 2 constraints"},
 		"kind key": {`
 zones:
   m: m/**

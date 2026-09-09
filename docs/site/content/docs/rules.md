@@ -4,7 +4,7 @@ description = "Every published Rule Type: its constraint key in rules.arclint.ya
 weight = 3
 +++
 
-The published Rule Types (formally ConstraintKind in the domain) are a finite ArcLint-owned enum. Configure them
+The supported Constraints form a finite ArcLint-owned set. Configure them
 in `rules.arclint.yaml`; Extensions do not add new types. The same shapes power
 `arclint rules schema`, editor completion, and `arclint rules <id>`
 detail output.

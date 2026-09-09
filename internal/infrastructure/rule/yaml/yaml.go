@@ -3,8 +3,8 @@
 // repository ruleset carries runtime, scan, extends, zones, and
 // rules; a Pattern distribution file carries the pattern header,
 // zones, and rules. Every Rule is keyed by its Rule ID and carries
-// exactly one assertion key, which decides its Type; an entry with no
-// assertion key is an Override of a Rule an extended Pattern
+// exactly one constraint key, which decides its Type; an entry with no
+// constraint key is an Override of a Rule an extended Pattern
 // distributes. Compact spellings are sugar the loader expands: the
 // engine only ever sees complete Zones, Rules, and Patterns. A
 // representation that cannot become a valid value is an error, never a
@@ -237,23 +237,23 @@ type zoneEntry struct {
 	hasPaths    bool
 }
 
-// ruleEntry is one rules entry: a Rule (assertion set) or an Override
-// (assertion empty).
+// ruleEntry is one rules entry: a Rule (constraint set) or an Override
+// (constraint empty).
 type ruleEntry struct {
-	where       string
-	id          string
-	description string
-	severity    string
-	on          []rule.ZoneName
-	onPresent   bool
-	files       []rule.Glob
-	assertion   string
-	assertNode  *yaml.Node
-	with        map[string]any
-	withPresent bool
-	disable     *string
-	exclude     *exclusionEntry
-	suppress    *suppressionEntry
+	where          string
+	id             string
+	description    string
+	severity       string
+	on             []rule.ZoneName
+	onPresent      bool
+	files          []rule.Glob
+	constraint     string
+	constraintNode *yaml.Node
+	with           map[string]any
+	withPresent    bool
+	disable        *string
+	exclude        *exclusionEntry
+	suppress       *suppressionEntry
 }
 
 type exclusionEntry struct {
@@ -595,7 +595,7 @@ func parseZones(n *yaml.Node, inPattern bool) ([]zoneEntry, error) {
 	return out, nil
 }
 
-// ruleKeys are the keys a rules entry may carry beside its assertion.
+// ruleKeys are the keys a rules entry may carry beside its constraint.
 var ruleKeys = []string{keyDescription, keySeverity, keyOn, keyFiles, keyWith, keyDisable, keyExclude, keySuppress}
 
 func parseRules(n *yaml.Node) ([]ruleEntry, error) {
@@ -620,24 +620,24 @@ func parseRule(id, where string, n *yaml.Node) (ruleEntry, error) {
 	if err != nil {
 		return ruleEntry{}, err
 	}
-	if err := m.allow(append(append([]string(nil), ruleKeys...), rule.AssertionKeys()...)...); err != nil {
+	if err := m.allow(append(append([]string(nil), ruleKeys...), rule.ConstraintKeys()...)...); err != nil {
 		return ruleEntry{}, fmt.Errorf("%s: %v", where, err)
 	}
 	entry := ruleEntry{where: where, id: id}
-	var assertions []string
-	for _, key := range rule.AssertionKeys() {
+	var constraints []string
+	for _, key := range rule.ConstraintKeys() {
 		if m.get(key) != nil {
-			assertions = append(assertions, key)
+			constraints = append(constraints, key)
 		}
 	}
-	switch len(assertions) {
+	switch len(constraints) {
 	case 0:
 	case 1:
-		entry.assertion = assertions[0]
-		entry.assertNode = m.get(assertions[0])
+		entry.constraint = constraints[0]
+		entry.constraintNode = m.get(constraints[0])
 	default:
-		return ruleEntry{}, fmt.Errorf("%s: carries %d assertions (%s); a Rule carries exactly one, so give each its own Rule ID",
-			where, len(assertions), strings.Join(assertions, ", "))
+		return ruleEntry{}, fmt.Errorf("%s: carries %d constraints (%s); a Rule carries exactly one, so give each its own Rule ID",
+			where, len(constraints), strings.Join(constraints, ", "))
 	}
 	if v := m.get(keyDescription); v != nil {
 		if entry.description, err = scalarString(v, where+".description"); err != nil {
@@ -817,8 +817,8 @@ func (d *document) distribution(extensions []rule.PatternExtension) (rule.Patter
 	}
 	var rules []rule.Rule
 	for _, e := range d.rules {
-		if e.assertion == "" {
-			return fail("%s: carries no assertion; a pattern distributes Rules and cannot override", e.where)
+		if e.constraint == "" {
+			return fail("%s: carries no constraint; a pattern distributes Rules and cannot override", e.where)
 		}
 		id, err := rule.NewID(e.id)
 		if err != nil {
@@ -939,15 +939,15 @@ func (d *document) repository(lang vocab.UbiquitousLanguage, available []rule.Pa
 			return fail("%s: %v", e.where, err)
 		}
 		q := id.Qualified()
-		if e.assertion == "" {
+		if e.constraint == "" {
 			i, ok := distributed[q]
 			if !ok && rule.BuiltInID(id) {
 				return fail("%s: rule %s is built in, and exists once a domain is recorded; record the domain in %s or remove the override",
 					e.where, q, vocab.UbiquitousLanguageFileName)
 			}
 			if !ok {
-				return fail("%s: carries no assertion, so it is an override, but no extended pattern or built-in rule distributes rule %s; give a new Rule one assertion key (%s)",
-					e.where, q, strings.Join(rule.AssertionKeys(), ", "))
+				return fail("%s: carries no constraint, so it is an override, but no extended pattern or built-in rule distributes rule %s; give a new Rule one constraint key (%s)",
+					e.where, q, strings.Join(rule.ConstraintKeys(), ", "))
 			}
 			if seen[q] {
 				return fail("%s: rule %s is overridden twice", e.where, q)
@@ -1012,7 +1012,7 @@ func sameGlobs(a, b []rule.Glob) bool {
 }
 
 // applyOverride merges the entry's adoption decisions onto a Pattern
-// Rule. An Override carries no assertion, no description, and no
+// Rule. An Override carries no constraint, no description, and no
 // applicability of its own.
 func (e ruleEntry) applyOverride(r rule.Rule) (rule.Rule, error) {
 	for _, bad := range []struct {
@@ -1072,7 +1072,7 @@ func (e ruleEntry) adopt(r rule.Rule) (rule.Rule, error) {
 	return r, nil
 }
 
-// build constructs the Rule an entry with an assertion spells, then
+// build constructs the Rule an entry with a constraint spells, then
 // applies its own adoption decisions. declared is the set of Zones
 // the entry may name; universe, non-nil only inside a Pattern, lists
 // the Pattern's Zones in order, and it is what an empty acyclic
@@ -1081,41 +1081,41 @@ func (e ruleEntry) adopt(r rule.Rule) (rule.Rule, error) {
 // Pattern declares. In the repository ruleset the empty scope stays
 // open and covers every declared Zone at evaluation.
 func (e ruleEntry) build(lang vocab.UbiquitousLanguage, declared map[rule.ZoneName]bool, universe []rule.ZoneName) (rule.Rule, error) {
-	t, ok := rule.TypeOfAssertionKey(e.assertion)
+	t, ok := rule.KindOfConstraintKey(e.constraint)
 	if !ok {
-		return rule.Rule{}, fmt.Errorf("%s: unknown assertion %q", e.where, e.assertion)
+		return rule.Rule{}, fmt.Errorf("%s: unknown constraint %q", e.where, e.constraint)
 	}
 	if e.withPresent && t != rule.TypeExtension {
-		return rule.Rule{}, fmt.Errorf("%s: with belongs to uses; %s carries its parameters under %s", e.where, e.assertion, e.assertion)
+		return rule.Rule{}, fmt.Errorf("%s: with belongs to uses; %s carries its parameters under %s", e.where, e.constraint, e.constraint)
 	}
 	if len(e.files) > 0 && !t.AcceptsFiles() {
-		return rule.Rule{}, fmt.Errorf("%s: %s does not accept files; it judges whole zones", e.where, e.assertion)
+		return rule.Rule{}, fmt.Errorf("%s: %s does not accept files; it judges whole zones", e.where, e.constraint)
 	}
 	for _, m := range e.on {
 		if !declared[m] {
 			return rule.Rule{}, fmt.Errorf("%s.on: zone %q is not declared", e.where, m)
 		}
 	}
-	spec := rule.Spec{ID: e.id, Type: t, Claim: e.description, Severity: e.severity}
+	spec := rule.Spec{ID: e.id, Claim: e.description, Severity: e.severity}
 	var err error
 	switch t.Scope() {
 	case rule.ScopeZones:
 		if !e.onPresent {
-			return rule.Rule{}, fmt.Errorf("%s: %s requires on (the zone or zones it judges)", e.where, e.assertion)
+			return rule.Rule{}, fmt.Errorf("%s: %s requires on (the zone or zones it judges)", e.where, e.constraint)
 		}
 		if spec.Applicability, err = rule.ZoneApplicability(e.on, e.files...); err != nil {
 			return rule.Rule{}, fmt.Errorf("%s.on: %v", e.where, err)
 		}
 	case rule.ScopeOneZone:
 		if len(e.on) != 1 {
-			return rule.Rule{}, fmt.Errorf("%s: %s requires on naming exactly one zone", e.where, e.assertion)
+			return rule.Rule{}, fmt.Errorf("%s: %s requires on naming exactly one zone", e.where, e.constraint)
 		}
 		if spec.Applicability, err = rule.RepositoryApplicability(); err != nil {
 			return rule.Rule{}, fmt.Errorf("%s: %v", e.where, err)
 		}
 	case rule.ScopeRepository:
 		if e.onPresent {
-			return rule.Rule{}, fmt.Errorf("%s: %s names zones itself, so it has no on", e.where, e.assertion)
+			return rule.Rule{}, fmt.Errorf("%s: %s names zones itself, so it has no on", e.where, e.constraint)
 		}
 		if spec.Applicability, err = rule.RepositoryApplicability(); err != nil {
 			return rule.Rule{}, fmt.Errorf("%s: %v", e.where, err)
@@ -1130,28 +1130,28 @@ func (e ruleEntry) build(lang vocab.UbiquitousLanguage, declared map[rule.ZoneNa
 			return rule.Rule{}, fmt.Errorf("%s: %v", e.where, err)
 		}
 	}
-	where := e.where + "." + e.assertion
+	where := e.where + "." + e.constraint
 	switch t {
 	case rule.TypeConsumes:
-		spec.Params, err = parseImports(e.assertNode, where)
+		spec.Constraint, err = parseImports(e.constraintNode, where)
 	case rule.TypeStructure:
-		spec.Params, spec.Expansion, err = parseStructure(e.assertNode, where, lang)
+		spec.Constraint, spec.Expansion, err = parseStructure(e.constraintNode, where, lang)
 	case rule.TypeNaming:
-		spec.Params, err = parseNaming(e.assertNode, where)
+		spec.Constraint, err = parseNaming(e.constraintNode, where)
 	case rule.TypeLayers:
-		spec.Params, err = parseLayers(e.assertNode, where)
+		spec.Constraint, err = parseLayers(e.constraintNode, where)
 	case rule.TypeProtected:
-		spec.Params, err = parseImportedBy(e.assertNode, where, e.on[0])
+		spec.Constraint, err = parseImportedBy(e.constraintNode, where, e.on[0])
 	case rule.TypeIndependence:
-		spec.Params, err = parseIndependent(e.assertNode, where)
+		spec.Constraint, err = parseIndependent(e.constraintNode, where)
 	case rule.TypeAcyclic:
-		spec.Params, err = parseAcyclic(e.assertNode, where, universe)
+		spec.Constraint, err = parseAcyclic(e.constraintNode, where, universe)
 	case rule.TypeContent:
-		spec.Params, err = parseContent(e.assertNode, where)
+		spec.Constraint, err = parseContent(e.constraintNode, where)
 	case rule.TypeExtension:
-		spec.Params, err = parseUses(e.assertNode, where, e.with)
+		spec.Constraint, err = parseUses(e.constraintNode, where, e.with)
 	case rule.TypeDomain:
-		// Built in, never spelled: no assertion key resolves to it.
+		// Built in, never spelled: no constraint key resolves to it.
 	}
 	if err != nil {
 		return rule.Rule{}, err
@@ -1168,7 +1168,7 @@ func (e ruleEntry) build(lang vocab.UbiquitousLanguage, declared map[rule.ZoneNa
 	return e.adopt(r)
 }
 
-func parseImports(n *yaml.Node, where string) (rule.Params, error) {
+func parseImports(n *yaml.Node, where string) (rule.Constraint, error) {
 	m, err := asMapping(n, where)
 	if err != nil {
 		return nil, err
@@ -1176,7 +1176,7 @@ func parseImports(n *yaml.Node, where string) (rule.Params, error) {
 	if err := m.allow(keyInternal, keyExternal, keyStdlib); err != nil {
 		return nil, fmt.Errorf("%s: %v", where, err)
 	}
-	params := rule.ConsumesParams{}
+	params := rule.ConsumesConstraint{}
 	if v := m.get(keyInternal); v != nil {
 		names, err := stringList(v, where+".internal")
 		if err != nil {
@@ -1219,7 +1219,7 @@ func parseImports(n *yaml.Node, where string) (rule.Params, error) {
 	return params, nil
 }
 
-func parseStructure(n *yaml.Node, where string, lang vocab.UbiquitousLanguage) (rule.Params, *rule.Expansion, error) {
+func parseStructure(n *yaml.Node, where string, lang vocab.UbiquitousLanguage) (rule.Constraint, *rule.Expansion, error) {
 	m, err := asMapping(n, where)
 	if err != nil {
 		return nil, nil, err
@@ -1258,10 +1258,10 @@ func parseStructure(n *yaml.Node, where string, lang vocab.UbiquitousLanguage) (
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s.forbid: %v", where, err)
 	}
-	return rule.StructureParams{Require: require, Forbid: forbid}, nil, nil
+	return rule.StructureConstraint{Require: require, Forbid: forbid}, nil, nil
 }
 
-func parseNaming(n *yaml.Node, where string) (rule.Params, error) {
+func parseNaming(n *yaml.Node, where string) (rule.Constraint, error) {
 	var spelled string
 	switch n.Kind {
 	case yaml.ScalarNode:
@@ -1292,26 +1292,26 @@ func parseNaming(n *yaml.Node, where string) (rule.Params, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", where, err)
 	}
-	return rule.NamingParams{Case: caseSpec}, nil
+	return rule.NamingConstraint{Case: caseSpec}, nil
 }
 
-func parseLayers(n *yaml.Node, where string) (rule.Params, error) {
+func parseLayers(n *yaml.Node, where string) (rule.Constraint, error) {
 	layers, err := zoneNameList(n, where)
 	if err != nil {
 		return nil, err
 	}
-	return rule.LayersParams{Layers: layers}, nil
+	return rule.LayersConstraint{Layers: layers}, nil
 }
 
-func parseImportedBy(n *yaml.Node, where string, protected rule.ZoneName) (rule.Params, error) {
+func parseImportedBy(n *yaml.Node, where string, protected rule.ZoneName) (rule.Constraint, error) {
 	allow, err := zoneNameList(n, where)
 	if err != nil {
 		return nil, err
 	}
-	return rule.ProtectedParams{Zone: protected, Allow: allow}, nil
+	return rule.ProtectedConstraint{Zone: protected, Allow: allow}, nil
 }
 
-func parseIndependent(n *yaml.Node, where string) (rule.Params, error) {
+func parseIndependent(n *yaml.Node, where string) (rule.Constraint, error) {
 	patterns, err := stringList(n, where)
 	if err != nil {
 		return nil, err
@@ -1320,14 +1320,14 @@ func parseIndependent(n *yaml.Node, where string) (rule.Params, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", where, err)
 	}
-	return rule.IndependenceParams{Folders: globs}, nil
+	return rule.IndependenceConstraint{Folders: globs}, nil
 }
 
 // parseAcyclic reads the cycle scope: a list of at least two Zones,
 // or {} for every declared Zone. Inside a Pattern, {} is resolved
 // now to the Pattern's own Zones (universe), so the Rule it
 // distributes names exactly what the Pattern declared.
-func parseAcyclic(n *yaml.Node, where string, universe []rule.ZoneName) (rule.Params, error) {
+func parseAcyclic(n *yaml.Node, where string, universe []rule.ZoneName) (rule.Constraint, error) {
 	switch n.Kind {
 	case yaml.SequenceNode:
 		zones, err := zoneNameList(n, where)
@@ -1337,18 +1337,18 @@ func parseAcyclic(n *yaml.Node, where string, universe []rule.ZoneName) (rule.Pa
 		if len(zones) < 2 {
 			return nil, fmt.Errorf("%s: a cycle needs at least two zones; use {} for every declared zone", where)
 		}
-		return rule.AcyclicParams{Zones: zones}, nil
+		return rule.AcyclicConstraint{Zones: zones}, nil
 	case yaml.MappingNode:
 		if len(n.Content) != 0 {
 			return nil, fmt.Errorf("%s: expected a list of zones or {} for every declared zone", where)
 		}
-		return rule.AcyclicParams{Zones: append([]rule.ZoneName(nil), universe...)}, nil
+		return rule.AcyclicConstraint{Zones: append([]rule.ZoneName(nil), universe...)}, nil
 	default:
 		return nil, fmt.Errorf("%s: expected a list of zones or {} for every declared zone", where)
 	}
 }
 
-func parseContent(n *yaml.Node, where string) (rule.Params, error) {
+func parseContent(n *yaml.Node, where string) (rule.Constraint, error) {
 	m, err := asMapping(n, where)
 	if err != nil {
 		return nil, err
@@ -1364,15 +1364,15 @@ func parseContent(n *yaml.Node, where string) (rule.Params, error) {
 	if err != nil {
 		return nil, err
 	}
-	return rule.ContentParams{Forbid: pattern}, nil
+	return rule.ContentConstraint{Forbid: pattern}, nil
 }
 
-func parseUses(n *yaml.Node, where string, with map[string]any) (rule.Params, error) {
+func parseUses(n *yaml.Node, where string, with map[string]any) (rule.Constraint, error) {
 	name, err := scalarString(n, where)
 	if err != nil {
 		return nil, err
 	}
-	return rule.ExtensionParams{Uses: name, With: with}, nil
+	return rule.ExtensionConstraint{Uses: name, With: with}, nil
 }
 
 func zoneNameList(n *yaml.Node, where string) ([]rule.ZoneName, error) {
