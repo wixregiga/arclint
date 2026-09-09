@@ -199,7 +199,7 @@ path and at which line.
 ## Adopting a built-in rule
 
 A built-in rule is adopted the way a Pattern rule is: an entry under
-`rules:` keyed by its id carrying no assertion. It may change the
+`rules:` keyed by its id carrying no constraint. It may change the
 severity, disable the rule with a reason, exclude subjects, or
 suppress findings; it may not change what the rule asserts.
 

@@ -148,14 +148,14 @@ func (t Type) Schema() TypeSchema {
 			},
 		}
 	}
-	return TypeSchema{Type: t, Key: t.AssertionKey(), Common: common, Params: params}
+	return TypeSchema{Type: t, Key: t.ConstraintKey(), Common: common, Params: params}
 }
 
 // Describe explains the accepted configuration of this Rule Type.
 func (s TypeSchema) Describe() string {
 	var b strings.Builder
 	if s.Type.Authored() {
-		fmt.Fprintf(&b, "rule type %s (assertion key %s)\n", s.Type, s.Key)
+		fmt.Fprintf(&b, "rule type %s (constraint key %s)\n", s.Type, s.Key)
 	} else {
 		fmt.Fprintf(&b, "rule type %s (built in; adopted by an override under the invariant's id)\n", s.Type)
 	}
@@ -264,7 +264,7 @@ func schemaDocument() map[string]any {
 		"$schema":              "https://json-schema.org/draft/2020-12/schema",
 		"$id":                  SchemaID,
 		"title":                "ArcLint ruleset",
-		"description":          "The complete " + RulesetFileName + " document ArcLint accepts. A repository ruleset carries runtime, scan, extends, zones, and rules; a Pattern distribution file carries the pattern header, zones, and rules. Every Rule is keyed by its Rule ID and carries exactly one assertion key; an entry with no assertion key is an Override of a Rule an extended Pattern distributes. Unknown keys are rejected everywhere.",
+		"description":          "The complete " + RulesetFileName + " document ArcLint accepts. A repository ruleset carries runtime, scan, extends, zones, and rules; a Pattern distribution file carries the pattern header, zones, and rules. Every Rule is keyed by its Rule ID and carries exactly one constraint key; an entry with no constraint key is an Override of a Rule an extended Pattern distributes. Unknown keys are rejected everywhere.",
 		"type":                 "object",
 		"additionalProperties": false,
 		"properties": map[string]any{
@@ -300,7 +300,7 @@ func schemaDocument() map[string]any {
 					"additionalProperties": schemaRef("patternZone"),
 				},
 				"rules": map[string]any{
-					"description":          "A Pattern distributes Rules and cannot override: every entry carries exactly one assertion key.",
+					"description":          "A Pattern distributes Rules and cannot override: every entry carries exactly one constraint key.",
 					"type":                 "object",
 					"propertyNames":        schemaRef("ruleID"),
 					"additionalProperties": patternRuleSchema(),
@@ -354,13 +354,13 @@ func defDescriptions() map[string]string {
 		"zone":                    "One Zone: a glob, a list of globs, or an object in a repository ruleset; a description or an object in a Pattern file.",
 		"repositoryZone":          "One repository Zone: its paths as a glob or a list of globs, or an object with paths and an optional description.",
 		"patternZone":             "One Pattern Zone: its description, or an object with the description and the paths the Pattern suggests for the Binding. A Pattern never owns paths.",
-		"rule":                    "One Rule carrying exactly one assertion key (" + strings.Join(AssertionKeys(), ", ") + "), or an Override carrying none.",
-		"override":                "An Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID. It carries no assertion and no description: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID.",
+		"rule":                    "One Rule carrying exactly one constraint key (" + strings.Join(ConstraintKeys(), ", ") + "), or an Override carrying none.",
+		"override":                "An Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID. It carries no constraint and no description: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID.",
 		"exclusion":               "Removes paths or Zones from what the Rule judges; excluded subjects evaluate not applicable.",
 		"suppression":             "Keeps findings at the paths while removing their gate effect; suppressed findings are still reported.",
 	}
 	for _, t := range AuthoredTypes() {
-		descs[assertionDefName(t)] = assertionRuleDescription(t)
+		descs[constraintDefName(t)] = constraintRuleDescription(t)
 	}
 	return descs
 }
@@ -450,17 +450,17 @@ func schemaDefs() map[string]any {
 		"suppression":             suppressionSchema(),
 	}
 	for _, t := range AuthoredTypes() {
-		defs[assertionDefName(t)] = assertionRuleSchema(t)
+		defs[constraintDefName(t)] = constraintRuleSchema(t)
 	}
 	return defs
 }
 
-func assertionDefName(t Type) string { return string(t) + "Rule" }
+func constraintDefName(t Type) string { return string(t) + "Rule" }
 
-// assertionRuleDescription names a Rule of one Type by its constraint
+// constraintRuleDescription names a Rule of one Type by its constraint
 // key and states its meaning.
-func assertionRuleDescription(t Type) string {
-	key := t.AssertionKey()
+func constraintRuleDescription(t Type) string {
+	key := t.ConstraintKey()
 	article := "A"
 	if strings.ContainsRune("aeiou", rune(key[0])) {
 		article = "An"
@@ -603,7 +603,7 @@ func patternZoneSchema() map[string]any {
 
 func rulesSchema() map[string]any {
 	return map[string]any{
-		"description":          "Every Rule keyed by its Rule ID. An entry with one assertion key is a Rule; an entry with none is an Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID, or of a built-in domain Rule, keyed by its block invariant.",
+		"description":          "Every Rule keyed by its Rule ID. An entry with one constraint key is a Rule; an entry with none is an Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID, or of a built-in domain Rule, keyed by its block invariant.",
 		"type":                 "object",
 		"propertyNames":        schemaRef("ruleID"),
 		"additionalProperties": schemaRef("rule"),
@@ -613,7 +613,7 @@ func rulesSchema() map[string]any {
 func ruleSchema() map[string]any {
 	names := make([]string, 0, len(Types())+1)
 	for _, t := range AuthoredTypes() {
-		names = append(names, assertionDefName(t))
+		names = append(names, constraintDefName(t))
 	}
 	names = append(names, "override")
 	s := oneOfRefs(names...)
@@ -626,10 +626,10 @@ func ruleSchema() map[string]any {
 func patternRuleSchema() map[string]any {
 	names := make([]string, 0, len(Types()))
 	for _, t := range AuthoredTypes() {
-		names = append(names, assertionDefName(t))
+		names = append(names, constraintDefName(t))
 	}
 	s := oneOfRefs(names...)
-	s["description"] = "One distributed Rule carrying exactly one assertion key (" + strings.Join(AssertionKeys(), ", ") + ")."
+	s["description"] = "One distributed Rule carrying exactly one constraint key (" + strings.Join(ConstraintKeys(), ", ") + ")."
 	return s
 }
 
@@ -665,11 +665,11 @@ func commonRuleProperties(t Type) (map[string]any, []string) {
 	return props, required
 }
 
-func assertionRuleSchema(t Type) map[string]any {
+func constraintRuleSchema(t Type) map[string]any {
 	props, required := commonRuleProperties(t)
-	key := t.AssertionKey()
+	key := t.ConstraintKey()
 	required = append(required, key)
-	description := assertionRuleDescription(t)
+	description := constraintRuleDescription(t)
 	switch t {
 	case TypeConsumes:
 		imports := strictObjectSchema(
@@ -703,8 +703,8 @@ func assertionRuleSchema(t Type) map[string]any {
 		props[key] = map[string]any{
 			"description": "Files the Zone must or must not contain. With each, the globs derive from a recorded vocabulary collection and may carry {name:<case>} placeholders.",
 			"oneOf": []any{
-				structureAssertionSchema(false),
-				structureAssertionSchema(true),
+				structureConstraintSchema(false),
+				structureConstraintSchema(true),
 			},
 		}
 	case TypeNaming:
@@ -775,7 +775,7 @@ func assertionRuleSchema(t Type) map[string]any {
 	return strictObjectSchema(description, props, required...)
 }
 
-func structureAssertionSchema(expanded bool) map[string]any {
+func structureConstraintSchema(expanded bool) map[string]any {
 	itemRef := schemaRef("glob")
 	desc := "Plain structure: at least one non-empty glob list."
 	props := map[string]any{}

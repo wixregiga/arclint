@@ -568,7 +568,7 @@
     },
     "override": {
       "additionalProperties": false,
-      "description": "An Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID. It carries no assertion and no description: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID.",
+      "description": "An Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID. It carries no constraint and no description: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID.",
       "minProperties": 1,
       "properties": {
         "disable": {
@@ -716,7 +716,7 @@
       ]
     },
     "rule": {
-      "description": "One Rule carrying exactly one assertion key (imports, structure, naming, layers, imported_by, independent, acyclic, content, uses), or an Override carrying none.",
+      "description": "One Rule carrying exactly one constraint key (imports, structure, naming, layers, imported_by, independent, acyclic, content, uses), or an Override carrying none.",
       "oneOf": [
         {
           "$ref": "#/$defs/consumesRule",
@@ -756,7 +756,7 @@
         },
         {
           "$ref": "#/$defs/override",
-          "description": "An Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID. It carries no assertion and no description: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID."
+          "description": "An Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID. It carries no constraint and no description: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID."
         }
       ]
     },
@@ -1049,7 +1049,7 @@
   "$id": "https://raw.githubusercontent.com/wixregiga/arclint/main/docs/schemas/rules.arclint.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "The complete rules.arclint.yaml document ArcLint accepts. A repository ruleset carries runtime, scan, extends, zones, and rules; a Pattern distribution file carries the pattern header, zones, and rules. Every Rule is keyed by its Rule ID and carries exactly one assertion key; an entry with no assertion key is an Override of a Rule an extended Pattern distributes. Unknown keys are rejected everywhere.",
+  "description": "The complete rules.arclint.yaml document ArcLint accepts. A repository ruleset carries runtime, scan, extends, zones, and rules; a Pattern distribution file carries the pattern header, zones, and rules. Every Rule is keyed by its Rule ID and carries exactly one constraint key; an entry with no constraint key is an Override of a Rule an extended Pattern distributes. Unknown keys are rejected everywhere.",
   "else": {
     "description": "A repository ruleset: every Zone carries paths, directly or through a Binding.",
     "properties": {
@@ -1151,9 +1151,9 @@
     "rules": {
       "additionalProperties": {
         "$ref": "#/$defs/rule",
-        "description": "One Rule carrying exactly one assertion key (imports, structure, naming, layers, imported_by, independent, acyclic, content, uses), or an Override carrying none."
+        "description": "One Rule carrying exactly one constraint key (imports, structure, naming, layers, imported_by, independent, acyclic, content, uses), or an Override carrying none."
       },
-      "description": "Every Rule keyed by its Rule ID. An entry with one assertion key is a Rule; an entry with none is an Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID, or of a built-in domain Rule, keyed by its block invariant.",
+      "description": "Every Rule keyed by its Rule ID. An entry with one constraint key is a Rule; an entry with none is an Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID, or of a built-in domain Rule, keyed by its block invariant.",
       "propertyNames": {
         "$ref": "#/$defs/ruleID",
         "description": "Explicit stable Rule ID: LOCAL for a repository Rule, or NAMESPACE/NAME:LOCAL for a Rule an extended Pattern distributes. LOCAL uses a-z 0-9 . _ - /, never starting with . / - and never ending with . or /. Inside a Pattern file the Rule ID is local; the loader qualifies it with the Pattern's namespace/name, so two Patterns may distribute the same local identity."
@@ -1224,7 +1224,7 @@
       "extends": false,
       "rules": {
         "additionalProperties": {
-          "description": "One distributed Rule carrying exactly one assertion key (imports, structure, naming, layers, imported_by, independent, acyclic, content, uses).",
+          "description": "One distributed Rule carrying exactly one constraint key (imports, structure, naming, layers, imported_by, independent, acyclic, content, uses).",
           "oneOf": [
             {
               "$ref": "#/$defs/consumesRule",
@@ -1264,7 +1264,7 @@
             }
           ]
         },
-        "description": "A Pattern distributes Rules and cannot override: every entry carries exactly one assertion key.",
+        "description": "A Pattern distributes Rules and cannot override: every entry carries exactly one constraint key.",
         "propertyNames": {
           "$ref": "#/$defs/ruleID",
           "description": "Explicit stable Rule ID: LOCAL for a repository Rule, or NAMESPACE/NAME:LOCAL for a Rule an extended Pattern distributes. LOCAL uses a-z 0-9 . _ - /, never starting with . / - and never ending with . or /. Inside a Pattern file the Rule ID is local; the loader qualifies it with the Pattern's namespace/name, so two Patterns may distribute the same local identity."

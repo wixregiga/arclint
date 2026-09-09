@@ -48,8 +48,7 @@ func builtInSpec(inv vocab.BlockInvariant) (Spec, bool) {
 	if inv.Enforcement.By != vocab.EvaluatorDomain {
 		return Spec{}, false
 	}
-	spec.Type = TypeDomain
-	spec.Params = DomainParams{Invariant: inv.ID}
+	spec.Constraint = DomainConstraint{Invariant: inv.ID}
 	return spec, true
 }
 
@@ -93,7 +92,7 @@ func respectsBuiltIn(id ID, c Constraint) error {
 		return nil
 	}
 	want, _ := builtInSpec(inv)
-	if c.Kind() != want.Type {
+	if c.Kind() != want.Constraint.Kind() {
 		return fmt.Errorf("the id is built in; arclint composes it from the recorded domain, and a ruleset adopts it with an override (severity, disable, exclude, suppress)")
 	}
 	if p, ok := c.(DomainParams); ok && p.Invariant != inv.ID {
