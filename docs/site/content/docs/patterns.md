@@ -149,7 +149,7 @@ zones:
   toolchain: ["Makefile", "go.mod"]
 
 rules:
-  # Overrides: the Pattern's qualified id, no assertion key.
+  # Overrides: the Pattern's qualified id, no constraint key.
   arclint/vertical:shared/concerns:
     severity: warning
   arclint/vertical:domain/no-context:
@@ -193,7 +193,7 @@ The loader enforces the adoption contract:
 
 ## Overrides
 
-An entry under `rules:` with no assertion key is an Override, and its
+An entry under `rules:` with no constraint key is an Override, and its
 key must be the qualified ID of a Rule an extended Pattern distributes.
 An Override changes at least one of:
 
@@ -204,13 +204,13 @@ An Override changes at least one of:
 | `exclude` | `{paths, zones, reason}`: files the Rule does not judge |
 | `suppress` | `{paths, reason}`: findings kept in the Assessment but not active |
 
-An Override never carries `description`, `on`, `files`, `with`, or an
-assertion: a Pattern Rule keeps its own Claim, Zones, and parameters.
+An Override never carries `description`, `on`, `files`, `with`, or a
+constraint: a Pattern Rule keeps its own Claim, Zones, and parameters.
 To assert something different, disable the Pattern Rule with a reason
 and add a local Rule under a new ID. Writing a local Rule under a
 Pattern Rule's ID is rejected for the same reason, and an Override
 whose ID no extended Pattern distributes is rejected with the list of
-assertion keys a new Rule may carry.
+constraint keys a new Rule may carry.
 
 ## Authoring a Pattern
 
@@ -286,7 +286,7 @@ The rules of the Pattern file:
   and `acme/onion:core/stdlib-only`) and both apply; an Override under
   either qualified ID reaches exactly that Rule.
 - Every Rule names only Zones the Pattern lists, and every entry
-  carries an assertion key; a Pattern distributes Rules and cannot
+  carries a constraint key; a Pattern distributes Rules and cannot
   override. A Pattern with no Rules is rejected. An `acyclic: {}`
   inside a Pattern resolves to the Pattern's own Zones, so
   `arclint rules acme/hexagonal:dependencies/acyclic` lists

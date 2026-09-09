@@ -90,7 +90,7 @@ Grow the starter zone by zone. A zone is logical, not a folder:
 `internal/*/domain/**` is the domain layer of every vertical slice, and
 a list of globs gathers files from as many roots as you like. A real
 contract set is one map of rules, each keyed by its id, each carrying
-one claim and one assertion:
+one claim and one constraint:
 
 ```yaml
 runtime: [go]
@@ -164,9 +164,9 @@ rules:
 ## Rule types
 
 The finite, arclint-owned set. Extensions plug into it; they never
-extend it. The assertion key a rule carries decides its type:
+extend it. The constraint key a rule carries decides its type:
 
-| assertion | type | claim shape |
+| constraint key | type | claim shape |
 |---|---|---|
 | `imports` | consumes | what a zone may import: internal allow-list, external and stdlib policy |
 | `structure` | structure | files a zone must contain or must not contain (globs; `each:` expands them per recorded domain term) |

@@ -155,3 +155,21 @@ func (a Applicability) ExcludedZone(name ZoneName) bool {
 func (a Applicability) SelectsZone(name ZoneName) bool {
 	return a.WouldSelectZone(name) && !a.ExcludedZone(name)
 }
+
+// Scope is the Applicability shape a Type demands: which Zones a
+// Rule of the Type judges and how rules.arclint.yaml spells that.
+type Scope int
+
+const (
+	// ScopeZones judges the members of the Zones named under on;
+	// on is required.
+	ScopeZones Scope = iota
+	// ScopeOneZone judges exactly one Zone named under on.
+	ScopeOneZone
+	// ScopeRepository ranges over the repository's Zone graph or
+	// its files; on is not accepted.
+	ScopeRepository
+	// ScopeZonesOrRepository judges the Zones named under on, or
+	// the whole repository when on is omitted.
+	ScopeZonesOrRepository
+)

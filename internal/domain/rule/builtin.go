@@ -83,20 +83,20 @@ func BuiltInID(id ID) bool {
 // respectsBuiltIn keeps the built-in ids and the domain Type together:
 // a Spec under a built-in id is exactly the built-in Rule, and a domain
 // Rule carries the id of the invariant it evaluates.
-func respectsBuiltIn(id ID, spec Spec) error {
+func respectsBuiltIn(id ID, c Constraint) error {
 	inv, reserved := builtInInvariant(id)
 	if !reserved {
-		if spec.Type == TypeDomain {
-			p := spec.Params.(DomainParams)
+		if c.Kind() == TypeDomain {
+			p := c.(DomainParams)
 			return fmt.Errorf("a domain rule is built in under the id of the invariant it evaluates, %s", p.Invariant)
 		}
 		return nil
 	}
 	want, _ := builtInSpec(inv)
-	if spec.Type != want.Type {
+	if c.Kind() != want.Type {
 		return fmt.Errorf("the id is built in; arclint composes it from the recorded domain, and a ruleset adopts it with an override (severity, disable, exclude, suppress)")
 	}
-	if p, ok := spec.Params.(DomainParams); ok && p.Invariant != inv.ID {
+	if p, ok := c.(DomainParams); ok && p.Invariant != inv.ID {
 		return fmt.Errorf("evaluates %s under the id of %s", p.Invariant, inv.ID)
 	}
 	return nil

@@ -17,10 +17,9 @@ import (
 // methods return a new Rule with the same identity.
 type Rule struct {
 	id            ID
-	typ           Type
 	claim         Claim
 	severity      Severity
-	params        Params
+	constraint    Constraint
 	applicability Applicability
 	enforcement   Enforcement
 	suppressions  []Suppression
@@ -32,6 +31,9 @@ type Rule struct {
 
 // Spec is the input to validated Rule construction.
 type Spec struct {
+	// Constraint is the complete checkable proposition.
+	// Supply it alone; Type and Params remain legacy construction inputs.
+	Constraint Constraint
 	// ID is the explicit stable identity, qualified by namespace/name
 	// when a Pattern distributes the Rule.
 	ID string
@@ -69,34 +71,35 @@ func New(spec Spec) (Rule, error) {
 	fail := func(err error) (Rule, error) {
 		return Rule{}, fmt.Errorf("rule %s: %v", id, err)
 	}
-	if !spec.Type.Valid() {
-		return fail(fmt.Errorf("type %q: not a published ArcLint Rule Type", spec.Type))
+	c, err := spec.constraintValue()
+	if err != nil {
+		return fail(err)
 	}
 	if spec.Expansion != nil {
 		if spec.Expansion.IsZero() {
 			return fail(fmt.Errorf("unconstructed expansion"))
 		}
-		if spec.Type != TypeStructure {
+		if c.Kind() != TypeStructure {
 			return fail(fmt.Errorf("expansion: only structure rules expand over the recorded vocabulary"))
 		}
-		if _, ok := spec.Params.(StructureParams); !ok {
-			return fail(fmt.Errorf("expansion: structure rule with %T params", spec.Params))
+		if _, ok := c.(StructureConstraint); !ok {
+			return fail(fmt.Errorf("expansion: structure rule with %T params", c))
 		}
 	}
-	if err := acceptsParams(spec.Type, spec.Params, spec.Expansion); err != nil {
+	if err := validateConstraint(c, spec.Expansion); err != nil {
 		return fail(err)
 	}
-	if err := respectsBuiltIn(id, spec); err != nil {
+	if err := respectsBuiltIn(id, c); err != nil {
 		return fail(err)
 	}
 	severity, err := ParseSeverity(spec.Severity)
 	if err != nil {
 		return fail(err)
 	}
-	if err := validateScope(spec.Type, spec.Applicability); err != nil {
+	if err := validateScope(c, spec.Applicability); err != nil {
 		return fail(err)
 	}
-	enforcement := BuiltinEnforcement(spec.Type)
+	enforcement := BuiltinEnforcement(c.Kind())
 	if inv, ok := builtInInvariant(id); ok {
 		enforcement, err = builtInEnforcement(inv)
 		if err != nil {
@@ -111,9 +114,9 @@ func New(spec Spec) (Rule, error) {
 	}
 	statement := spec.Claim
 	if strings.TrimSpace(statement) == "" {
-		statement = deriveClaim(spec.Applicability, spec.Params)
+		statement = deriveClaim(spec.Applicability, c)
 		if spec.Expansion != nil {
-			statement = deriveExpandedClaim(spec.Applicability, spec.Params.(StructureParams), *spec.Expansion)
+			statement = deriveExpandedClaim(spec.Applicability, c.(StructureConstraint), *spec.Expansion)
 		}
 	}
 	claim, err := NewClaim(statement)
@@ -146,10 +149,9 @@ func New(spec Spec) (Rule, error) {
 	}
 	return Rule{
 		id:            id,
-		typ:           spec.Type,
 		claim:         claim,
 		severity:      severity,
-		params:        spec.Params,
+		constraint:    c,
 		applicability: spec.Applicability,
 		enforcement:   enforcement,
 		tests:         append([]Test(nil), spec.Tests...),
@@ -158,24 +160,30 @@ func New(spec Spec) (Rule, error) {
 	}, nil
 }
 
-// acceptsParams is Type.Accepts with the one expansion allowance: an
+// validateConstraint preserves the one expansion allowance: an
 // expanded structure Rule over an empty recorded collection holds
 // empty parameters: it exists and asserts nothing yet, which its
 // Claim states.
-func acceptsParams(t Type, p Params, e *Expansion) error {
+func validateConstraint(p Constraint, e *Expansion) error {
+	if p == nil {
+		return fmt.Errorf("constraint: missing")
+	}
 	if e != nil {
-		sp, ok := p.(StructureParams)
+		sp, ok := p.(StructureConstraint)
 		if ok && len(sp.Require)+len(sp.Forbid) == 0 {
 			return nil
 		}
 	}
-	return t.Accepts(p)
+	if err := p.Validate(); err != nil {
+		return fmt.Errorf("constraint: %w", err)
+	}
+	return nil
 }
 
 // deriveExpandedClaim states the universally quantified claim of an
 // expanded structure Rule: the source it ranges over and the globs the
 // recorded language currently derives.
-func deriveExpandedClaim(a Applicability, p StructureParams, e Expansion) string {
+func deriveExpandedClaim(a Applicability, p StructureConstraint, e Expansion) string {
 	zones := a.Zones()
 	scope := fmt.Sprintf("Zones %s", zoneList(zones))
 	if len(zones) == 1 {
@@ -184,23 +192,25 @@ func deriveExpandedClaim(a Applicability, p StructureParams, e Expansion) string
 	if len(p.Require)+len(p.Forbid) == 0 {
 		return fmt.Sprintf("%s: derives structure obligations from each recorded %s; none recorded yet", scope, e.Source())
 	}
-	return fmt.Sprintf("%s: %s (derived from each recorded %s)", scope, p.proposition(), e.Source())
+	return fmt.Sprintf("%s: %s (derived from each recorded %s)", scope, p.Proposition(), e.Source())
 }
 
 // validateScope keeps Applicability coherent with the Rule Type:
 // zone-scoped Types bind to at least one Zone; graph Types range
 // over the repository's Zone graph.
-func validateScope(t Type, a Applicability) error {
-	switch t {
-	case TypeConsumes, TypeStructure, TypeNaming:
+func validateScope(c Constraint, a Applicability) error {
+	t := c.Kind()
+	switch c.Scope() {
+	case ScopeZones:
 		if len(a.Zones()) == 0 {
 			return fmt.Errorf("%s rule requires zone applicability", t)
 		}
-	case TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic, TypeDomain:
+	case ScopeRepository, ScopeOneZone:
+		// ProtectedConstraint carries its target Zone; its evaluation spans importers.
 		if !a.EntireRepository() {
 			return fmt.Errorf("%s rule requires repository applicability", t)
 		}
-	case TypeContent, TypeExtension:
+	case ScopeZonesOrRepository:
 		if a.IsZero() {
 			return fmt.Errorf("%s rule requires applicability", t)
 		}
@@ -210,9 +220,9 @@ func validateScope(t Type, a Applicability) error {
 
 // deriveClaim composes the canonical Claim from the Rule's scope and
 // its parameters' proposition.
-func deriveClaim(a Applicability, p Params) string {
-	proposition := p.proposition()
-	switch p.Type() {
+func deriveClaim(a Applicability, p Constraint) string {
+	proposition := p.Proposition()
+	switch p.Kind() {
 	case TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic, TypeDomain:
 		return proposition
 	case TypeConsumes, TypeStructure, TypeNaming, TypeContent, TypeExtension:
@@ -234,7 +244,17 @@ func deriveClaim(a Applicability, p Params) string {
 func (r Rule) ID() ID { return r.id }
 
 // Type returns the Rule's published Type.
-func (r Rule) Type() Type { return r.typ }
+func (r Rule) Type() Type {
+	if r.constraint == nil {
+		return ""
+	}
+	return r.constraint.Kind()
+}
+
+// Constraint returns the checkable proposition the Rule carries.
+func (r Rule) Constraint() Constraint {
+	return r.constraint
+}
 
 // Claim returns the architectural proposition.
 func (r Rule) Claim() Claim { return r.claim }
@@ -245,18 +265,18 @@ func (r Rule) Claim() Claim { return r.claim }
 // Rule sees the proposition and its operational content side by side.
 func (r Rule) Assertion() string {
 	if r.expansion != nil {
-		if sp, ok := r.params.(StructureParams); ok {
+		if sp, ok := r.constraint.(StructureConstraint); ok {
 			return deriveExpandedClaim(r.applicability, sp, *r.expansion)
 		}
 	}
-	return deriveClaim(r.applicability, r.params)
+	return deriveClaim(r.applicability, r.constraint)
 }
 
 // Severity returns the configured gate importance.
 func (r Rule) Severity() Severity { return r.severity }
 
 // Params returns the Type-specific parameters.
-func (r Rule) Params() Params { return r.params }
+func (r Rule) Params() Params { return r.constraint }
 
 // Applicability returns the Subject selection, Exclusions applied.
 func (r Rule) Applicability() Applicability { return r.applicability }
@@ -314,7 +334,7 @@ func (r Rule) Reexpand(lang vocab.UbiquitousLanguage) (Rule, error) {
 	if err != nil {
 		return Rule{}, fmt.Errorf("rule %s: %v", r.id, err)
 	}
-	r.params = params
+	r.constraint = params
 	r.claim = claim
 	return r, nil
 }
@@ -355,17 +375,17 @@ func (r Rule) ReferencedZones() []ZoneName {
 		}
 	}
 	add(r.applicability.Zones()...)
-	switch p := r.params.(type) {
-	case ConsumesParams:
+	switch p := r.constraint.(type) {
+	case ConsumesConstraint:
 		if p.Internal != nil {
 			add(p.Internal.Zones()...)
 		}
-	case LayersParams:
+	case LayersConstraint:
 		add(p.Layers...)
-	case ProtectedParams:
+	case ProtectedConstraint:
 		add(p.Zone)
 		add(p.Allow...)
-	case AcyclicParams:
+	case AcyclicConstraint:
 		add(p.Zones...)
 	}
 	return out
@@ -378,7 +398,7 @@ func (r Rule) Validate() error {
 	if r.id.IsZero() {
 		return fmt.Errorf("rule: unconstructed (zero value)")
 	}
-	if err := acceptsParams(r.typ, r.params, r.expansion); err != nil {
+	if err := validateConstraint(r.constraint, r.expansion); err != nil {
 		return fmt.Errorf("rule %s: %v", r.id, err)
 	}
 	if !r.severity.Valid() {
@@ -390,7 +410,7 @@ func (r Rule) Validate() error {
 	if r.enforcement.IsZero() {
 		return fmt.Errorf("rule %s: missing enforcement", r.id)
 	}
-	return validateScope(r.typ, r.applicability)
+	return validateScope(r.constraint, r.applicability)
 }
 
 // WithSeverity produces a valid repository-specific Rule with the same

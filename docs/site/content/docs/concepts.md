@@ -52,21 +52,21 @@ semantics. TypeScript and Python are lexer-grade with documented
 limits: computed specifiers like `import(x)` or
 `importlib.import_module(name)` are invisible by design.
 
-## Rules and assertions
+## Rules and constraints
 
 `rules:` is one map keyed by Rule ID. Every Rule states one Claim
 (`description`), judges the Zones named under `on`, and carries
-exactly one assertion key; that key is the Rule Type:
+exactly one constraint key; that key selects the Constraint:
 
 - Zone-scoped: `imports` (what the Zone may depend on),
   `structure` (files it must or must not contain), `naming`,
   `content` (lines it must not contain), `invariants` (recorded domain
   contracts visible in source), and `uses` (an Extension).
-- Graph-scoped, with the Zones in the assertion itself: `layers`,
+- Graph-scoped, with the Zones in the constraint itself: `layers`,
   `imported_by` (who may import the one Zone under `on`),
   `independent`, and `acyclic`.
 
-A Rule with two assertion keys is rejected: give each claim its own ID.
+A Rule with two constraint keys is rejected: give each claim its own ID.
 The [rule reference](/docs/rules/) lists every published Rule Type and
 paste-ready YAML. `arclint rules` lists configured Rules;
 `arclint rules <id>` shows one complete Rule when the selector matches
@@ -77,7 +77,7 @@ exactly.
 A Pattern distributes Rules by reference. `extends` names it by exact
 version and binds every Pattern Zone to local paths; the Pattern's
 Rules load under the Pattern's namespace, and an entry under `rules:`
-with no assertion is an Override of one of them: `severity`, `disable`
+with no constraint is an Override of one of them: `severity`, `disable`
 with a reason, `exclude`, or `suppress`. Nothing is copied.
 
 A Pattern resolves offline first: from the binary that embeds it, then
