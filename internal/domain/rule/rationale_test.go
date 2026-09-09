@@ -26,18 +26,15 @@ func TestRuleSeparatesRationaleFromProposition(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct {
-		name, rationale, legacy, want string
-		invalid                       bool
+		name, rationale, want string
+		invalid               bool
 	}{
 		{name: "absent"},
 		{name: "authored", rationale: "  Enable independent changes.  ", want: "Enable independent changes."},
-		{name: "legacy", legacy: "  Enable independent changes.  ", want: "Enable independent changes."},
-		{name: "blank legacy", legacy: " \t"},
 		{name: "blank canonical", rationale: " \t", invalid: true},
-		{name: "conflicting", rationale: "Why", legacy: "Another reason", invalid: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			r, err := rule.New(rule.Spec{ID: "acyclic", Constraint: rule.AcyclicConstraint{}, Scope: scope, Rationale: tc.rationale, Claim: tc.legacy})
+			r, err := rule.New(rule.Spec{ID: "acyclic", Constraint: rule.AcyclicConstraint{}, Scope: scope, Rationale: tc.rationale})
 			if tc.invalid {
 				if err == nil {
 					t.Fatal("accepted invalid rationale")
@@ -53,13 +50,7 @@ func TestRuleSeparatesRationaleFromProposition(t *testing.T) {
 			if r.Proposition() == "" || r.Proposition() == tc.want {
 				t.Fatalf("proposition = %q", r.Proposition())
 			}
-			legacyDisplay := tc.want
-			if legacyDisplay == "" {
-				legacyDisplay = r.Proposition()
-			}
-			if r.Claim().Statement() != legacyDisplay || r.Assertion() != r.Proposition() {
-				t.Fatal("legacy accessors lost compatibility")
-			}
+
 		})
 	}
 }

@@ -20,7 +20,7 @@ zones:
   core: "The core of the sample."
 rules:
   core/stdlib-only:
-    description: "The core imports no other Zone and no third-party package."
+    rationale: "The core imports no other Zone and no third-party package."
     on: core
     imports:
       internal: []

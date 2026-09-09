@@ -93,7 +93,7 @@ zones:
 
 rules:
   web/stdlib-only:
-    description: "Web imports nothing."
+    rationale: "Web imports nothing."
     on: web
     imports:
       internal: []
@@ -128,7 +128,7 @@ zones:
 
 rules:
   web/stdlib-only:
-    description: "Web imports nothing."
+    rationale: "Web imports nothing."
     on: web
     imports:
       internal: []
@@ -226,7 +226,7 @@ zones:
 
 rules:
   domain/stdlib-only:
-    description: "Domain imports nothing."
+    rationale: "Domain imports nothing."
     on: domain
     imports:
       internal: []
@@ -256,7 +256,7 @@ zones:
 
 rules:
   domain/stdlib-only:
-    description: "Domain imports nothing."
+    rationale: "Domain imports nothing."
     on: domain
     imports:
       internal: []
@@ -275,7 +275,7 @@ zones:
 
 rules:
   domain/stdlib-only:
-    description: "Domain imports nothing."
+    rationale: "Domain imports nothing."
     on: domain
     imports:
       internal: []
@@ -295,7 +295,7 @@ extends:
 
 rules:
   domain/stdlib-only:
-    description: "Domain imports nothing."
+    rationale: "Domain imports nothing."
     on: domain
     imports:
       internal: []

@@ -108,41 +108,39 @@ zones:
 
 rules:
   domain/stdlib-only:
-    description: "The domain imports no other Zone and no third-party package."
+    rationale: "The domain imports no other Zone and no third-party package."
     on: domain
     imports:
       internal: []        # may import no other declared zone
       external: forbid
 
   domain/no-panic:
-    description: "Domain code never panics."
+    rationale: "Domain code never panics."
     on: domain
     files: "internal/domain/**/*.go"
     content:
       forbid: '\bpanic\('
 
   application/inward:
-    description: "Use cases import only the domain."
+    rationale: "Use cases import only the domain."
     on: application
     imports:
       internal: [domain]
       external: forbid
 
   infrastructure/composition-only:
-    description: "Only composition imports infrastructure."
+    rationale: "Only composition imports infrastructure."
     on: infrastructure
     imported_by: [composition]
 
   dependencies/acyclic:
-    description: "Zone dependencies contain no cycle."
+    rationale: "Zone dependencies contain no cycle."
     acyclic: {}
 ```
 
-A Rule's `rationale` records the author's reason for the Constraint. The
-`description` key shown above remains a deprecated alias for `rationale`;
-using both keys on one Rule is rejected. ArcLint derives the checkable
-proposition from the Constraint and its scope. When no Rationale is
-supplied, none is invented. Zone descriptions keep their existing meaning.
+A Rule's `rationale` records the author's reason for the Constraint.
+ArcLint derives the checkable proposition from the Constraint and its
+scope. When no Rationale is supplied, none is invented.
 
 Or adopt a pattern by reference and bind its zones to your tree
 (`arclint patterns install vertical` writes this for you); its rules

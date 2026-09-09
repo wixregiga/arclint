@@ -26,7 +26,7 @@ zones:
 
 rules:
   domain/stdlib-only:
-    description: "The domain imports no other Zone and no third-party package."
+    rationale: "The domain imports no other Zone and no third-party package."
     on: domain
     imports:
       internal: []
@@ -49,7 +49,7 @@ zones:
 
 rules:
   docs/imports-nothing:
-    description: "Documentation imports no Zone."
+    rationale: "Documentation imports no Zone."
     on: docs
     imports:
       internal: []
@@ -177,7 +177,7 @@ zones:
 
 rules:
   web/no-domain:
-    description: "Web never imports the domain."
+    rationale: "Web never imports the domain."
     on: web
     imports:
       internal: []

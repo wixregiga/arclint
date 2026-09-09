@@ -63,8 +63,8 @@ func TestOverrideAppliesAdoptionAndPreservesRule(t *testing.T) {
 	if !override.Target().Equals(original.ID()) || !adopted.ID().Equals(original.ID()) {
 		t.Fatal("override changed the Rule identity")
 	}
-	if !reflect.DeepEqual(adopted.Constraint(), original.Constraint()) || adopted.Claim() != original.Claim() {
-		t.Fatal("override changed the Rule proposition")
+	if !reflect.DeepEqual(adopted.Constraint(), original.Constraint()) || adopted.Rationale() != original.Rationale() {
+		t.Fatal("override changed the Rule Constraint or Rationale")
 	}
 	originalRef, _ := original.Provenance()
 	adoptedRef, ok := adopted.Provenance()
@@ -156,7 +156,7 @@ func TestOverrideAdoptsBuiltInAndKeepsUnspecifiedSeverity(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", target.ID(), err)
 		}
-		if !adopted.BuiltIn() || !adopted.Disabled() || adopted.Severity() != target.Severity() || adopted.Claim() != target.Claim() || !reflect.DeepEqual(adopted.Constraint(), target.Constraint()) {
+		if !adopted.BuiltIn() || !adopted.Disabled() || adopted.Severity() != target.Severity() || adopted.Rationale() != target.Rationale() || !reflect.DeepEqual(adopted.Constraint(), target.Constraint()) {
 			t.Fatalf("%s: built-in changed beyond requested adoption", target.ID())
 		}
 	}

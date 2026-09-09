@@ -101,23 +101,23 @@ zones:
   shared: "internal/shared/**"
 rules:
   entities/pure:
-    description: "Entities import nothing internal and no third-party package."
+    rationale: "Entities import nothing internal and no third-party package."
     on: entities
     imports:
       internal: []
       external: forbid
   features/inward:
-    description: "Features import only shared and entities."
+    rationale: "Features import only shared and entities."
     on: features
     imports:
       internal: [shared, entities]
   features/snake:
-    description: "Feature files use snake_case."
+    rationale: "Feature files use snake_case."
     on: features
     files: "internal/features/**/*.go"
     naming: snake_case
   dependencies/acyclic:
-    description: "Zone dependencies contain no cycle."
+    rationale: "Zone dependencies contain no cycle."
     acyclic: {}
 `)
 	for p := 0; p < pkgs; p++ {

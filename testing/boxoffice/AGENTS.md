@@ -24,7 +24,7 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 
 - `arclint context [paths...]`: run before editing under any path: the owning zones, their import contracts, and the recorded domain in one answer (`--zone <names>`, `--format json`)
 - `arclint domain`: the ubiquitous language: contexts, aggregates, value objects, invariants, relations
-- `arclint rules [selector]`: every configured rule with its claim; one match prints the complete rule
+- `arclint rules [selector]`: every configured rule with its constraint and rationale; one match prints the complete rule
 - `arclint check .`: evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings
 - `arclint rules test`: run the rule fixtures under `.arclint/tests` after changing any rule
 - `arclint sdk init`: regenerate the extension SDK artifacts under `.arclint/extensions`
@@ -50,45 +50,45 @@ If your change speaks about something new, or changes what a recorded term means
 
 - **composition**: Composition root: flags, wiring, the http server. (paths cmd/**)
   - imports only: app, features, entities, shared, web_embed
-  - main-and-seed-present: The boxoffice binary has its main, its seed, and its version test.
+  - main-and-seed-present: contains files matching ["cmd/boxoffice/main.go", "cmd/boxoffice/seed.go", "cmd/boxoffice/version_test.go"] Rationale: The boxoffice binary has its main, its seed, and its version test.
 - **app**: FSD app layer: chi router, handlers, DTOs, the organizer gate, and the in-memory repositories. (paths internal/app/**)
   - imports only: features, entities, shared
-  - surface-tested: The app surface and its memory repositories exist with their tests.
+  - surface-tested: contains files matching ["internal/app/app.go", "internal/app/app_test.go", "internal/app/memory/memory.go"] Rationale: The app surface and its memory repositories exist with their tests.
 - **features**: FSD features layer: use cases that change the world, one slice per use case, technology-free. (paths internal/features/**)
   - imports only: entities; external imports forbidden
-  - use-cases-tested: Every use-case slice carries its named file and its tests. (require: [{slice}.go, {slice}_test.go], root: internal/features)
-  - technology-free: Use cases name no transport, logging, or JSON package.
-  - deterministic: Use cases never read the clock or roll dice.
+  - use-cases-tested: satisfies extension rule "slice-files" (require: [{slice}.go, {slice}_test.go], root: internal/features) Rationale: Every use-case slice carries its named file and its tests.
+  - technology-free: contains no line matching /"net/http"|"log/slog"|"encoding/json"/ Rationale: Use cases name no transport, logging, or JSON package.
+  - deterministic: contains no line matching /time\.Now\(|math/rand/ Rationale: Use cases never read the clock or roll dice.
 - **entities**: FSD entities layer: the domain aggregates. Domain logic only, enforced. (paths internal/entities/**)
   - imports no other zone; external imports forbidden
-  - aggregate-slices (warning): Every recorded aggregate owns a slice with its file, its repository interface, and its tests.
-  - technology-free: The entities layer names no transport, logging, or JSON package.
-  - no-panic: The entities layer never panics.
-  - errors-name-their-subject: Entity errors name their subject; a bare ErrNotFound or ErrInvalid is forbidden.
-  - deterministic: The entities layer never reads the clock or rolls dice.
-  - aggregates-encapsulate: The struct of every recorded aggregate has no exported fields. (root: internal/entities)
-  - no-store-machinery: The entities layer imports no sync machinery.
+  - aggregate-slices (warning): contains files matching ["internal/entities/event/event.go", "internal/entities/event/repository.go", "internal/entities/event/event_test.go", "internal/entities/order/order.go", "internal/entities/order/repository.go", "internal/entities/order/order_test.go", "internal/entities/capacity/capacity.go", "internal/entities/capacity/repository.go", "internal/entities/capacity/capacity_test.go"] (derived from each recorded domain.aggregates) Rationale: Every recorded aggregate owns a slice with its file, its repository interface, and its tests.
+  - technology-free: contains no line matching /"net/http"|"log/slog"|"encoding/json"/ Rationale: The entities layer names no transport, logging, or JSON package.
+  - no-panic: contains no line matching /\bpanic\(/ Rationale: The entities layer never panics.
+  - errors-name-their-subject: contains no line matching /\bErr(NotFound|Invalid|Failed|Exists)\b/ Rationale: Entity errors name their subject; a bare ErrNotFound or ErrInvalid is forbidden.
+  - deterministic: contains no line matching /time\.Now\(|math/rand/ Rationale: The entities layer never reads the clock or rolls dice.
+  - aggregates-encapsulate: satisfies extension rule "aggregate-encapsulation" (root: internal/entities) Rationale: The struct of every recorded aggregate has no exported fields.
+  - no-store-machinery: contains no line matching /"sync"/ Rationale: The entities layer imports no sync machinery.
 - **shared**: FSD shared layer: kit the app layer builds on. (paths internal/shared/**)
   - imports no other zone; external imports forbidden
 - **server_source**: Source-wide invariants for the Go server. (paths internal/**)
-  - slog-only: The server logs through slog only.
-  - snake-case: Go file names use snake_case.
+  - slog-only: contains no line matching /\bfmt\.Print|\blog\.(Print|Fatal|Panic)/ Rationale: The server logs through slog only.
+  - snake-case: file names use snake_case Rationale: Go file names use snake_case.
 - **web_embed**: The built web app carried into the single binary behind the embedweb tag. (paths web/*.go)
   - imports no other zone; external imports forbidden
 - **web_app**: FSD app layer on the web: router, providers, entry. (paths web/src/app/**)
   - imports only: web_pages, web_features, web_shared
 - **web_pages**: FSD pages layer: one slice per screen. (paths web/src/pages/**)
   - imports only: web_features, web_shared
-  - slices-export-public-api: Every web page slice exports a public API through index.ts. (require: [index.ts], root: web/src/pages)
+  - slices-export-public-api: satisfies extension rule "slice-files" (require: [index.ts], root: web/src/pages) Rationale: Every web page slice exports a public API through index.ts.
 - **web_features**: FSD features layer: one slice per user interaction. (paths web/src/features/**)
   - imports only: web_shared
-  - slices-export-public-api: Every web feature slice exports a public API through index.ts. (require: [index.ts], root: web/src/features)
+  - slices-export-public-api: satisfies extension rule "slice-files" (require: [index.ts], root: web/src/features) Rationale: Every web feature slice exports a public API through index.ts.
 - **web_shared**: FSD shared layer: the api client, per-aggregate api files, and the ui kit. (paths web/src/shared/**)
   - imports no other zone
-  - aggregates-speak-through-api (warning): Every recorded aggregate owns one api file in the web shared layer.
+  - aggregates-speak-through-api (warning): contains files matching ["web/src/shared/api/event.ts", "web/src/shared/api/order.ts", "web/src/shared/api/capacity.ts"] (derived from each recorded domain.aggregates) Rationale: Every recorded aggregate owns one api file in the web shared layer.
 - **vocabulary**: The recorded Ubiquitous Language of the box office. (paths domain.arclint.yaml)
 - **toolchain**: The build and lint surfaces the repo promises to keep. (paths Makefile .golangci.yml go.mod web/package.json)
-  - gates-present: The build and lint gates the repo promises are present.
+  - gates-present: contains files matching ["Makefile", ".golangci.yml", "go.mod", "web/package.json"] Rationale: The build and lint gates the repo promises are present.
 
 ### Built-in rules
 
@@ -117,10 +117,10 @@ If your change speaks about something new, or changes what a recorded term means
 
 ### Repository-wide rules
 
-- fsd/slice-isolation: Sibling slices within one FSD layer never import each other. (layers: [internal/features, internal/entities, web/src/pages, web/src/features])
-- dependencies/server-layers: Server dependencies point inward: app, then features, then entities.
-- dependencies/web-layers: Web dependencies point inward: app, then pages, then features, then shared.
-- dependencies/acyclic: Dependencies among the layer Zones contain no cycle.
+- fsd/slice-isolation: satisfies extension rule "fsd-slice-isolation" (layers: [internal/features, internal/entities, web/src/pages, web/src/features]) Rationale: Sibling slices within one FSD layer never import each other.
+- dependencies/server-layers: Zones layer highest first as ["app", "features", "entities"]; a Zone never imports a higher layer Rationale: Server dependencies point inward: app, then features, then entities.
+- dependencies/web-layers: Zones layer highest first as ["web_app", "web_pages", "web_features", "web_shared"]; a Zone never imports a higher layer Rationale: Web dependencies point inward: app, then pages, then features, then shared.
+- dependencies/acyclic: dependencies among ["composition", "app", "features", "entities", "shared", "web_embed", "web_app", "web_pages", "web_features", "web_shared"] contain no cycle Rationale: Dependencies among the layer Zones contain no cycle.
 
 ### Extension rules
 

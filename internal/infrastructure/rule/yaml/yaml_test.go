@@ -62,8 +62,11 @@ func TestLoadTargetRuleset(t *testing.T) {
 	byID := map[string]rule.Rule{}
 	for _, r := range cfg.Rules {
 		byID[r.ID().Qualified()] = r
-		if r.Claim().String() == "" {
-			t.Errorf("%s: every Rule in the target ruleset carries a description", r.ID().Qualified())
+		if r.Proposition() == "" {
+			t.Errorf("%s: every Rule states its Constraint", r.ID().Qualified())
+		}
+		if !r.BuiltIn() && r.Rationale().IsZero() {
+			t.Errorf("%s: the authored rationale was lost", r.ID().Qualified())
 		}
 		if _, distributed := r.Provenance(); distributed {
 			t.Errorf("%s: no Rule of this ruleset comes from a Pattern", r.ID().Qualified())
@@ -102,8 +105,8 @@ func TestLoadTargetRuleset(t *testing.T) {
 	if stdlibOnly.Type() != rule.TypeConsumes {
 		t.Errorf("stdlib-only type = %q", stdlibOnly.Type())
 	}
-	if !strings.Contains(stdlibOnly.Claim().Statement(), "no other Zone") {
-		t.Errorf("stdlib-only claim = %q", stdlibOnly.Claim())
+	if !strings.Contains(stdlibOnly.Rationale().String(), "no other Zone") {
+		t.Errorf("stdlib-only rationale = %q", stdlibOnly.Rationale())
 	}
 	if acyclic, ok := byID["dependencies/acyclic"]; !ok {
 		t.Errorf("missing dependencies/acyclic")
@@ -195,7 +198,7 @@ zones:
     paths: ["cmd/**"]
 rules:
   domain/stdlib-only:
-    description: "The domain imports nothing else."
+    rationale: "The domain imports nothing else."
     on: domain
     imports:
       internal: []
@@ -300,8 +303,8 @@ rules:
 			t.Errorf("%s type = %s, want %s", id, got, typ)
 		}
 	}
-	if r := ruleByID(t, cfg, "domain/stdlib-only"); r.Claim().Statement() != "The domain imports nothing else." {
-		t.Errorf("description must become the Claim, got %q", r.Claim())
+	if r := ruleByID(t, cfg, "domain/stdlib-only"); r.Rationale().String() != "The domain imports nothing else." {
+		t.Errorf("rationale must preserve the authored reason, got %q", r.Rationale())
 	}
 	if p := ruleByID(t, cfg, "application/imports-domain").Params().(rule.ConsumesParams); p.Internal == nil || len(p.Internal.Zones()) != 1 || p.External != rule.ImportAllow {
 		t.Errorf("imports params = %+v", p)
@@ -367,7 +370,7 @@ zones:
   m: m/**
 rules:
   m/imports:
-    description: "nothing"
+    rationale: "nothing"
     on: m
 `, "carries no constraint"},
 		"two constraints": {`
@@ -644,19 +647,19 @@ zones:
     description: "Technology adapters."
 rules:
   core/stdlib-only:
-    description: "The core imports no other Zone and no third-party package."
+    rationale: "The core imports no other Zone and no third-party package."
     on: core
     imports:
       internal: []
       external: forbid
   core/no-panic:
-    description: "The core never panics."
+    rationale: "The core never panics."
     on: core
     files: "**/*.go"
     content:
       forbid: '\bpanic\('
   core/aggregates:
-    description: "Every recorded aggregate has a root in the core."
+    rationale: "Every recorded aggregate has a root in the core."
     severity: warning
     on: core
     structure:
@@ -849,8 +852,8 @@ rules:
 	}
 	if r := ruleByID(t, cfg, "acme/hexagonal:core/stdlib-only"); r.Severity() != rule.SeverityWarning {
 		t.Errorf("override severity = %s", r.Severity())
-	} else if r.Claim().Statement() != "The core imports no other Zone and no third-party package." {
-		t.Errorf("an override keeps the pattern's description, got %q", r.Claim())
+	} else if r.Rationale().String() != "The core imports no other Zone and no third-party package." {
+		t.Errorf("an override keeps the pattern's rationale, got %q", r.Rationale())
 	}
 	if r := ruleByID(t, cfg, "acme/hexagonal:core/no-panic"); !r.Disabled() {
 		t.Errorf("override disable must disable the pattern rule")
@@ -914,7 +917,7 @@ extends:
   acme/hexagonal:core/stdlib-only:
     description: "rewritten"
     severity: warning
-`, "an override does not accept description"},
+`, `unknown key "description"`},
 		"override with on": {bound + `rules:
   acme/hexagonal:core/stdlib-only:
     on: ports

@@ -3,12 +3,6 @@
     "acyclicRule": {
       "additionalProperties": false,
       "description": "An acyclic Rule: forbids dependency cycles among declared Zones.",
-      "not": {
-        "required": [
-          "rationale",
-          "description"
-        ]
-      },
       "properties": {
         "acyclic": {
           "description": "Cycle scope: a list of declared Zones, or an empty mapping for every declared Zone; inside a Pattern the empty mapping means every Zone the Pattern declares.",
@@ -30,11 +24,6 @@
               "type": "object"
             }
           ]
-        },
-        "description": {
-          "deprecated": true,
-          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
-          "type": "string"
         },
         "disable": {
           "$ref": "#/$defs/reason",
@@ -89,18 +78,7 @@
     "consumesRule": {
       "additionalProperties": false,
       "description": "An imports Rule: states what a Zone may import: declared Zones by allow-list, external and standard-library imports by policy.",
-      "not": {
-        "required": [
-          "rationale",
-          "description"
-        ]
-      },
       "properties": {
-        "description": {
-          "deprecated": true,
-          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
-          "type": "string"
-        },
         "disable": {
           "$ref": "#/$defs/reason",
           "description": "The recorded reason for an adoption decision; required so the decision stays inspectable."
@@ -193,12 +171,6 @@
     "contentRule": {
       "additionalProperties": false,
       "description": "A content Rule: forbids lines matching a regular expression in the selected files.",
-      "not": {
-        "required": [
-          "rationale",
-          "description"
-        ]
-      },
       "properties": {
         "content": {
           "additionalProperties": false,
@@ -214,11 +186,6 @@
             "forbid"
           ],
           "type": "object"
-        },
-        "description": {
-          "deprecated": true,
-          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
-          "type": "string"
         },
         "disable": {
           "$ref": "#/$defs/reason",
@@ -347,18 +314,7 @@
     "extensionRule": {
       "additionalProperties": false,
       "description": "An uses Rule: delegates enforcement to a named Extension through the sandboxed SDK.",
-      "not": {
-        "required": [
-          "rationale",
-          "description"
-        ]
-      },
       "properties": {
-        "description": {
-          "deprecated": true,
-          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
-          "type": "string"
-        },
         "disable": {
           "$ref": "#/$defs/reason",
           "description": "The recorded reason for an adoption decision; required so the decision stays inspectable."
@@ -421,18 +377,7 @@
     "independenceRule": {
       "additionalProperties": false,
       "description": "An independent Rule: forbids imports between sibling Folders selected by globs.",
-      "not": {
-        "required": [
-          "rationale",
-          "description"
-        ]
-      },
       "properties": {
-        "description": {
-          "deprecated": true,
-          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
-          "type": "string"
-        },
         "disable": {
           "$ref": "#/$defs/reason",
           "description": "The recorded reason for an adoption decision; required so the decision stays inspectable."
@@ -527,18 +472,7 @@
     "layersRule": {
       "additionalProperties": false,
       "description": "A layers Rule: orders Zones highest first; a Zone may import same or lower layers, never higher.",
-      "not": {
-        "required": [
-          "rationale",
-          "description"
-        ]
-      },
       "properties": {
-        "description": {
-          "deprecated": true,
-          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
-          "type": "string"
-        },
         "disable": {
           "$ref": "#/$defs/reason",
           "description": "The recorded reason for an adoption decision; required so the decision stays inspectable."
@@ -579,18 +513,7 @@
     "namingRule": {
       "additionalProperties": false,
       "description": "A naming Rule: constrains file names within a Zone to a finite case vocabulary.",
-      "not": {
-        "required": [
-          "rationale",
-          "description"
-        ]
-      },
       "properties": {
-        "description": {
-          "deprecated": true,
-          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
-          "type": "string"
-        },
         "disable": {
           "$ref": "#/$defs/reason",
           "description": "The recorded reason for an adoption decision; required so the decision stays inspectable."
@@ -652,7 +575,7 @@
     },
     "override": {
       "additionalProperties": false,
-      "description": "An Override of a distributed or built-in Rule, keyed by that Rule's ID. It carries no constraint, rationale, or legacy description: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID.",
+      "description": "An Override of a distributed or built-in Rule, keyed by that Rule's ID. It carries no constraint or rationale: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID.",
       "minProperties": 1,
       "properties": {
         "disable": {
@@ -711,18 +634,7 @@
     "protectedRule": {
       "additionalProperties": false,
       "description": "An imported_by Rule: restricts which Zones may import one Zone.",
-      "not": {
-        "required": [
-          "rationale",
-          "description"
-        ]
-      },
       "properties": {
-        "description": {
-          "deprecated": true,
-          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
-          "type": "string"
-        },
         "disable": {
           "$ref": "#/$defs/reason",
           "description": "The recorded reason for an adoption decision; required so the decision stays inspectable."
@@ -852,7 +764,7 @@
         },
         {
           "$ref": "#/$defs/override",
-          "description": "An Override of a distributed or built-in Rule, keyed by that Rule's ID. It carries no constraint, rationale, or legacy description: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID."
+          "description": "An Override of a distributed or built-in Rule, keyed by that Rule's ID. It carries no constraint or rationale: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID."
         }
       ]
     },
@@ -874,18 +786,7 @@
     "structureRule": {
       "additionalProperties": false,
       "description": "A structure Rule: requires or forbids files matching globs inside a Zone.",
-      "not": {
-        "required": [
-          "rationale",
-          "description"
-        ]
-      },
       "properties": {
-        "description": {
-          "deprecated": true,
-          "description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
-          "type": "string"
-        },
         "disable": {
           "$ref": "#/$defs/reason",
           "description": "The recorded reason for an adoption decision; required so the decision stays inspectable."
@@ -997,7 +898,7 @@
                   "type": "object"
                 }
               ],
-              "description": "Expanded structure: one universally quantified claim whose globs derive from a recorded Ubiquitous Language collection. A project recording nothing derives no obligations; the Rule exists and says so.",
+              "description": "Expanded structure: one universally quantified proposition whose globs derive from a recorded Ubiquitous Language collection. A project recording nothing derives no obligations; the Rule exists and says so.",
               "properties": {
                 "each": {
                   "$ref": "#/$defs/expansionSource",

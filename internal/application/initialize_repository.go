@@ -175,7 +175,7 @@ func starterRuleset(languages []string) string {
 	b.WriteString("  # one constraint: imports, structure, naming, content, layers,\n")
 	b.WriteString("  # imported_by, independent, acyclic, or uses.\n")
 	b.WriteString("  source/dependencies:\n")
-	b.WriteString("    description: \"Source imports no other declared Zone.\"\n")
+	b.WriteString("    rationale: \"Source imports no other declared Zone.\"\n")
 	b.WriteString("    on: source\n")
 	b.WriteString("    imports:\n")
 	b.WriteString("      # An allow-list of other declared Zones. Empty means this Zone\n")

@@ -115,12 +115,12 @@ func TestVerticalPatternLoads(t *testing.T) {
 			t.Errorf("zones[%d] = %q, want %q", i, m.Name(), wantZones[i])
 		}
 		if m.Description() == "" || len(m.SuggestedPaths()) == 0 {
-			t.Errorf("zone %s must carry a description and suggested paths", m.Name())
+			t.Errorf("zone %s must carry a rationale and suggested paths", m.Name())
 		}
 	}
 	for _, r := range p.Rules() {
-		if r.Claim().String() == "" {
-			t.Errorf("%s: a distributed Rule must carry a description", r.ID().Qualified())
+		if r.Rationale().String() == "" {
+			t.Errorf("%s: a distributed Rule must carry a rationale", r.ID().Qualified())
 		}
 		if ref, ok := r.Provenance(); !ok || ref.String() != "arclint/vertical@0.1.0" {
 			t.Errorf("%s provenance = %v %v", r.ID().Qualified(), ref, ok)

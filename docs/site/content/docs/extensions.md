@@ -88,7 +88,7 @@ zones:
 
 rules:
   domain/no-io:
-    description: "Domain performs no I/O; adapters do."
+    rationale: "Domain performs no I/O; adapters do."
     # severity defaults to error when omitted
     on: domain
     files: "internal/domain/**/*.go"   # optional member-file narrow
@@ -108,7 +108,7 @@ whose constraint is not `uses`.
 ```yaml
 rules:
   repositories/application-only:
-    description: "Repository interfaces are declared only in application packages."
+    rationale: "Repository interfaces are declared only in application packages."
     uses: repository-location
     with:
       zone: application

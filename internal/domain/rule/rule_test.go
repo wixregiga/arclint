@@ -138,15 +138,15 @@ func TestInvalidRulesCannotBeConstructed(t *testing.T) {
 	}
 }
 
-func TestDerivedClaim(t *testing.T) {
+func TestDerivedProposition(t *testing.T) {
 	r, err := rule.New(validConsumesSpec(t))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	claim := r.Claim().Statement()
+	proposition := r.Proposition()
 	for _, want := range []string{`Zone "domain"`, "no other declared Zone", "no external imports"} {
-		if !strings.Contains(claim, want) {
-			t.Errorf("derived claim %q lacks %q", claim, want)
+		if !strings.Contains(proposition, want) {
+			t.Errorf("derived proposition %q lacks %q", proposition, want)
 		}
 	}
 	if r.Severity() != rule.SeverityError {
@@ -613,8 +613,8 @@ func TestContentParams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if !strings.Contains(r.Claim().String(), `contains no line matching /\bpanic\(/`) {
-		t.Errorf("claim = %q", r.Claim())
+	if !strings.Contains(r.Proposition(), `contains no line matching /\bpanic\(/`) {
+		t.Errorf("proposition = %q", r.Proposition())
 	}
 	re, err := r.Params().(rule.ContentParams).Regexp()
 	if err != nil || !re.MatchString("\tpanic(\"boom\")") || re.MatchString("// no panics here") {

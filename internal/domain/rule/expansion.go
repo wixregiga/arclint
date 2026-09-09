@@ -13,7 +13,7 @@ import (
 // parameters derive from a recorded Ubiquitous Language collection,
 // one substitution per recorded term. The Rule stays the one and only
 // aggregate: an expanded Rule is one Rule stating one universally
-// quantified claim; Expansion only describes how its globs are
+// quantified proposition; Expansion only describes how its globs are
 // derived. Derivation is pure substitution over a closed placeholder
 // grammar: no predicates, no filters, no joins; logic beyond
 // substitution belongs to the Extension SDK. A project recording

@@ -40,8 +40,8 @@ func TestBuiltInRulesComposeOnePerCheckLevelInvariant(t *testing.T) {
 		if got := string(r.Severity()); got != inv.Enforcement.Severity {
 			t.Errorf("%s: severity %s, want the invariant's %s", inv.ID, got, inv.Enforcement.Severity)
 		}
-		if r.Claim().Statement() != inv.Statement {
-			t.Errorf("%s: claim %q, want the invariant's statement", inv.ID, r.Claim().Statement())
+		if r.Proposition() != inv.Statement {
+			t.Errorf("%s: proposition %q, want the invariant's statement", inv.ID, r.Proposition())
 		}
 		if !r.Scope().EntireRepository() {
 			t.Errorf("%s: applies to %v, want the whole repository", inv.ID, r.Scope().Zones())

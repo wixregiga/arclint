@@ -245,7 +245,6 @@ type ruleEntry struct {
 	where          string
 	id             string
 	rationale      string
-	rationaleKey   string
 	severity       string
 	on             []rule.ZoneName
 	onPresent      bool
@@ -599,7 +598,7 @@ func parseZones(n *yaml.Node, inPattern bool) ([]zoneEntry, error) {
 }
 
 // ruleKeys are the keys a rules entry may carry beside its constraint.
-var ruleKeys = []string{keyRationale, keyDescription, keySeverity, keyOn, keyFiles, keyWith, keyDisable, keyExclude, keySuppress}
+var ruleKeys = []string{keyRationale, keySeverity, keyOn, keyFiles, keyWith, keyDisable, keyExclude, keySuppress}
 
 func parseRules(n *yaml.Node) ([]ruleEntry, error) {
 	m, err := asMapping(n, keyRules)
@@ -618,31 +617,21 @@ func parseRules(n *yaml.Node) ([]ruleEntry, error) {
 	return out, nil
 }
 
-// parseRationale accepts one authored reason, keeping description as a legacy
-// Rule-only alias. Presence, not content, determines whether aliases conflict.
-func parseRationale(m mapping, where string) (string, string, error) {
-	canonical, legacy := m.get(keyRationale), m.get(keyDescription)
-	if canonical != nil && legacy != nil {
-		return "", "", fmt.Errorf("%s: rationale and description cannot both be present; use rationale", where)
-	}
-	key, node := keyRationale, canonical
+// parseRationale reads an optional authored explanation; explicit blank
+// explanations are rejected instead of replaced by generated prose.
+func parseRationale(m mapping, where string) (string, error) {
+	node := m.get(keyRationale)
 	if node == nil {
-		key, node = keyDescription, legacy
+		return "", nil
 	}
-	if node == nil {
-		return "", "", nil
-	}
-	value, err := scalarString(node, where+"."+key)
+	value, err := scalarString(node, where+".rationale")
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	if strings.TrimSpace(value) == "" {
-		if key == keyRationale {
-			return "", "", fmt.Errorf("%s.rationale: an authored reason must not be blank; omit rationale when no reason is supplied", where)
-		}
-		value = ""
+		return "", fmt.Errorf("%s.rationale: an authored reason must not be blank; omit rationale when no reason is supplied", where)
 	}
-	return value, key, nil
+	return value, nil
 }
 
 func parseRule(id, where string, n *yaml.Node) (ruleEntry, error) {
@@ -669,7 +658,7 @@ func parseRule(id, where string, n *yaml.Node) (ruleEntry, error) {
 		return ruleEntry{}, fmt.Errorf("%s: carries %d constraints (%s); a Rule carries exactly one, so give each its own Rule ID",
 			where, len(constraints), strings.Join(constraints, ", "))
 	}
-	entry.rationale, entry.rationaleKey, err = parseRationale(m, where)
+	entry.rationale, err = parseRationale(m, where)
 	if err != nil {
 		return ruleEntry{}, err
 	}
@@ -1061,7 +1050,7 @@ func (e ruleEntry) buildOverride(id rule.ID) (adoption.Override, error) {
 		key  string
 		hint string
 	}{
-		{e.rationaleKey != "", e.rationaleKey, "a rule keeps its own rationale"},
+		{e.rationale != "", keyRationale, "a rule keeps its own rationale"},
 		{e.onPresent, keyOn, "a pattern rule keeps its own zones; use exclude to narrow it"},
 		{len(e.files) > 0, keyFiles, "a pattern rule keeps its own files; use exclude to narrow it"},
 		{e.withPresent, keyWith, "a pattern rule keeps its own parameters"},

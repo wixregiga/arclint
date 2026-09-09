@@ -108,7 +108,7 @@ rules:
   # one constraint: imports, structure, naming, content, layers,
   # imported_by, independent, acyclic, or uses.
   source/dependencies:
-    description: "Source imports no other declared Zone."
+    rationale: "Source imports no other declared Zone."
     on: source
     imports:
       # An allow-list of other declared Zones. Empty means this Zone
@@ -137,33 +137,33 @@ zones:
 
 rules:
   domain/stdlib-only:
-    description: "The domain imports no other Zone and no third-party package."
+    rationale: "The domain imports no other Zone and no third-party package."
     on: domain
     imports:
       internal: []
       external: forbid
 
   domain/no-panic:
-    description: "Domain code never panics."
+    rationale: "Domain code never panics."
     on: domain
     files: "internal/domain/**/*.go"
     content:
       forbid: '\bpanic\('
 
   application/through-ports:
-    description: "Use cases import only the domain."
+    rationale: "Use cases import only the domain."
     on: application
     imports:
       internal: [domain]
       external: forbid
 
   infrastructure/composition-only:
-    description: "Only composition imports infrastructure."
+    rationale: "Only composition imports infrastructure."
     on: infrastructure
     imported_by: [composition]
 
   dependencies/acyclic:
-    description: "Zone dependencies contain no cycle."
+    rationale: "Zone dependencies contain no cycle."
     acyclic: {}
 ```
 
