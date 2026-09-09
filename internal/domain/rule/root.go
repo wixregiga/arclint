@@ -254,10 +254,6 @@ func (r Rule) Proposition() string {
 	return deriveProposition(r.scope, r.constraint)
 }
 
-// Assertion preserves the legacy Rule accessor; meta-model assertions are separate.
-// Deprecated: use Proposition.
-func (r Rule) Assertion() string { return r.Proposition() }
-
 // Severity returns the configured gate importance.
 func (r Rule) Severity() Severity { return r.severity }
 
