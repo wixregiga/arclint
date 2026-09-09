@@ -1,7 +1,7 @@
 // Package rule holds the Rule aggregate and the domain values ArcLint
 // uses to evaluate repository conformance. Rule is the sole aggregate
-// root: one independently identifiable lint rule stating a Claim and
-// defining where and how ArcLint attempts to evaluate it. Invalid
+// root: one independently identifiable lint rule carrying a Constraint,
+// optional Rationale, and where and how ArcLint evaluates it. Invalid
 // Rules cannot be constructed, and no code outside the aggregate
 // enforces its invariants.
 package rule
@@ -17,7 +17,7 @@ import (
 // methods return a new Rule with the same identity.
 type Rule struct {
 	id            ID
-	claim         Claim
+	rationale     Rationale
 	severity      Severity
 	constraint    Constraint
 	applicability Applicability
@@ -39,8 +39,10 @@ type Spec struct {
 	ID string
 	// Type is one published Rule Type.
 	Type Type
-	// Claim optionally states the proposition; when empty the canonical
-	// Claim is derived from Type, parameters, and Applicability.
+	// Rationale optionally explains why the Constraint is needed.
+	Rationale string
+	// Claim accepts the legacy authored description. Supply either it or Rationale.
+	// Deprecated: use Rationale.
 	Claim string
 	// Severity defaults to error.
 	Severity string
@@ -112,16 +114,19 @@ func New(spec Spec) (Rule, error) {
 	if enforcement.IsZero() {
 		return fail(fmt.Errorf("missing enforcement"))
 	}
-	statement := spec.Claim
-	if strings.TrimSpace(statement) == "" {
-		statement = deriveClaim(spec.Applicability, c)
-		if spec.Expansion != nil {
-			statement = deriveExpandedClaim(spec.Applicability, c.(StructureConstraint), *spec.Expansion)
-		}
+	if spec.Rationale != "" && spec.Claim != "" {
+		return fail(fmt.Errorf("rationale: cannot combine with legacy claim"))
 	}
-	claim, err := NewClaim(statement)
-	if err != nil {
-		return fail(err)
+	explanation := spec.Rationale
+	if explanation == "" {
+		explanation = strings.TrimSpace(spec.Claim)
+	}
+	var rationale Rationale
+	if explanation != "" {
+		rationale, err = NewRationale(explanation)
+		if err != nil {
+			return fail(err)
+		}
 	}
 	for _, t := range spec.Tests {
 		if t.IsZero() {
@@ -149,7 +154,7 @@ func New(spec Spec) (Rule, error) {
 	}
 	return Rule{
 		id:            id,
-		claim:         claim,
+		rationale:     rationale,
 		severity:      severity,
 		constraint:    c,
 		applicability: spec.Applicability,
@@ -163,7 +168,7 @@ func New(spec Spec) (Rule, error) {
 // validateConstraint preserves the one expansion allowance: an
 // expanded structure Rule over an empty recorded collection holds
 // empty parameters: it exists and asserts nothing yet, which its
-// Claim states.
+// generated proposition states.
 func validateConstraint(p Constraint, e *Expansion) error {
 	if p == nil {
 		return fmt.Errorf("constraint: missing")
@@ -180,10 +185,10 @@ func validateConstraint(p Constraint, e *Expansion) error {
 	return nil
 }
 
-// deriveExpandedClaim states the universally quantified claim of an
+// deriveExpandedProposition states the universally quantified proposition of an
 // expanded structure Rule: the source it ranges over and the globs the
 // recorded language currently derives.
-func deriveExpandedClaim(a Applicability, p StructureConstraint, e Expansion) string {
+func deriveExpandedProposition(a Applicability, p StructureConstraint, e Expansion) string {
 	zones := a.Zones()
 	scope := fmt.Sprintf("Zones %s", zoneList(zones))
 	if len(zones) == 1 {
@@ -218,15 +223,15 @@ func validateScope(c Constraint, a Applicability) error {
 	return nil
 }
 
-// deriveClaim composes the canonical Claim from the Rule's scope and
+// deriveProposition composes the canonical proposition from the Rule's scope and
 // its parameters' proposition.
-func deriveClaim(a Applicability, p Constraint) string {
+func deriveProposition(a Applicability, p Constraint) string {
 	proposition := p.Proposition()
 	switch p.Kind() {
 	case TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic, TypeDomain:
 		return proposition
 	case TypeConsumes, TypeStructure, TypeNaming, TypeContent, TypeExtension:
-		// Zone-scoped Types: the Claim carries the Zones below.
+		// Zone-scoped Types: the proposition carries the Zones below.
 	}
 	zones := a.Zones()
 	switch len(zones) {
@@ -256,21 +261,37 @@ func (r Rule) Constraint() Constraint {
 	return r.constraint
 }
 
-// Claim returns the architectural proposition.
-func (r Rule) Claim() Claim { return r.claim }
+// Rationale returns the author's explanation, or the zero value when absent.
+func (r Rule) Rationale() Rationale { return r.rationale }
 
-// Assertion states what the parameters assert in canonical domain
-// language, independent of the Claim the author wrote: the layer
-// order, the allow-list, the cycle scope, the globs. A reader of one
-// Rule sees the proposition and its operational content side by side.
-func (r Rule) Assertion() string {
+// Claim preserves the legacy display text: the authored description when
+// supplied, otherwise the generated proposition. It is not stored by Rule.
+// Deprecated: use Rationale and Proposition separately.
+func (r Rule) Claim() Claim {
+	statement := r.rationale.String()
+	if statement == "" {
+		statement = r.Proposition()
+	}
+	return Claim{statement: statement}
+}
+
+// Proposition states the configured Constraint in its applicability and
+// expansion context. It never supplies or replaces an author's Rationale.
+func (r Rule) Proposition() string {
+	if r.constraint == nil {
+		return ""
+	}
 	if r.expansion != nil {
 		if sp, ok := r.constraint.(StructureConstraint); ok {
-			return deriveExpandedClaim(r.applicability, sp, *r.expansion)
+			return deriveExpandedProposition(r.applicability, sp, *r.expansion)
 		}
 	}
-	return deriveClaim(r.applicability, r.constraint)
+	return deriveProposition(r.applicability, r.constraint)
 }
+
+// Assertion preserves the legacy Rule accessor; meta-model assertions are separate.
+// Deprecated: use Proposition.
+func (r Rule) Assertion() string { return r.Proposition() }
 
 // Severity returns the configured gate importance.
 func (r Rule) Severity() Severity { return r.severity }
@@ -317,8 +338,8 @@ func (r Rule) Expansion() (Expansion, bool) {
 	return *r.expansion, true
 }
 
-// Reexpand re-derives an expanded Rule's parameters and Claim against
-// another recorded language, keeping the identity and every other
+// Reexpand re-derives an expanded Rule's Constraint against another
+// recorded language, keeping the authored Rationale, identity, and every other
 // value. The Rule Test runner uses this to evaluate the Rule against a
 // fixture's own vocabulary; a Rule without an Expansion is returned
 // unchanged.
@@ -330,12 +351,7 @@ func (r Rule) Reexpand(lang vocab.UbiquitousLanguage) (Rule, error) {
 	if err != nil {
 		return Rule{}, fmt.Errorf("rule %s: %v", r.id, err)
 	}
-	claim, err := NewClaim(deriveExpandedClaim(r.applicability, params, *r.expansion))
-	if err != nil {
-		return Rule{}, fmt.Errorf("rule %s: %v", r.id, err)
-	}
 	r.constraint = params
-	r.claim = claim
 	return r, nil
 }
 
@@ -403,9 +419,6 @@ func (r Rule) Validate() error {
 	}
 	if !r.severity.Valid() {
 		return fmt.Errorf("rule %s: severity %q invalid", r.id, r.severity)
-	}
-	if r.claim.IsZero() {
-		return fmt.Errorf("rule %s: missing claim", r.id)
 	}
 	if r.enforcement.IsZero() {
 		return fmt.Errorf("rule %s: missing enforcement", r.id)

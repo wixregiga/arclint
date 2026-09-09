@@ -82,7 +82,7 @@ const (
 type Assurance string
 
 const (
-	// AssuranceExact fully decides the Claim within a documented
+	// AssuranceExact fully decides the Constraint within a documented
 	// analysis limit.
 	AssuranceExact Assurance = "exact"
 	// AssurancePartial means reported Violations are trustworthy but
@@ -105,7 +105,7 @@ func (a Assurance) Valid() bool {
 }
 
 // PermitsConformance decides whether absence of a Violation can justify
-// the conforms outcome. Only exact evidence decides the Claim; partial
+// the conforms outcome. Only exact evidence decides the Constraint; partial
 // evidence leaves absence undetermined.
 func (a Assurance) PermitsConformance() bool { return a == AssuranceExact }
 

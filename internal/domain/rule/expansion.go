@@ -18,7 +18,7 @@ import (
 // grammar: no predicates, no filters, no joins; logic beyond
 // substitution belongs to the Extension SDK. A project recording
 // nothing derives empty parameters: the Rule exists, asserts nothing
-// yet, and says so in its Claim.
+// yet, and says so in its generated proposition.
 type Expansion struct {
 	source  ExpansionSource
 	require []string

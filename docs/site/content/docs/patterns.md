@@ -204,9 +204,10 @@ An Override changes at least one of:
 | `exclude` | `{paths, zones, reason}`: files the Rule does not judge |
 | `suppress` | `{paths, reason}`: findings kept in the Assessment but not active |
 
-An Override never carries `description`, `on`, `files`, `with`, or a
-constraint: a Pattern Rule keeps its own Claim, Zones, and parameters.
-To assert something different, disable the Pattern Rule with a reason
+An Override never carries `rationale`, its legacy alias `description`,
+`on`, `files`, `with`, or a constraint: a Pattern Rule keeps its own
+Rationale, Zones, and Constraint.
+To require something different, disable the Pattern Rule with a reason
 and add a local Rule under a new ID. Writing a local Rule under a
 Pattern Rule's ID is rejected for the same reason, and an Override
 whose ID no extended Pattern distributes is rejected with the list of

@@ -21,11 +21,11 @@ contexts:
     aggregates:
       Rule:
         definition: >-
-          One enforceable architecture claim configured in
+          One enforceable architecture constraint configured in
           rules.arclint.yaml. A Rule keeps its RuleID while everything
           human-facing about it can be renamed. Aggregate evidence,
           from the rules.arclint.yaml header: "Rule is the sole
-          aggregate". A Rule's identity, its Claim, its scope, and its
+          aggregate". A Rule's identity, its Rationale, its scope, and its
           Severity change together in one edit of rules.arclint.yaml.
         identity: RuleID
         entities:
@@ -58,7 +58,7 @@ contexts:
             A Rule may carry an Expansion only as a structure Rule, and
             its parameters must be exactly the Expansion's resolution
             against the recorded language. When nothing is recorded the
-            parameters are empty and the Claim says so.
+            parameters are empty and the generated proposition says so.
           exactly-one-assertion: >-
             A Rule carries exactly one Constraint; a Rule written with
             two constraint keys, or with none and no Override target, is
@@ -97,12 +97,14 @@ contexts:
         definition: >-
           The lowercase name a ruleset spells for a Zone, the only
           way a Rule, a Binding, or an Exclusion refers to one.
-      Claim:
+      Rationale:
         definition: >-
-          The architectural proposition a Rule states, either written
-          by the author or derived from the Rule's parameters. The
-          Claim of an expanded Rule says what it derives from, and
-          says plainly when the vocabulary records nothing yet.
+          The author's explanation of why a Rule's Constraint is
+          needed. It is optional: a Rule with no supplied explanation
+          has no Rationale. An Expansion changes the resolved
+          Constraint, never the author's Rationale. Legacy description
+          text is accepted as authored input; the explanation is never
+          generated from the Constraint.
         aliases: [description]
       Constraint:
         definition: >-
@@ -143,7 +145,7 @@ contexts:
           recorded term. It is pure substitution, with no predicates,
           filters, or joins. Logic beyond substitution belongs in an
           extension. The Rule stays the sole aggregate: an expanded
-          Rule is one Rule stating one universally quantified Claim.
+          Rule is one Rule stating one universally quantified proposition.
         invariants:
           well-formed: >-
             An Expansion must name a published ExpansionSource, declare
@@ -217,7 +219,7 @@ contexts:
             An Override names a distributed or built-in Rule; an
             Override whose RuleID matches neither is rejected at load.
           carries-no-assertion: >-
-            An Override carries no Constraint and no Claim; adding
+            An Override carries no Constraint and no Rationale; adding
             either is rejected at load with the advice to add a new
             local Rule under a new RuleID.
       Disablement:

@@ -35,8 +35,12 @@ type TypeSchema struct {
 func (t Type) Schema() TypeSchema {
 	common := []FieldSchema{
 		{
+			Name: "rationale", Kind: "string",
+			Doc: "optional authored reason for the Rule; nonblank when supplied, never derived",
+		},
+		{
 			Name: "description", Kind: "string",
-			Doc: "architectural proposition (the Claim); derived canonically when absent",
+			Doc: "deprecated alias for rationale; cannot appear together with rationale",
 		},
 		{
 			Name: "severity", Kind: "enum", Default: string(DefaultSeverity),
@@ -44,6 +48,9 @@ func (t Type) Schema() TypeSchema {
 			Configurable: true,
 			Doc:          "gate importance, independent from Assurance and Evidence Method",
 		},
+	}
+	if !t.Authored() {
+		common = common[2:]
 	}
 	switch t.Scope() {
 	case ScopeZones:
@@ -355,7 +362,7 @@ func defDescriptions() map[string]string {
 		"repositoryZone":          "One repository Zone: its paths as a glob or a list of globs, or an object with paths and an optional description.",
 		"patternZone":             "One Pattern Zone: its description, or an object with the description and the paths the Pattern suggests for the Binding. A Pattern never owns paths.",
 		"rule":                    "One Rule carrying exactly one constraint key (" + strings.Join(ConstraintKeys(), ", ") + "), or an Override carrying none.",
-		"override":                "An Override of a Rule an extended Pattern distributes, keyed by that Rule's qualified ID. It carries no constraint and no description: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID.",
+		"override":                "An Override of a distributed or built-in Rule, keyed by that Rule's ID. It carries no constraint, rationale, or legacy description: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID.",
 		"exclusion":               "Removes paths or Zones from what the Rule judges; excluded subjects evaluate not applicable.",
 		"suppression":             "Keeps findings at the paths while removing their gate effect; suppressed findings are still reported.",
 	}
@@ -637,9 +644,15 @@ func patternRuleSchema() map[string]any {
 // its constraint key.
 func commonRuleProperties(t Type) (map[string]any, []string) {
 	props := map[string]any{
-		"description": map[string]any{
-			"description": "The Claim: the architectural proposition the Rule states. Derived canonically when absent; Pattern Rules should write one.",
+		"rationale": map[string]any{
+			"description": "The optional authored reason for this Rule. Nonblank when supplied and never derived from the Constraint; omit it when no reason is recorded.",
 			"type":        "string",
+			"pattern":     `\S`,
+		},
+		"description": map[string]any{
+			"description": "Deprecated alias for rationale on a Rule. Cannot appear together with rationale. An empty legacy description means no authored reason.",
+			"type":        "string",
+			"deprecated":  true,
 		},
 		"severity": schemaRef("severity"),
 		"disable":  schemaRef("reason"),
@@ -772,7 +785,9 @@ func constraintRuleSchema(t Type) map[string]any {
 	case TypeDomain:
 		// Built in, never spelled: AuthoredTypes never yields it.
 	}
-	return strictObjectSchema(description, props, required...)
+	schema := strictObjectSchema(description, props, required...)
+	schema["not"] = map[string]any{"required": []string{"rationale", "description"}}
+	return schema
 }
 
 func structureConstraintSchema(expanded bool) map[string]any {

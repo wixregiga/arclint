@@ -18,7 +18,7 @@ func writeRuleRows(w io.Writer, rows []application.RuleSummary) error {
 			marker = fmt.Sprintf("  (disabled: %s)", row.DisabledReason)
 		}
 		p.Printf("%s  [%s/%s/%s]  %s%s%s\n",
-			row.ID, row.Type, row.Severity, row.Assurance, row.Claim, ruleOrigin(row), marker)
+			row.ID, row.Type, row.Severity, row.Assurance, row.Text(), ruleOrigin(row), marker)
 	}
 	return p.Err
 }
@@ -46,8 +46,8 @@ func writeRuleDetail(w io.Writer, d application.RuleDetail) error {
 	write("id", d.Summary.ID)
 	write("type", d.Summary.Type)
 	write("severity", d.Summary.Severity)
-	write("claim", d.Summary.Claim)
-	write("asserts", d.Asserts)
+	write("constraint", d.Summary.Proposition)
+	write("rationale", d.Summary.Rationale)
 	if d.EntireRepository {
 		write("applies to", "the entire repository")
 	} else {

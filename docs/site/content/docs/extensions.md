@@ -4,12 +4,12 @@ description = "Full rule logic in .arclint/extensions/*.ts, executed by the bina
 weight = 4
 +++
 
-When the declarative vocabulary runs out, a Rule whose assertion is
+When the declarative vocabulary runs out, a Rule whose constraint is
 `uses` delegates enforcement to a TypeScript file. The binary transpiles
 and executes it in-process (esbuild + sobek, the k6 pattern):
 contributors and CI need no Node, npm, or tsc. Extensions do not add
 Rule Types; they supply enforcement for the finite `extension` Type.
-Reach for one only after the built-in assertions run out: a line
+Reach for one only after the built-in constraints run out: a line
 pattern is a `content` Rule, not an Extension.
 
 ## Resolution
@@ -78,8 +78,8 @@ export default defineRule({
 Default-export one `defineRule(...)` result, or an array of them. Duplicate
 `type` names across entries fail registration.
 
-Wire the Rule in `rules.arclint.yaml` with `uses` as its assertion. Severity,
-identity, Claim, and Applicability belong to the Rule, not the
+Wire the Rule in `rules.arclint.yaml` with `uses` as its constraint. Severity,
+identity, Rationale, and Applicability belong to the Rule, not the
 TypeScript file:
 
 ```yaml
@@ -103,7 +103,7 @@ outside every declared Zone, which is repository-scoped enforcement
 with the same Rule Type. `files` narrows the selected files (one glob
 or a list). `with` is validated host-side against the extension's
 published schema before `check` runs, and is rejected on any Rule
-whose assertion is not `uses`.
+whose constraint is not `uses`.
 
 ```yaml
 rules:

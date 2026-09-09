@@ -42,21 +42,19 @@ Rule Test does not match its expectation, and `2` for configuration or
 usage errors. A gate failure can come from an active error-severity
 Violation or an error-severity operational Diagnostic.
 
-A complete Rule (`arclint rules <id>`) prints the Claim the author
-wrote and, beside it, `asserts`: the canonical statement of what the
-parameters assert, in domain language. The two differ on purpose: the
-Claim is the proposition, `asserts` is its operational content, such
-as the layer order, the allow-list, the cycle scope, or the globs an
-expanded structure Rule derived. JSON carries the same string as
-`asserts`.
+A complete Rule (`arclint rules <id>`) prints `constraint`: the canonical
+proposition derived from the Rule's Constraint and scope. It names the
+layer order, allow-list, cycle scope, or globs an expanded structure Rule
+derived. When the author supplies a Rationale, `rationale` prints that
+reason separately. JSON carries `proposition` and the optional `rationale`
+in the Rule summary. An absent Rationale stays absent.
 
 ```
 $ arclint rules acme/hexagonal:dependencies/acyclic
 id:          acme/hexagonal:dependencies/acyclic
 type:        acyclic
 severity:    error
-claim:       Zone dependencies contain no cycle.
-asserts:     dependencies among ["core", "ports", "adapters"] contain no cycle
+constraint:  dependencies among ["core", "ports", "adapters"] contain no cycle
 applies to:  the entire repository
 ```
 
@@ -225,7 +223,7 @@ and `domain.unanchored`.
 ruleset, the recorded vocabulary, and the local extension registry into
 a generated block inside `AGENTS.md`: an ask-arclint-first directive,
 the full command surface with when-to-use guidance, a recorded-domain
-snapshot, every zone with its rule claims, repository-wide rules, and
+snapshot, every zone with its rule propositions, repository-wide rules, and
 the local extension inventory. Agents see the architecture before
 writing code. The block sits between markers; hand-written content
 around it survives regeneration, and the block never carries

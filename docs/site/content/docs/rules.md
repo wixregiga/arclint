@@ -32,12 +32,18 @@ The common keys beside the constraint:
 
 | key | meaning |
 |---|---|
-| `description` | the Claim: the architectural proposition the Rule states, printed by `arclint rules`, `arclint context`, and `AGENTS.md` (derived from the constraint when absent) |
+| `rationale` | optional authored reason for requiring the Constraint; it stays absent when none is supplied |
+| `description` | deprecated alias for Rule `rationale`; an entry with both keys is rejected |
 | `severity` | `error` (default), `warning`, or `info`; independent from Assurance |
 | `on` | one Zone name or a list; required, optional, or forbidden per the table above |
 | `files` | one glob or a list narrowing the judged files; accepted by naming, content, and uses only |
 | `exclude` | `{paths, zones, reason}`: files the Rule does not judge |
 | `suppress` | `{paths, reason}`: files whose findings are kept but not active |
+
+ArcLint derives the checkable proposition from the Constraint and its
+scope. Rule detail prints it as `constraint`, separately from any authored
+`rationale`. The legacy Rule `description` examples below remain accepted;
+Zone and Pattern descriptions are unchanged.
 
 A Rule ID is `LOCAL` or `NAMESPACE/NAME:LOCAL`, where the local part is
 `segment/segment` in lower-case kebab. Repository Rules use bare local
@@ -130,7 +136,8 @@ term. The published sources are `domain.aggregates`, `domain.entities`,
 `domain.invariants`, `domain.assertions`, and `domain.specifications`;
 the cases are `flatcase`, `snake_case`, `kebab-case`, `camelCase`, and
 `PascalCase`. When nothing is recorded the Rule holds vacuously and its
-Claim says so.
+proposition says so. Expansion recomputes that proposition while preserving
+any Rationale the author supplied.
 
 ```yaml
 rules:

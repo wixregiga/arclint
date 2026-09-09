@@ -187,6 +187,7 @@ const (
 	keyBind          = "bind"
 	keyPaths         = "paths"
 	keyDescription   = "description"
+	keyRationale     = "rationale"
 	keySeverity      = "severity"
 	keyOn            = "on"
 	keyFiles         = "files"
@@ -243,7 +244,8 @@ type zoneEntry struct {
 type ruleEntry struct {
 	where          string
 	id             string
-	description    string
+	rationale      string
+	rationaleKey   string
 	severity       string
 	on             []rule.ZoneName
 	onPresent      bool
@@ -597,7 +599,7 @@ func parseZones(n *yaml.Node, inPattern bool) ([]zoneEntry, error) {
 }
 
 // ruleKeys are the keys a rules entry may carry beside its constraint.
-var ruleKeys = []string{keyDescription, keySeverity, keyOn, keyFiles, keyWith, keyDisable, keyExclude, keySuppress}
+var ruleKeys = []string{keyRationale, keyDescription, keySeverity, keyOn, keyFiles, keyWith, keyDisable, keyExclude, keySuppress}
 
 func parseRules(n *yaml.Node) ([]ruleEntry, error) {
 	m, err := asMapping(n, keyRules)
@@ -614,6 +616,33 @@ func parseRules(n *yaml.Node) ([]ruleEntry, error) {
 		out = append(out, entry)
 	}
 	return out, nil
+}
+
+// parseRationale accepts one authored reason, keeping description as a legacy
+// Rule-only alias. Presence, not content, determines whether aliases conflict.
+func parseRationale(m mapping, where string) (string, string, error) {
+	canonical, legacy := m.get(keyRationale), m.get(keyDescription)
+	if canonical != nil && legacy != nil {
+		return "", "", fmt.Errorf("%s: rationale and description cannot both be present; use rationale", where)
+	}
+	key, node := keyRationale, canonical
+	if node == nil {
+		key, node = keyDescription, legacy
+	}
+	if node == nil {
+		return "", "", nil
+	}
+	value, err := scalarString(node, where+"."+key)
+	if err != nil {
+		return "", "", err
+	}
+	if strings.TrimSpace(value) == "" {
+		if key == keyRationale {
+			return "", "", fmt.Errorf("%s.rationale: an authored reason must not be blank; omit rationale when no reason is supplied", where)
+		}
+		value = ""
+	}
+	return value, key, nil
 }
 
 func parseRule(id, where string, n *yaml.Node) (ruleEntry, error) {
@@ -640,10 +669,9 @@ func parseRule(id, where string, n *yaml.Node) (ruleEntry, error) {
 		return ruleEntry{}, fmt.Errorf("%s: carries %d constraints (%s); a Rule carries exactly one, so give each its own Rule ID",
 			where, len(constraints), strings.Join(constraints, ", "))
 	}
-	if v := m.get(keyDescription); v != nil {
-		if entry.description, err = scalarString(v, where+".description"); err != nil {
-			return ruleEntry{}, err
-		}
+	entry.rationale, entry.rationaleKey, err = parseRationale(m, where)
+	if err != nil {
+		return ruleEntry{}, err
 	}
 	if v := m.get(keySeverity); v != nil {
 		if entry.severity, err = scalarString(v, where+".severity"); err != nil {
@@ -1026,14 +1054,14 @@ func (e ruleEntry) applyOverride(id rule.ID, r rule.Rule) (rule.Rule, error) {
 }
 
 // buildOverride decodes adoption decisions without giving an Override a
-// constraint, description, parameters, or applicability of its own.
+// constraint, rationale, parameters, or applicability of its own.
 func (e ruleEntry) buildOverride(id rule.ID) (adoption.Override, error) {
 	for _, bad := range []struct {
 		set  bool
 		key  string
 		hint string
 	}{
-		{e.description != "", keyDescription, "a pattern rule keeps its own description"},
+		{e.rationaleKey != "", e.rationaleKey, "a rule keeps its own rationale"},
 		{e.onPresent, keyOn, "a pattern rule keeps its own zones; use exclude to narrow it"},
 		{len(e.files) > 0, keyFiles, "a pattern rule keeps its own files; use exclude to narrow it"},
 		{e.withPresent, keyWith, "a pattern rule keeps its own parameters"},
@@ -1144,7 +1172,7 @@ func (e ruleEntry) build(lang vocab.UbiquitousLanguage, declared map[rule.ZoneNa
 			return rule.Rule{}, fmt.Errorf("%s.on: zone %q is not declared", e.where, m)
 		}
 	}
-	spec := rule.Spec{ID: e.id, Claim: e.description, Severity: e.severity}
+	spec := rule.Spec{ID: e.id, Rationale: e.rationale, Severity: e.severity}
 	var err error
 	switch t.Scope() {
 	case rule.ScopeZones:

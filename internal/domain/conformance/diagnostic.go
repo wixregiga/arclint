@@ -11,7 +11,7 @@ import (
 type DiagnosticKind string
 
 const (
-	// DiagnosticViolation reports a broken or suspected-broken Claim.
+	// DiagnosticViolation reports a broken or suspected-broken Constraint.
 	DiagnosticViolation DiagnosticKind = "violation"
 	// DiagnosticOperational reports a problem encountered while loading
 	// or evaluating: unreadable input, parse failure, unknown import.

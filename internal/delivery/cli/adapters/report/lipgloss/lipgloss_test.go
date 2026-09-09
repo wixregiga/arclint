@@ -70,7 +70,7 @@ func TestLipglossRuleListMutesIDAndColorsSeverity(t *testing.T) {
 	err := ansiRenderer().Render(&buf, cli.RuleListReport{
 		Rules: []application.RuleSummary{{
 			ID: "arclint:demo", Type: "structure", Severity: "error",
-			Claim: "claim text", Assurance: "exact", Provenance: "ns/n@1",
+			Proposition: "claim text", Assurance: "exact", Provenance: "ns/n@1",
 		}},
 	})
 	if err != nil {
@@ -101,7 +101,7 @@ func TestLipglossRuleListMutesTheBuiltInOrigin(t *testing.T) {
 	err := ansiRenderer().Render(&buf, cli.RuleListReport{
 		Rules: []application.RuleSummary{{
 			ID: "aggregate/root-declared", Type: "domain", Severity: "error",
-			Claim: "composed", Assurance: "exact", BuiltIn: true,
+			Proposition: "composed", Assurance: "exact", BuiltIn: true,
 		}},
 	})
 	if err != nil {
@@ -114,6 +114,28 @@ func TestLipglossRuleListMutesTheBuiltInOrigin(t *testing.T) {
 	want := "aggregate/root-declared  [domain/error/exact]  composed  built in from the DDD meta-model\n"
 	if out := stripANSI(raw); out != want {
 		t.Fatalf("stripped grammar = %q, want %q", out, want)
+	}
+}
+
+func TestLipglossRuleDetailSeparatesConstraintAndOptionalRationale(t *testing.T) {
+	for _, rationale := range []string{"", "Keep technology outside the domain."} {
+		var buf bytes.Buffer
+		err := ansiRenderer().Render(&buf, cli.RuleDetailReport{Detail: application.RuleDetail{
+			Summary: application.RuleSummary{ID: "r1", Proposition: "dependencies point inward", Rationale: rationale},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := stripANSI(buf.String())
+		if !strings.Contains(text, "constraint:  dependencies point inward\n") {
+			t.Fatalf("constraint missing: %q", text)
+		}
+		if strings.Contains(text, "rationale:") != (rationale != "") {
+			t.Fatalf("rationale presence changed: %q", text)
+		}
+		if rationale != "" && !strings.Contains(text, rationale) {
+			t.Fatalf("authored rationale missing: %q", text)
+		}
 	}
 }
 

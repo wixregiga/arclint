@@ -90,7 +90,8 @@ Grow the starter zone by zone. A zone is logical, not a folder:
 `internal/*/domain/**` is the domain layer of every vertical slice, and
 a list of globs gathers files from as many roots as you like. A real
 contract set is one map of rules, each keyed by its id, each carrying
-one claim and one constraint:
+one Constraint and, optionally, an authored Rationale explaining why it
+belongs in the architecture:
 
 ```yaml
 runtime: [go]
@@ -137,6 +138,12 @@ rules:
     acyclic: {}
 ```
 
+A Rule's `rationale` records the author's reason for the Constraint. The
+`description` key shown above remains a deprecated alias for `rationale`;
+using both keys on one Rule is rejected. ArcLint derives the checkable
+proposition from the Constraint and its scope. When no Rationale is
+supplied, none is invented. Zone descriptions keep their existing meaning.
+
 Or adopt a pattern by reference and bind its zones to your tree
 (`arclint patterns install vertical` writes this for you); its rules
 load under its namespace, and you override them in place:
@@ -166,7 +173,7 @@ rules:
 The finite, arclint-owned set. Extensions plug into it; they never
 extend it. The constraint key a rule carries decides its type:
 
-| constraint key | type | claim shape |
+| constraint key | type | constraint shape |
 |---|---|---|
 | `imports` | consumes | what a zone may import: internal allow-list, external and stdlib policy |
 | `structure` | structure | files a zone must contain or must not contain (globs; `each:` expands them per recorded domain term) |

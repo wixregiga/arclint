@@ -16,7 +16,7 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 
 - `arclint context [paths...]`: run before editing under any path: the owning zones, their import contracts, and the recorded domain in one answer (`--zone <names>`, `--format json`)
 - `arclint domain`: the ubiquitous language: contexts, aggregates, value objects, invariants, relations
-- `arclint rules [selector]`: every configured rule with its claim; one match prints the complete rule
+- `arclint rules [selector]`: every configured rule with its constraint and rationale; one match prints the complete rule
 - `arclint check .`: evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings
 - `arclint rules test`: run the rule fixtures under `.arclint/tests` after changing any rule
 - `arclint sdk init`: regenerate the extension SDK artifacts under `.arclint/extensions`
@@ -29,7 +29,7 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 5 contexts, 1 aggregates, 27 value objects, 25 invariants (domain.arclint.yaml).
 
 - **vocabulary**
-- **rule**: aggregates Rule (Zone, Pattern); value objects RuleID, ZoneName, Claim, Constraint, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec
+- **rule**: aggregates Rule (Zone, Pattern); value objects RuleID, ZoneName, Rationale, Constraint, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec
 - **adoption**: value objects Binding, Override, Disablement, Exclusion, Suppression, Installation
 - **conformance**: value objects Violation
 - **distribution**: value objects Catalog, Digest, Index, Manifest, PatternFile, PatternSource, Registry, Selection, VendoredPattern
@@ -44,20 +44,20 @@ If your change speaks about something new, or changes what a recorded term means
 
 - **domain**: Rule aggregate and domain values; stdlib-only. (paths internal/domain/**)
   - imports no other zone; external imports forbidden
-  - rule-is-sole-aggregate: Rule is the only aggregate: it has a root, and no other aggregate root exists.
-  - no-panic: Domain code never panics; a representation that cannot become a value is an error.
-  - files-speak-the-vocabulary: Domain files are named for the concept they hold, never for a generic container.
-  - errors-name-their-subject: Domain errors name their subject; a bare ErrNotFound or ErrInvalid is forbidden.
-  - aggregate-skeleton (warning): Every recorded aggregate owns a home declaring its root and its Repository.
+  - rule-is-sole-aggregate: contains files matching ["internal/domain/rule/root.go"] and contains no files matching ["internal/domain/architecture/**", "internal/domain/pattern/**", "internal/domain/baseline/root.go", "internal/domain/conformance/root.go", "internal/domain/distribution/root.go"] Rationale: Rule is the only aggregate: it has a root, and no other aggregate root exists.
+  - no-panic: contains no line matching /\bpanic\(/ Rationale: Domain code never panics; a representation that cannot become a value is an error.
+  - files-speak-the-vocabulary: contains no files matching ["internal/domain/**/model.go", "internal/domain/**/types.go", "internal/domain/**/util.go", "internal/domain/**/utils.go", "internal/domain/**/helpers.go", "internal/domain/**/common.go"] Rationale: Domain files are named for the concept they hold, never for a generic container.
+  - errors-name-their-subject: contains no line matching /\bErr(NotFound|Invalid|Failed|Exists)\b/ Rationale: Domain errors name their subject; a bare ErrNotFound or ErrInvalid is forbidden.
+  - aggregate-skeleton (warning): contains files matching ["internal/domain/rule/root.go", "internal/domain/rule/repository.go"] (derived from each recorded domain.aggregates) Rationale: Every recorded aggregate owns a home declaring its root and its Repository.
 - **application**: Action-named use cases coordinating domain objects through ports. (paths internal/application/**)
   - imports only: domain; external imports forbidden
-  - core-actions-present: The core use cases exist under their action names.
+  - core-actions-present: contains files matching ["internal/application/list_rules.go", "internal/application/assess_conformance.go", "internal/application/capture_baseline.go", "internal/application/list_patterns.go"] Rationale: The core use cases exist under their action names.
 - **infrastructure**: Outbound technology adapters implementing inward-owned ports. (paths internal/infrastructure/**)
   - imports only: application, domain
-  - stdlib-table-present: The Go language adapter embeds its generated stdlib table.
+  - stdlib-table-present: contains files matching ["internal/infrastructure/language/golang/stdlib_gen.go"] Rationale: The Go language adapter embeds its generated stdlib table.
 - **delivery**: CLI adapters for inbound command translation and outbound Report rendering. (paths internal/delivery/**)
   - imports only: application, domain
-  - cli-seal-present: The CLI seal and the report seal are both complete.
+  - cli-seal-present: contains files matching ["internal/delivery/cli/cli.go", "internal/delivery/cli/factory/factory.go", "internal/delivery/cli/adapters/cobra/cobra.go", "internal/delivery/cli/report.go", "internal/delivery/cli/reportfactory/factory.go", "internal/delivery/cli/adapters/report/plain/plain.go", "internal/delivery/cli/adapters/report/json/json.go", "internal/delivery/cli/adapters/report/lipgloss/lipgloss.go"] Rationale: The CLI seal and the report seal are both complete.
 - **cli_interface**: Framework-neutral CLI commands, reports, and adapter ports. (paths internal/delivery/cli/*.go)
   - imports only: application, domain; external imports forbidden
 - **cli_factory**: Sealed CLI factory selecting an adapter by ArcLint-owned identity. (paths internal/delivery/cli/factory/**)
@@ -74,9 +74,9 @@ If your change speaks about something new, or changes what a recorded term means
   - imports only: delivery, application, domain
 - **composition**: Composition roots selecting and connecting concrete adapters. (paths cmd/**)
   - imports only: delivery, infrastructure, application, domain, cli_factory, cobra_adapter, report_factory
-  - main-present: The arclint binary has a main.
+  - main-present: contains files matching ["cmd/arclint/main.go"] Rationale: The arclint binary has a main.
 - **source**: Common source invariants for internal packages. (paths internal/**)
-  - snake-case: Go file names use snake_case.
+  - snake-case: file names use snake_case Rationale: Go file names use snake_case.
 - **vocabulary**: The vocabulary bounded context: the recorded Ubiquitous Language and the meta-model it is checked against. (paths internal/domain/vocab/**)
 - **rule**: The rule bounded context: the Rule aggregate's home. (paths internal/domain/rule/**)
 - **conformance**: The conformance bounded context, downstream conformist of rule. (paths internal/domain/conformance/**)
@@ -109,13 +109,13 @@ If your change speaks about something new, or changes what a recorded term means
 
 ### Repository-wide rules
 
-- dependencies/application-inward: Dependencies point inward: application, then domain.
-- infrastructure/composition-only: Only composition imports infrastructure.
-- delivery/cobra-factory-only: Only the CLI factory imports the Cobra adapter.
-- delivery/plain-report-factory-only: Only the report factory imports the plain renderer.
-- delivery/json-report-factory-only: Only the report factory imports the JSON renderer.
-- delivery/lipgloss-report-factory-only: Only the report factory imports the Lipgloss renderer.
-- dependencies/acyclic: Dependencies among the top-level Zones contain no cycle.
+- dependencies/application-inward: Zones layer highest first as ["application", "domain"]; a Zone never imports a higher layer Rationale: Dependencies point inward: application, then domain.
+- infrastructure/composition-only: Zone "infrastructure" is imported only by ["composition"] Rationale: Only composition imports infrastructure.
+- delivery/cobra-factory-only: Zone "cobra_adapter" is imported only by ["cli_factory"] Rationale: Only the CLI factory imports the Cobra adapter.
+- delivery/plain-report-factory-only: Zone "plain_report" is imported only by ["report_factory"] Rationale: Only the report factory imports the plain renderer.
+- delivery/json-report-factory-only: Zone "json_report" is imported only by ["report_factory"] Rationale: Only the report factory imports the JSON renderer.
+- delivery/lipgloss-report-factory-only: Zone "lipgloss_report" is imported only by ["report_factory"] Rationale: Only the report factory imports the Lipgloss renderer.
+- dependencies/acyclic: dependencies among ["composition", "delivery", "infrastructure", "application", "domain"] contain no cycle Rationale: Dependencies among the top-level Zones contain no cycle.
 <!-- arclint:agents:end -->
 
 ## Finish gate

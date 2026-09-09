@@ -22,6 +22,7 @@ func agentsFixture(t *testing.T) rule.Configured {
 	}
 	bound, err := rule.New(rule.Spec{
 		ID:            "t/p:m/technology-free",
+		Rationale:     "Keep transport choices outside the model.",
 		Type:          rule.TypeExtension,
 		Severity:      "warning",
 		Params:        rule.ExtensionParams{Uses: "forbid-content", With: map[string]any{"pattern": `"net/http"`}},
@@ -131,6 +132,7 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 		"  - imports no other zone; external imports forbidden",
 		"  - snake: file names use snake_case",
 		`  - technology-free (warning): satisfies extension rule "forbid-content" (pattern: "net/http")`,
+		`Rationale: Keep transport choices outside the model.`,
 		"### Repository-wide rules",
 		`- deps/protected-m: Zone "m" is imported by no other Zone`,
 		`- fsd/slice-isolation: satisfies extension rule "fsd-slice-isolation" (layers: [a, b])`,
@@ -184,6 +186,7 @@ func TestPublishAgentsContextOmitsAbsentSections(t *testing.T) {
 	}
 	for _, reject := range []string{
 		"### The recorded domain", "### Repository-wide rules", "### Extension rules",
+		"Rationale:",
 	} {
 		if strings.Contains(block, reject) {
 			t.Errorf("block must omit %q without its data:\n%s", reject, block)

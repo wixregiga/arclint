@@ -173,14 +173,14 @@ func expandedRule(t *testing.T, lang vocab.UbiquitousLanguage) rule.Rule {
 	return r
 }
 
-func TestExpandedRuleIsOneRuleWithQuantifiedClaim(t *testing.T) {
+func TestExpandedRuleIsOneRuleWithQuantifiedProposition(t *testing.T) {
 	r := expandedRule(t, recordedLanguage())
 	if _, ok := r.Expansion(); !ok {
 		t.Fatalf("expansion not carried")
 	}
-	claim := r.Claim().Statement()
-	if !strings.Contains(claim, "derived from each recorded domain.aggregates") {
-		t.Errorf("claim %q does not state its derivation", claim)
+	proposition := r.Proposition()
+	if !strings.Contains(proposition, "derived from each recorded domain.aggregates") {
+		t.Errorf("proposition %q does not state its derivation", proposition)
 	}
 	if err := r.Validate(); err != nil {
 		t.Errorf("Validate: %v", err)
@@ -189,9 +189,9 @@ func TestExpandedRuleIsOneRuleWithQuantifiedClaim(t *testing.T) {
 
 func TestExpandedRuleOverEmptyVocabularyExistsAndSaysSo(t *testing.T) {
 	r := expandedRule(t, vocab.UbiquitousLanguage{})
-	claim := r.Claim().Statement()
-	if !strings.Contains(claim, "none recorded yet") {
-		t.Errorf("claim %q does not state the empty derivation", claim)
+	proposition := r.Proposition()
+	if !strings.Contains(proposition, "none recorded yet") {
+		t.Errorf("proposition %q does not state the empty derivation", proposition)
 	}
 	if err := r.Validate(); err != nil {
 		t.Errorf("Validate: %v", err)
@@ -211,7 +211,7 @@ func TestReexpandKeepsIdentityAndRederivesParams(t *testing.T) {
 	if !ok || len(params.Require) != 2 {
 		t.Errorf("re-derived params = %#v", re.Params())
 	}
-	if !strings.Contains(re.Claim().Statement(), "derived from each recorded") {
-		t.Errorf("re-derived claim = %q", re.Claim().Statement())
+	if !strings.Contains(re.Proposition(), "derived from each recorded") {
+		t.Errorf("re-derived proposition = %q", re.Proposition())
 	}
 }
