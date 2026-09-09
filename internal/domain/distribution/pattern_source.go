@@ -2,7 +2,6 @@ package distribution
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
 )
@@ -65,6 +64,49 @@ func (a Available) Reference() rule.PatternReference { return a.Pattern.Referenc
 // Digest is the whole-Pattern Digest.
 func (a Available) Digest() Digest { return a.Vendored.Digest() }
 
+// PatternSource carries the available Patterns from one resolving place.
+// Its contents are immutable; the application loads them through its I/O port.
+// Sources that carry the same reference must agree on its published bytes.
+type PatternSource struct {
+	available []Available
+}
+
+// NewPatternSource validates the available Patterns and retains their source
+// order. Every Pattern comes from the same kind of place; an empty source
+// is valid and carries no Patterns.
+func NewPatternSource(available []Available) (PatternSource, error) {
+	source := PatternSource{available: append([]Available(nil), available...)}
+	seen := map[rule.PatternReference]Available{}
+	for _, a := range source.available {
+		if _, err := NewAvailable(a.Kind, a.Pattern, a.Vendored, a.Authored); err != nil {
+			return PatternSource{}, fmt.Errorf("pattern source: %w", err)
+		}
+		if a.Kind != source.available[0].Kind {
+			return PatternSource{}, fmt.Errorf("pattern source: mixes %s and %s patterns", source.available[0].Kind, a.Kind)
+		}
+		if previous, ok := seen[a.Reference()]; ok {
+			if err := agreeingCopies(previous, a); err != nil {
+				return PatternSource{}, err
+			}
+		}
+		seen[a.Reference()] = a
+	}
+	return source, nil
+}
+
+// Available returns the source's Patterns without exposing its stored slice.
+func (s PatternSource) Available() []Available {
+	return append([]Available(nil), s.available...)
+}
+
+func agreeingCopies(first, next Available) error {
+	if !first.Digest().Equals(next.Digest()) {
+		return fmt.Errorf("pattern %s is %s with digest %s but %s with digest %s; a published version is immutable, so one of the copies is not the published one",
+			first.Reference(), first.Kind, first.Digest().Short(), next.Kind, next.Digest().Short())
+	}
+	return nil
+}
+
 // Catalog is every Available Pattern the resolving sources carry,
 // deduplicated by reference in source order. Two sources carrying one
 // reference must agree on its Digest: a published version is immutable,
@@ -77,20 +119,16 @@ type Catalog struct {
 	copies  [][]Available
 }
 
-// NewCatalog folds source results in resolution order.
-func NewCatalog(available ...[]Available) (Catalog, error) {
+// NewCatalog folds validated PatternSources in resolution order.
+func NewCatalog(sources ...PatternSource) (Catalog, error) {
 	var c Catalog
 	index := map[string]int{}
-	for _, batch := range available {
-		for _, a := range batch {
-			if a.Pattern.Reference().IsZero() || a.Vendored.IsZero() || !a.Kind.Valid() {
-				return Catalog{}, fmt.Errorf("catalog: unconstructed available pattern")
-			}
+	for _, source := range sources {
+		for _, a := range source.available {
 			key := a.Reference().String()
 			if i, dup := index[key]; dup {
-				if !c.entries[i].Digest().Equals(a.Digest()) {
-					return Catalog{}, fmt.Errorf("pattern %s is %s with digest %s but %s with digest %s; a published version is immutable, so one of the copies is not the published one",
-						key, c.entries[i].Kind, c.entries[i].Digest().Short(), a.Kind, a.Digest().Short())
+				if err := agreeingCopies(c.entries[i], a); err != nil {
+					return Catalog{}, err
 				}
 				c.copies[i] = append(c.copies[i], a)
 				continue
@@ -152,73 +190,6 @@ func (c Catalog) Spellings() []string {
 	out := make([]string, 0, len(c.entries))
 	for _, a := range c.entries {
 		out = append(out, a.Reference().String())
-	}
-	return out
-}
-
-// Selection resolves one spelling against references: an exact
-// namespace/name@version, a namespace/name (its highest version), or a
-// bare name carried by exactly one namespace/name. It answers the
-// matching references in the order given, so a caller that resolves
-// through several sources can prefer the first.
-func Selection(spelling string, refs []rule.PatternReference) ([]rule.PatternReference, error) {
-	spelling = strings.TrimSpace(spelling)
-	if spelling == "" {
-		return nil, fmt.Errorf("pattern selection: spelling required")
-	}
-	if strings.Contains(spelling, "@") {
-		ref, err := rule.ParsePatternReference(spelling)
-		if err != nil {
-			return nil, fmt.Errorf("pattern selection %q: expected namespace/name@version", spelling)
-		}
-		for _, r := range refs {
-			if r == ref {
-				return []rule.PatternReference{r}, nil
-			}
-		}
-		return nil, nil
-	}
-	var out []rule.PatternReference
-	if strings.Contains(spelling, "/") {
-		parts := strings.Split(spelling, "/")
-		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-			return nil, fmt.Errorf("pattern selection %q: expected namespace/name[@version] or name", spelling)
-		}
-		for _, r := range refs {
-			if r.Namespace() == parts[0] && r.Name() == parts[1] {
-				out = append(out, r)
-			}
-		}
-		return highestVersions(out), nil
-	}
-	for _, r := range refs {
-		if r.Name() == spelling {
-			out = append(out, r)
-		}
-	}
-	return highestVersions(out), nil
-}
-
-// highestVersions keeps, per namespace/name, the highest version by
-// semantic-version ordering, preserving first-seen order of names.
-func highestVersions(refs []rule.PatternReference) []rule.PatternReference {
-	var order []string
-	best := map[string]rule.PatternReference{}
-	for _, r := range refs {
-		key := r.Namespace() + "/" + r.Name()
-		cur, ok := best[key]
-		if !ok {
-			order = append(order, key)
-			best[key] = r
-			continue
-		}
-		if CompareVersions(r.Version(), cur.Version()) > 0 {
-			best[key] = r
-		}
-	}
-	out := make([]rule.PatternReference, 0, len(order))
-	for _, key := range order {
-		out = append(out, best[key])
 	}
 	return out
 }

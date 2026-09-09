@@ -127,19 +127,20 @@ func (uc InitializeRepository) rulesetContent(selection string, languages []stri
 // exact reference, namespace/name at its highest version, or bare name
 // when exactly one namespace/name carries it.
 func selectPattern(selection string, catalog distribution.Catalog) (rule.Pattern, error) {
-	refs, err := distribution.Selection(selection, catalog.References())
+	choice, err := distribution.NewSelection(selection)
 	if err != nil {
 		return rule.Pattern{}, fmt.Errorf("initialize repository: %w", err)
 	}
-	switch len(refs) {
-	case 1:
-		a, _ := catalog.Lookup(refs[0])
-		return a.Pattern, nil
-	case 0:
+	ref, err := choice.Resolve(catalog.References())
+	if err != nil {
+		return rule.Pattern{}, fmt.Errorf("initialize repository: %w", err)
+	}
+	if ref.IsZero() {
 		choices := append([]string{BarePattern}, catalog.Spellings()...)
 		return rule.Pattern{}, fmt.Errorf("initialize repository: pattern %q is not one of %s", selection, strings.Join(choices, ", "))
 	}
-	return rule.Pattern{}, fmt.Errorf("initialize repository: %w", ambiguous(selection, refs))
+	a, _ := catalog.Lookup(ref)
+	return a.Pattern, nil
 }
 
 func runtimeLine(languages []string) string {

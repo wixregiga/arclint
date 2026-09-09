@@ -259,7 +259,7 @@ func TestCatalogDeduplicatesByReferenceAndRejectsDrift(t *testing.T) {
 	driftedLocal := available(t, distribution.SourceLocal, "arclint/vertical@0.1.0", "b")
 	other := available(t, distribution.SourceLocal, "acme/hex@1.0.0", "c")
 
-	c, err := distribution.NewCatalog([]distribution.Available{embedded}, []distribution.Available{sameLocal, other})
+	c, err := distribution.NewCatalog(mustSource(t, embedded), mustSource(t, sameLocal, other))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +280,7 @@ func TestCatalogDeduplicatesByReferenceAndRejectsDrift(t *testing.T) {
 	if copies := c.Copies(mustRef(t, "acme/none@1.0.0")); copies != nil {
 		t.Errorf("Copies of an unknown reference = %+v", copies)
 	}
-	if _, err := distribution.NewCatalog([]distribution.Available{embedded}, []distribution.Available{driftedLocal}); err == nil || !strings.Contains(err.Error(), "immutable") {
+	if _, err := distribution.NewCatalog(mustSource(t, embedded), mustSource(t, driftedLocal)); err == nil || !strings.Contains(err.Error(), "immutable") {
 		t.Errorf("drifted duplicate accepted: %v", err)
 	}
 }
@@ -293,28 +293,28 @@ func TestSelectionSpellings(t *testing.T) {
 		mustRef(t, "acme/vertical@3.0.0"),
 		mustRef(t, "acme/hex@1.0.0"),
 	}
-	exact, err := distribution.Selection("arclint/vertical@0.1.5", refs)
-	if err != nil || len(exact) != 1 || exact[0].Version() != "0.1.5" {
+	exact, err := resolveSelection(t, "arclint/vertical@0.1.5", refs)
+	if err != nil || exact.Version() != "0.1.5" {
 		t.Fatalf("exact = (%v, %v)", exact, err)
 	}
-	missing, err := distribution.Selection("arclint/vertical@9.9.9", refs)
-	if err != nil || missing != nil {
+	missing, err := resolveSelection(t, "arclint/vertical@9.9.9", refs)
+	if err != nil || !missing.IsZero() {
 		t.Fatalf("missing exact = (%v, %v)", missing, err)
 	}
-	byName, err := distribution.Selection("arclint/vertical", refs)
-	if err != nil || len(byName) != 1 || byName[0].Version() != "0.2.0-rc.1" {
+	byName, err := resolveSelection(t, "arclint/vertical", refs)
+	if err != nil || byName.Version() != "0.2.0-rc.1" {
 		t.Fatalf("namespace/name = (%v, %v), want the highest version", byName, err)
 	}
-	bare, err := distribution.Selection("vertical", refs)
-	if err != nil || len(bare) != 2 {
-		t.Fatalf("bare name = (%v, %v), want one per namespace", bare, err)
+	bare, err := resolveSelection(t, "vertical", refs)
+	if err == nil || !bare.IsZero() || !strings.Contains(err.Error(), "arclint/vertical@0.2.0-rc.1") || !strings.Contains(err.Error(), "acme/vertical@3.0.0") {
+		t.Fatalf("bare name = (%v, %v), want ambiguity naming both namespaces", bare, err)
 	}
-	unique, err := distribution.Selection("hex", refs)
-	if err != nil || len(unique) != 1 || unique[0].Namespace() != "acme" {
+	unique, err := resolveSelection(t, "hex", refs)
+	if err != nil || unique.Namespace() != "acme" {
 		t.Fatalf("unique bare = (%v, %v)", unique, err)
 	}
 	for _, bad := range []string{"", "a/b/c", "/x", "x/", "arclint/vertical@nope"} {
-		if _, err := distribution.Selection(bad, refs); err == nil {
+		if _, err := resolveSelection(t, bad, refs); err == nil {
 			t.Errorf("Selection(%q) accepted", bad)
 		}
 	}
@@ -343,5 +343,72 @@ func TestCompareVersions(t *testing.T) {
 		if got := distribution.CompareVersions(c.b, c.a); got != -c.want {
 			t.Errorf("CompareVersions(%q, %q) = %d, want %d", c.b, c.a, got, -c.want)
 		}
+	}
+}
+
+func mustSource(t *testing.T, available ...distribution.Available) distribution.PatternSource {
+	t.Helper()
+	source, err := distribution.NewPatternSource(available)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return source
+}
+
+func resolveSelection(t *testing.T, spelling string, refs []rule.PatternReference) (rule.PatternReference, error) {
+	t.Helper()
+	selection, err := distribution.NewSelection(spelling)
+	if err != nil {
+		return rule.PatternReference{}, err
+	}
+	return selection.Resolve(refs)
+}
+
+func TestPatternSourceProtectsAvailablePatterns(t *testing.T) {
+	original := available(t, distribution.SourceEmbedded, "arclint/vertical@0.1.0", "original")
+	other := available(t, distribution.SourceEmbedded, "acme/hex@1.0.0", "other")
+	input := []distribution.Available{original}
+	source, err := distribution.NewPatternSource(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input[0] = other
+	returned := source.Available()
+	returned[0] = other
+	catalog, err := distribution.NewCatalog(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := catalog.Lookup(original.Reference()); !ok || len(catalog.Entries()) != 1 {
+		t.Fatalf("source was changed through an input or returned slice: %v", catalog.Spellings())
+	}
+	mismatched := original
+	mismatched.Vendored = other.Vendored
+	drifted := available(t, distribution.SourceEmbedded, "arclint/vertical@0.1.0", "changed")
+	local := available(t, distribution.SourceLocal, "acme/hex@1.0.0", "other")
+	for name, batch := range map[string][]distribution.Available{
+		"unconstructed":         {{}},
+		"mismatched manifest":   {mismatched},
+		"conflicting duplicate": {original, drifted},
+		"mixed places":          {original, local},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := distribution.NewPatternSource(batch); err == nil {
+				t.Fatal("invalid source accepted")
+			}
+		})
+	}
+}
+
+func TestSelectionNormalizesSpellingAndRejectsZero(t *testing.T) {
+	for _, spelling := range []string{"arclint/vertical@0.1.0", "arclint/vertical", "vertical"} {
+		selection, err := distribution.NewSelection(" " + spelling + " ")
+		if err != nil || selection.String() != spelling {
+			t.Fatalf("selection = (%v, %v), want %s", selection, err, spelling)
+		}
+	}
+	var zero distribution.Selection
+	if _, err := zero.Resolve(nil); err == nil {
+		t.Fatal("unconstructed selection accepted")
 	}
 }

@@ -208,15 +208,14 @@ contexts:
       Override:
         definition: >-
           One adopting repository's decision applied onto a Rule an
-          extended Pattern distributes, keyed by the Rule's qualified
-          RuleID. An Override is not a second Rule: it only disables
-          the Rule, changes its Severity, excludes subjects from it, or
+          extended Pattern distributes or a built-in Rule, keyed by
+          the Rule's RuleID. An Override is not a second Rule: it only
+          disables the Rule, changes its Severity, excludes subjects from it, or
           suppresses its findings.
         invariants:
           names-a-distributed-rule: >-
-            An Override names a Rule an extended Pattern distributes;
-            an Override whose RuleID matches no Pattern Rule is
-            rejected at load.
+            An Override names a distributed or built-in Rule; an
+            Override whose RuleID matches neither is rejected at load.
           carries-no-assertion: >-
             An Override carries no Constraint and no Claim; adding
             either is rejected at load with the advice to add a new

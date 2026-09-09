@@ -7,32 +7,45 @@ import (
 	"unicode"
 )
 
-// Term casing turns a recorded vocabulary term into a path or
+// TermCase turns a recorded vocabulary term into a path or
 // identifier segment for Template expansion. The transform vocabulary
 // is deliberately close to the naming CaseSpec vocabulary but distinct
 // in role: CaseSpec MATCHES file stems, a term case PRODUCES a
 // segment, and only producible spellings are published here (regex has
 // no producing form; flatcase exists here for Go package segments and
 // has no matching need).
-var termCases = map[string]func(words []string) string{
-	"flatcase":   func(w []string) string { return strings.Join(w, "") },
-	"snake_case": func(w []string) string { return strings.Join(w, "_") },
-	"kebab-case": func(w []string) string { return strings.Join(w, "-") },
-	"camelCase": func(w []string) string {
+type TermCase struct {
+	render func(words []string) string
+}
+
+var termCases = map[string]TermCase{
+	"flatcase":   {render: func(w []string) string { return strings.Join(w, "") }},
+	"snake_case": {render: func(w []string) string { return strings.Join(w, "_") }},
+	"kebab-case": {render: func(w []string) string { return strings.Join(w, "-") }},
+	"camelCase": {render: func(w []string) string {
 		var out strings.Builder
 		out.WriteString(w[0])
 		for _, word := range w[1:] {
 			out.WriteString(titleWord(word))
 		}
 		return out.String()
-	},
-	"PascalCase": func(w []string) string {
+	}},
+	"PascalCase": {render: func(w []string) string {
 		var out strings.Builder
 		for _, word := range w {
 			out.WriteString(titleWord(word))
 		}
 		return out.String()
-	},
+	}},
+}
+
+// NewTermCase resolves a published term case to its rendering behavior.
+func NewTermCase(name string) (TermCase, error) {
+	termCase, ok := termCases[name]
+	if !ok {
+		return TermCase{}, fmt.Errorf("term case %q: not one of %s", name, strings.Join(TermCaseNames(), ", "))
+	}
+	return termCase, nil
 }
 
 // TermCaseNames returns the published term-case names, sorted.
@@ -49,15 +62,24 @@ func TermCaseNames() []string {
 // yielding no words (no letters or digits) is an error, never an empty
 // segment.
 func CaseTerm(term, caseName string) (string, error) {
-	transform, ok := termCases[caseName]
-	if !ok {
-		return "", fmt.Errorf("term case %q: not one of %s", caseName, strings.Join(TermCaseNames(), ", "))
+	termCase, err := NewTermCase(caseName)
+	if err != nil {
+		return "", err
+	}
+	return termCase.Render(term)
+}
+
+// Render produces a segment from a recorded term. Terms without letters
+// or digits are rejected, so successful rendering never yields an empty segment.
+func (c TermCase) Render(term string) (string, error) {
+	if c.render == nil {
+		return "", fmt.Errorf("term case: no published rendering selected")
 	}
 	words := termWords(term)
 	if len(words) == 0 {
 		return "", fmt.Errorf("term %q: no letters or digits to case", term)
 	}
-	return transform(words), nil
+	return c.render(words), nil
 }
 
 // termWords splits a recorded term into lowercase words: on
