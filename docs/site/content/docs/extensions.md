@@ -123,6 +123,9 @@ extension unless the Pattern is extended; the check fails with
 
 ## The ctx surface
 
+The [chain of custody](/docs/chain-of-custody/) explains when facts are
+collected and where the host applies each Rule's file-access boundary.
+
 During `check`, the host lends exactly this read-only surface. File-scoped
 calls are limited to the Rule's selected subjects: paths outside
 Scope are invisible to `files` / `imports` / `facts` / `zoneOf`
