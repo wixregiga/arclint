@@ -9,3 +9,6 @@ template = "section.html"
 Everything here is plain markdown in `docs/site/content/`. The rule
 reference matches the published Rule Types and JSON Schema that
 `arclint rules schema` and `arclint rules <id>` expose from the binary.
+
+The [chain of custody](/docs/chain-of-custody/) follows configuration through
+fact collection, extension access restrictions, and reporting.
