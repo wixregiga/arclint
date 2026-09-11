@@ -101,6 +101,7 @@ func TestDomainCommandFamily(t *testing.T) {
 	t.Run("commentPreservation", testDomainCommentPreservation)
 	t.Run("guided", testDomainGuided)
 	t.Run("schema", testDomainSchema)
+	t.Run("defineCompletion", testDomainDefineCompletion)
 	t.Run("help", testDomainHelp)
 	t.Run("exclusions", testDomainExclusions)
 	t.Run("removeLeavesSources", testDomainRemoveLeavesSources)
@@ -108,6 +109,46 @@ func TestDomainCommandFamily(t *testing.T) {
 	t.Run("builtInRules", testDomainBuiltInRules)
 	t.Run("context", testDomainContext)
 	t.Run("ambiguity", testDomainAmbiguity)
+}
+
+func testDomainDefineCompletion(t *testing.T) {
+	root := domainFixture(t)
+	write(t, root, "domain.arclint.yaml", orderingDomain)
+
+	stdout, stderr, code := runBin(t, root, os.Environ(), "__complete", "domain", "define", "entity", "")
+	if code != 0 {
+		t.Fatalf("complete define entity: exit %d\nstderr: %s", code, stderr)
+	}
+	if !containsLine(stdout, "OrderLine") || !containsLine(stdout, ":4") {
+		t.Errorf("entity completion misses the recorded entity or NoFileComp directive:\n%s", stdout)
+	}
+
+	stdout, stderr, code = runBin(t, root, os.Environ(), "__complete", "domain", "define", "value_object", "Ord")
+	if code != 0 {
+		t.Fatalf("complete define value_object Ord: exit %d\nstderr: %s", code, stderr)
+	}
+	if !containsLine(stdout, "OrderID") || containsLine(stdout, "Money") {
+		t.Errorf("value-object completion did not narrow to the Ord prefix:\n%s", stdout)
+	}
+
+	stdout = mustRunDomain(t, root, "domain", "define", "value_object", "CustomerID", "--definition", "The stable identity of a Customer.")
+	if stdout != "Defined value object CustomerID in context ordering.\n" {
+		t.Fatalf("define must accept an unrecorded name: %q", stdout)
+	}
+
+	write(t, root, "domain.arclint.yaml", "version: [invalid\n")
+	stdout, stderr, code = runBin(t, root, os.Environ(), "__complete", "domain", "define", "entity", "")
+	if code != 0 {
+		t.Fatalf("complete define against invalid domain: exit %d\nstderr: %s", code, stderr)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(stdout), "\n") {
+		if line != ":4" {
+			t.Errorf("completion candidate from invalid domain: %q\n%s", line, stdout)
+		}
+	}
+	if strings.Contains(stderr, "arclint:") || strings.Contains(stderr, "Error") {
+		t.Errorf("completion failure must be silent, stderr: %s", stderr)
+	}
 }
 
 func testDomainInit(t *testing.T) {
@@ -825,6 +866,9 @@ func testDomainHelp(t *testing.T) {
 		if !strings.Contains(stdout, flag) {
 			t.Errorf("define --help missing %s:\n%s", flag, stdout)
 		}
+	}
+	if !strings.Contains(stdout, "Shell completion suggests existing names") || !strings.Contains(stdout, "A new name remains valid") {
+		t.Errorf("define --help missing name-completion contract:\n%s", stdout)
 	}
 	for _, cmd := range [][]string{
 		{"domain", "init", "--help"},
