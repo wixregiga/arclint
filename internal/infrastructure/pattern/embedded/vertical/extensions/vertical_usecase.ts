@@ -38,7 +38,9 @@ export default defineRule({
   description: "require use-case functions to take a command and return error",
   capability: "heuristic",
   check(ctx) {
+    const subjects = new Set(ctx.scope().files);
     for (const file of ctx.files()) {
+      if (!subjects.has(file.path)) continue;
       const facts = ctx.facts(file.path);
       if (!facts) {
         continue;

@@ -396,7 +396,7 @@ func TestSDKInitWritesTyping(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(dts), "defineRule") {
+	if !strings.Contains(string(dts), "defineRule") || !strings.Contains(string(dts), "scope(): ScopeInfo") || !strings.Contains(string(dts), "subjectPath?: string") {
 		t.Errorf("arclint.d.ts lacks the SDK surface")
 	}
 }

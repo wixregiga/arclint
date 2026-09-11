@@ -117,6 +117,10 @@ export interface FactsInfo {
  * the Rule, never to one finding.
  */
 export interface ViolationInput {
+  /**
+   * SubjectPath is the governed file; omitted means Path is also the subject.
+   */
+  subjectPath?: string;
   path: string;
   message: string;
   line?: number /* int */;
@@ -257,4 +261,27 @@ export interface DomainInfo {
   project: string;
   contexts: DomainContextInfo[];
   relations: DomainRelationInfo[];
+}
+/**
+ * ScopeInfo is resolved Rule evaluation policy, separate from evidence.
+ */
+export interface ScopeInfo {
+  /**
+   * Files are the governed repository-relative file paths after exclusions.
+   */
+  files: string[];
+  /**
+   * ExcludedFiles would be governed without the Rule's exclusions.
+   */
+  excludedFiles: string[];
+  exclusions: ExclusionInfo[];
+}
+/**
+ * ExclusionInfo records the selectors and reason for an evaluation exclusion.
+ * Exclusions never redact repository evidence.
+ */
+export interface ExclusionInfo {
+  paths: string[];
+  zones: string[];
+  reason: string;
 }

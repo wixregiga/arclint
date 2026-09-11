@@ -9,7 +9,9 @@ export default defineRule({
   }),
   check(ctx, params) {
     const allowed = String(params.zone);
+    const subjects = new Set(ctx.scope().files);
     for (const file of ctx.files()) {
+      if (!subjects.has(file.path)) continue;
       const facts = ctx.facts(file.path);
       let earliest = 0;
       if (facts) {

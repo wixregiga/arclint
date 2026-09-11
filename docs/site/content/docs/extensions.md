@@ -46,7 +46,9 @@ export default defineRule({
   }),
   check(ctx, params) {
     const packages = params.packages as string[];
+    const subjects = new Set(ctx.scope().files);
     for (const file of ctx.files()) {
+      if (!subjects.has(file.path)) continue;
       for (const imp of ctx.imports(file.path)) {
         for (const pkg of packages) {
           if (imp.path === pkg || imp.path.startsWith(pkg + "/")) {
@@ -123,33 +125,71 @@ extension unless the Pattern is extended; the check fails with
 
 ## The ctx surface
 
-During `check`, the host lends exactly this read-only surface. File-scoped
-calls are limited to the Rule's selected subjects: paths outside
-Scope are invisible to `files` / `imports` / `facts` / `zoneOf`
-and unreadable via `read`. `ctx.domain()` is project-wide recorded
-knowledge, not path-scoped. No ambient filesystem, network, or Node
-globals.
+During `check`, the host lends repository observations as read-only evidence.
+A Rule's Scope determines what the Rule governs; it does not limit the
+evidence its Constraint may inspect. Repository observations still honor
+`scan.exclude`, ignore files, and configured language support. A Rule's
+own Exclusions remove evaluation subjects without redacting evidence.
+No ambient filesystem, network, or Node globals are available.
 
 | call | returns |
 |---|---|
-| `ctx.files(glob?)` | selected subjects as `FileInfo`, optionally filtered by a doublestar glob |
-| `ctx.read(path)` | one selected file's content; throws when out of scope or unreadable |
+| `ctx.scope()` | resolved governed `files`, `excludedFiles`, and `exclusions` with `paths`, `zones`, and `reason` |
+| `ctx.files(glob?)` | repository files as `FileInfo`, optionally filtered by a doublestar glob |
+| `ctx.read(path)` | one observed file's content; throws for unobserved or unreadable paths |
 | `ctx.imports(path)` | classified imports (`stdlib` \| `internal` \| `external` \| `unknown` \| `cgo`) with `targetDir` / `targetFile` when resolved |
-| `ctx.zones()` | declared Zone names to their **selected** member paths |
+| `ctx.zones()` | declared Zone names to their repository-wide member paths |
 | `ctx.facts(path)` | declaration facts, or `null` when the language did not supply them |
-| `ctx.zoneOf(path)` | sorted Zone names containing the path (empty when out of scope) |
-| `ctx.report(v)` | record one finding |
+| `ctx.zoneOf(path)` | sorted Zone names containing the observed path |
+| `ctx.report(v)` | record one finding against a governed subject |
 | `ctx.domain()` | the project's recorded domain model (`DomainInfo`); empty `contexts` and `relations` when none is recorded |
 
-`ctx.report` accepts only:
+`ctx.report` accepts:
 
 ```ts
-{ path: string; message: string; line?: number; fixHint?: string }
+{ path: string; message: string; subjectPath?: string; line?: number; fixHint?: string }
 ```
 
-`path` and `message` are required. Severity is not on the wire: the Rule
-owns it. Legacy per-finding `severity`, `contract`, and `blame` fields are
-ignored if present.
+`path` and `message` are required. `path` locates the diagnostic evidence;
+`subjectPath` identifies the governed file. When `subjectPath` is omitted,
+`path` is also the subject, preserving existing forward-check reports.
+Both use exact repository-relative paths from the context. Severity
+belongs to the Rule. Legacy per-finding `severity`, `contract`, and
+`blame` fields are ignored if present.
+
+Use `ctx.scope().files` for forward checks. A reverse-dependency check
+instead scans every potential importer and reports against a protected
+file. For example, after resolving the protected subjects:
+
+```ts
+const subjects = ctx.scope().files;
+for (const importer of ctx.files("**/*.go")) {
+  if (ctx.zoneOf(importer.path).includes("cli_factory")) continue;
+  for (const imp of ctx.imports(importer.path)) {
+    const subjectPath = subjects.find(path => imp.targetFile
+      ? path === imp.targetFile
+      : path.slice(0, path.lastIndexOf("/")) === imp.targetDir);
+    if (subjectPath) ctx.report({
+      subjectPath,
+      path: importer.path,
+      line: imp.line,
+      message: `${importer.path} may not import the protected adapter`,
+    });
+  }
+}
+```
+
+The protected file remains the evaluation subject even though the
+finding points at the importer. Excluding that importer from this
+Rule's subjects does not hide its imports. Suppressions continue to
+match diagnostic evidence paths; baseline identity continues to use
+the governed subject and message.
+
+**Migration:** existing SDK inspection signatures are unchanged, but
+`ctx.files()` now returns all observed files. Extensions that previously
+relied on its implicit Scope filtering must iterate `ctx.scope().files`
+or filter `FileInfo` records through a set of those paths, as in the
+first example. Regenerate editor declarations with `arclint sdk init`.
 
 `ctx.domain()` returns read-only `DomainInfo` (camelCase JSON), the
 same shape `arclint domain --format json` prints:
@@ -303,8 +343,10 @@ test's error; later tests still run.
 
 ## Scope breaches
 
-`ctx.report` accepts any path string. If any reported path falls outside
-the Rule's selected subjects, the whole Extension run is untrustworthy:
+`ctx.report` requires a governed subject in `ctx.scope().files` and an
+evidence path in the repository observations. An omitted `subjectPath`
+uses `path` as the subject. If either boundary is breached, the whole
+Extension run is untrustworthy:
 
 - every finding from that run is discarded (none become Violations),
 - each selected subject evaluates `failed`,

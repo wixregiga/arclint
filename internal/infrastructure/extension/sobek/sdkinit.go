@@ -28,6 +28,8 @@ export type TermCase =
   | "PascalCase";
 
 export interface Ctx {
+  /** Resolved governed files and exclusion policy, separate from evidence. */
+  scope(): ScopeInfo;
   /** Repository files, optionally filtered by a doublestar glob. */
   files(glob?: string): FileInfo[];
   /** Read one file's content. Throws on unreadable paths. */

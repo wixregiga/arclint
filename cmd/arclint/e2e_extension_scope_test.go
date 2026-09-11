@@ -18,8 +18,7 @@ import { defineRule } from "arclint";
 export default defineRule({
   type: "report-outside",
   check(ctx) {
-    // Hard-coded path outside the Rule's selected subjects: the sandbox
-    // hides out-of-scope files, but report() still accepts any string.
+    // A path-only report uses path as its subject, which must be selected.
     ctx.report({
       path: "elsewhere/secret.go",
       line: 1,

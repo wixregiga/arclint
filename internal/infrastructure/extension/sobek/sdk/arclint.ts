@@ -28,6 +28,8 @@ export interface ImportInfo {
 }
 
 export interface ViolationInput {
+  /** Governed file; omitted means path is also the subject. */
+  subjectPath?: string;
   path: string;
   message: string;
   line?: number;
@@ -71,7 +73,15 @@ export type TermCase =
   | "camelCase"
   | "PascalCase";
 
+export interface ScopeInfo {
+  files: string[];
+  excludedFiles: string[];
+  exclusions: { paths: string[]; zones: string[]; reason: string }[];
+}
+
 export interface Ctx {
+  /** Resolved governed files and exclusion policy, separate from evidence. */
+  scope(): ScopeInfo;
   /** Repository files, optionally filtered by a doublestar glob. */
   files(glob?: string): FileInfo[];
   /** Read one file's content. Throws on unreadable paths. */

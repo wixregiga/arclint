@@ -82,10 +82,12 @@ type FactsInfo struct {
 // is not part of the wire shape: in the target model it belongs to
 // the Rule, never to one finding.
 type ViolationInput struct {
-	Path    string `json:"path"`
-	Message string `json:"message"`
-	Line    int    `json:"line,omitempty"`
-	FixHint string `json:"fixHint,omitempty"`
+	// SubjectPath is the governed file; omitted means Path is also the subject.
+	SubjectPath string `json:"subjectPath,omitempty"`
+	Path        string `json:"path"`
+	Message     string `json:"message"`
+	Line        int    `json:"line,omitempty"`
+	FixHint     string `json:"fixHint,omitempty"`
 }
 
 // DomainInvariantInfo is one recorded invariant as exposed through
@@ -211,4 +213,21 @@ type DomainInfo struct {
 	Project   string               `json:"project"`
 	Contexts  []DomainContextInfo  `json:"contexts"`
 	Relations []DomainRelationInfo `json:"relations"`
+}
+
+// ScopeInfo is resolved Rule evaluation policy, separate from evidence.
+type ScopeInfo struct {
+	// Files are the governed repository-relative file paths after exclusions.
+	Files []string `json:"files"`
+	// ExcludedFiles would be governed without the Rule's exclusions.
+	ExcludedFiles []string        `json:"excludedFiles"`
+	Exclusions    []ExclusionInfo `json:"exclusions"`
+}
+
+// ExclusionInfo records the selectors and reason for an evaluation exclusion.
+// Exclusions never redact repository evidence.
+type ExclusionInfo struct {
+	Paths  []string `json:"paths"`
+	Zones  []string `json:"zones"`
+	Reason string   `json:"reason"`
 }

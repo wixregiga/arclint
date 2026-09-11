@@ -205,7 +205,7 @@ type failingExtensions struct {
 	err error
 }
 
-func (f failingExtensions) Evaluate(string, map[string]any, []string,
+func (f failingExtensions) Evaluate(string, map[string]any, conformance.ExtensionScope,
 	[]rule.Zone, conformance.Observations, vocab.UbiquitousLanguage,
 ) ([]conformance.ExtensionFinding, error) {
 	return nil, f.err
@@ -276,7 +276,7 @@ type recordingExtensions struct {
 	knowledge vocab.UbiquitousLanguage
 }
 
-func (r *recordingExtensions) Evaluate(_ string, _ map[string]any, _ []string,
+func (r *recordingExtensions) Evaluate(_ string, _ map[string]any, _ conformance.ExtensionScope,
 	_ []rule.Zone, _ conformance.Observations, knowledge vocab.UbiquitousLanguage,
 ) ([]conformance.ExtensionFinding, error) {
 	r.knowledge = knowledge

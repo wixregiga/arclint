@@ -10,7 +10,9 @@ export default defineRule({
   check(ctx, params) {
     const allowed = params.concerns as string[];
     const prefix = "internal/shared/";
+    const subjects = new Set(ctx.scope().files);
     for (const file of ctx.files()) {
+      if (!subjects.has(file.path)) continue;
       const path = file.path.replace(/\\/g, "/");
       if (!path.startsWith(prefix)) {
         ctx.report({

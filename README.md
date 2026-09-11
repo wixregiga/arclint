@@ -258,8 +258,11 @@ Patterns carry their own extensions: extend `arclint/vertical@0.1.0`
 and its rules find `vertical/forbid-imports` without any file landing
 in your tree.
 
-Extensions see exactly the subjects the rule's scope selects;
-findings outside that scope are rejected. The capability surface is
+Extensions inspect repository-wide evidence and receive the governed
+files separately through `ctx.scope()`. Forward checks iterate its
+`files`; reverse checks can report an importer through `path` while
+identifying a protected file through `subjectPath`. Findings whose
+subject is outside Scope are rejected. The capability surface is
 one interface for every language: `ctx.files`, `ctx.read`,
 `ctx.imports`, and `ctx.facts`, with the same normalized shapes for Go,
 TypeScript, and Python. Declarations use a closed cross-language

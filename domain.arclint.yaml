@@ -119,7 +119,9 @@ contexts:
           Which code a Rule applies to: the repository or selected
           Zones, optionally narrowed by file paths, with Exclusions
           removing selected code from evaluation. A Scope is carried
-          by its Rule and has no independent identity.
+          by its Rule and has no independent identity. It determines what
+          the Rule governs, without limiting the repository evidence
+          its Constraint may inspect.
       Severity:
         definition: >-
           Gate importance of a finding: error, warning, or info.
@@ -241,7 +243,9 @@ contexts:
         definition: >-
           The decision removing selected paths or Zones from what one
           Rule judges, with a reason. Excluded subjects are reported as
-          not applicable, never silently dropped.
+          not applicable, never silently dropped. Removing a subject from
+          evaluation does not remove it or other code from the evidence
+          available to the Rule.
         invariants:
           names-a-subject-with-a-reason: >-
             An Exclusion names at least one path or Zone and carries
@@ -281,7 +285,9 @@ contexts:
           and carrying the PatternReference of the Pattern that
           distributed the Rule when one did. It has no lifecycle: every
           assessment derives its Violations fresh, and two Violations
-          with the same values are the same finding.
+          with the same values are the same finding. The code governed by
+          the Rule is distinct from the file and line carrying evidence
+          of the breach, which may lie outside the Rule's Scope.
   distribution:
     definition: >-
       Moving published Patterns between repositories without changing

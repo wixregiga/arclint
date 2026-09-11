@@ -9,7 +9,9 @@ export default defineRule({
   }),
   check(ctx, params) {
     const packages = params.packages as string[];
+    const subjects = new Set(ctx.scope().files);
     for (const file of ctx.files()) {
+      if (!subjects.has(file.path)) continue;
       for (const imp of ctx.imports(file.path)) {
         for (const pkg of packages) {
           if (imp.path === pkg || imp.path.startsWith(pkg + "/")) {

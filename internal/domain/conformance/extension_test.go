@@ -20,12 +20,12 @@ type fakeExtensions struct {
 	}
 }
 
-func (f *fakeExtensions) Evaluate(extension string, params map[string]any, subjects []string,
+func (f *fakeExtensions) Evaluate(extension string, params map[string]any, scope conformance.ExtensionScope,
 	zones []rule.Zone, obs conformance.Observations, knowledge vocab.UbiquitousLanguage,
 ) ([]conformance.ExtensionFinding, error) {
 	f.saw.extension = extension
 	f.saw.params = params
-	f.saw.subjects = subjects
+	f.saw.subjects = scope.Files
 	return f.findings, f.err
 }
 
@@ -265,4 +265,86 @@ func diagKeys(a conformance.Assessment) []string {
 		out = append(out, string(d.Kind())+"|"+d.RuleID()+"|"+d.Path()+"|"+d.Message())
 	}
 	return out
+}
+
+func TestExtensionSeparatesSubjectFromEvidence(t *testing.T) {
+	evaluator := &fakeExtensions{findings: []conformance.ExtensionFinding{
+		{SubjectPath: "m/clean.go", Path: "consumer/run.go", Line: 8, Message: "forbidden importer"},
+	}}
+	req := extensionRequest(t, evaluator)
+	var err error
+	req.Observations, err = conformance.NewObservations(append(req.Observations.Files(),
+		conformance.ObservedFile{Path: "consumer/run.go"}), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := conformance.Run(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vs := a.ActiveViolations()
+	if len(vs) != 1 {
+		t.Fatalf("violations = %v; diagnostics = %v", violationKeys(vs), diagKeys(a))
+	}
+	v := vs[0]
+	if v.Subject().Identity() != "m/clean.go" || v.Path() != "consumer/run.go" || v.Line() != 8 {
+		t.Fatalf("subject=%s evidence=%s:%d", v.Subject().Identity(), v.Path(), v.Line())
+	}
+	if v.Fingerprint() != conformance.Fingerprint(v.Rule().Qualified(), "m/clean.go", v.Message()) {
+		t.Fatal("baseline identity must remain anchored to the governed subject")
+	}
+	// Suppression remains a reporting decision on the evidence location.
+	suppression, err := rule.NewSuppression([]rule.Glob{mustGlob(t, "consumer/**")}, "accepted importer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Rules[0] = req.Rules[0].Suppress(suppression)
+	a, err = conformance.Run(req)
+	if err != nil || len(a.ActiveViolations()) != 0 || len(a.Violations()) != 1 || a.Violations()[0].Status() != conformance.StatusSuppressed {
+		t.Fatalf("suppression: err=%v diagnostics=%v", err, diagKeys(a))
+	}
+}
+
+func TestExtensionExplicitAttributionBreaches(t *testing.T) {
+	for _, tc := range []struct {
+		name, subject, path, message string
+	}{
+		{"outside subject", "elsewhere/a.go", "m/dirty.go", "outside the rule's scope"},
+		{"excluded subject", "m/clean.go", "m/dirty.go", "outside the rule's scope"},
+		{"noncanonical subject", "m/../m/dirty.go", "m/dirty.go", "outside the rule's scope"},
+		{"missing evidence", "m/dirty.go", "missing.go", "outside the repository observations"},
+		{"escaping evidence", "m/dirty.go", "../secret.go", "outside the repository observations"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			evaluator := &fakeExtensions{findings: []conformance.ExtensionFinding{
+				{SubjectPath: tc.subject, Path: tc.path, Message: "untrustworthy"},
+				{Path: "m/dirty.go", Message: "also discarded"},
+			}}
+			req := extensionRequest(t, evaluator)
+			ex, err := rule.NewExclusion([]rule.Glob{mustGlob(t, "m/clean.go")}, nil, "legacy")
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Rules[0], err = req.Rules[0].Exclude(ex)
+			if err != nil {
+				t.Fatal(err)
+			}
+			a, err := conformance.Run(req)
+			if err != nil || !a.HasErrors() || len(a.Violations()) != 0 {
+				t.Fatalf("err=%v diagnostics=%v", err, diagKeys(a))
+			}
+			var failed, excluded int
+			for _, e := range a.Evaluations() {
+				switch e.Outcome() {
+				case conformance.OutcomeFailed:
+					failed++
+				case conformance.OutcomeNotApplicable:
+					excluded++
+				}
+			}
+			if failed != 1 || excluded != 1 || !strings.Contains(strings.Join(diagKeys(a), "\n"), tc.message) {
+				t.Fatalf("failed=%d excluded=%d diagnostics=%v", failed, excluded, diagKeys(a))
+			}
+		})
+	}
 }

@@ -5,7 +5,9 @@ export default defineRule({
   description: "require repository methods to take ctx context.Context first",
   capability: "structural",
   check(ctx) {
+    const subjects = new Set(ctx.scope().files);
     for (const file of ctx.files()) {
+      if (!subjects.has(file.path)) continue;
       const facts = ctx.facts(file.path);
       if (!facts) {
         continue;

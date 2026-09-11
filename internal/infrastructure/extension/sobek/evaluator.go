@@ -16,7 +16,7 @@ import (
 // Evaluator implements the domain's ExtensionEvaluator port: discover
 // and register the repository's extensions once, validate parameters
 // host-side against the extension's published schema, and lend the
-// sandboxed Host scoped to exactly the Rule's selected subjects.
+// sandboxed Host with repository observations and resolved Scope separately.
 // Per-finding severity, contract, and blame from the legacy wire shape
 // are ignored: in the target model Severity belongs to the Rule.
 type Evaluator struct {
@@ -82,7 +82,7 @@ func SuppliedSourceName(ext rule.ConfiguredExtension) string {
 }
 
 // Evaluate runs one extension rule over the selected subjects.
-func (e *Evaluator) Evaluate(extension string, params map[string]any, subjects []string,
+func (e *Evaluator) Evaluate(extension string, params map[string]any, scope conformance.ExtensionScope,
 	zones []rule.Zone, obs conformance.Observations, knowledge vocab.UbiquitousLanguage,
 ) ([]conformance.ExtensionFinding, error) {
 	e.load()
@@ -98,13 +98,14 @@ func (e *Evaluator) Evaluate(extension string, params map[string]any, subjects [
 	if err != nil {
 		return nil, err
 	}
-	reported, err := ruleType.Check(e.host(subjects, zones, obs, knowledge), validated)
+	reported, err := ruleType.Check(e.host(scope, zones, obs, knowledge), validated)
 	if err != nil {
 		return nil, err
 	}
 	findings := make([]conformance.ExtensionFinding, 0, len(reported))
 	for _, v := range reported {
 		findings = append(findings, conformance.ExtensionFinding{
+			SubjectPath: v.SubjectPath,
 			Path:        v.Path,
 			Line:        v.Line,
 			Message:     v.Message,
@@ -130,16 +131,16 @@ func (e *Evaluator) RegisteredExtensionRules() ([]application.RegisteredExtensio
 	return out, nil
 }
 
-// host lends the read-only capability surface, scoped to the selected
-// subjects: files outside the Rule's Scope are invisible and
-// unreadable, so exclusions hold mechanically.
-func (e *Evaluator) host(subjects []string, zones []rule.Zone, obs conformance.Observations, knowledge vocab.UbiquitousLanguage) Host {
-	inScope := make(map[string]bool, len(subjects))
-	for _, s := range subjects {
-		inScope[s] = true
+// host lends repository observations for evidence, independently of the
+// Rule's governed files. Reads cannot escape the observed repository.
+func (e *Evaluator) host(scope conformance.ExtensionScope, zones []rule.Zone, obs conformance.Observations, knowledge vocab.UbiquitousLanguage) Host {
+	observed := make(map[string]bool)
+	for _, f := range obs.Files() {
+		observed[f.Path] = true
 	}
 	domain := domainInfoFrom(knowledge)
 	return Host{
+		Scope: func() ScopeInfo { return scopeInfoFrom(scope) },
 		Files: func(glob string) ([]FileInfo, error) {
 			var matcher *rule.Glob
 			if glob != "" {
@@ -151,9 +152,6 @@ func (e *Evaluator) host(subjects []string, zones []rule.Zone, obs conformance.O
 			}
 			out := []FileInfo{}
 			for _, f := range obs.Files() {
-				if !inScope[f.Path] {
-					continue
-				}
 				if matcher != nil && !matcher.Match(f.Path) {
 					continue
 				}
@@ -171,8 +169,8 @@ func (e *Evaluator) host(subjects []string, zones []rule.Zone, obs conformance.O
 			return out, nil
 		},
 		Read: func(path string) (string, error) {
-			if !inScope[path] {
-				return "", fmt.Errorf("%s is outside this rule's scope", path)
+			if !observed[path] {
+				return "", fmt.Errorf("%s is outside the repository observations", path)
 			}
 			content := obs.Content()
 			if content == nil {
@@ -185,7 +183,7 @@ func (e *Evaluator) host(subjects []string, zones []rule.Zone, obs conformance.O
 			return data, nil
 		},
 		Imports: func(path string) []ImportInfo {
-			if !inScope[path] {
+			if !observed[path] {
 				return nil
 			}
 			facts, ok := obs.FactsFor(path)
@@ -205,7 +203,7 @@ func (e *Evaluator) host(subjects []string, zones []rule.Zone, obs conformance.O
 			return out
 		},
 		Facts: func(path string) *FactsInfo {
-			if !inScope[path] {
+			if !observed[path] {
 				return nil
 			}
 			facts, ok := obs.FactsFor(path)
@@ -233,9 +231,9 @@ func (e *Evaluator) host(subjects []string, zones []rule.Zone, obs conformance.O
 			out := map[string][]string{}
 			for _, m := range zones {
 				members := []string{}
-				for _, f := range subjects {
-					if m.Contains(f) {
-						members = append(members, f)
+				for _, f := range obs.Files() {
+					if m.Contains(f.Path) {
+						members = append(members, f.Path)
 					}
 				}
 				out[string(m.Name())] = members
@@ -243,7 +241,7 @@ func (e *Evaluator) host(subjects []string, zones []rule.Zone, obs conformance.O
 			return out
 		},
 		ZoneOf: func(path string) []string {
-			if !inScope[path] {
+			if !observed[path] {
 				return nil
 			}
 			var out []string
@@ -434,4 +432,23 @@ func NewSDKWriter(root string) (SDKWriter, error) {
 // .arclint/extensions.
 func (w SDKWriter) Write() ([]string, error) {
 	return SDKInit(w.root)
+}
+
+func scopeInfoFrom(scope conformance.ExtensionScope) ScopeInfo {
+	info := ScopeInfo{
+		Files:         append([]string{}, scope.Files...),
+		ExcludedFiles: append([]string{}, scope.ExcludedFiles...),
+		Exclusions:    []ExclusionInfo{},
+	}
+	for _, exclusion := range scope.Exclusions {
+		policy := ExclusionInfo{Paths: []string{}, Zones: []string{}, Reason: exclusion.Reason()}
+		for _, path := range exclusion.Paths() {
+			policy.Paths = append(policy.Paths, path.String())
+		}
+		for _, zone := range exclusion.Zones() {
+			policy.Zones = append(policy.Zones, string(zone))
+		}
+		info.Exclusions = append(info.Exclusions, policy)
+	}
+	return info
 }

@@ -29,6 +29,7 @@ type RuleType struct {
 // check() invocation. Extensions get exactly this and nothing else: no
 // filesystem, no network, no Node shims.
 type Host struct {
+	Scope   func() ScopeInfo
 	Files   func(glob string) ([]FileInfo, error)
 	Read    func(path string) (string, error)
 	Imports func(path string) []ImportInfo
@@ -65,7 +66,7 @@ const sandboxJS = `
 		throw new Error("arclint: the runtime API is unavailable during the registration phase; use the ctx passed to check()");
 	};
 	globalThis.__arclint = Object.freeze({
-		files: guard, read: guard, imports: guard, zones: guard, report: guard
+		files: guard, read: guard, imports: guard, zones: guard, scope: guard, report: guard
 	});
 })();
 `
@@ -252,6 +253,12 @@ func (rt *RuleType) Check(host Host, params map[string]any) ([]ViolationInput, e
 			panic(err)
 		}
 	}
+	mustSet("scope", func(_ sobek.FunctionCall) sobek.Value {
+		if host.Scope == nil {
+			return vm.ToValue(ScopeInfo{Files: []string{}, ExcludedFiles: []string{}, Exclusions: []ExclusionInfo{}})
+		}
+		return vm.ToValue(host.Scope())
+	})
 	mustSet("files", func(call sobek.FunctionCall) sobek.Value {
 		glob := ""
 		if len(call.Arguments) > 0 && !sobek.IsUndefined(call.Arguments[0]) {
@@ -333,6 +340,13 @@ func (rt *RuleType) Check(host Host, params map[string]any) ([]ViolationInput, e
 			return fail("ctx.report: argument must be an object")
 		}
 		v := ViolationInput{}
+		if rawSubject, present := raw["subjectPath"]; present {
+			subject, ok := rawSubject.(string)
+			if !ok || subject == "" {
+				return fail("ctx.report: subjectPath must be a non-empty string when supplied")
+			}
+			v.SubjectPath = subject
+		}
 		if s, ok := raw["path"].(string); ok {
 			v.Path = s
 		}
