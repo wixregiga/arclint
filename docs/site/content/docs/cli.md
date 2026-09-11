@@ -21,7 +21,7 @@ weight = 6
 | `arclint domain list [type]` | list domain definitions, optionally filtered to `contexts`, `aggregates`, `entities`, `value_objects`, `invariants`, `assertions`, `specifications`, `events`, `services`, or `questions`; `--context` narrows to one context |
 | `arclint domain show <type> <name>` | show one domain definition by singular type and canonical name |
 | `arclint domain explain [type]` | explain ArcLint's supported domain concepts |
-| `arclint domain define <type> <name>` | create or update a domain definition inside a bounded context; `--guided` starts interactive authoring |
+| `arclint domain define <type> <name>` | create or update a domain definition inside a bounded context; existing names complete from the recorded vocabulary and new names remain valid; `--guided` starts interactive authoring |
 | `arclint domain remove <type> <name>` | remove a domain definition (`rm` alias); never touches source files |
 | `arclint domain schema` | print the JSON Schema accepted for `domain.arclint.yaml`; `--write` puts it at `.arclint/schemas/domain.arclint.schema.json` (or under `--dir`) so the file's modeline can name a local copy |
 | `arclint agents` | command group for agent-facing artifacts |
@@ -238,7 +238,8 @@ Completion uses the resolved `rules.arclint.yaml` when available: Rule IDs for
 `context --zone`, supported languages for `init --languages` and
 `patterns install --languages`, `bare` plus every visible Pattern
 reference for `init --pattern`, every offline Pattern reference for the
-`patterns install`, `vendor`, and `export` argument, and the closed
+`patterns install`, `vendor`, and `export` argument, recorded names of the
+selected concept for the second `domain define` argument, and the closed
 `human` / `json` output-format values. Without a loadable
 repository configuration, repository-derived candidates stay empty.
 Command aliases complete alongside canonical names (`agents mar<TAB>`

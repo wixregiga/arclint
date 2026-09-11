@@ -94,7 +94,7 @@ func NewDomainCommand(
 				Example:      defineExample,
 				MaxArgs:      2,
 				Flags:        defineFlags(),
-				CompleteArgs: completeConcepts(),
+				CompleteArgs: completeShowArgs(list),
 				Run:          defineRunner(define, render),
 			},
 			{
@@ -697,9 +697,10 @@ func conceptSingularCandidates(toComplete string) []AutoCompleteCandidate {
 	return filterCandidates(toComplete, values)
 }
 
-// definitionNameCandidates completes the name argument of show and
-// remove with what the project records under the concept: keys for
-// invariants, assertions, and questions; names for everything else.
+// definitionNameCandidates completes the name argument of show,
+// define, and remove with what the project records under the concept:
+// keys for invariants, assertions, and questions; names for everything
+// else. Define still accepts names outside these suggestions.
 func definitionNameCandidates(list application.ListDomainDefinitions, conceptArg, toComplete string) []AutoCompleteCandidate {
 	concept, err := vocab.ParseConcept(conceptArg)
 	if err != nil {
@@ -871,6 +872,9 @@ const defineLong = `Create or update a domain definition.
 If the named entry does not exist, ArcLint records it. If it already exists,
 ArcLint changes only the properties the command passes; a property passed empty
 is recorded empty. Running the same command again changes nothing.
+
+Shell completion suggests existing names of the selected concept from the
+recorded vocabulary. A new name remains valid because define also creates entries.
 
 Every concept takes the properties its building block records, and needs its
 required ones when first recorded:
