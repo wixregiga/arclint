@@ -290,6 +290,7 @@ export function createScene(container: HTMLElement, callbacks: SceneCallbacks): 
     const { center, extent } = fitBounds();
     const width = Math.max(extent.x, 25), depth = Math.max(extent.z, 25);
     const size = Math.max(width / Math.max(camera.aspect, .55), depth * .72);
+    if (!state?.scopeId && !state?.aggregateId) center.y -= size * .06;
     const distance = size * (state?.scopeId || state?.aggregateId ? 1.27 : 1.36);
     travel(center.clone().add(new THREE.Vector3(distance * .38, distance * .85, distance)), center);
   }
