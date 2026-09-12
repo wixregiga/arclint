@@ -8,6 +8,6 @@ export interface Finding { id: string; severity: 'warning' | 'error'; subjectId:
 export interface Change { id: string; type: 'added' | 'changed' | 'removed'; subject: 'concept' | 'context' | 'relationship'; name: string; detail: string }
 export interface PatternSummary { name: string; description: string; rules: { id: string; description: string }[] }
 export type StudioMode = 'domain' | 'patterns' | 'baseline';
-export interface SceneState { project: DomainProject; selectedId: string | null; mode: StudioMode; baseline: Baseline | null; findings: Finding[]; search: string }
-export interface SceneController { update(state: SceneState): void; focus(id: string): void; overview(): void; topView(): void; zoom(direction: number): void; dispose(): void }
-export interface SceneCallbacks { select(id: string | null): void; move(id: string, position: [number, number, number]): void }
+export interface SceneState { project: DomainProject; selectedId: string | null; mode: StudioMode; baseline: Baseline | null; findings: Finding[]; search: string; scopeId?: string | null; aggregateId?: string | null }
+export interface SceneController { update(state: SceneState): void; focus(id: string): void; overview(): void; topView(): void; zoom(direction: number): void; dispose(): void; screenPosition?(id: string): {x: number; y: number} | null }
+export interface SceneCallbacks { select(id: string | null): void; move(id: string, position: [number, number, number]): void; enter?(id: string): void }

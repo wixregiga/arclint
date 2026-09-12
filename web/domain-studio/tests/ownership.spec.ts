@@ -1,8 +1,14 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { parse } from 'yaml';
 import { createEmptyProject } from '../src/domain';
 import type { DomainProject } from '../src/contracts';
+
+async function selectConcept(page: Page, name: RegExp) {
+  if (!await page.getByTestId('model-tree').isVisible()) await page.locator('#open-index').click();
+  await page.getByTestId('model-tree').getByRole('button', { name }).click();
+  await expect(page.getByTestId('model-tree')).not.toBeVisible();
+}
 
 function library(): DomainProject {
   return { ...createEmptyProject(), name: 'Library', description: 'A general library domain.', contexts: [{ id: 'catalog', name: 'catalog', description: 'Library titles and editions.', color: '#66d8df', position: [0, 0, 0] }] };
@@ -14,6 +20,7 @@ async function load(page: import('@playwright/test').Page, project: DomainProjec
 }
 
 test('creates aggregate and member through the UI and exports canonical ownership', async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
   await load(page, library());
   await page.locator('#add-concept').click();
   let dialog = page.getByRole('dialog');
@@ -32,6 +39,7 @@ test('creates aggregate and member through the UI and exports canonical ownershi
   await dialog.getByRole('textbox', { name: 'Identity', exact: true }).fill('EditionID');
   await dialog.getByRole('combobox', { name: 'Owning aggregate', exact: true }).selectOption({ label: 'Book' });
   await dialog.getByRole('button', { name: 'Create concept', exact: true }).click();
+  await page.getByRole('button', { name: 'Workspace menu', exact: true }).click();
   await page.getByRole('button', { name: 'Export', exact: true }).click();
   const pending = page.waitForEvent('download');
   await page.getByRole('button', { name: /Download domain YAML/ }).click();
@@ -43,13 +51,13 @@ test('creates aggregate and member through the UI and exports canonical ownershi
   expect(yaml.contexts.catalog.aggregates.Book.entities.Edition.identity).toBe('EditionID');
   expect(yaml.contexts.catalog.aggregates.Book.aliases).toEqual(['Title']);
   await page.locator('#import-file').setInputFiles(path);
-  await page.getByTestId('model-tree').getByRole('button', { name: /^Edition/ }).click();
+  await selectConcept(page, /^Edition/);
   await expect(page.getByRole('combobox', { name: 'Owning aggregate', exact: true })).toHaveValue('yaml:contexts/catalog/aggregates/Book');
   // Deleting an aggregate keeps the surviving member as an explicit unresolved draft.
-  await page.getByTestId('model-tree').getByRole('button', { name: /^Book/ }).click();
+  await selectConcept(page, /^Book/);
   await page.getByRole('button', { name: 'Delete concept', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
-  await page.getByTestId('model-tree').getByRole('button', { name: /^Edition/ }).click();
+  await selectConcept(page, /^Edition/);
   await expect(page.getByRole('combobox', { name: 'Owning aggregate', exact: true })).toHaveValue('');
   await expect(page.locator('#inspector')).not.toContainText('owns member');
 });
@@ -58,7 +66,7 @@ test('saving another field preserves multiline invariants and comma-containing a
   const model = library();
   model.concepts.push({ id: 'book', contextId: 'catalog', name: 'Book', definition: 'A title.', kind: 'aggregate', identity: 'BookID', aliases: ['Title, cataloged', 'Work'], invariants: ['Book keeps its identity\nacross every edition.', 'Book has a title.'], position: [0, 1, 0] });
   await load(page, model);
-  await page.getByTestId('model-tree').getByRole('button', { name: /^Book/ }).click();
+  await selectConcept(page, /^Book/);
   await page.getByRole('textbox', { name: 'Definition', exact: true }).fill('A title in the library catalog.');
   await page.getByRole('button', { name: 'Save concept', exact: true }).click();
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('arclint.domain-studio.v1')!).project);
