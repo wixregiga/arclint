@@ -72,11 +72,19 @@ export function assertProject(value: unknown): DomainProject {
     concepts: array(raw.concepts, 'Concepts').map(entry => {
       const c = object(entry, 'Concept');
       if (!kinds.includes(c.kind as ConceptKind)) throw new Error(`Unknown concept kind: ${String(c.kind)}.`);
+      const assertions = c.assertions === undefined ? {} : { assertions: array(c.assertions, 'Assertions').map(entry => {
+        const assertion = object(entry, 'Assertion');
+        const key = string(assertion.key, 'Assertion key');
+        if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(key)) throw new Error('Assertion keys use lowercase words separated by hyphens.');
+        return { key, on: string(assertion.on, 'Assertion operation'), statement: string(assertion.statement, 'Assertion statement') };
+      }) };
+      if (assertions.assertions && (c.kind !== 'aggregate' || new Set(assertions.assertions.map(a => a.key)).size !== assertions.assertions.length)) throw new Error('Assertions require an aggregate and unique keys.');
+      const raisedBy = c.raisedBy === undefined ? {} : { raisedBy: string(c.raisedBy, 'Event source') };
       const identity = c.identity === undefined ? {} : { identity: string(c.identity, 'Concept identity', true) };
       const owner = c.ownerId === undefined ? {} : { ownerId: string(c.ownerId, 'Aggregate owner ID', true) };
       const aliases = c.aliases === undefined ? {} : { aliases: array(c.aliases, 'Aliases').map(v => string(v, 'Alias')) };
       if (aliases.aliases && new Set(aliases.aliases).size !== aliases.aliases.length) throw new Error('Aliases must be unique.');
-      return { ...identity, ...owner, ...aliases, id: string(c.id, 'Concept ID'), name: string(c.name, 'Concept name', true), definition: string(c.definition, 'Concept definition', true), contextId: string(c.contextId, 'Concept context'), kind: c.kind as ConceptKind, position: position(c.position), invariants: array(c.invariants, 'Invariants').map(v => string(v, 'Invariant', true)) };
+      return { ...assertions, ...raisedBy, ...identity, ...owner, ...aliases, id: string(c.id, 'Concept ID'), name: string(c.name, 'Concept name', true), definition: string(c.definition, 'Concept definition', true), contextId: string(c.contextId, 'Concept context'), kind: c.kind as ConceptKind, position: position(c.position), invariants: array(c.invariants, 'Invariants').map(v => string(v, 'Invariant', true)) };
     }),
     relationships: array(raw.relationships, 'Relationships').map(entry => {
       const r = object(entry, 'Relationship');
@@ -116,8 +124,8 @@ export function validateProject(project: DomainProject): Finding[] {
   }
   const conceptNames = new Set<string>();
   for (const concept of project.concepts) {
-    if (!concept.name.trim()) add(concept.id, 'Concept needs a name', 'Give this concept a name from the domain.', 'error');
-    if (!concept.definition.trim()) add(concept.id, 'Meaning is undefined', 'Describe what this concept means.');
+    if (!concept.name.trim()) add(concept.id, 'Domain entry needs a name', 'Give this domain entry a name.', 'error');
+    if (!concept.definition.trim()) add(concept.id, 'Meaning is undefined', 'Record its meaning in this context.');
     if (concept.kind === 'unclassified') add(concept.id, 'Classification is open', 'Confirm identity, value equality, and ownership before choosing a domain kind.');
     if (concept.kind === 'aggregate' && !concept.identity?.trim()) add(concept.id, 'Aggregate identity is open', 'Name the value object carrying this aggregate root’s identity before canonical YAML export.');
     if (['entity', 'repository', 'factory'].includes(concept.kind) && !concept.ownerId) add(concept.id, 'Aggregate owner is open', 'Choose the aggregate that owns this member before canonical YAML export.');
@@ -126,7 +134,7 @@ export function validateProject(project: DomainProject): Finding[] {
     const key = `${concept.contextId}:${concept.name.trim().toLowerCase()}`;
     if (conceptNames.has(key)) add(concept.id, 'Repeated term', 'A context should define one meaning for a term.', 'error');
     conceptNames.add(key);
-    if (!project.contexts.some(c => c.id === concept.contextId)) add(concept.id, 'Missing context', 'Place this concept inside an existing context.', 'error');
+    if (!project.contexts.some(c => c.id === concept.contextId)) add(concept.id, 'Missing context', 'Choose the bounded context where this meaning applies.', 'error');
   }
   for (const c of project.concepts) if (c.ownerId) {
     const owner = project.concepts.find(candidate => candidate.id === c.ownerId);
@@ -148,13 +156,13 @@ export function diffProjects(baseline: DomainProject, current: DomainProject): C
     for (const [id, item] of after) {
       const previous = before.get(id);
       const name = 'name' in item ? item.name : item.label;
-      if (!previous) changes.push({ id, subject, name, type: 'added', detail: 'Added since the baseline.' });
+      if (!previous) changes.push({ id, subject, name, type: 'added', detail: 'Added since the model snapshot.' });
       else {
-        const fields = Object.keys(item).filter(key => JSON.stringify((item as unknown as Record<string, unknown>)[key]) !== JSON.stringify((previous as unknown as Record<string, unknown>)[key]));
+        const fields = [...new Set([...Object.keys(item), ...Object.keys(previous)])].filter(key => JSON.stringify((item as unknown as Record<string, unknown>)[key]) !== JSON.stringify((previous as unknown as Record<string, unknown>)[key]));
         if (fields.length) changes.push({ id, subject, name, type: 'changed', detail: fields.length === 1 && fields[0] === 'position' ? 'Position changed; domain meaning unchanged.' : `Changed ${fields.join(', ')}.` });
       }
     }
-    for (const [id, item] of before) if (!after.has(id)) changes.push({ id, subject, name: 'name' in item ? item.name : item.label, type: 'removed', detail: 'Removed since the baseline.' });
+    for (const [id, item] of before) if (!after.has(id)) changes.push({ id, subject, name: 'name' in item ? item.name : item.label, type: 'removed', detail: 'Removed since the model snapshot.' });
   }
   return changes;
 }

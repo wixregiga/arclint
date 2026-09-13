@@ -34,10 +34,44 @@ test('canonical definitions/invariants edits preserve identity, aliases, asserti
   assert.equal(result.invariants['lines-present'], 'Order has at least one line.');
 });
 
-test('unsupported canonical structural edits fail explicitly while JSON remains available', () => {
+test('canonical renames preserve unrelated source metadata and remain editable', () => {
   const project = importProject(source); project.concepts[0].name = 'Renamed';
-  assert.throws(() => exportDomainYaml(project), /Canonical YAML cannot preserve/);
+  const revised = importProject(exportDomainYaml(project));
+  assert.ok(revised.concepts.some(c => c.name === 'Renamed'));
+  assert.deepEqual(revised.sourceDocument?.relations, project.sourceDocument?.relations);
   assert.equal(importProject(exportProject(project)).concepts[0].name, 'Renamed');
+});
+
+test('adding and removing domain entries preserves unrelated assertions, relations and invariant keys', () => {
+  const project = importProject(source);
+  const before = parse(source);
+  const context = project.contexts.find(c => c.name === 'rule')!;
+  project.concepts.push({id:'new-policy-value',name:'PolicyRevision',kind:'value_object',contextId:context.id,definition:'The revision of an authored policy.',position:[1,0,1],invariants:['A revision is positive.']});
+  const revised = parse(exportDomainYaml(project));
+  assert.equal(revised.contexts.rule.value_objects.PolicyRevision.definition,'The revision of an authored policy.');
+  assert.deepEqual(revised.contexts.rule.aggregates,before.contexts.rule.aggregates);
+  assert.deepEqual(revised.relations,before.relations);
+  project.concepts = project.concepts.filter(c => c.id !== 'new-policy-value');
+  assert.deepEqual(parse(exportDomainYaml(project)),before);
+});
+
+test('typed operation assertions can be added and edited without rewriting invariants', () => {
+  const project = importProject(source);
+  const root = project.concepts.find(c => c.kind === 'aggregate')!;
+  const previous = [...root.invariants];
+  root.assertions = [...root.assertions ?? [],{key:'review-complete',on:'Review',statement:'Every proposed edit is recorded.'}];
+  const revised = importProject(exportDomainYaml(project));
+  const written = revised.concepts.find(c => c.name === root.name)!;
+  assert.deepEqual(written.assertions?.find(a => a.key === 'review-complete'),{key:'review-complete',on:'Review',statement:'Every proposed edit is recorded.'});
+  assert.deepEqual(written.invariants,previous);
+  written.assertions!.find(a => a.key === 'review-complete')!.statement = 'Every accepted edit is recorded.';
+  assert.equal(importProject(exportDomainYaml(revised)).concepts.find(c => c.name === root.name)!.assertions!.find(a => a.key === 'review-complete')!.statement,'Every accepted edit is recorded.');
+});
+
+test('incompatible reclassification cannot silently erase operation contracts', () => {
+  const project = importProject('version: 1\nproject: shop\ncontexts:\n  orders:\n    definition: Orders\n    aggregates:\n      Order:\n        definition: Order\n        identity: OrderID\n        assertions:\n          ready:\n            on: Confirm\n            statement: Is ready\n');
+  project.concepts[0].kind = 'value_object';
+  assert.throws(() => exportDomainYaml(project),/Assertions require an aggregate/);
 });
 
 test('unconfirmed sample concepts export as questions, never invented aggregate/value types', () => {

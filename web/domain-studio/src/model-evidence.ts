@@ -1,7 +1,7 @@
 import type { Concept, DomainProject, Relationship } from './contracts';
 
 export const kindNames: Record<Concept['kind'], string> = {
-  unclassified: 'Unclassified', aggregate: 'Aggregate', entity: 'Entity', value_object: 'Value object',
+  unclassified: 'Open question', aggregate: 'Aggregate', entity: 'Entity', value_object: 'Value object',
   domain_event: 'Domain event', domain_service: 'Domain service', specification: 'Specification', repository: 'Repository', factory: 'Factory',
 };
 export type RecordedContract = { key: string; statement: string };
@@ -29,7 +29,7 @@ export function conceptContracts(project: DomainProject, concept: Concept): { in
     const key = previous.find(([key, value]) => value === statement && !used.has(key))?.[0] ?? `draft-${index + 1}`;
     used.add(key); return { key, statement };
   });
-  const assertions = Object.entries(record(source.assertions)).flatMap(([key, value]) => {
+  const assertions = concept.assertions?.map(a => ({key:a.key,operation:a.on,statement:a.statement})) ?? Object.entries(record(source.assertions)).flatMap(([key, value]) => {
     const entry = record(value);
     return typeof entry.on === 'string' && typeof entry.statement === 'string' ? [{ key, operation: entry.on, statement: entry.statement }] : [];
   });
@@ -38,8 +38,7 @@ export function conceptContracts(project: DomainProject, concept: Concept): { in
 export function relationshipDescription(project: DomainProject, relationship: Relationship): { label: string; meaning: string; direction: 'forward' | 'both' | 'none' } {
   const name = (id: string) => [...project.contexts, ...project.concepts].find(item => item.id === id)?.name ?? id;
   const source = name(relationship.source), target = name(relationship.target);
-  const recordedRelations = project.sourceDocument?.relations;
-  const canonical = relationship.id.startsWith('yaml:relations/') && Array.isArray(recordedRelations) && record(recordedRelations[Number(relationship.id.split('/').at(-1))]).kind === relationship.label && project.contexts.some(c => c.id === relationship.source) && project.contexts.some(c => c.id === relationship.target);
+  const canonical = ['partnership','shared_kernel','conformist','customer_supplier','anticorruption_layer','open_host_service','published_language','separate_ways'].includes(relationship.label) && project.contexts.some(c => c.id === relationship.source) && project.contexts.some(c => c.id === relationship.target);
   if (canonical && ['partnership', 'shared_kernel'].includes(relationship.label)) return { label: relationship.label.replaceAll('_', ' '), meaning: `${source} ↔ ${target}: influence runs both ways.`, direction: 'both' };
   if (canonical && relationship.label === 'separate_ways') return { label: 'separate ways', meaning: `${source} and ${target} have no recorded connection.`, direction: 'none' };
   if (canonical) return { label: relationship.label.replaceAll('_', ' '), meaning: `${source} → ${target}: upstream model influences downstream (${relationship.label.replaceAll('_', ' ')}). This arrow does not show imports.`, direction: 'forward' };

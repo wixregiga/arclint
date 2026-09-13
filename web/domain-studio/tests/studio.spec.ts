@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { createExampleProject } from '../src/domain';
+
+test.beforeEach(async ({page}) => {
+  await page.addInitScript(project => localStorage.setItem('arclint.domain-studio.v1',JSON.stringify({project,baseline:null,patterns:[]})),createExampleProject());
+});
 
 import { openNavigator, selectConcept, selectPlace, workspaceAction, creationAction, toolId, toolButton } from './studio.helpers';
 
@@ -25,7 +30,7 @@ test('inspects imported Pattern rules and prepares a scoped AI request', async (
   expect(await readFile(path, 'utf8')).toContain('Skill');
 });
 
-test('edits an unrelated domain, restores it, and compares a baseline', async ({ page }, testInfo) => {
+test('edits an unrelated domain, restores it, and compares a model snapshot', async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -43,12 +48,12 @@ test('edits an unrelated domain, restores it, and compares a baseline', async ({
   await dialog.getByRole('button', { name: 'Create context', exact: true }).click();
 
   for (const [name, definition] of [['Book', 'A title available in the library.'], ['Author', 'The credited writer of a book.']]) {
-    await toolId(page, '#add-concept');
+    await creationAction(page, 'Add concept');
     dialog = page.getByRole('dialog');
     await dialog.getByLabel('Name', { exact: true }).fill(name);
     await dialog.getByLabel('Definition', { exact: true }).fill(definition);
     await dialog.getByRole('combobox', { name: 'Context', exact: true }).selectOption({ label: 'Catalog' });
-    await dialog.getByRole('button', { name: 'Create concept', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Save definition', exact: true }).click();
   }
   await creationAction(page, 'Connect');
   dialog = page.getByRole('dialog');
@@ -64,25 +69,25 @@ test('edits an unrelated domain, restores it, and compares a baseline', async ({
   await expect(page.getByTestId('model-tree')).toContainText('Author');
   await page.locator('#close-index').click();
 
-  await toolButton(page, 'Baseline');
-  await page.getByRole('button', { name: 'Capture baseline', exact: true }).click();
+  await toolButton(page, 'Model snapshot');
+  await page.getByRole('button', { name: 'Capture model snapshot', exact: true }).click();
   dialog = page.getByRole('dialog');
   await dialog.getByLabel('Name', { exact: true }).fill('Initial catalog');
-  await dialog.getByRole('button', { name: 'Save baseline', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Save snapshot', exact: true }).click();
   await selectConcept(page, /Book/);
   await page.getByRole('textbox', { name: 'Definition', exact: true }).fill('A cataloged title with a stable identity.');
-  await page.getByRole('button', { name: 'Save concept', exact: true }).click();
-  await toolButton(page, 'Baseline');
+  await page.getByRole('button', { name: 'Save definition', exact: true }).click();
+  await toolButton(page, 'Model snapshot');
   await expect(page.getByText('Initial catalog', { exact: false }).first()).toBeVisible();
   await expect(page.getByText(/changed/i).first()).toBeVisible();
   await toolButton(page, 'Undo');
-  await toolButton(page, 'Baseline');
-  await expect(page.getByText('Your model matches this baseline.', { exact: true })).toBeVisible();
+  await toolButton(page, 'Model snapshot');
+  await expect(page.getByText('Your model matches this snapshot.', { exact: true })).toBeVisible();
   await toolButton(page, 'Redo');
-  await toolButton(page, 'Baseline');
+  await toolButton(page, 'Model snapshot');
   await expect(page.getByText(/changed/i).first()).toBeVisible();
   await page.reload();
-  await toolButton(page, 'Baseline');
+  await toolButton(page, 'Model snapshot');
   await expect(page.getByText('Initial catalog', { exact: false }).first()).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('library-baseline.png'), fullPage: true });
 
@@ -95,6 +100,12 @@ test('edits an unrelated domain, restores it, and compares a baseline', async ({
   const saved = await readFile(downloadPath, 'utf8');
   expect(saved).toContain('A cataloged title with a stable identity.');
   expect(saved).toContain('written by');
+  const envelope = JSON.parse(saved);
+  expect(envelope.version).toBe(2);
+  expect(envelope.model.name).toBe('Library');
+  expect(envelope.modelSnapshot.name).toBe('Initial catalog');
+  expect(envelope.model.concepts.every((concept: object) => !('position' in concept))).toBe(true);
+  expect(Object.keys(envelope.layout)).toHaveLength(3);
 
   await page.evaluate(() => localStorage.clear());
   await page.reload();
@@ -156,9 +167,9 @@ for (const viewport of [{ width: 768, height: 1024 }, { width: 390, height: 844 
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     expect(overflow).toBe(false);
     await selectConcept(page, /^Skill/);
-    await expect(page.getByRole('button', { name: 'Save concept', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save definition', exact: true })).toBeVisible();
     await page.getByRole('textbox', { name: 'Definition', exact: true }).fill('A reusable capability, edited in the compact inspector.');
-    await page.getByRole('button', { name: 'Save concept', exact: true }).click();
+    await page.getByRole('button', { name: 'Save definition', exact: true }).click();
     await expect(page.getByRole('textbox', { name: 'Definition', exact: true })).toHaveValue('A reusable capability, edited in the compact inspector.');
     await page.screenshot({ path: testInfo.outputPath(`studio-${viewport.width}-inspector.png`), fullPage: true });
     await creationAction(page, 'Add context');

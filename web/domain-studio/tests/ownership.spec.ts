@@ -4,7 +4,7 @@ import { parse } from 'yaml';
 import { createEmptyProject } from '../src/domain';
 import type { DomainProject } from '../src/contracts';
 
-import { selectConcept, toolId, workspaceAction } from './studio.helpers';
+import { selectConcept, creationAction, savedProject, workspaceAction } from './studio.helpers';
 
 function library(): DomainProject {
   return { ...createEmptyProject(), name: 'Library', description: 'A general library domain.', contexts: [{ id: 'catalog', name: 'catalog', description: 'Library titles and editions.', color: '#66d8df', position: [0, 0, 0] }] };
@@ -18,7 +18,7 @@ async function load(page: import('@playwright/test').Page, project: DomainProjec
 test('creates aggregate and member through the UI and exports canonical ownership', async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   await load(page, library());
-  await toolId(page, '#add-concept');
+  await creationAction(page, 'Add concept', 'aggregate');
   let dialog = page.getByRole('dialog');
   await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Book');
   await dialog.getByRole('textbox', { name: 'Definition', exact: true }).fill('A catalog title with a stable identity.');
@@ -26,15 +26,15 @@ test('creates aggregate and member through the UI and exports canonical ownershi
   await dialog.getByRole('textbox', { name: 'Identity', exact: true }).fill('BookID');
   await dialog.getByRole('textbox', { name: 'Aliases', exact: true }).fill('Title');
   await dialog.getByRole('textbox', { name: 'Invariants', exact: true }).fill('Book has at least one edition.');
-  await dialog.getByRole('button', { name: 'Create concept', exact: true }).click();
-  await toolId(page, '#add-concept');
+  await dialog.getByRole('button', { name: 'Save definition', exact: true }).click();
+  await creationAction(page, 'Add concept', 'entity');
   dialog = page.getByRole('dialog');
   await dialog.getByRole('textbox', { name: 'Name', exact: true }).fill('Edition');
   await dialog.getByRole('textbox', { name: 'Definition', exact: true }).fill('A published edition belonging to a Book.');
   await dialog.getByRole('combobox', { name: 'Kind', exact: true }).selectOption('entity');
   await dialog.getByRole('textbox', { name: 'Identity', exact: true }).fill('EditionID');
   await dialog.getByRole('combobox', { name: 'Owning aggregate', exact: true }).selectOption({ label: 'Book' });
-  await dialog.getByRole('button', { name: 'Create concept', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Save definition', exact: true }).click();
   await workspaceAction(page, 'Export');
   const pending = page.waitForEvent('download');
   await page.getByRole('button', { name: /Download domain YAML/ }).click();
@@ -50,7 +50,7 @@ test('creates aggregate and member through the UI and exports canonical ownershi
   await expect(page.getByRole('combobox', { name: 'Owning aggregate', exact: true })).toHaveValue('yaml:contexts/catalog/aggregates/Book');
   // Deleting an aggregate keeps the surviving member as an explicit unresolved draft.
   await selectConcept(page, /^Book/);
-  await page.getByRole('button', { name: 'Delete concept', exact: true }).click();
+  await page.getByRole('button', { name: 'Delete domain entry', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
   await selectConcept(page, /^Edition/);
   await expect(page.getByRole('combobox', { name: 'Owning aggregate', exact: true })).toHaveValue('');
@@ -63,8 +63,8 @@ test('saving another field preserves multiline invariants and comma-containing a
   await load(page, model);
   await selectConcept(page, /^Book/);
   await page.getByRole('textbox', { name: 'Definition', exact: true }).fill('A title in the library catalog.');
-  await page.getByRole('button', { name: 'Save concept', exact: true }).click();
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('arclint.domain-studio.v1')!).project);
+  await page.getByRole('button', { name: 'Save definition', exact: true }).click();
+  const saved = await savedProject(page);
   expect(saved.concepts[0].aliases).toEqual(model.concepts[0].aliases);
   expect(saved.concepts[0].invariants).toEqual(model.concepts[0].invariants);
 });

@@ -45,19 +45,48 @@ export interface RepositoryDiagnostic {
 export interface RepositoryProject {
   repository: { name: string; root: string }; domainYaml: string | null; rulesYaml: string | null;
   context: RepositoryContextReport; rules: RepositoryRuleSummary[]; loadedAt: string;
+  documentHashes?: { rules: string | null; domain: string | null };
 }
-export interface RepositoryContextResult { path: string; zone?: string; report: RepositoryContextReport; queriedAt: string }
+export interface RepositoryContextResult { path: string; zone?: string; pathType?: 'file' | 'directory' | 'missing'; report: RepositoryContextReport; queriedAt: string }
 export interface RepositoryCheckResult {
   exitCode: 0 | 1; diagnostics: RepositoryDiagnostic[]; checkedAt: string; stderr: string;
   /** True only when the CLI explicitly emits evaluation records with outcomes. */
   outcomesAvailable: boolean;
 }
+export interface RepositoryRuleDetail {
+  summary: RepositoryRuleSummary; evidence?: string; languages?: string[]; facts?: string[];
+  entireRepository?: boolean; zones?: string[]; paths?: string[]; limitations?: string[] | string;
+  schema?: string; [key: string]: unknown;
+}
+export interface RepositoryPattern {
+  reference: string; namespace: string; name: string; version: string; source: string;
+  vendored?: boolean; authored?: boolean; digest?: string; documentation?: string;
+  rules?: number; extensions?: number; coverage?: string[];
+}
+export interface RepositoryPatternCatalog { patterns: RepositoryPattern[]; queriedAt: string }
+export interface RepositoryDirectory {
+  directory: string; entries: { path: string; name: string; kind: 'file' | 'directory' }[];
+  truncated: boolean; queriedAt: string;
+}
+export type DiagnosticFilter = 'all' | 'active' | 'baselined' | 'suppressed' | 'operational' | 'coverage';
+export type RepositoryDocument = 'rules' | 'domain';
+export interface RepositoryDocumentPreview {
+  token: string; document: RepositoryDocument; filename: string; before: string | null; after: string;
+  expectedHash: string | null; proposedHash: string; expiresAt: string;
+  validation: { rules: number; domain: boolean; message: string };
+}
+export interface RepositoryDocumentApplied { document: RepositoryDocument; filename: string; hash: string; savedAt: string }
+export interface RepositoryBaselinePreview {
+  token: string; action: 'capture' | 'refresh'; filename: string; findings: number; rules: number;
+  report: RepositoryCheckResult; expiresAt: string;
+}
+export interface RepositoryBaselineApplied { action: 'capture' | 'refresh'; findings: number; rules: number; removedStale?: number; savedAt: string }
 export class RepositoryError extends Error {
   constructor(message: string, public readonly code: string, public readonly status: number) { super(message); this.name = 'RepositoryError'; }
 }
-async function request<T>(path: string, method = 'GET', signal?: AbortSignal): Promise<T> {
+async function request<T>(path: string, method = 'GET', signal?: AbortSignal, body?: unknown): Promise<T> {
   let response: Response;
-  try { response = await fetch(`/api/arclint/${path}`, { method, signal, credentials: 'same-origin', headers: { Accept: 'application/json', 'X-Arclint-Studio': '1' } }); }
+  try { response = await fetch(`/api/arclint/${path}`, { method, signal, credentials: 'same-origin', headers: { Accept: 'application/json', 'X-Arclint-Studio': '1', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }); }
   catch (error) {
     if (signal?.aborted) throw error;
     throw new RepositoryError('The local ArcLint connection is unavailable. Start Domain Studio with its Vite dev or preview server.', 'CONNECTION_UNAVAILABLE', 0);
@@ -76,6 +105,23 @@ export const loadRepository = (signal?: AbortSignal) => request<RepositoryProjec
 export const queryRepositoryContext = (path: string, signal?: AbortSignal) => request<RepositoryContextResult>(`context?path=${encodeURIComponent(path)}`, 'GET', signal);
 export const queryRepositoryZone = (zone: string, signal?: AbortSignal) => request<RepositoryContextResult>(`context?zone=${encodeURIComponent(zone)}`, 'GET', signal);
 export const checkRepository = (signal?: AbortSignal) => request<RepositoryCheckResult>('check', 'POST', signal);
+export const queryRepositoryRule = (id: string, signal?: AbortSignal) => request<RepositoryRuleDetail>(`rule?id=${encodeURIComponent(id)}`, 'GET', signal);
+export const queryRepositoryPatterns = (signal?: AbortSignal) => request<RepositoryPatternCatalog>('patterns', 'GET', signal);
+export const queryRepositoryDirectory = (directory = '.', signal?: AbortSignal) => request<RepositoryDirectory>(`files?directory=${encodeURIComponent(directory)}`, 'GET', signal);
+export const previewRepositoryDocument = (document: RepositoryDocument, content: string, expectedHash: string | null) => request<RepositoryDocumentPreview>('documents/preview', 'POST', undefined, { document, content, expectedHash });
+export const applyRepositoryDocument = (token: string) => request<RepositoryDocumentApplied>('documents/apply', 'POST', undefined, { token });
+export const previewRepositoryBaseline = () => request<RepositoryBaselinePreview>('baseline/preview', 'POST', undefined, {});
+export const applyRepositoryBaseline = (token: string) => request<RepositoryBaselineApplied>('baseline/apply', 'POST', undefined, { token });
+
+/** Count returned occurrences, never unique messages or fingerprints. Missing status stays unknown. */
+export function diagnosticCounts(diagnostics: readonly RepositoryDiagnostic[]): Record<DiagnosticFilter, number> {
+  return Object.fromEntries((['all', 'active', 'baselined', 'suppressed', 'operational', 'coverage'] as const)
+    .map(filter => [filter, filterDiagnostics(diagnostics, filter).length])) as Record<DiagnosticFilter, number>;
+}
+export function filterDiagnostics(diagnostics: readonly RepositoryDiagnostic[], filter: DiagnosticFilter): RepositoryDiagnostic[] {
+  return diagnostics.filter(d => filter === 'all' || (filter === 'coverage' || filter === 'operational'
+    ? d.kind === filter : d.kind === 'violation' && d.status === filter));
+}
 
 export function diagnosticLabel(diagnostic: RepositoryDiagnostic): string {
   // A finding is evidence about its subject, not an invented per-rule evaluation.

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openTools, closeTools, toolId, openEditor, selectPlace } from './studio.helpers';
+import { openTools, closeTools, toolId, openEditor, selectPlace, savedProject } from './studio.helpers';
 
 const library = `version: 1
 project: Library
@@ -48,17 +48,13 @@ async function loadLibrary(page: Page) {
   await expect(page.locator('#project-name')).toHaveText('Library');
 }
 
-async function savedProject(page: Page) {
-  return page.evaluate(() => JSON.parse(localStorage.getItem('arclint.domain-studio.v1')!).project);
-}
-
 async function askWorkbench(page: Page, input: string) {
   await openTools(page);
   await page.locator('#workbench-input').fill(input);
   await page.locator('#workbench-submit').click();
 }
 
-test('plan objects remain directly selectable within their real layer', async ({ page }) => {
+test('plan objects remain directly selectable within their recorded context', async ({ page }) => {
   test.setTimeout(60_000);
   await loadLibrary(page);
   const project = await savedProject(page);
@@ -142,7 +138,7 @@ test('repository actions return actual context, layers, CLI results, and visible
   await expect(evidence).toContainText('application');
   await expect(evidence).toContainText('domain');
   const zoneResponse = page.waitForResponse(response => new URL(response.url()).searchParams.get('zone') === 'domain');
-  await evidence.locator('[data-inspect-zone="domain"]').click();
+  await evidence.getByRole('button', { name: 'domain Inspect →', exact: true }).click();
   const zone = await zoneResponse;
   expect(zone.ok()).toBe(true);
   expect((await zone.json()).zone).toBe('domain');
@@ -152,7 +148,7 @@ test('repository actions return actual context, layers, CLI results, and visible
   const response = await checkResponse;
   expect(response.ok()).toBe(true);
   const result = await response.json();
-  await expect(evidence).toContainText(/arclint check/i, { timeout: 90_000 });
+  await expect(evidence.getByRole('heading', { name: 'Report', exact: true })).toBeVisible();
   await expect(evidence).toContainText(new RegExp(`exit\\s*:?\\s*${result.exitCode}`, 'i'));
   const diagnostic = result.diagnostics.find((item: { kind: string }) => item.kind === 'violation');
   if (diagnostic) {

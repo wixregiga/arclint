@@ -95,6 +95,8 @@ function fromDomain(document: unknown): DomainProject {
         const term = checkTerm(rawTerm, path.join('.'), kind);
         const parent = add(termName, kind, String(term.definition), path, Object.values((term.invariants ?? {}) as Record<string, string>));
         if (typeof term.identity === 'string') parent.identity = term.identity;
+        if (term.assertions !== undefined) parent.assertions = Object.entries(record(term.assertions, 'assertions')).map(([key, value]) => ({ key, on: String(record(value, key).on), statement: String(record(value, key).statement) }));
+        if (typeof term.raised_by === 'string') parent.raisedBy = term.raised_by;
         if (Array.isArray(term.aliases)) parent.aliases = [...term.aliases] as string[];
         if (kind === 'aggregate') {
           for (const [memberName, rawMember] of Object.entries(record(term.entities ?? {}, `${termName}.entities`))) {
@@ -161,133 +163,109 @@ function invariantMap(values: string[], previous: unknown = {}): Record<string, 
   });
   return result;
 }
+/** Rebuild ownership from current identities, carrying canonical metadata by stable source ID. */
 function sourceExport(project: DomainProject): RecordValue {
-  const source = structuredClone(project.sourceDocument!);
-  const original = fromDomain(source);
-  const fail = (detail: string): never => { throw new Error(`Canonical YAML cannot preserve this edit: ${detail}. Export the Studio JSON to keep every change, or edit the canonical source with its full ownership and identity metadata.`); };
-  for (const group of ['contexts', 'concepts', 'relationships'] as const) {
-    const oldIds = original[group].map(item => item.id).sort();
-    if (JSON.stringify(oldIds) !== JSON.stringify(project[group].map(item => item.id).sort())) fail(`added or removed ${group}`);
-  }
-  const contextMap = record(source.contexts, 'contexts');
-  for (const context of project.contexts) {
-    const previous = original.contexts.find(c => c.id === context.id)!;
-    if (context.name !== previous.name) fail('renaming a context may affect preserved metadata references');
-    record(contextMap[previous.name], 'context').definition = text(context.description, 'Context definition');
-  }
-  for (const concept of project.concepts) {
-    const previous = original.concepts.find(c => c.id === concept.id)!;
-    if (concept.name !== previous.name || concept.kind !== previous.kind || concept.contextId !== previous.contextId || concept.ownerId !== previous.ownerId) fail(`renaming, reclassifying, or moving ${previous.name}`);
-    const path = concept.id.slice(5).split('/').map(decodeURIComponent);
-    if (concept.identity !== previous.identity && !['aggregate', 'entity'].includes(concept.kind)) fail(`identity metadata on ${concept.kind}`);
-    if (JSON.stringify(concept.aliases) !== JSON.stringify(previous.aliases) && !['aggregate', 'entity', 'value_object'].includes(concept.kind)) fail(`aliases on ${concept.kind}`);
-    if (concept.kind === 'unclassified') {
-      if (concept.invariants.length) fail(`adding invariants to unresolved ${concept.name}`);
-      record(readPath(source, path.slice(0, -1)), 'questions')[path.at(-1)!] = text(concept.definition, 'Question');
-    } else if (concept.kind === 'repository' || concept.kind === 'factory') {
-      if (concept.definition !== previous.definition || concept.invariants.length) fail(`adding unsupported detail to ${concept.kind}`);
-    } else {
-      const term = record(readPath(source, path), concept.name);
-      term.definition = text(concept.definition, 'Definition');
-      if (concept.identity !== previous.identity) {
-        if (concept.kind === 'aggregate') term.identity = text(concept.identity, `${concept.name} identity`);
-        else if (concept.identity?.trim()) term.identity = concept.identity;
-        else delete term.identity;
-      }
-      if (JSON.stringify(concept.aliases) !== JSON.stringify(previous.aliases)) {
-        if (concept.aliases?.length) term.aliases = [...concept.aliases];
-        else delete term.aliases;
-      }
-      if (JSON.stringify(previous.invariants) !== JSON.stringify(concept.invariants)) {
-        if (concept.kind !== 'aggregate' && concept.kind !== 'value_object') fail(`invariants on ${concept.kind}`);
-        term.invariants = invariantMap(concept.invariants, term.invariants ?? {});
-      }
-    }
-  }
-  for (const relation of project.relationships) {
-    const previous = original.relationships.find(r => r.id === relation.id)!;
-    if (JSON.stringify(previous) !== JSON.stringify(relation)) fail('changed relationship semantics');
-  }
-  source.project = text(project.name, 'Project name');
-  if (project.description) source.description = project.description;
-  else delete source.description;
-  return source;
-}
-
-/** Canonical YAML is the language record. Studio JSON is the complete visual workspace. */
-export function exportDomainYaml(input: DomainProject): string {
-  const project = assertProject(input);
-  if (project.sourceDocument) return stringify(sourceExport(project));
+  const source = project.sourceDocument;
+  const original = source ? fromDomain(source) : undefined;
+  const oldContext = (id: string) => original?.contexts.find(c => c.id === id);
+  const oldTerm = (id: string): RecordValue => {
+    if (!source || !id.startsWith('yaml:')) return {};
+    const value = id.slice(5).split('/').map(decodeURIComponent).reduce<unknown>((value, key) => value && typeof value === 'object' ? (value as RecordValue)[key] : undefined, source);
+    return value && typeof value === 'object' && !Array.isArray(value) ? structuredClone(value as RecordValue) : {};
+  };
   const contexts: Record<string, RecordValue> = Object.create(null);
   for (const context of project.contexts) {
-    if (!/^[a-z][a-z0-9_-]*$/.test(context.name)) throw new Error(`Canonical context names must use lowercase letters, numbers, underscores or hyphens: ${context.name}. Studio JSON accepts display names unchanged.`);
+    if (!/^[a-z][a-z0-9_-]*$/.test(context.name)) throw new Error(`Canonical context names use lowercase letters, numbers, underscores or hyphens: ${context.name}.`);
     if (Object.hasOwn(contexts, context.name)) throw new Error(`Duplicate context name: ${context.name}.`);
-    contexts[context.name] = { definition: text(context.description, `${context.name} definition`) };
+    const target: RecordValue = { definition: text(context.description, `${context.name} definition`) };
+    const previous = oldContext(context.id);
+    // Retain authored empty collections as well as all actual entries.
+    const raw = previous && source ? record(record(source.contexts, 'contexts')[previous.name], 'context') : {};
+    for (const key of [...groups.map(([group]) => group), 'questions']) if (raw[key] && !Object.keys(record(raw[key], key)).length) target[key] = Object.create(null);
+    contexts[context.name] = target;
   }
-  const questions = (contextId: string): RecordValue => {
-    const context = project.contexts.find(c => c.id === contextId)!;
-    const recordContext = contexts[context.name];
-    return (recordContext.questions ??= Object.create(null)) as RecordValue;
+  const contextRecord = (id: string) => contexts[project.contexts.find(c => c.id === id)!.name];
+  const question = (contextId: string, key: string, value: string) => {
+    const target = contextRecord(contextId);
+    const questions = (target.questions ??= Object.create(null)) as RecordValue;
+    if (Object.hasOwn(questions, key)) throw new Error(`Repeated open question ${key}.`);
+    questions[key] = value;
   };
-  const key = (id: string) => `studio-${Array.from(id).map(char => char.codePointAt(0)!.toString(16)).join('-')}`;
+  const keyFor = (id: string) => `studio-${Array.from(id).map(char => char.codePointAt(0)!.toString(16)).join('-')}`;
+  const termRecord = (entry: Concept): RecordValue => {
+    const raw = oldTerm(entry.id);
+    // These fields are derived from current explicit membership below.
+    delete raw.entities; delete raw.repository; delete raw.factory;
+    raw.definition = text(entry.definition, `${entry.name} definition`);
+    if (entry.kind === 'aggregate') raw.identity = text(entry.identity, `${entry.name} aggregate identity`);
+    else if (entry.identity) raw.identity = entry.identity;
+    else delete raw.identity;
+    if (entry.aliases?.length) raw.aliases = [...entry.aliases]; else delete raw.aliases;
+    if (entry.invariants.length || raw.invariants !== undefined) {
+      if (!['aggregate', 'value_object'].includes(entry.kind)) throw new Error(`Canonical YAML cannot represent invariants on ${entry.kind}.`);
+      raw.invariants = invariantMap(entry.invariants, raw.invariants ?? {});
+    }
+    if (entry.assertions !== undefined) raw.assertions = Object.fromEntries(entry.assertions.map(({key,on,statement}) => [key,{on,statement}]));
+    if (entry.raisedBy !== undefined) raw.raised_by = entry.raisedBy;
+    return raw;
+  };
   const records = new Map<string, RecordValue>();
-  const termRecord = (concept: Concept): RecordValue => {
-    if (concept.invariants.length && !['aggregate', 'value_object'].includes(concept.kind)) throw new Error(`Canonical YAML cannot represent invariants on ${concept.kind}; use Studio JSON.`);
-    if (concept.identity && !['aggregate', 'entity'].includes(concept.kind)) throw new Error(`Canonical YAML cannot represent identity on ${concept.kind}; use Studio JSON.`);
-    if (concept.aliases?.length && !['aggregate', 'entity', 'value_object'].includes(concept.kind)) throw new Error(`Canonical YAML cannot represent aliases on ${concept.kind}; use Studio JSON.`);
-    return {
-      definition: text(concept.definition, `${concept.name} definition`),
-      ...(concept.kind === 'aggregate' ? { identity: text(concept.identity, `${concept.name} aggregate identity`) } : concept.identity?.trim() ? { identity: concept.identity } : {}),
-      ...(concept.aliases?.length ? { aliases: [...concept.aliases] } : {}),
-      ...(concept.invariants.length ? { invariants: invariantMap(concept.invariants) } : {}),
-    };
-  };
-  for (const concept of project.concepts) {
-    const context = contexts[project.contexts.find(c => c.id === concept.contextId)!.name];
-    if (concept.kind === 'unclassified') {
-      questions(concept.contextId)[key(concept.id)] = `What kind of domain concept is ${concept.name}? Proposed meaning: ${concept.definition || '(not defined)'}.${concept.invariants.length ? ` Proposed rules: ${concept.invariants.join('; ')}` : ''}${concept.identity ? ` Proposed identity: ${concept.identity}.` : ''}${concept.aliases?.length ? ` Proposed aliases: ${concept.aliases.join(', ')}.` : ''}`;
+  for (const entry of project.concepts) {
+    const raw = oldTerm(entry.id);
+    const assertions = entry.assertions ?? Object.entries(record(raw.assertions ?? {}, 'Assertions'));
+    if (assertions.length && entry.kind !== 'aggregate') throw new Error(`Cannot reclassify ${entry.name} while retaining aggregate operation assertions. Resolve those contracts explicitly first.`);
+    if ((entry.raisedBy || raw.raised_by) && entry.kind !== 'domain_event') throw new Error(`Cannot reclassify ${entry.name} while retaining its event source. Resolve that contract explicitly first.`);
+    if (entry.kind === 'unclassified') {
+      const previous = original?.concepts.find(c => c.id === entry.id && c.kind === 'unclassified');
+      if (previous && /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(entry.name)) question(entry.contextId, entry.name, text(entry.definition, 'Open question'));
+      else question(entry.contextId, keyFor(entry.id), `What kind of domain concept is ${entry.name}? Proposed meaning: ${entry.definition || '(not defined)'}.${entry.invariants.length ? ` Proposed rules: ${entry.invariants.join('; ')}` : ''}${entry.identity ? ` Proposed identity: ${entry.identity}.` : ''}${entry.aliases?.length ? ` Proposed aliases: ${entry.aliases.join(', ')}.` : ''}`);
       continue;
     }
-    if (['entity', 'repository', 'factory'].includes(concept.kind)) continue;
-    if (concept.ownerId) throw new Error(`${concept.name} has aggregate ownership metadata its kind cannot represent in canonical YAML.`);
-    const group = groups.find(([, kind]) => concept.kind === kind)![0];
-    const target = (context[group] ??= Object.create(null)) as RecordValue;
-    if (Object.hasOwn(target, concept.name)) throw new Error(`Repeated term ${concept.name}.`);
-    const term = termRecord(concept);
-    target[text(concept.name, 'Concept name')] = term;
-    records.set(concept.id, term);
+    if (['entity','repository','factory'].includes(entry.kind)) continue;
+    if (entry.ownerId) throw new Error(`${entry.name} has aggregate ownership metadata its kind cannot represent in canonical YAML.`);
+    const group = groups.find(([,kind]) => kind === entry.kind)![0];
+    const context = contextRecord(entry.contextId), target = (context[group] ??= Object.create(null)) as RecordValue;
+    if (Object.hasOwn(target, entry.name)) throw new Error(`Repeated term ${entry.name}.`);
+    const term = termRecord(entry); target[text(entry.name, 'Domain name')] = term; records.set(entry.id,term);
   }
-  for (const concept of project.concepts.filter(c => ['entity', 'repository', 'factory'].includes(c.kind))) {
-    const owner = project.concepts.find(candidate => candidate.id === concept.ownerId);
-    const aggregate = owner && records.get(owner.id);
-    if (!owner || owner.kind !== 'aggregate' || owner.contextId !== concept.contextId || !aggregate) throw new Error(`${concept.name} needs an aggregate owner in the same context before canonical YAML export.`);
-    if (concept.kind === 'entity') {
-      const entities = (aggregate.entities ??= Object.create(null)) as RecordValue;
-      if (Object.hasOwn(entities, concept.name)) throw new Error(`Repeated member ${concept.name} in ${owner.name}.`);
-      entities[text(concept.name, 'Entity name')] = termRecord(concept);
+  for (const entry of project.concepts.filter(c => ['entity','repository','factory'].includes(c.kind))) {
+    const owner = project.concepts.find(c => c.id === entry.ownerId), aggregate = owner && records.get(owner.id);
+    if (!owner || owner.kind !== 'aggregate' || owner.contextId !== entry.contextId || !aggregate) throw new Error(`${entry.name} needs an aggregate owner in the same context before canonical YAML export.`);
+    if (entry.kind === 'entity') {
+      const members = (aggregate.entities ??= Object.create(null)) as RecordValue;
+      if (Object.hasOwn(members,entry.name)) throw new Error(`Repeated member ${entry.name}.`);
+      members[text(entry.name,'Entity name')] = termRecord(entry);
     } else {
-      if (aggregate[concept.kind]) throw new Error(`${owner.name} has more than one ${concept.kind}; canonical YAML supports one.`);
-      if (concept.invariants.length || concept.identity || concept.aliases?.length) throw new Error(`Canonical YAML records ${concept.kind} by name; extra invariants, identity, or aliases must stay in Studio JSON.`);
-      aggregate[concept.kind] = text(concept.name, `${concept.kind} name`);
-      const generatedDefinition = `${concept.kind === 'repository' ? 'Repository' : 'Factory'} recorded for ${owner.name}.`;
-      if (concept.definition.trim() && concept.definition !== generatedDefinition) questions(concept.contextId)[key(concept.id)] = `Proposed description of ${concept.name}, ${concept.kind} of ${owner.name}: ${concept.definition}. Does this describe its role correctly?`;
+      if (aggregate[entry.kind]) throw new Error(`${owner.name} has more than one ${entry.kind}; canonical YAML supports one.`);
+      if (entry.invariants.length || entry.identity || entry.aliases?.length) throw new Error(`Canonical YAML records ${entry.kind} by name; extra invariants, identity, or aliases must stay in Studio JSON.`);
+      aggregate[entry.kind] = text(entry.name,entry.kind);
+      const generated = `${entry.kind === 'repository' ? 'Repository' : 'Factory'} recorded for ${owner.name}.`;
+      const previous = original?.concepts.find(c => c.id === entry.id);
+      const inheritedRoleDescription = previous?.kind === entry.kind && entry.definition === previous.definition;
+      if (entry.definition.trim() && entry.definition !== generated && !inheritedRoleDescription) question(entry.contextId,keyFor(entry.id),`Proposed description of ${entry.name}, ${entry.kind} of ${owner.name}: ${entry.definition}. Does this describe its role correctly?`);
     }
   }
   const relations: RecordValue[] = [];
-  for (const relationship of project.relationships) {
-    const from = project.contexts.find(c => c.id === relationship.source);
-    const to = project.contexts.find(c => c.id === relationship.target);
-    if (from && to && contextKinds.includes(relationship.label)) relations.push({ from: from.name, to: to.name, kind: relationship.label });
-    else {
-      const nodes = [...project.contexts, ...project.concepts];
-      const source = nodes.find(n => n.id === relationship.source)!;
-      const target = nodes.find(n => n.id === relationship.target)!;
-      const owner = 'contextId' in source ? source.contextId : source.id;
-      questions(owner)[key(relationship.id)] = `Proposed relationship: ${source.name} → ${target.name}: ${relationship.label || '(unnamed)'}. How should this connection be recorded in the domain?`;
+  for (const relation of project.relationships) {
+    const member = project.concepts.find(c => relation.id === `${c.id}:owner`);
+    if (member?.ownerId) continue; // Aggregate membership already records this exact relationship.
+    const from = project.contexts.find(c => c.id === relation.source), to = project.contexts.find(c => c.id === relation.target);
+    if (from && to && contextKinds.includes(relation.label)) {
+      const old = oldTerm(relation.id);
+      relations.push({...old,from:from.name,to:to.name,kind:relation.label});
+    } else {
+      const nodes = [...project.contexts,...project.concepts], from = nodes.find(c => c.id === relation.source)!, to = nodes.find(c => c.id === relation.target)!;
+      question('contextId' in from ? from.contextId : from.id,keyFor(relation.id),`Proposed relationship: ${from.name} → ${to.name}: ${relation.label || '(unnamed)'}. How should this connection be recorded in the domain?`);
     }
   }
-  return '# Canonical language draft. Unclassified concepts and free-form connections are open questions.\n# Use Studio JSON to retain visual positions, stable IDs, and all editing details.\n' + stringify({ version: 1, project: project.name, ...(project.description ? { description: project.description } : {}), contexts, ...(relations.length ? { relations } : {}) });
+  const result = {version:1,project:project.name,...(project.description ? {description:project.description}:{}),contexts,...(relations.length || source?.relations ? {relations}: {})};
+  // Validate the complete result so incompatible reclassifications cannot drop contracts.
+  fromDomain(result);
+  return result;
 }
+
+/** Canonical semantics are independent of layout and presentation. */
+export function exportDomainYaml(input: DomainProject): string { return stringify(sourceExport(assertProject(input))); }
 
 export function parsePattern(input: string): PatternSummary {
   const document = record(parse(input), 'Pattern document');

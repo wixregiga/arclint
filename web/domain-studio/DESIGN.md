@@ -1,44 +1,43 @@
-# ArcLint · Places
+# ArcLint Studio · a shared drawing room
 
-> The [shared semantic model](model/README.md) supersedes this document's spatial mappings and keeper design. This file records the prior implemented direction. The next UI revision must follow the model review first; the current application has not yet implemented that proposal.
+The user accepted the [shared semantic model](model/README.md) and requested implementation. This document records the resulting interface. Earlier monument/keeper designs remain in Git history; they do not govern this revision.
 
-This records the implemented September 13 revision. Earlier dense atlas compositions are rejected and remain in Git history.
+## Visual system
 
-## Adversarial review
+A mineral blue ground (`#e9eff1`), deep blue ink (`#233e4b`), teal context boundaries (`#3e7774`), pale structure (`#b9cecf`), and amber interaction (`#b68032`). System humanist sans handles authoring and navigation; restrained Trebuchet headings establish the current place; Consolas identifies source paths and Rule IDs. The spatial study deliberately has one light material world. Status labels retain their actual evidence instead of borrowing the interaction color to imply health.
 
-The review used four independent lenses inspired by Andrew Kim, Jony Ive, Dieter Rams, and Hideo Kojima. These were our interpretations, not participation, quotations, or endorsements by those people.
+The drawing occupies the center; orientation belongs to the upper left; repository actions are directly reachable above it. Build stays over the graphics. Only requested definitions or evidence occupy a work surface. Spatial and Table share the frame, authoring desk, navigation, and application state.
 
-- Kim lens proposed an inhabited architectural object and categorical silhouettes. Rams challenged height implying importance; the resolution is comparable mass, with enclosure expressing only recorded ownership.
-- Ive lens rejected simultaneous exposition. The resolution is plain names at rest, one contextual action, and one summoned work surface.
-- Kojima lens proposed scale and arrival as the experience. Rams rejected automatic tours and decorative population; transitions are brief, cancelable, and tied to an explicit selection.
-- The group debated one recurring dog versus different keepers. The user asked for a team, so the final design has one visible guide per viewing level: Onyx, Steward, Inspector. They are interface guides, never invented actors in the recorded domain.
+## Meaning of form
 
-The restraint and functional-purpose lens is informed by [Rams's principles published by Vitsœ](https://www.vitsoe.com/us/about/good-design). The remaining lenses are interpretive creative constraints; no statements are attributed to the designers.
+- The Project names the map and breadcrumb root.
+- A bounded context is a visibly bordered region of meaning. Overview area follows its full recorded entry count. Its contour follows saved layout and reappears on entry. Neither size nor shape establishes importance, maturity, ownership of a Zone, or runtime activity.
+- An aggregate is a consistency enclosure around recorded members. When saved arrangement separates its members with unrelated entries, connected enclosure components preserve actual membership instead of swallowing unrelated records.
+- Other domain kinds have distinct, restrained marks. They represent recorded types, not runtime instances. Open questions remain visibly unresolved.
+- At most eight selectable subjects appear in the spatial view. Find and paging retain complete access. A context frame is not a ninth subject. Table has its own page size and complete query counts.
+- A semantic relationship is labeled as such. A context influence arrow does not become an observed code import. External references retain their context names.
+- Zones select actual file identities in the repository workspace. Overlapping memberships do not divide the domain into exclusive districts.
 
-## Composition
+No scene character, population, grass, damaged building, or simulated traffic stands for unavailable evidence. Onyx is a single dog support avatar belonging to the interface. Her actions use the current task, draft, selection, and actual repository capabilities.
 
-A quiet architectural study with a tangible ground and small, expressive keepers. Chalk #ECEDE6, graphite #25302E, cast stone #C2C7BB, muted steel #74848C, and a single active accent #B74937. Humanist system sans for controls and object names; restrained Georgia for the current place; monospace only for evidence and paths. One light material world, deliberately chosen. No green haze, decorative grass, rocks, paper texture, floating metadata cards, or always-visible toolbars.
+## Navigation and authoring
 
-Ground marks a recorded boundary. Enclosures mark actual membership. Distinct silhouettes aid recognition without claiming importance, conformance, or invented local culture. A keeper stands at the entry threshold. Light and shadow make form legible; they do not simulate status.
+Enter a region to work inside its context. Back goes up one level; the project breadcrumb leaves the context. Camera motion is brief, cancelable, and respects reduced motion. Framing accounts for visible navigation, the Build bar, and the editor; mobile uses the stage below the title.
 
-## Levels of attention
+Start typing before choosing a domain kind. The Notebook retains the exact input until assignment. The builder names real domain kinds rather than offering a generic “concept.” Invariants and assertions have explicit owners. Editing and switching presentation retain the same draft. Arrangement and semantic membership are separate commands.
 
-World: actual contexts only. No child buildings, type badges, definitions, or relationship-label web. Click a context once to enter.
+The editing desk remains alongside the map on larger screens. On narrow screens it uses the available work area while keeping a visible close action. Focused form interaction does not trigger background authoring shortcuts.
 
-Context: at most eight actual concepts belonging there. The context is ground and breadcrumb, not a ninth node. Plain names identify objects; definitions stay with the selected place and its explicit editing action.
+## Governance and execution
 
-Detail: the chosen object and a bounded set of directly related subjects. External endpoints count toward the eight-subject ceiling. Comparison marks existing subjects without adding duplicate actors; removed records remain available in the baseline review. Other relationships stay discoverable through pages and Find. There is no dimmed crowd left offstage.
+Rules, Findings, Paths, and Check code are available from the main frame. Detailed evidence lives in one repository workspace with navigable sections. Paths can be copied and inspected. Rule details show the proposition, compatible Scope, optional authored Rationale, provenance, and supplied assurance. Reports retain actual statuses and distinguish acknowledged findings from repairs.
 
-Stored model coordinates and identities do not change when levels, pages, or representations change. Camera arrival lasts about 650 ms and can be interrupted. Reduced motion jumps directly. Back reverses the level. Find can reach everything, including subjects beyond the current page.
+Domain and policy writes are explicit: edit, review a CLI-validated diff, then apply. A stale source version fails without replacing the file. Drafts remain recoverable. Imported Pattern references do not imply installation. No AI provider is connected; Onyx offers local guidance and a contextual request export.
 
-## Controls and work
+Model snapshot is the historical comparison of domain and arrangement. ArcLint Baseline is the adoption mechanism for findings. Their storage and effects remain separate.
 
-Persistent controls are orientation/back, Find, Tools, one primary contextual action, and the small Meaning/Governance goal selector. A quiet page indicator appears only for larger sets. Plan and Matrix are alternate working representations reached through Tools; they obey the same bounded visible set.
+## Shared application boundary
 
-Meaning serves defining the language and helping others understand. Governance serves inspecting the real Zone/Rule contracts and checking code. Definitions, contracts, editing, imports, Patterns, baselines, and real ArcLint evidence open one deliberate work surface; they do not compete with the resting scene. The existing domain, JSON/YAML, history, path/Zone queries, and check pipeline remain available.
+`workspace.ts` owns the semantic model, independent layout, selection, drafts, Model snapshot, references, and typed history. Existing serializers and renderers consume assembled adapters. Both presentations invoke the same commands. Canonical export preserves full metadata across structural edits and refuses incompatible reclassifications.
 
-Onyx, Steward, and Inspector are original procedural avatars placed in the scene. Only the current guide is visible. The guide offers one action appropriate to the level and goal. No help card, ambient dialogue, fabricated finding, or implied autonomous AI.
-
-## Acceptance
-
-At 990×623 the initial sample presents three context names, the current place, and a clear next action. No Skill/Plugin children or inspector appear. Every world/context/detail/alternate view has at most eight model subjects, including external subjects. All subjects remain reachable through Find or pages. A context opens with one click; entering detail changes actual camera framing. Opening and closing the editor returns to the same place. At rest, every rectangle, label, and material must earn its purpose. Passing functional tests alone does not constitute visual acceptance.
+The explanatory model board is not a production rendering. Its purpose is to expose the same-words/different-contexts and overlapping-Zones counterexamples behind the implementation.

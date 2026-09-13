@@ -92,10 +92,10 @@ test('forty contexts and five hundred concepts remain bounded in every level and
   }
 });
 
-test('keepers are explicit interface guides with lens-specific prompts, never added domain actors', () => {
+test('Onyx remains the same interface guide across every view and task', () => {
   const model = project([context('a')], [concept('one', 'a')]);
   const views = [projectView(model), projectView(model, { scopeId: 'a' }), projectView(model, { selectedId: 'one' })];
-  assert.deepEqual(views.map(view => keeperFor(view, 'meaning').name), ['Onyx', 'Steward', 'Inspector']);
+  assert.deepEqual(views.map(view => keeperFor(view, 'meaning').name), ['Onyx', 'Onyx', 'Onyx']);
   for (const view of views) {
     const a = keeperFor(view, 'meaning'), b = keeperFor(view, 'governance');
     assert.match(a.role, /interface role/); assert.notEqual(a.prompt, b.prompt); assert.notEqual(a.action, b.action);

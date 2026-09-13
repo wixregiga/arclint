@@ -1,6 +1,6 @@
 # Shared model for ArcLint's web experience
 
-**Status: design proposal for review.** This supersedes the spatial semantics in the previous [design](../DESIGN.md). It records what the interface must mean before its next implementation. The running application has not been changed by this modeling pass.
+**Status: accepted design model.** The user approved this model for implementation. The running [Studio](../README.md) now uses its shared semantic/layout state, bounded spatial navigation, conventional Table, authoring, and repository governance workflows. [DESIGN.md](../DESIGN.md) records the implemented visual grammar.
 
 Open the [interactive model board](index.html). It uses the illustrative Library data in [model.yaml](model.yaml), with no connection to a repository and no simulated check results. Switch its representation and select Zones to inspect the same references. This is an explanatory model, not the next application UI.
 
@@ -10,7 +10,7 @@ The board is a restrained engineering diagram: pale blue paper, dark blue text, 
 
 A bounded context is a boundary within which a model and its language apply. It is a logical boundary with possible manifestations in code and team practices. It is neither one physical object nor an arbitrary building. A town can help people understand an extent and a local language; the interface must not require imaginary geography to understand the project.
 
-The proposed composition is a named project map containing **bordered contexts**. Each context contains its recorded language. A separate, linked code view shows files, observed source associations, overlapping Zones, Rules, and evaluation evidence. Both the spatial interface and a conventional application use the same model and actions.
+The accepted composition is a named project map containing **bordered contexts**. Each context contains its recorded language. A separate, linked code view shows files, observed source associations, overlapping Zones, Rules, and evaluation evidence. Both the spatial interface and a conventional application use the same model and actions.
 
 This makes the metaphor subordinate to the model:
 
@@ -35,11 +35,11 @@ The user supplied a reminder of ArcLint terms. Current CLI, domain records, and 
 | [Domain contracts](../../../docs/site/content/docs/contracts.md) | Located code, context relations, invariant/assertion enforcement and limits |
 | [Rules schema](../../../docs/schemas/rules.arclint.schema.json) | Actual RuleID spelling, Scope and Constraint shapes |
 | [CLI output](../../../docs/site/content/docs/cli.md) | Reports and kind-dependent Diagnostic fields |
-| [Current view contracts](../src/contracts.ts) | Existing model/layout coupling and incorrectly named model snapshot |
+| [Shared workspace](../src/workspace.ts) | Separate semantic/layout storage, full-save migration, drafts, snapshots, and common commands |
 
 Terminology details matter:
 
-1. The present editor's `Baseline { name, capturedAt, project }` is a **Model snapshot**. ArcLint Baseline is reserved for acknowledged findings and their fingerprint counts. This document proposes the rename; it does not claim that migration is implemented.
+1. The former editor's `Baseline { name, capturedAt, project }` is a **Model snapshot**. V1 saves migrate to that presentation term in the shared workspace. ArcLint Baseline is reserved for acknowledged findings and their fingerprint counts, with a separate review/apply action in the repository Report.
 2. A recorded assertion describes what must hold when its named operation completes. The declaration, a checking method, a method-call observation, and proof of behavior are different evidence. An assertion is not just another name for an invariant's executable check.
 3. Preserve RuleID exactly. Documentation shows `segment/segment`; the schema also accepts local IDs without a slash. Distributed identities include `namespace/name:local`. A material Constraint change requires a new ID; renaming a display label does not authorize changing identity.
 4. A Pattern includes Rules and pathless Zone declarations. A repository's Bindings supply those Zones' paths. Merely viewing a Pattern reference does not install it.
@@ -139,7 +139,7 @@ Both presentations consume:
 - the same application commands, validation errors, undo history and selection;
 - separate presentation state for camera/layout versus list expansion/sorting.
 
-`model.yaml` enumerates the candidate actions and their effects. Its identifiers are design vocabulary, not implemented APIs or new DDD entities.
+`model.yaml` enumerates the accepted actions and their effects. Its identifiers remain design vocabulary; `workspace.ts` and the repository workbench implement those effects without creating new DDD entities.
 
 **Switching representation changes presentation only.** Selection, scope of attention, draft text, open questions, chosen evidence, undo history and pending action are retained. Canonical YAML must be identical before and after a switch. An arrangement gesture changes layout only. Moving a concept between bounded contexts requires an explicit semantic action with relationship and ownership validation.
 
@@ -191,34 +191,24 @@ Further cases the design must survive:
 11. Switching overlays or presentations preserves unfinished input and history.
 12. An AI suggestion has no repository effect until the supported application action is actually executed.
 
-## Can today's implementation support both modes?
+## Implementation
 
-**Partly. It has reusable model functions, but it does not yet have the required shared application boundary.** Adding a second renderer alone would reproduce existing coupling.
+Spatial and Table share `workspace.ts`: semantic records, layout, model snapshots, selection, exact drafts, and undoable commands. Canonical serialization retains source metadata while supporting structural edits. Both views use the same authoring desk and repository workbench.
 
-| Existing seam / gap | Evidence | Required consequence for a later implementation |
-|---|---|---|
-| Validation, import/export and comparison exist outside Three.js | `src/domain.ts`, `src/serialization.ts` | Retain behavior and canonical metadata; do not rewrite for a skin |
-| Context and Concept require `position`; Context also requires `color` | `src/contracts.ts:4–6` | Separate semantic model from presentation layout while migrating stored workspaces losslessly |
-| View projection is pure and bounded | `src/view-state.ts` | Retain reference-based focus; separate query results from each renderer's paging |
-| Mutation, history, persistence and dialogs live together | `src/main.ts:87–112`, authoring handlers | Extract shared application actions before adding another interface |
-| Workbench combines fetching, interpretation and HTML creation | `src/workbench.ts` | Separate evidence queries and application state from rendered surfaces |
-| Assertions and source metadata are partly retained behind raw documents | `src/model-evidence.ts`, `src/serialization.ts` | Preserve full canonical structure; expose typed read models without flattening contracts |
-| Current Baseline stores a project snapshot | `src/contracts.ts:8`, `src/main.ts:358` | Migrate it to Model snapshot; implement actual adoption separately |
-| Plan and Matrix share graph IDs but not a complete authoring shell | `src/workbench.ts` | They are useful projections, not proof of full conventional-mode parity |
-| Current bridge reads one configured repository and can check code | `server/arclint_bridge.ts`, `src/repository.ts` | Keep fixed repository boundaries and truth about on-disk inputs |
-| Rule/Zone/Pattern application and a connected support AI are absent | existing UI/bridge capability boundary | Record these as future capabilities, never enable controls that pretend they work |
+The local bridge resolves real paths, Zones, Rules, Patterns, and Reports. Domain and policy writes validate an isolated candidate and require a reviewed diff with unchanged source hashes. Baseline adoption uses the native CLI after a separate review, with the current CLI's evidence limitations stated in that review. Onyx supplies local guidance and contextual request preparation; she has no connected AI provider.
+
+The original modeling audit identified model/layout coupling, source-only assertions, incorrectly named Baseline state, and missing shared write actions. Migration and behavior tests now cover those seams. See the [application README](../README.md) for exact capability boundaries and verification commands.
 
 No Go domain change follows from this view model. The recorded question about Pattern's aggregate boundary remains open. This design neither reclassifies Pattern nor uses the map to resolve it.
 
 ## Decision ledger and remaining questions
 
-The team challenged semantics, metaphor, and implementation separately. Agreement: bounded regions for meaning; independent file-set overlays; type-level modeling; one Onyx avatar; one application contract with two presentations; explicit distinction between Model snapshot and ArcLint Baseline. The root audit confirmed implementation coupling before documenting parity as a future requirement.
+The team challenged semantics, metaphor, and implementation separately. Agreement: bounded regions for meaning; independent file-set overlays; type-level modeling; one Onyx avatar; one application contract with two presentations; explicit distinction between Model snapshot and ArcLint Baseline. The implementation now separates semantic records and presentation state and exercises the same authoring behavior through both views.
 
-The following remain proposals or unresolved decisions, rather than claims of user approval:
+The user accepted the context extents, aggregate enclosures, and shared application model. These product questions remain open:
 
-- Town-like context extents and aggregate enclosures are the proposed visual grammar. The user's demand for cohesive semantics is confirmed; exact material/art direction is still open.
-- One active repository binding per project is the initial scope proposed from today's capability. Multi-repository projects need an explicit model before support is promised.
+- One active repository binding is supported. Multi-repository projects need an explicit model before support is promised.
 - A connected Onyx provider, conversation retention policy and permitted execution actions need decisions before live AI integration.
 - “Two tiers” may mean presentation preferences or commercial packaging. This proposal establishes two equivalent presentations; it does not set pricing or feature restrictions.
 
-A later implementation should first establish shared semantic, evidence, draft and command boundaries; migrate existing stored data; prove mode parity with the counterexamples; then render the spatial and conventional views. More sculptural polish cannot substitute for these steps.
+The counterexamples remain acceptance criteria for future changes. New presentations must reuse these commands and preserve source metadata, drafts, evidence distinctions, and recovery behavior.

@@ -100,17 +100,17 @@ export function projectView(project: DomainProject, request: ViewRequest = {}): 
 /** These are interface-guide roles, never inferred domain actors or AI agents. */
 export function keeperFor(view: FocusView, lens: ViewLens): KeeperGuide {
   if (view.level === 'world') return {
-    name: 'Onyx', role: 'World guide · interface role',
+    name: 'Onyx', role: 'Project guide · interface role',
     prompt: lens === 'meaning' ? 'Choose a context to explore what this domain means, or add the first boundary.' : 'Inspect the repository’s declared architecture before judging its code.',
     action: lens === 'meaning' ? 'Find a context' : 'Inspect repository',
   };
   if (view.level === 'context') return {
-    name: 'Steward', role: 'Context guide · interface role',
-    prompt: lens === 'meaning' ? 'Choose a concept to examine its meaning and recorded relationships.' : 'Select a recorded source anchor or Zone to request the real ArcLint context.',
+    name: 'Onyx', role: 'Context guide · interface role',
+    prompt: lens === 'meaning' ? 'Choose a domain entry to examine its meaning and recorded relationships.' : 'Select a recorded source anchor or Zone to request the real ArcLint context.',
     action: lens === 'meaning' ? 'Edit this context' : 'Inspect context',
   };
   return {
-    name: 'Inspector', role: 'Detail guide · interface role',
+    name: 'Onyx', role: 'Detail guide · interface role',
     prompt: lens === 'meaning' ? 'Review this subject’s definition, ownership, and contracts before changing them.' : 'Inspect available source evidence. A browser draft is not the code checked on disk.',
     action: lens === 'meaning' ? 'Review meaning' : 'Inspect evidence',
   };

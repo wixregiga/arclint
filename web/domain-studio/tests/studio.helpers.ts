@@ -1,4 +1,11 @@
 import { expect, type Page } from '@playwright/test';
+import { assembleProject } from '../src/workspace';
+import type { DomainProject } from '../src/contracts';
+
+export async function savedProject(page: Page): Promise<DomainProject> {
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('arclint.domain-studio.v2') ?? localStorage.getItem('arclint.domain-studio.v1')!));
+  return saved.version === 2 ? assembleProject(saved) : saved.project;
+}
 
 export async function openTools(page: Page) {
   if (!await page.locator('#tools-drawer').isVisible()) {
@@ -8,6 +15,7 @@ export async function openTools(page: Page) {
 }
 
 export async function closeWorkSurface(page: Page) {
+  if (await page.locator('#onyx-support').isVisible()) await page.locator('#close-onyx').click();
   if (await page.locator('#inspector').isVisible()) {
     if (await page.locator('#clear-selection').isVisible()) await page.locator('#clear-selection').click();
     else if (await page.locator('#close-sheet').isVisible()) await page.locator('#close-sheet').click();
@@ -58,6 +66,7 @@ export async function workspaceAction(page: Page, name: string) {
   await page.getByRole('button', { name, exact: true }).click();
 }
 
-export async function creationAction(page: Page, name: string) {
+export async function creationAction(page: Page, name: string, kind = 'unclassified') {
   await toolId(page, name === 'Connect' ? '#connect' : name === 'Add context' ? '#add-context' : '#add-concept');
+  if (name !== 'Connect' && name !== 'Add context') await page.locator(`[data-create-kind="${kind}"]`).click();
 }

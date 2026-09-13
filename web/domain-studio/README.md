@@ -1,10 +1,10 @@
-# ArcLint Places
+# ArcLint Studio
 
-A general-purpose domain editor with three spatial viewing levels: the whole domain, one bounded context, and a selected subject with its recorded connections. Every view contains at most eight model subjects. Architectural forms, shared ground, and a physical keeper orient the view; definitions and evidence appear when you ask for them. The optional bskilled sample remains an illustrative draft, not the product's scope.
+A domain modeling and repository governance workspace. Bounded contexts are regions of local meaning. Aggregate enclosures show recorded ownership. Zones are independent, overlapping file sets. Spatial and Table presentations share the same editing commands, drafts, selection, and history. The optional bskilled example is one test domain; the application works with other projects and canonical ArcLint domain files.
 
 ## Run locally
 
-Requires Node.js 22.12+ (or 20.19+) and npm.
+Requires Node.js 22.12+ (or 20.19+), npm, and an installed `arclint` executable for repository operations.
 
 ```sh
 cd web/domain-studio
@@ -12,61 +12,68 @@ npm ci
 npm run dev
 ```
 
-Open http://localhost:5173. Model editing runs in your browser; no account or API key is needed. The Vite dev/preview server also exposes a local, read-only ArcLint connection. Code inspection sends a path to that server, which runs the installed `arclint` binary against one configured repository. Browser local storage saves the current model, one baseline, and imported Pattern references. The user/need brief is saved separately by model name in the same browser; it is not part of canonical YAML or a workspace download. Export JSON to keep a portable copy; local storage is specific to the browser and origin.
-
-## Working with a domain
-
-- **Tools → Files & workspace → New domain** starts an empty workspace. Use **Tools** for **Add context**, **Connect concepts**, and **Add concept**. Definitions, kind, invariants, identity, aliases, and aggregate ownership can be edited after choosing **Edit meaning**. Leave a kind unclassified while it is unresolved.
-- **Connect** creates a directed, named relationship between concepts or contexts. Select a connection to rename, reverse, or delete it.
-- Click a context to enter it; click a concept to approach its detail view. **Back** returns one level. **Find** searches every subject, including those outside the current page. The pager exposes additional subjects without exceeding eight at once; selected subjects remain present on their detail pages. Saved model coordinates retain their meaning across viewing levels and reloads.
-- Drag the background to orbit, right-drag to pan, scroll to zoom, and Shift-drag a concept to arrange it. Arrangement changes position only; the Context field changes ownership. **Tools → View & history** contains overhead, framing, zoom, and Undo/Redo controls.
-- **Meaning** supports recording and editing language. **Governance** offers code inspection through the real ArcLint connection. **Edit meaning** opens a dedicated work surface; closing it retains your place and selection. The keeper is an interface guide: Onyx at the world level, a Steward inside a context, and an Inspector at detail. Clicking a keeper opens the corresponding local action, without a connected AI or invented inspection result.
-- **Undo/Redo** reverses model changes, including replacing a workspace. History is kept for the current session. Starting or importing another domain clears the active baseline and Pattern references; Undo restores the previous workspace.
-- **Tools → Files & workspace → Import** reads Studio JSON or canonical `domain.arclint.yaml`. Imported YAML retains its complete parsed source metadata even when the visual projection does not expose a field.
-- **Tools → Files & workspace → Export → Download workspace** preserves model IDs, positions, arbitrary relationships, and retained source metadata as JSON. Baselines are downloaded separately from the Compare view. Pattern references remain in browser storage.
-- **Tools → Files & workspace → Export → Download domain YAML** writes the ArcLint language record. Unclassified concepts and free-form relationships become open questions. Classification alone does not prove domain validity. Canonical export requires the metadata needed by the chosen kind. Unsupported edits to an imported canonical structure raise an explicit error; JSON always remains available. YAML does not preserve camera/layout and does not preserve comments or formatting.
-- **Compare** captures a named point of reference. Added, changed, and removed concepts, contexts, and relationships appear in the comparison. Position-only changes are distinguished from changes to meaning. Close the comparison work surface to see changes in place; **Return to present** clears the comparison overlay. This is a model snapshot, separate from ArcLint's accepted-finding baseline.
-- **Patterns** imports and displays real Pattern manifest definitions and rule IDs. Local completeness checks identify missing definitions, classifications, and ownership. Imported references are not automatically installed into a repository. **Check code** runs the Rules already configured in the bound repository and displays the real CLI diagnostic output.
-- **Prepare AI request** creates an editable, contextual prompt for the selected area. Copy or download it for your harness. This version does not run an AI, edit a repository, or install skills. **Check code** executes the installed ArcLint linter separately from the AI request.
-
-Keyboard: `/` searches, `C` adds a concept, `F` frames the model, `Ctrl/Cmd+Z` undoes, `Ctrl/Cmd+Shift+Z` redoes. The **Field guide** explains selected domain concepts and distinguishes model meaning from code checks. Native dialogs and model forms are keyboard accessible. Reduced motion is respected; a selectable list fallback remains available if WebGL cannot initialize.
-
-## Inspect the architecture
-
-Use the input in **Tools** to select an exact concept name or inspect a relative code path. **Site**, **Plan**, and **Matrix** show the same model and preserve its IDs and positions. In the matrix, read from the row to the column; a bidirectional context relation appears in both directions. Plan boundaries reflect recorded membership. These are authored spatial positions, not inferred evolutionary maturity.
-
-**Open repository** reads `domain.arclint.yaml` from the configured repository into the editor. Undo restores the previous model. **Zones & layers** displays explicit local layer order from `rules.arclint.yaml`, along with declared Zone paths and permissions. Select a Zone to request `arclint context --zone <name>`; enter a file path to request `arclint context <path>`. Imported YAML and live context results retain their actual meanings and source anchors. A contract anchor is labeled as such; it is not guessed to be a type declaration.
-
-**Check code** runs `arclint check . --format json` against files on disk. Browser draft edits are not applied there. The result retains its exit code, timestamp, diagnostic paths, rule IDs, and statuses, including baselined or suppressed findings. The installed CLI's diagnostic list does not contain a complete per-Rule outcome table; an empty list is not displayed as proof that every Rule passed. Failures remain visible errors.
-
-The server defaults to this checkout. To inspect another local repository, including a bskilled checkout with ArcLint configured, restart with:
+Open http://localhost:5173. The server binds this checkout by default. To work with another repository:
 
 ```sh
 ARCLINT_STUDIO_REPO=/absolute/path/to/repository npm run dev
 ```
 
-The `arclint` executable must be on the server's PATH. Open the app through `localhost` or a loopback IP. API calls are restricted to the configured repository, use fixed subprocess argument lists, and reject path traversal, outside symlinks, and cross-origin requests. Commands have bounded execution time and output. Both Vite dev and Vite preview expose the API; static hosting alone supports model editing but cannot inspect local repositories.
+On first use, Studio opens the bound repository’s actual domain when available. A late response cannot replace work you have started typing. Without a connection, an empty local domain remains usable. Saved workspaces always take priority; the bskilled example is an explicit menu action.
 
-The read-only bridge does not change Go source, domain records, Rule configuration, or the accepted-finding baseline. The keepers offer actions appropriate to the current layer; their forms and roles are original interface guides.
+The binding is explicit and fixed for that server. Importing a domain file never silently changes which repository a check or write targets. Static hosting supports local modeling; repository operations require the local dev/preview server.
+
+## Model the domain
+
+- **Build:** start typing a definition, question, or promise immediately. Multiline input survives reload. Build retains the exact text in the Notebook until you assign it to a bounded context and a domain kind. Unassigned notes stay outside canonical YAML.
+- **Enter and leave:** select a bordered context region to enter its language. Select an aggregate or another domain entry to inspect its recorded relationships. Back goes up one level; the project breadcrumb returns to the project. Find reaches every entry. Spatial pages contain at most eight subjects, including external references; Table uses its own forty-row pages.
+- **Read the drawing:** overview region area follows the full recorded entry count, labeled explicitly. Its contour follows saved arrangement; these are presentation properties, not evidence of runtime population, maturity, or importance. Within a context, aggregate boundaries contain actual members. Other domain kinds use distinct marks. Context influence and observed imports remain different relationships.
+- **Author:** choose Bounded context, Aggregate, Entity, Value object, Domain event, Domain service, Specification, Repository, Factory, Open question, Invariant, or Assertion. Invariants attach to aggregates or values; assertions attach to an aggregate operation. Identity and aggregate ownership are explicit. Unfinished editor text survives presentation changes, governance inspection, and reload.
+- **Arrange:** drag to orbit, right-drag to pan, scroll to zoom, and Shift-drag an entry to change its saved position. Frame, Plan, and Zoom controls stay visible. Arrangement never changes canonical meaning. The Context field changes semantic membership.
+- **Switch presentation:** Spatial and Table use one semantic model and editing desk. A renderer switch preserves selections, unfinished input, and history. Layout coordinates and colors are stored separately from semantic records.
+- **Compare:** Tools → Review → Model snapshot captures the model and layout. The comparison distinguishes arrangement changes from semantic changes. This is separate from the ArcLint Baseline used to acknowledge findings.
+
+Onyx is one persistent female dog support avatar, independent of the scene and current context. The avatar opens a support conversation with local guidance, direct repository actions, and an editable AI request for another harness. No live AI provider is connected; free-form questions outside the local guide's supported actions are retained as notebook drafts rather than answered with invented analysis.
+
+## Inspect and apply architecture
+
+**Rules**, **Findings**, **Paths**, and **Check code** are available from the main view. The repository workspace provides Code paths, Zones, Rules, Patterns, and Report sections.
+
+- Browse real repository directories, copy relative paths, and request `arclint context <path>` or `arclint context --zone <name>`. A missing path is identified as hypothetical policy, not an observed file. A file can match several Zones. Source associations come from actual CLI evidence; matching display names alone do not establish them.
+- Inspect exact configured Rule IDs, Constraints, Scopes, authored Rationale, provenance, and available assurance. Zone paths and local layer ordering are shown separately from bounded-context membership.
+- Inspect offline Patterns and configured Bindings. Imported Pattern files remain references until their policy is applied. No skill-manager installation UI or runtime is assumed.
+- Run the actual configured check against files on disk. Retain returned paths, Rule IDs, statuses, multiplicity, timestamps, and exit code. Report filters distinguish active findings, baselined findings, suppressions, and other Diagnostics. Missing assurance or fingerprints remain absent; an empty diagnostic list is not a complete table of passed Rules.
+- **Review Baseline adoption** assesses real unbaselined findings before offering Capture or Replace. The bridge checks Rules, Domain, Baseline, and returned diagnostics again before invoking native adoption. Because this CLI omits its full outcome table, the web action requires exact-assurance enabled Rules and refuses coverage or operational gaps. The native command scans again; its final source inputs are not frozen. The review states this limit. Adoption acknowledges findings and preserves their native fingerprints; it does not repair code.
+- **Edit policy** prepares `rules.arclint.yaml`, including Rules, Zones, and Pattern Bindings. Review changes validates the candidate with ArcLint in an isolated workspace and shows its exact diff. A changed Constraint requires a new Rule ID.
+- **Review repository changes** in the domain editor saves the current definition locally and prepares canonical `domain.arclint.yaml`. The same action is available from Tools → Files & workspace → Save domain to repository.
+- **Apply to repository** is an explicit action after preview. The server rechecks source hashes, validates again, and atomically replaces only the reviewed document. If either companion document changed, the preview is refused and the draft remains. Applying clears stale repository and Report caches; Check code evaluates the new on-disk inputs.
+
+Repository reads and writes are limited to the configured local repository. The bridge rejects cross-origin access, traversal, option injection, and escaping symlinks. Document writes require a short-lived preview token, unchanged source versions, and regular destination files. Commands have time and output limits. Tests execute writes only in temporary fixture repositories.
+
+## Keep and exchange work
+
+V1 saves migrate into a version-2 envelope containing separate semantic/layout records, Model snapshot, Pattern references, view state, exact notebook text, and editor drafts. The legacy save is retained. Undo/Redo spans both presentations and reverses semantic edits, arrangement, snapshots, and workspace replacement within the current session.
+
+Tools → Files & workspace → Export provides:
+
+- **Workspace JSON:** the complete version-2 envelope, including unfinished drafts, snapshot, and references. Import restores the complete workspace.
+- **Domain YAML:** canonical ArcLint language, preserving assertion keys, invariant keys, identities, aliases, ownership, event metadata, and context relation descriptions. Adding, removing, and renaming entries in imported domains is supported. Incompatible edits fail explicitly rather than silently erasing metadata. Layout, browser drafts, comments, and formatting are not canonical language.
+
+The optional user/need brief in Tools remains browser-local by model name. It is not part of canonical YAML. Local storage is specific to browser and origin; download a workspace to keep a portable copy.
+
+Keyboard: `/` opens Find; `C` opens the domain builder; `F` frames the view; Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z undo and redo. Focused editors suppress background authoring shortcuts. Reduced motion is respected. A selectable fallback remains available if WebGL cannot initialize.
 
 ## Verify
 
 ```sh
 npm test
 npm run build
-npx playwright install chromium
 npm run test:browser
 ```
 
-The browser suite uses a separate Library domain to verify creation, editing, relationships, persistence, baseline comparison, undo/redo, and JSON export/import. It also exercises desktop, tablet, and mobile layouts; interchangeable representations; directional relationships; invariant/assertion meaning; and actual CLI context/check responses. Bridge tests cover failing checks, Zone queries, preserved diagnostic status, and repository boundaries. Canonical import/export tests include this repository's actual domain YAML and an embedded Pattern manifest.
+Unit coverage exercises canonical metadata and structural edits, separate layout, complete-save migration, shared history, exact draft retention, actual CLI reports, repository boundaries, and reviewed write conflicts. Browser coverage uses the real ArcLint domain and an unrelated Library domain, checks both presentations and mobile navigation, and exercises authoring, typed contracts, Onyx, snapshots, full-workspace exchange, and real repository evidence.
 
-Run `make check` from the repository root for the repository finish gate. No Go domain, CLI behavior, or root ruleset was changed by this standalone editor.
+Run `make check` from the repository root before completing work. The web implementation does not change Go domain or CLI semantics.
 
-## Design references
+## Model and design
 
-The [shared model](model/README.md) records the subsequent model-first review, its [interactive example](model/index.html), and the requirements for equivalent spatial and conventional presentations. Those changes are proposals; the descriptions above describe the currently implemented application.
-
-Original procedural architecture and keepers on a continuous chalk ground. The latest direction was developed through a simulated adversarial review using industrial design restraint, architectural clarity, and spatial continuity as lenses inspired by the designers named in the brief. They did not participate or endorse the result. No game assets are used. See DESIGN.md for the decisions and rejected alternatives.
-
-- [Three.js OrbitControls](https://threejs.org/docs/pages/OrbitControls.html)
-- [Vite setup](https://vite.dev/guide/)
+The user accepted the [shared model](model/README.md). [DESIGN.md](DESIGN.md) records its implemented visual and interaction decisions. The [model board](model/index.html) remains an explanatory example, separate from the application. Existing ArcLint terminology governs both presentations; unresolved product decisions remain explicit in the model.

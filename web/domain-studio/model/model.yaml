@@ -1,7 +1,7 @@
 format: arclint-web-design-model
 version: 1
-status: proposal
-implementation_status: not_implemented
+status: accepted_by_user
+implementation_status: implemented_in_domain_studio
 purpose: Shared semantic and interaction contract for spatial and conventional presentations.
 canonical_authority: ../../../domain.arclint.yaml
 reference_library: reference.domain.arclint.yaml
@@ -26,7 +26,7 @@ confirmed_requirements:
 semantic_contract:
   project:
     role: Workspace and navigation anchor, not a newly classified DDD aggregate.
-    domain_model: One active working model in this proposal.
+    domain_model: One active working model in the shared workspace.
     repository_binding: Zero or one active repository; multi-repository scope remains open.
   domain_model:
     authority: Committed project Ubiquitous Language and explicitly distinguished authoring drafts.
@@ -84,7 +84,7 @@ semantic_contract:
     preserve_when_available: [rule_id, subject, message, severity, assurance, fingerprint, status, multiplicity, source, exit_code]
     absent_field_policy: Remain unavailable; never synthesize complete Rule outcomes from an empty list.
   model_snapshot:
-    status: Proposed presentation term for the current editor's mislabeled Baseline.
+    status: Implemented with migration from the former editor Baseline field.
     effect: Compare model records, with layout changes identified separately.
     does_not_change: [arclint_baseline, report, rule_outcomes]
 
@@ -112,7 +112,7 @@ projections:
     conventional_rows: May use a different page size without reducing model capability.
 
 application_contract:
-  status: Design identifiers, not implemented APIs.
+  status: Accepted design identifiers; implemented through workspace commands and repository actions.
   shared_state:
     - project_reference
     - canonical_model_and_authored_draft
@@ -156,11 +156,11 @@ application_contract:
     - id: prepare_rule_or_pattern_change
       effect: Prepare a reviewable ruleset change including Scope compatibility and Bindings.
       requires: [source_configuration, explicit_intent]
-      current_capability: absent
+      current_capability: reviewed_validated_document_change
     - id: apply_repository_change
       effect: Apply reviewed changes through one shared application action.
       requires: [supported_write_adapter, reviewed_diff, appropriate_authority]
-      current_capability: absent
+      current_capability: reviewed_validated_document_change
     - id: evaluate
       effect: Run ArcLint against stated repository inputs and retain its actual Report.
       requires: [repository_binding, stated_on_disk_inputs]
@@ -168,23 +168,23 @@ application_contract:
     - id: adopt_findings
       effect: Capture or refresh the ArcLint Baseline from actual evaluated findings.
       requires: [real_evaluation, supported_adoption_action, explicit_intent]
-      current_capability: absent_in_webapp
+      current_capability: native_review_and_adoption_with_exact_assurance_evidence_gate
     - id: capture_model_snapshot
       effect: Capture a model reference without altering adoption.
       requires: [authored_model]
-      current_capability: available_under_incorrect_baseline_name
+      current_capability: model_snapshot_with_v1_migration
     - id: switch_representation
       effect: Change renderer while preserving all shared state and canonical output.
       requires: [renderer_choice]
-      current_capability: partial_read_projections_only
+      current_capability: shared_spatial_and_table_authoring
     - id: ask_onyx
       effect: Open task-aware support through the avatar itself.
       requires: []
       live_ai_requires: Connected provider and explicit execution capability.
-      current_capability: local_action_shortcuts_only
+      current_capability: contextual_local_guide_and_editable_ai_request
 
 onyx:
-  status: Proposed support interaction; no connected AI is claimed.
+  status: Implemented local guide; no connected AI is claimed.
   identity: One persistent female dog avatar.
   location: Interface corner, independent of camera and context count.
   trigger: Avatar itself is the accessible support control.

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { closeTools, openEditor, openNavigator, selectPlace, toolButton, toolId } from './studio.helpers';
+import { closeTools, openEditor, openNavigator, selectPlace, toolButton, toolId, savedProject } from './studio.helpers';
 
 const largeLibrary = {
   version: 1, name: 'Library', description: 'A domain large enough to require deliberate layers.',
@@ -37,16 +37,20 @@ async function expectBoundedSubjects(page: Page) {
 
 test('first view is a quiet world of contexts, with no descendant labels or work surfaces', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 990, height: 623 });
-  await page.goto('/');
+  await loadLargeLibrary(page);
   await expect(page.locator('#scene')).toHaveAttribute('data-depth', 'world');
   await expect(page.locator('#scene [data-subject-id]:visible')).toHaveCount(3);
-  await expect(page.locator('#scene').getByRole('button', { name: /^Skill/ })).not.toBeVisible();
+  await expect(page.locator('#scene .domain-regions')).toHaveCount(1);
+  await expect(page.locator('#scene [data-subject-kind="context"]')).toHaveCount(3);
+  await expect(page.locator('#scene').getByRole('button', { name: /^Book/ })).not.toBeVisible();
   for (const selector of ['#inspector', '#tools-drawer', '#evidence-card', '#workbench-input', '#projection', '#model-tree']) {
     await expect(page.locator(selector)).not.toBeVisible();
   }
   await expect(page.locator('#open-index')).toBeVisible();
   await expect(page.locator('#tools-toggle')).toBeVisible();
   await expect(page.locator('#keeper-action')).toHaveAttribute('data-keeper', 'Onyx');
+  await expect(page.locator('#keeper-action .onyx-avatar')).toHaveCount(1);
+  await expect(page.locator('#scene .onyx-avatar')).toHaveCount(0);
   await expect(page.locator('.study-scene')).toHaveAttribute('data-camera-state', 'settled');
   await page.screenshot({ path: testInfo.outputPath('quiet-world-990.png'), fullPage: true });
 });
@@ -57,7 +61,7 @@ test('one click descends, paging reveals the complete context, and Find reaches 
   await expect(page.locator('#scene')).toHaveAttribute('data-depth', 'context');
   await expect(page.locator('#scene')).toHaveAttribute('data-scope', 'catalog');
   await expect(page.locator('#inspector')).not.toBeVisible();
-  await expect(page.locator('#keeper-action')).toHaveAttribute('data-keeper', 'Steward');
+  await expect(page.locator('#keeper-action')).toHaveAttribute('data-keeper', 'Onyx');
   await expect(page.locator('#scene [data-subject-id="book-1"]')).toBeVisible();
   await expect(page.locator('.study-scene')).toHaveAttribute('data-camera-state', 'settled');
   const contextDistance = Number(await page.locator('.study-scene').getAttribute('data-camera-distance'));
@@ -80,7 +84,7 @@ test('one click descends, paging reveals the complete context, and Find reaches 
   await expect(page.locator('#scene')).toHaveAttribute('data-depth', 'detail');
   await expect(page.locator('#scene')).toHaveAttribute('data-selected-id', 'book-18');
   await expectBoundedSubjects(page);
-  await expect(page.locator('#keeper-action')).toHaveAttribute('data-keeper', 'Inspector');
+  await expect(page.locator('#keeper-action')).toHaveAttribute('data-keeper', 'Onyx');
   await expect(page.locator('.study-scene')).toHaveAttribute('data-camera-state', 'settled');
   expect(Number(await page.locator('.study-scene').getAttribute('data-camera-distance'))).toBeLessThan(contextDistance);
   const selectedBounds = await page.locator('#scene [data-subject-id="book-18"]').boundingBox();
@@ -96,15 +100,19 @@ test('one click descends, paging reveals the complete context, and Find reaches 
   await expect(page.locator('#scene')).toHaveAttribute('data-depth', 'world');
 });
 
-test('Edit is explicit, its close preserves the place, and the keeper invokes that real action', async ({ page }) => {
+test('the same Onyx avatar opens contextual support, and explicit editing preserves the selected place', async ({ page }) => {
   await loadLargeLibrary(page);
   await selectPlace(page, /^Book 01/);
   await expect(page.locator('#inspector')).not.toBeVisible();
   await page.locator('#keeper-action').click();
+  await expect(page.locator('#onyx-support')).toBeVisible();
+  await expect(page.locator('#onyx-place')).toContainText('Book 01');
+  await expect(page.locator('#inspector')).not.toBeVisible();
+  await page.locator('#onyx-define').click();
   await expect(page.locator('#inspector')).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Book 01');
   await page.getByRole('textbox', { name: 'Definition', exact: true }).fill('A named title that readers can discover.');
-  await page.getByRole('button', { name: 'Save concept', exact: true }).click();
+  await page.getByRole('button', { name: 'Save definition', exact: true }).click();
   await page.locator('#clear-selection').click();
   await expect(page.locator('#inspector')).not.toBeVisible();
   await expect(page.locator('#scene')).toHaveAttribute('data-depth', 'detail');
@@ -113,26 +121,30 @@ test('Edit is explicit, its close preserves the place, and the keeper invokes th
   await expect(page.getByRole('textbox', { name: 'Definition', exact: true })).toHaveValue('A named title that readers can discover.');
 });
 
-test('related endpoints, lenses, and baseline ghosts share the eight-subject budget', async ({ page }) => {
+test('related endpoints, lenses, and model snapshot ghosts share the eight-subject budget', async ({ page }) => {
   await loadLargeLibrary(page);
   await selectPlace(page, /^Book 01/);
   await expectBoundedSubjects(page);
-  const original = await page.evaluate(() => JSON.parse(localStorage.getItem('arclint.domain-studio.v1')!).project);
+  const original = await savedProject(page);
   for (const lens of ['#lens-governance', '#lens-meaning']) {
     await page.locator(lens).click();
+    if (lens === '#lens-governance') {
+      await expect(page.locator('#evidence-card')).toBeVisible();
+      await page.locator('#close-evidence').click();
+    }
     await expectBoundedSubjects(page);
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('arclint.domain-studio.v1')!).project)).toEqual(original);
+    expect(await savedProject(page)).toEqual(original);
   }
-  await toolButton(page, 'Baseline');
-  await page.getByRole('button', { name: 'Capture baseline', exact: true }).click();
+  await toolButton(page, 'Model snapshot');
+  await page.getByRole('button', { name: 'Capture model snapshot', exact: true }).click();
   await page.getByRole('dialog').getByRole('textbox', { name: 'Name', exact: true }).fill('Before clarification');
-  await page.getByRole('button', { name: 'Save baseline', exact: true }).click();
+  await page.getByRole('button', { name: 'Save snapshot', exact: true }).click();
   await selectPlace(page, /^Book 01/);
   await openEditor(page);
   await page.getByRole('textbox', { name: 'Definition', exact: true }).fill('A clarified library title.');
-  await page.getByRole('button', { name: 'Save concept', exact: true }).click();
+  await page.getByRole('button', { name: 'Save definition', exact: true }).click();
   await page.locator('#clear-selection').click();
-  await toolButton(page, 'Baseline');
+  await toolButton(page, 'Model snapshot');
   await closeTools(page);
   await expect(page.locator('#inspector')).toContainText('Changed definition.');
   await page.locator('#close-sheet').click();
@@ -150,18 +162,18 @@ test('related endpoints, lenses, and baseline ghosts share the eight-subject bud
   await expect(page.locator('#scene')).not.toHaveAttribute('data-comparison', 'baseline');
 });
 
-test('fullscreen editing and evidence suppress background creation and undo shortcuts', async ({ page }) => {
+test('focused editing and evidence suppress background creation and undo shortcuts', async ({ page }) => {
   await loadLargeLibrary(page);
   await selectPlace(page, /^Book 01/);
   await openEditor(page);
   await page.getByRole('textbox', { name: 'Definition', exact: true }).fill('A title with an intentionally saved clarification.');
-  await page.getByRole('button', { name: 'Save concept', exact: true }).click();
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('arclint.domain-studio.v1')!).project);
+  await page.getByRole('button', { name: 'Save definition', exact: true }).click();
+  const saved = await savedProject(page);
   await page.locator('#clear-selection').focus();
   await page.keyboard.press('c');
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await page.keyboard.press('Control+z');
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('arclint.domain-studio.v1')!).project)).toEqual(saved);
+  expect(await savedProject(page)).toEqual(saved);
   await expect(page.locator('#inspector')).toBeVisible();
   await toolId(page, '#open-architecture');
   await expect(page.locator('#evidence-card')).toContainText('domain');
@@ -169,7 +181,7 @@ test('fullscreen editing and evidence suppress background creation and undo shor
   await page.keyboard.press('c');
   await expect(page.getByRole('dialog')).not.toBeVisible();
   await page.keyboard.press('Control+z');
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('arclint.domain-studio.v1')!).project)).toEqual(saved);
+  expect(await savedProject(page)).toEqual(saved);
   await expect(page.locator('#evidence-card')).toBeVisible();
 });
 
@@ -177,7 +189,10 @@ test('following an external neighbor keeps Back in the originating context while
   await loadLargeLibrary(page);
   await selectPlace(page, /^Book 01/);
   for (let index = 0; index < 6 && !await page.locator('#scene [data-subject-id="loan"]').isVisible(); index++) {
+    if (await page.locator('#view-next').isDisabled()) break;
+    const previous = await subjects(page);
     await page.locator('#view-next').click();
+    await expect.poll(() => subjects(page)).not.toEqual(previous);
   }
   await expect(page.locator('#scene [data-subject-id="loan"]')).toBeVisible();
   await expect(page.locator('.study-scene')).toHaveAttribute('data-camera-state', 'settled');
