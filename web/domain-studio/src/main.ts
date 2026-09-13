@@ -153,7 +153,7 @@ function renderLocation() {
   const place = concept?.name ?? (relation ? relationshipDescription(project,relation).label : context?.name ?? 'The whole domain');
   $('#place-name').textContent = place;
   $('#place-summary').textContent = concept ? concept.definition.slice(0,180) : relation ? relationshipDescription(project,relation).meaning : context ? 'Choose a concept to understand its meaning.' : 'Choose a context to enter.';
-  $('#breadcrumbs').innerHTML = `<button id="realm-location" aria-label="Domain">World</button>${context ? `<span>/</span><button id="context-location">${escape(context.name)}</button>` : ''}${view.level === 'detail' ? '<span>/</span><span>Detail</span>' : ''}`;
+  $('#breadcrumbs').innerHTML = `<button id="realm-location">${escape(project.name)}</button>${context ? `<span>/</span><button id="context-location">${escape(context.name)}</button>` : ''}${view.level === 'detail' ? '<span>/</span><span>Detail</span>' : ''}`;
   $('#realm-location').onclick = () => { scopeId = null; aggregateId = null; selectedId = null; viewPage = 0; editorOpen = false; if (mode !== 'baseline') mode = 'domain'; render(); };
   $('#context-location')?.addEventListener('click', () => { selectedId = null; aggregateId = null; editorOpen = false; viewPage = 0; if (mode !== 'baseline') mode = 'domain'; render(); });
   $('#ascend').toggleAttribute('disabled', view.level === 'world');
