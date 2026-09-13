@@ -1,0 +1,275 @@
+format: arclint-web-design-model
+version: 1
+status: proposal
+implementation_status: not_implemented
+purpose: Shared semantic and interaction contract for spatial and conventional presentations.
+canonical_authority: ../../../domain.arclint.yaml
+reference_library: reference.domain.arclint.yaml
+source_commit: 4baae740e4bf58fd2b5f477273b37b2db96f59fa
+source_sha256: 56a60d8aaa22be7e4c552b453b40d32e191bbb5fd5fae2b4e0e75fd53aa0ad61
+new_ddd_classifications: []
+
+confirmed_requirements:
+  - id: cohesive-meaning
+    evidence: "You and the team NEED TO MODEL IT OUT FIRST SO THAT IT IS A COHESIVE MODEL."
+  - id: overlapping-zones
+    evidence: "A zone may span multiple directories, and files may belong to multiple Zones."
+  - id: two-presentations
+    evidence: "is the way that we implemented and categorized it capable of just translating into a regular application?"
+  - id: support-avatar
+    evidence: "I meant having her as an avatar here not having a button and a cat over to the right. think support bot type of stuff."
+  - id: stakeholder-entry
+    evidence: "the ability to just get in here and start typing up the things that the stakeholder wants to answer"
+  - id: bounded-visible-set
+    evidence: "You need to limit the amount of things or nodes that you can see on the screen at one point. At the same time you have to make sure everything is available."
+
+semantic_contract:
+  project:
+    role: Workspace and navigation anchor, not a newly classified DDD aggregate.
+    domain_model: One active working model in this proposal.
+    repository_binding: Zero or one active repository; multi-repository scope remains open.
+  domain_model:
+    authority: Committed project Ubiquitous Language and explicitly distinguished authoring drafts.
+    owns: [bounded_contexts, context_relations]
+    does_not_include: [camera, layout, avatars, repository_observations, evaluation_results]
+  bounded_context:
+    meaning: Boundary within which one model and its language apply.
+    owns: [recorded_terms, context_owned_questions]
+    representation: Bordered region containing its language, never one arbitrary building.
+  term:
+    identity: Context-qualified application reference; preserve source identity and rename mappings.
+    classifications: [aggregate, entity, value_object, domain_event, domain_service, specification, repository, factory]
+    unclassified_input: Retain as draft or context-owned open question; no guessed kind.
+    granularity: Recorded concept type, not a running business instance.
+  aggregate:
+    meaning: Recorded consistency boundary with root, members, ownership and contracts.
+    representation: Enclosure only where that boundary is actually recorded.
+  invariant:
+    meaning: Promise that always holds within its recorded owner.
+    evidence: Declaration and observed enforcement are distinct.
+  assertion:
+    meaning: Recorded postcondition of a named operation.
+    canonical_fields: [on, statement]
+    evidence: No inferred invariant-to-assertion link without a recorded relation.
+  zone:
+    meaning: Named logical file set resolved from path globs.
+    membership: many_to_many
+    may_cross_contexts: true
+    may_include_unassociated_code: true
+    representation: Membership marks over actual file references, not administrative territory.
+  rule:
+    identity: Preserve exact RuleID including any Pattern qualification.
+    composition: One Constraint and compatible Scope, with authored and effective supporting fields.
+    material_constraint_change: Requires a new RuleID.
+    rationale: Authored when supplied; never generated from the proposition.
+  scope:
+    meaning: Repository or selected Zones, narrowed only where the Constraint supports it.
+    caution: Graph-scoped Constraint is not a new kind of semantic context or view level.
+  constraint:
+    meaning: Checkable proposition determining shape and compatible evaluation Scope.
+    layers: Declared ordering between participating Zones, never camera height.
+  import:
+    direction: importer_to_imported
+    classes: [internal, external, stdlib, unknown]
+    internal: May resolve to repository code outside every declared Zone.
+    unknown: Governed by scan.unknown_imports; do not invent a resolution.
+  pattern:
+    carries: [versioned_rules, pathless_zone_declarations]
+    adoption: Exact PatternReference and local Bindings; inspection alone installs nothing.
+  baseline:
+    meaning: Acknowledged findings, keyed by fingerprint and counted multiplicity.
+    effect: Adoption subtraction; not repair, semantic approval, or a model/layout snapshot.
+  report:
+    meaning: Actual output of evaluation, including kind-dependent Diagnostics and finding records.
+    preserve_when_available: [rule_id, subject, message, severity, assurance, fingerprint, status, multiplicity, source, exit_code]
+    absent_field_policy: Remain unavailable; never synthesize complete Rule outcomes from an empty list.
+  model_snapshot:
+    status: Proposed presentation term for the current editor's mislabeled Baseline.
+    effect: Compare model records, with layout changes identified separately.
+    does_not_change: [arclint_baseline, report, rule_outcomes]
+
+projections:
+  meaning:
+    subjects: [bounded_context, recorded_term]
+    edges: [recorded_context_influence, recorded_ownership, recorded_term_relation]
+    coordinates_mean: Authored presentation arrangement only.
+  code:
+    subjects: [file, declaration]
+    links_to_meaning: Located source associations carrying their origin and evidence state.
+    overlays: [zone_membership, rule_scope, observed_import, report_record, baseline_status]
+    unassociated_file: Remains a file without a located context; never invent a context.
+  relation_keys:
+    context_influence: upstream_to_downstream_with_recorded_kind
+    observed_import: importer_to_imported_with_source_observation
+    permitted_import: Policy expectation, never an observation.
+    finding: Report record about a Rule and its subject, never a generic road.
+  scene_budget:
+    maximum_primary_subjects: 8
+    external_references_count: true
+    aggregate_members_count: true
+    context_frame_is_subject: false
+    queries_and_totals: Use the complete scoped result, not only the visible page.
+    conventional_rows: May use a different page size without reducing model capability.
+
+application_contract:
+  status: Design identifiers, not implemented APIs.
+  shared_state:
+    - project_reference
+    - canonical_model_and_authored_draft
+    - semantic_selection_and_originating_context
+    - repository_binding
+    - observed_source_associations
+    - rules_patterns_and_bindings
+    - reports_and_adoption_baseline
+    - unfinished_input_and_open_questions
+    - undo_history_and_pending_actions
+    - evidence_provenance_and_freshness
+  presentation_state:
+    - renderer_choice
+    - camera_and_authored_layout
+    - list_expansion_sort_and_page
+    - active_view_level
+    - selected_overlay
+  commands:
+    - id: capture_text
+      effect: Retain exact input immediately in the shared draft notebook.
+      requires: []
+      not_implied: Classification, context assignment, canonical export or AI execution.
+    - id: assign_meaning
+      effect: Propose a context-owned term or question using sufficient evidence.
+      requires: [chosen_context, explicit_user_intent]
+    - id: save_definition
+      effect: Update the same semantic draft through either renderer.
+      requires: [semantic_reference, definition, shared_validation]
+    - id: move_between_contexts
+      effect: Explicitly change semantic ownership and validate affected references.
+      requires: [semantic_reference, destination_context, ownership_validation]
+    - id: arrange
+      effect: Change presentation layout only.
+      requires: [semantic_reference]
+    - id: select_overlay
+      effect: Change visible evidence without modifying selection, draft or domain meaning.
+      requires: [overlay_kind]
+    - id: inspect_context
+      effect: Query actual ArcLint context for a validated path or Zone.
+      requires: [repository_binding, explicit_subject]
+    - id: prepare_rule_or_pattern_change
+      effect: Prepare a reviewable ruleset change including Scope compatibility and Bindings.
+      requires: [source_configuration, explicit_intent]
+      current_capability: absent
+    - id: apply_repository_change
+      effect: Apply reviewed changes through one shared application action.
+      requires: [supported_write_adapter, reviewed_diff, appropriate_authority]
+      current_capability: absent
+    - id: evaluate
+      effect: Run ArcLint against stated repository inputs and retain its actual Report.
+      requires: [repository_binding, stated_on_disk_inputs]
+      current_capability: available_for_bound_repository_only
+    - id: adopt_findings
+      effect: Capture or refresh the ArcLint Baseline from actual evaluated findings.
+      requires: [real_evaluation, supported_adoption_action, explicit_intent]
+      current_capability: absent_in_webapp
+    - id: capture_model_snapshot
+      effect: Capture a model reference without altering adoption.
+      requires: [authored_model]
+      current_capability: available_under_incorrect_baseline_name
+    - id: switch_representation
+      effect: Change renderer while preserving all shared state and canonical output.
+      requires: [renderer_choice]
+      current_capability: partial_read_projections_only
+    - id: ask_onyx
+      effect: Open task-aware support through the avatar itself.
+      requires: []
+      live_ai_requires: Connected provider and explicit execution capability.
+      current_capability: local_action_shortcuts_only
+
+onyx:
+  status: Proposed support interaction; no connected AI is claimed.
+  identity: One persistent female dog avatar.
+  location: Interface corner, independent of camera and context count.
+  trigger: Avatar itself is the accessible support control.
+  duplicate_scene_character: false
+  separate_helper_text_button: false
+  retained_context: [task, selection, draft, source_references, evidence_state]
+  suggestions: Reviewable proposals; never silently create domain facts or execute changes.
+
+presentation_invariants:
+  - Switching renderer preserves canonical model content and all unfinished input.
+  - Selecting a Zone never changes context ownership or file identity.
+  - Arrangement does not change meaning, source membership or Rule outcomes.
+  - Matching display names never merge context-qualified references.
+  - A located association carries evidence; lack of association never creates a town.
+  - A context relation never masquerades as an observed import.
+  - A declared invariant never masquerades as proven runtime behavior.
+  - A Report record retains the status and limitations actually supplied.
+  - Baseline adoption never means a finding was repaired.
+  - Diagram limits never truncate queries, exports or complete counts.
+  - Onyx's persona never determines domain authority or reported truth.
+
+example:
+  status: illustrative_fixture
+  disclaimer: A proposed Library example. No repository was observed and no check was run.
+  project: {id: library, name: Library}
+  contexts:
+    - {id: catalog, name: Catalog, definition: Describing bibliographic works.}
+    - {id: circulation, name: Circulation, definition: Lending and returning physical items.}
+  terms:
+    - id: catalog-book
+      context: catalog
+      name: Book
+      definition: A bibliographic work identified in the catalog.
+      classification: unresolved
+      position: [180, 170]
+    - id: circulation-book
+      context: circulation
+      name: Book
+      definition: A lendable item whose availability matters to circulation.
+      classification: unresolved
+      position: [590, 170]
+  context_relations:
+    - {id: catalog-influences-circulation, from: catalog, to: circulation, kind: conformist}
+  files:
+    - {id: catalog-file, path: internal/catalog/domain/book.go, context: catalog, term: catalog-book, position: [175, 170]}
+    - {id: circulation-file, path: internal/circulation/domain/book.go, context: circulation, term: circulation-book, position: [590, 170]}
+    - {id: audit-file, path: internal/telemetry/audit.go, context: null, term: null, position: [385, 350]}
+  source_association_status: Illustrative fixture associations only; no actual repository observations.
+  zones:
+    - id: catalog-zone
+      name: catalog
+      paths: [internal/catalog/**]
+      members: [catalog-file]
+    - id: circulation-zone
+      name: circulation
+      paths: [internal/circulation/**]
+      members: [circulation-file]
+    - id: domain-zone
+      name: domain
+      paths: [internal/*/domain/**]
+      members: [catalog-file, circulation-file]
+    - id: audited-zone
+      name: audited
+      paths: [internal/*/domain/**, internal/telemetry/**]
+      members: [catalog-file, circulation-file, audit-file]
+  observed_imports: []
+  report: null
+  baseline: null
+  permitted_dependency_example:
+    from: circulation-file
+    to: catalog-file
+    status: Expected direction under the recorded conformist relation, not an observed import.
+
+open_questions:
+  - id: art-direction
+    question: Which material treatment best expresses these explicit boundaries without implying nonexistent behavior?
+    blocks: Final scene rendering, not the semantic model.
+  - id: repository-scope
+    question: Is one active repository binding sufficient, or must a project coordinate multiple repositories?
+    proposal: One active binding initially; no multi-repository promise.
+  - id: support-capability
+    question: Which AI provider, retention policy and execution capabilities should connected Onyx support?
+    proposal: Keep provider/authority explicit; local guidance must remain useful without a connection.
+  - id: commercial-tiers
+    question: Are the two presentations preferences or commercial tiers?
+    proposal: Model capability parity now; defer pricing and packaging.
+  - id: existing-pattern-boundary
+    question: The source library already questions Pattern's aggregate ownership. This design does not resolve it.

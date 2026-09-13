@@ -1,6 +1,8 @@
 # ArcLint · Places
 
-This is the governing design for the September 13 revision. Earlier dense atlas compositions are rejected and remain in Git history.
+> The [shared semantic model](model/README.md) supersedes this document's spatial mappings and keeper design. This file records the prior implemented direction. The next UI revision must follow the model review first; the current application has not yet implemented that proposal.
+
+This records the implemented September 13 revision. Earlier dense atlas compositions are rejected and remain in Git history.
 
 ## Adversarial review
 

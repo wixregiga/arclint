@@ -64,6 +64,8 @@ Run `make check` from the repository root for the repository finish gate. No Go 
 
 ## Design references
 
+The [shared model](model/README.md) records the subsequent model-first review, its [interactive example](model/index.html), and the requirements for equivalent spatial and conventional presentations. Those changes are proposals; the descriptions above describe the currently implemented application.
+
 Original procedural architecture and keepers on a continuous chalk ground. The latest direction was developed through a simulated adversarial review using industrial design restraint, architectural clarity, and spatial continuity as lenses inspired by the designers named in the brief. They did not participate or endorse the result. No game assets are used. See DESIGN.md for the decisions and rejected alternatives.
 
 - [Three.js OrbitControls](https://threejs.org/docs/pages/OrbitControls.html)
