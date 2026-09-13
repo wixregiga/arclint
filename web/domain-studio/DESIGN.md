@@ -1,29 +1,42 @@
-# The Domain Atlas
+# ArcLint · Places
 
-The saved version at 247958f is a functional checkpoint. Its dashboard layout is explicitly rejected. This redesign starts from a new interaction composition, not a reskin of that layout.
+This is the governing design for the September 13 revision. Earlier dense atlas compositions are rejected and remain in Git history.
 
-The user's latest attachment offers three useful influences: a material landscape informed by Japanese terrain and architecture; restrained tactical targeting and camera movement; and an encyclopedia's ability to explain an object where it is encountered. The attachment's repository assertions are unverified suggestions, not contracts. Existing canonical domain/schema behavior remains authoritative.
+## Adversarial review
 
-Design plan: a full-window, physical, terraced landscape on an ink-and-paper atlas. Contexts are distinct named terrain plates. Concepts have legible, varied architectural silhouettes; existing ownership is a visible boundary, not an inferred one. Recorded connections travel as routes. Hover/selection reveals meaning. A double-click or Enter action descends into a context; ascent returns to the previous level. Realm/context/aggregate orientation follows actual membership, never a fabricated uniform four-level hierarchy.
+The review used four independent lenses inspired by Andrew Kim, Jony Ive, Dieter Rams, and Hideo Kojima. These were our interpretations, not participation, quotations, or endorsements by those people.
 
-Palette: paper #e5dfce, mist #c8cfbf, ink #273a38, vermilion #a94332, aged gold #a38a50, indigo #455c71. Natural matte materials and quiet water. Display typography: Georgia/Palatino; interface: system sans; coordinates and annotations: monospace. A single light atlas theme is intentional. No copied game assets, stars, chrome, neon, dark dashboard shell, header navigation strip, permanent explorer column, permanent inspector column, or KPI tiles.
+- Kim lens proposed an inhabited architectural object and categorical silhouettes. Rams challenged height implying importance; the resolution is comparable mass, with enclosure expressing only recorded ownership.
+- Ive lens rejected simultaneous exposition. The resolution is plain names at rest, one contextual action, and one summoned work surface.
+- Kojima lens proposed scale and arrival as the experience. Rams rejected automatic tours and decorative population; transitions are brief, cancelable, and tied to an explicit selection.
+- The group debated one recurring dog versus different keepers. The user asked for a team, so the final design has one visible guide per viewing level: Onyx, Steward, Inspector. They are interface guides, never invented actors in the recorded domain.
 
-The world occupies the screen. A small vertical locator at upper left tells where you are. A creation compass fans out near the lower left. A compact tool stack handles overlays at the upper right. A contextual manuscript appears only on selection. Search/index is a transient command sheet, not a permanent sidebar. Findings/Patterns/baseline use deliberate temporary overlays. All editing and import/export functionality survives. Browser-local persistence survives the redesign.
+The restraint and functional-purpose lens is informed by [Rams's principles published by Vitsœ](https://www.vitsoe.com/us/about/good-design). The remaining lenses are interpretive creative constraints; no statements are attributed to the designers.
 
-The model remains general purpose. bskilled is optional example content only. No seven-state conformance system or invented assurance levels are added from the supplied prompt. Local completeness findings remain visibly distinct from repository conformance. Pattern execution and AI execution retain their current honest limitations.
+## Composition
 
-## Semantic drawing revision
+A quiet architectural study with a tangible ground and small, expressive keepers. Chalk #ECEDE6, graphite #25302E, cast stone #C2C7BB, muted steel #74848C, and a single active accent #B74937. Humanist system sans for controls and object names; restrained Georgia for the current place; monospace only for evidence and paths. One light material world, deliberately chosen. No green haze, decorative grass, rocks, paper texture, floating metadata cards, or always-visible toolbars.
 
-The scene must explain what is recorded before it supplies atmosphere. Names and recorded kinds remain legible; an unclassified term is an unfinished foundation, never an invented aggregate or a finished generic house. Distinct architectural silhouettes encode actual kinds. Invariant braces attach to the owner; assertion gates show the named operation's post-condition. Counts are authored contracts, not passed checks. An invariant on a value object is not presented as an aggregate-root operation.
+Ground marks a recorded boundary. Enclosures mark actual membership. Distinct silhouettes aid recognition without claiming importance, conformance, or invented local culture. A keeper stands at the entry threshold. Light and shadow make form legible; they do not simulate status.
 
-Every relationship carries its verb and direction. Canonical context arrows describe model influence from upstream to downstream; they do not reverse themselves to pretend to be observed imports. Partnership/shared-kernel arrows are bidirectional; separate-ways marks no connection. A context view retains labeled external endpoints. Context labels state the boundary's recorded description and concept count. Collision handling moves annotation paper and leaders, never model coordinates.
+## Levels of attention
 
-The drawing has three representations: Site, Plan, and Matrix. Site preserves the spatial identity; Plan uses the same saved coordinates with explicit membership boundaries; Matrix reads recorded relationships from row to column. Representation changes never mutate the domain. Model movement is compared with the saved baseline. Positions represent authored arrangement and membership; this is not a Wardley maturity projection. Evolutionary maturity cannot be inferred from a DDD kind or a source folder. A separately saved user/need brief supplies a visible, user-authored anchor.
+World: actual contexts only. No child buildings, type badges, definitions, or relationship-label web. Click a context once to enter.
 
-The architecture workbench stays above the drawing. A concept name selects an editable model object; a path requests the real `arclint context` report. Open repository loads the configured repository's canonical domain as an editable browser draft. Zones & layers draws explicit local `layers` constraints and exposes Zone context queries, without assuming that a bounded context is a Zone or that import permission is human edit permission. Check code executes ArcLint on the repository on disk. Browser drafts, configured Rules, code observations, and diagnostic results remain separately identified.
+Context: at most eight actual concepts belonging there. The context is ground and breadcrumb, not a ninth node. Plain names identify objects; definitions stay with the selected place and its explicit editing action.
 
-Onyx is a small, original, stylized dog guide. Its advice follows the selected object and available evidence. It has no fabricated persona knowledge or autonomous AI execution.
+Detail: the chosen object and a bounded set of directly related subjects. External endpoints count toward the eight-subject ceiling. Comparison marks existing subjects without adding duplicate actors; removed records remain available in the baseline review. Other relationships stay discoverable through pages and Find. There is no dimmed crowd left offstage.
 
-The visual tokens remain ink #273a38, drafting paper #eee9d9, terrain #c8cfbf, vermilion #a94332, gold #a38a50, and indigo #455c71. Typography retains the existing display/system/mono roles. The composition adds a compact working input, marked-up plans, contract annotations, and a temporary inspection sheet. It avoids a permanent dashboard shell.
+Stored model coordinates and identities do not change when levels, pages, or representations change. Camera arrival lasts about 650 ms and can be interrupted. Reduced motion jumps directly. Back reverses the level. Find can reach everything, including subjects beyond the current page.
 
-The stable-layout decision is informed by Kuhn, Loretan and Nierstrasz's [Consistent Layout for Thematic Software Maps](https://scg.unibe.ch/archive/papers/Kuhn08bSoftwareMap.pdf), which motivates a common layout across thematic software views. We preserve authored coordinates here; we do not claim to implement their lexical embedding or reproduce a published comprehension improvement. The user's CodeCity correctness figure and the claimed universal advantage of matrices are not acceptance evidence for this implementation.
+## Controls and work
+
+Persistent controls are orientation/back, Find, Tools, one primary contextual action, and the small Meaning/Governance goal selector. A quiet page indicator appears only for larger sets. Plan and Matrix are alternate working representations reached through Tools; they obey the same bounded visible set.
+
+Meaning serves defining the language and helping others understand. Governance serves inspecting the real Zone/Rule contracts and checking code. Definitions, contracts, editing, imports, Patterns, baselines, and real ArcLint evidence open one deliberate work surface; they do not compete with the resting scene. The existing domain, JSON/YAML, history, path/Zone queries, and check pipeline remain available.
+
+Onyx, Steward, and Inspector are original procedural avatars placed in the scene. Only the current guide is visible. The guide offers one action appropriate to the level and goal. No help card, ambient dialogue, fabricated finding, or implied autonomous AI.
+
+## Acceptance
+
+At 990×623 the initial sample presents three context names, the current place, and a clear next action. No Skill/Plugin children or inspector appear. Every world/context/detail/alternate view has at most eight model subjects, including external subjects. All subjects remain reachable through Find or pages. A context opens with one click; entering detail changes actual camera framing. Opening and closing the editor returns to the same place. At rest, every rectangle, label, and material must earn its purpose. Passing functional tests alone does not constitute visual acceptance.

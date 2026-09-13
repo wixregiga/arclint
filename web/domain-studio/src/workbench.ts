@@ -4,19 +4,21 @@ import { importProject } from './serialization';
 import { conceptContracts, kindNames, planPosition, record, relationshipDescription } from './model-evidence';
 import { loadRepository, queryRepositoryContext, queryRepositoryZone, checkRepository, type RepositoryProject, type RepositoryContextReport, type RepositoryCheckResult } from './repository';
 import './workbench.css';
+import type { FocusView } from './view-state';
 
 const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 type Representation = 'site' | 'plan' | 'matrix';
 interface Callbacks { select(id: string): void; replace(project: DomainProject): void; create(): void; notify(message: string, error?: boolean): void }
-export interface Workbench { update(project: DomainProject, selectedId: string | null, scopeId: string | null, mode: StudioMode, baseline: Baseline | null): void; selectionEvidence(id: string): string; bindSelection(): void }
+export interface Workbench { update(project: DomainProject, selectedId: string | null, scopeId: string | null, mode: StudioMode, baseline: Baseline | null, view: FocusView): void; inspectSelection(id: string | null): void; selectionEvidence(id: string): string; bindSelection(): void }
 
 export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbench {
   let project: DomainProject;
+  let focusView: FocusView | null = null;
   let selected: string | null = null, scope: string | null = null;
   let mode: StudioMode = 'domain', baseline: Baseline | null = null;
   let representation: Representation = 'site';
   let matrixRowPage = 0, matrixColumnPage = 0;
-  const matrixPageSize = 32;
+  const matrixPageSize = 8;
   let repository: RepositoryProject | null = null;
   let run: RepositoryCheckResult | null = null;
   let requestGeneration = 0;
@@ -30,15 +32,15 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
     </div>
     <section id="projection" aria-label="Alternative model representation" hidden></section>
     <section id="evidence-card" aria-label="ArcLint evidence" hidden></section>
-    <details class="drawing-key" aria-label="Map legend"><summary>READ THE DRAWING</summary><span>□ Unclassified · named foundation</span><span>▣ Aggregate · consistency boundary</span><span>◇ Value · identity-free object</span><span>╳ Invariant · must hold</span><span>⊣ Assertion · after an operation</span><span>→ Relationship · follow the named arrow</span></details>
-    <button id="onyx-helper" aria-label="Ask Onyx for the next step"><svg viewBox="0 0 48 44" aria-hidden="true"><path d="M12 8 5 5 4 27 14 25M36 8 43 5 44 27 34 25" fill="#202a29"/><path d="M12 8Q24 0 36 8L35 29Q24 44 13 29Z" fill="#34413d"/><path d="m15 21 9 8 9-8-5 14h-8Z" fill="#64766b"/><circle cx="17" cy="17" r="2" fill="#eae4ca"/><circle cx="31" cy="17" r="2" fill="#eae4ca"/><path d="m20 25 4 5 4-5Z" fill="#14221f"/></svg><span><b>Onyx</b><small id="onyx-hint">Start with a need</small></span></button>
   `);
   const $ = <T extends HTMLElement = HTMLElement>(selector: string) => host.querySelector<T>(selector)!;
   const card = $('#evidence-card');
+  const closeTools = () => (host.querySelector('#tools-drawer') as HTMLDialogElement).close();
+  host.querySelector('.tools-body')!.append(host.querySelector('.workbench')!);
   host.addEventListener('keydown', event => { if (event.key === 'Escape' && !card.hidden) { requestGeneration++; card.hidden = true; event.stopPropagation(); } });
   ($('#workbench-form') as HTMLFormElement).autocomplete = 'off';
-  ($('.drawing-key') as HTMLDetailsElement).open = window.innerWidth > 1100;
   function evidence(title: string, html: string) {
+    closeTools();
     card.hidden = false;
     card.innerHTML = `<div class="evidence-heading"><div><span>ARCLINT · EVIDENCE</span><h2>${escape(title)}</h2></div><button id="close-evidence" aria-label="Close evidence">×</button></div><div class="evidence-body">${html}</div>`;
     $('#close-evidence').onclick = () => { requestGeneration++; card.hidden = true; };
@@ -49,7 +51,6 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
   async function ensureRepository() { if (!repository) repository = await loadRepository(); return repository; }
   function status() {
     $('#connection-state').textContent = repository ? `${repository.repository.name} · on-disk evidence${run ? ` · checked ${new Date(run.checkedAt).toLocaleTimeString()}` : ' · not checked'}` : 'Model draft · code not inspected';
-    $('#onyx-hint').textContent = !project?.contexts.length ? 'Lay out a context' : selected ? 'Inspect this selection' : run ? `${run.diagnostics.length} reported records` : 'Model → rules → code';
   }
   function ruleRows(report: RepositoryContextReport) {
     return (report.Rules ?? []).map(({ Summary: r, Reason }) => `<details class="evidence-rule"><summary><span>${escape(r.ID)}</span><em>${escape(r.Disabled ? 'disabled' : r.Severity)}</em></summary><p>${escape(r.Proposition)}</p>${r.Rationale ? `<p><b>Rationale.</b> ${escape(r.Rationale)}</p>` : ''}<p class="evidence-meta">${escape(Reason)}${r.Assurance ? ` · Assurance: ${escape(r.Assurance)}` : ''}</p>${r.DisabledReason ? `<p>Disabled: ${escape(r.DisabledReason)}</p>` : ''}</details>`).join('') || '<p>No governing Rules returned for this path.</p>';
@@ -95,6 +96,7 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
     finally { busy = false; $('#run-repository-check').removeAttribute('disabled'); }
   }
   $('#open-repository').onclick = async () => {
+    closeTools();
     if (busy) return;
     busy = true; $('#open-repository').setAttribute('disabled', '');
     try {
@@ -109,7 +111,7 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
   $('#open-architecture').onclick = () => void architecture();
   $('#run-repository-check').onclick = () => void checkCode();
   $('#workbench-form').onsubmit = event => {
-    event.preventDefault();
+    event.preventDefault(); closeTools();
     const value = $('#workbench-input') as HTMLInputElement;
     const text = value.value.trim(); if (!text) return;
     const matches = [...project.contexts, ...project.concepts].filter(item => item.name.toLocaleLowerCase() === text.toLocaleLowerCase());
@@ -123,14 +125,14 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
     $('#create-from-workbench').onclick = () => { card.hidden = true; callbacks.create(); };
   };
   function setRepresentation(next: Representation) {
-    representation = next; host.dataset.representation = next;
+    closeTools(); representation = next; host.dataset.representation = next;
     for (const item of ['site', 'plan', 'matrix']) $(`#view-${item}`).setAttribute('aria-pressed', String(item === next));
     $('#projection').hidden = next === 'site'; renderDrawing();
   }
   $('#view-site').onclick = () => setRepresentation('site'); $('#view-plan').onclick = () => setRepresentation('plan'); $('#view-matrix').onclick = () => setRepresentation('matrix');
   function renderDrawing() {
     if (!project || representation === 'site') return;
-    const objects = [...project.contexts.filter(c => !scope || c.id === scope), ...project.concepts.filter(c => !scope || c.contextId === scope)];
+    const objects = [...project.contexts, ...project.concepts].filter(c => focusView?.ids.includes(c.id));
     const ids = new Set(objects.map(item => item.id));
     const relations = project.relationships.filter(r => ids.has(r.source) && ids.has(r.target));
     const name = (id: string) => objects.find(item => item.id === id)?.name ?? id;
@@ -145,10 +147,10 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
       const add = (source: string, target: string, relation: typeof relations[number]) => { const key=JSON.stringify([source,target]); cells.set(key,[...cells.get(key) ?? [],relation]); };
       for (const relation of relations) { add(relation.source,relation.target,relation); if (relationshipDescription(project,relation).direction === 'both') add(relation.target,relation.source,relation); }
       const pager = (axis: 'row'|'column', page: number) => `<div><button data-matrix-page="${axis}" data-step="-1" ${page ? '' : 'disabled'} aria-label="Previous ${axis}s">←</button><span>${axis === 'row' ? 'Rows' : 'Columns'} ${objects.length ? page*matrixPageSize+1 : 0}–${Math.min(objects.length,(page+1)*matrixPageSize)} of ${objects.length}</span><button data-matrix-page="${axis}" data-step="1" ${page+1 < pageCount ? '' : 'disabled'} aria-label="Next ${axis}s">→</button></div>`;
-      panel.innerHTML = `<div class="matrix-drawing"><div class="drawing-heading"><h2>Relationship matrix</h2><p>Read from the row to the column. Each cell names the recorded relationship; blank means none recorded.</p><div class="matrix-pagination">${pager('row',matrixRowPage)}${pager('column',matrixColumnPage)}</div></div><table><caption>Same model · ${objects.length} objects · ${relations.length} relationships</caption><thead><tr><th scope="col">FROM ↓ / TO →</th>${columns.map(object => `<th scope="col"><button data-model-select="${escape(object.id)}">${escape(object.name)}</button></th>`).join('')}</tr></thead><tbody>${rows.map(source => `<tr><th scope="row"><button data-model-select="${escape(source.id)}">${escape(source.name)}</button></th>${columns.map(target => `<td ${source.id === target.id ? 'class="matrix-self"' : ''}>${(cells.get(JSON.stringify([source.id,target.id])) ?? []).map(r => `<button data-matrix-relation="${escape(r.id)}" aria-label="${escape(`${name(r.source)} ${r.label} ${name(r.target)}`)}">${escape(relationshipDescription(project, r).label)}</button>`).join('')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      panel.innerHTML = `<div class="matrix-drawing"><div class="drawing-heading"><h2>Relationships</h2><p>Read from row to column.</p><div class="matrix-pagination">${pager('row',matrixRowPage)}${pager('column',matrixColumnPage)}</div></div><table><caption>Same model · ${objects.length} objects · ${relations.length} relationships</caption><thead><tr><th scope="col">FROM ↓ / TO →</th>${columns.map(object => `<th scope="col"><button data-model-select="${escape(object.id)}">${escape(object.name)}</button></th>`).join('')}</tr></thead><tbody>${rows.map(source => `<tr><th scope="row"><button data-model-select="${escape(source.id)}">${escape(source.name)}</button></th>${columns.map(target => `<td ${source.id === target.id ? 'class="matrix-self"' : ''}>${(cells.get(JSON.stringify([source.id,target.id])) ?? []).map(r => `<button data-matrix-relation="${escape(r.id)}" aria-label="${escape(`${name(r.source)} ${r.label} ${name(r.target)}`)}">${escape(relationshipDescription(project, r).label)}</button>`).join('')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
     } else {
-      const coordinates = new Map(objects.map(object => [object.id, planPosition(object.position)]));
-      const contexts = project.contexts.filter(c => ids.has(c.id));
+      const coordinates = new Map([...project.contexts, ...objects].map(object => [object.id, planPosition(object.position)]));
+      const contexts = project.contexts.filter(c => ids.has(c.id) || objects.some(item => 'contextId' in item && item.contextId === c.id));
       const bounds = new Map(contexts.map(context => {
         const members = project.concepts.filter(c => c.contextId === context.id && ids.has(c.id)).map(c => coordinates.get(c.id)!);
         const anchor = coordinates.get(context.id)!;
@@ -167,7 +169,7 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
         for (let attempts = 0; attempts < 40 && collides(); attempts++) y += 35;
         occupied.push({x:x-100,y:y-16,width:200,height:32}); return {r,x,y};
       });
-      panel.innerHTML = `<div class="drawing-heading"><h2>Model plan</h2><p>Scroll to explore · saved positions · select any object to edit its meaning. Position records arrangement, not evolutionary maturity.</p></div><div class="plan-drawing" style="width:${width}px;height:${Math.max(height,...edgeLabels.map(p=>p.y+60))}px">${contexts.map(c => { const box=bounds.get(c.id)!, p=point(c.id); return `<div class="plan-context-boundary" style="left:${box.x-minX}px;top:${box.y-minY}px;width:${box.right-box.x}px;height:${box.bottom-box.y}px"></div><button class="plan-object context ${selected === c.id ? 'is-selected' : ''}" data-model-select="${escape(c.id)}" style="left:${p.x}px;top:${p.y}px"><small>Bounded context</small><b>${escape(c.name)}</b></button>`; }).join('')}<svg class="plan-lines" width="${width}" height="${Math.max(height,...edgeLabels.map(p=>p.y+60))}" aria-hidden="true"><defs><marker id="plan-arrow" orient="auto-start-reverse" markerWidth="8" markerHeight="8" refX="7" refY="4"><path d="M0 0 8 4 0 8" fill="#526863"/></marker></defs>${relations.map(r => { const {a,b}=clipped(r); const direction=relationshipDescription(project,r).direction; return `<path d="M${a.x} ${a.y} L${b.x} ${b.y}" ${direction === 'none' ? 'stroke-dasharray="3 8"' : 'marker-end="url(#plan-arrow)"'} ${direction === 'both' ? 'marker-start="url(#plan-arrow)"' : ''}/>`; }).join('')}${edgeLabels.map(({r,x,y})=>{ const a=point(r.source),b=point(r.target); return `<path class="plan-leader" d="M${(a.x+b.x)/2} ${(a.y+b.y)/2} L${x} ${y}"/>`; }).join('')}${mode === 'baseline' && baseline ? conceptObjects.flatMap(c => { const old = baseline!.project.concepts.find(o => o.id === c.id); if (!old || JSON.stringify(old.position) === JSON.stringify(c.position)) return []; const a = planPosition(old.position), b = point(c.id); return [`<path class="movement-trace" d="M${a.x - minX} ${a.y - minY} L${b.x} ${b.y}" marker-end="url(#plan-arrow)"/>`]; }).join('') : ''}</svg>${conceptObjects.map(object => { const p=point(object.id), contracts=conceptContracts(project,object); return `<button class="plan-object ${object.kind} ${selected === object.id ? 'is-selected' : ''}" data-model-select="${escape(object.id)}" style="left:${p.x}px;top:${p.y}px"><small>${escape(kindNames[object.kind])}</small><b>${escape(object.name)}</b>${contracts.invariants.length || contracts.assertions.length ? `<span>╳ ${contracts.invariants.length} invariants · ⊣ ${contracts.assertions.length} assertions</span>` : ''}</button>`; }).join('')}${edgeLabels.map(({r,x,y}) => { const info=relationshipDescription(project,r); return `<button class="plan-relation" data-plan-relation="${escape(r.id)}" style="left:${x}px;top:${y}px" aria-label="${escape(`${name(r.source)} ${r.label} ${name(r.target)}`)}" title="${escape(info.meaning)}">${escape(info.label)} ${info.direction === 'both' ? '↔' : info.direction === 'none' ? '∥' : '→'}</button>`; }).join('')}</div>`;
+      panel.innerHTML = `<div class="drawing-heading"><h2>Plan</h2><p>Same place. Saved positions.</p></div><div class="plan-drawing" style="width:${width}px;height:${Math.max(height,...edgeLabels.map(p=>p.y+60))}px">${contexts.map(c => { const box=bounds.get(c.id)!, p=point(c.id); return `<div class="plan-context-boundary" style="left:${box.x-minX}px;top:${box.y-minY}px;width:${box.right-box.x}px;height:${box.bottom-box.y}px"></div>${ids.has(c.id) ? `<button class="plan-object context ${selected === c.id ? 'is-selected' : ''}" data-model-select="${escape(c.id)}" style="left:${p.x}px;top:${p.y}px"><b>${escape(c.name)}</b></button>` : ''}`; }).join('')}<svg class="plan-lines" width="${width}" height="${Math.max(height,...edgeLabels.map(p=>p.y+60))}" aria-hidden="true"><defs><marker id="plan-arrow" orient="auto-start-reverse" markerWidth="8" markerHeight="8" refX="7" refY="4"><path d="M0 0 8 4 0 8" fill="#526863"/></marker></defs>${relations.map(r => { const {a,b}=clipped(r); const direction=relationshipDescription(project,r).direction; return `<path d="M${a.x} ${a.y} L${b.x} ${b.y}" ${direction === 'none' ? 'stroke-dasharray="3 8"' : 'marker-end="url(#plan-arrow)"'} ${direction === 'both' ? 'marker-start="url(#plan-arrow)"' : ''}/>`; }).join('')}${edgeLabels.map(({r,x,y})=>{ const a=point(r.source),b=point(r.target); return `<path class="plan-leader" d="M${(a.x+b.x)/2} ${(a.y+b.y)/2} L${x} ${y}"/>`; }).join('')}${mode === 'baseline' && baseline ? conceptObjects.flatMap(c => { const old = baseline!.project.concepts.find(o => o.id === c.id); if (!old || JSON.stringify(old.position) === JSON.stringify(c.position)) return []; const a = planPosition(old.position), b = point(c.id); return [`<path class="movement-trace" d="M${a.x - minX} ${a.y - minY} L${b.x} ${b.y}" marker-end="url(#plan-arrow)"/>`]; }).join('') : ''}</svg>${conceptObjects.map(object => { const p=point(object.id), contracts=conceptContracts(project,object); return `<button class="plan-object ${object.kind} ${selected === object.id ? 'is-selected' : ''}" data-model-select="${escape(object.id)}" style="left:${p.x}px;top:${p.y}px"><b>${escape(object.name)}</b></button>`; }).join('')}${edgeLabels.map(({r,x,y}) => { const info=relationshipDescription(project,r); return `<button class="plan-relation" data-plan-relation="${escape(r.id)}" style="left:${x}px;top:${y}px" aria-label="${escape(`${name(r.source)} ${r.label} ${name(r.target)}`)}" title="${escape(info.meaning)}">${escape(info.label)} ${info.direction === 'both' ? '↔' : info.direction === 'none' ? '∥' : '→'}</button>`; }).join('')}</div>`;
     }
     panel.scrollLeft = scroll.x; panel.scrollTop = scroll.y;
     panel.querySelectorAll<HTMLElement>('[data-matrix-page]').forEach(b => b.onclick = () => { const step=Number(b.dataset.step); if (b.dataset.matrixPage === 'row') matrixRowPage += step; else matrixColumnPage += step; renderDrawing(); });
@@ -182,11 +184,24 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
   $('#edit-purpose').onclick = () => { $('#purpose-form').hidden = !$('#purpose-form').hidden; if (!$('#purpose-form').hidden) $('#purpose-form input').focus(); };
   $('#close-purpose').onclick = () => { $('#purpose-form').hidden = true; };
   $('#purpose-form').onsubmit = event => { event.preventDefault(); const form = $('#purpose-form') as HTMLFormElement; const data = new FormData(form); try { localStorage.setItem(briefKey(), JSON.stringify({ actor: String(data.get('actor')).trim(), need: String(data.get('need')).trim() })); form.hidden = true; purpose(); } catch { callbacks.notify('Could not save the model’s user and need.', true); } };
-  $('#onyx-helper').onclick = () => {
-    const c = project.concepts.find(item => item.id === selected);
-    evidence('Onyx · next step', `<p>${c ? `You selected <b>${escape(c.name)}</b>, ${escape(kindNames[c.kind].toLowerCase())} in ${escape(project.contexts.find(ctx => ctx.id === c.contextId)?.name)}.` : `This model records ${project.contexts.length} contexts and ${project.concepts.length} concepts.`}</p><ol class="inspection-steps"><li><b>Record the need.</b> Name the user and what the model must support.</li><li><b>Define the boundary.</b> Name the concepts, their identities, and the invariants the root must protect.</li><li><b>Inspect the governing Rules.</b> Use a real path to see its Zones, constraints, and Rationale.</li><li><b>Check the code.</b> Run ArcLint, then inspect each reported finding at its path.</li></ol><p class="evidence-meta">Onyx is a local guide. Recommendations come from the current selection and recorded evidence.</p><div class="guide-actions"><button id="onyx-zones">Inspect Zones</button><button id="onyx-check">Check repository</button></div>`);
-    $('#onyx-zones').onclick = () => void architecture(); $('#onyx-check').onclick = () => void checkCode();
-  };
+  async function inspectSelection(id: string | null) {
+    if (!id) { await architecture(); return; }
+    const concept = project.concepts.find(c => c.id === id);
+    const context = project.contexts.find(c => c.id === (concept?.contextId ?? id));
+    const ticket = ++requestGeneration;
+    evidence(`Inspecting ${concept?.name ?? context?.name ?? 'code'}`, '<p>Reading the repository’s recorded source anchors…</p>');
+    try {
+      const repo = await ensureRepository();
+      if (ticket !== requestGeneration) return;
+      const linked = repo.domainYaml && project.sourceDocument && JSON.stringify(parse(repo.domainYaml)) === JSON.stringify(project.sourceDocument);
+      const anchors = linked && concept ? (repo.context.domain?.contexts ?? []).filter(c => c.name === context?.name).flatMap(c => [...c.invariants ?? [], ...c.assertions ?? []]).filter(c => c.owner === concept.name && c.ownerConcept === concept.kind && c.source) : [];
+      if (anchors[0]?.source) { await inspect(anchors[0].source.replace(/:\d+$/, '')); return; }
+      if (linked && !concept && repo.context.Zones?.some(z => z.Name === context?.name)) { await inspect(context!.name, true); return; }
+      evidence(`Inspect ${concept?.name ?? context?.name ?? 'code'}`, `<p>This model has no located code anchor for this selection. Enter the repository path you want ArcLint to inspect.</p><form id="selection-path-form"><label>Repository path<input id="selection-code-path" name="path" placeholder="internal/example/root.go" required /></label><button type="submit">Inspect path ↗</button></form>`);
+      $('#selection-path-form').onsubmit = event => { event.preventDefault(); void inspect(($('#selection-code-path') as HTMLInputElement).value.trim()); };
+      $('#selection-code-path').focus();
+    } catch (failure) { if (ticket === requestGeneration) evidence('Inspection unavailable', `<p role="alert">${error(failure)}</p>`); }
+  }
   function selectionEvidence(id: string): string {
     const concept = project?.concepts.find(c => c.id === id);
     if (!concept) return '';
@@ -197,5 +212,5 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
     return `<section class="recorded-contracts"><h3>Recorded contracts</h3><p class="field-help">These state what must hold. Code inspection supplies separate evidence.</p><details ${contracts.invariants.length ? 'open' : ''}><summary>Invariants · ${contracts.invariants.length}</summary>${contracts.invariants.map(i => `<article><b>╳ ${escape(i.key)}</b><p>${escape(i.statement)}</p></article>`).join('') || '<p>No invariants recorded.</p>'}</details><details ${contracts.assertions.length ? 'open' : ''}><summary>Assertions · ${contracts.assertions.length}</summary>${contracts.assertions.map(a => `<article><b>⊣ After ${escape(a.operation)}</b><code>${escape(a.key)}</code><p>${escape(a.statement)}</p></article>`).join('') || '<p>No operation post-conditions recorded.</p>'}</details><h3>Code evidence</h3>${anchors.map(a => `<button class="path-button" data-inspect-path="${escape(a.source!.replace(/:\d+$/, ''))}">Contract anchor: ${escape(a.source)} ↗</button>`).join('') || '<p class="field-help">No located contract anchor for this concept. Enter a repository path above to inspect its governing Rules.</p>'}</section>`;
   }
   function bindSelection() { document.querySelectorAll<HTMLElement>('#inspector [data-inspect-path]').forEach(b => b.onclick = () => void inspect(b.dataset.inspectPath!)); }
-  return { update(next, id, contextId, nextMode, pointOfReference) { project = next; selected = id; scope = contextId; mode = nextMode; baseline = pointOfReference; purpose(); status(); renderDrawing(); }, selectionEvidence, bindSelection };
+  return { update(next, id, contextId, nextMode, pointOfReference, view) { focusView = view; project = next; selected = id; scope = contextId; mode = nextMode; baseline = pointOfReference; purpose(); status(); renderDrawing(); }, inspectSelection: id => { void inspectSelection(id); }, selectionEvidence, bindSelection };
 }

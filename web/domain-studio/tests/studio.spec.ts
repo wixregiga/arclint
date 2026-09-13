@@ -1,28 +1,11 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
-async function openNavigator(page: Page) {
-  if (!await page.getByTestId('model-tree').isVisible()) await page.locator('#open-index').click();
-}
-async function selectConcept(page: Page, name: RegExp) {
-  await openNavigator(page);
-  await page.getByTestId('model-tree').getByRole('button', { name }).click();
-  await expect(page.getByTestId('model-tree')).not.toBeVisible();
-  await expect(page.locator('#inspector')).toBeVisible();
-}
-async function workspaceAction(page: Page, name: string) {
-  await page.getByRole('button', { name: 'Workspace menu', exact: true }).click();
-  await page.getByRole('button', { name, exact: true }).click();
-}
-async function creationAction(page: Page, name: string) {
-  const action = name === 'Connect' ? page.locator('#connect') : page.getByRole('button', { name, exact: true });
-  if (!await action.isVisible()) await page.getByRole('button', { name: 'Create', exact: true }).click();
-  await action.click();
-}
+import { openNavigator, selectConcept, selectPlace, workspaceAction, creationAction, toolId, toolButton } from './studio.helpers';
 
 test('inspects imported Pattern rules and prepares a scoped AI request', async ({ page }, testInfo) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Patterns', exact: true }).click();
+  await toolButton(page, 'Patterns');
   await page.locator('#pattern-file').setInputFiles({
     name: 'pattern.yaml',
     mimeType: 'application/yaml',
@@ -60,7 +43,7 @@ test('edits an unrelated domain, restores it, and compares a baseline', async ({
   await dialog.getByRole('button', { name: 'Create context', exact: true }).click();
 
   for (const [name, definition] of [['Book', 'A title available in the library.'], ['Author', 'The credited writer of a book.']]) {
-    await page.locator('#add-concept').click();
+    await toolId(page, '#add-concept');
     dialog = page.getByRole('dialog');
     await dialog.getByLabel('Name', { exact: true }).fill(name);
     await dialog.getByLabel('Definition', { exact: true }).fill(definition);
@@ -81,7 +64,7 @@ test('edits an unrelated domain, restores it, and compares a baseline', async ({
   await expect(page.getByTestId('model-tree')).toContainText('Author');
   await page.locator('#close-index').click();
 
-  await page.getByRole('button', { name: 'Baseline', exact: true }).click();
+  await toolButton(page, 'Baseline');
   await page.getByRole('button', { name: 'Capture baseline', exact: true }).click();
   dialog = page.getByRole('dialog');
   await dialog.getByLabel('Name', { exact: true }).fill('Initial catalog');
@@ -89,15 +72,17 @@ test('edits an unrelated domain, restores it, and compares a baseline', async ({
   await selectConcept(page, /Book/);
   await page.getByRole('textbox', { name: 'Definition', exact: true }).fill('A cataloged title with a stable identity.');
   await page.getByRole('button', { name: 'Save concept', exact: true }).click();
-  await page.getByRole('button', { name: 'Baseline', exact: true }).click();
+  await toolButton(page, 'Baseline');
   await expect(page.getByText('Initial catalog', { exact: false }).first()).toBeVisible();
   await expect(page.getByText(/changed/i).first()).toBeVisible();
-  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await toolButton(page, 'Undo');
+  await toolButton(page, 'Baseline');
   await expect(page.getByText('Your model matches this baseline.', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  await toolButton(page, 'Redo');
+  await toolButton(page, 'Baseline');
   await expect(page.getByText(/changed/i).first()).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: 'Baseline', exact: true }).click();
+  await toolButton(page, 'Baseline');
   await expect(page.getByText('Initial catalog', { exact: false }).first()).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('library-baseline.png'), fullPage: true });
 
@@ -133,7 +118,7 @@ test('renders the spatial editor without browser errors', async ({ page }, testI
   const bounds = await page.getByTestId('scene').boundingBox();
   const viewport = page.viewportSize()!;
   expect(bounds).toEqual({ x: 0, y: 0, width: viewport.width, height: viewport.height });
-  await expect(page.locator('#add-concept')).toBeVisible();
+  await expect(page.locator('#tools-drawer')).not.toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('studio-desktop.png'), fullPage: true });
   expect(errors).toEqual([]);
 });
@@ -152,8 +137,7 @@ test('enters an actual context and ascends to the realm', async ({ page }, testI
   });
   await expect(page.locator('#ascend')).toBeDisabled();
   await expect(page.getByTestId('scene')).toHaveAttribute('data-scope', 'realm');
-  await selectConcept(page, /^Catalog/);
-  await page.getByRole('button', { name: 'Enter context', exact: true }).click();
+  await selectPlace(page, /^Catalog/);
   await expect(page.locator('#ascend')).toBeEnabled();
   await expect(page.getByTestId('scene')).toHaveAttribute('data-scope', 'catalog');
   await page.screenshot({ path: testInfo.outputPath('library-context.png'), fullPage: true });
