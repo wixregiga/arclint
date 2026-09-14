@@ -30,3 +30,54 @@ jobs:
       # repository selfcheck.
       - name: Run full repository check
         run: make ci
+
+  studio:
+    name: Studio beta
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: web/domain-studio
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/domain-studio/package-lock.json
+
+      - name: Build ArcLint for repository integration tests
+        working-directory: .
+        run: |
+          make build
+          echo "$GITHUB_WORKSPACE" >> "$GITHUB_PATH"
+
+      - name: Install Studio dependencies
+        run: npm ci
+
+      - name: Test domain state and repository actions
+        run: npm test
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # The Playwright server builds the production app before serving it.
+      - name: Build and test Studio in the browser
+        run: npm run test:browser
+
+      - name: Keep browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: studio-browser-failures
+          path: web/domain-studio/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
