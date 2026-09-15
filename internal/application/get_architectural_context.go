@@ -18,6 +18,8 @@ type ContextRequest struct {
 	Paths []string
 	Zones []string
 	Full  bool
+	// Dependencies adds repository-wide parsed import facts; it cannot be scoped.
+	Dependencies bool
 }
 
 // PathBinding maps one requested path to the declared Zones owning
@@ -84,7 +86,8 @@ type ArchitecturalContext struct {
 	// Domain is the project's recorded domain model summary; nil when
 	// the project records none. Repository scope and Full carry the
 	// whole model; a worksite carries the part anchored into it.
-	Domain *DomainKnowledge `json:"domain,omitempty"`
+	Domain       *DomainKnowledge      `json:"domain,omitempty"`
+	Dependencies *ObservedDependencies `json:"dependencies,omitempty"`
 }
 
 // DomainAggregateRef is one aggregate inside a bounded-context
@@ -223,7 +226,16 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 	if err != nil {
 		return ArchitecturalContext{}, fmt.Errorf("load configured rules: %w", err)
 	}
+	if req.Dependencies && (len(req.Paths) > 0 || len(req.Zones) > 0) {
+		return ArchitecturalContext{}, fmt.Errorf("observed dependencies require repository scope; omit paths and --zone")
+	}
 	out := ArchitecturalContext{Scope: "repository", RuleCount: len(cfg.Rules)}
+	if req.Dependencies {
+		out.Dependencies, err = uc.observeDependencies(cfg)
+		if err != nil {
+			return ArchitecturalContext{}, err
+		}
+	}
 	for _, l := range cfg.Languages {
 		out.Languages = append(out.Languages, string(l))
 	}

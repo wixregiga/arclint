@@ -2,12 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, request as httpRequest, type Server } from 'node:http';
 import { once } from 'node:events';
-import { mkdtemp, writeFile, readFile, readdir, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { createArclintBridge, runArclint, type CommandResult, type CommandRunner } from '../server/arclint_bridge';
-import { diagnosticLabel, diagnosticCounts, filterDiagnostics } from '../src/repository';
+import { diagnosticLabel, diagnosticCounts, filterDiagnostics, queryRepositoryContext, applyRepositoryDocument } from '../src/repository';
 
 const context = { Scope: 'repository', Languages: ['go'], RuleCount: 1, Zones: [], Rules: null, Paths: null };
 const rules = [{ id: 'model/no-panic', type: 'content', severity: 'error', proposition: 'No panic', rationale: 'Keep the model total.', assurance: 'exact' }];
@@ -24,6 +24,7 @@ async function fixture() {
 async function start(root: string, run?: CommandRunner) {
   const bridge = createArclintBridge({ root, run });
   const server = createServer((request, response) => bridge(request, response, () => { response.statusCode = 404; response.end(); }));
+  server.once('close', () => bridge.dispose());
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   return { server, base, call: (path: string, init?: RequestInit) => fetch(`${base}/api/arclint/${path}`, init) };
@@ -341,4 +342,111 @@ test('Baseline hashes and parent path protections prevent overwriting a changed 
   await symlink(outside, join(root, '.arclint'));
   const refused = await api.call('baseline/preview', documentAction({})); assert.equal(refused.status, 400); assert.equal((await refused.json()).error.code, 'UNSAFE_BASELINE_PATH');
   assert.deepEqual(await readdir(outside), []);
+});
+
+
+test('busy read retries recover when other Studio tabs release bridge capacity', async t => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls++;
+    return calls === 1 ? new Response(JSON.stringify({error:{code:'BUSY',message:'Other reads are running'}}),{status:429}) : new Response(JSON.stringify({path:'src/order.ts',pathType:'file',report:context}));
+  });
+  const result = await queryRepositoryContext('src/order.ts');
+  assert.equal(result.path,'src/order.ts');
+  assert.equal(calls,2);
+});
+
+test('leaving an evidence request cancels its pending busy retry', async t => {
+  let calls = 0;
+  t.mock.method(globalThis,'fetch',async () => { calls++; return new Response(JSON.stringify({error:{code:'BUSY'}}),{status:429}); });
+  const controller = new AbortController();
+  const pending = queryRepositoryContext('src/order.ts',controller.signal);
+  controller.abort(new Error('Left the evidence request'));
+  await assert.rejects(pending,/Left the evidence request/);
+  assert.equal(calls,1);
+});
+
+test('document writes never repeat automatically after a busy response', async t => {
+  let calls = 0;
+  t.mock.method(globalThis,'fetch',async () => { calls++; return new Response(JSON.stringify({error:{code:'BUSY',message:'Busy'}}),{status:429}); });
+  await assert.rejects(applyRepositoryDocument('reviewed-token'),{code:'BUSY'});
+  assert.equal(calls,1);
+});
+
+const observedDependencies = {
+  files: [{ path: 'main.go', zones: ['composition'], language: 'go', importsAvailable: true }, { path: 'model/value.go', zones: ['model', 'domain'], language: 'go', importsAvailable: true }],
+  edges: [{ sourcePath: 'main.go', targetPath: 'model', targetKind: 'directory', specifier: 'example.com/model', line: 3, classification: 'internal', sourceZones: ['composition'], targetZones: ['domain', 'model'] }],
+  coverage: { scope: 'repository', languages: ['go'], filesObserved: 2, sourceFiles: 2, filesWithImports: 2, complete: true }, diagnostics: [], limitations: ['Parsed imports only.'],
+};
+
+test('observed dependencies preserve native package targets and snapshot revision through the read queue', async t => {
+  const root = await fixture(); let calls = 0;
+  const api = await start(root, async (args, cwd) => {
+    calls++; assert.equal(cwd, root); assert.deepEqual(args, ['context', '--dependencies', '--format', 'json']);
+    return answer({ ...context, dependencies: observedDependencies });
+  });
+  t.after(async () => { await stop(api.server); await rm(root, { recursive: true }); });
+  const before = await (await api.call('revision')).json();
+  const response = await api.call('dependencies'); assert.equal(response.status, 200); const data = await response.json();
+  assert.equal(calls, 1); assert.deepEqual(data.edges, observedDependencies.edges);
+  assert.deepEqual(data.files, observedDependencies.files); assert.equal(data.revision, before.revision);
+  assert.equal(data.changedDuringObservation, false); assert.equal(data.coverage.complete, true); assert.ok(Date.parse(data.observedAt));
+});
+
+test('old CLI dependency flag failure does not break existing repository context', async t => {
+  const root = await fixture(); let dependencyResponse = { stdout: '', stderr: 'unknown flag: --dependencies', exitCode: 2 };
+  const api = await start(root, async args => args.includes('--dependencies') ? dependencyResponse : answer(context));
+  t.after(async () => { await stop(api.server); await rm(root, { recursive: true }); });
+  let response = await api.call('dependencies'); assert.equal(response.status, 502); assert.equal((await response.json()).error.code, 'DEPENDENCIES_UNAVAILABLE');
+  assert.equal((await api.call('context?path=price.go')).status, 200);
+  dependencyResponse = answer(context); response = await api.call('dependencies');
+  assert.equal(response.status, 502); assert.equal((await response.json()).error.code, 'DEPENDENCIES_UNAVAILABLE');
+  dependencyResponse = answer({ ...context, dependencies: { ...observedDependencies, edges: [{ ...observedDependencies.edges[0], targetPath: '../outside' }] } });
+  response = await api.call('dependencies'); assert.equal(response.status, 502);
+});
+
+test('dependency observation reports repository changes during its actual command', async t => {
+  const root = await fixture(); let release!: () => void, started!: () => void;
+  const observed = new Promise<void>(resolve => { started = resolve; });
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const api = await start(root, async () => { started(); await pending; return answer({ ...context, dependencies: observedDependencies }); });
+  t.after(async () => { release(); await stop(api.server); await rm(root, { recursive: true }); });
+  const before = await (await api.call('revision')).json();
+  const responsePromise = api.call('dependencies'); await observed;
+  await writeFile(join(root, 'price.go'), 'package fixture\nimport "fmt"\n');
+  let current = before;
+  for (let attempt = 0; attempt < 30 && current.revision === before.revision; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 10)); current = await (await api.call('revision')).json();
+  }
+  assert.notEqual(current.revision, before.revision); release();
+  const data = await (await responsePromise).json(); assert.equal(data.changedDuringObservation, true);
+  assert.equal(data.revision, before.revision); assert.ok(data.diagnostics.some((row: { code: string }) => row.code === 'REPOSITORY_CHANGED'));
+});
+
+test('actual CLI dependency endpoint observes Go package and TypeScript file imports and preserves parse failures', async t => {
+  const root = await fixture();
+  const policy = (await readFile(join(root, 'rules.arclint.yaml'), 'utf8')).replace('runtime: [go]', 'runtime: [go, ts]').replace('rules:\n', '  values:\n    paths: "model/**"\n  exact:\n    paths: "model/value.go"\nrules:\n');
+  await writeFile(join(root, 'rules.arclint.yaml'), policy);
+  await mkdir(join(root, 'model'));
+  await writeFile(join(root, 'model/value.go'), 'package model\ntype Amount int\n');
+  const price = 'package fixture\nimport ("fmt"; "example.com/studiofixture/model")\ntype Price int\nfunc Show() { fmt.Println(model.Amount(1)) }\n';
+  await writeFile(join(root, 'price.go'), price);
+  await writeFile(join(root, 'main.ts'), 'import { value } from "./other"; export const amount = value;\n');
+  await writeFile(join(root, 'other.ts'), 'export const value = 1;\n');
+  const api = await start(root, runArclint);
+  t.after(async () => { await stop(api.server); await rm(root, { recursive: true }); });
+  let response = await api.call('dependencies'); const report = await response.json(); assert.equal(response.status, 200, JSON.stringify(report));
+  const packageEdge = report.edges.find((edge: { specifier: string }) => edge.specifier === 'example.com/studiofixture/model');
+  assert.equal(packageEdge.targetKind, 'directory'); assert.equal(packageEdge.targetPath, 'model');
+  assert.deepEqual(packageEdge.targetZones, ['exact', 'values']); assert.deepEqual(packageEdge.sourceZones, ['model']);
+  const fileEdge = report.edges.find((edge: { sourcePath: string }) => edge.sourcePath === 'main.ts');
+  assert.equal(fileEdge.targetKind, 'file'); assert.equal(fileEdge.targetPath, 'other.ts'); assert.equal(fileEdge.classification, 'internal');
+  assert.ok(report.edges.some((edge: { classification: string; specifier: string }) => edge.classification === 'stdlib' && edge.specifier === 'fmt'));
+  assert.equal(report.coverage.complete, true); assert.equal(report.coverage.filesWithImports, 4);
+  assert.equal(await readFile(join(root, 'price.go'), 'utf8'), price); assert.equal(await readFile(join(root, 'rules.arclint.yaml'), 'utf8'), policy);
+  await writeFile(join(root, 'price.go'), 'package fixture\nimport (\n');
+  response = await api.call('dependencies'); const partial = await response.json(); assert.equal(response.status, 200, JSON.stringify(partial));
+  assert.equal(partial.coverage.complete, false);
+  assert.ok(partial.diagnostics.some((row: { code: string; path: string }) => row.code === 'IMPORTS_UNAVAILABLE' && row.path === 'price.go'));
+  assert.ok(partial.edges.some((edge: { sourcePath: string }) => edge.sourcePath === 'main.ts'), 'Failure in one parser source must not discard available facts from another.');
 });

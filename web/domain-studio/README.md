@@ -4,9 +4,11 @@ A domain modeling and repository governance workspace. Bounded contexts are regi
 
 ## Run locally
 
-Requires Node.js 22.12+ (or 20.19+), npm, and an installed `arclint` executable for repository operations.
+Requires Node.js 22.12+ (or 20.19+), npm, and the current checkout’s `arclint` executable for repository operations. From the repository root, build a local CLI and put it on this shell’s PATH:
 
 ```sh
+go build -o .arclint-studio-bin/arclint ./cmd/arclint
+export PATH="$PWD/.arclint-studio-bin:$PATH"
 cd web/domain-studio
 npm ci
 npm run dev
@@ -39,6 +41,7 @@ Onyx is one persistent female dog support avatar, independent of the scene and c
 **Rules**, **Findings**, **Paths**, and **Check code** are available from the main view. The repository workspace provides Code paths, Zones, Rules, Patterns, and Report sections.
 
 - Browse real repository directories, copy relative paths, and request `arclint context <path>` or `arclint context --zone <name>`. A missing path is identified as hypothetical policy, not an observed file. A file can match several Zones. Source associations come from actual CLI evidence; matching display names alone do not establish them.
+- **Dependencies** loads actual parsed imports through `arclint context --dependencies --format json`. File targets and Go package-directory targets retain their native precision and all overlapping Zones. Coverage, parser gaps, observation time, and source revision remain visible. Changes during observation invalidate its freshness. This is separate from declared layer order, context influence, and conformance findings. An older CLI reports that dependency observation is unavailable while other repository tools remain usable.
 - Inspect exact configured Rule IDs, Constraints, Scopes, authored Rationale, provenance, and available assurance. Zone paths and local layer ordering are shown separately from bounded-context membership.
 - Inspect offline Patterns and configured Bindings. Imported Pattern files remain references until their policy is applied. No skill-manager installation UI or runtime is assumed.
 - Run the actual configured check against files on disk. Retain returned paths, Rule IDs, statuses, multiplicity, timestamps, and exit code. Report filters distinguish active findings, baselined findings, suppressions, and other Diagnostics. Missing assurance or fingerprints remain absent; an empty diagnostic list is not a complete table of passed Rules.
@@ -72,7 +75,7 @@ npm run test:browser
 
 Unit coverage exercises canonical metadata and structural edits, separate layout, complete-save migration, shared history, exact draft retention, actual CLI reports, repository boundaries, and reviewed write conflicts. Browser coverage uses the real ArcLint domain and an unrelated Library domain, checks both presentations and mobile navigation, and exercises authoring, typed contracts, Onyx, snapshots, full-workspace exchange, and real repository evidence.
 
-Run `make check` from the repository root before completing work. The web implementation does not change Go domain or CLI semantics.
+Run `make check` from the repository root before completing work. The optional CLI dependency projection reuses native observation without changing the domain model or check semantics. Keep the locally built CLI on PATH when running tests; the repository suite exercises the real parser through HTTP.
 
 ## Model and design
 

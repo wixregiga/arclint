@@ -1,7 +1,7 @@
 import type { Concept, DomainContext, DomainProject } from './contracts';
 
 export type ViewLevel = 'world' | 'context' | 'detail';
-export type ViewLens = 'meaning' | 'governance';
+export type ViewLens = 'meaning' | 'structure' | 'inspection' | 'governance';
 export interface FocusView {
   level: ViewLevel;
   /** The actual active context, retained when inspecting one of its external connections. */

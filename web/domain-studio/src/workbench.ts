@@ -2,24 +2,30 @@ import { parse, stringify } from 'yaml';
 import type { Baseline, DomainProject, StudioMode } from './contracts';
 import { importProject, exportDomainYaml } from './serialization';
 import { conceptContracts, kindNames, planPosition, record, relationshipDescription } from './model-evidence';
-import { loadRepository, queryRepositoryContext, queryRepositoryZone, checkRepository, queryRepositoryRule, queryRepositoryPatterns, queryRepositoryDirectory, previewRepositoryDocument, applyRepositoryDocument, previewRepositoryBaseline, applyRepositoryBaseline, diagnosticCounts, filterDiagnostics, type DiagnosticFilter, type RepositoryDiagnostic, type RepositoryProject, type RepositoryContextReport, type RepositoryContextResult, type RepositoryCheckResult, type RepositoryRuleSummary, type RepositoryPatternCatalog, type RepositoryDocument, type RepositoryDocumentPreview, type RepositoryBaselinePreview } from './repository';
+import { loadRepository, queryRepositoryRevision, queryRepositoryContext, queryRepositoryZone, checkRepository, queryRepositoryRule, queryRepositoryPatterns, queryRepositoryDirectory, previewRepositoryDocument, applyRepositoryDocument, previewRepositoryBaseline, applyRepositoryBaseline, diagnosticCounts, filterDiagnostics, type DiagnosticFilter, type RepositoryDiagnostic, type RepositoryProject, type RepositoryContextReport, type RepositoryContextResult, type RepositoryCheckResult, type RepositoryRuleSummary, type RepositoryPatternCatalog, type RepositoryDocument, type RepositoryDocumentPreview, type RepositoryBaselinePreview } from './repository';
 import './workbench.css';
 import type { FocusView } from './view-state';
+import { buildArchitectureEvidence } from './architecture-evidence';
 
 const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 type Representation = 'site' | 'plan' | 'matrix';
 export type GovernanceSection = 'rules' | 'zones' | 'findings' | 'paths' | 'patterns';
-interface Callbacks { select(id: string): void; replace(project: DomainProject): void; create(): void; notify(message: string, error?: boolean): void }
+interface Callbacks { inspectionInvalidated?(): void; select(id: string): void; replace(project: DomainProject): void; create(): void; notify(message: string, error?: boolean): void; evidenceChanged?(repository: RepositoryProject | null, report: RepositoryCheckResult | null): void; checkingChanged?(checking: boolean, error?: string): void }
 export interface Workbench {
   update(project: DomainProject, selectedId: string | null, scopeId: string | null, mode: StudioMode, baseline: Baseline | null, view: FocusView): void;
   inspectSelection(id: string | null): void; selectionEvidence(id: string): string; bindSelection(): void;
-  showGovernance(section?: GovernanceSection): void; checkCode(): void; showRepository(): void;
+  showGovernance(section?: GovernanceSection): void; checkCode(): void; checkQuietly(isCurrent?: () => boolean): Promise<void>; showRepository(): void;
   getRepository(): RepositoryProject | null; getReport(): RepositoryCheckResult | null; saveDomain(domainYaml: string): void;
+  inspectPath(path: string): void; inspectZone(zone: string): void; showRule(id: string): void;
+  initializeRepository(repository: RepositoryProject): boolean;
+  receiveEvidence(repository: RepositoryProject | null, report: RepositoryCheckResult | null): void;
 }
 const sectionNames: Record<GovernanceSection, string> = { paths: 'Code paths', zones: 'Zones', rules: 'Rules', patterns: 'Patterns', findings: 'Report' };
+type CheckEvaluation = { state: 'reported' | 'superseded' | 'stale' | 'failed' | 'busy'; message?: string };
 
 export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbench {
   let project: DomainProject;
+  let repositoryOpening = false;
   let focusView: FocusView | null = null;
   let selected: string | null = null, scope: string | null = null;
   let mode: StudioMode = 'domain', baseline: Baseline | null = null;
@@ -34,6 +40,11 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
   let reportFilter: DiagnosticFilter = 'all';
   let ruleSearch = '', reportSearch = '', directory = '.';
   let requestGeneration = 0;
+  // Repository evidence has its own lifetime; closing a reading does not end it.
+  let evidenceGeneration = 0;
+  let pendingRepository: { generation: number; promise: Promise<RepositoryProject> } | null = null;
+  let pendingCheck: Promise<CheckEvaluation> | null = null;
+  let pendingCheckGuards: (() => boolean)[] = [];
   let busy = false;
   let policyDraft: { content: string; expectedHash: string | null } | null = null;
   host.insertAdjacentHTML('beforeend', `
@@ -54,7 +65,7 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
   host.addEventListener('keydown', event => { if (event.key === 'Escape' && !card.hidden) { closeEvidence(); event.stopPropagation(); } });
   function bindEvidence() {
     const refresh = $('#refresh-repository');
-    if (refresh) refresh.onclick = () => { repository = null; patternCatalog = null; inspected = null; void showGovernance(activeSection); };
+    if (refresh) refresh.onclick = () => { clearRepositoryEvidence(); void showGovernance(activeSection).finally(() => callbacks.inspectionInvalidated?.()); };
     card.querySelectorAll<HTMLElement>('[data-inspect-path]').forEach(b => b.onclick = () => void inspect(b.dataset.inspectPath!));
     card.querySelectorAll<HTMLElement>('[data-inspect-zone]').forEach(b => b.onclick = () => void inspect(b.dataset.inspectZone!, true));
     card.querySelectorAll<HTMLElement>('[data-rule-detail]').forEach(b => b.onclick = () => void ruleDetail(b.dataset.ruleDetail!));
@@ -74,7 +85,52 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
     bindEvidence();
   }
   const error = (failure: unknown) => escape(failure instanceof Error ? failure.message : String(failure));
-  async function ensureRepository() { if (!repository) repository = await loadRepository(); return repository; }
+  function clearRepositoryEvidence() {
+    evidenceGeneration++; pendingRepository = null;
+    repository = null; patternCatalog = null; inspected = null; run = null;
+    markReportUpdating(); callbacks.evidenceChanged?.(null,null); status();
+  }
+  function clearReportEvidence() {
+    evidenceGeneration++; pendingRepository = null; run = null;
+    markReportUpdating(); callbacks.evidenceChanged?.(repository,null); status();
+  }
+  async function reloadRepositoryEvidence() {
+    clearRepositoryEvidence();
+    return ensureRepository();
+  }
+  async function ensureRepository(): Promise<RepositoryProject> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (repository) return repository;
+      const generation = evidenceGeneration;
+      if (!pendingRepository || pendingRepository.generation !== generation) pendingRepository = { generation, promise: loadRepository() };
+      const pending = pendingRepository;
+      try {
+        const loaded = await pending.promise;
+        if (generation !== evidenceGeneration) continue;
+        if (!repository) { repository = loaded; callbacks.evidenceChanged?.(repository,run); }
+        return repository;
+      } catch (failure) {
+        if (generation === evidenceGeneration) throw failure;
+      } finally { if (pendingRepository === pending) pendingRepository = null; }
+    }
+    throw new Error('The repository is still changing. Open this reading again in a moment.');
+  }
+  async function readCurrentEvidence<T>(ticket: number, read: () => Promise<T>): Promise<T | undefined> {
+    for (let attempt = 0; attempt < 3 && ticket === requestGeneration; attempt++) {
+      await ensureRepository();
+      if (ticket !== requestGeneration) return;
+      const generation = evidenceGeneration;
+      try {
+        const result = await read();
+        if (ticket !== requestGeneration) return;
+        if (generation === evidenceGeneration) return result;
+      } catch (failure) {
+        if (ticket !== requestGeneration) return;
+        if (generation === evidenceGeneration) throw failure;
+      }
+    }
+    if (ticket === requestGeneration) throw new Error('The repository is still changing. Open this reading again in a moment.');
+  }
   function status() {
     $('#connection-state').textContent = repository ? `${repository.repository.name} · on-disk evidence${run ? ` · checked ${new Date(run.checkedAt).toLocaleTimeString()}` : ' · not checked'}` : 'Model draft · code not inspected';
   }
@@ -98,8 +154,8 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
   function contextBody(path: string, report: RepositoryContextReport) {
     return `${focusBar()}<p class="evidence-command">arclint context ${escape(path)}</p>${inspected?.pathType === 'missing' ? '<p class="evidence-meta">This path does not exist on disk. ArcLint returned the policy that would apply at this path, not observations of a file.</p>' : ''}<div class="workspace-section-heading"><h3>Zone memberships</h3><span>${report.Zones?.length ?? 0} selected Zones</span></div><p class="evidence-meta">Zones are overlapping file sets. Membership does not assign a term to a bounded context.</p>
       ${(report.Paths ?? []).map(p => `<div class="membership-row"><code>${escape(p.Path)}</code><span>${(p.Zones ?? []).map(zone => `<button data-inspect-zone="${escape(zone)}">${escape(zone)}</button>`).join('') || 'No declared Zone'}</span></div>`).join('')}
-      ${(report.Zones ?? []).map(z => `<details class="zone-record"><summary>${escape(z.Name)}</summary><p>${escape(z.Description)}</p><code>${escape((z.Paths ?? []).join('\n'))}</code><p>May import: ${z.InternalRestricted ? escape(z.Internal?.join(', ') || 'no other declared Zone') : 'not restricted by this Zone’s import contract'}. External: ${escape(z.External)}. Standard library: ${escape(z.Stdlib)}.</p></details>`).join('') || '<p>No declared Zone matches this path.</p>'}
-      <h3>What governs it</h3><p class="evidence-meta">Import contracts govern code dependencies. They do not grant people permission to change files.</p>${ruleRows(report)}
+      ${(report.Zones ?? []).map(z => `<details class="zone-record"><summary>${escape(z.Name)}</summary><p>${escape(z.Description)}</p><code>${escape((z.Paths ?? []).join('\n'))}</code><p>Reported import contract: ${z.InternalRestricted ? escape(z.Internal?.join(', ') || 'no other declared Zone') : 'internal imports unrestricted by this contract'}. External: ${escape(z.External)}. Standard library: ${escape(z.Stdlib)}.</p></details>`).join('') || '<p>No declared Zone matches this path.</p>'}
+      <h3>What governs it</h3><p class="evidence-meta">The reported import contract is declared policy. Layer Rules, incoming import restrictions, and other overlapping Zones may further restrict dependencies. Governing Rules remain inspectable below.</p>${ruleRows(report)}
       <h3>Recorded contract anchors</h3>${(report.domain?.contexts ?? []).flatMap(c => [...c.invariants ?? [], ...c.assertions ?? []].map(contract => `<article class="contract-record"><b>${escape(c.name)} / ${escape(contract.owner)} · ${escape(contract.key)}</b><p>${escape(contract.statement)}</p>${contract.on ? `<small>After ${escape(contract.on)}</small>` : ''}<small>${escape(contract.anchor ?? 'unknown')}${contract.reason ? ` · ${escape(contract.reason)}` : ''}</small>${contract.source ? `<button class="path-button" data-inspect-path="${escape(contract.source.replace(/:\d+$/, ''))}">${escape(contract.source)} ↗</button>` : '<small>No located source anchor</small>'}</article>`)).join('') || '<p>No contract anchors returned for this path.</p>'}`;
   }
   async function inspect(path: string, zone = false) {
@@ -107,22 +163,18 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
     const ticket = ++requestGeneration;
     evidence('Inspecting code', `<p>Reading <code>${escape(path)}</code> from the bound repository…</p>`);
     try {
-      const [result] = await Promise.all([zone ? queryRepositoryZone(path) : queryRepositoryContext(path), ensureRepository()]);
-      if (ticket !== requestGeneration) return;
+      const result = await readCurrentEvidence(ticket, () => zone ? queryRepositoryZone(path) : queryRepositoryContext(path));
+      if (!result) return;
       inspected = result;
       evidence(zone ? `Zone: ${path}` : path, contextBody(result.path, result.report)); bindFocus(); status();
     } catch (failure) { if (ticket === requestGeneration) evidence('Code inspection unavailable', `<p role="alert">${error(failure)}</p>`); }
   }
   function architectureBody() {
     const repo = repository!;
-    const yaml = record(parse(repo.rulesYaml ?? ''));
-    const layerRules = Object.entries(record(yaml.rules)).flatMap(([id, raw]) => {
-      const rule = record(raw);
-      return Array.isArray(rule.layers) && rule.layers.every(item => typeof item === 'string') ? [{ id, layers: rule.layers as string[] }] : [];
-    });
+    const architecture = buildArchitectureEvidence(project, repo);
     return `${focusBar()}<div class="policy-actions"><p>A Zone is a named file set. One file may belong to several Zones.</p><button id="edit-repository-policy">Edit Zones & Rules ↗</button></div>
       <div class="zone-directory">${(repo.context.Zones ?? []).map(zone => `<article><button data-inspect-zone="${escape(zone.Name)}"><b>${escape(zone.Name)}</b><span>Inspect →</span></button><p>${escape(zone.Description)}</p><code>${escape((zone.Paths ?? []).join('\n'))}</code></article>`).join('') || '<p>No Zones are declared.</p>'}</div>
-      <h3>Declared dependency layers</h3><p class="evidence-meta">Only explicit layers Constraints determine order. These are locally authored Rules; distributed Rules remain inspectable in Rules.</p>${layerRules.map(rule => `<article class="layer-section"><button data-rule-detail="${escape(rule.id)}">${escape(rule.id)} ↗</button><ol class="layer-stack">${rule.layers.map((zone, index) => `<li><span>${index === 0 ? 'HIGHEST' : 'LOWER'}</span><button data-inspect-zone="${escape(zone)}">${escape(zone)}</button><small>May import the same or a lower layer, never a higher one.</small></li>`).join('')}</ol></article>`).join('') || '<p>No local layer order is declared.</p>'}`;
+      <h3>Declared dependency layers</h3><p class="evidence-meta">Only explicit layers Constraints determine order. These are locally authored Rules; distributed Rules remain inspectable in Rules.</p>${architecture.layers.map(rule => `<article class="layer-section"><button data-rule-detail="${escape(rule.id)}">${escape(rule.id)} ↗</button><p>${rule.disabled ? 'Disabled Layer Rule · this declared order is not being evaluated.' : 'This Rule forbids imports toward a higher layer. Other governing Rules can further restrict imports.'}</p><ol class="layer-stack">${rule.zones.map((zone, index) => `<li><span>${index === 0 ? 'HIGHEST' : 'LOWER'}</span><button data-inspect-zone="${escape(zone)}">${escape(zone)}</button><small>${rule.disabled ? 'Authored order · disabled' : 'Declared order under this Rule'}</small></li>`).join('')}</ol></article>`).join('') || '<p>No local layer order is declared.</p>'}${architecture.unavailableLayerRuleIds.length ? `<p class="evidence-meta">Structured order is unavailable for ${architecture.unavailableLayerRuleIds.map(id => `<button data-rule-detail="${escape(id)}">${escape(id)} ↗</button>`).join(', ')}.</p>` : ''}`;
   }
   function currentRules(): RepositoryRuleSummary[] {
     if (!inspected) return repository?.rules ?? [];
@@ -138,7 +190,8 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
     activeSection = 'rules'; const ticket = ++requestGeneration;
     evidence(id, '<p>Reading the Rule’s complete contract…</p>');
     try {
-      const detail = await queryRepositoryRule(id); await ensureRepository(); if (ticket !== requestGeneration) return;
+      const detail = await readCurrentEvidence(ticket, () => queryRepositoryRule(id));
+      if (!detail) return;
       const rule = detail.summary;
       const raw = record(record(parse(repository!.rulesYaml ?? '')).rules)[id];
       const paths = Array.isArray(detail.files) ? detail.files : detail.paths;
@@ -158,10 +211,44 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
     bindEvidence();
   }
   function reportBody() {
-    if (!run) return `${boundSource()}<div class="evidence-empty"><h3>No Report yet</h3><p>Run ArcLint against this repository’s files and configured Rules. The browser’s model draft is not an input to this check.</p><button id="check-from-report" class="primary">Check code →</button></div>`;
+    if (!run) return `${boundSource()}<div class="evidence-empty"><h3>No Report yet</h3><p>Inspection runs automatically against repository files and configured Rules. Results will appear here when it finishes. Unsaved browser drafts are not checked.</p><button id="check-from-report" class="primary">Check code →</button></div>`;
     const counts = diagnosticCounts(run.diagnostics);
     return `${boundSource()}<div class="report-summary"><div><h3>${run.exitCode === 0 ? 'Check completed' : 'Gate failed'}</h3><p>${escape(new Date(run.checkedAt).toLocaleString())} · exit ${run.exitCode}</p></div><button id="check-from-report">Run again ↻</button></div><p>${counts.active} active · ${counts.baselined} baselined · ${counts.suppressed} suppressed · ${counts.operational} operational · ${counts.coverage} coverage</p><div class="document-actions"><button id="review-baseline-adoption">Review Baseline adoption →</button><button id="download-report">Download Report JSON ↓</button></div><p class="evidence-meta">Baseline adoption acknowledges findings; it does not repair them. This check reads repository files on disk, excluding unsaved browser edits.</p>${!run.outcomesAvailable ? '<p class="evidence-meta">A complete per-Rule outcome table was not supplied. Zero active findings does not establish that every Rule passed. Assurance and fingerprints appear only when emitted.</p>' : ''}
       <div class="report-filters" role="group" aria-label="Report filter">${(Object.keys(counts) as DiagnosticFilter[]).map(filter => `<button data-report-filter="${filter}" aria-pressed="${filter === reportFilter}">${filter === 'all' ? 'All' : filter === 'baselined' ? 'Baselined' : filter[0].toUpperCase() + filter.slice(1)} <span>${counts[filter]}</span></button>`).join('')}</div><label class="evidence-search">Find in Report<input id="report-search" value="${escape(reportSearch)}" placeholder="Rule ID, path, or message" /></label><div id="report-records"></div>${run.stderr ? `<details><summary>CLI output</summary><pre>${escape(run.stderr)}</pre></details>` : ''}`;
+  }
+  function markReportUpdating() {
+    const surface = $('#report-surface');
+    if (!surface) return;
+    surface.setAttribute('aria-busy', 'true');
+    surface.querySelector<HTMLElement>('#report-updating')!.hidden = false;
+    for (const id of ['download-report', 'review-baseline-adoption']) surface.querySelector<HTMLButtonElement>(`#${id}`)?.setAttribute('disabled', '');
+  }
+  function renderReportSurface() {
+    const surface = $('#report-surface');
+    if (!surface || card.hidden) return;
+    const active = document.activeElement as HTMLInputElement | null;
+    const focused = active && surface.contains(active) ? active : null;
+    const caret = focused?.id === 'report-search' ? [focused.selectionStart, focused.selectionEnd] : null;
+    const selector = focused?.id ? `#${focused.id}` : focused?.dataset.reportFilter ? `[data-report-filter="${focused.dataset.reportFilter}"]` : null;
+    const scroll = card.querySelector('.evidence-body')!.scrollTop;
+    surface.innerHTML = `<p id="report-updating" class="evidence-meta" ${busy ? '' : 'hidden'}>Inspection is updating. Any displayed findings belong to the previous completed Report.</p>${reportBody()}`;
+    surface.setAttribute('aria-busy', String(busy));
+    $('#check-from-report')?.addEventListener('click', () => void checkCode());
+    if (run) {
+      const source = repository, report = run;
+      renderReportRecords();
+      $('#review-baseline-adoption').onclick = () => void reviewBaselineAdoption();
+      card.querySelectorAll<HTMLElement>('[data-report-filter]').forEach(b => b.onclick = () => { reportFilter = b.dataset.reportFilter as DiagnosticFilter; card.querySelectorAll<HTMLElement>('[data-report-filter]').forEach(item => item.setAttribute('aria-pressed', String(item === b))); renderReportRecords(); });
+      $('#report-search').oninput = event => { reportSearch = (event.target as HTMLInputElement).value; renderReportRecords(); };
+      $('#download-report').onclick = () => { const url = URL.createObjectURL(new Blob([JSON.stringify({ repository: source!.repository, ...report }, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = 'arclint-report.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
+    }
+    bindEvidence();
+    if (selector) {
+      const next = surface.querySelector<HTMLInputElement>(selector);
+      next?.focus({ preventScroll: true });
+      if (caret) next?.setSelectionRange(caret[0], caret[1]);
+    }
+    card.querySelector('.evidence-body')!.scrollTop = scroll;
   }
   async function showGovernance(section: GovernanceSection = 'rules') {
     activeSection = section; const ticket = ++requestGeneration;
@@ -174,40 +261,86 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
         renderRuleList(); $('#governance-search').oninput = event => { ruleSearch = (event.target as HTMLInputElement).value; renderRuleList(); };
       }
       if (section === 'findings') {
-        evidence('Report', reportBody());
-        $('#check-from-report')?.addEventListener('click', () => void checkCode());
-        if (run) {
-          renderReportRecords();
-          $('#review-baseline-adoption').onclick = () => void reviewBaselineAdoption();
-          card.querySelectorAll<HTMLElement>('[data-report-filter]').forEach(b => b.onclick = () => { reportFilter = b.dataset.reportFilter as DiagnosticFilter; card.querySelectorAll<HTMLElement>('[data-report-filter]').forEach(item => item.setAttribute('aria-pressed', String(item === b))); renderReportRecords(); });
-          $('#report-search').oninput = event => { reportSearch = (event.target as HTMLInputElement).value; renderReportRecords(); };
-          $('#download-report').onclick = () => { const url = URL.createObjectURL(new Blob([JSON.stringify({ repository: repository!.repository, ...run }, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = 'arclint-report.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); };
-        }
+        evidence('Report', '<section id="report-surface"></section>');
+        renderReportSurface();
       }
       if (section === 'paths') {
-        const listing = await queryRepositoryDirectory(directory); if (ticket !== requestGeneration) return;
+        const listing = await readCurrentEvidence(ticket, () => queryRepositoryDirectory(directory));
+        if (!listing) return;
         const parents = directory === '.' ? '' : `<button data-directory="${escape(directory.split('/').slice(0, -1).join('/') || '.')}">← Parent directory</button>`;
         evidence('Code paths', `${focusBar()}<form id="path-inspect-form" class="path-inspect-form"><label>Inspect a repository path<input id="path-inspect-input" placeholder="internal/example/root.go" required /></label><button type="submit">Inspect →</button></form><p class="evidence-meta">Files on disk, not a claim that every file was scanned. Select a file to ask ArcLint for all matching Zones and governing Rules.</p><div class="directory-heading"><code>${escape(listing.directory)}/</code>${parents}</div><div class="source-directory">${listing.entries.map(entry => entry.kind === 'directory' ? `<button data-directory="${escape(entry.path)}"><span aria-hidden="true">▱</span><span>${escape(entry.name)}/</span><small>Open →</small></button>` : `<div><button data-inspect-path="${escape(entry.path)}"><span aria-hidden="true">·</span><span>${escape(entry.name)}</span></button><button class="copy-path" data-copy="${escape(entry.path)}" aria-label="Copy path ${escape(entry.name)}">Copy</button></div>`).join('') || '<p>This directory contains no regular files or directories.</p>'}</div>${listing.truncated ? '<p>Showing the first 500 entries. Enter an exact path above to inspect another entry.</p>' : ''}`);
         $('#path-inspect-form').onsubmit = event => { event.preventDefault(); void inspect(($('#path-inspect-input') as HTMLInputElement).value.trim()); };
       }
       if (section === 'patterns') {
-        patternCatalog ??= await queryRepositoryPatterns(); if (ticket !== requestGeneration) return;
+        const catalog = patternCatalog ?? await readCurrentEvidence(ticket, queryRepositoryPatterns);
+        if (!catalog) return;
+        patternCatalog = catalog;
         const yaml = record(parse(repository!.rulesYaml ?? '')); const installations = Array.isArray(yaml.extends) ? yaml.extends.map(record) : [];
         evidence('Patterns', `${boundSource()}<div class="policy-actions"><p>Patterns distribute Rules and Zone declarations. Bindings supply the local paths.</p><button id="edit-repository-policy">Edit extends & Bindings ↗</button></div><h3>Configured installations</h3>${installations.map(installation => `<article class="pattern-installation"><b>${escape(installation.pattern)}</b>${Object.entries(record(installation.bind)).map(([zone, paths]) => `<div class="binding-row"><button data-inspect-zone="${escape(zone)}">${escape(zone)} ↗</button><code>${escape(Array.isArray(paths) ? paths.join('\n') : paths)}</code></div>`).join('') || '<p>No Bindings recorded.</p>'}${repository!.rules.filter(rule => rule.provenance === installation.pattern).map(rule => ruleRow(rule)).join('')}</article>`).join('') || '<p>No Patterns are extended by this repository.</p>'}<h3>Available offline</h3>${patternCatalog.patterns.map(pattern => `<details class="pattern-catalog-entry"><summary><b>${escape(pattern.reference)}</b><span>${escape(pattern.source)}</span></summary><p>${escape(pattern.documentation)}</p><p>${pattern.rules ?? 'Unreported'} Rules · ${pattern.extensions ?? 'Unreported'} extensions${pattern.coverage?.length ? ` · ${escape(pattern.coverage.join(', '))}` : ''}</p>${pattern.digest ? `<code>${escape(pattern.digest)}</code>` : ''}<p class="evidence-meta">${installations.some(i => i.pattern === pattern.reference) ? 'Configured by extends in this repository.' : 'Available to resolve; not installed by viewing this entry.'}</p><button data-copy="${escape(pattern.reference)}">Copy exact reference</button></details>`).join('') || '<p>No offline Patterns returned.</p>'}<p class="evidence-meta">Edit extends and Bindings to adopt an available Pattern. Imported browser references remain separate from repository configuration.</p>`);
       }
       bindFocus(); status();
     } catch (failure) { if (ticket === requestGeneration) evidence(`${sectionNames[section]} unavailable`, `<p role="alert">${error(failure)}</p>`); }
   }
+  /** Evaluation owns the evidence generation; presentation never decides whether a result is current. */
+  function evaluateRepository(isCurrent?: () => boolean): Promise<CheckEvaluation> {
+    if (pendingCheck) { if (isCurrent) pendingCheckGuards.push(isCurrent); return pendingCheck; }
+    if (busy) return Promise.resolve({ state: 'busy', message: 'Repository loading is still in progress. Retry the check when it finishes.' });
+    const guards = isCurrent ? [isCurrent] : [];
+    pendingCheckGuards = guards;
+    busy = true; $('#run-repository-check').setAttribute('disabled', '');
+    // Assign the shared promise before callbacks can request another check.
+    pendingCheck = Promise.resolve().then(async (): Promise<CheckEvaluation> => {
+      let failureMessage: string | undefined;
+      try {
+        callbacks.checkingChanged?.(true);
+        const before = await queryRepositoryRevision().catch(() => null);
+        const source = await reloadRepositoryEvidence(), generation = evidenceGeneration;
+        const result = await checkRepository();
+        const after = before ? await queryRepositoryRevision().catch(() => null) : null;
+        if (before && (!after || before.revision !== after.revision)) {
+          failureMessage = 'Repository files changed during inspection. Updating the evidence.';
+          return {state:'stale',message:failureMessage};
+        }
+        if (!guards.every(guard => guard())) return { state: 'superseded' };
+        if (generation !== evidenceGeneration || source !== repository) {
+          failureMessage = 'Repository evidence changed during this check. The result was discarded.';
+          return { state: 'stale', message: failureMessage };
+        }
+        run = result; status(); callbacks.evidenceChanged?.(repository,run);
+        return { state: 'reported' };
+      } catch (failure) {
+        failureMessage = failure instanceof Error ? failure.message : String(failure);
+        return { state: 'failed', message: failureMessage };
+      } finally {
+        pendingCheck = null; pendingCheckGuards = []; busy = false; $('#run-repository-check').removeAttribute('disabled');
+        callbacks.checkingChanged?.(false, failureMessage);
+        if (run) renderReportSurface();
+        else {
+          const surface = $('#report-surface');
+          surface?.setAttribute('aria-busy', 'false');
+          const note = surface?.querySelector<HTMLElement>('#report-updating');
+          if (note && failureMessage) { note.hidden = false; note.textContent = `Inspection unavailable: ${failureMessage} Retrying automatically.`; }
+        }
+      }
+    });
+    return pendingCheck;
+  }
+  async function checkQuietly(isCurrent?: () => boolean) {
+    const result = await evaluateRepository(isCurrent);
+    if (result.state === 'failed' || result.state === 'stale' || result.state === 'busy') throw new Error(result.message ?? 'The repository check could not complete.');
+  }
   async function checkCode() {
-    if (busy) return;
-    busy = true; $('#run-repository-check').setAttribute('disabled', ''); activeSection = 'findings';
+    if (busy && !pendingCheck) return;
+    activeSection = 'findings';
     const ticket = ++requestGeneration;
     evidence('Checking repository', '<p>ArcLint is observing code on disk and evaluating its configured Rules.</p><p>Browser model edits are not an input to this check.</p>');
-    try {
-      await ensureRepository(); const result = await checkRepository(); run = result; status();
-      if (ticket === requestGeneration) await showGovernance('findings');
-    } catch (failure) { if (ticket === requestGeneration) evidence('Check could not complete', `<p role="alert">${error(failure)}</p>${run ? '<p>The previous completed Report remains available in Report; this failed attempt did not replace it.</p>' : ''}`); }
-    finally { busy = false; $('#run-repository-check').removeAttribute('disabled'); }
+    const result = await evaluateRepository();
+    if (ticket !== requestGeneration) return;
+    if (result.state === 'reported') await showGovernance('findings');
+    else if (result.state === 'stale' || result.state === 'superseded') {
+      evidence('Check needs refreshing', `<p>${escape(result.message ?? 'Source changed while checking. A current check is required.')}</p><button id="recheck-current-source">Check code →</button>`);
+      $('#recheck-current-source').addEventListener('click', () => void checkCode());
+    } else if (result.state === 'failed') evidence('Check could not complete', `<p role="alert">${escape(result.message)}</p>${run ? '<p>The previous completed Report remains available in Report; this failed attempt did not replace it.</p>' : ''}`);
   }
   async function reviewBaselineAdoption() {
     activeSection = 'findings'; const ticket = ++requestGeneration;
@@ -223,16 +356,17 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
   }
   async function applyBaselineAdoption(preview: RepositoryBaselinePreview) {
     ($('#apply-baseline-adoption') as HTMLButtonElement).disabled = true; const ticket = ++requestGeneration;
+    clearReportEvidence();
     try {
-      const result = await applyRepositoryBaseline(preview.token); run = null; status();
+      const result = await applyRepositoryBaseline(preview.token);
       if (ticket === requestGeneration) {
-        evidence('Baseline updated', `<h3>${result.findings} findings acknowledged</h3><p>ArcLint ${escape(result.action)} recorded ${result.rules} applied Rules${typeof result.removedStale === 'number' ? ` and removed ${result.removedStale} stale occurrences` : ''}.</p>${result.findings !== preview.findings ? '<p role="alert">The native command reported a different adopted count than the preview. Source may have changed during its final assessment; inspect the new Report.</p>' : ''}<p>Adoption changed the Baseline, not the code. Run another check to see which findings remain active.</p><button id="check-after-adoption" class="primary">Check code →</button>`);
+        evidence('Baseline updated', `<h3>${result.findings} findings acknowledged</h3><p>ArcLint ${escape(result.action)} recorded ${result.rules} applied Rules${typeof result.removedStale === 'number' ? ` and removed ${result.removedStale} stale occurrences` : ''}.</p>${result.findings !== preview.findings ? '<p role="alert">The native command reported a different adopted count than the preview. Source may have changed during its final assessment; inspect the new Report.</p>' : ''}<p>Adoption changed the Baseline, not the code. Inspection updates automatically to show which findings remain active.</p><button id="check-after-adoption" class="primary">Check code →</button>`);
         $('#check-after-adoption').onclick = () => void checkCode();
       }
       callbacks.notify(`ArcLint acknowledged ${result.findings} findings in the Baseline.`);
     } catch (failure) {
       if (ticket === requestGeneration) { evidence('Baseline adoption not confirmed', `<p role="alert">${error(failure)}</p><button id="retry-baseline-review">Review current findings →</button>`); $('#retry-baseline-review').onclick = () => void reviewBaselineAdoption(); }
-    }
+    } finally { clearReportEvidence(); callbacks.inspectionInvalidated?.(); }
   }
   function sourceHash(repo: RepositoryProject, document: RepositoryDocument): string | null {
     if (!repo.documentHashes) throw new Error('Reload the local server to use version-checked document saving.');
@@ -260,7 +394,7 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
     return { removed: removed.length, added: added.length, html: rows.join('\n') };
   }
   async function reviewCurrentDocument(document: RepositoryDocument, content: string) {
-    try { repository = await loadRepository(); const hash = sourceHash(repository, document); if (document === 'rules' && policyDraft) policyDraft.expectedHash = hash; await reviewDocument(document, content, hash); }
+    try { const source = await reloadRepositoryEvidence(); const hash = sourceHash(source, document); if (document === 'rules' && policyDraft) policyDraft.expectedHash = hash; await reviewDocument(document, content, hash); }
     catch (failure) { evidence('Could not refresh the source', `<p role="alert">${error(failure)}</p>`); }
   }
   async function reviewDocument(document: RepositoryDocument, content: string, expectedHash: string | null) {
@@ -270,7 +404,7 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
       const preview = await previewRepositoryDocument(document, content, expectedHash);
       if (ticket !== requestGeneration) return;
       const diff = documentDiff(preview.before, preview.after);
-      evidence(`Review ${preview.filename}`, `${boundSource()}<p class="document-validation">${escape(preview.validation.message)}</p><div class="document-review-heading"><span>${diff.added} added lines · ${diff.removed} removed lines</span><code>${escape(preview.filename)}</code></div><pre class="document-diff" aria-label="Proposed document changes">${diff.html || 'No content changes.'}</pre><details><summary>Complete proposed YAML</summary><pre>${escape(preview.after)}</pre></details><div class="document-actions"><button id="apply-document" class="primary" ${preview.before === preview.after ? 'disabled' : ''}>Apply to repository →</button><button id="back-document-editor">${document === 'rules' ? 'Continue editing' : 'Return to model'}</button></div><p class="evidence-meta">This writes ${escape(preview.filename)}. The server checks that Rules and Domain still match this preview. A new code check is required after applying.</p>`);
+      evidence(`Review ${preview.filename}`, `${boundSource()}<p class="document-validation">${escape(preview.validation.message)}</p><div class="document-review-heading"><span>${diff.added} added lines · ${diff.removed} removed lines</span><code>${escape(preview.filename)}</code></div><pre class="document-diff" aria-label="Proposed document changes">${diff.html || 'No content changes.'}</pre><details><summary>Complete proposed YAML</summary><pre>${escape(preview.after)}</pre></details><div class="document-actions"><button id="apply-document" class="primary" ${preview.before === preview.after ? 'disabled' : ''}>Apply to repository →</button><button id="back-document-editor">${document === 'rules' ? 'Continue editing' : 'Return to model'}</button></div><p class="evidence-meta">This writes ${escape(preview.filename)}. The server checks that Rules and Domain still match this preview. Inspection updates automatically after applying.</p>`);
       $('#back-document-editor').onclick = () => { if (document === 'rules') void editPolicy(); else closeEvidence(); };
       $('#apply-document').onclick = () => void applyDocument(preview);
     } catch (failure) {
@@ -282,9 +416,9 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
   async function applyDocument(preview: RepositoryDocumentPreview) {
     const button = $('#apply-document') as HTMLButtonElement; button.disabled = true;
     const ticket = ++requestGeneration;
+    clearRepositoryEvidence();
     try {
       const result = await applyRepositoryDocument(preview.token);
-      repository = null; inspected = null; patternCatalog = null; run = null;
       if (result.document === 'rules') policyDraft = null;
       if (ticket === requestGeneration) evidence(`${result.filename} saved`, `<p>The reviewed document was applied to the bound repository.</p><p class="evidence-meta">Saved ${escape(new Date(result.savedAt).toLocaleString())}. Previous inspection and Report caches were cleared.</p><div class="document-actions"><button id="check-saved-document" class="primary">Check code →</button><button id="return-from-save">Return to model</button></div>`);
       $('#check-saved-document')?.addEventListener('click', () => void checkCode());
@@ -296,23 +430,30 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
         body.insertAdjacentHTML('beforeend', `<p class="form-error" role="alert">${error(failure)}</p><p>The model and editor draft are retained.</p><button id="review-latest-after-failure">Compare with current file</button>`);
         $('#review-latest-after-failure').onclick = () => void reviewCurrentDocument(preview.document, preview.after);
       }
-    }
+    } finally { clearRepositoryEvidence(); callbacks.inspectionInvalidated?.(); }
   }
   async function saveDomain(domainYaml: string) {
     try { const repo = await ensureRepository(); await reviewDocument('domain', domainYaml, sourceHash(repo, 'domain')); }
     catch (failure) { evidence('Domain saving unavailable', `<p role="alert">${error(failure)}</p>`); }
   }
   async function showRepository() {
-    closeTools(); if (busy) return;
-    busy = true; $('#open-repository').setAttribute('disabled', '');
+    closeTools(); if (repositoryOpening) return;
+    repositoryOpening = true; $('#open-repository').setAttribute('disabled', '');
+    const ticket = ++requestGeneration;
     try {
-      const loaded = await loadRepository();
+      // Foreground intent survives a quiet check. Invalidate its pending result,
+      // then use the existing execution instead of starting a competing reload.
+      const checking = pendingCheck;
+      if (checking) { clearRepositoryEvidence(); await checking; }
+      busy = true;
+      const loaded = await reloadRepositoryEvidence();
+      if (ticket !== requestGeneration) return;
       if (!loaded.domainYaml) throw new Error('This repository has no domain.arclint.yaml. Create a model here or import a domain file.');
       const next = importProject(loaded.domainYaml);
-      repository = loaded; run = null; inspected = null; patternCatalog = null; closeEvidence(); callbacks.replace(next); status();
+      closeEvidence(); callbacks.replace(next); status();
       callbacks.notify(`Loaded ${loaded.repository.name} from disk. Edits remain a browser draft; Undo restores the previous model.`);
-    } catch (failure) { evidence('Repository could not be opened', `<p role="alert">${error(failure)}</p>`); }
-    finally { busy = false; $('#open-repository').removeAttribute('disabled'); }
+    } catch (failure) { if (ticket === requestGeneration) evidence('Repository could not be opened', `<p role="alert">${error(failure)}</p>`); }
+    finally { repositoryOpening = false; busy = false; $('#open-repository').removeAttribute('disabled'); callbacks.inspectionInvalidated?.(); }
   }
   $('#open-repository').onclick = () => void showRepository();
   $('#open-architecture').onclick = () => void showGovernance('zones');
@@ -390,11 +531,6 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
   $('#edit-purpose').onclick = () => { $('#purpose-form').hidden = !$('#purpose-form').hidden; if (!$('#purpose-form').hidden) $('#purpose-form input').focus(); };
   $('#close-purpose').onclick = () => { $('#purpose-form').hidden = true; };
   $('#purpose-form').onsubmit = event => { event.preventDefault(); const form = $('#purpose-form') as HTMLFormElement; const data = new FormData(form); try { localStorage.setItem(briefKey(), JSON.stringify({ actor: String(data.get('actor')).trim(), need: String(data.get('need')).trim() })); form.hidden = true; purpose(); } catch { callbacks.notify('Could not save the model’s user and need.', true); } };
-  function matchesRepositoryDomain() {
-    if (!repository?.domainYaml || !project) return false;
-    try { return JSON.stringify(parse(repository.domainYaml)) === JSON.stringify(parse(exportDomainYaml(project))); }
-    catch { return false; }
-  }
   async function inspectSelection(id: string | null) {
     if (!id) { await showGovernance('rules'); return; }
     const concept = project.concepts.find(c => c.id === id);
@@ -404,10 +540,13 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
     try {
       const repo = await ensureRepository();
       if (ticket !== requestGeneration) return;
-      const linked = matchesRepositoryDomain();
-      const anchors = linked && concept ? (repo.context.domain?.contexts ?? []).filter(c => c.name === context?.name).flatMap(c => [...c.invariants ?? [], ...c.assertions ?? []]).filter(c => c.owner === concept.name && c.ownerConcept === concept.kind && c.source) : [];
-      if (anchors[0]?.source) { await inspect(anchors[0].source.replace(/:\d+$/, '')); return; }
-      if (linked && !concept && repo.context.Zones?.some(z => z.Name === context?.name)) { await inspect(context!.name, true); return; }
+      const association = buildArchitectureEvidence(project, repo).contexts.find(item => item.id === context?.id);
+      const anchors = concept ? association?.subjects.find(item => item.id === concept.id)?.anchors ?? [] : association?.anchors ?? [];
+      const paths = [...new Set(anchors.map(anchor => anchor.path))];
+      if ((!concept && paths.length) || paths.length > 1) {
+        evidence(`Located code for ${concept?.name ?? context?.name ?? 'context'}`, `<p>These are located contract anchors. They do not establish the entire code footprint.</p>${paths.map(path => `<button class="path-button" data-inspect-path="${escape(path)}">${escape(path)} ↗</button>`).join('')}`); return;
+      }
+      if (paths[0]) { await inspect(paths[0]); return; }
       evidence(`Inspect ${concept?.name ?? context?.name ?? 'code'}`, `<p>This model has no located code anchor for this selection. Enter the repository path you want ArcLint to inspect.</p><form id="selection-path-form"><label>Repository path<input id="selection-code-path" name="path" placeholder="internal/example/root.go" required /></label><button type="submit">Inspect path ↗</button></form>`);
       $('#selection-path-form').onsubmit = event => { event.preventDefault(); void inspect(($('#selection-code-path') as HTMLInputElement).value.trim()); };
       $('#selection-code-path').focus();
@@ -417,11 +556,9 @@ export function createWorkbench(host: HTMLElement, callbacks: Callbacks): Workbe
     const concept = project?.concepts.find(c => c.id === id);
     if (!concept) return '';
     const contracts = conceptContracts(project, concept);
-    const contextName = project.contexts.find(c => c.id === concept.contextId)?.name;
-    const sameSource = matchesRepositoryDomain();
-    const anchors = sameSource ? (repository!.context.domain?.contexts ?? []).filter(c => c.name === contextName).flatMap(c => [...c.invariants ?? [], ...c.assertions ?? []]).filter(item => item.owner === concept.name && item.ownerConcept === concept.kind && item.source) : [];
-    return `<section class="recorded-contracts"><h3>Recorded contracts</h3><p class="field-help">These state what must hold. Code inspection supplies separate evidence.</p><details ${contracts.invariants.length ? 'open' : ''}><summary>Invariants · ${contracts.invariants.length}</summary>${contracts.invariants.map(i => `<article><b>╳ ${escape(i.key)}</b><p>${escape(i.statement)}</p></article>`).join('') || '<p>No invariants recorded.</p>'}</details><details ${contracts.assertions.length ? 'open' : ''}><summary>Assertions · ${contracts.assertions.length}</summary>${contracts.assertions.map(a => `<article><b>⊣ After ${escape(a.operation)}</b><code>${escape(a.key)}</code><p>${escape(a.statement)}</p></article>`).join('') || '<p>No operation post-conditions recorded.</p>'}</details><h3>Code evidence</h3>${anchors.map(a => `<button class="path-button" data-inspect-path="${escape(a.source!.replace(/:\d+$/, ''))}">Contract anchor: ${escape(a.source)} ↗</button>`).join('') || '<p class="field-help">No located contract anchor for this term. Enter a repository path above to inspect its governing Rules.</p>'}</section>`;
+    const anchors = buildArchitectureEvidence(project, repository).contexts.find(context => context.id === concept.contextId)?.subjects.find(subject => subject.id === concept.id)?.anchors ?? [];
+    return `<section class="recorded-contracts"><h3>Recorded contracts</h3><p class="field-help">These state what must hold. Code inspection supplies separate evidence.</p><details ${contracts.invariants.length ? 'open' : ''}><summary>Invariants · ${contracts.invariants.length}</summary>${contracts.invariants.map(i => `<article><b>╳ ${escape(i.key)}</b><p>${escape(i.statement)}</p></article>`).join('') || '<p>No invariants recorded.</p>'}</details><details ${contracts.assertions.length ? 'open' : ''}><summary>Assertions · ${contracts.assertions.length}</summary>${contracts.assertions.map(a => `<article><b>⊣ After ${escape(a.operation)}</b><code>${escape(a.key)}</code><p>${escape(a.statement)}</p></article>`).join('') || '<p>No operation post-conditions recorded.</p>'}</details><h3>Code evidence</h3>${anchors.map(a => `<button class="path-button" data-inspect-path="${escape(a.path)}">Contract anchor: ${escape(a.source)} ↗</button>`).join('') || '<p class="field-help">No located contract anchor for this term. Enter a repository path above to inspect its governing Rules.</p>'}</section>`;
   }
   function bindSelection() { document.querySelectorAll<HTMLElement>('#inspector [data-inspect-path]').forEach(b => b.onclick = () => void inspect(b.dataset.inspectPath!)); }
-  return { update(next, id, contextId, nextMode, pointOfReference, view) { focusView = view; project = next; selected = id; scope = contextId; mode = nextMode; baseline = pointOfReference; purpose(); status(); renderDrawing(); }, inspectSelection: id => { void inspectSelection(id); }, selectionEvidence, bindSelection, showGovernance: section => { void showGovernance(section); }, checkCode: () => { void checkCode(); }, showRepository: () => { void showRepository(); }, getRepository: () => repository ? structuredClone(repository) : null, getReport: () => run ? structuredClone(run) : null, saveDomain: yaml => { void saveDomain(yaml); } };
+  return { update(next, id, contextId, nextMode, pointOfReference, view) { focusView = view; project = next; selected = id; scope = contextId; mode = nextMode; baseline = pointOfReference; purpose(); status(); renderDrawing(); }, inspectSelection: id => { void inspectSelection(id); }, selectionEvidence, bindSelection, showGovernance: section => { void showGovernance(section); }, checkCode: () => { void checkCode(); }, checkQuietly, showRepository: () => { void showRepository(); }, getRepository: () => repository ? structuredClone(repository) : null, getReport: () => run ? structuredClone(run) : null, saveDomain: yaml => { void saveDomain(yaml); }, inspectPath: path => { void inspect(path); }, inspectZone: zone => { void inspect(zone,true); }, showRule: id => { void ruleDetail(id); }, initializeRepository(repo) { if (repositoryOpening || busy || repository || pendingRepository || evidenceGeneration || requestGeneration) return false; evidenceGeneration++; repository = repo; status(); return true; }, receiveEvidence(repo,result) { evidenceGeneration++; pendingRepository = null; repository = repo; run = result; inspected = null; patternCatalog = null; status(); } };
 }

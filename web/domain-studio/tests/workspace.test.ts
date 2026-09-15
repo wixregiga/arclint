@@ -76,6 +76,32 @@ test('unassigned notebook text survives switching, reload and model replacement 
   assert.equal(loaded.project.contexts.length, 0);
 });
 
+test('independent scene preferences survive reload without changing the domain or drafts', () => {
+  const workspace = createWorkspace(undefined, fixture());
+  const original = exportDomainYaml(workspace.project);
+  workspace.saveDraft('Keep this unanswered.');
+  workspace.updateView({ visibility: { layers: true, dependencies: false, description: false }, hiddenLayerZones: ['domain', 'domain'], layerSpread: .2, selectedLayerRule: 'dependencies/application-inward' });
+  workspace.updateView({ representation: 'table' });
+  const restored = createWorkspace(workspace.serialize());
+  assert.deepEqual(restored.view.visibility, { layers: true, dependencies: false, description: false });
+  assert.deepEqual(restored.view.hiddenLayerZones, ['domain']);
+  assert.equal(restored.view.layerSpread, .2);
+  assert.equal(restored.view.selectedLayerRule, 'dependencies/application-inward');
+  assert.equal(restored.notebook[0].text, 'Keep this unanswered.');
+  assert.equal(exportDomainYaml(restored.project), original);
+});
+
+test('older workspaces preserve their policy overlay while new visibility values are validated', () => {
+  const snapshot = createWorkspace(undefined, fixture()).snapshot();
+  const legacy = JSON.parse(JSON.stringify(snapshot));
+  delete legacy.view.visibility;
+  legacy.view.lens = 'structure';
+  assert.deepEqual(createWorkspace(legacy).view.visibility, { layers: true, dependencies: true, description: true });
+  for (const patch of [{ layerSpread: 2 }, { visibility: { layers: true, dependencies: 'yes', description: false } }, { hiddenLayerZones: [3] }]) {
+    assert.throws(() => createWorkspace({ ...snapshot, view: { ...snapshot.view, ...patch } }));
+  }
+});
+
 test('editor fields persist across representations and overlays without entering semantic history', () => {
   const workspace = createWorkspace(undefined, fixture());
   const subject = workspace.project.concepts[0].id;

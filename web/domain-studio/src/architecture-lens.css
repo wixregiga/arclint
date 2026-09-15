@@ -1,0 +1,97 @@
+/* The reading edge belongs to the selected model, with one unfolded record at a time. */
+#architecture-tools{position:absolute;z-index:8;left:295px;right:30px;top:131px;display:flex;align-items:center;gap:10px;font-size:11px;flex-wrap:wrap}
+#architecture-tools label{color:var(--muted);white-space:nowrap}
+#architecture-layer{width:auto;max-width:min(300px,45vw);font-size:11px;border:0;border-bottom:1px solid var(--line);padding:8px 20px 8px 5px;background:transparent}
+#architecture-refresh{font-size:11px;min-height:40px}
+#architecture-state{color:var(--muted);font-size:10px;flex-basis:100%}
+#architecture-reading{position:absolute;z-index:6;right:30px;bottom:145px;width:300px;max-height:calc(100% - 350px);overflow:auto;padding:18px 0 5px 20px;border-left:1px solid var(--line);background:color-mix(in srgb,var(--paper) 94%,transparent);font-size:12px}
+.architecture-reading-heading{display:flex;justify-content:space-between;gap:12px;font-size:9px;letter-spacing:.06em;color:var(--muted);margin-bottom:15px}
+#architecture-reading h3{font:500 17px/1.4 var(--display);letter-spacing:-.02em;overflow-wrap:anywhere;margin:0 0 9px}
+#architecture-reading p{font-size:12px;line-height:1.8;margin:10px 0}
+.architecture-contract small,.architecture-layer-law small{font-size:10px;color:var(--accent);display:block;margin-bottom:7px}
+#architecture-reading .architecture-caption{font-size:10px;line-height:1.65;color:var(--muted);margin-top:17px}
+#architecture-reading button{font-size:11px;text-align:left;justify-content:flex-start;min-height:40px;line-height:1.6}
+.architecture-paths>button{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding-block:9px;width:100%;overflow-wrap:anywhere}
+.architecture-paths code,.architecture-finding code{font:11px/1.7 Consolas,monospace;white-space:normal;overflow-wrap:anywhere}
+.architecture-paths small{font-size:10px;color:var(--muted)}
+.architecture-zone-links{display:flex;flex-wrap:wrap;gap:4px 15px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.architecture-zone-links span{font-size:10px;color:var(--muted)}
+.architecture-layer-law{margin-top:20px;border-top:1px solid var(--line);padding-top:16px}
+.architecture-layer-law p{font-weight:500}
+.architecture-layer-law button{overflow-wrap:anywhere}
+.contract-switch{display:flex;flex-direction:column;gap:5px;font-size:10px;color:var(--muted);margin-top:16px}
+.contract-switch select{font-size:11px;padding:8px 0;background:transparent;max-width:100%}
+.inspection-statuses{display:flex;gap:9px;flex-wrap:wrap;font-size:10px;color:var(--muted);margin-block:12px}
+[data-finding-status=active]{color:#8b4232}
+.architecture-finding{display:flex;flex-direction:column;align-items:flex-start;border-top:1px solid var(--line);padding-block:12px;gap:3px;width:100%}
+.architecture-finding b{font-size:10px;text-transform:uppercase}
+.architecture-finding span{overflow-wrap:anywhere}
+.lens-switch{gap:16px}
+.lens-switch button{min-height:44px}
+@media(max-width:1100px){#architecture-reading{right:22px;width:250px;bottom:150px;max-height:calc(100% - 340px);padding-left:15px}#architecture-tools{left:245px;right:22px}}
+@media(max-width:650px){#architecture-tools{top:235px;left:20px;right:20px;gap:5px 10px}#architecture-layer{max-width:calc(100vw - 160px);font-size:10px;min-height:44px}#architecture-refresh{min-height:44px;font-size:10px}#architecture-state{font-size:9px}#architecture-reading{left:20px;right:20px;width:auto;bottom:var(--reading-bottom,260px);max-height:210px;padding:12px 14px;border:1px solid var(--line);border-radius:3px}#architecture-reading h3{font-size:15px}#architecture-reading button{min-height:44px}#architecture-reading p{font-size:11px}.architecture-reading-heading{font-size:9px;margin-bottom:9px}.architecture-caption{font-size:10px}.lens-switch{gap:13px}.lens-switch button{font-size:10px;min-height:44px}.focus-controls{bottom:123px}.atlas-world[data-lens=structure] .place-orientation,.atlas-world[data-lens=inspection] .place-orientation{top:126px}.atlas-world[data-lens=structure] #place-summary,.atlas-world[data-lens=inspection] #place-summary{max-height:48px;overflow:auto}}
+
+.architecture-reading-toggle{display:none}
+@media(max-width:650px){#architecture-reading{padding:0 12px;border:0;border-top:1px solid var(--line);border-radius:0}#architecture-reading .architecture-reading-toggle{display:flex;width:100%;min-height:44px;padding:0;font-size:11px;justify-content:space-between}#architecture-reading[data-expanded=false] #architecture-reading-body{display:none}#architecture-reading-body{padding:8px 0 12px}}
+
+@media(max-width:650px){#architecture-reading[data-expanded=true]{background:var(--paper)}.atlas-world:has(#architecture-reading[data-expanded=true]:not([hidden])) .study-labels,.atlas-world:has(#architecture-reading[data-expanded=true]:not([hidden])) .study-leaders{visibility:hidden}}
+
+/* The map has one overlay control and one deliberate reading surface. */
+#architecture-tools{align-items:center;column-gap:16px;row-gap:4px;top:126px}
+#architecture-tools .lens-switch{gap:0;border-bottom:1px solid var(--line);margin-right:auto}
+#architecture-tools .lens-switch button{padding:8px 12px;font-size:12px;min-height:40px}
+#architecture-open-reading{font-size:11px;min-height:40px}
+#architecture-reading{background:var(--paper);padding-top:0}
+#architecture-reading .architecture-reading-toggle{display:flex;min-height:40px;margin-bottom:12px;color:var(--muted);font-size:11px;width:100%;justify-content:flex-end}
+#architecture-reading-body{padding-bottom:10px}
+#architecture-reading[data-expanded=false]{display:none}
+#architecture-tools[data-overlay=meaning] #architecture-state{display:none}
+@media(max-width:650px){#architecture-tools{top:230px;gap:2px 10px}#architecture-tools .lens-switch{margin-right:0}#architecture-tools .lens-switch button{padding:5px 12px;min-height:44px;font-size:11px}#architecture-open-reading{margin-left:auto;min-height:44px}#architecture-tools label{font-size:10px}#architecture-layer{flex:1;max-width:100%;font-size:11px}#architecture-state{font-size:10px}#architecture-reading{max-height:260px}.focus-controls{bottom:148px}#architecture-reading .architecture-reading-toggle{margin-bottom:4px}}
+@media(max-width:650px){#architecture-tools{top:var(--architecture-top,250px)}.atlas-world #place-summary{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;max-height:36px;overflow:hidden;line-height:1.65}}
+#architecture-rule-caption{flex-basis:100%;display:flex;align-items:baseline;gap:12px;font-size:12px;line-height:1.65;max-width:850px}#architecture-rule-caption button{font-size:11px;white-space:nowrap;min-height:36px}#architecture-rule-caption[hidden]{display:none}@media(max-width:650px){#architecture-rule-caption{font-size:11px;gap:6px;align-items:flex-start}#architecture-rule-caption button{min-height:44px}}
+
+/* One place; overlays add markings without changing the task or the subject. */
+#zone-overlay{font-size:12px;min-height:44px;padding:5px 12px;border:1px solid var(--line);border-radius:24px}
+#zone-overlay::before{content:'◇';margin-right:7px;font-size:17px}
+#zone-overlay[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+#architecture-open-reading{margin-left:auto}
+#architecture-tools #architecture-state{display:initial;flex-basis:auto;color:#995330}
+#architecture-tools #architecture-state[hidden]{display:none}
+.architecture-section{border-top:1px solid var(--line);padding:12px 0}
+.architecture-section summary{cursor:pointer;min-height:32px;font-size:12px;line-height:1.7}
+.architecture-section[open] summary{margin-bottom:12px}
+.view-pages{left:34px;bottom:200px;transform:none;max-width:205px;display:flex;flex-direction:column;align-items:flex-start;gap:3px;font-size:10px}
+.view-pages label{color:var(--muted)}
+#view-group{font:12px/1.5 var(--body);border:0;border-bottom:1px solid var(--line);background:transparent;padding:9px 20px 9px 0;width:100%;text-overflow:ellipsis;min-height:44px}
+@media(max-width:1000px){.view-pages{left:24px;max-width:175px}}
+@media(max-width:650px){.view-pages{left:20px;bottom:198px;max-width:180px}.view-pages label{font-size:9px}#view-group{font-size:10px}#architecture-tools{gap:3px 10px}#zone-overlay{font-size:11px}#architecture-layer{max-width:calc(100% - 120px)}}
+.focus-controls{max-width:205px}
+.focus-controls>.view-pages{position:static;transform:none;max-width:100%;margin:0 0 10px}
+@media(max-width:650px){.focus-controls{max-width:180px}}
+
+/* Independent view controls share one row; policy options unfold only when requested. */
+.architecture-visibility{display:flex;align-items:center;gap:3px 16px;flex-wrap:wrap}
+.architecture-visibility button,#architecture-tools #zone-overlay{font-size:11px;min-height:44px;padding:4px 0;border:0;border-radius:0;background:transparent;color:var(--muted);white-space:nowrap}
+.architecture-visibility button[aria-pressed=true],#architecture-tools #zone-overlay[aria-pressed=true]{color:var(--ink);background:transparent;text-decoration:underline;text-underline-offset:6px;text-decoration-thickness:1px}
+#architecture-tools #zone-overlay::before{content:none}
+#architecture-layer-controls{display:flex;align-items:center;gap:6px 16px;flex-wrap:wrap;flex-basis:100%;font-size:11px}
+#architecture-layer-controls[hidden]{display:none}
+#architecture-layer-controls #architecture-layer{flex:0 1 auto;max-width:min(400px,50vw);min-height:40px;font-size:11px}
+#architecture-layer-controls button{font-size:11px;min-height:40px}
+#architecture-layer-options{position:relative}
+#architecture-layer-options summary{cursor:pointer;min-height:40px;display:flex;align-items:center;gap:6px;color:var(--muted)}
+#architecture-layer-options summary::after{content:'⌄'}
+#architecture-layer-options[open]{z-index:15}
+.architecture-layer-options-body{position:absolute;top:40px;left:0;width:230px;background:var(--paper);border:1px solid var(--line);padding:12px 16px;box-sizing:border-box}
+#architecture-layer-zones{max-height:210px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+#architecture-layer-zones label{display:flex;align-items:center;gap:10px;min-height:30px;color:var(--ink);white-space:normal;overflow-wrap:anywhere}
+#architecture-layer-zones input{width:16px;height:16px;accent-color:var(--ink)}
+.architecture-spread{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:10px;border-top:1px solid var(--line);padding-top:12px;margin-top:9px}
+.architecture-spread input{width:135px;accent-color:var(--ink)}
+#architecture-state button{font-size:10px;min-height:32px;text-decoration:underline}
+.architecture-import{display:grid;grid-template-columns:1fr;gap:2px;padding:10px 0;border-top:1px solid var(--line)}
+.architecture-import button{padding:0;min-height:30px!important;overflow-wrap:anywhere}
+.architecture-import code{font-size:10px;white-space:normal;overflow-wrap:anywhere}
+.architecture-import>span{color:var(--muted);line-height:1}
+.architecture-import-pages{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px}
+@media(max-width:650px){.architecture-visibility{gap:2px 12px}.architecture-visibility button,#architecture-tools #zone-overlay{font-size:10px}#architecture-layer-controls{gap:2px 10px}#architecture-layer-controls #architecture-layer{max-width:calc(100vw - 210px)}.architecture-layer-options-body{left:auto;right:0;width:215px}}

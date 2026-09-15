@@ -71,7 +71,9 @@ test('plan objects remain directly selectable within their recorded context', as
       await openEditor(page);
       await expect(page.locator('#inspector').getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(concept.name);
       await page.locator('#clear-selection').click();
-      await page.locator('#ascend').click();
+      // Up visits a member's owning aggregate; the context breadcrumb returns
+      // directly to the complete context before selecting its next entry.
+      await page.locator('#context-location').click();
     }
     await page.locator('#ascend').click();
   }
@@ -156,7 +158,10 @@ test('repository actions return actual context, layers, CLI results, and visible
     await expect(evidence).toContainText(diagnostic.status);
   }
   await page.screenshot({ path: testInfo.outputPath('repository-evidence.png'), fullPage: true });
-  const errorResponse = page.waitForResponse(response => response.url().includes('/api/arclint/context?'));
+  const errorResponse = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.pathname === '/api/arclint/context' && url.searchParams.get('path') === '../outside.go';
+  });
   await askWorkbench(page, '../outside.go');
   expect((await errorResponse).status()).toBe(400);
   await expect(evidence).toContainText(/INVALID_PATH|without traversal|relative repository path/i);
@@ -178,7 +183,7 @@ for (const viewport of [{ width: 626, height: 766 }, { width: 942, height: 766 }
   });
 }
 
-test('large matrices page the current context without changing the model', async ({ page }) => {
+test('large matrices explore named groups in the current context without changing the model', async ({ page }) => {
   await page.goto('/');
   const project = {
     version: 1, name: 'Large domain', description: 'Matrix navigation fixture',
@@ -191,10 +196,12 @@ test('large matrices page the current context without changing the model', async
   await selectPlace(page, /^area/);
   await toolId(page, '#view-matrix');
   await closeTools(page);
-  for (let index = 0; index < 8; index++) {
+  const groups = await page.locator('#view-group option').evaluateAll(options => options.map(option => ({ value: (option as HTMLOptionElement).value, label: option.textContent ?? '' })));
+  expect(groups.length).toBeGreaterThan(1);
+  for (const group of groups) {
+    expect(group.label).toMatch(/Term/);
+    await page.locator('#view-group').selectOption(group.value);
     expect(await page.locator('#projection td').count()).toBeLessThanOrEqual(64);
-    if (await page.locator('#view-next').isDisabled()) break;
-    await page.locator('#view-next').click();
   }
   await expect(page.locator('[data-matrix-relation="last-link"]')).toHaveText('supplies');
   expect(await savedProject(page)).toEqual(project);

@@ -43,9 +43,12 @@ test('first view is a quiet world of contexts, with no descendant labels or work
   await expect(page.locator('#scene .domain-regions')).toHaveCount(1);
   await expect(page.locator('#scene [data-subject-kind="context"]')).toHaveCount(3);
   await expect(page.locator('#scene').getByRole('button', { name: /^Book/ })).not.toBeVisible();
-  for (const selector of ['#inspector', '#tools-drawer', '#evidence-card', '#workbench-input', '#projection', '#model-tree']) {
+  for (const selector of ['#inspector', '#tools-drawer', '#evidence-card', '#architecture-reading', '#workbench-input', '#projection', '#model-tree']) {
     await expect(page.locator(selector)).not.toBeVisible();
   }
+  await expect(page.locator('#lens-meaning, #lens-structure, #lens-inspection, #view-prev, #view-next, #view-page')).toHaveCount(0);
+  await expect(page.locator('#scene').getByText(/No located anchors/i)).toHaveCount(0);
+  await expect(page.locator('#zone-overlay')).toBeVisible();
   await expect(page.locator('#open-index')).toBeVisible();
   await expect(page.locator('#tools-toggle')).toBeVisible();
   await expect(page.locator('#keeper-action')).toHaveAttribute('data-keeper', 'Onyx');
@@ -55,38 +58,42 @@ test('first view is a quiet world of contexts, with no descendant labels or work
   await page.screenshot({ path: testInfo.outputPath('quiet-world-990.png'), fullPage: true });
 });
 
-test('one click descends, paging reveals the complete context, and Find reaches an off-page subject', async ({ page }, testInfo) => {
+test('one click enters a context, named groups reveal every entry, and Find reaches another group', async ({ page }, testInfo) => {
   await loadLargeLibrary(page);
   await page.locator('#scene [data-subject-id="catalog"]').click();
   await expect(page.locator('#scene')).toHaveAttribute('data-depth', 'context');
   await expect(page.locator('#scene')).toHaveAttribute('data-scope', 'catalog');
+  await expect(page.locator('.study-scene')).toHaveAttribute('data-context-enclosure', 'none');
   await expect(page.locator('#inspector')).not.toBeVisible();
+  await expect(page.locator('#architecture-reading')).not.toBeVisible();
   await expect(page.locator('#keeper-action')).toHaveAttribute('data-keeper', 'Onyx');
   await expect(page.locator('#scene [data-subject-id="book-1"]')).toBeVisible();
   await expect(page.locator('.study-scene')).toHaveAttribute('data-camera-state', 'settled');
-  const contextDistance = Number(await page.locator('.study-scene').getAttribute('data-camera-distance'));
   const visible = new Set<string | null>();
-  for (let pageNumber = 0; pageNumber < 6; pageNumber++) {
+  const groupOptions = await page.locator('#view-group option').evaluateAll(options => options.map(option => ({ value: (option as HTMLOptionElement).value, label: option.textContent ?? '' })));
+  expect(groupOptions.length).toBeGreaterThan(1);
+  for (const group of groupOptions) {
+    expect(group.label).toMatch(/Book/);
+    expect(group.label).not.toMatch(/^\d+\s*(?:of|\/)\s*\d+$/);
+    await page.locator('#view-group').selectOption(group.value);
     await expectBoundedSubjects(page);
     (await subjects(page)).forEach(id => visible.add(id));
-    if (await page.locator('#view-next').isDisabled()) break;
-    const previous = await subjects(page);
-    await page.locator('#view-next').click();
-    await expect.poll(() => subjects(page)).not.toEqual(previous);
   }
   for (let index = 1; index <= 18; index++) expect(visible.has(`book-${index}`)).toBe(true);
   await expect(page.locator('.study-scene')).toHaveAttribute('data-camera-state', 'settled');
   await page.screenshot({ path: testInfo.outputPath('catalog-final-page.png'), fullPage: true });
-  await page.locator('#view-prev').click();
+  await page.locator('#view-group').selectOption('0');
   await openNavigator(page);
   await page.locator('#search').fill('Book 18');
   await page.getByTestId('model-tree').getByRole('button', { name: /^Book 18/ }).click();
   await expect(page.locator('#scene')).toHaveAttribute('data-depth', 'detail');
   await expect(page.locator('#scene')).toHaveAttribute('data-selected-id', 'book-18');
+  await expect(page.locator('.study-scene')).toHaveAttribute('data-context-enclosure', 'none');
   await expectBoundedSubjects(page);
   await expect(page.locator('#keeper-action')).toHaveAttribute('data-keeper', 'Onyx');
   await expect(page.locator('.study-scene')).toHaveAttribute('data-camera-state', 'settled');
-  expect(Number(await page.locator('.study-scene').getAttribute('data-camera-distance'))).toBeLessThan(contextDistance);
+  await expect(page.locator('#place-name')).toHaveText('Book 18');
+  await expect(page.locator('#scene [data-inspect-contract]')).toBeVisible();
   const selectedBounds = await page.locator('#scene [data-subject-id="book-18"]').boundingBox();
   const viewport = page.viewportSize()!;
   expect(selectedBounds!.x).toBeGreaterThanOrEqual(12);
@@ -98,6 +105,27 @@ test('one click descends, paging reveals the complete context, and Find reaches 
   await expect(page.locator('#scene')).toHaveAttribute('data-depth', 'context');
   await page.locator('#ascend').click();
   await expect(page.locator('#scene')).toHaveAttribute('data-depth', 'world');
+});
+
+test('Up restores the context group and camera that preceded a drill down', async ({ page }) => {
+  await loadLargeLibrary(page);
+  await page.locator('#scene [data-subject-id="catalog"]').click();
+  await page.locator('#view-group').selectOption('2');
+  const scene = page.locator('.study-scene');
+  await expect(scene).toHaveAttribute('data-camera-state', 'settled');
+  const initialDistance = Number(await scene.getAttribute('data-camera-distance'));
+  await page.getByRole('button', { name: 'Zoom out', exact: true }).click();
+  await expect.poll(async () => Number(await scene.getAttribute('data-camera-distance'))).toBeGreaterThan(initialDistance * 1.1);
+  await expect(scene).toHaveAttribute('data-camera-state', 'settled');
+  const before = await subjects(page);
+  const distance = Number(await scene.getAttribute('data-camera-distance'));
+  await page.locator('#scene [data-subject-id="book-17"]').click();
+  await expect(page.locator('#place-name')).toHaveText('Book 17');
+  await page.locator('#ascend').click();
+  await expect(page.locator('#view-group')).toHaveValue('2');
+  await expect(scene).toHaveAttribute('data-camera-state', 'settled');
+  expect(await subjects(page)).toEqual(before);
+  expect(Number(await scene.getAttribute('data-camera-distance'))).toBeCloseTo(distance, 0);
 });
 
 test('the same Onyx avatar opens contextual support, and explicit editing preserves the selected place', async ({ page }) => {
@@ -121,17 +149,18 @@ test('the same Onyx avatar opens contextual support, and explicit editing preser
   await expect(page.getByRole('textbox', { name: 'Definition', exact: true })).toHaveValue('A named title that readers can discover.');
 });
 
-test('related endpoints, lenses, and model snapshot ghosts share the eight-subject budget', async ({ page }) => {
+test('related endpoints, the Zone overlay, and model snapshot ghosts share the eight-subject budget', async ({ page }) => {
   await loadLargeLibrary(page);
   await selectPlace(page, /^Book 01/);
   await expectBoundedSubjects(page);
   const original = await savedProject(page);
-  for (const lens of ['#lens-governance', '#lens-meaning']) {
-    await page.locator(lens).click();
-    if (lens === '#lens-governance') {
-      await expect(page.locator('#evidence-card')).toBeVisible();
-      await page.locator('#close-evidence').click();
-    }
+  for (const shown of [true, false]) {
+    await page.locator('#zone-overlay').click();
+    await expect(page.locator('#zone-overlay')).toHaveAttribute('aria-pressed', String(shown));
+    await expect(page.locator('#evidence-card')).not.toBeVisible();
+    await expect(page.locator('#architecture-reading')).not.toBeVisible();
+    await expect(page.locator('#scene [data-inspect-contract]')).toBeVisible();
+    await expect(page.locator('#scene .study-label[data-subject-id="book-1"]')).toHaveAttribute('data-inspection-state', /.+/);
     await expectBoundedSubjects(page);
     expect(await savedProject(page)).toEqual(original);
   }
@@ -188,11 +217,11 @@ test('focused editing and evidence suppress background creation and undo shortcu
 test('following an external neighbor keeps Back in the originating context while Find changes home', async ({ page }) => {
   await loadLargeLibrary(page);
   await selectPlace(page, /^Book 01/);
-  for (let index = 0; index < 6 && !await page.locator('#scene [data-subject-id="loan"]').isVisible(); index++) {
-    if (await page.locator('#view-next').isDisabled()) break;
-    const previous = await subjects(page);
-    await page.locator('#view-next').click();
-    await expect.poll(() => subjects(page)).not.toEqual(previous);
+  const groups = await page.locator('#view-group option').evaluateAll(options => options.map(option => (option as HTMLOptionElement).value));
+  for (const group of groups) {
+    await page.locator('#view-group').selectOption(group);
+    await expectBoundedSubjects(page);
+    if (await page.locator('#scene [data-subject-id="loan"]').isVisible()) break;
   }
   await expect(page.locator('#scene [data-subject-id="loan"]')).toBeVisible();
   await expect(page.locator('.study-scene')).toHaveAttribute('data-camera-state', 'settled');

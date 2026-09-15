@@ -1,4 +1,4 @@
-import type { Concept, DomainContext, DomainProject, PatternSummary } from './contracts';
+import type { Concept, DomainContext, DomainProject, PatternSummary, SceneVisibility } from './contracts';
 import { assertProject, createEmptyProject, makeId } from './domain';
 import { sourceTerm } from './model-evidence';
 
@@ -22,7 +22,11 @@ export interface WorkspaceView {
   aggregateId: string | null;
   page: number;
   representation: Representation;
-  lens: 'meaning' | 'governance';
+  lens: 'meaning' | 'structure' | 'inspection' | 'governance';
+  visibility: SceneVisibility;
+  hiddenLayerZones: string[];
+  layerSpread: number;
+  selectedLayerRule: string | null;
 }
 /** Unassigned text is deliberately outside the canonical Domain Model. */
 export interface NotebookDraft { id: string; text: string; createdAt: string; updatedAt: string }
@@ -67,7 +71,7 @@ export interface Workspace {
 }
 
 const clone = <T>(value: T): T => structuredClone(value);
-const defaultView = (): WorkspaceView => ({ selectedId: null, scopeId: null, aggregateId: null, page: 0, representation: 'spatial', lens: 'meaning' });
+const defaultView = (): WorkspaceView => ({ selectedId: null, scopeId: null, aggregateId: null, page: 0, representation: 'spatial', lens: 'meaning', visibility: { layers: false, dependencies: true, description: true }, hiddenLayerZones: [], layerSpread: 0.65, selectedLayerRule: null });
 const same = (left: unknown, right: unknown): boolean => JSON.stringify(left) === JSON.stringify(right);
 const mapping = (value: unknown, label: string): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${label} must be an object.`);
@@ -126,13 +130,18 @@ function checkedView(value: unknown = {}, project: DomainProject): WorkspaceView
   const view = { ...defaultView(), ...raw };
   for (const key of ['selectedId', 'scopeId', 'aggregateId'] as const) if (view[key] !== null && typeof view[key] !== 'string') throw new Error(`${key} must be a subject ID or null.`);
   if (view.representation !== 'spatial' && view.representation !== 'table') throw new Error('Unknown workspace representation.');
-  if (view.lens !== 'meaning' && view.lens !== 'governance') throw new Error('Unknown workspace task.');
+  if (!['meaning', 'structure', 'inspection', 'governance'].includes(view.lens)) throw new Error('Unknown workspace task.');
   if (!Number.isSafeInteger(view.page) || view.page < 0) throw new Error('View page must be a nonnegative integer.');
+  const visibility = raw.visibility === undefined ? { ...defaultView().visibility, layers: view.lens === 'structure' || view.lens === 'governance' } : mapping(raw.visibility, 'Scene visibility');
+  for (const key of ['layers', 'dependencies', 'description'] as const) if (typeof visibility[key] !== 'boolean') throw new Error(`Scene ${key} visibility must be true or false.`);
+  if (!Array.isArray(view.hiddenLayerZones) || view.hiddenLayerZones.some(zone => typeof zone !== 'string')) throw new Error('Hidden layers must be Zone names.');
+  if (typeof view.layerSpread !== 'number' || !Number.isFinite(view.layerSpread) || view.layerSpread < 0 || view.layerSpread > 1) throw new Error('Layer spread must be between zero and one.');
+  if (view.selectedLayerRule !== null && typeof view.selectedLayerRule !== 'string') throw new Error('The selected Layer Rule must be an ID or null.');
   const nodes = [...project.contexts, ...project.concepts, ...project.relationships];
   if (view.selectedId && !nodes.some(item => item.id === view.selectedId)) view.selectedId = null;
   if (view.scopeId && !project.contexts.some(item => item.id === view.scopeId)) view.scopeId = null;
   if (view.aggregateId && !project.concepts.some(item => item.id === view.aggregateId && item.kind === 'aggregate')) view.aggregateId = null;
-  return { selectedId: view.selectedId, scopeId: view.scopeId, aggregateId: view.aggregateId, page: view.page, representation: view.representation, lens: view.lens };
+  return { selectedId: view.selectedId, scopeId: view.scopeId, aggregateId: view.aggregateId, page: view.page, representation: view.representation, lens: view.lens, visibility: { layers: visibility.layers as boolean, dependencies: visibility.dependencies as boolean, description: visibility.description as boolean }, hiddenLayerZones: [...new Set(view.hiddenLayerZones)], layerSpread: view.layerSpread, selectedLayerRule: view.selectedLayerRule };
 }
 function checkedNotebook(value: unknown = []): NotebookDraft[] {
   if (!Array.isArray(value)) throw new Error('Notebook drafts must be an array.');

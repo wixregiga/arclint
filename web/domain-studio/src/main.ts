@@ -2,7 +2,10 @@ import './style.css';
 import './platform.css';
 import { createWorkspace, type Representation, type WorkspaceApplyOptions } from './workspace';
 import { DOMAIN_KINDS, domainTable, onyxAvatar } from './presentation';
+import { domainGuide, type GuidedKind, type GuideStepId } from './domain-guide';
+import { createArchitectureLens, type ArchitectureLens } from './architecture-lens';
 import { loadRepository } from './repository';
+import { startLiveInspection } from './live-inspection';
 import { createIcons, ArrowUpLeft, Compass, BookOpen, Map, Menu, ArrowDown, ArrowDownToLine, ArrowUpDown, Box, Camera, Check, ChevronRight, CircleAlert, CircleCheck, CircleDashed, Copy, Download, File, FileCode, FolderOpen, HardDrive, Hexagon, History, Keyboard, Layers3, Minus, Network, Orbit, PanelLeftClose, Pencil, Plus, Redo2, Scan, Search, Sparkles, Undo2, Upload, View, Waypoints, X } from 'lucide';
 const icons = { ArrowUpLeft, Compass, BookOpen, Map, Menu, ArrowDown, ArrowDownToLine, ArrowUpDown, Box, Camera, Check, ChevronRight, CircleAlert, CircleCheck, CircleDashed, Copy, Download, File, FileCode, FolderOpen, HardDrive, Hexagon, History, Keyboard, Layers3, Minus, Network, Orbit, PanelLeftClose, Pencil, Plus, Redo2, Scan, Search, Sparkles, Undo2, Upload, View, Waypoints, X };
 import { createScene } from './scene';
@@ -11,7 +14,7 @@ import { relationshipDescription } from './model-evidence';
 import { projectView, keeperFor, type ViewLens } from './view-state';
 import { createEmptyProject, createExampleProject, validateProject, diffProjects, assertProject, cloneProject, makeId } from './domain';
 import { exportProject, importProject, exportDomainYaml, parsePattern } from './serialization';
-import type { DomainProject, Baseline, StudioMode, PatternSummary, ConceptKind, Concept, SceneController } from './contracts';
+import type { DomainProject, Baseline, StudioMode, PatternSummary, ConceptKind, Concept, SceneController, SceneVisibility } from './contracts';
 
 const STORAGE_KEY = 'arclint.domain-studio.v2';
 const LEGACY_STORAGE_KEY = 'arclint.domain-studio.v1';
@@ -28,7 +31,14 @@ let search = '';
 let scopeId: string | null = null;
 let aggregateId: string | null = null;
 let viewPage = 0;
+const placePages = new globalThis.Map<string, number>();
 let lens: ViewLens = 'meaning';
+let selectedLayerRule: string | null = null;
+let visibility: SceneVisibility = { layers: false, dependencies: true, description: true };
+let hiddenLayerZones: string[] = [];
+let layerSpread = 0.65;
+let checking = false, checkError = '';
+let watchingNote = '';
 let representation: Representation = 'spatial';
 let tablePage = 0;
 let tableQuery = '';
@@ -43,7 +53,7 @@ try {
   recoveryRaw = raw;
   if (raw) workspace = createWorkspace(JSON.parse(raw));
   project = workspace.project; baseline = workspace.modelSnapshot; patterns = workspace.patterns;
-  ({selectedId,scopeId,aggregateId,lens,representation} = workspace.view); viewPage = workspace.view.page;
+  ({selectedId,scopeId,aggregateId,lens,representation,visibility,hiddenLayerZones,layerSpread,selectedLayerRule} = workspace.view); viewPage = workspace.view.page;
 } catch { if (recoveryRaw) startupNotice = 'Your previous save could not be loaded. Download the saved data before replacing it.'; else saveError = 'Local storage unavailable'; }
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -54,12 +64,12 @@ app.innerHTML = `
     <section class="place-orientation" aria-label="Your place in the domain"><button id="ascend" aria-label="Ascend one level">${icon('arrow-up-left', 16)} Back</button><nav id="breadcrumbs" aria-label="Domain hierarchy"></nav><h2 id="place-name">The whole domain</h2><p id="place-summary">Choose a context to enter.</p></section>
     <nav class="governance-access" aria-label="Repository governance"><button id="governing-rules">${icon('layers-3')} Rules</button><button id="repository-findings">${icon('circle-alert')} Findings</button><button id="source-paths">${icon('file-code')} Paths</button><button id="check-code-now">${icon('check')} Check code</button></nav>
     <section id="meaning-table" aria-label="Domain table" hidden><div class="table-heading"><label>Find in this view<input id="table-query" placeholder="Filter names and meanings…" /></label><span id="table-count"></span></div><div id="domain-table-content"></div><nav class="table-pages" aria-label="Table pages"><button id="table-prev">← Previous</button><span id="table-page"></span><button id="table-next">Next →</button></nav></section>
-    <div class="focus-controls"><button id="exit-comparison" hidden>Model snapshot · return to present ×</button><div class="lens-switch" role="group" aria-label="Your goal"><button id="lens-meaning" aria-pressed="true">Meaning</button><button id="lens-governance" aria-pressed="false">Governance</button></div><button id="primary-action">Add context ${icon('plus', 15)}</button><button id="open-editor" hidden>Edit meaning ${icon('arrow-up-left', 15)}</button></div>
-    <nav class="view-pages" aria-label="Visible subjects"><button id="view-prev" aria-label="Previous subjects">←</button><span id="view-count"></span><button id="view-next" aria-label="Next subjects">→</button></nav>
+    <div class="focus-controls"><button id="exit-comparison" hidden>Model snapshot · return to present ×</button><button id="primary-action">Add context ${icon('plus', 15)}</button><button id="open-editor" hidden>Edit meaning ${icon('arrow-up-left', 15)}</button></div>
+    <nav class="view-pages" aria-label="Explore this place"><label for="view-group">Explore</label><select id="view-group" aria-label="Visible group"></select></nav>
     <form id="build-bar" aria-label="Start writing your domain"><label class="sr-only" for="build-input">Describe a meaning or a question</label><textarea id="build-input" rows="1" placeholder="Describe a meaning, a question, a promise…" spellcheck="true"></textarea><button type="submit" id="build-draft">Build ${icon('arrow-up-left')}</button><button type="button" id="open-notebook" aria-label="Open notebook">${icon('book-open')}</button></form>
     <div class="map-navigation" role="toolbar" aria-label="Spatial navigation"><button id="map-frame" aria-label="Frame this view">${icon('scan')}</button><button id="map-top" aria-label="Plan view">${icon('map')}</button><button id="map-minus" aria-label="Zoom out">${icon('minus')}</button><button id="map-plus" aria-label="Zoom in">${icon('plus')}</button></div>
     <button id="keeper-action" class="keeper-action" aria-label="Talk to Onyx" aria-expanded="false">${onyxAvatar()}<span id="keeper-name">Onyx</span><span id="keeper-prompt" class="sr-only">Your domain guide</span></button>
-    <section id="onyx-support" aria-label="Onyx support" hidden><header><div><b>Onyx</b><small>Local domain guide</small></div><button id="close-onyx" aria-label="Close Onyx">${icon('x')}</button></header><p id="onyx-place"></p><div id="onyx-conversation" role="log" aria-live="polite"></div><div class="onyx-actions"><button id="onyx-define">Work on this meaning</button><button id="onyx-rules">What governs this?</button><button id="onyx-paths">Find its source</button><button id="onyx-request">Prepare AI request ↗</button></div><form id="onyx-form"><label class="sr-only" for="onyx-input">Ask Onyx</label><input id="onyx-input" placeholder="Ask about this domain…" required /><button type="submit" aria-label="Send to Onyx">↑</button></form></section>
+    <section id="onyx-support" aria-label="Onyx support" hidden><header><div><b>Onyx</b><small>Local domain guide</small></div><button id="close-onyx" aria-label="Close Onyx">${icon('x')}</button></header><p id="onyx-place"></p><div id="onyx-conversation" role="log" aria-live="polite"></div><div class="onyx-actions"><button id="onyx-scene">Read this scene</button><button id="onyx-define">Work on this meaning</button><button id="onyx-rules">What governs this?</button><button id="onyx-paths">Find its source</button><button id="onyx-request">Prepare AI request ↗</button></div><form id="onyx-form"><label class="sr-only" for="onyx-input">Ask Onyx</label><input id="onyx-input" placeholder="Ask about this domain…" required /><button type="submit" aria-label="Send to Onyx">↑</button></form></section>
     <section id="inspector" class="field-manuscript" aria-label="Selection details" hidden></section>
     <div id="notice" class="notice" role="status" aria-live="polite"></div>
     <span id="project-description" class="sr-only"></span><span id="model-stats" class="sr-only"></span><span id="issues-status" class="sr-only"></span><span id="save-status" class="save-status"></span><span id="level-hint" hidden></span>
@@ -76,10 +86,17 @@ app.innerHTML = `
   <dialog id="modal" class="studio-dialog"></dialog>
 `;
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
+$('.focus-controls').prepend($('.view-pages'));
 let scene: SceneController;
 let workbench: Workbench;
+let architecture: ArchitectureLens;
+let liveInspection: ReturnType<typeof startLiveInspection> | undefined;
 const currentView = () => projectView(project, { scopeId, selectedId, page: viewPage });
-const sceneState = () => ({ project, selectedId, mode, baseline, findings: validateProject(project), search, scopeId, aggregateId, view: currentView(), lens });
+const placeKey = () => { const view = currentView(); return `${view.level}:${view.contextId ?? ''}:${view.selectedId ?? ''}`; };
+function rememberPlacePage() { placePages.set(placeKey(), currentView().page); }
+function restorePlacePage() { viewPage = placePages.get(placeKey()) ?? 0; }
+const sceneState = () => ({ project, selectedId, mode, baseline, findings: validateProject(project), search, scopeId, aggregateId, view: currentView(), lens, visibility, hiddenLayerZones, layerSpread, architecture: architecture?.evidence, selectedLayerRule, checking, checkError });
+function updateArchitecture() { architecture?.update({project, selectedId, contextId:scopeId, lens, visibility, hiddenLayerZones, layerSpread, editorOpen, selectedLayerRule, checking, checkError, watchingNote}); }
 function closeTools() { ($('#tools-drawer') as HTMLDialogElement).close(); }
 function openTools() { const tools = $('#tools-drawer') as HTMLDialogElement; if (!tools.open) tools.showModal(); }
 function openEditor() { closeTools(); editorOpen = true; mode = 'domain'; render(); }
@@ -94,7 +111,7 @@ let noticeTimer = 0;
 function persist() {
   if (startupNotice) return;
   try {
-    workspace.updateView({selectedId,scopeId,aggregateId,page:viewPage,representation,lens});
+    workspace.updateView({selectedId,scopeId,aggregateId,page:viewPage,representation,lens,visibility,hiddenLayerZones,layerSpread,selectedLayerRule});
     if (JSON.stringify(workspace.modelSnapshot) !== JSON.stringify(baseline)) workspace.setModelSnapshot(baseline);
     if (JSON.stringify(workspace.patterns) !== JSON.stringify(patterns)) workspace.setPatterns(patterns);
     localStorage.setItem(STORAGE_KEY, workspace.serialize()); saveError = '';
@@ -122,7 +139,7 @@ function restoreEditorDraft() {
 }
 function syncWorkspace() {
   project = workspace.project; baseline = workspace.modelSnapshot; patterns = workspace.patterns;
-  ({selectedId,scopeId,aggregateId,lens,representation} = workspace.view); viewPage = workspace.view.page;
+  ({selectedId,scopeId,aggregateId,lens,representation,visibility,hiddenLayerZones,layerSpread,selectedLayerRule} = workspace.view); viewPage = workspace.view.page;
   activeNotebookDraftId = undefined;
   const composer = $('#build-input') as HTMLTextAreaElement;
   composer.value = workspace.getEditorDraft('composer')?.fields.text ?? '';
@@ -141,7 +158,7 @@ function commit(next: DomainProject, message?: string, replaceWorkspace = false,
   next = assertProject(next);
   if (replaceWorkspace) workspace.replace(next,message); else workspace.apply(message ?? 'Edit domain or layout', () => next, options);
   project = workspace.project;
-  if (replaceWorkspace) { baseline = null; patterns = []; scopeId = null; aggregateId = null; viewPage = 0; editorOpen = false; }
+  if (replaceWorkspace) { placePages.clear(); baseline = null; patterns = []; scopeId = null; aggregateId = null; viewPage = 0; editorOpen = false; }
   if (scopeId && !project.contexts.some(c => c.id === scopeId)) { scopeId = null; aggregateId = null; }
   if (aggregateId && !project.concepts.some(c => c.id === aggregateId && c.kind === 'aggregate')) aggregateId = null;
   if (selectedId && ![...project.concepts, ...project.contexts, ...project.relationships].some(x => x.id === selectedId)) selectedId = null;
@@ -152,30 +169,34 @@ function undo() { captureEditorDraft(); if (!workspace.undo()) return; syncWorks
 function redo() { if (!workspace.redo()) return; syncWorkspace(); editorOpen = false; persist(); render(); scene.overview(); notify('Change restored'); }
 
 function select(id: string | null, focus = false, preserveScope = false) {
-  captureEditorDraft();
+  captureEditorDraft(); rememberPlacePage();
   ($('#navigator') as HTMLDialogElement).close(); closeTools();
   if (id && project.contexts.some(c => c.id === id)) { enter(id); return; }
   selectedId = id; viewPage = 0; editorOpen = false;
   const concept = project.concepts.find(c => c.id === id);
   if (concept && (!preserveScope || !project.contexts.some(context => context.id === scopeId))) scopeId = concept.contextId;
-  render();
+  restorePlacePage(); render();
   if (id && focus) scene.focus(id);
 }
 function enter(id: string) {
-  captureEditorDraft();
+  captureEditorDraft(); rememberPlacePage();
   const context = project.contexts.find(c => c.id === id);
   const concept = project.concepts.find(c => c.id === id);
   if (context) { scopeId = context.id; aggregateId = null; selectedId = null; }
   else if (concept?.kind === 'aggregate') { scopeId = concept.contextId; aggregateId = concept.id; selectedId = concept.id; }
   else { select(id, true); return; }
-  editorOpen = false; viewPage = 0; if (mode !== 'baseline') mode = 'domain'; closeTools(); render();
+  editorOpen = false; restorePlacePage(); if (mode !== 'baseline') mode = 'domain'; closeTools(); render();
 }
 function ascend() {
   captureEditorDraft();
   if (editorOpen) { editorOpen = false; if (mode !== 'baseline') mode = 'domain'; render(); return; }
-  if (selectedId) { selectedId = null; aggregateId = null; }
+  rememberPlacePage();
+  const subject = project.concepts.find(item => item.id === selectedId);
+  const owner = subject?.contextId === scopeId ? project.concepts.find(item => item.id === subject.ownerId && item.kind === 'aggregate') : undefined;
+  if (owner) { selectedId = owner.id; aggregateId = owner.id; }
+  else if (selectedId) { selectedId = null; aggregateId = null; }
   else { scopeId = null; aggregateId = null; }
-  viewPage = 0; if (mode !== 'baseline') mode = 'domain'; render();
+  restorePlacePage(); if (mode !== 'baseline') mode = 'domain'; render();
 }
 function openIndex() {
   closeTools();
@@ -194,12 +215,15 @@ function renderLocation() {
   const context = project.contexts.find(c => c.id === view.contextId);
   const concept = project.concepts.find(c => c.id === selectedId);
   const relation = project.relationships.find(c => c.id === selectedId);
+  const owner = concept?.contextId === scopeId ? project.concepts.find(item => item.id === concept.ownerId && item.kind === 'aggregate') : undefined;
   const place = concept?.name ?? (relation ? relationshipDescription(project,relation).label : context?.name ?? project.name);
   $('#place-name').textContent = place;
-  $('#place-summary').textContent = concept ? concept.definition.slice(0,180) : relation ? relationshipDescription(project,relation).meaning : context ? context.description.slice(0,120) : `${project.contexts.length} bounded contexts · ${project.concepts.length} domain entries`;
-  $('#breadcrumbs').innerHTML = `<button id="realm-location">${escape(project.name)}</button>${context ? `<span>/</span><button id="context-location">${escape(context.name)}</button>` : ''}${view.level === 'detail' ? `<span>/</span><span>${escape(concept ? KINDS[concept.kind] : 'Relationship')}</span>` : ''}`;
-  $('#realm-location').onclick = () => { captureEditorDraft(); scopeId = null; aggregateId = null; selectedId = null; viewPage = 0; editorOpen = false; if (mode !== 'baseline') mode = 'domain'; render(); };
-  $('#context-location')?.addEventListener('click', () => { captureEditorDraft(); selectedId = null; aggregateId = null; editorOpen = false; viewPage = 0; if (mode !== 'baseline') mode = 'domain'; render(); });
+  $('#place-summary').textContent = concept ? concept.definition : relation ? relationshipDescription(project,relation).meaning : context ? context.description : `${project.contexts.length} bounded contexts · ${project.concepts.length} domain entries`;
+  $('#breadcrumbs').innerHTML = `<button id="realm-location">${escape(project.name)}</button>${context ? `<span>/</span><button id="context-location">${escape(context.name)}</button>` : ''}${owner ? `<span>/</span><button id="owner-location">${escape(owner.name)}</button>` : ''}${view.level === 'detail' ? `<span>/</span><span>${escape(concept ? KINDS[concept.kind] : 'Relationship')}</span>` : ''}`;
+  $('#realm-location').onclick = () => { captureEditorDraft(); rememberPlacePage(); scopeId = null; aggregateId = null; selectedId = null; restorePlacePage(); editorOpen = false; if (mode !== 'baseline') mode = 'domain'; render(); };
+  $('#context-location')?.addEventListener('click', () => { captureEditorDraft(); rememberPlacePage(); selectedId = null; aggregateId = null; editorOpen = false; restorePlacePage(); if (mode !== 'baseline') mode = 'domain'; render(); });
+  $('#owner-location')?.addEventListener('click', () => enter(owner!.id));
+  $('#ascend').textContent = `↑ Up to ${owner?.name ?? (view.level === 'detail' ? context?.name ?? project.name : project.name)}`;
   $('#ascend').toggleAttribute('disabled', view.level === 'world');
   $('#scene').dataset.scope = scopeId ?? 'realm';
   $('#scene').dataset.depth = view.level;
@@ -208,6 +232,8 @@ function renderLocation() {
   $('#scene').dataset.selectedId = selectedId ?? '';
   $('.atlas-world').dataset.depth = view.level;
   $('.atlas-world').dataset.lens = lens;
+  $('.atlas-world').dataset.description = String(visibility.description);
+  $('#place-summary').hidden = !visibility.description;
   const keeper = keeperFor(view,lens);
   $('#keeper-name').textContent = 'Onyx';
   $('#keeper-prompt').textContent = keeper.action;
@@ -217,13 +243,16 @@ function renderLocation() {
   $('#open-editor').hidden = view.level === 'world';
   $('#open-editor').textContent = concept ? `Edit ${KINDS[concept.kind].toLowerCase()} ↗` : 'Edit context ↗';
   $('#primary-action').hidden = false;
-  $('#primary-action').textContent = lens === 'governance' ? 'Inspect governing Rules ↗' : context ? 'Add to this context +' : 'Add a context +';
-  $('#view-count').textContent = `${view.ids.length} of ${view.total}`;
+  $('#primary-action').textContent = context ? 'Add to this context +' : 'Add a context +';
   $('.view-pages').hidden = view.pages <= 1;
-  $('#view-prev').toggleAttribute('disabled', view.page === 0);
-  $('#view-next').toggleAttribute('disabled', view.page + 1 >= view.pages);
-  $('#lens-meaning').setAttribute('aria-pressed', String(lens === 'meaning'));
-  $('#lens-governance').setAttribute('aria-pressed', String(lens === 'governance'));
+  const group = $('#view-group') as HTMLSelectElement;
+  group.innerHTML = Array.from({length:view.pages}, (_,page) => {
+    const groupView = projectView(project,{scopeId,selectedId,page});
+    const members = groupView.ids.filter(id => id !== groupView.anchorId).map(entityName);
+    const label = members.length > 3 ? `${members.slice(0,2).join(', ')} … ${members.at(-1)}` : members.join(', ');
+    return `<option value="${page}" title="${escape(members.join(', '))}">${escape(label)}</option>`;
+  }).join('');
+  group.value = String(view.page);
 }
 function entityName(id: string) { return [...project.concepts, ...project.contexts].find(c => c.id === id)?.name ?? 'Removed domain entry'; }
 function contextOptions(selected?: string) { return project.contexts.map(c => `<option value="${escape(c.id)}" ${c.id === selected ? 'selected' : ''}>${escape(c.name)}</option>`).join(''); }
@@ -309,7 +338,9 @@ function renderInspector() {
 }
 function findingRows(findings: ReturnType<typeof validateProject>) { return findings.map(f => `<button class="finding-row ${f.severity}" data-finding="${escape(f.subjectId)}">${icon('circle-alert', 15)}<span><b>${escape(f.title)}</b><small>${escape(f.message)}</small></span></button>`).join('') || '<div class="check-clear">No model completeness issues found.</div>'; }
 function render() {
+  lens = visibility.layers ? 'structure' : 'meaning';
   workbench?.update(project, selectedId, scopeId, mode, baseline, currentView());
+  updateArchitecture();
   $('#project-name').textContent = project.name;
   $('#project-description').textContent = project.description;
   $('#model-stats').textContent = `${project.contexts.length} CONTEXTS   /   ${project.concepts.length} DOMAIN ENTRIES   /   ${project.relationships.length} RELATIONSHIPS`;
@@ -362,6 +393,7 @@ function bindInspector() {
 function showDialog(title: string, contents: string, submitLabel: string, onSubmit: (data: FormData) => void) {
   closeTools(); closeWorkspaceMenu(); closeCreationFan();
   const modal = $('#modal') as HTMLDialogElement;
+  modal.classList.remove('has-domain-guide');
   modal.innerHTML = `<form id="dialog-form"><div class="dialog-heading"><div><div class="eyebrow">ARCLINT STUDIO</div><h2>${escape(title)}</h2></div><button type="button" class="icon-button" id="close-dialog" aria-label="Close dialog">${icon('x', 20)}</button></div><div class="dialog-content">${contents}<p class="form-error" role="alert"></p></div><div class="dialog-actions"><button class="quiet-button" type="button" id="cancel-dialog">Cancel</button><button class="primary" type="submit">${escape(submitLabel)}</button></div></form>`;
   const cancel = () => { activeNotebookDraftId = undefined; modal.close(); };
   $('#close-dialog').onclick = cancel; $('#cancel-dialog').onclick = cancel; modal.oncancel = () => { activeNotebookDraftId = undefined; };
@@ -486,14 +518,56 @@ function commitAssignment(next: DomainProject, message: string) {
 }
 function domainPicker(contextId?: string) {
   const choices = [['bounded_context','Bounded context','A boundary for a local language'], ...Object.entries(KINDS).map(([key,label]) => [key,label,key === 'unclassified' ? 'Keep an unresolved question' : key === 'aggregate' ? 'A root and its consistency boundary' : key === 'entity' ? 'An identity-bearing member' : key === 'value_object' ? 'A value and its invariants' : `Record a ${label.toLowerCase()}`]), ['invariant','Invariant','A promise an owner must always uphold'],['assertion','Assertion','What holds after an aggregate operation']];
-  showDialog('Build the domain', `${activeNotebookDraftId ? `<p class="draft-excerpt">${escape(draftText())}</p><p class="muted small">Your text is saved in the notebook until you assign it.</p>` : '<p class="muted">Choose what you want to record. Keep uncertain meanings as open questions.</p>'}<div class="domain-kind-picker">${choices.map(([key,label,description]) => `<button type="button" data-create-kind="${key}"><b>${label}</b><span>${description}</span><em>↗</em></button>`).join('')}</div>`, 'Close', () => { activeNotebookDraftId = undefined; });
+  showDialog('Build the domain', `${activeNotebookDraftId ? `<p class="draft-excerpt">${escape(draftText())}</p><p class="muted small">Your text is saved in the notebook until you assign it.</p>` : ''}<button type="button" id="start-domain-guide" class="domain-guide-entry"><span class="guide-entry-mark">${icon('compass',24)}</span><span><b>Help me choose</b><small>A guided start, one question at a time. No domain terminology needed.</small></span><span aria-hidden="true">→</span></button><div class="domain-direct-heading">Already know what you need? Choose a type.</div><div class="domain-kind-picker">${choices.map(([key,label,description]) => `<button type="button" data-create-kind="${key}"><b>${label}</b><span>${description}</span><em>↗</em></button>`).join('')}</div>`, 'Close', () => { activeNotebookDraftId = undefined; });
+  $('#start-domain-guide').onclick = () => domainWizard(contextId);
   document.querySelectorAll<HTMLElement>('[data-create-kind]').forEach(button => button.onclick = () => {
-    ($('#modal') as HTMLDialogElement).close();
-    const kind = button.dataset.createKind!;
-    if (kind === 'bounded_context') contextDialog();
-    else if (kind === 'invariant' || kind === 'assertion') contractDialog(kind);
-    else conceptDialog(contextId,kind as ConceptKind);
+    openDomainKind(button.dataset.createKind as GuidedKind, contextId);
   });
+}
+function openDomainKind(kind: GuidedKind, contextId?: string) {
+  ($('#modal') as HTMLDialogElement).close();
+  if (kind === 'bounded_context') contextDialog();
+  else if (kind === 'invariant' || kind === 'assertion') contractDialog(kind);
+  else conceptDialog(contextId, kind);
+}
+function domainWizard(contextId?: string, trail: GuideStepId[] = ['start']) {
+  const step = domainGuide[trail.at(-1)!];
+  const suggestion = 'kind' in step ? step : null;
+  const label = suggestion ? (suggestion.kind === 'bounded_context' ? 'Bounded context' : suggestion.kind === 'invariant' ? 'Invariant' : suggestion.kind === 'assertion' ? 'Assertion' : KINDS[suggestion.kind]) : '';
+  let prerequisite: { explanation: string; label: string; kind: GuidedKind } | undefined;
+  if (suggestion && suggestion.kind !== 'bounded_context') {
+    if (!project.contexts.length) prerequisite = { explanation: 'This needs a bounded context first. Your text stays in the notebook while you define that boundary.', label: 'Define a context first', kind: 'bounded_context' };
+    else if (suggestion.kind === 'invariant' || suggestion.kind === 'assertion') {
+      const owners = project.concepts.filter(c => (suggestion.kind === 'assertion' ? c.kind === 'aggregate' : ['aggregate','value_object'].includes(c.kind)) && (!scopeId || c.contextId === scopeId));
+      if (!owners.length) prerequisite = { explanation: `${suggestion.kind === 'assertion' ? 'An assertion needs an aggregate owner.' : 'An invariant needs an aggregate or value object owner.'} Your text stays in the notebook while you define its owner.`, label: 'Define an aggregate first', kind: 'aggregate' };
+    }
+  }
+  const excerpt = activeNotebookDraftId ? `<details class="guide-draft"><summary>Your original text</summary><p class="draft-excerpt">${escape(draftText())}</p></details>` : '';
+  const content = 'question' in step ? `<p class="guide-progress">QUESTION ${trail.length}</p><h3 id="guide-question" tabindex="-1">${escape(step.question)}</h3><p class="muted guide-hint">${escape(step.hint)}</p><div class="guide-choices">${step.choices.map(choice => `<button type="button" data-guide-next="${choice.next}"><span><b>${escape(choice.label)}</b><small>${escape(choice.detail)}</small></span><span aria-hidden="true">→</span></button>`).join('')}</div><button type="button" id="guide-uncertain" class="guide-uncertain">I’m not sure yet</button>` : `<p class="guide-progress">SUGGESTED STARTING POINT</p><h3 id="guide-question" tabindex="-1">${escape(label)}</h3><p class="guide-reason">${escape(step.reason)}</p><p class="muted guide-hint">${prerequisite ? escape(prerequisite.explanation) : 'Review the fields next. Nothing is added to the domain until you save.'}</p>`;
+  showDialog('Help me choose', `<section class="domain-guide">${content}${excerpt}<button type="button" id="guide-direct">Choose a type directly ↗</button></section>`, prerequisite?.label ?? 'Review fields', () => {});
+  const modal = $('#modal') as HTMLDialogElement;
+  modal.classList.add('has-domain-guide');
+  const form = $('#dialog-form') as HTMLFormElement;
+  form.querySelector<HTMLButtonElement>('[type="submit"]')!.hidden = !suggestion;
+  form.onsubmit = event => {
+    event.preventDefault();
+    if (!suggestion) return;
+    if (prerequisite) {
+      // The idea is not the missing boundary or owner; never consume it as one.
+      activeNotebookDraftId = undefined;
+      openDomainKind(prerequisite.kind, contextId);
+    } else openDomainKind(suggestion.kind, contextId);
+  };
+  $('#cancel-dialog').textContent = activeNotebookDraftId ? 'Keep in notebook' : 'Close';
+  const back = document.createElement('button');
+  back.type = 'button'; back.id = 'guide-back'; back.textContent = '← Back';
+  back.onclick = () => trail.length > 1 ? domainWizard(contextId, trail.slice(0,-1)) : domainPicker(contextId);
+  form.querySelector('.dialog-actions')!.prepend(back);
+  form.querySelectorAll<HTMLElement>('[data-guide-next]').forEach(button => button.onclick = () => domainWizard(contextId, [...trail,button.dataset.guideNext as GuideStepId]));
+  form.querySelector<HTMLElement>('#guide-uncertain')?.addEventListener('click', () => domainWizard(contextId,[...trail,'unclassified']));
+  $('#guide-direct').onclick = () => domainPicker(contextId);
+  modal.scrollTop = 0;
+  $('#guide-question').focus();
 }
 function contractDialog(kind: 'invariant' | 'assertion', existingKey?: string) {
   const owners = project.concepts.filter(c => (kind === 'assertion' ? c.kind === 'aggregate' : ['aggregate','value_object'].includes(c.kind)) && (!scopeId || c.contextId === scopeId));
@@ -536,7 +610,12 @@ function onyxMessage(speaker: string, text: string) {
 function askOnyx(text: string) {
   onyxMessage('You',text);
   const subject = project.concepts.find(c => c.id === selectedId), context = project.contexts.find(c => c.id === (subject?.contextId ?? scopeId));
-  if (/\b(rule|govern|policy|constraint)\b/i.test(text)) {
+  if (/\b(scene|symbol|represent|guard|badge|display)\b/i.test(text)) {
+    const display: Partial<Record<ConceptKind,string>> = {aggregate:'The workshop stands for a consistency boundary and the root responsible for it.',entity:'The named participant keeps its identity as its state changes.',value_object:'The sealed artifact is defined by its contents. An equivalent value can replace it.'};
+    const place = subject ? display[subject.kind] ?? 'The named object stands for this recorded domain entry.' : context ? 'You are inside a bounded context: a place with its own language. Its inhabitants are the recorded domain entries.' : 'The map marks the project’s bounded contexts. Entering one opens a different working view of that place.';
+    const overlay = `Guards stand for recorded invariants; checkpoints belong to named operations. The inspection notice records evidence from code: a pencil means work is in progress, a warning marks a returned finding, and a diagonal tag marks acknowledged debt. Inspection updates automatically after repository changes.${lens === 'structure' ? ' Layers separate the located code by the selected Rule’s declared Zone order. Dependencies show observed imports. Details contains the exact paths and governing Rules.' : ' Layers, Dependencies and Description can be shown independently in this same place.'}`;
+    onyxMessage('Onyx',`${place} ${overlay}`);
+  } else if (/\b(rule|govern|policy|constraint)\b/i.test(text)) {
     onyxMessage('Onyx','The Rules workspace shows the actual propositions and their scopes. Select a path or Zone there to narrow what governs the code.');
     workbench.showGovernance('rules');
   } else if (/\b(fail|finding|check|violation|baseline)\b/i.test(text)) {
@@ -566,6 +645,7 @@ $('#build-input').oninput = () => { sizeComposer(); workspace.saveEditorDraft('c
 $('#build-bar').onsubmit = event => { event.preventDefault(); const text = ($('#build-input') as HTMLInputElement).value; if (text.trim()) { activeNotebookDraftId = workspace.saveDraft(text,activeNotebookDraftId).id; persist(); } domainPicker(scopeId ?? undefined); };
 $('#open-notebook').onclick = openNotebook;
 $('#close-onyx').onclick = () => toggleOnyx();
+$('#onyx-scene').onclick = () => askOnyx('Read this scene');
 $('#onyx-form').onsubmit = event => { event.preventDefault(); const input = $('#onyx-input') as HTMLInputElement; const text = input.value; input.value = ''; askOnyx(text); };
 $('#onyx-define').onclick = () => { if (selectedId || scopeId) openEditor(); else domainPicker(); };
 $('#onyx-rules').onclick = () => workbench.inspectSelection(selectedId ?? scopeId);
@@ -599,19 +679,29 @@ document.querySelectorAll<HTMLElement>('[data-mode]').forEach(b => b.onclick = (
 $('#import-file').onchange = async event => { const input = event.target as HTMLInputElement; const file = input.files?.[0]; if (!file) return; try { if (file.size > 5_000_000) throw new Error('Choose a domain file smaller than 5 MB.'); const contents = await file.text(); let saved: unknown; try { saved = JSON.parse(contents); } catch { /* Canonical YAML uses the domain importer. */ } if (saved && typeof saved === 'object' && (saved as {version?:number}).version === 2) { captureEditorDraft(); workspace.restore(saved,'Import complete workspace'); syncWorkspace(); editorOpen = false; persist(); render(); scene.overview(); notify(`Restored ${file.name}`); return; } const imported = importProject(contents); selectedId = null; mode = 'domain'; search = ''; ($('#search') as HTMLInputElement).value = ''; commit(imported, `Imported ${file.name}`, true); scene.overview(); } catch (error) { notify(`Import failed: ${error instanceof Error ? error.message : String(error)}`, true); } finally { input.value = ''; } };
 $('#pattern-file').onchange = async event => { const input = event.target as HTMLInputElement; const file = input.files?.[0]; if (!file) return; try { if (file.size > 2_000_000) throw new Error('Choose a Pattern smaller than 2 MB.'); const pattern = parsePattern(await file.text()); patterns.push(pattern); persist(); render(); notify(`Pattern reference imported: ${pattern.name}`); } catch (error) { notify(`Pattern import failed: ${error instanceof Error ? error.message : String(error)}`, true); } finally { input.value = ''; } };
 document.addEventListener('keydown', event => { if ($('#inspector').contains(event.target as Node)) { if (event.key === 'Escape') { event.preventDefault(); ascend(); } return; } if (document.querySelector('dialog[open]') || workSurface() || (event.target as HTMLElement).closest('input,textarea,select,[contenteditable]')) return; if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); event.shiftKey ? redo() : undo(); } else if (event.key === '/') { event.preventDefault(); openIndex(); } else if (event.key.toLowerCase() === 'c') conceptDialog(); else if (event.key.toLowerCase() === 'f') scene.overview(); else if (event.key === 'Escape') { closeWorkspaceMenu(); closeCreationFan(); ascend(); } });
-workbench = createWorkbench($('.atlas-world'), { select: id => { if (mode !== 'baseline') mode = 'domain'; select(id, true); }, replace: next => { selectedId = null; mode = 'domain'; search = ''; ($('#search') as HTMLInputElement).value = ''; commit(next, undefined, true); scene.overview(); }, create: () => conceptDialog(), notify });
-scene = createScene($('#scene'), { keeper: () => $('#keeper-action').click(), select: id => { if (id && mode !== 'baseline') mode = 'domain'; select(id, false, true); }, enter, move: (id, position) => { const next = cloneProject(project); const c = next.concepts.find(c => c.id === id); if (c) { c.position = position; commit(next); } } });
+workbench = createWorkbench($('.atlas-world'), { inspectionInvalidated: () => liveInspection?.invalidate(), select: id => { if (mode !== 'baseline') mode = 'domain'; select(id, true); }, replace: next => { selectedId = null; mode = 'domain'; search = ''; ($('#search') as HTMLInputElement).value = ''; commit(next, undefined, true); scene.overview(); }, create: () => conceptDialog(), notify, evidenceChanged: (repository,report) => architecture?.receive(repository,report), checkingChanged: (active,error) => { checking = active; checkError = error ?? ''; updateArchitecture(); scene?.update(sceneState()); const button = $('#check-code-now'); button.textContent = active ? 'Inspecting…' : 'Check code'; button.toggleAttribute('disabled',active); button.title = error ?? 'Inspection runs automatically when repository files change'; } });
+architecture = createArchitectureLens($('.atlas-world'), {
+  visibility: (key,enabled) => {
+    visibility = { ...visibility, [key]:enabled }; lens = visibility.layers ? 'structure' : 'meaning';
+    $('.atlas-world').dataset.description = String(visibility.description); $('#place-summary').hidden = !visibility.description;
+    updateArchitecture(); scene?.update(sceneState()); persist();
+  },
+  layerZone: (zone,visible) => { hiddenLayerZones = visible ? hiddenLayerZones.filter(item => item !== zone) : [...new Set([...hiddenLayerZones,zone])]; updateArchitecture(); scene?.update(sceneState()); persist(); },
+  spread: value => { layerSpread = value; updateArchitecture(); scene?.update(sceneState()); persist(); },
+  changed: () => scene?.update(sceneState()), loaded: (repository,report) => workbench.receiveEvidence(repository,report),
+  layer: id => { selectedLayerRule = id; hiddenLayerZones = []; updateArchitecture(); scene?.update(sceneState()); persist(); },
+  inspectPath: path => workbench.inspectPath(path), inspectZone: zone => workbench.inspectZone(zone), inspectRule: id => workbench.showRule(id),
+  report: () => workbench.showGovernance('findings'), check: () => workbench.checkCode(), locate: () => workbench.inspectSelection(selectedId ?? scopeId),
+});
+scene = createScene($('#scene'), { checkCode: () => workbench.checkCode(), inspectReport: () => workbench.showGovernance('findings'), keeper: () => $('#keeper-action').click(), select: id => { if (id && mode !== 'baseline') mode = 'domain'; select(id, false, true); }, enter, move: (id, position) => { const next = cloneProject(project); const c = next.concepts.find(c => c.id === id); if (c) { c.position = position; commit(next); } }, inspectPath: path => workbench.inspectPath(path), inspectZone: zone => workbench.inspectZone(zone), inspectRule: id => workbench.showRule(id), inspectContract: (id,key,kind) => { captureEditorDraft(); editorOpen = false; if (selectedId !== id) select(id,false,true); architecture.openContract(id,key,kind); render(); } });
 $('#exit-comparison').onclick = () => { mode = 'domain'; editorOpen = false; render(); };
 $('#tools-toggle').onclick = openTools;
 $('#close-tools').onclick = closeTools;
 $('#home-world').onclick = () => $('#realm-location').click();
 $('#open-editor').onclick = openEditor;
-$('#primary-action').onclick = () => { if (lens === 'meaning') scopeId ? domainPicker(scopeId) : contextDialog(); else workbench.inspectSelection(selectedId ?? scopeId); };
+$('#primary-action').onclick = () => { scopeId ? domainPicker(scopeId) : contextDialog(); };
 $('#keeper-action').onclick = toggleOnyx;
-$('#lens-meaning').onclick = () => { lens = 'meaning'; render(); };
-$('#lens-governance').onclick = () => { captureEditorDraft(); lens = 'governance'; render(); workbench.showGovernance('zones'); };
-$('#view-prev').onclick = () => { viewPage--; render(); scene.overview(); };
-$('#view-next').onclick = () => { viewPage++; render(); scene.overview(); };
+$('#view-group').onchange = event => { viewPage = Number((event.target as HTMLSelectElement).value); render(); scene.overview(); };
 // The focused work surface owns keyboard interaction until it is closed.
 const worldElement = $('.atlas-world');
 let activeSurface: HTMLElement | null = null;
@@ -652,12 +742,24 @@ if (startupNotice) {
 }
 // First use opens the bound project's actual language. A late response may never
 // overwrite a draft, import, or interaction that the user has already started.
-if (!recoveryRaw && !startupNotice) {
+let repositoryReady: Promise<unknown> = Promise.resolve();
+if (!startupNotice) {
   const untouched = workspace.serialize();
-  void loadRepository().then(repository => {
-    if (workspace.serialize() !== untouched || document.querySelector('dialog[open]')) return;
-    const next = repository.domainYaml ? importProject(repository.domainYaml) : {...createEmptyProject(),name:repository.repository.name};
-    commit(next, `Opened ${repository.repository.name}`, true); scene.overview();
+  repositoryReady = loadRepository().then(repository => {
+    try {
+      if (!workbench.initializeRepository(repository)) return;
+      architecture.receive(repository,null);
+      if (recoveryRaw) return;
+      if (workspace.serialize() !== untouched || document.querySelector('dialog[open]')) return;
+      const next = repository.domainYaml ? importProject(repository.domainYaml) : {...createEmptyProject(),name:repository.repository.name};
+      commit(next, `Opened ${repository.repository.name}`, true); scene.overview();
+    } catch (error) {
+      notify(`Repository loaded, but its model could not open: ${error instanceof Error ? error.message : String(error)}`, true);
+    }
   }).catch(() => { /* Local modeling remains available without the repository bridge. */ });
 }
-window.addEventListener('beforeunload', () => scene.dispose());
+liveInspection = startLiveInspection({
+  ready: repositoryReady, check: isCurrent => workbench.checkQuietly(isCurrent),
+  watchState: note => { watchingNote = note; updateArchitecture(); },
+});
+window.addEventListener('beforeunload', () => { liveInspection?.dispose(); scene.dispose(); });

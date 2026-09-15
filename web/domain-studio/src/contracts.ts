@@ -1,4 +1,5 @@
 import type { FocusView } from './view-state';
+import type { ArchitectureEvidence } from './architecture-evidence';
 
 export type ConceptKind = 'unclassified' | 'aggregate' | 'entity' | 'value_object' | 'domain_event' | 'domain_service' | 'specification' | 'repository' | 'factory';
 export interface DomainContext { id: string; name: string; description: string; color: string; position: [number, number, number] }
@@ -13,6 +14,7 @@ export interface Finding { id: string; severity: 'warning' | 'error'; subjectId:
 export interface Change { id: string; type: 'added' | 'changed' | 'removed'; subject: 'concept' | 'context' | 'relationship'; name: string; detail: string }
 export interface PatternSummary { name: string; description: string; rules: { id: string; description: string }[] }
 export type StudioMode = 'domain' | 'patterns' | 'baseline';
-export interface SceneState { project: DomainProject; selectedId: string | null; mode: StudioMode; baseline: Baseline | null; findings: Finding[]; search: string; scopeId?: string | null; aggregateId?: string | null; view?: FocusView; lens?: 'meaning' | 'governance' }
+export interface SceneVisibility { layers: boolean; dependencies: boolean; description: boolean }
+export interface SceneState { project: DomainProject; selectedId: string | null; mode: StudioMode; baseline: Baseline | null; findings: Finding[]; search: string; scopeId?: string | null; aggregateId?: string | null; view?: FocusView; lens?: 'meaning' | 'governance' | 'structure' | 'inspection'; visibility?: SceneVisibility; hiddenLayerZones?: string[]; layerSpread?: number; architecture?: ArchitectureEvidence; selectedLayerRule?: string | null; checking?: boolean; checkError?: string }
 export interface SceneController { update(state: SceneState): void; focus(id: string): void; overview(): void; topView(): void; zoom(direction: number): void; dispose(): void; screenPosition?(id: string): {x: number; y: number} | null }
-export interface SceneCallbacks { select(id: string | null): void; move(id: string, position: [number, number, number]): void; enter?(id: string): void; keeper?(): void }
+export interface SceneCallbacks { select(id: string | null): void; move(id: string, position: [number, number, number]): void; enter?(id: string): void; keeper?(): void; inspectPath?(path: string): void; inspectZone?(zone: string): void; inspectContract?(subjectId: string, key: string, kind: 'invariant' | 'assertion'): void; inspectRule?(ruleId: string): void; checkCode?(): void; inspectReport?(): void }

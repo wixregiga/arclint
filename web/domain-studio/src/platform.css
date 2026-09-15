@@ -8,7 +8,7 @@
 .representation-switch button{padding:6px 16px;font-size:12px;border-radius:22px;min-height:30px}
 .representation-switch [aria-pressed=true]{background:var(--ink);color:var(--paper)}
 .place-header-actions{margin-left:12px;gap:22px}
-.place-orientation{left:34px;top:132px;max-width:230px}
+.place-orientation{left:34px;top:132px;max-width:210px}
 #place-name{font-weight:500;font-size:clamp(26px,2.8vw,40px);letter-spacing:-.055em;line-height:1.15}
 #place-summary{font-size:12px;max-width:26ch;line-height:1.65}
 #breadcrumbs{flex-wrap:wrap;gap:7px;max-width:250px}
@@ -84,6 +84,35 @@
 .domain-kind-picker b{font-size:13px;font-weight:500}
 .domain-kind-picker span{font-size:10px;color:var(--muted);line-height:1.5}
 .domain-kind-picker em{position:absolute;right:3px;top:16px;font-style:normal}
+.domain-guide-entry{display:flex;gap:18px;align-items:center;text-align:left;padding:23px 0;border-block:1px solid var(--line);width:100%}
+.domain-guide-entry>span:nth-child(2){flex:1}
+.domain-guide-entry b{display:block;font-size:18px;font-weight:500;letter-spacing:-.02em}
+.domain-guide-entry small{display:block;margin-top:7px;font-size:12px;line-height:1.6;color:var(--muted)}
+.guide-entry-mark{color:var(--accent)}
+.domain-direct-heading{font-size:11px;color:var(--muted);margin-bottom:-18px}
+.domain-guide{display:flex;flex-direction:column;gap:20px;padding-block:24px}
+.guide-progress{font-size:10px;letter-spacing:.14em;color:var(--muted)}
+.domain-guide h3{font-family:var(--display);font-size:clamp(25px,3vw,34px);line-height:1.2;font-weight:500;letter-spacing:-.04em;margin:0;max-width:25ch}
+.domain-guide h3:focus{outline:none}
+.guide-hint,.guide-reason{font-size:14px;line-height:1.75;max-width:60ch}
+.guide-choices{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.guide-choices button{display:flex;justify-content:space-between;gap:24px;width:100%;padding:20px 0;border-bottom:1px solid var(--line);text-align:left}
+.guide-choices b{display:block;font-size:15px;font-weight:500;line-height:1.5}
+.guide-choices small{display:block;font-size:12px;line-height:1.6;margin-top:6px;color:var(--muted);max-width:58ch}
+.guide-choices button:hover b,.domain-guide-entry:hover b{color:var(--accent)}
+.guide-uncertain,#guide-direct{align-self:flex-start;justify-content:flex-start;font-size:12px;min-height:40px;text-align:left}
+#guide-direct{color:var(--muted)}
+.guide-draft{font-size:12px;color:var(--muted);border-left:2px solid var(--gold);padding-left:14px;overflow-wrap:anywhere}
+.guide-draft summary{cursor:pointer;padding-block:10px}
+.guide-draft .draft-excerpt{border:0;padding:8px 0;font-size:13px;max-height:140px;overflow:auto}
+#guide-back{margin-right:auto;min-height:44px;font-size:12px;white-space:nowrap}
+.has-domain-guide #dialog-form{height:100%;display:flex;flex-direction:column;gap:0}
+.has-domain-guide .dialog-heading{flex:none}
+.has-domain-guide .dialog-content{flex:1;min-height:0;overflow-y:auto}
+.has-domain-guide .dialog-actions{gap:16px;flex-wrap:wrap}
+.has-domain-guide .dialog-actions{flex:none;margin-top:0;background:var(--paper)}
+.has-domain-guide .dialog-actions button{font-size:12px;min-height:44px}
+@media(max-width:650px){.domain-guide{padding-block:0}.domain-guide-entry{gap:12px}.domain-guide-entry b{font-size:17px}.guide-choices button{padding-block:17px;gap:14px}.guide-choices b{font-size:14px}.guide-choices small{font-size:12px}.has-domain-guide .dialog-actions{gap:10px}.has-domain-guide .dialog-actions .primary{padding-inline:14px}.guide-hint,.guide-reason{font-size:13px}}
 .draft-excerpt{border-left:2px solid var(--gold);padding-left:14px;font-size:14px;white-space:pre-wrap}
 .notebook-entries{display:flex;flex-direction:column;gap:26px}
 .notebook-entries article{border-bottom:1px solid var(--line);padding-bottom:20px}
@@ -97,3 +126,13 @@
 .editor-repository-save{display:flex;flex-direction:column;border-top:1px solid var(--line);padding-top:18px;gap:4px}.editor-repository-save button{font-size:12px;justify-content:flex-start}.editor-repository-save small{font-size:10px;color:var(--muted)}
 
 #build-input{min-height:44px;height:44px;max-height:124px;resize:none;line-height:20px;overflow:auto;padding:12px 0;border:0;box-shadow:none}
+
+/* The place has one reading. Hiding it gives its space back to the scene. */
+.atlas-world[data-description=true] #place-summary{display:block;-webkit-line-clamp:unset;max-height:180px;overflow:auto;pointer-events:auto}
+.atlas-world #place-summary[hidden]{display:none!important}
+#architecture-tools{pointer-events:none}
+#architecture-tools button,#architecture-tools select,#architecture-tools details,#architecture-tools label,#architecture-state{pointer-events:auto}
+.atlas-world[data-description=false] .place-orientation{max-width:220px}
+.atlas-world[data-description=false] #place-name{font-size:28px;margin-top:3px}
+@media(min-width:651px){.atlas-world[data-description=false] #architecture-tools{left:280px}}
+@media(max-width:650px){.atlas-world[data-description=true] #place-summary{max-height:55px;font-size:11px;max-width:43ch}.atlas-world .place-orientation{max-width:calc(100% - 40px)}.atlas-world[data-description=false] #place-name{font-size:25px}.atlas-world[data-description=false] #meaning-table{top:230px}}

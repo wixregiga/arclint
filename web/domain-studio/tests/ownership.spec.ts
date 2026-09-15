@@ -4,7 +4,7 @@ import { parse } from 'yaml';
 import { createEmptyProject } from '../src/domain';
 import type { DomainProject } from '../src/contracts';
 
-import { selectConcept, creationAction, savedProject, workspaceAction } from './studio.helpers';
+import { selectConcept, selectPlace, creationAction, savedProject, workspaceAction } from './studio.helpers';
 
 function library(): DomainProject {
   return { ...createEmptyProject(), name: 'Library', description: 'A general library domain.', contexts: [{ id: 'catalog', name: 'catalog', description: 'Library titles and editions.', color: '#66d8df', position: [0, 0, 0] }] };
@@ -14,6 +14,22 @@ async function load(page: import('@playwright/test').Page, project: DomainProjec
   await page.locator('#import-file').setInputFiles({ name: 'library.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(project)) });
   await expect(page.locator('#project-name')).toHaveText('Library');
 }
+
+test('Up follows a recorded member owner before returning to the context and project', async ({ page }) => {
+  const model = library();
+  model.concepts = [
+    { id: 'book', contextId: 'catalog', name: 'Book', definition: 'A title.', kind: 'aggregate', identity: 'BookID', invariants: [], position: [0, 1, 0] },
+    { id: 'edition', contextId: 'catalog', ownerId: 'book', name: 'Edition', definition: 'An edition of this title.', kind: 'entity', identity: 'EditionID', invariants: [], position: [6, 1, 0] },
+  ];
+  await load(page, model);
+  await selectPlace(page, /^Edition$/);
+  await expect(page.locator('#owner-location')).toHaveText('Book');
+  for (const name of ['Book', 'catalog', 'Library']) {
+    await page.locator('#ascend').click();
+    await expect(page.locator('#place-name')).toHaveText(name);
+  }
+  await expect(page.locator('#ascend')).not.toBeVisible();
+});
 
 test('creates aggregate and member through the UI and exports canonical ownership', async ({ page }, testInfo) => {
   test.setTimeout(60_000);

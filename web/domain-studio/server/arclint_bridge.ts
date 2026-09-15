@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { watch, type FSWatcher } from 'node:fs';
 import { readFile, readdir, realpath, stat, lstat, mkdtemp, rm, symlink, writeFile, open, rename } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
@@ -8,11 +9,13 @@ import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path
 import { fileURLToPath } from 'node:url';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
-import type { RepositoryCheckResult, RepositoryContextReport, RepositoryDiagnostic, RepositoryProject, RepositoryRuleSummary, RepositoryDocument, RepositoryDocumentPreview, RepositoryBaselinePreview } from '../src/repository';
+import type { RepositoryDependencies, RepositoryCheckResult, RepositoryContextReport, RepositoryDiagnostic, RepositoryProject, RepositoryRuleSummary, RepositoryDocument, RepositoryDocumentPreview, RepositoryBaselinePreview } from '../src/repository';
 
 export interface CommandResult { stdout: string; stderr: string; exitCode: number }
 export type CommandRunner = (args: readonly string[], cwd: string) => Promise<CommandResult>;
 export interface BridgeOptions { root?: string; run?: CommandRunner }
+export interface RepositoryRevision { revision: string; changedAt: string; watching: boolean; reason?: string }
+export interface RepositoryRevisionMonitor { snapshot(): Promise<RepositoryRevision>; dispose(): void }
 class BridgeError extends Error {
   constructor(public readonly status: number, public readonly code: string, message: string) { super(message); }
 }
@@ -22,6 +25,85 @@ const MAX_OUTPUT = 12 * 1024 * 1024;
 const documentFiles = { rules: 'rules.arclint.yaml', domain: 'domain.arclint.yaml' } as const;
 const baselineFile = '.arclint/baseline.v2.json';
 const digest = (content: string | null) => content === null ? null : createHash('sha256').update(content).digest('hex');
+const revisionIgnoredDirectories = new Set(['.git', '.hg', '.svn', 'node_modules', 'dist', 'build', 'coverage', 'test-results', 'playwright-report', '.next', '.nuxt', '.turbo', '.cache', '.pytest_cache', '__pycache__', '.venv', 'venv', '.codex', '.claude', '.wixregiga-ignore']);
+const revisionIgnoredName = (name: string) => revisionIgnoredDirectories.has(name) || name.startsWith('.arclint-studio-');
+
+/** Observe source/configuration changes without running ArcLint or reading file contents.
+ * One nonrecursive watcher per directory avoids traversing dependency/output trees.
+ * The cap and filesystem failures are reported; incomplete coverage never claims to watch.
+ */
+export function createRepositoryRevisionMonitor(root: string, maxDirectories = 2048): RepositoryRevisionMonitor {
+  const identity = randomUUID(); let sequence = 0, changedAt = new Date().toISOString();
+  let disposed = false, failure = '', pending: Promise<void> | null = null, rescanNeeded = true;
+  const watchers = new Map<string, FSWatcher>();
+  const changed = () => { sequence++; changedAt = new Date().toISOString(); };
+  const fail = (message: string) => { if (failure !== message) { failure = message; changed(); } };
+  const reconcile = async () => {
+    const previousFailure = failure; failure = '';
+    const seen = new Set<string>(), queue = [root];
+    while (queue.length && !disposed) {
+      const directory = queue.shift()!;
+      if (seen.size >= maxDirectories) { fail(`Automatic change detection reached its ${maxDirectories}-directory limit.`); break; }
+      try {
+        const entry = await lstat(directory);
+        if (!entry.isDirectory() || entry.isSymbolicLink() || !inside(root, await realpath(directory))) continue;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') fail('A source directory could not be read for automatic change detection.');
+        continue;
+      }
+      seen.add(directory);
+      if (!watchers.has(directory)) {
+        try {
+          const watcher = watch(directory, { persistent: false }, (event, filename) => {
+            if (disposed || filename && revisionIgnoredName(String(filename))) return;
+            changed();
+            if (event === 'rename' || filename === null) {
+              rescanNeeded = true;
+              // A directory can be atomically replaced under the same name;
+              // its old watcher still refers to the former inode.
+              const replaced = filename === null ? null : resolve(directory, String(filename));
+              if (replaced && watchers.has(replaced)) { watchers.get(replaced)!.close(); watchers.delete(replaced); }
+            }
+          });
+          watcher.on('error', () => {
+            if (disposed) return;
+            watcher.close(); watchers.delete(directory); rescanNeeded = true;
+            fail('The filesystem could not keep every source directory under observation.');
+          });
+          watchers.set(directory, watcher);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') { seen.delete(directory); continue; }
+          fail('The filesystem could not watch every source directory.');
+        }
+      }
+      try {
+        const entries = await readdir(directory, { withFileTypes: true });
+        // Dirent.isDirectory excludes symlinks, including links into another repository.
+        for (const entry of entries) if (entry.isDirectory() && !revisionIgnoredName(entry.name)) queue.push(resolve(directory, entry.name));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') fail('A source directory could not be read for automatic change detection.');
+      }
+    }
+    for (const [directory, watcher] of watchers) if (!seen.has(directory)) { watcher.close(); watchers.delete(directory); }
+    if (previousFailure && !failure) changed();
+  };
+  const refresh = async () => {
+    if (disposed) return;
+    if (pending) { await pending; return; }
+    if (!rescanNeeded) return;
+    rescanNeeded = false;
+    pending = reconcile();
+    try { await pending; } finally { pending = null; }
+  };
+  return {
+    async snapshot() {
+      await refresh();
+      return { revision: `${identity}:${sequence}`, changedAt, watching: !disposed && !failure,
+        ...(disposed ? { reason: 'Automatic change detection has stopped.' } : failure ? { reason: failure } : {}) };
+    },
+    dispose() { if (disposed) return; disposed = true; changed(); for (const watcher of watchers.values()) watcher.close(); watchers.clear(); },
+  };
+}
 function preserveRuleIdentity(before: string | null, after: string): void {
   if (before === null) return;
   let previous: unknown, candidate: unknown;
@@ -108,6 +190,19 @@ function contextReport(value: unknown): RepositoryContextReport {
   if (!isObject(value) || typeof value.Scope !== 'string' || !Array.isArray(value.Languages) || typeof value.RuleCount !== 'number' || (value.Zones !== null && !Array.isArray(value.Zones))) throw new BridgeError(502, 'UNSUPPORTED_CONTEXT_REPORT', 'This ArcLint context JSON shape is not supported. No model evidence was inferred.');
   return value as unknown as RepositoryContextReport;
 }
+function dependencyReport(value: unknown): Omit<RepositoryDependencies, 'observedAt' | 'revision' | 'changedDuringObservation'> {
+  const fail = () => { throw new BridgeError(502, 'DEPENDENCIES_UNAVAILABLE', 'This ArcLint CLI does not provide a supported observed-dependency report. Rebuild the current checkout CLI and restart Studio; other repository evidence remains available.'); };
+  if (!isObject(value) || !isObject(value.dependencies)) return fail();
+  const d = value.dependencies;
+  const strings = (v: unknown): v is string[] => Array.isArray(v) && v.every(item => typeof item === 'string');
+  const relativePath = (v: unknown): v is string => typeof v === 'string' && !!v && !v.includes('\\') && !v.startsWith('/') && !/^[A-Za-z]:/.test(v) && !v.split('/').includes('..');
+  if (!Array.isArray(d.files) || d.files.some(file => !isObject(file) || !relativePath(file.path) || !strings(file.zones) || typeof file.language !== 'string' || typeof file.importsAvailable !== 'boolean')) return fail();
+  if (!Array.isArray(d.edges) || d.edges.some(edge => !isObject(edge) || !relativePath(edge.sourcePath) || !['file', 'directory', 'unresolved'].includes(String(edge.targetKind)) || (edge.targetKind === 'unresolved' ? edge.targetPath !== '' : !relativePath(edge.targetPath)) || typeof edge.specifier !== 'string' || !Number.isInteger(edge.line) || !['internal', 'external', 'stdlib', 'unknown', 'cgo'].includes(String(edge.classification)) || !strings(edge.sourceZones) || !strings(edge.targetZones))) return fail();
+  const coverage = d.coverage;
+  if (!isObject(coverage) || coverage.scope !== 'repository' || !strings(coverage.languages) || typeof coverage.complete !== 'boolean' || !['filesObserved', 'sourceFiles', 'filesWithImports'].every(key => Number.isInteger(coverage[key]) && Number(coverage[key]) >= 0)) return fail();
+  if (!strings(d.limitations) || !Array.isArray(d.diagnostics) || d.diagnostics.some(row => !isObject(row) || typeof row.code !== 'string' || typeof row.message !== 'string' || (row.path !== undefined && !relativePath(row.path)))) return fail();
+  return d as unknown as Omit<RepositoryDependencies, 'observedAt' | 'revision' | 'changedDuringObservation'>;
+}
 function checkResult(result: CommandResult): RepositoryCheckResult {
   if (result.exitCode !== 0 && result.exitCode !== 1) throw new BridgeError(502, 'CHECK_FAILED', `ArcLint check failed (exit ${result.exitCode}). ${result.stderr.trim() || result.stdout.trim()}`.trim());
   const value = parseJson(result, 'check');
@@ -125,6 +220,8 @@ function send(response: ServerResponse, status: number, data: unknown): void {
 export function createArclintBridge(options: BridgeOptions = {}) {
   const configuredRoot = options.root ?? process.env.ARCLINT_STUDIO_REPO ?? defaultRoot;
   const run = options.run ?? runArclint;
+  let revisionMonitor: RepositoryRevisionMonitor | null = null, revisionRoot = '';
+  let disposed = false;
   const previews = new Map<string, { preview: RepositoryDocumentPreview; hashes: { rules: string | null; domain: string | null }; root: string }>();
   const baselinePreviews = new Map<string, { preview: RepositoryBaselinePreview; hashes: { rules: string | null; domain: string | null; baseline: string | null }; root: string }>();
   let applying = false;
@@ -134,14 +231,34 @@ export function createArclintBridge(options: BridgeOptions = {}) {
     catch { throw new BridgeError(503, 'REPOSITORY_UNAVAILABLE', 'The configured ArcLint repository directory is unavailable. Check ARCLINT_STUDIO_REPO.'); }
   };
   const running = new Map<string, Promise<CommandResult>>();
+  const waiting: { key: string; start(): void; reject(error: Error): void }[] = [];
+  let activeCommands = 0;
+  const drain = () => {
+    while (!disposed && activeCommands < 4 && waiting.length) waiting.shift()!.start();
+  };
   const execute = async (cwd: string, args: readonly string[]) => {
-    const key = JSON.stringify(args);
-    let pending = running.get(key);
-    if (!pending) {
-      if (running.size >= 4) throw new BridgeError(429, 'BUSY', 'ArcLint is handling other repository requests. Try again shortly.');
-      pending = run(args, cwd); running.set(key, pending);
-      void pending.finally(() => { if (running.get(key) === pending) running.delete(key); }).catch(() => {});
-    }
+    if (disposed) throw new BridgeError(503, 'BRIDGE_STOPPED', 'The repository connection has stopped.');
+    const key = JSON.stringify([cwd, args]);
+    // Read requests share active and queued commands across tabs. Mutation
+    // commands retain immediate admission: never defer or retry an adoption
+    // after its final input checks while other reads take their turns.
+    const mutation = args[0] === 'baseline' && ['capture', 'refresh'].includes(args[1]);
+    const existing = mutation ? undefined : running.get(key);
+    if (existing) return existing;
+    if (activeCommands >= 4 && (mutation || waiting.length >= 32)) throw new BridgeError(429, 'BUSY', 'ArcLint is handling other repository requests. Try again shortly.');
+    let succeed!: (result: CommandResult) => void, fail!: (error: Error) => void;
+    const pending = new Promise<CommandResult>((resolve, reject) => { succeed = resolve; fail = reject; });
+    if (!mutation) running.set(key, pending);
+    const start = () => {
+      activeCommands++;
+      void Promise.resolve().then(() => run(args, cwd)).then(succeed, fail).finally(() => {
+        activeCommands--;
+        if (running.get(key) === pending) running.delete(key);
+        drain();
+      });
+    };
+    waiting.push({ key, start, reject: fail });
+    drain();
     return pending;
   };
   const readDocument = async (cwd: string, filename: string) => {
@@ -205,18 +322,35 @@ export function createArclintBridge(options: BridgeOptions = {}) {
     if (report.diagnostics.some(d => d.kind !== 'violation' || !['active', 'suppressed'].includes(d.status ?? ''))) throw new BridgeError(409, 'BASELINE_EVIDENCE_INCOMPLETE', 'The unbaselined assessment contains coverage, operational, or unsupported records. Resolve these evaluation gaps before adopting findings.');
     return { report, rules: rules.filter(rule => !rule.disabled).length };
   };
-  return (request: IncomingMessage, response: ServerResponse, next: () => void) => {
+  const middleware = (request: IncomingMessage, response: ServerResponse, next: () => void) => {
     let url: URL;
     try { url = new URL(request.url ?? '/', 'http://localhost'); } catch { next(); return; }
     if (!url.pathname.startsWith('/api/arclint/')) { next(); return; }
     void (async () => {
       authorize(request);
-      const routes = new Map([['/api/arclint/project', 'GET'], ['/api/arclint/context', 'GET'], ['/api/arclint/check', 'POST'], ['/api/arclint/rule', 'GET'], ['/api/arclint/patterns', 'GET'], ['/api/arclint/files', 'GET'], ['/api/arclint/documents/preview', 'POST'], ['/api/arclint/documents/apply', 'POST'], ['/api/arclint/baseline/preview', 'POST'], ['/api/arclint/baseline/apply', 'POST']]);
+      const routes = new Map([['/api/arclint/dependencies', 'GET'], ['/api/arclint/revision', 'GET'], ['/api/arclint/project', 'GET'], ['/api/arclint/context', 'GET'], ['/api/arclint/check', 'POST'], ['/api/arclint/rule', 'GET'], ['/api/arclint/patterns', 'GET'], ['/api/arclint/files', 'GET'], ['/api/arclint/documents/preview', 'POST'], ['/api/arclint/documents/apply', 'POST'], ['/api/arclint/baseline/preview', 'POST'], ['/api/arclint/baseline/apply', 'POST']]);
       const expected = routes.get(url.pathname);
       if (!expected) throw new BridgeError(404, 'NOT_FOUND', 'Unknown ArcLint endpoint.');
       if (request.method !== expected) throw new BridgeError(405, 'METHOD_NOT_ALLOWED', `Use ${expected} for this endpoint.`);
       const cwd = await root();
-      if (url.pathname === '/api/arclint/project') {
+      if (url.pathname === '/api/arclint/revision' || url.pathname === '/api/arclint/dependencies') {
+        if (disposed) throw new BridgeError(503, 'REVISION_MONITOR_STOPPED', 'The repository change monitor has stopped.');
+        if (!revisionMonitor || revisionRoot !== cwd) {
+          revisionMonitor?.dispose(); revisionRoot = cwd;
+          revisionMonitor = createRepositoryRevisionMonitor(cwd);
+        }
+        const before = await revisionMonitor.snapshot();
+        if (url.pathname === '/api/arclint/revision') { send(response, 200, before); return; }
+        const command = await execute(cwd, ['context', '--dependencies', '--format', 'json']);
+        if (command.exitCode !== 0) throw new BridgeError(502, 'DEPENDENCIES_UNAVAILABLE', `Observed imports could not be read. Rebuild the current checkout CLI if --dependencies is unavailable. ${command.stderr.trim() || command.stdout.trim()}`);
+        const observed = dependencyReport(parseJson(command, 'context --dependencies'));
+        const after = await revisionMonitor.snapshot();
+        const changedDuringObservation = before.revision !== after.revision;
+        const diagnostics = [...observed.diagnostics];
+        if (changedDuringObservation) diagnostics.push({ code: 'REPOSITORY_CHANGED', message: 'Repository files changed while imports were observed. Refresh to obtain current evidence.' });
+        if (!after.watching) diagnostics.push({ code: 'REVISION_UNAVAILABLE', message: after.reason ?? 'Repository changes cannot be monitored completely.' });
+        send(response, 200, { ...observed, diagnostics, observedAt: new Date().toISOString(), revision: before.revision, changedDuringObservation });
+      } else if (url.pathname === '/api/arclint/project') {
         const [domainYaml, rulesYaml, rawContext, rawRules] = await Promise.all([
           readDocument(cwd, 'domain.arclint.yaml'), readDocument(cwd, 'rules.arclint.yaml'),
           checkedCommand(cwd, ['context', '--full', '--format', 'json']), checkedCommand(cwd, ['rules', '--format', 'json']),
@@ -333,9 +467,19 @@ export function createArclintBridge(options: BridgeOptions = {}) {
       send(response, failure.status, { error: { code: failure.code, message: failure.message } });
     });
   };
+  return Object.assign(middleware, { dispose() {
+    disposed = true; revisionMonitor?.dispose();
+    for (const command of waiting.splice(0)) {
+      running.delete(command.key);
+      command.reject(new BridgeError(503, 'BRIDGE_STOPPED', 'The repository connection has stopped.'));
+    }
+  } });
 }
 
 export function arclintBridgePlugin(options: BridgeOptions = {}): Plugin {
-  const middleware = createArclintBridge(options);
-  return { name: 'arclint-local-repository-bridge', configureServer(server) { server.middlewares.use(middleware); }, configurePreviewServer(server) { server.middlewares.use(middleware); } };
+  const attach = (server: { middlewares: { use: (middleware: ReturnType<typeof createArclintBridge>) => unknown }; httpServer: { once(event: 'close', listener: () => void): unknown } | null }) => {
+    const middleware = createArclintBridge(options);
+    server.middlewares.use(middleware); server.httpServer?.once('close', () => middleware.dispose());
+  };
+  return { name: 'arclint-local-repository-bridge', configureServer: attach, configurePreviewServer: attach };
 }

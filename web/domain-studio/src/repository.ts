@@ -53,6 +53,18 @@ export interface RepositoryCheckResult {
   /** True only when the CLI explicitly emits evaluation records with outcomes. */
   outcomesAvailable: boolean;
 }
+/** Native parsed imports; directory targets are package-granular, never guessed files. */
+export interface RepositoryDependencies {
+  files: { path: string; zones: string[]; language: string; importsAvailable: boolean }[];
+  edges: { sourcePath: string; targetPath: string; targetKind: 'file' | 'directory' | 'unresolved';
+    specifier: string; line: number; classification: 'internal' | 'external' | 'stdlib' | 'unknown' | 'cgo';
+    sourceZones: string[]; targetZones: string[] }[];
+  coverage: { scope: 'repository'; languages: string[]; filesObserved: number; sourceFiles: number; filesWithImports: number; complete: boolean };
+  diagnostics: { path?: string; code: string; message: string }[];
+  limitations: string[];
+  observedAt: string; revision: string; changedDuringObservation: boolean;
+}
+export interface RepositoryRevision { revision: string; changedAt: string; watching: boolean; reason?: string }
 export interface RepositoryRuleDetail {
   summary: RepositoryRuleSummary; evidence?: string; languages?: string[]; facts?: string[];
   entireRepository?: boolean; zones?: string[]; paths?: string[]; limitations?: string[] | string;
@@ -84,7 +96,7 @@ export interface RepositoryBaselineApplied { action: 'capture' | 'refresh'; find
 export class RepositoryError extends Error {
   constructor(message: string, public readonly code: string, public readonly status: number) { super(message); this.name = 'RepositoryError'; }
 }
-async function request<T>(path: string, method = 'GET', signal?: AbortSignal, body?: unknown): Promise<T> {
+async function request<T>(path: string, method = 'GET', signal?: AbortSignal, body?: unknown, attempt = 0): Promise<T> {
   let response: Response;
   try { response = await fetch(`/api/arclint/${path}`, { method, signal, credentials: 'same-origin', headers: { Accept: 'application/json', 'X-Arclint-Studio': '1', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }); }
   catch (error) {
@@ -97,11 +109,24 @@ async function request<T>(path: string, method = 'GET', signal?: AbortSignal, bo
   catch { throw new RepositoryError('This server does not expose the local ArcLint API. Start Domain Studio with npm run dev or npm run preview.', 'API_UNAVAILABLE', response.status); }
   if (!response.ok) {
     const failure = value as { error?: { message?: string; code?: string } };
+    // Several open Studio tabs share the bridge. Retry only its explicit busy
+    // response to a read; writes always retain their original outcome.
+    if (method === 'GET' && response.status === 429 && failure.error?.code === 'BUSY' && attempt < 4) {
+      await new Promise<void>((resolve, reject) => {
+        if (signal?.aborted) { reject(signal.reason); return; }
+        const cancel = () => { clearTimeout(timer); reject(signal?.reason); };
+        const timer = setTimeout(() => { signal?.removeEventListener('abort', cancel); resolve(); }, 250 * 2 ** attempt);
+        signal?.addEventListener('abort', cancel, { once: true });
+      });
+      return request<T>(path, method, signal, body, attempt + 1);
+    }
     throw new RepositoryError(failure.error?.message ?? 'The ArcLint request failed.', failure.error?.code ?? 'REQUEST_FAILED', response.status);
   }
   return value as T;
 }
 export const loadRepository = (signal?: AbortSignal) => request<RepositoryProject>('project', 'GET', signal);
+export const queryRepositoryDependencies = (signal?: AbortSignal) => request<RepositoryDependencies>('dependencies', 'GET', signal);
+export const queryRepositoryRevision = (signal?: AbortSignal) => request<RepositoryRevision>('revision', 'GET', signal);
 export const queryRepositoryContext = (path: string, signal?: AbortSignal) => request<RepositoryContextResult>(`context?path=${encodeURIComponent(path)}`, 'GET', signal);
 export const queryRepositoryZone = (zone: string, signal?: AbortSignal) => request<RepositoryContextResult>(`context?zone=${encodeURIComponent(zone)}`, 'GET', signal);
 export const checkRepository = (signal?: AbortSignal) => request<RepositoryCheckResult>('check', 'POST', signal);
