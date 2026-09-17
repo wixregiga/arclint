@@ -1,0 +1,16 @@
+rule: web/launch-surfaces-present
+files:
+  web/package.json: |
+    {"name":"@arclint/web","private":true}
+  web/vite.config.ts: |
+    export default {};
+  web/index.html: |
+    <div id="web"></div>
+  web/public/manifest.webmanifest: |
+    {"name":"Web"}
+  web/src/app/entrypoints/start-web.ts: |
+    export {};
+expect:
+- kind: violation
+  path: web/src/app/entrypoints/mount-web.ts
+  message: Zone "web" is missing a required file matching "web/src/app/entrypoints/mount-web.ts"

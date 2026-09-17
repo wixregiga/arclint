@@ -1,0 +1,7 @@
+rule: web/standalone-is-an-entrypoint
+files:
+  web/src/app/entrypoints/start-web.ts: |
+    import "./mount-web";
+  web/src/app/entrypoints/mount-web.ts: |
+    export {};
+expect: []

@@ -8,7 +8,7 @@ it drifts). Add hand-written guidance outside the markers.
 <!-- arclint:agents:begin -->
 ## Architecture contracts (arclint)
 
-Enforced from rules.arclint.yaml: 49 rules over languages [go, typescript].
+Enforced from rules.arclint.yaml: 60 rules over languages [go, typescript].
 
 ### Ask arclint first
 
@@ -81,6 +81,24 @@ If your change speaks about something new, or changes what a recorded term means
 - **rule**: The rule bounded context: the Rule aggregate's home. (paths internal/domain/rule/**)
 - **conformance**: The conformance bounded context, downstream conformist of rule. (paths internal/domain/conformance/**)
 - **distribution**: The distribution bounded context: Patterns travelling between repositories. (paths internal/domain/distribution/**)
+- **web**: Web frontend package, build configuration, and public assets. (paths web/**)
+  - launch-surfaces-present: contains files matching ["web/package.json", "web/vite.config.ts", "web/index.html", "web/public/manifest.webmanifest", "web/src/app/entrypoints/start-web.ts", "web/src/app/entrypoints/mount-web.ts"] Rationale: Web has separate standalone startup and host-controlled mounting entrypoints, plus an authored web app manifest; presence alone proves no runtime behavior.
+- **web_source**: Browser-portable Web source, organized by FSD responsibility. (paths web/src/**)
+  - imports no other zone; stdlib imports forbidden
+  - source-layout: satisfies extension rule "web-source-layout" Rationale: A reader can find code by FSD layer, slice, and purposeful segment; implementation is not placed beside a slice's public interface.
+  - slices-are-independent: satisfies extension rule "web-slice-isolation" Rationale: Sibling slices remain independently understandable; compose their behavior in a higher layer. Native independent skips Zone-owned folders, so this rule uses resolved imports in the selected Web source.
+  - public-interfaces: satisfies extension rule "web-public-interfaces" Rationale: Other modules depend on a slice or Shared module's explicit public entry, while its own implementation imports local files directly.
+  - files-speak-their-purpose: contains no files matching ["web/src/**/model.ts", "web/src/**/model.tsx", "web/src/**/types.ts", "web/src/**/types.tsx", "web/src/**/util.ts", "web/src/**/util.tsx", "web/src/**/utils.ts", "web/src/**/utils.tsx", "web/src/**/helper.ts", "web/src/**/helper.tsx", "web/src/**/helpers.ts", "web/src/**/helpers.tsx", "web/src/**/common.ts", "web/src/**/common.tsx", "web/src/**/constants.ts", "web/src/**/constants.tsx", "web/src/**/data.ts", "web/src/**/data.tsx", "web/src/**/service.ts", "web/src/**/service.tsx", "web/src/**/services.ts", "web/src/**/services.tsx", "web/src/**/component.ts", "web/src/**/component.tsx", "web/src/**/components.ts", "web/src/**/components.tsx", "web/src/**/hooks.ts", "web/src/**/hooks.tsx", "web/src/**/components/**", "web/src/**/hooks/**", "web/src/**/types/**", "web/src/**/utils/**", "web/src/**/helpers/**", "web/src/**/common/**", "web/src/**/services/**", "web/src/**/index.tsx", "web/src/**/index.test.ts", "web/src/**/index.spec.ts"] Rationale: Implementation filenames identify the concept or action they hold; index.ts is reserved for a public interface, and model remains a segment name rather than a generic file.
+  - typescript-source: contains no files matching ["web/src/**/*.js", "web/src/**/*.jsx", "web/src/**/*.mjs", "web/src/**/*.cjs", "web/src/**/*.mts", "web/src/**/*.cts"] Rationale: Web executable source uses the TypeScript and TSX files ArcLint observes; JavaScript and alternate module extensions must not silently escape dependency checks.
+  - explicit-public-exports: contains no line matching /^\s*export\s+(type\s+)?\*/ Rationale: A public interface names its exports explicitly. This line check catches wildcard export statements; it does not judge semantic cohesion.
+- **web_app**: Web composition, routes, providers, host adapters, and explicit launch entrypoints. (paths web/src/app/**)
+- **web_pages**: Screen slices owning their presentation and screen-specific behavior. (paths web/src/pages/**)
+- **web_widgets**: Optional reusable screen compositions; introduce only when pages or features do not own them. (paths web/src/widgets/**)
+- **web_features**: Reusable user-action slices named for the behavior they provide. (paths web/src/features/**)
+- **web_entities**: Reusable Web concepts; an FSD entity slice does not classify a DDD Entity. (paths web/src/entities/**)
+- **web_shared**: Purpose-named browser libraries, UI primitives, transport contracts, and configuration without project-domain policy. (paths web/src/shared/**)
+- **web_standalone**: Standalone browser startup; chooses the mount target and opts into PWA lifecycle. (paths web/src/app/entrypoints/start-web.ts)
+- **web_pwa**: Standalone PWA registration, updates, and worker lifecycle; never implicit in an embedded mount. (paths web/src/app/pwa/**)
 
 ### Built-in rules
 
@@ -109,6 +127,9 @@ If your change speaks about something new, or changes what a recorded term means
 
 ### Repository-wide rules
 
+- web/layers-point-downward: Zones layer highest first as ["web_app", "web_pages", "web_widgets", "web_features", "web_entities", "web_shared"]; a Zone never imports a higher layer Rationale: Web dependencies run from app through pages, optional widgets, features, entities, and shared; lower layers never import higher layers.
+- web/standalone-is-an-entrypoint: Zone "web_standalone" is imported by no other Zone Rationale: No module imports standalone startup; a host invokes mount-web without importing browser auto-start code.
+- web/pwa-lifecycle-is-opt-in: Zone "web_pwa" is imported only by ["web_standalone"] Rationale: Only standalone startup imports the PWA lifecycle; embedding Web must not implicitly install a service worker in the host's origin.
 - dependencies/application-inward: Zones layer highest first as ["application", "domain"]; a Zone never imports a higher layer Rationale: Dependencies point inward: application, then domain.
 - infrastructure/composition-only: Zone "infrastructure" is imported only by ["composition"] Rationale: Only composition imports infrastructure.
 - delivery/cobra-factory-only: Zone "cobra_adapter" is imported only by ["cli_factory"] Rationale: Only the CLI factory imports the Cobra adapter.
@@ -116,6 +137,10 @@ If your change speaks about something new, or changes what a recorded term means
 - delivery/json-report-factory-only: Zone "json_report" is imported only by ["report_factory"] Rationale: Only the report factory imports the JSON renderer.
 - delivery/lipgloss-report-factory-only: Zone "lipgloss_report" is imported only by ["report_factory"] Rationale: Only the report factory imports the Lipgloss renderer.
 - dependencies/acyclic: dependencies among ["composition", "delivery", "infrastructure", "application", "domain"] contain no cycle Rationale: Dependencies among the top-level Zones contain no cycle.
+
+### Extension rules
+
+`.arclint/extensions/web_boundaries.ts` default-exports the rule definitions: web-source-layout, web-slice-isolation, web-public-interfaces.
 <!-- arclint:agents:end -->
 
 ## Finish gate

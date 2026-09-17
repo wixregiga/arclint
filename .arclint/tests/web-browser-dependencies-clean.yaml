@@ -1,0 +1,10 @@
+rule: web/browser-dependencies
+files:
+  web/package.json: |
+    {"dependencies":{"react":"1.0.0"}}
+  web/src/pages/inspect-project/ui/ProjectScreen.tsx: |
+    import "react";
+    import "../../../shared/api";
+  web/src/shared/api/index.ts: |
+    export {};
+expect: []

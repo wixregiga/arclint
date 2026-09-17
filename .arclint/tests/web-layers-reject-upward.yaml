@@ -1,0 +1,11 @@
+rule: web/layers-point-downward
+files:
+  web/src/shared/api/index.ts: |
+    import "../../pages/inspect-project";
+  web/src/pages/inspect-project/index.ts: |
+    export {};
+expect:
+- kind: violation
+  path: web/src/shared/api/index.ts
+  message: 'Zone "web_shared" (layer 5) may not import higher layer "web_pages" (layer 1): import of "../../pages/inspect-project"'
+  line: 1

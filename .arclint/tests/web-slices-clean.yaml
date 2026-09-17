@@ -1,0 +1,14 @@
+rule: web/slices-are-independent
+files:
+  web/src/features/open-project/index.ts: |
+    import "./model/open-project";
+    import "../../entities/project";
+  web/src/features/open-project/model/open-project.ts: |
+    export {};
+  web/src/entities/project/index.ts: |
+    export {};
+  web/src/shared/api/index.ts: |
+    import "../config";
+  web/src/shared/config/index.ts: |
+    export {};
+expect: []

@@ -10,7 +10,7 @@
 # independent, acyclic, or uses. `on` names the Zone(s)
 # it judges. Query commands: arclint rules [selector] · arclint context <path>
 
-# go for the engine itself; ts for the embedded extension SDK sources.
+# go for the engine; ts for the extension SDK and Web frontend.
 runtime: [go, ts]
 
 scan:
@@ -25,6 +25,8 @@ scan:
     # its own go.mod, rules.arclint.yaml, and vocabulary. It must not land
     # in this build or this scan.
     - "testing/**"
+    # Vite output is a distribution artifact, never authored architecture.
+    - "web/dist/**"
 
 # The vocabulary rules are not written here: they are the built-in
 # rules every recorded building block carries, exactly as any adopter
@@ -92,6 +94,40 @@ zones:
   distribution:
     paths: "internal/domain/distribution/**"
     description: "The distribution bounded context: Patterns travelling between repositories."
+
+  # Web is a browser application with its own composition boundary.
+  # These are technical Zones, not new bounded contexts or classifications
+  # of the user's project domain. See docs/web-architecture.md.
+  web:
+    paths: "web/**"
+    description: "Web frontend package, build configuration, and public assets."
+  web_source:
+    paths: "web/src/**"
+    description: "Browser-portable Web source, organized by FSD responsibility."
+  web_app:
+    paths: "web/src/app/**"
+    description: "Web composition, routes, providers, host adapters, and explicit launch entrypoints."
+  web_pages:
+    paths: "web/src/pages/**"
+    description: "Screen slices owning their presentation and screen-specific behavior."
+  web_widgets:
+    paths: "web/src/widgets/**"
+    description: "Optional reusable screen compositions; introduce only when pages or features do not own them."
+  web_features:
+    paths: "web/src/features/**"
+    description: "Reusable user-action slices named for the behavior they provide."
+  web_entities:
+    paths: "web/src/entities/**"
+    description: "Reusable Web concepts; an FSD entity slice does not classify a DDD Entity."
+  web_shared:
+    paths: "web/src/shared/**"
+    description: "Purpose-named browser libraries, UI primitives, transport contracts, and configuration without project-domain policy."
+  web_standalone:
+    paths: "web/src/app/entrypoints/start-web.ts"
+    description: "Standalone browser startup; chooses the mount target and opts into PWA lifecycle."
+  web_pwa:
+    paths: "web/src/app/pwa/**"
+    description: "Standalone PWA registration, updates, and worker lifecycle; never implicit in an embedded mount."
 
 rules:
   # ---- domain --------------------------------------------------------
@@ -301,6 +337,116 @@ rules:
     on: source
     files: "internal/**/*.go"
     naming: snake_case
+
+  # ---- Web --------------------------------------------------------
+  # The prospective contract applies before Web is implemented in this
+  # checkout. Missing launch surfaces are findings, not baseline entries.
+  # Layers are optional until needed; no empty slice scaffolds are required.
+
+  web/launch-surfaces-present:
+    rationale: "Web has separate standalone startup and host-controlled mounting entrypoints, plus an authored web app manifest; presence alone proves no runtime behavior."
+    on: web
+    structure:
+      require:
+        - "web/package.json"
+        - "web/vite.config.ts"
+        - "web/index.html"
+        - "web/public/manifest.webmanifest"
+        - "web/src/app/entrypoints/start-web.ts"
+        - "web/src/app/entrypoints/mount-web.ts"
+
+  web/source-layout:
+    rationale: "A reader can find code by FSD layer, slice, and purposeful segment; implementation is not placed beside a slice's public interface."
+    on: web_source
+    uses: web-source-layout
+
+  web/layers-point-downward:
+    rationale: "Web dependencies run from app through pages, optional widgets, features, entities, and shared; lower layers never import higher layers."
+    layers: [web_app, web_pages, web_widgets, web_features, web_entities, web_shared]
+
+  web/slices-are-independent:
+    rationale: "Sibling slices remain independently understandable; compose their behavior in a higher layer. Native independent skips Zone-owned folders, so this rule uses resolved imports in the selected Web source."
+    on: web_source
+    uses: web-slice-isolation
+
+  web/public-interfaces:
+    rationale: "Other modules depend on a slice or Shared module's explicit public entry, while its own implementation imports local files directly."
+    on: web_source
+    uses: web-public-interfaces
+
+  web/browser-dependencies:
+    rationale: "Browser source imports only Web source and declared browser packages; Node builtins and build or engine implementation belong outside the browser graph."
+    on: web_source
+    imports:
+      internal: []
+      stdlib: forbid
+
+  web/standalone-is-an-entrypoint:
+    rationale: "No module imports standalone startup; a host invokes mount-web without importing browser auto-start code."
+    on: web_standalone
+    imported_by: []
+
+  web/pwa-lifecycle-is-opt-in:
+    rationale: "Only standalone startup imports the PWA lifecycle; embedding Web must not implicitly install a service worker in the host's origin."
+    on: web_pwa
+    imported_by: [web_standalone]
+
+  web/files-speak-their-purpose:
+    rationale: "Implementation filenames identify the concept or action they hold; index.ts is reserved for a public interface, and model remains a segment name rather than a generic file."
+    on: web_source
+    structure:
+      forbid:
+        - "web/src/**/model.ts"
+        - "web/src/**/model.tsx"
+        - "web/src/**/types.ts"
+        - "web/src/**/types.tsx"
+        - "web/src/**/util.ts"
+        - "web/src/**/util.tsx"
+        - "web/src/**/utils.ts"
+        - "web/src/**/utils.tsx"
+        - "web/src/**/helper.ts"
+        - "web/src/**/helper.tsx"
+        - "web/src/**/helpers.ts"
+        - "web/src/**/helpers.tsx"
+        - "web/src/**/common.ts"
+        - "web/src/**/common.tsx"
+        - "web/src/**/constants.ts"
+        - "web/src/**/constants.tsx"
+        - "web/src/**/data.ts"
+        - "web/src/**/data.tsx"
+        - "web/src/**/service.ts"
+        - "web/src/**/service.tsx"
+        - "web/src/**/services.ts"
+        - "web/src/**/services.tsx"
+        - "web/src/**/component.ts"
+        - "web/src/**/component.tsx"
+        - "web/src/**/components.ts"
+        - "web/src/**/components.tsx"
+        - "web/src/**/hooks.ts"
+        - "web/src/**/hooks.tsx"
+        - "web/src/**/components/**"
+        - "web/src/**/hooks/**"
+        - "web/src/**/types/**"
+        - "web/src/**/utils/**"
+        - "web/src/**/helpers/**"
+        - "web/src/**/common/**"
+        - "web/src/**/services/**"
+        - "web/src/**/index.tsx"
+        - "web/src/**/index.test.ts"
+        - "web/src/**/index.spec.ts"
+
+  web/typescript-source:
+    rationale: "Web executable source uses the TypeScript and TSX files ArcLint observes; JavaScript and alternate module extensions must not silently escape dependency checks."
+    on: web_source
+    structure:
+      forbid: ["web/src/**/*.js", "web/src/**/*.jsx", "web/src/**/*.mjs", "web/src/**/*.cjs", "web/src/**/*.mts", "web/src/**/*.cts"]
+
+  web/explicit-public-exports:
+    rationale: "A public interface names its exports explicitly. This line check catches wildcard export statements; it does not judge semantic cohesion."
+    on: web_source
+    files: "web/src/**/index.ts"
+    content:
+      forbid: '^\s*export\s+(type\s+)?\*'
 
   # ---- repository-wide -----------------------------------------------
 

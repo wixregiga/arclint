@@ -1,0 +1,9 @@
+rule: web/pwa-lifecycle-is-opt-in
+files:
+  web/src/app/entrypoints/start-web.ts: |
+    import "../pwa/register-worker";
+  web/src/app/pwa/register-worker.ts: |
+    import "./worker-url";
+  web/src/app/pwa/worker-url.ts: |
+    export {};
+expect: []

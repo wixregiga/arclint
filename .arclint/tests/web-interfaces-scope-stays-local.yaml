@@ -1,0 +1,7 @@
+rule: web/public-interfaces
+files:
+  web/src/shared/ui/Button.tsx: |
+    export const Button = () => null;
+  unrelated/src/features/no-entry/model/opaque.ts: |
+    export {};
+expect: []

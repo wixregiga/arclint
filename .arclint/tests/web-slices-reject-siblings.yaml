@@ -1,0 +1,35 @@
+rule: web/slices-are-independent
+files:
+  web/src/pages/first/index.ts: |
+    import "../second";
+  web/src/pages/second/index.ts: |
+    export {};
+  web/src/widgets/first/index.ts: |
+    import "../second";
+  web/src/widgets/second/index.ts: |
+    export {};
+  web/src/features/first/index.ts: |
+    import "../second";
+  web/src/features/second/index.ts: |
+    export {};
+  web/src/entities/first/index.ts: |
+    import "../second";
+  web/src/entities/second/index.ts: |
+    export {};
+expect:
+- kind: violation
+  path: web/src/pages/first/index.ts
+  message: Web slice web/src/pages/first cannot import sibling slice web/src/pages/second
+  line: 1
+- kind: violation
+  path: web/src/widgets/first/index.ts
+  message: Web slice web/src/widgets/first cannot import sibling slice web/src/widgets/second
+  line: 1
+- kind: violation
+  path: web/src/features/first/index.ts
+  message: Web slice web/src/features/first cannot import sibling slice web/src/features/second
+  line: 1
+- kind: violation
+  path: web/src/entities/first/index.ts
+  message: Web slice web/src/entities/first cannot import sibling slice web/src/entities/second
+  line: 1

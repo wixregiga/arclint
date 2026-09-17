@@ -1,0 +1,15 @@
+rule: web/layers-point-downward
+files:
+  web/src/app/entrypoints/mount-web.ts: |
+    import "../../pages/inspect-project";
+  web/src/pages/inspect-project/index.ts: |
+    import "../../widgets/project-outline";
+  web/src/widgets/project-outline/index.ts: |
+    import "../../features/open-project";
+  web/src/features/open-project/index.ts: |
+    import "../../entities/project";
+  web/src/entities/project/index.ts: |
+    import "../../shared/api";
+  web/src/shared/api/index.ts: |
+    export {};
+expect: []

@@ -1,0 +1,11 @@
+rule: web/browser-dependencies
+files:
+  web/src/app/entrypoints/mount-web.ts: |
+    import "../../../vite.config";
+  web/vite.config.ts: |
+    export {};
+expect:
+- kind: violation
+  path: web/src/app/entrypoints/mount-web.ts
+  message: import "../../../vite.config" resolves to Zone(s) ["web"], not in the allow-list of Zone "web_source"
+  line: 1

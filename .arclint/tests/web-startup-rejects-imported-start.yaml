@@ -1,0 +1,12 @@
+rule: web/standalone-is-an-entrypoint
+files:
+  web/src/app/entrypoints/start-web.ts: |
+    export {};
+  web/src/app/entrypoints/mount-web.ts: |
+    import "./start-web";
+expect:
+- kind: violation
+  path: web/src/app/entrypoints/mount-web.ts
+  message: Zone "web_standalone" is protected (importable only by []); import of "./start-web" from Zone(s)
+    ["web", "web_app", "web_source"]
+  line: 1

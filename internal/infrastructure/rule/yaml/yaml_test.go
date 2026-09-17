@@ -39,14 +39,14 @@ func TestLoadTargetRuleset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConfiguredRules: %v", err)
 	}
-	if len(cfg.Zones) != 17 {
-		t.Errorf("zones = %d, want 17", len(cfg.Zones))
+	if len(cfg.Zones) != 27 {
+		t.Errorf("zones = %d, want 27", len(cfg.Zones))
 	}
 	builtIn, err := rule.BuiltIn()
 	if err != nil {
 		t.Fatalf("BuiltIn: %v", err)
 	}
-	const local = 29
+	const local = 40
 	if len(cfg.Rules) != local+len(builtIn) {
 		t.Errorf("rules = %d, want %d local + %d built-in", len(cfg.Rules), local, len(builtIn))
 	}
@@ -57,7 +57,7 @@ func TestLoadTargetRuleset(t *testing.T) {
 		t.Errorf("unknown imports policy = %q, want error", cfg.Scan.UnknownImports)
 	}
 	if len(cfg.Extensions) != 0 {
-		t.Errorf("the repository extends no Pattern and authors no extension; got %d extensions", len(cfg.Extensions))
+		t.Errorf("the repository extends no Pattern; got %d Pattern-supplied extensions", len(cfg.Extensions))
 	}
 	byID := map[string]rule.Rule{}
 	for _, r := range cfg.Rules {
