@@ -1,0 +1,13 @@
+rule: web/typescript-source
+files:
+  web/src/shared/lib/format-date.js: |
+    export {};
+  web/src/shared/lib/parse-date.mts: |
+    export {};
+expect:
+- kind: violation
+  path: web/src/shared/lib/format-date.js
+  message: path forbidden by structure rule "web/src/**/*.js" of Zone "web_source"
+- kind: violation
+  path: web/src/shared/lib/parse-date.mts
+  message: path forbidden by structure rule "web/src/**/*.mts" of Zone "web_source"

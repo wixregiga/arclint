@@ -1,0 +1,13 @@
+rule: web/files-speak-their-purpose
+files:
+  web/src/entities/project/model/types.ts: |
+    export {};
+  web/src/shared/utils/format-date.ts: |
+    export {};
+expect:
+- kind: violation
+  path: web/src/entities/project/model/types.ts
+  message: path forbidden by structure rule "web/src/**/types.ts" of Zone "web_source"
+- kind: violation
+  path: web/src/shared/utils/format-date.ts
+  message: path forbidden by structure rule "web/src/**/utils/**" of Zone "web_source"

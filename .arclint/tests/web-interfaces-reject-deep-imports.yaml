@@ -1,0 +1,23 @@
+rule: web/public-interfaces
+files:
+  web/src/app/entrypoints/mount-web.ts: |
+    import "../../features/open-project/model/open-project";
+    export { openProject } from "../../features/open-project/model/open-project";
+    const load = () => import("../../features/open-project/model/open-project");
+  web/src/features/open-project/index.ts: |
+    export { openProject } from "./model/open-project";
+  web/src/features/open-project/model/open-project.ts: |
+    export function openProject() {}
+expect:
+- kind: violation
+  path: web/src/app/entrypoints/mount-web.ts
+  message: Import Web module web/src/features/open-project through web/src/features/open-project/index.ts
+  line: 1
+- kind: violation
+  path: web/src/app/entrypoints/mount-web.ts
+  message: Import Web module web/src/features/open-project through web/src/features/open-project/index.ts
+  line: 2
+- kind: violation
+  path: web/src/app/entrypoints/mount-web.ts
+  message: Import Web module web/src/features/open-project through web/src/features/open-project/index.ts
+  line: 3

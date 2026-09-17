@@ -1,0 +1,11 @@
+rule: web/browser-dependencies
+files:
+  web/src/app/entrypoints/mount-web.ts: |
+    import "../../../../outside";
+  outside.ts: |
+    export {};
+expect:
+- kind: violation
+  path: web/src/app/entrypoints/mount-web.ts
+  message: import "../../../../outside" resolves to code outside any declared Zone, not allowed for Zone "web_source"
+  line: 1

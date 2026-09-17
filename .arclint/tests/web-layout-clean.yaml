@@ -1,0 +1,17 @@
+rule: web/source-layout
+files:
+  web/src/app/entrypoints/mount-web.ts: |
+    export {};
+  web/src/pages/inspect-project/index.ts: |
+    export {};
+  web/src/pages/inspect-project/ui/ProjectScreen.tsx: |
+    export const ProjectScreen = () => null;
+  web/src/features/open-project/api/open-project.ts: |
+    export {};
+  web/src/entities/project/model/project-description.ts: |
+    export {};
+  web/src/shared/ui/Button.tsx: |
+    export const Button = () => null;
+  web/src/shared/lib/dates/format-date.ts: |
+    export {};
+expect: []

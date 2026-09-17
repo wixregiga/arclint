@@ -1,0 +1,22 @@
+rule: web/public-interfaces
+files:
+  web/src/app/entrypoints/mount-web.ts: |
+    import "../../shared/lib/dates/format-date";
+    import "../../shared/api/fetch-project";
+  web/src/shared/lib/dates/index.ts: |
+    export {};
+  web/src/shared/lib/dates/format-date.ts: |
+    export {};
+  web/src/shared/api/index.ts: |
+    export {};
+  web/src/shared/api/fetch-project.ts: |
+    export {};
+expect:
+- kind: violation
+  path: web/src/app/entrypoints/mount-web.ts
+  message: Import Web module web/src/shared/lib/dates through web/src/shared/lib/dates/index.ts
+  line: 1
+- kind: violation
+  path: web/src/app/entrypoints/mount-web.ts
+  message: Import Web module web/src/shared/api through web/src/shared/api/index.ts
+  line: 2

@@ -1,0 +1,12 @@
+rule: web/public-interfaces
+files:
+  web/src/features/open-project/index.ts: |
+    export { openProject } from "./model/open-project";
+  web/src/features/open-project/model/open-project.ts: |
+    import "../index";
+    export function openProject() {}
+expect:
+- kind: violation
+  path: web/src/features/open-project/model/open-project.ts
+  message: Web implementation cannot import its own public entry web/src/features/open-project/index.ts
+  line: 1

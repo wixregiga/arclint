@@ -1,0 +1,12 @@
+rule: web/pwa-lifecycle-is-opt-in
+files:
+  web/src/app/entrypoints/mount-web.ts: |
+    import "../pwa/register-worker";
+  web/src/app/pwa/register-worker.ts: |
+    export {};
+expect:
+- kind: violation
+  path: web/src/app/entrypoints/mount-web.ts
+  message: Zone "web_pwa" is protected (importable only by ["web_standalone"]); import of "../pwa/register-worker"
+    from Zone(s) ["web", "web_app", "web_source"]
+  line: 1

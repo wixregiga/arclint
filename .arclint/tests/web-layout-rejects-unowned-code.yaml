@@ -1,0 +1,18 @@
+rule: web/source-layout
+files:
+  web/src/main.ts: |
+    export {};
+  web/src/pages/inspect-project/ProjectScreen.tsx: |
+    export {};
+  web/src/app/configuration.ts: |
+    export {};
+expect:
+- kind: violation
+  path: web/src/main.ts
+  message: Web source must belong to app, pages, widgets, features, entities, or shared
+- kind: violation
+  path: web/src/pages/inspect-project/ProjectScreen.tsx
+  message: A Web slice exposes index.ts and keeps implementation in ui, api, model, lib, or config
+- kind: violation
+  path: web/src/app/configuration.ts
+  message: App and Shared code belongs to a purpose-named segment

@@ -1,0 +1,8 @@
+rule: web/public-interfaces
+files:
+  web/src/features/open-project/model/open-project.ts: |
+    export {};
+expect:
+- kind: violation
+  path: web/src/features/open-project/model/open-project.ts
+  message: Web module web/src/features/open-project must expose web/src/features/open-project/index.ts

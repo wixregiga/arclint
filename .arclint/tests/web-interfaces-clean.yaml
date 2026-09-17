@@ -1,0 +1,22 @@
+rule: web/public-interfaces
+files:
+  web/src/app/entrypoints/mount-web.ts: |
+    import "../../pages/inspect-project";
+    import "../../shared/ui/Button";
+    import "../../shared/lib/dates";
+  web/src/pages/inspect-project/index.ts: |
+    export { ProjectScreen } from "./ui/ProjectScreen";
+  web/src/pages/inspect-project/ui/ProjectScreen.tsx: |
+    import "../../../shared/api";
+    export const ProjectScreen = () => null;
+  web/src/shared/api/index.ts: |
+    export { fetchProject } from "./fetch-project";
+  web/src/shared/api/fetch-project.ts: |
+    export function fetchProject() {}
+  web/src/shared/ui/Button.tsx: |
+    export const Button = () => null;
+  web/src/shared/lib/dates/index.ts: |
+    export { formatDate } from "./format-date";
+  web/src/shared/lib/dates/format-date.ts: |
+    export function formatDate() {}
+expect: []

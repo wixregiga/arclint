@@ -1,0 +1,9 @@
+rule: web/files-speak-their-purpose
+files:
+  web/src/entities/project/model/project-description.ts: |
+    export {};
+  web/src/entities/project/index.ts: |
+    export {};
+  web/src/pages/inspect-project/ui/ProjectScreen.tsx: |
+    export {};
+expect: []

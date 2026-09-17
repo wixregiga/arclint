@@ -1,0 +1,14 @@
+rule: web/browser-dependencies
+files:
+  web/src/shared/api/fetch-project.ts: |
+    import "node:fs";
+    import "path";
+expect:
+- kind: violation
+  path: web/src/shared/api/fetch-project.ts
+  message: standard-library import "node:fs" is forbidden for Zone "web_source"
+  line: 1
+- kind: violation
+  path: web/src/shared/api/fetch-project.ts
+  message: standard-library import "path" is forbidden for Zone "web_source"
+  line: 2

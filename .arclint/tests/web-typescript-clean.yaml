@@ -1,0 +1,7 @@
+rule: web/typescript-source
+files:
+  web/src/shared/ui/Button.tsx: |
+    export {};
+  web/src/shared/lib/format-date.ts: |
+    export {};
+expect: []

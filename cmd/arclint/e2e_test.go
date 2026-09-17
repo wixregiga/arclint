@@ -139,7 +139,7 @@ func TestRulesListsRuleset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuiltIn: %v", err)
 	}
-	const local = 29
+	const local = 40
 	if len(lines) != len(builtIns)+local {
 		t.Errorf("rules listed = %d, want %d built in and %d local\n%s", len(lines), len(builtIns), local, stdout)
 	}
