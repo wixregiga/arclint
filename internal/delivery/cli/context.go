@@ -19,6 +19,7 @@ func NewContextCommand(context application.GetArchitecturalContext, render Rende
 		Short:   "explain the architecture: the repository, or everything binding the given paths",
 		MaxArgs: -1,
 		Flags: []Flag{
+			{Name: "dependencies", Bool: true, Doc: "include observed imports from configured languages (repository scope only)"},
 			{
 				Name:     "zone",
 				Doc:      "declared zones to include in the scope (comma or space separated)",
@@ -36,9 +37,10 @@ func NewContextCommand(context application.GetArchitecturalContext, render Rende
 				paths = append(paths, strings.TrimPrefix(a, "./"))
 			}
 			result, err := context.Execute(application.ContextRequest{
-				Paths: paths,
-				Zones: splitSelectors(ctx.String("zone")),
-				Full:  ctx.Bool("full"),
+				Paths:        paths,
+				Zones:        splitSelectors(ctx.String("zone")),
+				Full:         ctx.Bool("full"),
+				Dependencies: ctx.Bool("dependencies"),
 			})
 			if err != nil {
 				return ConfigError(err)

@@ -28,7 +28,7 @@ export interface FileInfo {
 }
 /**
  * ImportInfo is one classified import occurrence as exposed to
- * ctx.imports(path), for every active language target.
+ * ctx.imports(path) and ctx.facts(path).imports, for every active language target.
  */
 export interface ImportInfo {
   path: string;
@@ -47,6 +47,15 @@ export interface ImportInfo {
    * for file-granular languages (JS/TS, Python), else "".
    */
   targetFile: string;
+  /**
+   * TargetZones is the sorted membership of the exact target file or
+   * the union for its package directory. It grants no target access.
+   */
+  targetZones: string[];
+  /**
+   * TargetObserved distinguishes an observed unzoned target from a target absent from the scan.
+   */
+  targetObserved: boolean;
 }
 /**
  * ParamInfo is one function or method parameter at the syntactic tier.
@@ -98,18 +107,53 @@ export interface DeclInfo {
   results?: string[];
 }
 /**
- * FactsInfo is the cross-language declaration-fact view of one file as
- * exposed through ctx.facts(path). Languages return only declarations
- * they can support honestly.
+ * FactsInfo exposes one file's already-observed declarations and imports.
+ * Availability distinguishes unsupported or failed facts from empty results.
  */
 export interface FactsInfo {
   path: string;
   /**
+   * Zones is the sorted Zone membership of this selected source file.
+   */
+  zones: string[];
+  /**
    * Package is the Go package clause; "" for other languages.
    */
   package: string;
+  /**
+   * ImportsAvailable is false when imports are unsupported or parsing failed.
+   */
+  importsAvailable: boolean;
+  /**
+   * Imports contains parsed occurrences, never inferred runtime dependencies.
+   * Empty with ImportsAvailable true means the file has no imports.
+   */
+  imports: ImportInfo[];
+  /**
+   * Dependencies preserves incoming and outgoing evidence involving this
+   * subject. A directory target is never an exact file dependency.
+   */
+  dependencies: DependencyInfo[];
+  /**
+   * DeclarationsAvailable is false when declarations were not supplied or parsing failed.
+   */
+  declarationsAvailable: boolean;
   decls: DeclInfo[];
   parseError?: string;
+}
+/**
+ * DependencyInfo is the SDK view of the shared domain DependencyImport.
+ */
+export interface DependencyInfo {
+  sourcePath: string;
+  targetPath: string;
+  targetKind: string;
+  specifier: string;
+  line: number /* int */;
+  classification: string;
+  sourceZones: string[];
+  targetZones: string[];
+  targetObserved: boolean;
 }
 /**
  * ViolationInput is what ctx.report() accepts from a rule. Severity
@@ -117,6 +161,11 @@ export interface FactsInfo {
  * the Rule, never to one finding.
  */
 export interface ViolationInput {
+  /**
+   * SubjectPath names the selected subject when Path is a distinct evidence
+   * location. The domain validates that location against supplied dependencies.
+   */
+  subjectPath?: string;
   path: string;
   message: string;
   line?: number /* int */;

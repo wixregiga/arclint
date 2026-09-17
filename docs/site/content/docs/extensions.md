@@ -126,6 +126,12 @@ extension unless the Pattern is extended; the check fails with
 The [chain of custody](/docs/chain-of-custody/) explains when facts are
 collected and where the host applies each Rule's file-access boundary.
 
+The conformance domain supplies the same `Facts` used by native evaluators. It restricts
+facts to the Rule's requirements, selected subjects, and Exclusions.
+Dependency evidence may originate outside Scope when it involves a selected
+subject; that evidence grants no access to the originating file. The adapter
+translates this value into the SDK; it receives no repository-wide observations.
+
 During `check`, the host lends exactly this read-only surface. File-scoped
 calls are limited to the Rule's selected subjects: paths outside
 Scope are invisible to `files` / `imports` / `facts` / `zoneOf`
@@ -139,7 +145,7 @@ globals.
 | `ctx.read(path)` | one selected file's content; throws when out of scope or unreadable |
 | `ctx.imports(path)` | classified imports (`stdlib` \| `internal` \| `external` \| `unknown` \| `cgo`) with `targetDir` / `targetFile` when resolved |
 | `ctx.zones()` | declared Zone names to their **selected** member paths |
-| `ctx.facts(path)` | declaration facts, or `null` when the language did not supply them |
+| `ctx.facts(path)` | available declarations, outgoing imports, incident dependencies, and Zone memberships for a selected subject; `null` outside Scope |
 | `ctx.zoneOf(path)` | sorted Zone names containing the path (empty when out of scope) |
 | `ctx.report(v)` | record one finding |
 | `ctx.domain()` | the project's recorded domain model (`DomainInfo`); empty `contexts` and `relations` when none is recorded |
@@ -147,7 +153,7 @@ globals.
 `ctx.report` accepts only:
 
 ```ts
-{ path: string; message: string; line?: number; fixHint?: string }
+{ path: string; message: string; line?: number; fixHint?: string; subjectPath?: string }
 ```
 
 `path` and `message` are required. Severity is not on the wire: the Rule
@@ -245,6 +251,121 @@ the author's `capability` claim. Findings become suspected Violations at
 the Rule's Severity (still gate when Severity is `error`). Subjects with
 no findings evaluate undetermined, never conformance.
 
+## Dependency facts
+
+Go, TypeScript, and Python supply observations through the same scoped Facts
+contract and the same SDK methods. The observations retain language-specific
+precision: a Go package target remains a directory, while a resolved TypeScript
+or Python file target retains its exact path.
+
+`ctx.facts(path)` includes already-collected imports by default alongside
+`decls`. No opt-in, command, second query, or additional parse is needed.
+The source location is `facts.path` plus each import's `line`; `path` on
+an import is its original specifier. `class` retains `stdlib`, `internal`,
+`external`, `unknown`, or `cgo`.
+
+```ts
+const facts = ctx.facts(file.path);
+if (facts?.importsAvailable) {
+  for (const imp of facts.imports) {
+    if (imp.targetZones.includes("infrastructure")) {
+      ctx.report({
+        path: facts.path,
+        line: imp.line,
+        message: `Imports infrastructure through ${imp.path}`,
+      });
+    }
+  }
+}
+```
+
+`facts.zones` contains the selected source file's sorted Zone memberships.
+Each import includes `targetDir`, `targetFile`, and sorted `targetZones`,
+using the check's existing membership index. An exact file target uses
+that file's memberships; a package-directory target uses the directory's
+union of memberships and leaves `targetFile` empty. An unresolved target
+has empty target paths and an empty `targetZones` array. Package resolution
+never invents dependencies on individual files.
+
+`targetObserved` says whether the resolved file or package directory is
+represented in the observations. A target can be observed while `targetZones`
+is empty because no declared Zone contains it. A false value for a resolved
+internal target means it was absent from the scan, not necessarily from disk.
+
+These are parsed import observations, not inferred runtime relationships or
+Rule outcomes. Endpoint paths and memberships describe dependency evidence;
+they do not expand file access. Even when an import names an excluded or
+out-of-Scope file, `facts`, `imports`, `zoneOf`, and `read` still deny access
+to that file, and `zones` lists only selected members. Reporting at a target
+without supplied source-location evidence is a Scope breach. Extensions have no file-writing capability.
+
+Availability is explicit:
+
+- `importsAvailable: true` with `imports: []` means the file was observed
+  with no imports.
+- `importsAvailable: false` with `imports: []` means import observations
+  are unavailable or parsing failed, not that there are no dependencies.
+- `declarationsAvailable` independently describes `decls`; available
+  imports remain accessible when declarations were not supplied.
+- A supplied parse failure is retained as `parseError`; both availability
+  flags are false and `imports` / `decls` are empty. Incoming dependency
+  evidence observed in other files can still be available.
+- A selected path without language observations still has a facts object
+  with false availability flags. `null` means the path is outside Scope.
+- Go blank imports (`import _ "package"`) are valid dependency observations.
+
+`ctx.imports(path)` remains available and returns the same available import
+occurrences. Use `ctx.facts(path)` when absence must be distinguished from
+an observed empty import list.
+
+When upgrading an extension that used `if (!facts)` to detect unavailable
+declarations, use `if (!facts?.declarationsAvailable)` instead. A facts object
+can carry imports or incoming evidence even when declarations are unavailable.
+Run `arclint sdk init` in each consuming project after upgrading ArcLint to
+refresh its editor declarations. Keep invocation-specific data inside `check`;
+module state starts fresh for each invocation.
+
+### Incoming dependencies
+
+`facts.dependencies` contains the already-observed incoming and outgoing
+imports involving the selected subject. Each entry has `sourcePath`,
+`targetPath`, `targetKind` (`file`, `directory`, or `unresolved`), `specifier`,
+`line`, `classification`, `sourceZones`, `targetZones`, and `targetObserved`. An import appearing
+in two subjects' views has the same attributes in both. Directory targets
+remain package evidence, even when a selected subject is a file in that package.
+
+For a Rule selecting `domain/order.ts`, this reports an import from an
+unapproved Zone at its actual source location:
+
+```ts
+const subject = "domain/order.ts";
+for (const edge of ctx.facts(subject)?.dependencies ?? []) {
+  if (edge.targetKind === "file" && edge.targetPath === subject &&
+      !edge.sourceZones.includes("application")) {
+    ctx.report({
+      subjectPath: subject,
+      path: edge.sourcePath,
+      line: edge.line,
+      message: `Only application may import ${subject}`,
+    });
+  }
+}
+```
+
+`subjectPath` keeps the finding attached to the selected subject. A distinct
+`path` and `line` must match a supplied dependency's source location. Omitting
+`subjectPath` means the reported `path` is itself the subject. Knowing an
+importer's path does not permit `ctx.read(importer)`, `ctx.facts(importer)`, or
+traversing that importer's other dependencies. Explicitly excluded import
+sources are omitted from the supplied dependency evidence.
+
+ArcLint indexes existing observations once per check and projects only incident
+evidence for each Rule. It does not rescan, reparse, resolve again, or build a
+repository export for every invocation. Native dependency graph checks use the
+same endpoint and membership interpretation. Missing observations and unresolved
+imports remain limits of this evidence: an empty incident list does not prove
+that no importer exists. Extension results remain heuristic.
+
 ## Signature facts
 
 When declarations are available, every `func` and `method` declaration
@@ -253,8 +374,8 @@ text, not resolved types, so signature comparison is structural rather
 than proof.
 
 Go facts are parser-exact. TypeScript and Python declarations come from
-their pinned tree-sitter grammars. `ctx.facts(path)` returns `null` when
-the file's language did not supply declarations.
+their pinned tree-sitter grammars. Check `facts.declarationsAvailable`
+before treating an empty `decls` array as an observed absence of declarations.
 
 ```ts
 // Find(id string) (Member, error) becomes:
@@ -292,6 +413,9 @@ them without checking, and the host enforces the params schema instead.
 
 Extensions run on a bare ES runtime:
 
+- Each invocation has a fresh runtime. Compiled extension code is reused,
+  while closures, globals, and retained contexts are never shared across
+  invocations or different Rule types in the same extension.
 - `Date.now` and `Math.random` are host-controlled (deterministic).
 - Registration and each `check` invocation time out after 5s
   (interrupt-based).
@@ -306,8 +430,10 @@ test's error; later tests still run.
 
 ## Scope breaches
 
-`ctx.report` accepts any path string. If any reported path falls outside
-the Rule's selected subjects, the whole Extension run is untrustworthy:
+`ctx.report` accepts path strings, which the domain validates. A finding must
+name a selected subject. Its location must be that subject or the exact source
+file and line of a supplied dependency involving it. If any finding violates
+this boundary, the whole Extension run is untrustworthy:
 
 - every finding from that run is discarded (none become Violations),
 - each selected subject evaluates `failed`,

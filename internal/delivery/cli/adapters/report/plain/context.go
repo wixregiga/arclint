@@ -49,6 +49,22 @@ func writeContext(w io.Writer, c application.ArchitecturalContext) error {
 			p.Printf("  stdlib imports: %s\n", m.Stdlib)
 		}
 	}
+	if d := c.Dependencies; d != nil {
+		p.Printf("\nobserved dependencies: %d imports; %d/%d configured source files analyzed; complete within scan: %t\n", len(d.Edges), d.Coverage.FilesWithImports, d.Coverage.SourceFiles, d.Coverage.Complete)
+		for _, edge := range d.Edges {
+			target := edge.TargetPath
+			if target == "" {
+				target = edge.Specifier
+			}
+			p.Printf("  %s:%d → %s [%s; %s]\n", edge.SourcePath, edge.Line, target, edge.Classification, edge.TargetKind)
+		}
+		for _, diagnostic := range d.Diagnostics {
+			p.Printf("  %s %s: %s\n", diagnostic.Code, diagnostic.Path, diagnostic.Message)
+		}
+		for _, limit := range d.Limitations {
+			p.Printf("  limit: %s\n", limit)
+		}
+	}
 	if c.Domain != nil {
 		writeDomainKnowledge(p, c.Domain)
 	}

@@ -60,25 +60,30 @@ func (uc GetDomainOverview) Execute() (DomainOverview, error) {
 	}
 	out.Language = lang
 	out.Counts = lang.Counts()
-	if uc.rules != nil && uc.observations != nil {
-		cfg, err := uc.rules.ConfiguredRules()
-		if err != nil {
-			return DomainOverview{}, fmt.Errorf("load configured rules: %w", err)
-		}
-		obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, []rule.Fact{rule.FactDeclarations})
-		if err != nil {
-			return DomainOverview{}, fmt.Errorf("observe contracts: %w", err)
-		}
-		matrix := domainKnowledgeOf(lang)
-		carriers, err := conformance.NewCarriers(obs, lang, cfg.Zones)
-		if err != nil {
-			return DomainOverview{}, fmt.Errorf("locate contracts: %w", err)
-		}
-		if err := locateDomainContracts(matrix, carriers); err != nil {
-			return DomainOverview{}, fmt.Errorf("locate contracts: %w", err)
-		}
-		matrix.Unanchored = unanchoredContracts(matrix, cfg.Languages)
-		out.Matrix = matrix
+	if uc.rules == nil || uc.observations == nil {
+		return out, nil
 	}
+	cfg, err := uc.rules.ConfiguredRules()
+	if err != nil {
+		return DomainOverview{}, fmt.Errorf("load configured rules: %w", err)
+	}
+	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, []rule.Fact{rule.FactDeclarations})
+	if err != nil {
+		return DomainOverview{}, fmt.Errorf("observe contracts: %w", err)
+	}
+	matrix := domainKnowledgeOf(lang)
+	facts, err := conformance.NewInspectionFacts(cfg.Zones, obs, rule.FactDeclarations)
+	if err != nil {
+		return DomainOverview{}, fmt.Errorf("prepare domain facts: %w", err)
+	}
+	carriers, err := conformance.NewCarriers(facts, lang)
+	if err != nil {
+		return DomainOverview{}, fmt.Errorf("locate contracts: %w", err)
+	}
+	if err := locateDomainContracts(matrix, carriers); err != nil {
+		return DomainOverview{}, fmt.Errorf("locate contracts: %w", err)
+	}
+	matrix.Unanchored = unanchoredContracts(matrix, cfg.Languages)
+	out.Matrix = matrix
 	return out, nil
 }

@@ -14,7 +14,7 @@ weight = 6
 | `arclint check [path]` | evaluate configured Rules; accepts `--no-baseline` and `--only` / `--exclude` Rule selectors |
 | `arclint baseline capture` | replace `.arclint/baseline.v2.json` with the active findings from one complete assessment |
 | `arclint baseline refresh` | reassess and replace the Baseline, dropping stale entries |
-| `arclint context [paths...]` | explain the repository or everything binding the selected paths; `--zone` adds named Zones, `--full` lists the whole recorded domain instead of the part anchored into the scope |
+| `arclint context [paths...]` | explain the repository or everything binding the selected paths; `--zone` adds named Zones, `--full` lists the whole recorded domain instead of the part anchored into the scope; `--dependencies` adds observed imports at repository scope |
 | `arclint domain` | shorthand for `arclint domain overview`; inspect and maintain the project's ubiquitous language |
 | `arclint domain init` | create an empty, schema-hinted `domain.arclint.yaml` beside the resolved `rules.arclint.yaml`; leave an existing file unchanged |
 | `arclint domain overview` | summarize the project's ubiquitous language for understanding |
@@ -218,6 +218,41 @@ turns each missing contract into a Violation under `arclint check`.
 The JSON shape carries the same facts under `domain.scoped`,
 `domain.shown`, `domain.located`, per-contract `anchor` and `reason`,
 and `domain.unanchored`.
+
+`arclint context --dependencies --format json` adds a `dependencies` block
+with observed files, direct import edges, overlapping Zone memberships,
+coverage, diagnostics, and analysis limits. This opt-in mode requires
+repository scope: do not combine it with paths or `--zone`. It uses the
+same language observation source as conformance checks and honors the
+configured languages and scan exclusions. Default context output is unchanged.
+
+Each edge retains its source path, import specifier, line, and native
+classification (`internal`, `external`, `stdlib`, `unknown`, or `cgo`).
+An internal target is a repository-relative `file` or `directory`;
+Go package imports remain directory targets, whose Zones are the union
+of observed files directly in that directory. A nonlocal or unresolved
+import has no local target path. Missing import facts, parse failures,
+unknown classifications, and unobserved internal targets are explicit
+diagnostics rather than empty successful results. `coverage.complete`
+applies only to the configured observation scope; parsed imports do not
+prove runtime or transitive dependencies, nor compliance with a Rule.
+
+`targetObserved` records whether the resolved target is represented in the
+scan, independently of its Zone memberships. An observed file outside every
+Zone has `targetObserved: true` and empty `targetZones`. An excluded target can
+have a resolved path while `targetObserved` is false.
+
+The diagnostic distinctions are:
+
+| Code | Meaning |
+|---|---|
+| `IMPORTS_UNAVAILABLE` | No usable import list was supplied for a configured source file, including parse failures |
+| `TARGET_UNRESOLVED` | An internal import was observed without a resolved file or directory |
+| `TARGET_NOT_OBSERVED` | A resolved target has no corresponding observed file or direct directory member; this does not assert absence from disk |
+
+A successfully analyzed file with zero imports contributes to coverage.
+When context also locates recorded domain contracts, imports and declarations
+are requested together in one observation pass.
 
 `arclint agents md --write` covers the prompt-time half: it compiles the
 ruleset, the recorded vocabulary, and the local extension registry into

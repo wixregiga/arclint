@@ -50,11 +50,11 @@ func Run(req Request) (Assessment, error) {
 		return Assessment{}, fmt.Errorf("conformance: unknown_imports policy %q invalid", policy)
 	}
 
-	mem, err := newMembership(req.Zones, req.Observations)
+	source, err := newFactsSource(req.Zones, req.Observations)
 	if err != nil {
 		return Assessment{}, err
 	}
-	rules, err := validRules(req.Rules, mem)
+	rules, err := validRules(req.Rules, source.membership)
 	if err != nil {
 		return Assessment{}, err
 	}
@@ -73,27 +73,28 @@ func Run(req Request) (Assessment, error) {
 			continue
 		}
 		applied = append(applied, r.ID().Qualified())
+		facts := source.forRule(r)
 		var es []Evaluation
 		var ruleDiags []Diagnostic
 		switch {
 		case !r.Enforcement().CanEvaluate():
-			es, err = evaluateUnsupported(r, mem)
+			es, err = evaluateUnsupported(r, facts)
 		case r.Type() == rule.TypeConsumes:
-			es, err = evaluateConsumes(r, mem, req.Observations)
+			es, err = evaluateConsumes(r, facts)
 		case r.Type() == rule.TypeStructure:
-			es, err = evaluateStructure(r, mem)
+			es, err = evaluateStructure(r, facts)
 		case r.Type() == rule.TypeNaming:
-			es, err = evaluateNaming(r, mem)
+			es, err = evaluateNaming(r, facts)
 		case r.Type() == rule.TypeContent:
-			es, err = evaluateContent(r, mem, req.Observations)
+			es, err = evaluateContent(r, facts)
 		case r.Type() == rule.TypeExtension:
-			es, ruleDiags, err = evaluateExtensionRule(r, mem, req.Observations, req.Extensions, req.Zones, req.Knowledge)
+			es, ruleDiags, err = evaluateExtensionRule(r, facts, req.Extensions, req.Knowledge)
 		case r.Type() == rule.TypeLayers, r.Type() == rule.TypeProtected, r.Type() == rule.TypeIndependence, r.Type() == rule.TypeAcyclic:
-			es, err = evaluateGraph(r, mem, req.Observations)
+			es, err = evaluateGraph(r, facts)
 		case r.Type() == rule.TypeDomain:
-			es, err = evaluateDomain(r, mem, req.Observations, req.Knowledge)
+			es, err = evaluateDomain(r, facts, req.Knowledge)
 		default:
-			es, err = evaluateUnsupported(r, mem)
+			es, err = evaluateUnsupported(r, facts)
 		}
 		if err != nil {
 			return Assessment{}, err
@@ -140,110 +141,6 @@ func validRules(rules []rule.Rule, mem membership) ([]rule.Rule, error) {
 		return out[i].ID().Qualified() < out[j].ID().Qualified()
 	})
 	return out, nil
-}
-
-// membership resolves Zone membership over the Observations once,
-// for every evaluator.
-type membership struct {
-	names     []rule.ZoneName // sorted
-	zones     map[rule.ZoneName]rule.Zone
-	files     []string                   // sorted repo-relative paths
-	fileZones map[string][]rule.ZoneName // sorted per file
-	zoneFiles map[rule.ZoneName][]string // path order
-	dirZones  map[string][]rule.ZoneName // sorted per directory
-}
-
-func newMembership(zones []rule.Zone, obs Observations) (membership, error) {
-	mem := membership{
-		zones:     map[rule.ZoneName]rule.Zone{},
-		fileZones: map[string][]rule.ZoneName{},
-		zoneFiles: map[rule.ZoneName][]string{},
-		dirZones:  map[string][]rule.ZoneName{},
-	}
-	for _, m := range zones {
-		if _, ok := mem.zones[m.Name()]; ok {
-			return membership{}, fmt.Errorf("conformance: duplicate zone %q", m.Name())
-		}
-		mem.zones[m.Name()] = m
-		mem.names = append(mem.names, m.Name())
-	}
-	sort.Slice(mem.names, func(i, j int) bool { return mem.names[i] < mem.names[j] })
-
-	dirSets := map[string]map[rule.ZoneName]bool{}
-	for _, f := range obs.Files() {
-		mem.files = append(mem.files, f.Path)
-		for _, name := range mem.names {
-			if mem.zones[name].Contains(f.Path) {
-				mem.fileZones[f.Path] = append(mem.fileZones[f.Path], name)
-				mem.zoneFiles[name] = append(mem.zoneFiles[name], f.Path)
-			}
-		}
-		if mods := mem.fileZones[f.Path]; len(mods) > 0 {
-			d := path.Dir(f.Path)
-			set := dirSets[d]
-			if set == nil {
-				set = map[rule.ZoneName]bool{}
-				dirSets[d] = set
-			}
-			for _, m := range mods {
-				set[m] = true
-			}
-		}
-	}
-	for d, set := range dirSets {
-		names := make([]rule.ZoneName, 0, len(set))
-		for m := range set {
-			names = append(names, m)
-		}
-		sort.Slice(names, func(i, j int) bool { return names[i] < names[j] })
-		mem.dirZones[d] = names
-	}
-	return mem, nil
-}
-
-// targetZones resolves the declared Zones an internal import lands
-// in: file-granular targets through the file's own membership,
-// package-granular targets through the directory union.
-func (m membership) targetZones(imp Import) []rule.ZoneName {
-	if imp.TargetFile != "" {
-		return m.fileZones[imp.TargetFile]
-	}
-	if imp.TargetDir != "" {
-		return m.dirZones[imp.TargetDir]
-	}
-	return nil
-}
-
-// partitionFiles splits the observed files into the Rule's selected
-// Subjects and the subjects an Exclusion removed.
-func partitionFiles(r rule.Rule, mem membership) (selected, excluded []string) {
-	for _, f := range mem.files {
-		if !r.Scope().WouldSelectFile(f, mem.fileZones[f]) {
-			continue
-		}
-		if r.Scope().ExcludedFile(f) {
-			excluded = append(excluded, f)
-			continue
-		}
-		selected = append(selected, f)
-	}
-	return selected, excluded
-}
-
-// partitionZoneFiles is partitionFiles narrowed to one Zone's
-// member files, for evaluators that judge per Zone.
-func partitionZoneFiles(r rule.Rule, name rule.ZoneName, mem membership) (selected, excluded []string) {
-	for _, f := range mem.zoneFiles[name] {
-		if !r.Scope().WouldSelectFile(f, mem.fileZones[f]) {
-			continue
-		}
-		if r.Scope().ExcludedFile(f) {
-			excluded = append(excluded, f)
-			continue
-		}
-		selected = append(selected, f)
-	}
-	return selected, excluded
 }
 
 // applySuppressions relabels Violations the Rule's Suppressions match.

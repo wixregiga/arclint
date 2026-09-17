@@ -53,6 +53,26 @@ type Import struct {
 	TargetFile string
 }
 
+const (
+	importTargetFile       = "file"
+	importTargetDirectory  = "directory"
+	importTargetUnresolved = "unresolved"
+)
+
+// Target returns the resolver's precision and repository-relative endpoint.
+// Package resolution never implies a dependency on a particular member file.
+func (i Import) Target() (kind, target string) {
+	if i.Class == ImportInternal {
+		if i.TargetFile != "" {
+			return importTargetFile, i.TargetFile
+		}
+		if i.TargetDir != "" {
+			return importTargetDirectory, i.TargetDir
+		}
+	}
+	return importTargetUnresolved, ""
+}
+
 // DeclarationParam is one parameter of a func or method declaration
 // at the syntactic tier.
 type DeclarationParam struct {
@@ -234,10 +254,7 @@ func NewObservations(files []ObservedFile, facts map[string]LanguageFacts) (Obse
 				return Observations{}, fmt.Errorf("observations: %s: declaration kind %q is outside the closed cross-language vocabulary", path, d.Kind)
 			}
 		}
-		f.Imports = append([]Import(nil), f.Imports...)
-		f.Declarations = append([]Declaration(nil), f.Declarations...)
-		f.Calls = append([]Call(nil), f.Calls...)
-		copied[path] = f
+		copied[path] = copyLanguageFacts(f)
 	}
 	return Observations{files: sorted, facts: copied}, nil
 }
@@ -264,7 +281,7 @@ func (o Observations) Files() []ObservedFile { return append([]ObservedFile(nil)
 // adapter produced them.
 func (o Observations) FactsFor(path string) (LanguageFacts, bool) {
 	f, ok := o.facts[path]
-	return f, ok
+	return copyLanguageFacts(f), ok
 }
 
 // WithContent returns Observations that lend c for Extension content
@@ -278,4 +295,15 @@ func (o Observations) WithContent(c Content) Observations {
 // supplied.
 func (o Observations) Content() Content {
 	return o.content
+}
+
+func copyLanguageFacts(f LanguageFacts) LanguageFacts {
+	f.Imports = append([]Import(nil), f.Imports...)
+	f.Declarations = append([]Declaration(nil), f.Declarations...)
+	for i := range f.Declarations {
+		f.Declarations[i].Params = append([]DeclarationParam(nil), f.Declarations[i].Params...)
+		f.Declarations[i].Results = append([]string(nil), f.Declarations[i].Results...)
+	}
+	f.Calls = append([]Call(nil), f.Calls...)
+	return f
 }

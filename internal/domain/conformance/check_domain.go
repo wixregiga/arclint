@@ -76,7 +76,7 @@ var domainChecks = map[string]domainCheck{
 // for it; a context whose scope yields none of the facts the invariant
 // reads is unsupported, and a check that needs Zones is not applicable
 // while the ruleset declares none.
-func evaluateDomain(r rule.Rule, mem membership, obs Observations, knowledge vocab.UbiquitousLanguage) ([]Evaluation, error) {
+func evaluateDomain(r rule.Rule, facts Facts, knowledge vocab.UbiquitousLanguage) ([]Evaluation, error) {
 	p, ok := r.Params().(rule.DomainParams)
 	if !ok {
 		return nil, fmt.Errorf("rule %s: domain rule with %T params", r.ID(), r.Params())
@@ -89,7 +89,7 @@ func evaluateDomain(r rule.Rule, mem membership, obs Observations, knowledge voc
 	if !ok {
 		return nil, fmt.Errorf("rule %s: no evaluator for block invariant %s", r.ID(), inv.ID)
 	}
-	code, err := resolveDomain(r.Scope().ExcludedFile, mem, obs, knowledge)
+	code, err := resolveDomain(facts, knowledge)
 	if err != nil {
 		return nil, fmt.Errorf("rule %s: %w", r.ID(), err)
 	}
@@ -100,7 +100,7 @@ func evaluateDomain(r rule.Rule, mem membership, obs Observations, knowledge voc
 			return nil, fmt.Errorf("domain: %w", err)
 		}
 		outcome, undecided := cc.undecidable(inv.Enforcement.Facts)
-		if check.needsZones && len(mem.names) == 0 {
+		if check.needsZones && len(facts.zoneNames()) == 0 {
 			outcome, undecided = OutcomeNotApplicable, true
 		}
 		if undecided {
@@ -210,13 +210,12 @@ type fileImport struct {
 }
 
 // resolveDomain locates every context of the recorded domain in the
-// observed code. The excluded function removes a file from every
-// scope; the Rule's Exclusions when a Rule is judged, nothing when the
-// domain is listed.
-func resolveDomain(excluded func(string) bool, mem membership, obs Observations, knowledge vocab.UbiquitousLanguage) (domainCode, error) {
+// supplied code. The Facts view applies the Rule's Exclusions when a
+// Rule is judged and supplies inspection facts when the domain is listed.
+func resolveDomain(facts Facts, knowledge vocab.UbiquitousLanguage) (domainCode, error) {
 	code := domainCode{knowledge: knowledge, holders: map[string][]string{}}
 	for _, ctx := range knowledge.Contexts {
-		cc, err := resolveContext(ctx, mem, obs, excluded)
+		cc, err := resolveContext(ctx, facts)
 		if err != nil {
 			return domainCode{}, err
 		}
@@ -237,15 +236,15 @@ func resolveDomain(excluded func(string) bool, mem membership, obs Observations,
 	return code, nil
 }
 
-func resolveContext(ctx vocab.BoundedContext, mem membership, obs Observations, excluded func(string) bool) (contextCode, error) {
+func resolveContext(ctx vocab.BoundedContext, facts Facts) (contextCode, error) {
 	cc := contextCode{ctx: ctx, aggregates: map[string]aggregateCode{}, terms: map[string]termLocation{}}
-	zone, scope, err := contextScope(ctx.Name, mem, excluded)
+	zone, scope, err := facts.contextScope(ctx.Name)
 	if err != nil {
 		return contextCode{}, err
 	}
 	cc.zone, cc.scope = zone, scope
-	cc.scopeIdx = buildContractIndex(scope, obs)
-	cc.scopeImportFiles = importSupport(scope, obs)
+	cc.scopeIdx = buildContractIndex(scope, facts)
+	cc.scopeImportFiles = importSupport(scope, facts)
 	seen := map[string]bool{}
 	add := func(f string) {
 		if !seen[f] {
@@ -288,52 +287,16 @@ func resolveContext(ctx vocab.BoundedContext, mem membership, obs Observations, 
 		}
 	}
 	sort.Strings(cc.files)
-	cc.idx = buildContractIndex(cc.files, obs)
-	cc.imports, cc.importFiles = contextImports(cc.files, mem, obs)
+	cc.idx = buildContractIndex(cc.files, facts)
+	cc.imports, cc.importFiles = contextImports(cc.files, facts)
 	return cc, nil
 }
 
-// contextScope is where a context's declarations are looked for: the
-// member files of the Zone named for the context when the ruleset
-// declares one (its exact name first, then the same words in another
-// case), otherwise every observed file. Two Zones spelling the name in
-// different cases leave nothing to choose between, and that is an
-// error, never a silent pick.
-func contextScope(name string, mem membership, excluded func(string) bool) (rule.ZoneName, []string, error) {
-	keep := func(files []string) []string {
-		out := make([]string, 0, len(files))
-		for _, f := range files {
-			if !excluded(f) {
-				out = append(out, f)
-			}
-		}
-		sort.Strings(out)
-		return out
-	}
-	if _, ok := mem.zones[rule.ZoneName(name)]; ok {
-		return rule.ZoneName(name), keep(mem.zoneFiles[rule.ZoneName(name)]), nil
-	}
-	var spelled []rule.ZoneName
-	for _, z := range mem.names {
-		if namedFor(string(z), name) {
-			spelled = append(spelled, z)
-		}
-	}
-	switch len(spelled) {
-	case 0:
-		return "", keep(mem.files), nil
-	case 1:
-		return spelled[0], keep(mem.zoneFiles[spelled[0]]), nil
-	default:
-		return "", nil, fmt.Errorf("context %s: Zones %s all spell its name; keep one named for the context", name, quotedZones(spelled))
-	}
-}
-
 // importSupport counts the files yielding the imports fact.
-func importSupport(files []string, obs Observations) int {
+func importSupport(files []string, supplied Facts) int {
 	n := 0
 	for _, f := range files {
-		if facts, ok := obs.FactsFor(f); ok && facts.Supports(rule.FactImports) {
+		if facts, ok := supplied.FactsFor(f); ok && facts.Supports(rule.FactImports) {
 			n++
 		}
 	}
@@ -547,20 +510,20 @@ func (code domainCode) contextsOf(imp Import) []string {
 
 // contextImports collects the internal imports of the files that yield
 // the imports fact, with the count of files that yield it.
-func contextImports(files []string, mem membership, obs Observations) ([]fileImport, int) {
+func contextImports(files []string, supplied Facts) ([]fileImport, int) {
 	var out []fileImport
 	supporting := 0
 	for _, f := range files {
-		facts, ok := obs.FactsFor(f)
+		facts, ok := supplied.FactsFor(f)
 		if !ok || !facts.Supports(rule.FactImports) {
 			continue
 		}
 		supporting++
-		for _, imp := range facts.Imports {
+		for _, imp := range supplied.ImportsFor(f) {
 			if imp.Class != ImportInternal {
 				continue
 			}
-			out = append(out, fileImport{path: f, imp: imp, targets: mem.targetZones(imp)})
+			out = append(out, fileImport{path: f, imp: imp.Import, targets: imp.TargetZones})
 		}
 	}
 	return out, supporting
@@ -696,10 +659,10 @@ type contractIndex struct {
 	files []fileFacts
 }
 
-func buildContractIndex(paths []string, obs Observations) contractIndex {
+func buildContractIndex(paths []string, supplied Facts) contractIndex {
 	var files []fileFacts
 	for _, p := range paths {
-		facts, ok := obs.FactsFor(p)
+		facts, ok := supplied.FactsFor(p)
 		if !ok || facts.ParseFailure != "" {
 			continue
 		}

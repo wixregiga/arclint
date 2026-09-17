@@ -18,6 +18,8 @@ type ContextRequest struct {
 	Paths []string
 	Zones []string
 	Full  bool
+	// Dependencies adds observed imports at repository scope.
+	Dependencies bool
 }
 
 // PathBinding maps one requested path to the declared Zones owning
@@ -84,7 +86,8 @@ type ArchitecturalContext struct {
 	// Domain is the project's recorded domain model summary; nil when
 	// the project records none. Repository scope and Full carry the
 	// whole model; a worksite carries the part anchored into it.
-	Domain *DomainKnowledge `json:"domain,omitempty"`
+	Domain       *DomainKnowledge      `json:"domain,omitempty"`
+	Dependencies *ObservedDependencies `json:"dependencies,omitempty"`
 }
 
 // DomainAggregateRef is one aggregate inside a bounded-context
@@ -223,11 +226,14 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 	if err != nil {
 		return ArchitecturalContext{}, fmt.Errorf("load configured rules: %w", err)
 	}
+	if req.Dependencies && (len(req.Paths) > 0 || len(req.Zones) > 0) {
+		return ArchitecturalContext{}, fmt.Errorf("observed dependencies require repository scope; omit paths and --zone")
+	}
 	out := ArchitecturalContext{Scope: "repository", RuleCount: len(cfg.Rules)}
 	for _, l := range cfg.Languages {
 		out.Languages = append(out.Languages, string(l))
 	}
-	carriers, err := uc.recordedDomain(&out, cfg)
+	carriers, err := uc.inspectContext(&out, cfg, req.Dependencies)
 	if err != nil {
 		return ArchitecturalContext{}, err
 	}
@@ -259,27 +265,47 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 	return out, nil
 }
 
-// recordedDomain projects the recorded language into the context and,
-// when an observation source is lent, locates its contracts in source.
-// Without a recorded domain the context carries none and no carriers
-// are read.
-func (uc GetArchitecturalContext) recordedDomain(out *ArchitecturalContext, cfg rule.Configured) (conformance.Carriers, error) {
+// inspectContext collects the union of this request's fact requirements once.
+// Recorded contracts and dependency reporting consume the same prepared Facts.
+func (uc GetArchitecturalContext) inspectContext(out *ArchitecturalContext, cfg rule.Configured, dependencies bool) (conformance.Carriers, error) {
 	lang, found, err := uc.knowledge.RecordedLanguage()
 	if err != nil {
 		return conformance.Carriers{}, fmt.Errorf("load domain model: %w", err)
 	}
+	if found {
+		out.Domain = domainKnowledgeOf(lang)
+	}
+	if uc.observations == nil {
+		if dependencies {
+			return conformance.Carriers{}, fmt.Errorf("observe dependencies: no observation source is configured")
+		}
+		return conformance.Carriers{}, nil
+	}
+	var required []rule.Fact
+	if dependencies {
+		required = append(required, rule.FactImports)
+	}
+	if found {
+		required = append(required, rule.FactDeclarations)
+	}
+	if len(required) == 0 {
+		return conformance.Carriers{}, nil
+	}
+	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, required)
+	if err != nil {
+		return conformance.Carriers{}, fmt.Errorf("observe context: %w", err)
+	}
+	facts, err := conformance.NewInspectionFacts(cfg.Zones, obs, append([]rule.Fact{rule.FactFileTree}, required...)...)
+	if err != nil {
+		return conformance.Carriers{}, fmt.Errorf("prepare context facts: %w", err)
+	}
+	if dependencies {
+		out.Dependencies = dependenciesOf(facts, cfg)
+	}
 	if !found {
 		return conformance.Carriers{}, nil
 	}
-	out.Domain = domainKnowledgeOf(lang)
-	if uc.observations == nil {
-		return conformance.Carriers{}, nil
-	}
-	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, []rule.Fact{rule.FactDeclarations})
-	if err != nil {
-		return conformance.Carriers{}, fmt.Errorf("observe contracts: %w", err)
-	}
-	carriers, err := conformance.NewCarriers(obs, lang, cfg.Zones)
+	carriers, err := conformance.NewCarriers(facts, lang)
 	if err != nil {
 		return conformance.Carriers{}, fmt.Errorf("locate contracts: %w", err)
 	}
