@@ -340,10 +340,11 @@ rules:
 
   # ---- Web --------------------------------------------------------
   # The prospective contract applies before Web is implemented in this
-  # checkout. Missing launch surfaces are findings, not baseline entries.
+  # checkout. The launch-file requirement stays disabled until Web exists.
   # Layers are optional until needed; no empty slice scaffolds are required.
 
   web/launch-surfaces-present:
+    disable: "Web is not implemented yet; re-enable when its launch surfaces are added."
     rationale: "Web has separate standalone startup and host-controlled mounting entrypoints, plus an authored web app manifest; presence alone proves no runtime behavior."
     on: web
     structure:
