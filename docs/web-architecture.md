@@ -1,7 +1,7 @@
 # Web architecture contract
 
 The repository rules reserve `web/` for the Vite frontend. At the time this
-contract was introduced, `/home/jofyi/ai/arclint` contained no Web source.
+contract was introduced, the repository contained no Web source.
 These are target constraints, not a description of an existing implementation.
 `web/launch-surfaces-present` intentionally reports the missing package,
 Vite configuration, HTML entry, manifest, standalone startup, and mount entry.
@@ -96,13 +96,16 @@ elsewhere.
 | `web/pwa-lifecycle-is-opt-in` | Native importer restriction: only standalone startup imports the PWA Zone, whose own files may import each other. |
 | `web/files-speak-their-purpose` | Exact forbidden filenames and directories; semantic naming and cohesion still require review. |
 | `web/typescript-source` | Forbids `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts`, and `.cts` source under `src` so those files cannot evade the configured TypeScript observer. |
-| `web/explicit-public-exports` | A line-oriented wildcard-export check; multiline syntax and comments remain limitations. |
+| `web/explicit-public-exports` | Checks `index.ts`, the mount entry, and direct `.ts`/`.tsx` modules under `shared/ui` and `shared/lib` for wildcard exports. This is a line check; multiline syntax and comments remain limitations. |
 | `web/source-layout` | Scoped extension checks layer placement and implementation segments. |
 | `web/slices-are-independent` | Scoped extension checks resolved imports between sibling slices. |
 | `web/public-interfaces` | Scoped extension checks populated module entries, deep imports, and imports of an implementation's own barrel. |
 
 The three extension checks live in
-`.arclint/extensions/web_boundaries.ts`. The native `independent` constraint
+`.arclint/extensions/web_boundaries.ts`. They retain `ctx.imports(path)`, which
+uses the same scoped import facts as `ctx.facts(path).imports` after #69.
+The two import checks need outgoing exact-file targets; the incoming dependency projection
+is not needed for these checks. The native `independent` constraint
 deliberately removes folders owned by declared Zones, so it cannot check slices
 inside these layer Zones. Native `structure.require` cannot quantify over every
 populated directory without a recorded domain collection. FSD technical slices
@@ -115,13 +118,21 @@ when an extension declares structural capability. No extension findings means
 undetermined, not proven conformance.
 
 The current TypeScript observer resolves relative imports and index files, and
-observes static imports, re-exports, and literal dynamic imports. Use relative
-source imports in this contract. Vite/tsconfig aliases are not resolved by this
+observes static imports, re-exports, literal dynamic imports, and literal
+`require()` calls. Use relative source imports in this contract.
+Vite/tsconfig aliases are not resolved by this
 observer; unknown imports remain errors. Workspace package specifiers resolve
-to package directories rather than precise entry files and do not prove a
-slice interface was used. Computed dynamic imports, declaration-only `.d.ts`
-imports, CSS dependency graphs, package internals, and runtime loading are
-outside these import guarantees. `web/dist/` is excluded as build output.
+to package directories rather than precise entry files. Relative imports also
+fall back to a directory when no matching source or index file is found.
+The slice and interface import checks inspect only exact-file targets; neither
+directory-only nor unresolved targets prove a slice interface was used.
+Computed dynamic imports, imports originating in declaration-only `.d.ts`
+files, CSS dependency graphs, package internals, and runtime loading are
+outside these import guarantees. Unknown package specifiers are errors, but
+missing relative targets are classified as internal; these rules do not
+replace TypeScript and Vite resolution checks. `web/dist/` is excluded as
+build output. All checks also inherit the repository's `scan.exclude` entries;
+excluded source is outside their coverage.
 
 ## Browser acceptance criteria
 
@@ -154,5 +165,5 @@ replaced by architecture fixtures:
    project vocabulary require data/configuration changes rather than screen
    forks or hardcoded domain switches.
 
-Run `arclint rules test` for the rule fixtures, `arclint check --only 'web/*'
+Run `arclint rules test` for the rule fixtures, `arclint check --only 'web/*'`
 for current Web findings, and the repository finish gate `make check`.
