@@ -22,7 +22,7 @@ type FileInfo struct {
 }
 
 // ImportInfo is one classified import occurrence as exposed to
-// ctx.imports(path), for every active language target.
+// ctx.imports(path) and ctx.facts(path).imports, for every active language target.
 type ImportInfo struct {
 	Path string `json:"path"`
 	Line int    `json:"line"`
@@ -34,6 +34,11 @@ type ImportInfo struct {
 	// TargetFile is the repo-relative file an internal import resolves to
 	// for file-granular languages (JS/TS, Python), else "".
 	TargetFile string `json:"targetFile"`
+	// TargetZones is the sorted membership of the exact target file or
+	// the union for its package directory. It grants no target access.
+	TargetZones []string `json:"targetZones"`
+	// TargetObserved distinguishes an observed unzoned target from a target absent from the scan.
+	TargetObserved bool `json:"targetObserved"`
 }
 
 // ParamInfo is one function or method parameter at the syntactic tier.
@@ -67,25 +72,53 @@ type DeclInfo struct {
 	Results []string    `json:"results,omitempty"`
 }
 
-// FactsInfo is the cross-language declaration-fact view of one file as
-// exposed through ctx.facts(path). Languages return only declarations
-// they can support honestly.
+// FactsInfo exposes one file's already-observed declarations and imports.
+// Availability distinguishes unsupported or failed facts from empty results.
 type FactsInfo struct {
 	Path string `json:"path"`
+	// Zones is the sorted Zone membership of this selected source file.
+	Zones []string `json:"zones"`
 	// Package is the Go package clause; "" for other languages.
-	Package    string     `json:"package"`
-	Decls      []DeclInfo `json:"decls"`
-	ParseError string     `json:"parseError,omitempty"`
+	Package string `json:"package"`
+	// ImportsAvailable is false when imports are unsupported or parsing failed.
+	ImportsAvailable bool `json:"importsAvailable"`
+	// Imports contains parsed occurrences, never inferred runtime dependencies.
+	// Empty with ImportsAvailable true means the file has no imports.
+	Imports []ImportInfo `json:"imports"`
+	// Dependencies preserves incoming and outgoing evidence involving this
+	// subject. A directory target is never an exact file dependency.
+	Dependencies []DependencyInfo `json:"dependencies"`
+
+	// DeclarationsAvailable is false when declarations were not supplied or parsing failed.
+	DeclarationsAvailable bool       `json:"declarationsAvailable"`
+	Decls                 []DeclInfo `json:"decls"`
+	ParseError            string     `json:"parseError,omitempty"`
+}
+
+// DependencyInfo is the SDK view of the shared domain DependencyImport.
+type DependencyInfo struct {
+	SourcePath     string   `json:"sourcePath"`
+	TargetPath     string   `json:"targetPath"`
+	TargetKind     string   `json:"targetKind"`
+	Specifier      string   `json:"specifier"`
+	Line           int      `json:"line"`
+	Classification string   `json:"classification"`
+	SourceZones    []string `json:"sourceZones"`
+	TargetZones    []string `json:"targetZones"`
+	TargetObserved bool     `json:"targetObserved"`
 }
 
 // ViolationInput is what ctx.report() accepts from a rule. Severity
 // is not part of the wire shape: in the target model it belongs to
 // the Rule, never to one finding.
 type ViolationInput struct {
-	Path    string `json:"path"`
-	Message string `json:"message"`
-	Line    int    `json:"line,omitempty"`
-	FixHint string `json:"fixHint,omitempty"`
+	// SubjectPath names the selected subject when Path is a distinct evidence
+	// location. The domain validates that location against supplied dependencies.
+	SubjectPath string `json:"subjectPath,omitempty"`
+	Path        string `json:"path"`
+	Message     string `json:"message"`
+	Line        int    `json:"line,omitempty"`
+	FixHint     string `json:"fixHint,omitempty"`
 }
 
 // DomainInvariantInfo is one recorded invariant as exposed through

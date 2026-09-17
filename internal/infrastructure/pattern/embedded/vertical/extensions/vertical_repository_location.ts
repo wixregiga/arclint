@@ -12,7 +12,7 @@ export default defineRule({
     for (const file of ctx.files()) {
       const facts = ctx.facts(file.path);
       let earliest = 0;
-      if (facts) {
+      if (facts?.declarationsAvailable) {
         for (const d of facts.decls) {
           const typeHit =
             (d.kind === "interface" || d.kind === "struct" || d.kind === "type") &&

@@ -49,7 +49,9 @@ const fsdSliceIsolation = defineRule({
       for (const f of ctx.files(root + "/**")) {
         const from = sliceOfFile(f.path, root);
         if (!from) continue;
-        for (const imp of ctx.imports(f.path)) {
+        const facts = ctx.facts(f.path);
+        if (!facts?.importsAvailable) continue;
+        for (const imp of facts.imports) {
           if (imp.class !== "internal") continue;
           const targetDir = imp.targetFile ? dirOf(imp.targetFile) : imp.targetDir;
           if (!targetDir) continue;
@@ -131,7 +133,7 @@ const aggregateEncapsulation = defineRule({
         for (const f of ctx.files(prefix + slice + "/*.go")) {
           if (f.name.endsWith("_test.go")) continue;
           const facts = ctx.facts(f.path);
-          if (!facts) continue;
+          if (!facts?.declarationsAvailable) continue;
           for (const decl of facts.decls) {
             if (decl.kind === "field" && decl.owner === aggregate.name && decl.exported) {
               ctx.report({

@@ -7,94 +7,10 @@
 // invoked. esbuild strips types without checking them, so type safety is
 // an author-time editor concern backed by the generated arclint.d.ts.
 
-export interface FileInfo {
-  path: string;
-  name: string;
-  stem: string;
-  ext: string;
-  dir: string;
-  size: number;
-}
-
-export interface ImportInfo {
-  path: string;
-  line: number;
-  /** stdlib | internal | external | unknown | cgo */
-  class: string;
-  /** Repo-relative package directory for resolved internal imports, else "". */
-  targetDir: string;
-  /** Repo-relative file for file-granular languages (JS/TS, Python), else "". */
-  targetFile: string;
-}
-
-export interface ViolationInput {
-  path: string;
-  message: string;
-  line?: number;
-  fixHint?: string;
-}
-
-export interface ParamInfo {
-  name?: string;
-  type?: string;
-  optional?: boolean;
-  variadic?: boolean;
-}
-
-export interface DeclInfo {
-  /** struct | interface | type | class | enum | func | method | field | const | var */
-  kind: string;
-  name: string;
-  /** Enclosing declaration for members (receiver, interface, class), else "". */
-  owner: string;
-  exported: boolean;
-  startLine: number;
-  endLine: number;
-  params?: ParamInfo[];
-  results?: string[];
-}
-
-export interface FactsInfo {
-  path: string;
-  /** Go package clause; "" for other languages. */
-  package: string;
-  decls: DeclInfo[];
-  parseError?: string;
-}
-
-/** Published TermCases: the same closed set rules.arclint.yaml accepts in
- * {name:<case>} placeholders. */
-export type TermCase =
-  | "flatcase"
-  | "snake_case"
-  | "kebab-case"
-  | "camelCase"
-  | "PascalCase";
-
-export interface Ctx {
-  /** Repository files, optionally filtered by a doublestar glob. */
-  files(glob?: string): FileInfo[];
-  /** Read one file's content. Throws on unreadable paths. */
-  read(path: string): string;
-  /** Classified imports of one file, for every active language target. */
-  imports(path: string): ImportInfo[];
-  /** Declared zone names to their member file paths. */
-  zones(): Record<string, string[]>;
-  /** Cross-language declaration facts for one file; null when its
-   * language did not supply declarations. */
-  facts(path: string): FactsInfo | null;
-  /** The sorted zone names a file belongs to. */
-  zoneOf(path: string): string[];
-  /** The project's recorded domain model; empty collections when the
-   * project records none. */
-  domain(): unknown;
-  /** Render a recorded term in one published TermCase, the host's
-   * one casing implementation. Throws on an unknown case and on terms
-   * without letters or digits. */
-  caseTerm(term: string, termCase: TermCase): string;
-  /** Report one violation. */
-  report(v: ViolationInput): void;
-}
+import type * as API from "./api_gen";
+import type { Schema, RuleDef } from "./api_gen";
+export type { Capability, Ctx, RuleDef, Schema, TermCase } from "./api_gen";
+export type * from "./types_gen";
 
 interface SchemaState {
   schema: Record<string, unknown>;
@@ -102,18 +18,14 @@ interface SchemaState {
   hasDefault: boolean;
 }
 
-export interface Schema {
+interface RuntimeSchema extends Schema {
   readonly __schema: true;
   readonly __state: SchemaState;
-  optional(): Schema;
-  default(v: unknown): Schema;
-  describe(d: string): Schema;
-  toJSON(): Record<string, unknown>;
 }
 
-function node(base: Record<string, unknown>): Schema {
+function node(base: Record<string, unknown>): RuntimeSchema {
   const state: SchemaState = { schema: { ...base }, optional: false, hasDefault: false };
-  const api: Schema = {
+  const api: RuntimeSchema = {
     __schema: true,
     __state: state,
     optional() {
@@ -137,7 +49,7 @@ function node(base: Record<string, unknown>): Schema {
 }
 
 /** Minimal zod-style schema builder producing JSON Schema. */
-export const s = {
+export const s: typeof API.s = {
   string: () => node({ type: "string" }),
   number: () => node({ type: "number" }),
   integer: () => node({ type: "integer" }),
@@ -148,7 +60,7 @@ export const s = {
     const properties: Record<string, unknown> = {};
     const required: string[] = [];
     for (const key of Object.keys(props)) {
-      const child = props[key];
+      const child = props[key] as RuntimeSchema;
       properties[key] = child.toJSON();
       if (!child.__state.optional && !child.__state.hasDefault) {
         required.push(key);
@@ -166,23 +78,7 @@ export const s = {
   },
 };
 
-export type Capability = "exact" | "structural" | "heuristic" | "advisory";
-
-export interface RuleDef {
-  /** Unique rule type name, referenced by rules.arclint.yaml entries. */
-  type: string;
-  /** One-line summary shown by arclint rules. */
-  description?: string;
-  /** How this rule enforces its claim: exact (imports/syntax facts),
-   * structural (paths/declarations), heuristic (names/regex/complexity),
-   * advisory (guidance only). Default: heuristic, the conservative claim. */
-  capability?: Capability;
-  /** Params schema; YAML params are host-validated against it. */
-  params?: Schema;
-  check(ctx: Ctx, params: Record<string, unknown>): void;
-}
-
-export function defineRule(def: RuleDef) {
+export const defineRule: typeof API.defineRule = (def: RuleDef) => {
   if (!def || typeof def.type !== "string" || def.type.length === 0) {
     throw new Error("defineRule: type is required and must be a non-empty string");
   }
@@ -212,4 +108,4 @@ export function defineRule(def: RuleDef) {
     paramsSchema,
     check: def.check,
   };
-}
+};

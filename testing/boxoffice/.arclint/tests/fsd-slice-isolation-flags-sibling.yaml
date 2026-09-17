@@ -15,8 +15,17 @@ files:
     package holdseats
 
     func Do() {}
+  web/src/features/place-order/index.ts: |
+    import { pickTickets } from '../pick-tickets';
+    export const placeOrder = () => pickTickets();
+  web/src/features/pick-tickets/index.ts: |
+    export const pickTickets = () => [];
 expect:
   - kind: violation
     path: internal/features/placeorder/placeorder.go
     line: 3
     message: "FSD slice isolation: internal/features slice \"placeorder\" imports sibling slice \"holdseats\""
+  - kind: violation
+    path: web/src/features/place-order/index.ts
+    line: 1
+    message: 'FSD slice isolation: web/src/features slice "place-order" imports sibling slice "pick-tickets"'

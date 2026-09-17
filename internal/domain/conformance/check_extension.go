@@ -15,41 +15,41 @@ import (
 // honest: findings are suspected violations, absence of findings is
 // undetermined, never conformance.
 //
-// A finding that names a path outside the selected subjects is an
-// Scope breach: every finding from that Extension run is
+// A finding with neither a selected location nor supplied dependency evidence
+// for an explicitly selected subject is a Scope breach: every finding from that Extension run is
 // discarded as untrustworthy, each selected subject evaluates failed,
 // excluded subjects stay not-applicable, and error-severity
 // operational Diagnostics identify the breach. The check still returns
 // a complete Assessment (no error) so other Rules keep reporting.
-func evaluateExtensionRule(r rule.Rule, mem membership, obs Observations,
-	evaluator ExtensionEvaluator, zones []rule.Zone, knowledge vocab.UbiquitousLanguage,
+func evaluateExtensionRule(r rule.Rule, facts Facts,
+	evaluator ExtensionEvaluator, knowledge vocab.UbiquitousLanguage,
 ) ([]Evaluation, []Diagnostic, error) {
 	params, ok := r.Params().(rule.ExtensionParams)
 	if !ok {
 		return nil, nil, fmt.Errorf("rule %s: extension rule with %T params", r.ID(), r.Params())
 	}
 	if evaluator == nil {
-		es, err := evaluateUnsupported(r, mem)
+		es, err := evaluateUnsupported(r, facts)
 		return es, nil, err
 	}
-	selected, excluded := partitionFiles(r, mem)
-	findings, err := evaluator.Evaluate(params.Uses, params.With, selected, zones, obs, knowledge)
+	selected, excluded := facts.selectedFiles()
+	findings, err := evaluator.Evaluate(params.Uses, params.With, facts, knowledge)
 	if err != nil {
 		return nil, nil, fmt.Errorf("rule %s: %v", r.ID(), err)
 	}
 
-	inScope := map[string]bool{}
-	for _, f := range selected {
-		inScope[f] = true
-	}
 	var breaches []ExtensionFinding
 	byPath := map[string][]ExtensionFinding{}
 	for _, f := range findings {
-		if !inScope[f.Path] {
+		subject := f.SubjectPath
+		if subject == "" {
+			subject = f.Path
+		}
+		if !facts.AllowsFinding(subject, f.Path, f.Line) {
 			breaches = append(breaches, f)
 			continue
 		}
-		byPath[f.Path] = append(byPath[f.Path], f)
+		byPath[subject] = append(byPath[subject], f)
 	}
 	if len(breaches) > 0 {
 		return containExtensionScopeBreach(r, params.Uses, selected, excluded, breaches)
@@ -63,6 +63,9 @@ func evaluateExtensionRule(r rule.Rule, mem membership, obs Observations,
 		}
 		reported := byPath[path]
 		sort.SliceStable(reported, func(i, j int) bool {
+			if reported[i].Path != reported[j].Path {
+				return reported[i].Path < reported[j].Path
+			}
 			if reported[i].Line != reported[j].Line {
 				return reported[i].Line < reported[j].Line
 			}
@@ -70,7 +73,7 @@ func evaluateExtensionRule(r rule.Rule, mem membership, obs Observations,
 		})
 		var vs []Violation
 		for _, f := range reported {
-			v, err := newViolation(r, subject, path, f.Line, f.Message, f.Remediation)
+			v, err := newViolation(r, subject, f.Path, f.Line, f.Message, f.Remediation)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -112,6 +115,9 @@ func containExtensionScopeBreach(r rule.Rule, extension string,
 	for _, f := range breaches {
 		msg := fmt.Sprintf("rule %s: extension %q reported %q, which is outside the rule's scope",
 			r.ID(), extension, f.Path)
+		if f.SubjectPath != "" {
+			msg = fmt.Sprintf("rule %s: extension %q reported %s:%d for subject %q without permission from its supplied facts", r.ID(), extension, f.Path, f.Line, f.SubjectPath)
+		}
 		d, err := NewOperational(ruleID, f.Path, f.Line, rule.SeverityError, msg)
 		if err != nil {
 			return nil, nil, err

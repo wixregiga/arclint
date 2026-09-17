@@ -388,7 +388,7 @@ func TestEvaluatorReadUsesObservationContent(t *testing.T) {
 
 	findings, err := eval.Evaluate("forbid-content", map[string]any{
 		"pattern": `\bpanic\(`,
-	}, []string{"m/a.go"}, nil, obs, vocab.UbiquitousLanguage{})
+	}, extensionFacts(t, []string{"m/a.go"}, obs), vocab.UbiquitousLanguage{})
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
@@ -407,7 +407,7 @@ func TestEvaluatorReadUsesObservationContent(t *testing.T) {
 	}
 	findings, err = evalMissing.Evaluate("forbid-content", map[string]any{
 		"pattern": `\bpanic\(`,
-	}, []string{"m/a.go"}, nil, obs, vocab.UbiquitousLanguage{})
+	}, extensionFacts(t, []string{"m/a.go"}, obs), vocab.UbiquitousLanguage{})
 	if err != nil {
 		t.Fatalf("Evaluate missing production file: %v", err)
 	}
@@ -465,7 +465,7 @@ func TestEvaluatorDomainExposesRecordedModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewUbiquitousLanguage: %v", err)
 	}
-	findings, err := eval.Evaluate("domain-probe", nil, []string{"m/a.go"}, nil, obs, lang)
+	findings, err := eval.Evaluate("domain-probe", nil, extensionFacts(t, []string{"m/a.go"}, obs), lang)
 	if err != nil {
 		t.Fatalf("Evaluate with model: %v", err)
 	}
@@ -480,7 +480,7 @@ func TestEvaluatorDomainExposesRecordedModel(t *testing.T) {
 		t.Errorf("domain findings = %v, want the aggregate and its entity", got)
 	}
 
-	empty, err := eval.Evaluate("domain-probe", nil, []string{"m/a.go"}, nil, obs, vocab.UbiquitousLanguage{})
+	empty, err := eval.Evaluate("domain-probe", nil, extensionFacts(t, []string{"m/a.go"}, obs), vocab.UbiquitousLanguage{})
 	if err != nil {
 		t.Fatalf("Evaluate empty model: %v", err)
 	}
@@ -575,7 +575,7 @@ func TestEvaluatorDomainCarriesRecordedLines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewUbiquitousLanguage: %v", err)
 	}
-	findings, err := eval.Evaluate("domain-line-probe", nil, []string{"m/a.go"}, nil, obs, lang)
+	findings, err := eval.Evaluate("domain-line-probe", nil, extensionFacts(t, []string{"m/a.go"}, obs), lang)
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}

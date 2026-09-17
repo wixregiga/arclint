@@ -313,15 +313,16 @@ func ruleTestDocs(results []application.RuleTestResult) []ruleTestDoc {
 // Established context JSON used Go field names for application structs
 // that lacked tags (PascalCase), with nested domain already lowerCamel.
 type contextJSON struct {
-	Scope          string               `json:"Scope"`
-	Languages      []string             `json:"Languages"`
-	RuleCount      int                  `json:"RuleCount"`
-	Zones          []zonePolicyJSON     `json:"Zones"`
-	Rules          []appliedRuleJSON    `json:"Rules"`
-	Paths          []pathBindingJSON    `json:"Paths"`
-	Kinds          []kindInUseJSON      `json:"Kinds"`
-	UnknownImports string               `json:"UnknownImports"`
-	Domain         *domainKnowledgeJSON `json:"domain,omitempty"`
+	Dependencies   *application.ObservedDependencies `json:"dependencies,omitempty"`
+	Scope          string                            `json:"Scope"`
+	Languages      []string                          `json:"Languages"`
+	RuleCount      int                               `json:"RuleCount"`
+	Zones          []zonePolicyJSON                  `json:"Zones"`
+	Rules          []appliedRuleJSON                 `json:"Rules"`
+	Paths          []pathBindingJSON                 `json:"Paths"`
+	Kinds          []kindInUseJSON                   `json:"Kinds"`
+	UnknownImports string                            `json:"UnknownImports"`
+	Domain         *domainKnowledgeJSON              `json:"domain,omitempty"`
 }
 
 type pathBindingJSON struct {
@@ -437,6 +438,7 @@ type domainContextKnowJSON struct {
 
 func contextDoc(c application.ArchitecturalContext) contextJSON {
 	doc := contextJSON{
+		Dependencies:   c.Dependencies,
 		Scope:          c.Scope,
 		Languages:      append([]string(nil), c.Languages...),
 		RuleCount:      c.RuleCount,

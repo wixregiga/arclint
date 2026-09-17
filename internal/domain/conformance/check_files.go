@@ -11,8 +11,8 @@ import (
 // evaluateUnsupported records the honest outcome for a Rule whose
 // Enforcement this build cannot perform: every selected subject
 // evaluates unsupported, excluded subjects evaluate not-applicable.
-func evaluateUnsupported(r rule.Rule, mem membership) ([]Evaluation, error) {
-	selected, excluded := partitionFiles(r, mem)
+func evaluateUnsupported(r rule.Rule, facts Facts) ([]Evaluation, error) {
+	selected, excluded := facts.selectedFiles()
 	var out []Evaluation
 	for _, f := range selected {
 		subject, err := rule.FileSubject(f)
@@ -30,12 +30,12 @@ func evaluateUnsupported(r rule.Rule, mem membership) ([]Evaluation, error) {
 
 // evaluateNaming judges every selected file's stem against the Rule's
 // case vocabulary.
-func evaluateNaming(r rule.Rule, mem membership) ([]Evaluation, error) {
+func evaluateNaming(r rule.Rule, facts Facts) ([]Evaluation, error) {
 	p, ok := r.Params().(rule.NamingParams)
 	if !ok {
 		return nil, fmt.Errorf("rule %s: naming rule with %T params", r.ID(), r.Params())
 	}
-	selected, excluded := partitionFiles(r, mem)
+	selected, excluded := facts.selectedFiles()
 	var out []Evaluation
 	for _, f := range selected {
 		subject, err := rule.FileSubject(f)
@@ -65,7 +65,7 @@ func evaluateNaming(r rule.Rule, mem membership) ([]Evaluation, error) {
 // Rule's forbidden pattern. Each matching line is one Violation anchored
 // at that line; a file that cannot be read evaluates unsupported rather
 // than silently passing.
-func evaluateContent(r rule.Rule, mem membership, obs Observations) ([]Evaluation, error) {
+func evaluateContent(r rule.Rule, facts Facts) ([]Evaluation, error) {
 	p, ok := r.Params().(rule.ContentParams)
 	if !ok {
 		return nil, fmt.Errorf("rule %s: content rule with %T params", r.ID(), r.Params())
@@ -74,23 +74,14 @@ func evaluateContent(r rule.Rule, mem membership, obs Observations) ([]Evaluatio
 	if err != nil {
 		return nil, fmt.Errorf("rule %s: %w", r.ID(), err)
 	}
-	content := obs.Content()
-	selected, excluded := partitionFiles(r, mem)
+	selected, excluded := facts.selectedFiles()
 	var out []Evaluation
 	for _, f := range selected {
 		subject, err := rule.FileSubject(f)
 		if err != nil {
 			return nil, fmt.Errorf("content: %w", err)
 		}
-		if content == nil {
-			e, err := simpleEvaluation(r, subject, OutcomeUnsupported)
-			if err != nil {
-				return nil, err
-			}
-			out = append(out, e)
-			continue
-		}
-		text, err := content.Read(f)
+		text, err := facts.Read(f)
 		if err != nil {
 			e, err := simpleEvaluation(r, subject, OutcomeUnsupported)
 			if err != nil {
@@ -123,7 +114,7 @@ func evaluateContent(r rule.Rule, mem membership, obs Observations) ([]Evaluatio
 
 // evaluateStructure judges each selected Zone: every require glob
 // must match a member file, no member file may match a forbid glob.
-func evaluateStructure(r rule.Rule, mem membership) ([]Evaluation, error) {
+func evaluateStructure(r rule.Rule, facts Facts) ([]Evaluation, error) {
 	p, ok := r.Params().(rule.StructureParams)
 	if !ok {
 		return nil, fmt.Errorf("rule %s: structure rule with %T params", r.ID(), r.Params())
@@ -142,7 +133,7 @@ func evaluateStructure(r rule.Rule, mem membership) ([]Evaluation, error) {
 			out = append(out, e)
 			continue
 		}
-		members := mem.zoneFiles[name]
+		members := facts.zoneMembers(name)
 		var vs []Violation
 		for _, req := range p.Require {
 			found := false

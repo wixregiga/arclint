@@ -198,8 +198,8 @@ func staleCount(entries []baseline.Entry) int {
 }
 
 // requiredFacts unions the fact classes every enabled Rule's
-// Enforcement declares, so observation gathers exactly what the check
-// needs, no more and no less.
+// Enforcement declares to guide collection. Producers may collect shared base
+// facts; conformance.Facts enforces each Rule's access to the required classes.
 func requiredFacts(rules []rule.Rule) []rule.Fact {
 	seen := map[rule.Fact]bool{}
 	var out []rule.Fact

@@ -10,8 +10,8 @@ import (
 	sj "github.com/santhosh-tekuri/jsonschema/v6"
 )
 
-// RuleType is one extension-registered rule type: a sobek runtime holding
-// the compiled check function, plus the host-compiled params schema.
+// RuleType is one extension-registered rule type with a compiled program
+// and params schema. Check instantiates the program in a fresh runtime.
 type RuleType struct {
 	Name        string
 	Description string // one-line summary from defineRule
@@ -19,10 +19,12 @@ type RuleType struct {
 	SourcePath  string // repo-relative extension file
 	RawSchema   map[string]any
 
-	schema  *sj.Schema
-	vm      *sobek.Runtime
-	check   sobek.Callable
-	timeout time.Duration
+	schema          *sj.Schema
+	vm              *sobek.Runtime
+	check           sobek.Callable
+	program         *sobek.Program
+	timeout         time.Duration
+	registerTimeout time.Duration
 }
 
 // Host is the read-only surface the engine lends to a rule during one
@@ -33,8 +35,8 @@ type Host struct {
 	Read    func(path string) (string, error)
 	Imports func(path string) []ImportInfo
 	Zones   func() map[string][]string
-	// Facts returns declaration facts for one file, nil when the
-	// file's language does not supply declarations.
+	// Facts returns already-observed declarations and imports for a selected
+	// subject, including incident dependencies; nil when outside Scope.
 	Facts func(path string) *FactsInfo
 	// ZoneOf returns the sorted zones a file belongs to.
 	ZoneOf func(path string) []string
@@ -73,6 +75,16 @@ const sandboxJS = `
 // register runs one bundled extension through the registration phase and
 // records every rule definition its default export declares.
 func (r *Registry) register(sourcePath, bundleJS string, opts Options) error {
+	prog, err := sobek.Compile(sourcePath, "(function(module, exports){\n"+bundleJS+"\n})", true)
+	if err != nil {
+		return fmt.Errorf("extension %s: compile: %w", sourcePath, err)
+	}
+	return r.registerProgram(sourcePath, prog, opts)
+}
+
+// registerProgram instantiates compiled code without reloading extension files.
+// Only the immutable program is shared; JavaScript state belongs to one run.
+func (r *Registry) registerProgram(sourcePath string, prog *sobek.Program, opts Options) error {
 	vm := sobek.New()
 	vm.SetFieldNameMapper(sobek.TagFieldNameMapper("json", true))
 
@@ -80,11 +92,6 @@ func (r *Registry) register(sourcePath, bundleJS string, opts Options) error {
 	// point is that no wall clock or entropy reaches rules.
 	if _, err := vm.RunString(fmt.Sprintf(sandboxJS, int64(1_600_000_000_000), 42)); err != nil {
 		return fmt.Errorf("extension %s: sandbox init: %w", sourcePath, err)
-	}
-
-	prog, err := sobek.Compile(sourcePath, "(function(module, exports){\n"+bundleJS+"\n})", true)
-	if err != nil {
-		return fmt.Errorf("extension %s: compile: %w", sourcePath, err)
 	}
 
 	timer := time.AfterFunc(opts.RegisterTimeout, func() {
@@ -159,15 +166,17 @@ func (r *Registry) register(sourcePath, bundleJS string, opts Options) error {
 			return fmt.Errorf("extension %s: rule %q: %w", sourcePath, name, err)
 		}
 		rt := &RuleType{
-			Name:        name,
-			Description: d.Get("description").String(),
-			Capability:  d.Get("capability").String(),
-			SourcePath:  sourcePath,
-			RawSchema:   rawSchema,
-			schema:      schema,
-			vm:          vm,
-			check:       checkFn,
-			timeout:     opts.CheckTimeout,
+			Name:            name,
+			Description:     d.Get("description").String(),
+			Capability:      d.Get("capability").String(),
+			SourcePath:      sourcePath,
+			RawSchema:       rawSchema,
+			schema:          schema,
+			vm:              vm,
+			check:           checkFn,
+			program:         prog,
+			timeout:         opts.CheckTimeout,
+			registerTimeout: opts.RegisterTimeout,
 		}
 		r.types[name] = rt
 		r.order = append(r.order, name)
@@ -233,13 +242,29 @@ func (rt *RuleType) ValidateParams(params map[string]any) (map[string]any, error
 	if err := rt.schema.Validate(instance); err != nil {
 		return nil, fmt.Errorf("rule %q: params do not match the extension's schema:\n%v", rt.Name, err)
 	}
-	return merged, nil
+	// Return the detached JSON value, never the configuration's nested maps
+	// or the shared schema's default values, to the JavaScript runtime.
+	return instance.(map[string]any), nil
 }
 
 // Check runs one evaluation-phase invocation: check(ctx, params) with the
 // host-lent read-only ctx, under an interrupt-based timeout. It returns
 // the violations the rule reported.
 func (rt *RuleType) Check(host Host, params map[string]any) ([]ViolationInput, error) {
+	registry := &Registry{types: map[string]*RuleType{}}
+	if err := registry.registerProgram(rt.SourcePath, rt.program, Options{
+		CheckTimeout: rt.timeout, RegisterTimeout: rt.registerTimeout,
+	}); err != nil {
+		return nil, err
+	}
+	fresh := registry.Get(rt.Name)
+	if fresh == nil {
+		return nil, fmt.Errorf("extension %s: rule %q was not registered in the fresh runtime", rt.SourcePath, rt.Name)
+	}
+	return fresh.checkWithHost(host, params)
+}
+
+func (rt *RuleType) checkWithHost(host Host, params map[string]any) ([]ViolationInput, error) {
 	vm := rt.vm
 	var reported []ViolationInput
 
@@ -333,6 +358,9 @@ func (rt *RuleType) Check(host Host, params map[string]any) ([]ViolationInput, e
 			return fail("ctx.report: argument must be an object")
 		}
 		v := ViolationInput{}
+		if s, ok := raw["subjectPath"].(string); ok {
+			v.SubjectPath = s
+		}
 		if s, ok := raw["path"].(string); ok {
 			v.Path = s
 		}

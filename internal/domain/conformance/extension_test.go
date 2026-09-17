@@ -20,12 +20,15 @@ type fakeExtensions struct {
 	}
 }
 
-func (f *fakeExtensions) Evaluate(extension string, params map[string]any, subjects []string,
-	zones []rule.Zone, obs conformance.Observations, knowledge vocab.UbiquitousLanguage,
+func (f *fakeExtensions) Evaluate(extension string, params map[string]any, facts conformance.Facts,
+	knowledge vocab.UbiquitousLanguage,
 ) ([]conformance.ExtensionFinding, error) {
 	f.saw.extension = extension
 	f.saw.params = params
-	f.saw.subjects = subjects
+	f.saw.subjects = nil
+	for _, file := range facts.Files() {
+		f.saw.subjects = append(f.saw.subjects, file.Path)
+	}
 	return f.findings, f.err
 }
 

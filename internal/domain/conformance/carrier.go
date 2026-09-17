@@ -26,15 +26,13 @@ type Carriers struct {
 	contexts map[string]contextCode
 }
 
-// NewCarriers locates every context of the recorded language in the
-// observed files, narrowing a context to the Zone named for it when
-// the ruleset declares one.
-func NewCarriers(obs Observations, knowledge vocab.UbiquitousLanguage, zones []rule.Zone) (Carriers, error) {
-	mem, err := newMembership(zones, obs)
-	if err != nil {
-		return Carriers{}, err
+// NewCarriers locates recorded language through the same prepared Facts queries
+// as native domain checks. Context and dependency inspection can share this input.
+func NewCarriers(facts Facts, knowledge vocab.UbiquitousLanguage) (Carriers, error) {
+	if !facts.required[rule.FactDeclarations] {
+		return Carriers{}, fmt.Errorf("carriers: declaration facts were not requested")
 	}
-	code, err := resolveDomain(func(string) bool { return false }, mem, obs, knowledge)
+	code, err := resolveDomain(facts, knowledge)
 	if err != nil {
 		return Carriers{}, err
 	}

@@ -40,7 +40,7 @@ export default defineRule({
   check(ctx) {
     for (const file of ctx.files()) {
       const facts = ctx.facts(file.path);
-      if (!facts) {
+      if (!facts?.declarationsAvailable) {
         continue;
       }
       for (const d of facts.decls) {
