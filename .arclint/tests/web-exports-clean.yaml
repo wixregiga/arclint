@@ -1,5 +1,11 @@
 rule: web/explicit-public-exports
 files:
+  web/src/app/entrypoints/mount-web.ts: |
+    export { formatDate } from "../../shared/lib/date-format";
+  web/src/shared/ui/Button.tsx: |
+    export const Button = () => null;
+  web/src/shared/lib/date-format.ts: |
+    export const formatDate = (value: string) => value;
   web/src/entities/project/index.ts: |
     export { projectTitle } from "./model/project-title";
   web/src/entities/project/model/project-title.ts: |

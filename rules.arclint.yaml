@@ -375,7 +375,7 @@ rules:
     uses: web-public-interfaces
 
   web/browser-dependencies:
-    rationale: "Browser source imports only Web source and declared browser packages; Node builtins and build or engine implementation belong outside the browser graph."
+    rationale: "Browser source imports only Web source and declared third-party packages; Node builtins and build or engine implementation belong outside the browser graph. Package browser compatibility still requires review."
     on: web_source
     imports:
       internal: []
@@ -444,7 +444,13 @@ rules:
   web/explicit-public-exports:
     rationale: "A public interface names its exports explicitly. This line check catches wildcard export statements; it does not judge semantic cohesion."
     on: web_source
-    files: "web/src/**/index.ts"
+    files:
+      - "web/src/**/index.ts"
+      - "web/src/app/entrypoints/mount-web.ts"
+      - "web/src/shared/ui/*.ts"
+      - "web/src/shared/ui/*.tsx"
+      - "web/src/shared/lib/*.ts"
+      - "web/src/shared/lib/*.tsx"
     content:
       forbid: '^\s*export\s+(type\s+)?\*'
 

@@ -1,0 +1,25 @@
+rule: web/explicit-public-exports
+files:
+  web/src/app/entrypoints/mount-web.ts: |
+    export * from "../../shared/lib/date-format";
+  web/src/shared/ui/Button.tsx: |
+    export * from "./button-style";
+  web/src/shared/ui/button-style.ts: |
+    export const buttonStyle = "primary";
+  web/src/shared/lib/date-format.ts: |
+    export type * from "./date-options";
+  web/src/shared/lib/date-options.ts: |
+    export interface DateOptions { locale: string }
+expect:
+- kind: violation
+  path: web/src/app/entrypoints/mount-web.ts
+  message: forbidden content matching /^\s*export\s+(type\s+)?\*/
+  line: 1
+- kind: violation
+  path: web/src/shared/ui/Button.tsx
+  message: forbidden content matching /^\s*export\s+(type\s+)?\*/
+  line: 1
+- kind: violation
+  path: web/src/shared/lib/date-format.ts
+  message: forbidden content matching /^\s*export\s+(type\s+)?\*/
+  line: 1
