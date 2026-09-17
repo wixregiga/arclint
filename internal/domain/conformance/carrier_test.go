@@ -63,7 +63,11 @@ func carriersOf(t *testing.T, contexts []vocab.BoundedContext, zones []rule.Zone
 	if err != nil {
 		t.Fatalf("NewUbiquitousLanguage: %v", err)
 	}
-	c, err := conformance.NewCarriers(obs, knowledge, zones)
+	facts, err := conformance.NewInspectionFacts(zones, obs, rule.FactDeclarations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := conformance.NewCarriers(facts, knowledge)
 	if err != nil {
 		t.Fatalf("NewCarriers: %v", err)
 	}
@@ -601,7 +605,11 @@ func TestCarriersRefuseTwoZonesSpellingOneContext(t *testing.T) {
 		mustZone(t, "event-catalog", "internal/event/**"),
 		mustZone(t, "eventcatalog", "internal/catalog/**"),
 	}
-	_, err = conformance.NewCarriers(obs, knowledge, zones)
+	facts, err := conformance.NewInspectionFacts(zones, obs, rule.FactDeclarations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = conformance.NewCarriers(facts, knowledge)
 	if err == nil || !strings.Contains(err.Error(), "event_catalog") {
 		t.Fatalf("NewCarriers = %v, want an error naming the context", err)
 	}

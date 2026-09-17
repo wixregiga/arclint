@@ -401,11 +401,11 @@ func TestSDKInitWritesTyping(t *testing.T) {
 	}
 }
 
-// TestExtensionFactsEndToEnd proves the declaration tier root to
+// TestFactsEndToEnd proves the declaration tier root to
 // sandbox: the extension rule's enforcement declares the fact, the
 // walker gathers it, the Go producer extracts exactly, and the
 // extension reads it through ctx.facts.
-func TestExtensionFactsEndToEnd(t *testing.T) {
+func TestFactsEndToEnd(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, ".arclint/extensions/exported_inventory.ts", `
 import { defineRule } from "arclint";

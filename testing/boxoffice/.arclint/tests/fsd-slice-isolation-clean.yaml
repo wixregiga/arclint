@@ -16,4 +16,9 @@ files:
     package order
 
     type Order struct{}
+  web/src/features/place-order/index.ts: |
+    import { order } from '../../shared/api/order';
+    export const placeOrder = () => order;
+  web/src/shared/api/order.ts: |
+    export const order = {};
 expect: []

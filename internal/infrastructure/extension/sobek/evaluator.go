@@ -3,7 +3,6 @@ package sobekextension
 import (
 	"fmt"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 
@@ -82,8 +81,8 @@ func SuppliedSourceName(ext rule.ConfiguredExtension) string {
 }
 
 // Evaluate runs one extension rule over the selected subjects.
-func (e *Evaluator) Evaluate(extension string, params map[string]any, subjects []string,
-	zones []rule.Zone, obs conformance.Observations, knowledge vocab.UbiquitousLanguage,
+func (e *Evaluator) Evaluate(extension string, params map[string]any, facts conformance.Facts,
+	knowledge vocab.UbiquitousLanguage,
 ) ([]conformance.ExtensionFinding, error) {
 	e.load()
 	if e.loadErr != nil {
@@ -98,13 +97,14 @@ func (e *Evaluator) Evaluate(extension string, params map[string]any, subjects [
 	if err != nil {
 		return nil, err
 	}
-	reported, err := ruleType.Check(e.host(subjects, zones, obs, knowledge), validated)
+	reported, err := ruleType.Check(e.host(facts, knowledge), validated)
 	if err != nil {
 		return nil, err
 	}
 	findings := make([]conformance.ExtensionFinding, 0, len(reported))
 	for _, v := range reported {
 		findings = append(findings, conformance.ExtensionFinding{
+			SubjectPath: v.SubjectPath,
 			Path:        v.Path,
 			Line:        v.Line,
 			Message:     v.Message,
@@ -131,14 +131,33 @@ func (e *Evaluator) RegisteredExtensionRules() ([]application.RegisteredExtensio
 }
 
 // host lends the read-only capability surface, scoped to the selected
-// subjects: files outside the Rule's Scope are invisible and
-// unreadable, so exclusions hold mechanically.
-func (e *Evaluator) host(subjects []string, zones []rule.Zone, obs conformance.Observations, knowledge vocab.UbiquitousLanguage) Host {
-	inScope := make(map[string]bool, len(subjects))
-	for _, s := range subjects {
-		inScope[s] = true
-	}
+// subjects. Incident dependency metadata grants no file access; files outside
+// the Rule's Scope remain unreadable.
+func (e *Evaluator) host(supplied conformance.Facts, knowledge vocab.UbiquitousLanguage) Host {
 	domain := domainInfoFrom(knowledge)
+	zoneNames := func(names []rule.ZoneName) []string {
+		out := make([]string, len(names))
+		for i, name := range names {
+			out[i] = string(name)
+		}
+		return out
+	}
+	zoneOf := func(path string) []string {
+		return zoneNames(supplied.ZoneOf(path))
+	}
+	imports := func(path string) []ImportInfo {
+		observed := supplied.ImportsFor(path)
+		out := make([]ImportInfo, 0, len(observed))
+		for _, imp := range observed {
+			targets := zoneNames(imp.TargetZones)
+			out = append(out, ImportInfo{
+				Path: imp.Path, Line: imp.Line, Class: string(imp.Class),
+				TargetDir: imp.TargetDir, TargetFile: imp.TargetFile,
+				TargetZones: targets, TargetObserved: imp.TargetObserved,
+			})
+		}
+		return out
+	}
 	return Host{
 		Files: func(glob string) ([]FileInfo, error) {
 			var matcher *rule.Glob
@@ -150,10 +169,7 @@ func (e *Evaluator) host(subjects []string, zones []rule.Zone, obs conformance.O
 				matcher = &g
 			}
 			out := []FileInfo{}
-			for _, f := range obs.Files() {
-				if !inScope[f.Path] {
-					continue
-				}
+			for _, f := range supplied.Files() {
 				if matcher != nil && !matcher.Match(f.Path) {
 					continue
 				}
@@ -170,54 +186,42 @@ func (e *Evaluator) host(subjects []string, zones []rule.Zone, obs conformance.O
 			}
 			return out, nil
 		},
-		Read: func(path string) (string, error) {
-			if !inScope[path] {
-				return "", fmt.Errorf("%s is outside this rule's scope", path)
-			}
-			content := obs.Content()
-			if content == nil {
-				return "", fmt.Errorf("read %s: no content capability on observations", path)
-			}
-			data, err := content.Read(path)
-			if err != nil {
-				return "", fmt.Errorf("read %s: %w", path, err)
-			}
-			return data, nil
-		},
+		Read: supplied.Read,
 		Imports: func(path string) []ImportInfo {
-			if !inScope[path] {
-				return nil
-			}
-			facts, ok := obs.FactsFor(path)
+			facts, ok := supplied.FactsFor(path)
 			if !ok || !facts.Supports(rule.FactImports) {
 				return nil
 			}
-			out := make([]ImportInfo, 0, len(facts.Imports))
-			for _, imp := range facts.Imports {
-				out = append(out, ImportInfo{
-					Path:       imp.Path,
-					Line:       imp.Line,
-					Class:      string(imp.Class),
-					TargetDir:  imp.TargetDir,
-					TargetFile: imp.TargetFile,
-				})
-			}
-			return out
+			return imports(path)
 		},
 		Facts: func(path string) *FactsInfo {
-			if !inScope[path] {
+			if !supplied.Contains(path) {
 				return nil
 			}
-			facts, ok := obs.FactsFor(path)
-			if !ok || !facts.Supports(rule.FactDeclarations) {
-				return nil
+			facts, _ := supplied.FactsFor(path)
+			info := &FactsInfo{
+				Path: path, Zones: zoneOf(path), Package: facts.Package,
+				ImportsAvailable: facts.Supports(rule.FactImports), Imports: imports(path),
+				DeclarationsAvailable: facts.Supports(rule.FactDeclarations),
+				Decls:                 []DeclInfo{}, ParseError: facts.ParseFailure,
+				Dependencies: []DependencyInfo{},
 			}
-			info := &FactsInfo{Path: path, Package: facts.Package, Decls: []DeclInfo{}}
+			for _, d := range supplied.DependenciesFor(path) {
+				kind, target := d.Target()
+				info.Dependencies = append(info.Dependencies, DependencyInfo{
+					SourcePath: d.SourcePath, TargetPath: target, TargetKind: kind,
+					Specifier: d.Path, Line: d.Line, Classification: string(d.Class),
+					SourceZones: zoneNames(d.SourceZones), TargetZones: zoneNames(d.TargetZones), TargetObserved: d.TargetObserved,
+				})
+			}
+			if !info.DeclarationsAvailable {
+				return info
+			}
 			for _, d := range facts.Declarations {
 				decl := DeclInfo{
 					Kind: d.Kind, Name: d.Name, Owner: d.Owner,
 					Exported: d.Exported, StartLine: d.StartLine, EndLine: d.EndLine,
-					Results: d.Results,
+					Results: append([]string(nil), d.Results...),
 				}
 				for _, param := range d.Params {
 					decl.Params = append(decl.Params, ParamInfo{
@@ -231,29 +235,13 @@ func (e *Evaluator) host(subjects []string, zones []rule.Zone, obs conformance.O
 		},
 		Zones: func() map[string][]string {
 			out := map[string][]string{}
-			for _, m := range zones {
-				members := []string{}
-				for _, f := range subjects {
-					if m.Contains(f) {
-						members = append(members, f)
-					}
-				}
-				out[string(m.Name())] = members
+			for name, files := range supplied.Zones() {
+				out[string(name)] = files
 			}
 			return out
 		},
 		ZoneOf: func(path string) []string {
-			if !inScope[path] {
-				return nil
-			}
-			var out []string
-			for _, m := range zones {
-				if m.Contains(path) {
-					out = append(out, string(m.Name()))
-				}
-			}
-			sort.Strings(out)
-			return out
+			return zoneOf(path)
 		},
 		Domain:   func() DomainInfo { return domain },
 		CaseTerm: rule.CaseTerm,
@@ -313,7 +301,7 @@ func aggregateInfos(aggregates []vocab.Aggregate) []DomainAggregateInfo {
 			Name:       a.Name,
 			Definition: a.Definition,
 			Identity:   a.Identity,
-			Aliases:    a.Aliases,
+			Aliases:    append([]string(nil), a.Aliases...),
 			Entities:   entityInfos(a.Entities),
 			Invariants: invariantInfos(a.Invariants),
 			Assertions: assertionInfos(a.Assertions),
@@ -332,7 +320,7 @@ func entityInfos(entities []vocab.Entity) []DomainEntityInfo {
 			Name:       e.Name,
 			Definition: e.Definition,
 			Identity:   e.Identity,
-			Aliases:    e.Aliases,
+			Aliases:    append([]string(nil), e.Aliases...),
 			Line:       e.Line,
 		}
 	}
@@ -345,7 +333,7 @@ func valueObjectInfos(values []vocab.ValueObject) []DomainValueObjectInfo {
 		out[i] = DomainValueObjectInfo{
 			Name:       v.Name,
 			Definition: v.Definition,
-			Aliases:    v.Aliases,
+			Aliases:    append([]string(nil), v.Aliases...),
 			Invariants: invariantInfos(v.Invariants),
 			Line:       v.Line,
 		}

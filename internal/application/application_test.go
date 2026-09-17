@@ -64,12 +64,14 @@ type fakeRepository struct {
 func (f fakeRepository) ConfiguredRules() (rule.Configured, error) { return f.cfg, nil }
 
 type fakeObservations struct {
+	calls     int
 	obs       conformance.Observations
 	languages []rule.Language
 	facts     []rule.Fact
 }
 
 func (f *fakeObservations) Observe(languages []rule.Language, scan rule.Scan, facts []rule.Fact) (conformance.Observations, error) {
+	f.calls++
 	f.languages = languages
 	f.facts = facts
 	return f.obs, nil

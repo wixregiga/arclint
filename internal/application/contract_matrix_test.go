@@ -181,7 +181,11 @@ func TestExpectedMethodSpellsPerLanguage(t *testing.T) {
 // observations with no Zone declared.
 func catalogCarriers(t *testing.T) conformance.Carriers {
 	t.Helper()
-	carriers, err := conformance.NewCarriers(catalogObservations(t), catalogLanguage(t), nil)
+	facts, err := conformance.NewInspectionFacts(nil, catalogObservations(t), rule.FactDeclarations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	carriers, err := conformance.NewCarriers(facts, catalogLanguage(t))
 	if err != nil {
 		t.Fatalf("NewCarriers: %v", err)
 	}

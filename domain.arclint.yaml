@@ -275,6 +275,67 @@ contexts:
       Judging code against Rules: every assessment derives its
       Violations fresh from the observed repository.
     value_objects:
+      DependencyImport:
+        definition: >-
+          One parsed import with its source file, source location,
+          classification, resolved target, and source and target Zone
+          memberships, including whether the target was observed.
+          Incoming and outgoing are views of the same
+          supplied value; equal attributes are interchangeable.
+        invariants:
+          preserves-target-precision: >-
+            DependencyImport never presents a resolved package directory
+            as an exact target file.
+          blank-import-is-a-dependency: >-
+            DependencyImport retains a Go blank import as dependency
+            evidence rather than treating it as an empty or failed result.
+          unobserved-is-not-unzoned: >-
+            DependencyImport distinguishes an unobserved target from
+            an observed target that belongs to no declared Zone.
+      Facts:
+        definition: >-
+          The collected information supplied to a consumer, with one
+          meaning regardless of how a Rule is evaluated. For a Rule,
+          the available information is determined by its required fact
+          classes, Scope, Exclusions, and the evidence its Constraint
+          needs. Selected subjects and evidence locations are distinct:
+          an incoming dependency may originate outside the selected
+          code without granting access to that file. Facts have no
+          independent identity; equal supplied information and access
+          are interchangeable. Repository inspection requests its own
+          fact classes without inventing a Rule; its information uses
+          the same observation and dependency meanings.
+        invariants:
+          observed-evidence-only: >-
+            Facts contains only evidence present in the supplied
+            observations, never inferred runtime relationships.
+          one-meaning-for-every-consumer: >-
+            Facts preserves the same import attributes and Zone
+            memberships for native evaluation, extension evaluation,
+            and repository inspection.
+          empty-is-not-unavailable: >-
+            Facts distinguishes an observed empty result from
+            unavailable observations and from a parse failure.
+          only-required-facts: >-
+            Facts supplied to a Rule contains no fact class that its
+            enforcement does not require.
+          scope-bounds-file-access: >-
+            Facts supplied to a Rule exposes content and declarations
+            only for files selected by its Scope after file Exclusions.
+          evidence-follows-the-constraint: >-
+            Facts supplies dependency evidence according to the Rule's
+            Constraint, retaining incoming and outgoing evidence when
+            the Constraint needs it. Excluding a file from evaluation
+            does not erase the existence of its Folder as dependency
+            evidence. An unsupported evidence query is not an observed
+            empty result.
+          imports-grant-no-access: >-
+            Facts never grants file access merely because a
+            DependencyImport references that file.
+          findings-use-supplied-evidence: >-
+            Facts permits an extension finding outside its selected
+            subject only at the source location of supplied dependency
+            evidence involving that subject.
       Violation:
         definition: >-
           One suspected breach of a Rule, anchored at a file and line

@@ -760,3 +760,35 @@ func TestJSONDomainExplainCarriesSources(t *testing.T) {
 		t.Fatalf("page = %v, want %q", first["page"], want.Page)
 	}
 }
+
+func TestJSONContextIncludesOnlyRequestedObservedDependencies(t *testing.T) {
+	for _, requested := range []bool{false, true} {
+		ctx := application.ArchitecturalContext{Scope: "repository"}
+		if requested {
+			ctx.Dependencies = &application.ObservedDependencies{
+				Files: []application.DependencyFile{}, Edges: []application.DependencyImport{{SourcePath: "main.go", TargetPath: "internal/model", TargetKind: "directory", SourceZones: []string{"composition"}, TargetZones: []string{"domain", "model"}}},
+				Coverage:    application.DependencyCoverage{Scope: "repository", Complete: false},
+				Diagnostics: []application.DependencyDiagnostic{{Code: "IMPORTS_UNAVAILABLE", Path: "bad.go", Message: "syntax error"}},
+			}
+		}
+		var buf bytes.Buffer
+		if err := New().Render(&buf, cli.ContextReport{Context: ctx}); err != nil {
+			t.Fatal(err)
+		}
+		var doc map[string]any
+		if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
+			t.Fatal(err)
+		}
+		deps, present := doc["dependencies"]
+		if present != requested {
+			t.Fatalf("dependencies presence: %v", doc)
+		}
+		if requested {
+			view := deps.(map[string]any)
+			edge := view["edges"].([]any)[0].(map[string]any)
+			if edge["targetKind"] != "directory" || edge["targetPath"] != "internal/model" || view["coverage"].(map[string]any)["complete"] != false {
+				t.Fatalf("native precision or coverage lost: %v", view)
+			}
+		}
+	}
+}

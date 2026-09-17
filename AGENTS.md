@@ -26,12 +26,12 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 
 ### The recorded domain
 
-5 contexts, 1 aggregates, 28 value objects, 26 invariants (domain.arclint.yaml).
+5 contexts, 1 aggregates, 30 value objects, 37 invariants (domain.arclint.yaml).
 
 - **vocabulary**
 - **rule**: aggregates Rule (Zone, Pattern); value objects RuleID, ZoneName, Rationale, Constraint, Scope, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec
 - **adoption**: value objects Binding, Override, Disablement, Exclusion, Suppression, Installation
-- **conformance**: value objects Violation
+- **conformance**: value objects DependencyImport, Facts, Violation
 - **distribution**: value objects Catalog, Digest, Index, Manifest, PatternFile, PatternSource, Registry, Selection, VendoredPattern
 
 Relations: vocabulary → rule (conformist); vocabulary → conformance (conformist); rule → conformance (conformist); rule → adoption (conformist); rule → distribution (conformist); distribution → adoption (conformist). Full text: `arclint domain`.
