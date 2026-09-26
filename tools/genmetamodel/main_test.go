@@ -177,3 +177,14 @@ func TestRenderRefusesOtherVersions(t *testing.T) {
 		t.Fatalf("expected version refusal; got %v", err)
 	}
 }
+
+func TestRenderTranscribesLimitations(t *testing.T) {
+	src := strings.Replace(minimal, "languages: [go, typescript]}", "languages: [go, typescript], limitations: [a thrown error is not seen]}", 1)
+	got, err := render([]byte(src), "minimal.yaml", "vocab")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !strings.Contains(string(got), `Limitations: []string{"a thrown error is not seen"}`) {
+		t.Fatalf("output lacks the limitation:\n%s", got)
+	}
+}

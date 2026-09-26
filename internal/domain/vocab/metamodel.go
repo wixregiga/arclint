@@ -261,13 +261,16 @@ type BlockInvariant struct {
 // the evaluator; Facts are the observed facts the invariant reads;
 // Needs names the Milestone an unobserved fact belongs to; Languages
 // says which supported languages emit the facts; Severity is error or
-// warning, and a warning never rejects an instance or fails a check.
+// warning, and a warning never rejects an instance or fails a check;
+// Limitations state what the evaluation of this invariant alone cannot
+// see, beyond the limits every reader of the same facts shares.
 type Enforcement struct {
-	By        Evaluator
-	Facts     []string
-	Languages Languages
-	Needs     string
-	Severity  string
+	By          Evaluator
+	Facts       []string
+	Languages   Languages
+	Needs       string
+	Severity    string
+	Limitations []string
 }
 
 // The two severities a BlockInvariant carries; they are the Rule
@@ -703,6 +706,14 @@ func (v *metaModelValidation) enforcement(subject string, inv BlockInvariant) {
 	}
 	if e.Languages.All && len(e.Languages.Names) > 0 {
 		v.failf("%s: languages is all and also names languages", subject)
+	}
+	if len(e.Limitations) > 0 && e.By != EvaluatorDomain {
+		v.failf("%s: limitations describe a check the domain evaluator runs; evaluator %q runs none", subject, e.By)
+	}
+	for _, l := range e.Limitations {
+		if strings.TrimSpace(l) == "" {
+			v.failf("%s: a limitation is empty", subject)
+		}
 	}
 	if inv.Level() == LevelMilestone {
 		v.milestoneEnforcement(subject, inv)

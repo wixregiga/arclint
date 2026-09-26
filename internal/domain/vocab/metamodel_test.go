@@ -274,6 +274,13 @@ func TestValidateRejects(t *testing.T) {
 		{"work without authors", func(m *MetaModel) { m.Works[0].Authors = nil }, `at least one author`},
 		{"work verification", func(m *MetaModel) { m.Works[0].Verification = "trusted" }, `verification "trusted"`},
 		{"empty statement", func(m *MetaModel) { m.Blocks[0].Invariants[0].Statement = " " }, `statement must be non-empty`},
+		{"limitation off the domain evaluator", func(m *MetaModel) {
+			m.Blocks[0].Invariants[0].Enforcement.Limitations = []string{"a thrown error is not seen"}
+		}, `evaluator "loader" runs none`},
+		{"empty limitation", func(m *MetaModel) {
+			m.Blocks[0].Invariants[1].Enforcement.By = EvaluatorDomain
+			m.Blocks[0].Invariants[1].Enforcement.Limitations = []string{" "}
+		}, `a limitation is empty`},
 	}
 	for _, c := range cases {
 		m := validModel()

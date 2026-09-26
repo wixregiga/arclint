@@ -1282,6 +1282,11 @@ func checkInvariantEnforcedAtMutation(r rule.Rule, subject rule.Subject, cc cont
 	return vs, nil
 }
 
+// checkAssertionChecked judges every recorded assertion against its
+// owner: an aggregate's root or a domain service declares the operation
+// and the checking method, and the operation calls the check. An owner
+// whose type is not located is left to aggregate/root-declared or
+// domain_service/declared.
 func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ domainCode) ([]Violation, error) {
 	var vs []Violation
 	for _, agg := range cc.ctx.Aggregates {
@@ -1289,49 +1294,88 @@ func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ 
 		if !ac.located() {
 			continue
 		}
-		root := ac.root()
-		for _, as := range agg.Assertions {
-			key := assertKey(as.Key)
-			op, hasOp, err := ac.idx.methodNamed(root.decl.Name, as.On)
-			if err != nil {
-				return nil, err
-			}
-			check, hasCheck, err := ac.idx.methodNamed(root.decl.Name, key)
-			if err != nil {
-				return nil, err
-			}
-			if !hasOp {
-				v, err := newViolation(r, subject, root.file.path, root.decl.StartLine,
-					fmt.Sprintf("aggregate %s: assertion %s constrains operation %s, which the root does not declare", agg.Name, as.Key, as.On),
-					fmt.Sprintf("declare %s on %s and call %s from it", methodSpellings(ac.idx, as.On), root.decl.Name, methodSpellings(ac.idx, key)))
-				if err != nil {
-					return nil, err
-				}
-				vs = append(vs, v)
-			}
-			if !hasCheck {
-				v, err := newViolation(r, subject, root.file.path, root.decl.StartLine,
-					fmt.Sprintf("aggregate %s: assertion %s names no checking method on the root; expected %s", agg.Name, as.Key, methodSpellings(ac.idx, key)),
-					fmt.Sprintf("declare %s on %s and call it from %s", methodSpellings(ac.idx, key), root.decl.Name, as.On))
-				if err != nil {
-					return nil, err
-				}
-				vs = append(vs, v)
-			}
-			if !hasOp || !hasCheck {
-				continue
-			}
-			if callsKey(op.file, op.decl.Name, key) {
-				continue
-			}
-			v, err := newViolation(r, subject, op.file.path, op.decl.StartLine,
-				fmt.Sprintf("aggregate %s: operation %s does not call %s, so assertion %s is not checked when it completes", agg.Name, op.decl.Name, check.decl.Name, as.Key),
-				fmt.Sprintf("call %s from %s and fail the operation when it fails", check.decl.Name, op.decl.Name))
+		more, err := assertionsChecked(r, subject, assertionOwner{
+			label: "aggregate " + agg.Name, holder: "the root", decl: ac.root(), idx: ac.idx,
+		}, agg.Assertions)
+		if err != nil {
+			return nil, err
+		}
+		vs = append(vs, more...)
+	}
+	for _, s := range cc.ctx.Services {
+		loc := cc.terms[s.Name]
+		if len(s.Assertions) == 0 || !loc.located() {
+			continue
+		}
+		decl := loc.decl()
+		more, err := assertionsChecked(r, subject, assertionOwner{
+			label: "service " + s.Name, holder: "the service", decl: decl, idx: cc.unitIdx(decl),
+		}, s.Assertions)
+		if err != nil {
+			return nil, err
+		}
+		vs = append(vs, more...)
+	}
+	return vs, nil
+}
+
+// assertionOwner is the declared type that owns a set of assertions:
+// an aggregate's root or a domain service. label names the owner in a
+// finding, holder names the declaring type in prose.
+type assertionOwner struct {
+	label  string
+	holder string
+	decl   locDecl
+	idx    contractIndex
+}
+
+// assertionsChecked applies the one shape both owners share: the owner
+// declares the operation and assert followed by the key, and the
+// operation calls the check.
+func assertionsChecked(r rule.Rule, subject rule.Subject, owner assertionOwner, assertions []vocab.Assertion) ([]Violation, error) {
+	var vs []Violation
+	name := owner.decl.decl.Name
+	for _, as := range assertions {
+		key := assertKey(as.Key)
+		op, hasOp, err := owner.idx.methodNamed(name, as.On)
+		if err != nil {
+			return nil, err
+		}
+		check, hasCheck, err := owner.idx.methodNamed(name, key)
+		if err != nil {
+			return nil, err
+		}
+		if !hasOp {
+			v, err := newViolation(r, subject, owner.decl.file.path, owner.decl.decl.StartLine,
+				fmt.Sprintf("%s: assertion %s constrains operation %s, which %s does not declare", owner.label, as.Key, as.On, owner.holder),
+				fmt.Sprintf("declare %s on %s and call %s from it", methodSpellings(owner.idx, as.On), name, methodSpellings(owner.idx, key)))
 			if err != nil {
 				return nil, err
 			}
 			vs = append(vs, v)
 		}
+		if !hasCheck {
+			v, err := newViolation(r, subject, owner.decl.file.path, owner.decl.decl.StartLine,
+				fmt.Sprintf("%s: assertion %s names no checking method on %s; expected %s", owner.label, as.Key, owner.holder, methodSpellings(owner.idx, key)),
+				fmt.Sprintf("declare %s on %s and call it from %s", methodSpellings(owner.idx, key), name, as.On))
+			if err != nil {
+				return nil, err
+			}
+			vs = append(vs, v)
+		}
+		if !hasOp || !hasCheck {
+			continue
+		}
+		if callsKey(op.file, op.decl.Name, key) {
+			continue
+		}
+		v, err := newViolation(r, subject, op.file.path, op.decl.StartLine,
+			fmt.Sprintf("%s: operation %s does not call %s, so assertion %s is not checked when it completes", owner.label, op.decl.Name, check.decl.Name, as.Key),
+			fmt.Sprintf("call %s from %s and fail the operation when it fails", check.decl.Name, op.decl.Name))
+		if err != nil {
+			return nil, err
+		}
+		vs = append(vs, v)
 	}
 	return vs, nil
 }

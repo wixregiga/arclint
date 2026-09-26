@@ -247,8 +247,18 @@ export interface DomainEventInfo {
   line: number /* int */;
 }
 /**
+ * DomainServiceInfo is one recorded domain service as exposed through
+ * ctx.domain(), with the assertions that state its contract.
+ */
+export interface DomainServiceInfo {
+  name: string;
+  definition: string;
+  assertions: DomainAssertionInfo[];
+  line: number /* int */;
+}
+/**
  * DomainTermInfo is one recorded term that carries a name and a
- * definition and nothing else: a domain service or a specification.
+ * definition and nothing else: a specification.
  */
 export interface DomainTermInfo {
   name: string;
@@ -275,7 +285,7 @@ export interface DomainContextInfo {
   aggregates: DomainAggregateInfo[];
   valueObjects: DomainValueObjectInfo[];
   events: DomainEventInfo[];
-  services: DomainTermInfo[];
+  services: DomainServiceInfo[];
   specifications: DomainTermInfo[];
   questions: DomainQuestionInfo[];
   line: number /* int */;

@@ -153,9 +153,9 @@ func TestConceptDocsComeFromTheMetaModel(t *testing.T) {
 			}
 		}
 	}
-	// business_rule doc must state it resolves to an invariant or an assertion with an owner.
+	// business_rule doc must state it resolves to an invariant, an assertion, or a specification with an owner.
 	br := vocab.ConceptBusinessRule.Doc()
-	if !strings.Contains(br.Meaning, "either an invariant") || !strings.Contains(br.Meaning, "or an assertion") {
+	if !strings.Contains(br.Meaning, "an invariant") || !strings.Contains(br.Meaning, "an assertion") || !strings.Contains(br.Meaning, "a specification") {
 		t.Errorf("business_rule meaning missing resolve clause: %q", br.Meaning)
 	}
 	if !strings.Contains(br.Supplies, "owner") {

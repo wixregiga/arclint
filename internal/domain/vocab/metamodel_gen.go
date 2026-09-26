@@ -108,6 +108,94 @@ func ddd() MetaModel {
 				URL:          "https://martinfowler.com/bliki/AnemicDomainModel.html",
 				Verification: VerifiedFetched,
 			},
+			{
+				Key:          "fowler-cqs",
+				Title:        "CommandQuerySeparation",
+				Authors:      []string{"Martin Fowler"},
+				Date:         "2005-12-05",
+				URL:          "https://martinfowler.com/bliki/CommandQuerySeparation.html",
+				Verification: VerifiedFetched,
+			},
+			{
+				Key:          "fowler-function-length",
+				Title:        "FunctionLength",
+				Authors:      []string{"Martin Fowler"},
+				Date:         "2016-11-30",
+				URL:          "https://martinfowler.com/bliki/FunctionLength.html",
+				Verification: VerifiedFetched,
+			},
+			{
+				Key:          "stafford-service-layer",
+				Title:        "Service Layer",
+				Authors:      []string{"Randy Stafford"},
+				Year:         2002,
+				URL:          "https://martinfowler.com/eaaCatalog/serviceLayer.html",
+				Verification: VerifiedFetched,
+			},
+			{
+				Key:          "stafford-business-logic",
+				Title:        "Service Layer, Kinds of Business Logic (Patterns of Enterprise Application Architecture excerpt)",
+				Authors:      []string{"Randy Stafford"},
+				Year:         2002,
+				URL:          "https://www.informit.com/articles/article.aspx?p=1398617&seqNum=4",
+				Verification: VerifiedFetched,
+			},
+			{
+				Key:          "vernon-iddd-ch1",
+				Title:        "Getting Started with Domain-Driven Design (Implementing Domain-Driven Design, chapter 1 excerpt)",
+				Authors:      []string{"Vaughn Vernon"},
+				Year:         2013,
+				URL:          "https://www.informit.com/articles/article.aspx?p=1944876&seqNum=3",
+				Verification: VerifiedFetched,
+			},
+			{
+				Key:          "vernon-iddd-sample-pages",
+				Title:        "Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-397)",
+				Authors:      []string{"Vaughn Vernon"},
+				Year:         2013,
+				URL:          "https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf",
+				Verification: VerifiedText,
+			},
+			{
+				Key:          "vernon-effective-aggregate-design-1",
+				Title:        "Effective Aggregate Design Part I: Modeling a Single Aggregate",
+				Authors:      []string{"Vaughn Vernon"},
+				Year:         2011,
+				URL:          "https://www.dddcommunity.org/wp-content/uploads/files/pdf_articles/Vernon_2011_1.pdf",
+				Verification: VerifiedText,
+			},
+			{
+				Key:          "vernon-effective-aggregate-design-2",
+				Title:        "Effective Aggregate Design Part II: Making Aggregates Work Together",
+				Authors:      []string{"Vaughn Vernon"},
+				Year:         2011,
+				URL:          "https://www.dddcommunity.org/wp-content/uploads/files/pdf_articles/Vernon_2011_2.pdf",
+				Verification: VerifiedText,
+			},
+			{
+				Key:          "vernon-iddd-samples",
+				Title:        "IDDD_Samples, identity and access context (commit 9b27b11)",
+				Authors:      []string{"Vaughn Vernon"},
+				Date:         "2022-03-26",
+				URL:          "https://github.com/VaughnVernon/IDDD_Samples",
+				Verification: VerifiedFetched,
+			},
+			{
+				Key:          "martin-screaming-architecture",
+				Title:        "Screaming Architecture",
+				Authors:      []string{"Robert C. Martin"},
+				Date:         "2011-09-30",
+				URL:          "https://blog.cleancoder.com/uncle-bob/2011/09/30/Screaming-Architecture.html",
+				Verification: VerifiedFetched,
+			},
+			{
+				Key:          "bogard-vertical-slice",
+				Title:        "Vertical Slice Architecture",
+				Authors:      []string{"Jimmy Bogard"},
+				Date:         "2018-04-19",
+				URL:          "https://www.jimmybogard.com/vertical-slice-architecture/",
+				Verification: VerifiedFetched,
+			},
 		},
 		Facts: []FactDefinition{
 			{
@@ -135,12 +223,12 @@ func ddd() MetaModel {
 			{
 				Key:     "field-declarations",
 				Needs:   "Field declarations from the Python adapter, which emits class, method, and func today.",
-				Unlocks: []string{"value_object/no-identity", "domain_event/occurrence-time", "domain_service/stateless"},
+				Unlocks: []string{"value_object/no-identity", "domain_event/occurrence-time"},
 			},
 			{
 				Key:     "field-types",
 				Needs:   "The declared type of every field, so that a field of the recorded identity type can be told from any other, and a root held in a field from an identity held there.",
-				Unlocks: []string{"entity/identity", "aggregate/root-only-references"},
+				Unlocks: []string{"entity/identity", "aggregate/root-only-references", "domain_service/not-held-by-aggregates"},
 			},
 			{
 				Key:     "field-mutability",
@@ -904,10 +992,11 @@ func ddd() MetaModel {
 							{Work: "vernon2013", Chapter: 10, Page: "354"},
 						},
 						Enforcement: Enforcement{
-							By:        EvaluatorDomain,
-							Facts:     []string{"file_tree", "declarations", "calls"},
-							Languages: Languages{All: true},
-							Severity:  severityError,
+							By:          EvaluatorDomain,
+							Facts:       []string{"file_tree", "declarations", "calls"},
+							Languages:   Languages{All: true},
+							Severity:    severityError,
+							Limitations: []string{"a command is an exported method of the root whose result carries an error; a TypeScript or Python command that throws is not seen"},
 						},
 					},
 				},
@@ -949,11 +1038,11 @@ func ddd() MetaModel {
 				},
 				Records: Recording{
 					Section: SectionAssertions,
-					Note:    "A map keyed by the assertion's name, recorded under the aggregate whose operation it constrains.",
+					Note:    "A map keyed by the assertion's name, recorded under the aggregate whose command it constrains or under the domain service whose operation it constrains; the assertions of a service are its contract.",
 					Properties: []Property{
-						{Name: "key", Required: true, Definition: "The assertion's name in kebab-case, unique within its owner; the root's method that checks it is assert followed by the key, spelled in the language's method case (AssertHasLines, assertHasLines, assert_has_lines)."},
-						{Name: "on", Required: true, Definition: "The operation of the root whose completion the assertion constrains."},
-						{Name: "statement", Required: true, Definition: "The post-condition in the ubiquitous language."},
+						{Name: "key", Required: true, Definition: "The assertion's name in kebab-case, unique within its owner; the owner's method that checks it is assert followed by the key, spelled in the language's method case (AssertHasLines, assertHasLines, assert_has_lines)."},
+						{Name: "on", Required: true, Definition: "The operation the guarantee belongs to: a command of the root, or an operation of the service."},
+						{Name: "statement", Required: true, Definition: "The guarantee as the domain expert states it, in the ubiquitous language (Only an active tenant offers an invitation); it is recorded in the expert's words and never rewritten into a post-condition, because on already names the operation."},
 					},
 				},
 				Invariants: []BlockInvariant{
@@ -970,8 +1059,8 @@ func ddd() MetaModel {
 						},
 					},
 					{
-						ID:        "assertion/owned-by-an-aggregate",
-						Statement: "An assertion is recorded under one aggregate; an assertion under a value object, a member entity, or nothing is rejected.",
+						ID:        "assertion/owned-by-an-aggregate-or-service",
+						Statement: "An assertion is recorded under one aggregate or one domain service; an assertion under a value object, a member entity, or nothing is rejected.",
 						Sources: []Citation{
 							{Work: "evans2015", Page: "22", Section: "Assertions"},
 						},
@@ -983,8 +1072,9 @@ func ddd() MetaModel {
 					},
 					{
 						ID:        "assertion/checked-by-its-operation",
-						Statement: "The root declares both the operation and the checking method (assert followed by the key in the language's method case), and the operation calls the checking method.",
+						Statement: "The owner of an assertion, the aggregate's root or the domain service, declares both the operation the assertion names and the checking method (assert followed by the key in the language's method case), and the operation calls the checking method.",
 						Sources: []Citation{
+							{Work: "evans2015", Page: "14", Section: "Services"},
 							{Work: "evans2015", Page: "22", Section: "Assertions"},
 						},
 						Enforcement: Enforcement{
@@ -1051,15 +1141,28 @@ func ddd() MetaModel {
 				Title: "Business Rule",
 				Phase: "tactical",
 				Definition: Meaning{
-					Text: "A rule of the business as a domain expert states it, before the model has placed it. Once placed it is either an invariant, when it must hold at all times for an aggregate or a value, or an assertion, when it is a post-condition of one operation. It is never recorded as its own section.",
+					Text: "A rule of the business as a domain expert states it, before the model has placed it. Once placed it is an invariant, when it must hold at all times for an aggregate or a value; an assertion, when it is a guarantee of one command of a root or one operation of a domain service; a specification, when experts pass the predicate around as a thing they name; or not a domain rule, when it is a programming guard or an application policy such as notifying or exporting. It is an intake word and is never recorded as its own section.",
 					Sources: []Citation{
 						{Work: "evans2015", Page: "22", Section: "Assertions"},
+						{Work: "evans2015", Page: "25", Section: "Declarative Design"},
+						{Work: "fowler-anemic-domain-model"},
+						{Work: "stafford-business-logic"},
 						{Work: "vernon2013", Chapter: 10, Page: "353"},
 					},
 				},
 				Records: Recording{
 					Section: SectionNone,
-					Note:    "Recorded as an invariant or an assertion with one owner.",
+					Note:    "Recorded as an invariant, an assertion, or a specification with one owner, or left unrecorded as an application policy or a guard.",
+				},
+				Guidance: []Guidance{
+					{
+						Text:        "A rule that holds only when one operation runs is recorded as an assertion on that operation, in the expert's words; a rule that spans aggregates and must hold at every instant has no owner and is a question for the domain expert.",
+						Fundamental: true,
+						Sources: []Citation{
+							{Work: "evans2015", Page: "22", Section: "Assertions"},
+							{Work: "vernon-effective-aggregate-design-2", Page: "8", Section: "Rule: Use Eventual Consistency Outside the Boundary"},
+						},
+					},
 				},
 			},
 			{
@@ -1273,10 +1376,11 @@ func ddd() MetaModel {
 						},
 					},
 					{
-						Text:        "Ask an aggregate whether something is allowed through a side-effect-free function named for the capability, or through a specification; a command changes state and returns no domain information.",
+						Text:        "Ask an aggregate whether something is allowed through a query named for the capability (Evans's side-effect-free function), or through a specification; a command changes state and returns no domain information, and no operation is both.",
 						Fundamental: true,
 						Sources: []Citation{
 							{Work: "evans2015", Page: "21", Section: "Side-Effect-Free Functions"},
+							{Work: "fowler-cqs"},
 							{Work: "evans-fowler-1997", Page: "2"},
 						},
 					},
@@ -1433,19 +1537,21 @@ func ddd() MetaModel {
 				Title: "Domain Service",
 				Phase: "tactical",
 				Definition: Meaning{
-					Text: "A standalone operation in the domain for a significant process or transformation that is not a natural responsibility of an entity or value object, declared as an interface with a name that is part of the ubiquitous language and a contract stated as assertions.",
+					Text: "A standalone operation in the domain for a significant process or transformation that is not a natural responsibility of an entity or value object, given a name that is part of the ubiquitous language and a contract stated as assertions. It makes a business decision that no one aggregate or value can make alone; it may read through repositories, but it never commits and never publishes.",
 					Sources: []Citation{
 						{Work: "evans2015", Page: "14", Section: "Services"},
 						{Work: "fowler-evans-classification"},
 						{Work: "vernon2013", Chapter: 7, Page: "267"},
+						{Work: "vernon-iddd-sample-pages", Page: "xxxix", Section: "Guide to This Book"},
 					},
 				},
 				Records: Recording{
 					Section: SectionServices,
-					Note:    "A map keyed by the service's name.",
+					Note:    "A map keyed by the service's name; its assertions are its contract, each on one operation of the service.",
 					Properties: []Property{
 						{Name: "name", Required: true, Definition: "The service's name, the name of its type in the code; the map key."},
-						{Name: "definition", Required: true, Definition: "The process or transformation it performs and across which aggregates."},
+						{Name: "definition", Required: true, Definition: "The business decision it makes and across which aggregates."},
+						{Name: "assertions", Required: false, Definition: "The service's contract: a map keyed by the assertion's name, each with on (the operation of the service) and statement, checked by the service's method assert followed by the key in the language's method case."},
 					},
 				},
 				Invariants: []BlockInvariant{
@@ -1463,39 +1569,50 @@ func ddd() MetaModel {
 						},
 					},
 					{
-						ID:        "domain_service/stateless",
-						Statement: "A service declares no field that holds state across invocations.",
+						ID:        "domain_service/not-held-by-aggregates",
+						Statement: "No aggregate root or member entity declares a field whose type is a recorded domain service; a service reaches an aggregate only as a parameter of one command.",
 						Sources: []Citation{
-							{Work: "evans2015", Page: "14", Section: "Services"},
-							{Work: "vernon2013", Chapter: 7, Page: "268"},
+							{Work: "vernon-iddd-sample-pages", Page: "387", Section: "Avoid Dependency Injection"},
+							{Work: "vernon-iddd-sample-pages", Page: "363", Section: "Rule: Reference Other Aggregates by Identity"},
 						},
 						Enforcement: Enforcement{
 							Facts:     []string{"declarations"},
 							Languages: Languages{Names: []string{"go", "typescript"}},
-							Needs:     "field-declarations",
-							Severity:  severityError,
-						},
-					},
-					{
-						ID:        "domain_service/not-injected-into-aggregates",
-						Statement: "No constructor or command of an aggregate root takes a domain service as a parameter.",
-						Sources: []Citation{
-							{Work: "vernon2013", Chapter: 10, Page: "387"},
-						},
-						Enforcement: Enforcement{
-							By:        EvaluatorPlanned,
-							Facts:     []string{"file_tree", "declarations"},
-							Languages: Languages{Names: []string{"go", "typescript"}},
+							Needs:     "field-types",
 							Severity:  severityError,
 						},
 					},
 				},
 				Guidance: []Guidance{
 					{
-						Text: "Use a domain service for an operation that spans aggregates; look up what it needs ahead of invoking aggregate behavior rather than reaching out from inside the aggregate.",
+						Text:        "Try the thing first; a service exists only for a business decision that no entity or value object naturally owns, and the more behavior the services hold, the less the model does.",
+						Fundamental: true,
+						Sources: []Citation{
+							{Work: "evans2015", Page: "14", Section: "Services"},
+							{Work: "fowler-anemic-domain-model"},
+						},
+					},
+					{
+						Text:        "Name the service and its operations for their effect and purpose in the ubiquitous language, never for the means; a name ending in Manager, Helper, Handler, or Processor names no effect.",
+						Fundamental: true,
+						Sources: []Citation{
+							{Work: "evans2015", Page: "14", Section: "Services"},
+							{Work: "evans2015", Page: "20", Section: "Intention-Revealing Interfaces"},
+						},
+					},
+					{
+						Text: "A service holds collaborators (repositories, other services, a clock) and never state that survives an invocation; Evans no longer holds statelessness to be necessary, and Vernon's services hold repositories.",
+						Sources: []Citation{
+							{Work: "fowler-evans-classification"},
+							{Work: "vernon2013", Chapter: 7, Page: "268"},
+							{Work: "vernon-iddd-samples"},
+						},
+					},
+					{
+						Text: "Use a domain service for an operation that spans aggregates; look up what it needs ahead of invoking aggregate behavior, and pass a service into a command only for a dependency resolution the aggregate itself must double-dispatch.",
 						Sources: []Citation{
 							{Work: "vernon2013", Chapter: 7, Page: "268"},
-							{Work: "vernon2013", Chapter: 10, Page: "362"},
+							{Work: "vernon-iddd-sample-pages", Page: "362", Section: "Rule: Reference Other Aggregates by Identity"},
 						},
 					},
 				},
@@ -1505,15 +1622,41 @@ func ddd() MetaModel {
 				Title: "Application Service",
 				Phase: "tactical",
 				Definition: Meaning{
-					Text: "An operation of the application layer that coordinates a use case: it fetches aggregates through repositories, invokes their behavior, and commits, holding application logic that is not business logic and never the domain rules themselves.",
+					Text: "An operation of the application layer that runs one use case flow: it translates the request into domain values, fetches aggregates through repositories, invokes their commands or one domain service, commits, and publishes what happened, holding application logic that is not business logic and never the domain rules themselves. Use case is the same thing seen from the request; the two words are not two kinds.",
 					Sources: []Citation{
 						{Work: "evans2015", Page: "10", Section: "Layered Architecture"},
 						{Work: "evans2015", Page: "17", Section: "Repositories"},
+						{Work: "fowler-anemic-domain-model"},
+						{Work: "vernon-iddd-ch1", Section: "How To Do DDD"},
+						{Work: "stafford-service-layer"},
 					},
 				},
 				Records: Recording{
 					Section: SectionNone,
-					Note:    "Application services are the use cases of the application Zone in rules.arclint.yaml; the domain file does not record them.",
+					Note:    "Application services are the use cases of the application Zone in rules.arclint.yaml; the domain file does not record them, and a business rule found in one is a finding for the librarian, not an entry.",
+				},
+				Guidance: []Guidance{
+					{
+						Text:        "Keep it thin; it coordinates tasks and delegates work to domain objects, contains no business rules or knowledge, and holds no state reflecting the business situation. If deleting every step it takes would lose a business decision, that decision belongs to an aggregate or a domain service.",
+						Fundamental: true,
+						Sources: []Citation{
+							{Work: "fowler-anemic-domain-model"},
+							{Work: "evans2015", Page: "10", Section: "Layered Architecture"},
+						},
+					},
+					{
+						Text: "Notifying, exporting, retrying, and transaction control are application logic, sometimes called workflow logic; they belong here and are never recorded as domain rules.",
+						Sources: []Citation{
+							{Work: "stafford-business-logic"},
+						},
+					},
+					{
+						Text: "Name the use case for the action it performs, and name its input type for the request (ProvisionTenantRequest), never with the word command, which names a state-changing operation of a root.",
+						Sources: []Citation{
+							{Work: "vernon-iddd-ch1", Section: "How To Do DDD"},
+							{Work: "fowler-cqs"},
+						},
+					},
 				},
 			},
 			{

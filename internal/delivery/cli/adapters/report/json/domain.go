@@ -88,6 +88,12 @@ type domainEventJSON struct {
 	RaisedBy   string `json:"raisedBy,omitempty"`
 }
 
+type domainServiceJSON struct {
+	Name       string                `json:"name"`
+	Definition string                `json:"definition"`
+	Assertions []domainAssertionJSON `json:"assertions,omitempty"`
+}
+
 type domainTermJSON struct {
 	Name       string `json:"name"`
 	Definition string `json:"definition"`
@@ -104,7 +110,7 @@ type domainContextJSON struct {
 	Aggregates     []domainAggregateJSON   `json:"aggregates,omitempty"`
 	ValueObjects   []domainValueObjectJSON `json:"valueObjects,omitempty"`
 	Events         []domainEventJSON       `json:"events,omitempty"`
-	Services       []domainTermJSON        `json:"services,omitempty"`
+	Services       []domainServiceJSON     `json:"services,omitempty"`
 	Specifications []domainTermJSON        `json:"specifications,omitempty"`
 	Questions      []domainQuestionJSON    `json:"questions,omitempty"`
 }
@@ -159,7 +165,7 @@ func contextJSONDoc(ctx vocab.BoundedContext) domainContextJSON {
 		doc.Events = append(doc.Events, eventJSONDoc(e))
 	}
 	for _, s := range ctx.Services {
-		doc.Services = append(doc.Services, domainTermJSON{Name: s.Name, Definition: s.Definition})
+		doc.Services = append(doc.Services, serviceJSONDoc(s))
 	}
 	for _, s := range ctx.Specifications {
 		doc.Specifications = append(doc.Specifications, domainTermJSON{Name: s.Name, Definition: s.Definition})
@@ -185,6 +191,10 @@ func aggregateJSONDoc(a vocab.Aggregate) domainAggregateJSON {
 		doc.Entities = append(doc.Entities, entityJSONDoc(e))
 	}
 	return doc
+}
+
+func serviceJSONDoc(s vocab.DomainService) domainServiceJSON {
+	return domainServiceJSON{Name: s.Name, Definition: s.Definition, Assertions: assertionsJSON(s.Assertions)}
 }
 
 func entityJSONDoc(e vocab.Entity) domainEntityJSON {
@@ -353,9 +363,9 @@ func listedSection(ctx vocab.BoundedContext, c vocab.Concept) (any, bool) {
 		}
 		return out, true
 	case vocab.ConceptDomainService:
-		var out []domainTermJSON
+		var out []domainServiceJSON
 		for _, s := range ctx.Services {
-			out = append(out, domainTermJSON{Name: s.Name, Definition: s.Definition})
+			out = append(out, serviceJSONDoc(s))
 		}
 		return out, true
 	case vocab.ConceptQuestion:
@@ -503,6 +513,7 @@ func showJSONDoc(v application.DomainEntryView) map[string]any {
 		}
 	case vocab.ConceptDomainService:
 		doc["definition"] = v.Service.Definition
+		doc["assertions"] = presentList(assertionsJSON(v.Service.Assertions))
 	case vocab.ConceptSpecification:
 		doc["definition"] = v.Specification.Definition
 	case vocab.ConceptQuestion:

@@ -863,6 +863,66 @@ func TestAssertionIsCheckedByItsOperation(t *testing.T) {
 	}
 }
 
+// An assertion of a domain service is checked like an aggregate's: the
+// service type declares the operation and assert followed by the key,
+// and the operation calls the check, spelled in each language's method
+// case.
+func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
+	knowledge := oneContext(t, vocab.BoundedContext{
+		Name: "identity", Definition: "d", Line: 1,
+		Services: []vocab.DomainService{{
+			Name: "TenantProvisioningService", Definition: "d", Line: 2,
+			Assertions: []vocab.Assertion{{Key: "tenant-name-unique", On: "ProvisionTenant", Statement: "No two tenants share a name.", Line: 4}},
+		}},
+	})
+	id := "assertion/checked-by-its-operation"
+	r := builtInRule(t, id)
+	goFile := "internal/identity/tenant_provisioning_service.go"
+	run := func(decls []conformance.Declaration, calls ...conformance.Call) []string {
+		a := runOne(t, r, nil, observed(goFile), map[string]conformance.LanguageFacts{goFile: goDecls("identity", decls, calls...)}, knowledge)
+		var out []string
+		for _, v := range a.Violations() {
+			out = append(out, v.Message())
+		}
+		return out
+	}
+	svc := conformance.Declaration{Kind: "struct", Name: "TenantProvisioningService", Exported: true, StartLine: 3}
+	provision := conformance.Declaration{Kind: "method", Name: "ProvisionTenant", Owner: "TenantProvisioningService", Exported: true, StartLine: 10, Results: []string{"error"}}
+	check := conformance.Declaration{Kind: "method", Name: "AssertTenantNameUnique", Owner: "TenantProvisioningService", Exported: true, StartLine: 20, Results: []string{"error"}}
+
+	got := run([]conformance.Declaration{svc})
+	want := []string{
+		"service TenantProvisioningService: assertion tenant-name-unique constrains operation ProvisionTenant, which the service does not declare",
+		"service TenantProvisioningService: assertion tenant-name-unique names no checking method on the service; expected AssertTenantNameUnique (go)",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("bare service:\n got %q\nwant %q", got, want)
+	}
+	got = run([]conformance.Declaration{svc, provision, check})
+	if len(got) != 1 || got[0] != "service TenantProvisioningService: operation ProvisionTenant does not call AssertTenantNameUnique, so assertion tenant-name-unique is not checked when it completes" {
+		t.Errorf("uncalled check: %q", got)
+	}
+	if got = run([]conformance.Declaration{svc, provision, check}, conformance.Call{Callee: "AssertTenantNameUnique", Line: 12, Enclosing: "ProvisionTenant"}); len(got) != 0 {
+		t.Errorf("checked operation: %q", got)
+	}
+	if got = run(nil); len(got) != 0 {
+		t.Errorf("an undeclared service is domain_service/declared's finding: %q", got)
+	}
+
+	tsFile := "src/identity/tenant-provisioning-service.ts"
+	facts := map[string]conformance.LanguageFacts{
+		tsFile: {Language: rule.LanguageTypeScript, DeclarationsAvailable: true, CallsAvailable: true, Declarations: []conformance.Declaration{
+			{Kind: "class", Name: "TenantProvisioningService", Exported: true, StartLine: 1},
+			{Kind: "method", Name: "provisionTenant", Owner: "TenantProvisioningService", Exported: true, StartLine: 5},
+			{Kind: "method", Name: "assertTenantNameUnique", Owner: "TenantProvisioningService", Exported: true, StartLine: 15},
+		}, Calls: []conformance.Call{{Callee: "assertTenantNameUnique", Line: 7, Enclosing: "provisionTenant"}}},
+	}
+	a := runOne(t, r, nil, observed(tsFile), facts, knowledge)
+	if got := outcomesOf(a)[id+"|context:identity"]; got != conformance.OutcomeConforms {
+		t.Errorf("typescript: outcome %s, want conforms; violations %v", got, anchorsOf(a)[id])
+	}
+}
+
 // Two contexts holding one file is a finding for each unless they
 // record a shared_kernel. A context with a Zone named for it holds
 // every file of the Zone; one without holds the files of its terms.

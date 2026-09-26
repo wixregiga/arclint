@@ -202,7 +202,7 @@ func TestDefineAssertionIsOwnedByAnAggregate(t *testing.T) {
 		t.Errorf("assertion = %+v", as)
 	}
 	_, _, err = next.Define(vocab.ConceptAssertion, vocab.Locator{Context: "sales", Owner: "Money", Name: "rounded"}, vocab.Change{SetOn: true, On: "Add", SetStatement: true, Statement: "x"})
-	if err == nil || !strings.Contains(err.Error(), "assertion/owned-by-an-aggregate") {
+	if err == nil || !strings.Contains(err.Error(), "assertion/owned-by-an-aggregate-or-service") {
 		t.Fatalf("value object owner: err = %v", err)
 	}
 	_, _, err = next.Define(vocab.ConceptAssertion, vocab.Locator{Context: "sales", Owner: "Order", Name: "total-is-sum-of-lines"}, vocab.Change{SetOn: true, On: "Add", SetStatement: true, Statement: "x"})
@@ -212,6 +212,39 @@ func TestDefineAssertionIsOwnedByAnAggregate(t *testing.T) {
 	_, _, err = next.Define(vocab.ConceptAssertion, vocab.Locator{Context: "sales", Owner: "Order", Name: "late"}, vocab.Change{SetStatement: true, Statement: "x"})
 	if err == nil || !strings.Contains(err.Error(), "needs on") {
 		t.Fatalf("assertion without on: err = %v", err)
+	}
+}
+
+func TestDefineAssertionIsOwnedByADomainService(t *testing.T) {
+	lang := mustTicketing(t)
+	next, res, err := lang.Define(vocab.ConceptAssertion, vocab.Locator{Context: "sales", Owner: "Pricing", Name: "active-tenant-only"},
+		vocab.Change{SetOn: true, On: "Price", SetStatement: true, Statement: "Only a published event is priced."})
+	if err != nil || res.Concept != vocab.ConceptAssertion || res.Owner != "Pricing" {
+		t.Fatalf("res = %+v, err = %v", res, err)
+	}
+	sales, _ := next.Context("sales")
+	pricing, _ := sales.Service("Pricing")
+	if as, ok := pricing.Assertion("active-tenant-only"); !ok || as.On != "Price" {
+		t.Errorf("assertion = %+v", as)
+	}
+	owned := sales.Assertions()
+	last := owned[len(owned)-1]
+	if last.Owner != "Pricing" || last.OwnerConcept != vocab.ConceptDomainService {
+		t.Errorf("owned = %+v", last)
+	}
+	next, res, err = next.Define(vocab.ConceptAssertion, vocab.Locator{Context: "sales", Name: "active-tenant-only"}, vocab.Change{SetOn: true, On: "Quote"})
+	if err != nil || res.Owner != "Pricing" {
+		t.Fatalf("owner found by key: res = %+v, err = %v", res, err)
+	}
+	if _, _, err := next.Remove(vocab.ConceptAssertion, vocab.Locator{Context: "sales", Name: "active-tenant-only"}); err != nil {
+		t.Fatalf("remove by key: %v", err)
+	}
+	_, removed, err := next.Remove(vocab.ConceptDomainService, vocab.Locator{Context: "sales", Name: "Pricing"})
+	if err != nil || strings.Join(removed.Also, ";") != "assertion active-tenant-only removed with it" {
+		t.Fatalf("remove service: res = %+v, err = %v", removed, err)
+	}
+	if orig, _ := lang.Context("sales"); len(orig.Assertions()) != len(owned)-1 {
+		t.Errorf("the original language changed: %d assertions", len(orig.Assertions()))
 	}
 }
 

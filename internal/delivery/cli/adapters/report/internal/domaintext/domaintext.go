@@ -144,6 +144,13 @@ func Overview(p *out.Printer, st Style, o application.DomainOverview) {
 			p.Printf("  %s\n", st.Bold("Domain services"))
 			for _, s := range ctx.Services {
 				p.Printf("    %s\n", namedLine(s.Name, s.Definition))
+				if len(s.Assertions) > 0 {
+					p.Printf("      %s\n", st.Muted("assertions:"))
+					for _, as := range s.Assertions {
+						p.Printf("        %s\n", namedLine(as.Key+" (on "+as.On+")", as.Statement))
+						writeSourceLine(p, st, "          ", contractSource(o.Matrix, ctx.Name, application.ContractAssertion, s.Name, as.Key))
+					}
+				}
 			}
 		}
 		if len(ctx.Specifications) > 0 {
@@ -433,7 +440,7 @@ func Show(p *out.Printer, st Style, v application.DomainEntryView) {
 		p.Printf("%s %s\n", st.Bold("Owner:"), v.Owner)
 		p.Printf("%s %s\n", st.Bold("Statement:"), v.Invariant.Statement)
 	case vocab.ConceptAssertion:
-		p.Printf("%s %s\n", st.Bold("Aggregate:"), v.Owner)
+		p.Printf("%s %s\n", st.Bold("Owner:"), v.Owner)
 		p.Printf("%s %s\n", st.Bold("On:"), v.Assertion.On)
 		p.Printf("%s %s\n", st.Bold("Statement:"), v.Assertion.Statement)
 	case vocab.ConceptDomainEvent:
@@ -443,6 +450,12 @@ func Show(p *out.Printer, st Style, v application.DomainEntryView) {
 		showDefinition(p, st, v.Event.Definition)
 	case vocab.ConceptDomainService:
 		showDefinition(p, st, v.Service.Definition)
+		if len(v.Service.Assertions) > 0 {
+			p.Println(st.Bold("Assertions:"))
+			for _, as := range v.Service.Assertions {
+				p.Printf("  %s\n", namedLine(as.Key+" (on "+as.On+")", as.Statement))
+			}
+		}
 	case vocab.ConceptSpecification:
 		showDefinition(p, st, v.Specification.Definition)
 	case vocab.ConceptQuestion:

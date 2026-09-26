@@ -57,7 +57,7 @@
           "type": "object",
           "description": "The context's domain services.",
           "propertyNames": { "pattern": "^\\S(.*\\S)?$" },
-          "additionalProperties": { "$ref": "#/$defs/service", "description": "A standalone operation in the domain for a significant process or transformation that is not a natural responsibility of an entity or value object, declared as an interface with a name that is part of the ubiquitous language and a contract stated as assertions." }
+          "additionalProperties": { "$ref": "#/$defs/service", "description": "A standalone operation in the domain for a significant process or transformation that is not a natural responsibility of an entity or value object, given a name that is part of the ubiquitous language and a contract stated as assertions. It makes a business decision that no one aggregate or value can make alone; it may read through repositories, but it never commits and never publishes." }
         },
         "specifications": {
           "type": "object",
@@ -152,8 +152,8 @@
       "additionalProperties": false,
       "required": ["on", "statement"],
       "properties": {
-        "on": { "type": "string", "minLength": 1, "description": "The operation of the root whose completion the assertion constrains." },
-        "statement": { "type": "string", "minLength": 1, "description": "The post-condition in the ubiquitous language." }
+        "on": { "type": "string", "minLength": 1, "description": "The operation the guarantee belongs to: a command of the root, or an operation of the service." },
+        "statement": { "type": "string", "minLength": 1, "description": "The guarantee as the domain expert states it, in the ubiquitous language (Only an active tenant offers an invitation); it is recorded in the expert's words and never rewritten into a post-condition, because on already names the operation." }
       }
     },
     "event": {
@@ -168,11 +168,17 @@
     },
     "service": {
       "type": "object",
-      "description": "A standalone operation in the domain for a significant process or transformation that is not a natural responsibility of an entity or value object, declared as an interface with a name that is part of the ubiquitous language and a contract stated as assertions.",
+      "description": "A standalone operation in the domain for a significant process or transformation that is not a natural responsibility of an entity or value object, given a name that is part of the ubiquitous language and a contract stated as assertions. It makes a business decision that no one aggregate or value can make alone; it may read through repositories, but it never commits and never publishes.",
       "additionalProperties": false,
       "required": ["definition"],
       "properties": {
-        "definition": { "type": "string", "minLength": 1, "description": "The process or transformation it performs and across which aggregates." }
+        "definition": { "type": "string", "minLength": 1, "description": "The business decision it makes and across which aggregates." },
+        "assertions": {
+          "type": "object",
+          "description": "The service's contract: a map keyed by the assertion's name, each with on (the operation of the service) and statement, checked by the service's method assert followed by the key in the language's method case.",
+          "propertyNames": { "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+          "additionalProperties": { "$ref": "#/$defs/assertion", "description": "A stated post-condition of an operation or invariant of a class or aggregate, made explicit so that the effect of an operation can be known without tracing its implementation. Assertions define the contracts of services and entity modifiers and the invariants on aggregates; where they cannot be coded directly, they are written as automated unit tests." }
+        }
       }
     },
     "specification": {

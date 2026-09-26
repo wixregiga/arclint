@@ -379,10 +379,10 @@ func eventInfos(events []vocab.DomainEvent) []DomainEventInfo {
 	return out
 }
 
-func serviceInfos(services []vocab.DomainService) []DomainTermInfo {
-	out := make([]DomainTermInfo, len(services))
+func serviceInfos(services []vocab.DomainService) []DomainServiceInfo {
+	out := make([]DomainServiceInfo, len(services))
 	for i, s := range services {
-		out[i] = DomainTermInfo{Name: s.Name, Definition: s.Definition, Line: s.Line}
+		out[i] = DomainServiceInfo{Name: s.Name, Definition: s.Definition, Assertions: assertionInfos(s.Assertions), Line: s.Line}
 	}
 	return out
 }

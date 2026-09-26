@@ -514,25 +514,24 @@ func (c *BoundedContext) defineAssertion(at Locator, ch Change) (DefineResult, e
 			return DefineResult{}, err
 		}
 		if !ok {
-			return DefineResult{}, fmt.Errorf("%w: assertion %q is not recorded; recording one names the aggregate that owns it", ErrChangeIncomplete, at.Name)
+			return DefineResult{}, fmt.Errorf("%w: assertion %q is not recorded; recording one names the aggregate or domain service that owns it", ErrChangeIncomplete, at.Name)
 		}
 		owner = found
 	}
-	ai, err := c.assertionOwnerIndex(owner)
+	assertions, err := c.assertionsOf(owner)
 	if err != nil {
 		return DefineResult{}, err
 	}
-	a := &c.Aggregates[ai]
-	i := slices.IndexFunc(a.Assertions, func(as Assertion) bool { return as.Key == at.Name })
+	i := slices.IndexFunc(*assertions, func(as Assertion) bool { return as.Key == at.Name })
 	created := i < 0
 	if created {
 		if err := ch.requiredToRecord(ConceptAssertion, "assertion", at.Name); err != nil {
 			return DefineResult{}, err
 		}
-		a.Assertions = append(a.Assertions, Assertion{Key: at.Name})
-		i = len(a.Assertions) - 1
+		*assertions = append(*assertions, Assertion{Key: at.Name})
+		i = len(*assertions) - 1
 	}
-	as := &a.Assertions[i]
+	as := &(*assertions)[i]
 	var changed []string
 	setString(&as.On, ch.SetOn, ch.On, propOn, &changed)
 	setString(&as.Statement, ch.SetStatement, ch.Statement, propStatement, &changed)
@@ -637,8 +636,12 @@ func (c *BoundedContext) remove(k Concept, at Locator) (RemoveResult, error) {
 		if i < 0 {
 			return RemoveResult{}, c.notFound("service", at.Name)
 		}
+		res := RemoveResult{Concept: k}
+		for _, as := range c.Services[i].Assertions {
+			res.Also = append(res.Also, fmt.Sprintf("assertion %s removed with it", as.Key))
+		}
 		c.Services = slices.Delete(c.Services, i, i+1)
-		return RemoveResult{Concept: k}, nil
+		return res, nil
 	case ConceptSpecification:
 		i := slices.IndexFunc(c.Specifications, func(s Specification) bool { return s.Name == at.Name })
 		if i < 0 {
@@ -756,16 +759,15 @@ func (c *BoundedContext) removeAssertion(at Locator) (RemoveResult, error) {
 		}
 		owner = found
 	}
-	ai, err := c.assertionOwnerIndex(owner)
+	assertions, err := c.assertionsOf(owner)
 	if err != nil {
 		return RemoveResult{}, err
 	}
-	a := &c.Aggregates[ai]
-	i := slices.IndexFunc(a.Assertions, func(as Assertion) bool { return as.Key == at.Name })
+	i := slices.IndexFunc(*assertions, func(as Assertion) bool { return as.Key == at.Name })
 	if i < 0 {
 		return RemoveResult{}, fmt.Errorf("%w: %s records no assertion %q", ErrDefinitionNotFound, owner, at.Name)
 	}
-	a.Assertions = slices.Delete(a.Assertions, i, i+1)
+	*assertions = slices.Delete(*assertions, i, i+1)
 	return RemoveResult{Concept: ConceptAssertion, Owner: owner}, nil
 }
 
@@ -805,17 +807,20 @@ func (c *BoundedContext) invariantsOf(owner string) (*[]Invariant, error) {
 	return nil, fmt.Errorf("%w: context %q records no aggregate or value object %q", ErrDefinitionNotFound, c.Name, owner)
 }
 
-// assertionOwnerIndex returns the index of the aggregate an assertion
-// is owned by; anything else is refused with the meta-model invariant
-// that says so.
-func (c BoundedContext) assertionOwnerIndex(owner string) (int, error) {
+// assertionsOf returns the assertions slice of an owner, which is an
+// aggregate or a domain service; anything else is refused with the
+// meta-model invariant that says so.
+func (c *BoundedContext) assertionsOf(owner string) (*[]Assertion, error) {
 	if ai := c.aggregateIndex(owner); ai >= 0 {
-		return ai, nil
+		return &c.Aggregates[ai].Assertions, nil
+	}
+	if si := slices.IndexFunc(c.Services, func(s DomainService) bool { return s.Name == owner }); si >= 0 {
+		return &c.Services[si].Assertions, nil
 	}
 	if t, ok := c.Term(owner); ok {
-		return -1, fmt.Errorf("assertion/owned-by-an-aggregate: context %q records %q as %s; an assertion is owned by an aggregate", c.Name, owner, describe(t))
+		return nil, fmt.Errorf("assertion/owned-by-an-aggregate-or-service: context %q records %q as %s; an assertion is owned by an aggregate or a domain service", c.Name, owner, describe(t))
 	}
-	return -1, fmt.Errorf("%w: context %q records no aggregate %q", ErrDefinitionNotFound, c.Name, owner)
+	return nil, fmt.Errorf("%w: context %q records no aggregate or domain service %q", ErrDefinitionNotFound, c.Name, owner)
 }
 
 // ownerOfInvariant finds the owner an invariant key is recorded under
@@ -831,8 +836,8 @@ func (c BoundedContext) ownerOfInvariant(key string) (string, bool, error) {
 	return oneOwner(c.Name, "invariant", key, owners)
 }
 
-// ownerOfAssertion finds the aggregate an assertion key is recorded
-// under when the locator names none.
+// ownerOfAssertion finds the aggregate or domain service an assertion
+// key is recorded under when the locator names none.
 func (c BoundedContext) ownerOfAssertion(key string) (string, bool, error) {
 	var owners []string
 	for _, oa := range c.Assertions() {

@@ -34,7 +34,8 @@ brings none.
 
 Names are keys. Each context holds its aggregates, value objects,
 events, services, specifications, relations, and open questions; each
-aggregate holds its identity, its invariants, and its assertions.
+aggregate holds its identity, its invariants, and its assertions; a
+domain service holds the assertions of its own operations.
 
 ```yaml
 version: 1
@@ -92,8 +93,11 @@ invariant (`aggregate/protects-an-invariant`, warning).
 **An invariant of an aggregate** is a method named `Ensure` followed by
 its key, and every constructor and every command of the root calls it
 (`invariant/enforced-at-every-mutation`). **An assertion** is a method
-named `Assert` followed by its key, which the named operation calls
-(`assertion/checked-by-its-operation`).
+named `Assert` followed by its key, declared on its owner (the aggregate's
+root or the domain service) and called by the operation the assertion
+names (`assertion/checked-by-its-operation`).
+The statement is the guarantee in the domain expert's words; the code
+checks it, the recording never restates it as a post-condition.
 
 **A value object** with an invariant declares one constructor (`New`,
 `New<Name>`, `Parse<Name>`, `constructor`, or `__init__`) so a value

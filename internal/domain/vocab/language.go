@@ -121,6 +121,9 @@ func (l UbiquitousLanguage) Counts() Counts {
 		for _, v := range ctx.ValueObjects {
 			c.Invariants += len(v.Invariants)
 		}
+		for _, s := range ctx.Services {
+			c.Assertions += len(s.Assertions)
+		}
 	}
 	return c
 }

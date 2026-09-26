@@ -151,7 +151,8 @@ project knowledge, not hidden ArcLint machinery. The file is organized
 by bounded context, names as keys: each context holds its aggregates,
 value objects, events, services, specifications, and open questions;
 an aggregate holds its identity, its entities, its invariants, and its
-assertions; a value object holds its invariants; top-level relations
+assertions; a domain service holds the assertions of its operations; a
+value object holds its invariants; top-level relations
 name how contexts connect. ArcLint owns the meanings of the concepts
 (`arclint domain explain` prints them with their sources); the project
 supplies names, definitions, aliases, statements, and owners.
@@ -163,9 +164,9 @@ supplies names, definitions, aliases, statements, and owners.
 | Entity | `entity` | A member of an aggregate whose identity matters as it changes over time. |
 | Value Object | `value_object` | A domain value defined entirely by its attributes, with no identity of its own; built through one constructor when it records an invariant. |
 | Invariant | `invariant` | What always holds inside its owner; keyed, since the root's enforcing method is `Ensure` followed by the key. |
-| Assertion | `assertion` | What holds when one operation of the root completes (`on`); the root's checking method is `Assert` followed by the key. |
+| Assertion | `assertion` | What holds when one named operation (`on`) of an aggregate's root or a domain service completes; the owner's checking method is `Assert` followed by the key. |
 | Domain Event | `domain_event` | Something that has completed in the domain and that the project cares to record (file section: `events`). |
-| Domain Service | `domain_service` | An operation of the model that belongs to no aggregate. |
+| Domain Service | `domain_service` | An operation of the model that belongs to no aggregate; its contract is recorded as assertions on its operations. |
 | Specification | `specification` | A named predicate carrying a satisfaction method. |
 | Question | `question` | What the project has not decided yet, recorded instead of guessed. |
 

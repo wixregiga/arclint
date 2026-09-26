@@ -19,7 +19,7 @@ type Carrier struct {
 // and a check of it never disagree about which declaration carries a
 // contract: the type spelling a term, the constructor a value object's
 // invariants are enforced at, the root method enforcing an invariant
-// or checking an assertion, and the satisfaction method of a
+// or a service method checking an assertion, and the satisfaction method of a
 // specification. Every lookup is within one bounded context, because a
 // name means one thing per context.
 type Carriers struct {
@@ -93,11 +93,30 @@ func (c Carriers) Invariant(ctx, owner, key string) (Carrier, bool, error) {
 	return c.rootMethod(ctx, owner, key, ensureKey)
 }
 
-// Assertion locates the root method checking an aggregate's
-// assertion: assert followed by the key, in the method case of the
-// root's language.
+// Assertion locates the method checking an assertion: assert followed
+// by the key, in the method case of the owner's language, declared on
+// the aggregate's root or on the domain service's type.
 func (c Carriers) Assertion(ctx, owner, key string) (Carrier, bool, error) {
-	return c.rootMethod(ctx, owner, key, assertKey)
+	cc, ok := c.contexts[ctx]
+	if !ok {
+		return Carrier{}, false, nil
+	}
+	if _, isAggregate := cc.aggregates[owner]; isAggregate {
+		return c.rootMethod(ctx, owner, key, assertKey)
+	}
+	if _, err := rule.CaseTerm(key, "flatcase"); err != nil {
+		return Carrier{}, false, fmt.Errorf("method name for %q: %w", key, err)
+	}
+	loc := cc.terms[owner]
+	if !loc.located() {
+		return Carrier{}, false, nil
+	}
+	decl := loc.decl()
+	m, found, err := cc.unitIdx(decl).methodNamed(decl.decl.Name, assertKey(key))
+	if err != nil || !found {
+		return Carrier{}, false, err
+	}
+	return carrierOf(m), true, nil
 }
 
 // rootMethod finds the method a contract key names on an aggregate's

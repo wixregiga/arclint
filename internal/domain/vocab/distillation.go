@@ -24,7 +24,7 @@ func DistillationRules() []DistillationRule {
 		},
 		{
 			ID:      "invariant-ownership",
-			Rule:    "Every must-always/must-never statement -> invariant (or assertion) under exactly one owner. Always-true -> the owner's invariants, keyed; named operation -> the aggregate's assertions, keyed, with on. A value object's key names value integrity checked at construction; an aggregate's key names the root method that enforces the cluster rule.",
+			Rule:    "Every must-always/must-never statement -> invariant (or assertion) under exactly one owner. Always-true -> the owner's invariants, keyed; named operation -> the owner's assertions, keyed, with on: the aggregate's for its command, the domain service's for its operation. A value object's key names value integrity checked at construction; an aggregate's key names the root method that enforces the cluster rule.",
 			Example: "total = sum of lines -> Order.invariants.total-is-sum-of-lines; every tier priced before Publish -> Order.assertions.tiers-priced on Publish",
 		},
 		{
@@ -43,9 +43,44 @@ func DistillationRules() []DistillationRule {
 			Example: "reject: customer and all orders save together",
 		},
 		{
-			ID:      "homeless-operation",
-			Rule:    "Logic spanning aggregates or needing external domain knowledge -> domain_service.",
-			Example: "DiscountCalculator over Order+Customer",
+			ID:      "thing-first",
+			Rule:    "A behavior goes to the entity or value that naturally owns it before any service is considered; a service that could be a method on one root is a wrong home.",
+			Example: "Tenant.Deactivate, not TenantService.Deactivate(tenant)",
+		},
+		{
+			ID:      "command-vs-query",
+			Rule:    "Changes the state of one aggregate and returns no domain information -> a command of that root; changes nothing and answers a question -> a query of the root or value; never both in one operation. Neither is recorded.",
+			Example: "Tenant.Deactivate is a command; Tenant.IsRegistrationAvailableThrough is a query",
+		},
+		{
+			ID:      "domain-service-when-no-owner",
+			Rule:    "Does it make a business decision that no one aggregate can make alone? Yes -> domain_service, recorded under services with its contract; it may read through repositories, never commits, never publishes.",
+			Example: "TenantProvisioningService over Tenant, User, and Role; Encrypter for knowledge no aggregate holds",
+		},
+		{
+			ID:      "application-service-holds-no-rule",
+			Rule:    "If I delete every step here, is any business decision lost? No -> application_service: loading, invoking, committing, publishing, notifying, translating; not recorded. Yes -> the decision is placed under its owner and reported as a finding.",
+			Example: "the ProvisionTenant use case runs the service in one unit of work and publishes; it holds no rule",
+		},
+		{
+			ID:      "contract-of-a-service",
+			Rule:    "A guarantee of one operation of a domain service -> the service's assertions, keyed, with on naming the operation; the set is the service's contract.",
+			Example: "TenantProvisioningService.assertions.tenant-name-unique on ProvisionTenant",
+		},
+		{
+			ID:      "precondition-as-assertion",
+			Rule:    "A rule that holds only when one named command runs, not at every instant -> the owner's assertions with on that command; the statement stays as the expert said it and is never rewritten into a post-condition.",
+			Example: "Tenant.assertions.invites-only-while-active on OfferRegistrationInvitation, not a Tenant invariant, because a deactivated tenant is legal",
+		},
+		{
+			ID:      "not-a-domain-rule",
+			Rule:    "A promise about delivery (notify, export, retry, transaction control) or a programming guard -> no entry; the application service or the code does it.",
+			Example: "notify billing on TenantProvisioned is a subscriber, not an assertion",
+		},
+		{
+			ID:      "intention-revealing-name",
+			Rule:    "Name a service and its operations for effect and purpose in the ubiquitous language, never for the means; a name ending in Manager, Helper, Handler, or Processor is a finding to rename, not a kind. An application service's input is named for the request, never with the word command.",
+			Example: "TenantProvisioningService.ProvisionTenant, not TenantManager.Handle; ProvisionTenantRequest, not ProvisionTenantCommand",
 		},
 		{
 			ID:      "event-detection",

@@ -180,6 +180,7 @@ func writeSchema(buf *bytes.Buffer) error {
 			)),
 			"service", entry("domain_service", []string{"definition"}, o(
 				"definition", str(b.def("domain_service", "definition")),
+				"assertions", keyed(b.def("domain_service", "assertions"), KeyPattern, ref("assertion", "assertion")),
 			)),
 			"specification", entry("specification", []string{"definition"}, o(
 				"definition", str(b.def("specification", "definition")),
