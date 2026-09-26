@@ -185,7 +185,7 @@ func buildAggregate(a vocab.Aggregate) *yaml.Node {
 	appendList(m, keyAliases, a.Aliases)
 	entities(a).appendTo(m)
 	invariants(a.Invariants, aggregateKeys).appendTo(m)
-	assertions(a).appendTo(m)
+	assertions(a.Assertions, aggregateKeys).appendTo(m)
 	if a.Repository != "" {
 		appendKV(m, keyRepository, stringScalar(a.Repository))
 	}
@@ -205,7 +205,7 @@ func updateAggregate(n *yaml.Node, a vocab.Aggregate) {
 	setList(n, keyAliases, a.Aliases, aggregateKeys)
 	entities(a).sync(n, false)
 	invariants(a.Invariants, aggregateKeys).sync(n, false)
-	assertions(a).sync(n, false)
+	assertions(a.Assertions, aggregateKeys).sync(n, false)
 	setText(n, keyRepository, a.Repository, aggregateKeys)
 	setText(n, keyFactory, a.Factory, aggregateKeys)
 }
@@ -246,9 +246,11 @@ func invariants(invs []vocab.Invariant, order []string) keyed[vocab.Invariant] {
 	}
 }
 
-func assertions(a vocab.Aggregate) keyed[vocab.Assertion] {
+// assertions describes the assertions of an aggregate or a domain
+// service; order is the owner's key order.
+func assertions(items []vocab.Assertion, order []string) keyed[vocab.Assertion] {
 	return keyed[vocab.Assertion]{
-		key: keyAssertions, order: aggregateKeys, items: a.Assertions,
+		key: keyAssertions, order: order, items: items,
 		name: func(as vocab.Assertion) string { return as.Key },
 		build: func(as vocab.Assertion) *yaml.Node {
 			m := newMapping()
@@ -258,7 +260,7 @@ func assertions(a vocab.Aggregate) keyed[vocab.Assertion] {
 		},
 		update: func(n *yaml.Node, as vocab.Assertion) {
 			if n.Kind != yaml.MappingNode {
-				*n = *assertions(a).build(as)
+				*n = *assertions(items, order).build(as)
 				return
 			}
 			setText(n, keyOn, as.On, assertionKeys)
@@ -316,9 +318,20 @@ func events(c vocab.BoundedContext) keyed[vocab.DomainEvent] {
 func services(c vocab.BoundedContext) keyed[vocab.DomainService] {
 	return keyed[vocab.DomainService]{
 		key: keyServices, order: contextKeys, items: c.Services,
-		name:   func(s vocab.DomainService) string { return s.Name },
-		build:  func(s vocab.DomainService) *yaml.Node { return definitionOnly(s.Definition) },
-		update: func(n *yaml.Node, s vocab.DomainService) { updateDefinitionOnly(n, s.Definition, serviceKeys) },
+		name: func(s vocab.DomainService) string { return s.Name },
+		build: func(s vocab.DomainService) *yaml.Node {
+			m := definitionOnly(s.Definition)
+			assertions(s.Assertions, serviceKeys).appendTo(m)
+			return m
+		},
+		update: func(n *yaml.Node, s vocab.DomainService) {
+			if n.Kind != yaml.MappingNode {
+				*n = *services(c).build(s)
+				return
+			}
+			setText(n, keyDefinition, s.Definition, serviceKeys)
+			assertions(s.Assertions, serviceKeys).sync(n, false)
+		},
 	}
 }
 

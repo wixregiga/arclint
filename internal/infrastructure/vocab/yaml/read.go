@@ -52,7 +52,7 @@ var (
 	valueObjectKeys   = []string{keyDefinition, keyAliases, keyInvariants}
 	assertionKeys     = []string{keyOn, keyStatement}
 	eventKeys         = []string{keyDefinition, keyRaisedBy}
-	serviceKeys       = []string{keyDefinition}
+	serviceKeys       = []string{keyDefinition, keyAssertions}
 	specificationKeys = []string{keyDefinition}
 	relationKeys      = []string{keyFrom, keyTo, keyKind, keyDescription}
 )
@@ -372,7 +372,11 @@ func (s source) context(e entry) (vocab.BoundedContext, error) {
 	}
 	for _, m := range f.keyed(keyServices) {
 		g := s.fields(m.value, fmt.Sprintf("%s: service %q", f.what, m.key), serviceKeys)
-		c.Services = append(c.Services, vocab.DomainService{Name: m.key, Definition: g.text(keyDefinition), Line: m.line})
+		assertions, err := s.assertions(g)
+		if err != nil {
+			return vocab.BoundedContext{}, err
+		}
+		c.Services = append(c.Services, vocab.DomainService{Name: m.key, Definition: g.text(keyDefinition), Assertions: assertions, Line: m.line})
 		if g.err != nil {
 			return vocab.BoundedContext{}, g.err
 		}
@@ -416,15 +420,11 @@ func (s source) aggregate(context string, e entry) (vocab.Aggregate, error) {
 		return vocab.Aggregate{}, err
 	}
 	a.Invariants = invariants
-	for _, m := range f.keyed(keyAssertions) {
-		g := s.fields(m.value, fmt.Sprintf("%s: assertion %q", f.what, m.key), assertionKeys)
-		a.Assertions = append(a.Assertions, vocab.Assertion{
-			Key: m.key, On: g.text(keyOn), Statement: g.text(keyStatement), Line: m.line,
-		})
-		if g.err != nil {
-			return vocab.Aggregate{}, g.err
-		}
+	assertions, err := s.assertions(f)
+	if err != nil {
+		return vocab.Aggregate{}, err
 	}
+	a.Assertions = assertions
 	a.Repository = f.text(keyRepository)
 	a.Factory = f.text(keyFactory)
 	return a, f.err
@@ -442,6 +442,22 @@ func (s source) valueObject(context string, e entry) (vocab.ValueObject, error) 
 	}
 	v.Invariants = invariants
 	return v, f.err
+}
+
+// assertions reads the assertions an aggregate or a domain service
+// owns.
+func (s source) assertions(f *fields) ([]vocab.Assertion, error) {
+	var out []vocab.Assertion
+	for _, m := range f.keyed(keyAssertions) {
+		g := s.fields(m.value, fmt.Sprintf("%s: assertion %q", f.what, m.key), assertionKeys)
+		out = append(out, vocab.Assertion{
+			Key: m.key, On: g.text(keyOn), Statement: g.text(keyStatement), Line: m.line,
+		})
+		if g.err != nil {
+			return nil, g.err
+		}
+	}
+	return out, nil
 }
 
 // invariants reads an owner's keyed statements.

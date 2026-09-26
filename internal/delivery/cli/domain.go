@@ -884,7 +884,7 @@ required ones when first recorded:
   entity           --owner <aggregate> --definition; optional --identity --alias
   value_object     --definition; optional --alias
   invariant        --owner <aggregate or value object> --statement
-  assertion        --owner <aggregate> --on --statement
+  assertion        --owner <aggregate or domain service> --on --statement
   business_rule    an invariant, or an assertion when --on is passed
   domain_event     --definition; optional --raised-by <aggregate>
   domain_service   --definition
@@ -892,8 +892,9 @@ required ones when first recorded:
   question         --text
 
 The name of an invariant, assertion, or question is its key: short and
-kebab-case, since the method that enforces an aggregate's invariant or checks
-an assertion is named after it.
+kebab-case, since the method that enforces an aggregate's invariant, or the
+method an aggregate or domain service declares to check an assertion, is named
+after it.
 
 A bounded context must be recorded before anything is recorded in it. Pass
 --context when the project records several.`

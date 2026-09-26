@@ -166,11 +166,6 @@ func scopeContext(ctx DomainContextKnowledge, carriers conformance.Carriers, sco
 			out.Invariants = append(out.Invariants, inv)
 		}
 	}
-	for _, a := range ctx.Assertions {
-		if owners[a.Owner] {
-			out.Assertions = append(out.Assertions, a)
-		}
-	}
 	for _, s := range ctx.Specifications {
 		if scope.containsSource(s.Source) || anchored(s.Name) {
 			out.Specifications = append(out.Specifications, s)
@@ -184,6 +179,12 @@ func scopeContext(ctx DomainContextKnowledge, carriers conformance.Carriers, sco
 	for _, s := range ctx.Services {
 		if anchored(s) {
 			out.Services = append(out.Services, s)
+			owners[s] = true
+		}
+	}
+	for _, a := range ctx.Assertions {
+		if owners[a.Owner] {
+			out.Assertions = append(out.Assertions, a)
 		}
 	}
 	anchors := len(out.Aggregates)+len(out.ValueObjects)+len(out.Specifications)+len(out.Events)+len(out.Services) > 0

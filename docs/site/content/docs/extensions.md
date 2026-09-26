@@ -190,7 +190,12 @@ same shape `arclint domain --format json` prints:
       line: number;
     }>;
     events: Array<{ name: string; definition: string; raisedBy?: string; line: number }>;
-    services: Array<{ name: string; definition: string; line: number }>;
+    services: Array<{
+      name: string;
+      definition: string;
+      assertions: Array<{ key: string; on: string; statement: string; line: number }>;
+      line: number;
+    }>;
     specifications: Array<{ name: string; definition: string; line: number }>;
     questions: Array<{ key: string; text: string; line: number }>;
     line: number;
@@ -208,7 +213,8 @@ same shape `arclint domain --format json` prints:
 Collections are always arrays (empty when the project records none or
 the file is absent). Each term lives inside a named bounded context;
 entities, invariants, and assertions live under the aggregate that
-owns them, and a value object carries its own invariants. `source` is
+owns them, a domain service carries the assertions of its operations,
+and a value object carries its own invariants. `source` is
 the repository-relative path of the domain file (`domain.arclint.yaml`),
 and every entry carries the `line` it is written on there, so a finding
 about a context, term, invariant, or relation anchors at the entry

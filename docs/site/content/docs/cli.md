@@ -395,7 +395,8 @@ spellings use underscores (`bounded_context`, `aggregate`, `entity`,
 aggregate is recorded in its own right with its identity; an entity is
 recorded under the aggregate that owns it (`--owner`); an invariant is
 recorded under the aggregate or value object that enforces it; an
-assertion under the aggregate whose operation (`--on`) checks it.
+assertion under the aggregate or domain service whose operation (`--on`)
+checks it.
 `business_rule` records as an invariant, or as an assertion when `--on`
 is passed. A context's code is located from where its recorded terms
 are declared, anywhere in the repository; a Zone spelled with the

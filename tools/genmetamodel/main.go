@@ -178,11 +178,12 @@ type invariant struct {
 }
 
 type enforcement struct {
-	By        string    `yaml:"by"`
-	Facts     []string  `yaml:"facts"`
-	Languages languages `yaml:"languages"`
-	Needs     string    `yaml:"needs"`
-	Severity  string    `yaml:"severity"`
+	By          string    `yaml:"by"`
+	Facts       []string  `yaml:"facts"`
+	Languages   languages `yaml:"languages"`
+	Needs       string    `yaml:"needs"`
+	Severity    string    `yaml:"severity"`
+	Limitations []string  `yaml:"limitations"`
 }
 
 type guidance struct {
@@ -522,6 +523,7 @@ func (e emitter) enforcement(en enforcement) {
 	e.languages(en.Languages)
 	e.str("Needs", en.Needs)
 	e.printf("Severity: %s,\n", severities[en.Severity])
+	e.strings("Limitations", en.Limitations)
 	e.printf("},\n")
 }
 

@@ -115,14 +115,16 @@ type DomainInvariantRef struct {
 }
 
 // DomainAssertionRef is one assertion with the operation it is on and
-// the outcome of looking for the root method its key names.
+// the outcome of looking for the method its key names on the owner.
 type DomainAssertionRef struct {
-	Key       string         `json:"key"`
-	Statement string         `json:"statement"`
-	Owner     string         `json:"owner"`
-	On        string         `json:"on"`
-	Source    string         `json:"source,omitempty"`
-	Anchor    ContractAnchor `json:"anchor,omitempty"`
+	Key       string `json:"key"`
+	Statement string `json:"statement"`
+	Owner     string `json:"owner"`
+	// OwnerConcept is aggregate or domain_service.
+	OwnerConcept vocab.Concept  `json:"ownerConcept"`
+	On           string         `json:"on"`
+	Source       string         `json:"source,omitempty"`
+	Anchor       ContractAnchor `json:"anchor,omitempty"`
 }
 
 // DomainSpecificationRef is one specification name with its source
@@ -587,10 +589,11 @@ func domainKnowledgeOf(lang vocab.UbiquitousLanguage) *DomainKnowledge {
 		}
 		for _, oa := range ctx.Assertions() {
 			summary.Assertions = append(summary.Assertions, DomainAssertionRef{
-				Key:       oa.Assertion.Key,
-				Statement: oa.Assertion.Statement,
-				Owner:     oa.Owner,
-				On:        oa.Assertion.On,
+				Key:          oa.Assertion.Key,
+				Statement:    oa.Assertion.Statement,
+				Owner:        oa.Owner,
+				OwnerConcept: oa.OwnerConcept,
+				On:           oa.Assertion.On,
 			})
 		}
 		for _, s := range ctx.Specifications {

@@ -207,13 +207,18 @@ func (c BoundedContext) Invariants() []OwnedInvariant {
 	return out
 }
 
-// Assertions returns every assertion of the context with the aggregate
-// that owns it, in file order.
+// Assertions returns every assertion of the context with its owner:
+// each aggregate's, then each domain service's, in file order.
 func (c BoundedContext) Assertions() []OwnedAssertion {
 	var out []OwnedAssertion
 	for _, a := range c.Aggregates {
 		for _, as := range a.Assertions {
-			out = append(out, OwnedAssertion{Context: c.Name, Owner: a.Name, Assertion: as})
+			out = append(out, OwnedAssertion{Context: c.Name, Owner: a.Name, OwnerConcept: ConceptAggregate, Assertion: as})
+		}
+	}
+	for _, s := range c.Services {
+		for _, as := range s.Assertions {
+			out = append(out, OwnedAssertion{Context: c.Name, Owner: s.Name, OwnerConcept: ConceptDomainService, Assertion: as})
 		}
 	}
 	return out
@@ -291,7 +296,7 @@ func (c BoundedContext) validate() error {
 		}
 	}
 	for _, s := range c.Services {
-		if err := s.validate(); err != nil {
+		if err := s.validate(c); err != nil {
 			return err
 		}
 	}
@@ -355,7 +360,10 @@ func (c BoundedContext) clone() BoundedContext {
 		out.ValueObjects = append(out.ValueObjects, v.clone())
 	}
 	out.Events = cloneSlice(c.Events)
-	out.Services = cloneSlice(c.Services)
+	out.Services = nil
+	for _, s := range c.Services {
+		out.Services = append(out.Services, s.clone())
+	}
 	out.Specifications = cloneSlice(c.Specifications)
 	out.Questions = cloneSlice(c.Questions)
 	return out

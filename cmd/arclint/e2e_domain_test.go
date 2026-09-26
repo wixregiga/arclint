@@ -107,6 +107,7 @@ func TestDomainCommandFamily(t *testing.T) {
 	t.Run("removeLeavesSources", testDomainRemoveLeavesSources)
 	t.Run("extensionAccess", testDomainExtensionAccess)
 	t.Run("builtInRules", testDomainBuiltInRules)
+	t.Run("serviceContract", testDomainServiceContract)
 	t.Run("context", testDomainContext)
 	t.Run("ambiguity", testDomainAmbiguity)
 }
@@ -1314,5 +1315,136 @@ contexts:
 	_, stderr, code = runBin(t, root, os.Environ(), "domain", "list", "--context", "shipping")
 	if code != 2 || !strings.Contains(stderr, `unknown context "shipping"; recorded: ordering, billing`) {
 		t.Fatalf("list unknown context: exit %d stderr %q", code, stderr)
+	}
+}
+
+// tenantProvisioning is a domain service that checks its contract: the
+// operation ProvisionTenant calls the check its assertion key names.
+const tenantProvisioning = `package tenancy
+
+import "errors"
+
+// Tenants is what the service needs to know about the names in use.
+type Tenants interface {
+	NameTaken(name string) (bool, error)
+}
+
+// TenantProvisioningService provisions a Tenant under a unique name.
+type TenantProvisioningService struct {
+	tenants Tenants
+}
+
+// ProvisionTenant reserves a name for a new Tenant.
+func (s TenantProvisioningService) ProvisionTenant(name string) error {
+	return s.AssertTenantNameUnique(name)
+}
+
+// AssertTenantNameUnique checks tenant-name-unique.
+func (s TenantProvisioningService) AssertTenantNameUnique(name string) error {
+	taken, err := s.tenants.NameTaken(name)
+	if err != nil {
+		return err
+	}
+	if taken {
+		return errors.New("no two Tenants share a name")
+	}
+	return nil
+}
+`
+
+// testDomainServiceContract records an assertion owned by a domain
+// service through the command line, reads it back, and holds the code
+// to it: the service declares the operation and the check, and the
+// operation calls the check.
+func testDomainServiceContract(t *testing.T) {
+	root := domainFixture(t)
+	for _, args := range [][]string{
+		{"domain", "define", "bounded_context", "tenancy", "--definition", "Giving each customer organization its own isolated workspace."},
+		{"domain", "define", "domain_service", "TenantProvisioningService", "--definition", "Provisions a Tenant under a name no other Tenant holds."},
+		{"domain", "define", "assertion", "tenant-name-unique", "--owner", "TenantProvisioningService", "--on", "ProvisionTenant", "--statement", "No two Tenants share a name."},
+	} {
+		if out := mustRunDomain(t, root, args...); !strings.HasPrefix(out, "Defined ") {
+			t.Fatalf("%v: got %q", args, out)
+		}
+	}
+
+	stdout := mustRunDomain(t, root, "domain", "show", "domain_service", "TenantProvisioningService")
+	if !strings.Contains(stdout, "Assertions:\n  tenant-name-unique (on ProvisionTenant)  No two Tenants share a name.\n") {
+		t.Fatalf("service show lacks its assertion:\n%s", stdout)
+	}
+	stdout = mustRunDomain(t, root, "domain", "show", "assertion", "tenant-name-unique")
+	if !strings.Contains(stdout, "Owner: TenantProvisioningService\n") {
+		t.Fatalf("assertion show does not name the service as its owner:\n%s", stdout)
+	}
+	stdout = mustRunDomain(t, root, "domain", "show", "domain_service", "TenantProvisioningService", "--format", "json")
+	var shown struct {
+		Type       string `json:"type"`
+		Assertions []struct {
+			Key       string `json:"key"`
+			On        string `json:"on"`
+			Statement string `json:"statement"`
+		} `json:"assertions"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &shown); err != nil {
+		t.Fatalf("service show json: %v\n%s", err, stdout)
+	}
+	if shown.Type != "domain_service" || len(shown.Assertions) != 1 ||
+		shown.Assertions[0].Key != "tenant-name-unique" || shown.Assertions[0].On != "ProvisionTenant" {
+		t.Fatalf("service show json: %+v", shown)
+	}
+
+	checkRules := func() []diagnosticDoc {
+		t.Helper()
+		stdout, stderr, code := runBin(t, root, os.Environ(), "check", "--format", "json")
+		if code != 1 {
+			t.Fatalf("check: exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+		}
+		var diagnostics []diagnosticDoc
+		if err := json.Unmarshal([]byte(stdout), &diagnostics); err != nil {
+			t.Fatalf("check json: %v\n%s", err, stdout)
+		}
+		return diagnostics
+	}
+
+	// An undeclared service is one finding at the recording; its
+	// contract is judged only once the type exists.
+	if d := checkRules(); len(d) != 1 || d[0].RuleID != "domain_service/declared" {
+		t.Fatalf("undeclared service findings: %+v", d)
+	}
+
+	// The operation is declared but checks nothing.
+	unchecked := strings.Replace(tenantProvisioning, "\treturn s.AssertTenantNameUnique(name)\n", "\treturn nil\n", 1)
+	if unchecked == tenantProvisioning {
+		t.Fatal("fixture edit did not apply")
+	}
+	write(t, root, "src/tenancy/provisioning.go", unchecked)
+	d := checkRules()
+	if len(d) != 1 || d[0].RuleID != "assertion/checked-by-its-operation" ||
+		d[0].Path != "src/tenancy/provisioning.go" ||
+		!strings.Contains(d[0].Message, "operation ProvisionTenant does not call AssertTenantNameUnique") {
+		t.Fatalf("unchecked contract finding: %+v", d)
+	}
+
+	// Neither the operation nor the check is declared.
+	bare := "package tenancy\n\n// TenantProvisioningService provisions a Tenant under a unique name.\ntype TenantProvisioningService struct{}\n"
+	write(t, root, "src/tenancy/provisioning.go", bare)
+	d = checkRules()
+	if len(d) != 2 {
+		t.Fatalf("bare service findings: %+v", d)
+	}
+	for _, f := range d {
+		if f.RuleID != "assertion/checked-by-its-operation" || f.Path != "src/tenancy/provisioning.go" || f.Line != 4 {
+			t.Errorf("bare service finding: %+v", f)
+		}
+	}
+
+	write(t, root, "src/tenancy/provisioning.go", tenantProvisioning)
+	stdout, stderr, code := runBin(t, root, os.Environ(), "check")
+	if code != 0 {
+		t.Fatalf("check with the contract checked must be clean: exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	stdout = mustRunDomain(t, root, "domain", "overview")
+	if !strings.Contains(stdout, "tenant-name-unique") || !strings.Contains(stdout, "source: src/tenancy/provisioning.go:") {
+		t.Fatalf("overview does not anchor the service assertion at its check:\n%s", stdout)
 	}
 }

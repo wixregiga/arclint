@@ -190,8 +190,17 @@ type DomainEventInfo struct {
 	Line       int    `json:"line"`
 }
 
+// DomainServiceInfo is one recorded domain service as exposed through
+// ctx.domain(), with the assertions that state its contract.
+type DomainServiceInfo struct {
+	Name       string                `json:"name"`
+	Definition string                `json:"definition"`
+	Assertions []DomainAssertionInfo `json:"assertions"`
+	Line       int                   `json:"line"`
+}
+
 // DomainTermInfo is one recorded term that carries a name and a
-// definition and nothing else: a domain service or a specification.
+// definition and nothing else: a specification.
 type DomainTermInfo struct {
 	Name       string `json:"name"`
 	Definition string `json:"definition"`
@@ -215,7 +224,7 @@ type DomainContextInfo struct {
 	Aggregates     []DomainAggregateInfo   `json:"aggregates"`
 	ValueObjects   []DomainValueObjectInfo `json:"valueObjects"`
 	Events         []DomainEventInfo       `json:"events"`
-	Services       []DomainTermInfo        `json:"services"`
+	Services       []DomainServiceInfo     `json:"services"`
 	Specifications []DomainTermInfo        `json:"specifications"`
 	Questions      []DomainQuestionInfo    `json:"questions"`
 	Line           int                     `json:"line"`

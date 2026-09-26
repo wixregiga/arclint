@@ -5,11 +5,12 @@ import (
 	"strings"
 )
 
-// Assertion is one post-condition of an operation of an aggregate's
-// root: the key names the root method that checks it, On names the
-// operation whose completion it constrains, and Statement is the
-// post-condition in the ubiquitous language. The owner is the aggregate
-// the assertion is recorded under.
+// Assertion is one guarantee of an operation: a command of an
+// aggregate's root, or an operation of a domain service. The key names
+// the method that checks it, On names the operation it constrains, and
+// Statement is the guarantee as the domain expert states it, never
+// rewritten into a post-condition. The owner is the aggregate or domain
+// service the assertion is recorded under.
 type Assertion struct {
 	Key       string
 	On        string
@@ -17,12 +18,13 @@ type Assertion struct {
 	Line      int
 }
 
-// OwnedAssertion is an Assertion with the aggregate it is recorded
-// under.
+// OwnedAssertion is an Assertion with the aggregate or domain service
+// it is recorded under; OwnerConcept says which.
 type OwnedAssertion struct {
-	Context   string
-	Owner     string
-	Assertion Assertion
+	Context      string
+	Owner        string
+	OwnerConcept Concept
+	Assertion    Assertion
 }
 
 // validate applies assertion/names-owner-operation-and-check: the key,
@@ -32,7 +34,7 @@ func (a Assertion) validate(where string) error {
 		return err
 	}
 	if strings.TrimSpace(a.On) == "" {
-		return fmt.Errorf("assertion/names-owner-operation-and-check: %s%s: assertion %q names no operation; record the root operation it constrains under on",
+		return fmt.Errorf("assertion/names-owner-operation-and-check: %s%s: assertion %q names no operation; record under on the command or service operation it constrains",
 			at(a.Line), where, a.Key)
 	}
 	if strings.TrimSpace(a.Statement) == "" {

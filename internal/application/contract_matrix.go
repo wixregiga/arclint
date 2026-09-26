@@ -10,9 +10,10 @@ import (
 // ContractAnchor states how a recorded contract relates to the observed
 // declarations. Every recorded contract names the declaration that
 // carries it (an aggregate invariant the root method its key names, a
-// value object invariant the constructor, an assertion the root method
-// its key names, a specification its satisfaction method), so a
-// contract is either found in source or missing from it.
+// value object invariant the constructor, an assertion the method its
+// key names on the root or the domain service, a specification its
+// satisfaction method), so a contract is either found in source or
+// missing from it.
 type ContractAnchor string
 
 const (

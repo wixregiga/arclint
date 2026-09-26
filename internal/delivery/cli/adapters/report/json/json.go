@@ -395,12 +395,13 @@ type domainInvariantKnowJSON struct {
 }
 
 type domainAssertionKnowJSON struct {
-	Key       string `json:"key"`
-	Statement string `json:"statement"`
-	Owner     string `json:"owner"`
-	On        string `json:"on"`
-	Source    string `json:"source,omitempty"`
-	Anchor    string `json:"anchor"`
+	Key          string `json:"key"`
+	Statement    string `json:"statement"`
+	Owner        string `json:"owner"`
+	OwnerConcept string `json:"ownerConcept"`
+	On           string `json:"on"`
+	Source       string `json:"source,omitempty"`
+	Anchor       string `json:"anchor"`
 }
 
 type domainSpecificationKnowJSON struct {
@@ -516,7 +517,7 @@ func domainKnowledgeDoc(d *application.DomainKnowledge) *domainKnowledgeJSON {
 		}
 		for _, a := range ctx.Assertions {
 			entry.Assertions = append(entry.Assertions, domainAssertionKnowJSON{
-				Key: a.Key, Statement: a.Statement, Owner: a.Owner, On: a.On,
+				Key: a.Key, Statement: a.Statement, Owner: a.Owner, OwnerConcept: string(a.OwnerConcept), On: a.On,
 				Source: a.Source, Anchor: string(a.Anchor),
 			})
 		}

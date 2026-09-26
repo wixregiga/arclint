@@ -132,10 +132,9 @@ func builtInEnforcement(inv vocab.BlockInvariant) (Enforcement, error) {
 	}
 	var limitations []string
 	if hasFact(facts, FactCalls) {
-		limitations = append(limitations,
-			"calls are matched by callee name and never resolved to a declaration",
-			"a command is an exported method of the root whose result carries an error; a TypeScript or Python command that throws is not seen")
+		limitations = append(limitations, "calls are matched by callee name and never resolved to a declaration")
 	}
+	limitations = append(limitations, inv.Enforcement.Limitations...)
 	return NewEnforcement(languages, facts, builtInEvidence(facts), AssuranceExact, limitations, true)
 }
 

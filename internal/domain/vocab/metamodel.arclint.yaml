@@ -135,6 +135,72 @@ works:
     date: 2003-11-25
     url: https://martinfowler.com/bliki/AnemicDomainModel.html
     verification: fetched
+  fowler-cqs:
+    title: CommandQuerySeparation
+    author: Martin Fowler
+    date: 2005-12-05
+    url: https://martinfowler.com/bliki/CommandQuerySeparation.html
+    verification: fetched
+  fowler-function-length:
+    title: FunctionLength
+    author: Martin Fowler
+    date: 2016-11-30
+    url: https://martinfowler.com/bliki/FunctionLength.html
+    verification: fetched
+  stafford-service-layer:
+    title: Service Layer
+    author: Randy Stafford
+    year: 2002
+    url: https://martinfowler.com/eaaCatalog/serviceLayer.html
+    verification: fetched
+  stafford-business-logic:
+    title: "Service Layer, Kinds of Business Logic (Patterns of Enterprise Application Architecture excerpt)"
+    author: Randy Stafford
+    year: 2002
+    url: https://www.informit.com/articles/article.aspx?p=1398617&seqNum=4
+    verification: fetched
+  vernon-iddd-ch1:
+    title: "Getting Started with Domain-Driven Design (Implementing Domain-Driven Design, chapter 1 excerpt)"
+    author: Vaughn Vernon
+    year: 2013
+    url: https://www.informit.com/articles/article.aspx?p=1944876&seqNum=3
+    verification: fetched
+  vernon-iddd-sample-pages:
+    title: "Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-397)"
+    author: Vaughn Vernon
+    year: 2013
+    url: https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf
+    verification: text
+  vernon-effective-aggregate-design-1:
+    title: "Effective Aggregate Design Part I: Modeling a Single Aggregate"
+    author: Vaughn Vernon
+    year: 2011
+    url: https://www.dddcommunity.org/wp-content/uploads/files/pdf_articles/Vernon_2011_1.pdf
+    verification: text
+  vernon-effective-aggregate-design-2:
+    title: "Effective Aggregate Design Part II: Making Aggregates Work Together"
+    author: Vaughn Vernon
+    year: 2011
+    url: https://www.dddcommunity.org/wp-content/uploads/files/pdf_articles/Vernon_2011_2.pdf
+    verification: text
+  vernon-iddd-samples:
+    title: "IDDD_Samples, identity and access context (commit 9b27b11)"
+    author: Vaughn Vernon
+    date: 2022-03-26
+    url: https://github.com/VaughnVernon/IDDD_Samples
+    verification: fetched
+  martin-screaming-architecture:
+    title: Screaming Architecture
+    author: Robert C. Martin
+    date: 2011-09-30
+    url: https://blog.cleancoder.com/uncle-bob/2011/09/30/Screaming-Architecture.html
+    verification: fetched
+  bogard-vertical-slice:
+    title: Vertical Slice Architecture
+    author: Jimmy Bogard
+    date: 2018-04-19
+    url: https://www.jimmybogard.com/vertical-slice-architecture/
+    verification: fetched
 
 # The facts arclint observes in source today, one entry per Fact in
 # internal/domain/rule/enforcement.go. An invariant is enforceable across
@@ -165,10 +231,10 @@ facts:
 milestones:
   field-declarations:
     needs: Field declarations from the Python adapter, which emits class, method, and func today.
-    unlocks: [value_object/no-identity, domain_event/occurrence-time, domain_service/stateless]
+    unlocks: [value_object/no-identity, domain_event/occurrence-time]
   field-types:
     needs: The declared type of every field, so that a field of the recorded identity type can be told from any other, and a root held in a field from an identity held there.
-    unlocks: [entity/identity, aggregate/root-only-references]
+    unlocks: [entity/identity, aggregate/root-only-references, domain_service/not-held-by-aggregates]
   field-mutability:
     needs: Whether a field can be assigned after construction, in each language's own idiom.
     unlocks: [value_object/immutable-fields, domain_event/immutable]
@@ -239,7 +305,10 @@ phases:
 # `languages` is `all` when every supported language emits the facts the
 # invariant needs. `severity` is `error` unless stated; `warning` marks
 # an invariant whose violation is reported but never rejects an instance
-# or fails a check.
+# or fails a check. `limitations` state what a `domain` invariant's own
+# evaluation cannot see, printed with its coverage; a limit every reader
+# of the same fact shares (calls are matched by callee name) is stated
+# once by the binary and never repeated here.
 #
 # The level an invariant is evaluated at (recording, check, or
 # milestone) is never written here: it follows from `by` and `needs`.
@@ -738,7 +807,12 @@ building_blocks:
         sources:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: vernon2013, chapter: 10, page: 354}
-        enforcement: {by: domain, facts: [file_tree, declarations, calls], languages: all}
+        enforcement:
+          by: domain
+          facts: [file_tree, declarations, calls]
+          languages: all
+          limitations:
+            - a command is an exported method of the root whose result carries an error; a TypeScript or Python command that throws is not seen
     guidance:
       - text: Model true invariants in consistency boundaries; a rule that can tolerate a delay is not an invariant of the aggregate and belongs to eventual consistency outside it.
         fundamental: true
@@ -770,25 +844,26 @@ building_blocks:
         - {work: vernon2013, chapter: 5, page: 208}
     records:
       section: assertions
-      note: A map keyed by the assertion's name, recorded under the aggregate whose operation it constrains.
+      note: A map keyed by the assertion's name, recorded under the aggregate whose command it constrains or under the domain service whose operation it constrains; the assertions of a service are its contract.
       properties:
-        - {name: key, required: true, definition: "The assertion's name in kebab-case, unique within its owner; the root's method that checks it is assert followed by the key, spelled in the language's method case (AssertHasLines, assertHasLines, assert_has_lines)."}
-        - {name: "on", required: true, definition: The operation of the root whose completion the assertion constrains.}
-        - {name: statement, required: true, definition: The post-condition in the ubiquitous language.}
+        - {name: key, required: true, definition: "The assertion's name in kebab-case, unique within its owner; the owner's method that checks it is assert followed by the key, spelled in the language's method case (AssertHasLines, assertHasLines, assert_has_lines)."}
+        - {name: "on", required: true, definition: "The operation the guarantee belongs to: a command of the root, or an operation of the service."}
+        - {name: statement, required: true, definition: "The guarantee as the domain expert states it, in the ubiquitous language (Only an active tenant offers an invitation); it is recorded in the expert's words and never rewritten into a post-condition, because on already names the operation."}
     invariants:
       - id: assertion/names-owner-operation-and-check
         statement: An assertion carries a statement, names the operation it constrains, and carries a key naming the method that checks it.
         sources:
           - {work: evans2015, page: 22, section: Assertions}
         enforcement: {by: loader, languages: all}
-      - id: assertion/owned-by-an-aggregate
-        statement: An assertion is recorded under one aggregate; an assertion under a value object, a member entity, or nothing is rejected.
+      - id: assertion/owned-by-an-aggregate-or-service
+        statement: An assertion is recorded under one aggregate or one domain service; an assertion under a value object, a member entity, or nothing is rejected.
         sources:
           - {work: evans2015, page: 22, section: Assertions}
         enforcement: {by: loader, languages: all}
       - id: assertion/checked-by-its-operation
-        statement: The root declares both the operation and the checking method (assert followed by the key in the language's method case), and the operation calls the checking method.
+        statement: The owner of an assertion, the aggregate's root or the domain service, declares both the operation the assertion names and the checking method (assert followed by the key in the language's method case), and the operation calls the checking method.
         sources:
+          - {work: evans2015, page: 14, section: Services}
           - {work: evans2015, page: 22, section: Assertions}
         enforcement: {by: domain, facts: [file_tree, declarations, calls], languages: all}
     guidance:
@@ -832,16 +907,29 @@ building_blocks:
     definition:
       text: >-
         A rule of the business as a domain expert states it, before the
-        model has placed it. Once placed it is either an invariant,
-        when it must hold at all times for an aggregate or a value, or
-        an assertion, when it is a post-condition of one operation. It
+        model has placed it. Once placed it is an invariant, when it
+        must hold at all times for an aggregate or a value; an
+        assertion, when it is a guarantee of one command of a root or
+        one operation of a domain service; a specification, when
+        experts pass the predicate around as a thing they name; or not
+        a domain rule, when it is a programming guard or an application
+        policy such as notifying or exporting. It is an intake word and
         is never recorded as its own section.
       sources:
         - {work: evans2015, page: 22, section: Assertions}
+        - {work: evans2015, page: 25, section: Declarative Design}
+        - {work: fowler-anemic-domain-model}
+        - {work: stafford-business-logic}
         - {work: vernon2013, chapter: 10, page: 353}
     records:
       section: none
-      note: Recorded as an invariant or an assertion with one owner.
+      note: Recorded as an invariant, an assertion, or a specification with one owner, or left unrecorded as an application policy or a guard.
+    guidance:
+      - text: A rule that holds only when one operation runs is recorded as an assertion on that operation, in the expert's words; a rule that spans aggregates and must hold at every instant has no owner and is a question for the domain expert.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 22, section: Assertions}
+          - {work: vernon-effective-aggregate-design-2, page: 8, section: "Rule: Use Eventual Consistency Outside the Boundary"}
 
   - term: aggregate
     title: Aggregate
@@ -972,10 +1060,11 @@ building_blocks:
           - {work: fowler-aggregate}
           - {work: evans2015, page: 17, section: Repositories}
           - {work: evans2003, chapter: 6, page: 128}
-      - text: Ask an aggregate whether something is allowed through a side-effect-free function named for the capability, or through a specification; a command changes state and returns no domain information.
+      - text: Ask an aggregate whether something is allowed through a query named for the capability (Evans's side-effect-free function), or through a specification; a command changes state and returns no domain information, and no operation is both.
         fundamental: true
         sources:
           - {work: evans2015, page: 21, section: Side-Effect-Free Functions}
+          - {work: fowler-cqs}
           - {work: evans-fowler-1997, page: 2}
       - text: Favor value object parts over entity parts inside an aggregate.
         sources:
@@ -1076,57 +1165,90 @@ building_blocks:
       text: >-
         A standalone operation in the domain for a significant process
         or transformation that is not a natural responsibility of an
-        entity or value object, declared as an interface with a name
-        that is part of the ubiquitous language and a contract stated
-        as assertions.
+        entity or value object, given a name that is part of the
+        ubiquitous language and a contract stated as assertions. It
+        makes a business decision that no one aggregate or value can
+        make alone; it may read through repositories, but it never
+        commits and never publishes.
       sources:
         - {work: evans2015, page: 14, section: Services}
         - {work: fowler-evans-classification}
         - {work: vernon2013, chapter: 7, page: 267}
+        - {work: vernon-iddd-sample-pages, page: xxxix, section: "Guide to This Book"}
     records:
       section: services
-      note: A map keyed by the service's name.
+      note: A map keyed by the service's name; its assertions are its contract, each on one operation of the service.
       properties:
         - {name: name, required: true, definition: "The service's name, the name of its type in the code; the map key."}
-        - {name: definition, required: true, definition: The process or transformation it performs and across which aggregates.}
+        - {name: definition, required: true, definition: The business decision it makes and across which aggregates.}
+        - {name: assertions, required: false, definition: "The service's contract: a map keyed by the assertion's name, each with on (the operation of the service) and statement, checked by the service's method assert followed by the key in the language's method case."}
     invariants:
       - id: domain_service/declared
         statement: A recorded service is a declared type spelled with the service's name in the language's type case.
         sources:
           - {work: evans2015, page: 14, section: Services}
         enforcement: {by: domain, facts: [file_tree, declarations], languages: all}
-      - id: domain_service/stateless
-        statement: A service declares no field that holds state across invocations.
+      - id: domain_service/not-held-by-aggregates
+        statement: No aggregate root or member entity declares a field whose type is a recorded domain service; a service reaches an aggregate only as a parameter of one command.
+        sources:
+          - {work: vernon-iddd-sample-pages, page: 387, section: Avoid Dependency Injection}
+          - {work: vernon-iddd-sample-pages, page: 363, section: "Rule: Reference Other Aggregates by Identity"}
+        enforcement: {needs: field-types, facts: [declarations], languages: [go, typescript]}
+    guidance:
+      - text: Try the thing first; a service exists only for a business decision that no entity or value object naturally owns, and the more behavior the services hold, the less the model does.
+        fundamental: true
         sources:
           - {work: evans2015, page: 14, section: Services}
-          - {work: vernon2013, chapter: 7, page: 268}
-        enforcement: {needs: field-declarations, facts: [declarations], languages: [go, typescript]}
-      - id: domain_service/not-injected-into-aggregates
-        statement: No constructor or command of an aggregate root takes a domain service as a parameter.
+          - {work: fowler-anemic-domain-model}
+      - text: Name the service and its operations for their effect and purpose in the ubiquitous language, never for the means; a name ending in Manager, Helper, Handler, or Processor names no effect.
+        fundamental: true
         sources:
-          - {work: vernon2013, chapter: 10, page: 387}
-        enforcement: {by: planned, facts: [file_tree, declarations], languages: [go, typescript]}
-    guidance:
-      - text: Use a domain service for an operation that spans aggregates; look up what it needs ahead of invoking aggregate behavior rather than reaching out from inside the aggregate.
+          - {work: evans2015, page: 14, section: Services}
+          - {work: evans2015, page: 20, section: Intention-Revealing Interfaces}
+      - text: A service holds collaborators (repositories, other services, a clock) and never state that survives an invocation; Evans no longer holds statelessness to be necessary, and Vernon's services hold repositories.
+        sources:
+          - {work: fowler-evans-classification}
+          - {work: vernon2013, chapter: 7, page: 268}
+          - {work: vernon-iddd-samples}
+      - text: Use a domain service for an operation that spans aggregates; look up what it needs ahead of invoking aggregate behavior, and pass a service into a command only for a dependency resolution the aggregate itself must double-dispatch.
         sources:
           - {work: vernon2013, chapter: 7, page: 268}
-          - {work: vernon2013, chapter: 10, page: 362}
+          - {work: vernon-iddd-sample-pages, page: 362, section: "Rule: Reference Other Aggregates by Identity"}
 
   - term: application_service
     title: Application Service
     phase: tactical
     definition:
       text: >-
-        An operation of the application layer that coordinates a use
-        case: it fetches aggregates through repositories, invokes their
-        behavior, and commits, holding application logic that is not
-        business logic and never the domain rules themselves.
+        An operation of the application layer that runs one use case
+        flow: it translates the request into domain values, fetches
+        aggregates through repositories, invokes their commands or one
+        domain service, commits, and publishes what happened, holding
+        application logic that is not business logic and never the
+        domain rules themselves. Use case is the same thing seen from
+        the request; the two words are not two kinds.
       sources:
         - {work: evans2015, page: 10, section: Layered Architecture}
         - {work: evans2015, page: 17, section: Repositories}
+        - {work: fowler-anemic-domain-model}
+        - {work: vernon-iddd-ch1, section: How To Do DDD}
+        - {work: stafford-service-layer}
     records:
       section: none
-      note: Application services are the use cases of the application Zone in rules.arclint.yaml; the domain file does not record them.
+      note: Application services are the use cases of the application Zone in rules.arclint.yaml; the domain file does not record them, and a business rule found in one is a finding for the librarian, not an entry.
+    guidance:
+      - text: Keep it thin; it coordinates tasks and delegates work to domain objects, contains no business rules or knowledge, and holds no state reflecting the business situation. If deleting every step it takes would lose a business decision, that decision belongs to an aggregate or a domain service.
+        fundamental: true
+        sources:
+          - {work: fowler-anemic-domain-model}
+          - {work: evans2015, page: 10, section: Layered Architecture}
+      - text: Notifying, exporting, retrying, and transaction control are application logic, sometimes called workflow logic; they belong here and are never recorded as domain rules.
+        sources:
+          - {work: stafford-business-logic}
+      - text: Name the use case for the action it performs, and name its input type for the request (ProvisionTenantRequest), never with the word command, which names a state-changing operation of a root.
+        sources:
+          - {work: vernon-iddd-ch1, section: How To Do DDD}
+          - {work: fowler-cqs}
 
   - term: repository
     title: Repository

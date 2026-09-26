@@ -50,6 +50,10 @@ contexts:
     services:
       Pricing:
         definition: Prices an order against the event's tiers.
+        assertions:
+          tiers-on-sale:
+            on: Price
+            statement: Only a tier on sale prices an order.
     specifications:
       PreferredCustomer:
         definition: A customer entitled to early access.
@@ -98,8 +102,12 @@ func ticketing(t *testing.T) vocab.UbiquitousLanguage {
 				Definition: "An amount in one currency.",
 				Invariants: []vocab.Invariant{{Key: "never-negative", Statement: "Money is never negative."}},
 			}},
-			Events:         []vocab.DomainEvent{{Name: "OrderConfirmed", Definition: "The order was confirmed.", RaisedBy: "Order"}},
-			Services:       []vocab.DomainService{{Name: "Pricing", Definition: "Prices an order against the event's tiers."}},
+			Events: []vocab.DomainEvent{{Name: "OrderConfirmed", Definition: "The order was confirmed.", RaisedBy: "Order"}},
+			Services: []vocab.DomainService{{
+				Name:       "Pricing",
+				Definition: "Prices an order against the event's tiers.",
+				Assertions: []vocab.Assertion{{Key: "tiers-on-sale", On: "Price", Statement: "Only a tier on sale prices an order."}},
+			}},
 			Specifications: []vocab.Specification{{Name: "PreferredCustomer", Definition: "A customer entitled to early access."}},
 			Questions:      []vocab.Question{{Key: "refund-window", Text: "How long after purchase may an order be refunded?"}},
 		},
@@ -153,6 +161,9 @@ func withoutLines(l vocab.UbiquitousLanguage) vocab.UbiquitousLanguage {
 		}
 		for j := range c.Services {
 			c.Services[j].Line = 0
+			for k := range c.Services[j].Assertions {
+				c.Services[j].Assertions[k].Line = 0
+			}
 		}
 		for j := range c.Specifications {
 			c.Specifications[j].Line = 0
@@ -250,6 +261,7 @@ func TestLoadCarriesLines(t *testing.T) {
 		"invariant never-negative": sales.ValueObjects[0].Invariants[0].Line,
 		"event OrderConfirmed":     sales.Events[0].Line,
 		"service Pricing":          sales.Services[0].Line,
+		"assertion tiers-on-sale":  sales.Services[0].Assertions[0].Line,
 		"spec PreferredCustomer":   sales.Specifications[0].Line,
 		"question refund-window":   sales.Questions[0].Line,
 		"context catalog":          lang.Contexts[1].Line,
@@ -258,8 +270,8 @@ func TestLoadCarriesLines(t *testing.T) {
 	want := map[string]int{
 		"context sales": 6, "aggregate Order": 9, "entity OrderLine": 14, "invariant total-is-sum": 18,
 		"assertion lines-priced": 20, "value object Money": 25, "invariant never-negative": 28,
-		"event OrderConfirmed": 30, "service Pricing": 34, "spec PreferredCustomer": 37,
-		"question refund-window": 40, "context catalog": 41, "relation": 48,
+		"event OrderConfirmed": 30, "service Pricing": 34, "assertion tiers-on-sale": 37,
+		"spec PreferredCustomer": 41, "question refund-window": 44, "context catalog": 45, "relation": 52,
 	}
 	for what, line := range want {
 		if lines[what] != line {
@@ -329,7 +341,7 @@ func TestLoadRejectsUnknownKeys(t *testing.T) {
 		},
 		{
 			"service", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    services:\n      Pricing:\n        definition: d\n        raised_by: x\n",
-			`line 9: context "sales": service "Pricing": unknown key "raised_by"; it records definition`,
+			`line 9: context "sales": service "Pricing": unknown key "raised_by"; it records definition, assertions`,
 		},
 		{
 			"specification", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    specifications:\n      Preferred:\n        definition: d\n        aliases: [x]\n",
@@ -509,6 +521,7 @@ func TestRecordWritesAFreshFile(t *testing.T) {
 		"        invariants:\n          total-is-sum-of-lines: The order total equals the sum of its lines.\n",
 		"        assertions:\n          lines-priced:\n            on: Confirm\n            statement: Every line carries a price once the order is confirmed.\n",
 		"        repository: OrderRepository\n",
+		"    services:\n      Pricing:\n        definition: Prices an order against the event's tiers.\n        assertions:\n          tiers-on-sale:\n            on: Price\n            statement: Only a tier on sale prices an order.\n",
 		"    questions:\n      refund-window: How long after purchase may an order be refunded?\n",
 		"relations:\n  - from: catalog\n    to: sales\n    kind: customer_supplier\n    description: Sales reads seating from the catalog.\n",
 	} {

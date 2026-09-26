@@ -76,8 +76,18 @@ func TestDomainKnowledgeOfProjectsEveryContract(t *testing.T) {
 			t.Errorf("invariant %d = %+v, want %+v", i, inv, want[i])
 		}
 	}
-	if len(ctx.Assertions) != 1 || ctx.Assertions[0] != (DomainAssertionRef{Key: "tiers-priced", Statement: "Tiers are priced.", Owner: "Event", On: "Publish"}) {
+	wantAssertions := []DomainAssertionRef{
+		{Key: "tiers-priced", Statement: "Tiers are priced.", Owner: "Event", OwnerConcept: vocab.ConceptAggregate, On: "Publish"},
+		{Key: "tier-on-sale", Statement: "Only a tier on sale is priced.", Owner: "Pricing", OwnerConcept: vocab.ConceptDomainService, On: "Price"},
+		{Key: "one-currency", Statement: "A priced order is in one currency.", Owner: "Pricing", OwnerConcept: vocab.ConceptDomainService, On: "Price"},
+	}
+	if len(ctx.Assertions) != len(wantAssertions) {
 		t.Fatalf("assertions = %+v", ctx.Assertions)
+	}
+	for i, a := range ctx.Assertions {
+		if a != wantAssertions[i] {
+			t.Errorf("assertion %d = %+v, want %+v", i, a, wantAssertions[i])
+		}
 	}
 	if len(ctx.Specifications) != 2 || len(ctx.Events) != 1 || ctx.Events[0] != "Published" || len(ctx.Services) != 1 || ctx.Services[0] != "Pricing" {
 		t.Fatalf("specifications %+v events %+v services %+v", ctx.Specifications, ctx.Events, ctx.Services)
@@ -112,7 +122,13 @@ func TestLocateDomainContractsFillsSourcesAndAnchors(t *testing.T) {
 		t.Fatalf("value object without constructor = %+v, want missing", inv[3])
 	}
 	if a := dk.Contexts[0].Assertions[0]; a.Source != "event/event.go:120" || a.Anchor != AnchorFound {
-		t.Fatalf("assertion = %+v", a)
+		t.Fatalf("aggregate assertion = %+v", a)
+	}
+	if a := dk.Contexts[0].Assertions[1]; a.Source != "event/event.go:150" || a.Anchor != AnchorFound {
+		t.Fatalf("service assertion with its method = %+v", a)
+	}
+	if a := dk.Contexts[0].Assertions[2]; a.Source != "" || a.Anchor != AnchorMissing {
+		t.Fatalf("service assertion without its method = %+v, want missing", a)
 	}
 	if s := dk.Contexts[0].Specifications[0]; s.Source != "order/spec.go:34" || s.Anchor != AnchorFound {
 		t.Fatalf("specification = %+v", s)
@@ -145,6 +161,7 @@ func TestUnanchoredContractsNameTheExpectedCarrier(t *testing.T) {
 	want := []UnanchoredContract{
 		{Kind: ContractInvariant, Context: "catalog", Owner: "Event", Key: "one-venue", Statement: "An Event has at most one Venue.", Expected: "method EnsureOneVenue on Event"},
 		{Kind: ContractInvariant, Context: "catalog", Owner: "Discount", Key: "within-the-whole", Statement: "A Discount never exceeds the whole.", Expected: "constructor of Discount"},
+		{Kind: ContractAssertion, Context: "catalog", Owner: "Pricing", Key: "one-currency", Statement: "A priced order is in one currency.", Expected: "method AssertOneCurrency on Pricing"},
 		{Kind: ContractSpecification, Context: "catalog", Name: "LateOrder", Expected: "satisfaction method on LateOrder"},
 	}
 	if len(got) != len(want) {
@@ -195,7 +212,8 @@ func catalogCarriers(t *testing.T) conformance.Carriers {
 // catalogLanguage records one context whose contracts cover every
 // anchor outcome: an aggregate invariant with and without its method,
 // a value object invariant with and without a constructor, a found
-// assertion, and one found and one missing specification.
+// aggregate assertion, a service assertion with and without its
+// method, and one found and one missing specification.
 func catalogLanguage(t *testing.T) vocab.UbiquitousLanguage {
 	t.Helper()
 	lang, err := vocab.NewUbiquitousLanguage("boxoffice", "", []vocab.BoundedContext{{
@@ -218,8 +236,14 @@ func catalogLanguage(t *testing.T) vocab.UbiquitousLanguage {
 			{Name: "Price", Definition: "Whole cents.", Invariants: []vocab.Invariant{{Key: "never-negative", Statement: "A Price is never negative."}}},
 			{Name: "Discount", Definition: "A percentage off.", Invariants: []vocab.Invariant{{Key: "within-the-whole", Statement: "A Discount never exceeds the whole."}}},
 		},
-		Events:   []vocab.DomainEvent{{Name: "Published", Definition: "An Event went on sale.", RaisedBy: "Event"}},
-		Services: []vocab.DomainService{{Name: "Pricing", Definition: "Prices tiers."}},
+		Events: []vocab.DomainEvent{{Name: "Published", Definition: "An Event went on sale.", RaisedBy: "Event"}},
+		Services: []vocab.DomainService{{
+			Name: "Pricing", Definition: "Prices tiers.",
+			Assertions: []vocab.Assertion{
+				{Key: "tier-on-sale", On: "Price", Statement: "Only a tier on sale is priced."},
+				{Key: "one-currency", On: "Price", Statement: "A priced order is in one currency."},
+			},
+		}},
 		Specifications: []vocab.Specification{
 			{Name: "HighValueOrder", Definition: "Orders above a threshold."},
 			{Name: "LateOrder", Definition: "Orders after the doors."},
@@ -250,6 +274,8 @@ func catalogObservations(t *testing.T) conformance.Observations {
 					{Kind: "struct", Name: "Discount", Exported: true, StartLine: 40},
 					{Kind: "method", Name: "EnsurePublishedFrozen", Owner: "Event", Exported: true, StartLine: 90},
 					{Kind: "method", Name: "AssertTiersPriced", Owner: "Event", Exported: true, StartLine: 120},
+					{Kind: "struct", Name: "Pricing", Exported: true, StartLine: 140},
+					{Kind: "method", Name: "AssertTierOnSale", Owner: "Pricing", Exported: true, StartLine: 150},
 				},
 			},
 			"order/spec.go": {

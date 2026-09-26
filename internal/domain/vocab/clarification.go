@@ -21,8 +21,24 @@ func InsufficientInfoQuestions() []ClarificationQuestion {
 			Decides:  "invariants and owner",
 		},
 		{
-			Question: "Does this hold at all times, or only when a named operation occurs?",
+			Question: "Does <rule> hold even while nothing runs, or only when <operation> runs?",
 			Decides:  "invariant vs assertion",
+		},
+		{
+			Question: "Which operation guarantees <rule>, and who performs it: one aggregate, or a process that spans aggregates?",
+			Decides:  "assertion owner (aggregate vs domain_service)",
+		},
+		{
+			Question: "Does <X> change anything, or does it only answer a question?",
+			Decides:  "command vs query",
+		},
+		{
+			Question: "Can one <Aggregate> do <X> with what it already holds, or does <X> need another aggregate or knowledge none of them holds?",
+			Decides:  "command vs domain_service",
+		},
+		{
+			Question: "Is <X> a result the business names, or a step the software takes to deliver one?",
+			Decides:  "domain_service vs application_service",
 		},
 		{
 			Question: "Do experts pass this predicate around as a thing they name, rather than as a rule that simply holds?",
