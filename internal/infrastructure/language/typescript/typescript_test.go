@@ -167,6 +167,44 @@ func TestOnlyOwnedFilesClaimed(t *testing.T) {
 	}
 }
 
+// TestJavaScriptExtensionReachesTypeScriptSource pins tsc's file
+// extension substitution: a NodeNext specifier written as "./mod.js"
+// resolves to mod.ts ahead of a sibling mod.js, falls back through .tsx
+// and .d.ts, and .mjs/.cjs reach .mts/.cts.
+func TestJavaScriptExtensionReachesTypeScriptSource(t *testing.T) {
+	root, files := writeFiles(t, map[string]string{
+		"src/main.ts": `import a from "./a.js";
+import b from "./b.js";
+import c from "./c.js";
+import d from "./d.mjs";
+import e from "./e.cjs";
+import f from "./f.js";
+import g from "./g.js";
+`,
+		"src/a.ts":   "export const a = 1;\n",
+		"src/a.js":   "export const a = 1;\n",
+		"src/b.tsx":  "export const b = 1;\n",
+		"src/c.d.ts": "export declare const c: number;\n",
+		"src/d.mts":  "export const d = 1;\n",
+		"src/e.cts":  "export const e = 1;\n",
+		"src/f.js":   "export const f = 1;\n",
+	})
+	facts := produce(t, root, files)
+	want := []string{"src/a.ts", "src/b.tsx", "src/c.d.ts", "src/d.mts", "src/e.cts", "src/f.js", ""}
+	got := facts["src/main.ts"].Imports
+	if len(got) != len(want) {
+		t.Fatalf("imports: %+v", got)
+	}
+	for i, w := range want {
+		if got[i].TargetFile != w {
+			t.Errorf("import %d (%s): target %q, want %q", i, got[i].Path, got[i].TargetFile, w)
+		}
+		if w != "" && got[i].Class != conformance.ImportInternal {
+			t.Errorf("import %d (%s): class %v, want internal", i, got[i].Path, got[i].Class)
+		}
+	}
+}
+
 func TestStdlibTableSanity(t *testing.T) {
 	for _, m := range []string{"fs", "node:fs", "path", "fs/promises", "child_process"} {
 		if !isStdlib(m) {

@@ -40,6 +40,37 @@ Relations: vocabulary → rule (conformist); vocabulary → conformance (conform
 
 If your change speaks about something new, or changes what a recorded term means, record it in `domain.arclint.yaml` before writing code. Invoke the domain-librarian skill for that work: it decides how a concept is classified, what evidence a recording needs, and when an open question is recorded instead of a guess. If your harness does not have the skill, `arclint agents skill` writes it to `.agents/skills/domain-librarian/`.
 
+### Architecture change workflow
+
+Before changing responsibilities, dependencies, or domain behavior:
+
+1. Run `arclint context` for the affected paths. Read the relevant code to
+   understand existing behavior. Use the recorded domain, architecture,
+   and approved decisions to determine the intended design.
+
+2. Give a short explanation before editing:
+   - This change does ___.
+   - These decisions belong to ___.
+   - The caller uses ___.
+   - Existing behavior ___ must remain intact.
+
+   Use the project's language. Resolve contradictions with approved decisions
+   before proceeding. Ask only when an unresolved product decision requires
+   the user's input. This explanation is not an approval checkpoint.
+
+3. Implement one complete behavior path through the intended boundaries.
+   Keep names and files understandable from their responsibilities.
+   Callers use contracts; implementations own their specific decisions.
+
+4. Verify the changed behavior through those contracts. Test application
+   assembly through the real assembly code. Inspect unexpected lint findings
+   and their scope before moving code or changing enforcement.
+
+5. Run `arclint check .` and the repository's tests as the finish gate.
+   Review baseline findings affecting the changed code as outstanding
+   repair work. Report the behavior verified, structural checks passed,
+   and remaining gaps separately.
+
 ### Zones and their rules
 
 - **domain**: Rule aggregate and domain values; stdlib-only. (paths internal/domain/**)
@@ -72,7 +103,7 @@ If your change speaks about something new, or changes what a recorded term means
   - imports only: delivery, application, domain; external imports forbidden
 - **lipgloss_report**: The only package permitted to import Lipgloss. (paths internal/delivery/cli/adapters/report/lipgloss/**)
   - imports only: delivery, application, domain
-- **composition**: Composition roots selecting and connecting concrete adapters. (paths cmd/**)
+- **composition**: Composition roots selecting and connecting concrete adapters: the binary and the generators. (paths cmd/** tools/**)
   - imports only: delivery, infrastructure, application, domain, cli_factory, cobra_adapter, report_factory
   - main-present: contains files matching ["cmd/arclint/main.go"] Rationale: The arclint binary has a main.
 - **source**: Common source invariants for internal packages. (paths internal/**)
