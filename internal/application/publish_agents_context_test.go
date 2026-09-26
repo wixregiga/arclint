@@ -2,6 +2,8 @@ package application_test
 
 import (
 	"fmt"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -143,14 +145,29 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 			t.Errorf("block lacks %q:\n%s", want, block)
 		}
 	}
-	// The changing-the-language section sits between the recorded domain
-	// and the zone rules.
+	// The changing-the-language section and then the change workflow sit
+	// between the recorded domain and the zone rules.
 	domainAt := strings.Index(block, "### The recorded domain")
 	changingAt := strings.Index(block, "### Changing the language")
+	workflowAt := strings.Index(block, "### Architecture change workflow")
 	zonesAt := strings.Index(block, "### Zones and their rules")
-	if !(domainAt >= 0 && domainAt < changingAt && changingAt < zonesAt) {
-		t.Errorf("section order wrong: recorded domain at %d, changing the language at %d, zones at %d:\n%s",
-			domainAt, changingAt, zonesAt, block)
+	if !(domainAt >= 0 && domainAt < changingAt && changingAt < workflowAt && workflowAt < zonesAt) {
+		t.Fatalf("section order wrong: recorded domain at %d, changing the language at %d, "+
+			"change workflow at %d, zones at %d:\n%s",
+			domainAt, changingAt, workflowAt, zonesAt, block)
+	}
+	// The workflow names only commands the surface documents, so an agent
+	// following it never runs a command arclint does not ship.
+	workflow := block[workflowAt:zonesAt]
+	for _, named := range regexp.MustCompile("`arclint ([a-z ]+?)[ .`]").FindAllStringSubmatch(workflow, -1) {
+		if !slices.ContainsFunc(application.AgentCommandSurface(), func(c application.AgentCommandDoc) bool {
+			return c.Command == named[1]
+		}) {
+			t.Errorf("change workflow names `arclint %s`, which the command surface does not document", named[1])
+		}
+	}
+	if !strings.Contains(workflow, "`arclint context`") || !strings.Contains(workflow, "`arclint check .`") {
+		t.Errorf("change workflow must start from `arclint context` and gate on `arclint check .`:\n%s", workflow)
 	}
 	// The command surface renders every entry as an invocable bullet.
 	for _, c := range application.AgentCommandSurface() {
@@ -192,10 +209,12 @@ func TestPublishAgentsContextOmitsAbsentSections(t *testing.T) {
 			t.Errorf("block must omit %q without its data:\n%s", reject, block)
 		}
 	}
-	// Changing the language is unconditional: it renders even without a
-	// recorded domain, and never gates on installed skill files.
+	// Changing the language and the change workflow are unconditional:
+	// they render even without a recorded domain, and never gate on
+	// installed skill files.
 	for _, want := range []string{
 		"### Ask arclint first", "### Changing the language",
+		"### Architecture change workflow",
 		"### Zones and their rules", "- **m**",
 	} {
 		if !strings.Contains(block, want) {

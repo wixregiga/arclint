@@ -145,6 +145,7 @@ func renderAgentsBlock(cfg rule.Configured, lang vocab.UbiquitousLanguage,
 		writeRecordedDomain(&b, lang)
 	}
 	writeChangingLanguage(&b)
+	writeChangeWorkflow(&b)
 	writeZoneRules(&b, cfg)
 	writeBuiltInRules(&b, cfg)
 	writeRepositoryRules(&b, cfg)
@@ -275,6 +276,37 @@ func writeChangingLanguage(b *strings.Builder) {
 		"and when an open question is recorded instead of a guess. "+
 		"If your harness does not have the skill, `arclint agents skill` writes it to `%s/`.\n\n",
 		vocab.UbiquitousLanguageFileName, vocab.SkillName, vocab.SkillDirectory)
+}
+
+// writeChangeWorkflow is the fixed change discipline for architectural
+// work: consult the recorded architecture first, explain the change,
+// implement one complete path, verify through the contracts, and gate
+// on arclint check plus the repository's tests. It is emitted
+// unconditionally; the discipline holds for every repository.
+func writeChangeWorkflow(b *strings.Builder) {
+	b.WriteString("### Architecture change workflow\n\n")
+	b.WriteString("Before changing responsibilities, dependencies, or domain behavior:\n\n")
+	b.WriteString("1. Run `arclint context` for the affected paths. Read the relevant code to\n" +
+		"   understand existing behavior. Use the recorded domain, architecture,\n" +
+		"   and approved decisions to determine the intended design.\n\n")
+	b.WriteString("2. Give a short explanation before editing:\n" +
+		"   - This change does ___.\n" +
+		"   - These decisions belong to ___.\n" +
+		"   - The caller uses ___.\n" +
+		"   - Existing behavior ___ must remain intact.\n\n" +
+		"   Use the project's language. Resolve contradictions with approved decisions\n" +
+		"   before proceeding. Ask only when an unresolved product decision requires\n" +
+		"   the user's input. This explanation is not an approval checkpoint.\n\n")
+	b.WriteString("3. Implement one complete behavior path through the intended boundaries.\n" +
+		"   Keep names and files understandable from their responsibilities.\n" +
+		"   Callers use contracts; implementations own their specific decisions.\n\n")
+	b.WriteString("4. Verify the changed behavior through those contracts. Test application\n" +
+		"   assembly through the real assembly code. Inspect unexpected lint findings\n" +
+		"   and their scope before moving code or changing enforcement.\n\n")
+	b.WriteString("5. Run `arclint check .` and the repository's tests as the finish gate.\n" +
+		"   Review baseline findings affecting the changed code as outstanding\n" +
+		"   repair work. Report the behavior verified, structural checks passed,\n" +
+		"   and remaining gaps separately.\n\n")
 }
 
 // writeZoneRules lists every declared Zone with its import

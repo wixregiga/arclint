@@ -1424,6 +1424,56 @@ func ddd() MetaModel {
 				},
 			},
 			{
+				Term:  "command",
+				Title: "Command",
+				Phase: "tactical",
+				Definition: Meaning{
+					Text: "An operation of an aggregate root that changes the state of that one aggregate and returns no domain information, named for what it does in the ubiquitous language. It is never a setter, and it is never the request a use case receives.",
+					Sources: []Citation{
+						{Work: "evans2015", Page: "21", Section: "Side-Effect-Free Functions"},
+						{Work: "fowler-cqs"},
+					},
+				},
+				Records: Recording{
+					Section: SectionNone,
+					Note:    "A command has no entry of its own; its name is the `on` of the assertions recorded under its aggregate.",
+				},
+				Guidance: []Guidance{
+					{
+						Text:        "Keep commands very simple and let them return no domain information; the logic they rely on belongs in queries, which have no side effects.",
+						Fundamental: true,
+						Sources: []Citation{
+							{Work: "evans2015", Page: "21", Section: "Side-Effect-Free Functions"},
+						},
+					},
+				},
+			},
+			{
+				Term:  "query",
+				Title: "Query",
+				Phase: "tactical",
+				Definition: Meaning{
+					Text: "An operation of an aggregate or a value object that returns a result and changes no observable state; Evans calls it a side-effect-free function. No operation is both a query and a command.",
+					Sources: []Citation{
+						{Work: "evans2015", Page: "21", Section: "Side-Effect-Free Functions"},
+						{Work: "fowler-cqs"},
+					},
+				},
+				Records: Recording{
+					Section: SectionNone,
+					Note:    "A query is not recorded; a predicate experts name and pass around is recorded as a specification instead.",
+				},
+				Guidance: []Guidance{
+					{
+						Text:        "Place as much of the logic as possible into queries, operations that return results with no observable side effects.",
+						Fundamental: true,
+						Sources: []Citation{
+							{Work: "evans2015", Page: "21", Section: "Side-Effect-Free Functions"},
+						},
+					},
+				},
+			},
+			{
 				Term:  "domain_event",
 				Title: "Domain Event",
 				Phase: "tactical",

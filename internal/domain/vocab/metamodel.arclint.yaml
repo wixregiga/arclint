@@ -1095,6 +1095,48 @@ building_blocks:
       section: aggregates
       note: The root is the aggregate's entry itself; the aggregate's name is the root's name and the aggregate's identity is the root's.
 
+  - term: command
+    title: Command
+    phase: tactical
+    definition:
+      text: >-
+        An operation of an aggregate root that changes the state of
+        that one aggregate and returns no domain information, named for
+        what it does in the ubiquitous language. It is never a setter,
+        and it is never the request a use case receives.
+      sources:
+        - {work: evans2015, page: 21, section: Side-Effect-Free Functions}
+        - {work: fowler-cqs}
+    records:
+      section: none
+      note: A command has no entry of its own; its name is the `on` of the assertions recorded under its aggregate.
+    guidance:
+      - text: Keep commands very simple and let them return no domain information; the logic they rely on belongs in queries, which have no side effects.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 21, section: Side-Effect-Free Functions}
+
+  - term: query
+    title: Query
+    phase: tactical
+    definition:
+      text: >-
+        An operation of an aggregate or a value object that returns a
+        result and changes no observable state; Evans calls it a
+        side-effect-free function. No operation is both a query and a
+        command.
+      sources:
+        - {work: evans2015, page: 21, section: Side-Effect-Free Functions}
+        - {work: fowler-cqs}
+    records:
+      section: none
+      note: A query is not recorded; a predicate experts name and pass around is recorded as a specification instead.
+    guidance:
+      - text: Place as much of the logic as possible into queries, operations that return results with no observable side effects.
+        fundamental: true
+        sources:
+          - {work: evans2015, page: 21, section: Side-Effect-Free Functions}
+
   - term: domain_event
     title: Domain Event
     phase: tactical

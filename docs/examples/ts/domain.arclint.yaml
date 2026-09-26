@@ -1,0 +1,172 @@
+version: 1
+
+project: identityaccess
+
+description: >-
+  Identity and access for the SaaSOvation tenants, after Vaughn Vernon's
+  IDDD_Samples: a tenant is provisioned with its first administrator,
+  registers users through invitations, and groups them under roles.
+
+contexts:
+  identityaccess:
+    definition: >-
+      Identity and access for the SaaSOvation tenants: each tenant is
+      provisioned with its first administrator, registers users through
+      invitations, and groups them under roles.
+
+    aggregates:
+      Role:
+        definition: >-
+          A named set of users of one tenant that a permission can be
+          granted to; it lists each member once.
+        identity: RoleID
+        invariants:
+          members-listed-once: A role lists each of its members once.
+        assertions:
+          assignee-belongs-to-tenant:
+            on: AssignUser
+            statement: A role is assigned only users of its own tenant.
+        repository: RoleRepository
+
+      # ANCHOR: tenant-recording
+      Tenant:
+        definition: >-
+          A subscribing organisation that owns users and roles; it is
+          active from provisioning until deactivated, and while active it
+          offers registration invitations that users register through.
+        identity: TenantID
+        entities:
+          RegistrationInvitation:
+            definition: >-
+              An invitation, identified within its tenant, through which a
+              user registers; it is open-ended or limited to a window.
+        invariants:
+          one-open-invitation-per-description: >-
+            No two invitations of a tenant that are available at the same
+            moment carry the same description.
+        assertions:
+          invites-only-while-active:
+            on: OfferRegistrationInvitation
+            statement: Only an active tenant offers a registration invitation.
+        repository: TenantRepository
+      # ANCHOR_END: tenant-recording
+
+      User:
+        definition: >-
+          A person's account under one tenant, identified by tenant and
+          username, protected by an encrypted password, and enabled or not
+          for a period.
+        identity: UserID
+        invariants:
+          person-belongs-to-the-users-tenant: The person a user describes belongs to the user's tenant.
+        assertions:
+          changed-password-differs-from-current:
+            on: ChangePassword
+            statement: A changed password differs from the one it replaces.
+        repository: UserRepository
+
+    value_objects:
+      Credentials:
+        definition: A Username together with the Password chosen for it.
+        invariants:
+          password-differs-from-username: The password of a credential is not its username.
+      EmailAddress:
+        definition: A well-formed email address.
+        invariants:
+          well-formed: An email address parses as one mailbox address.
+      Enablement:
+        definition: Whether a user is enabled, indefinitely or within a window of dates.
+        invariants:
+          window-is-whole: An enablement with a window has both a start and an end, and the start is not after the end.
+      EncryptedPassword:
+        definition: The protected form of a Password as the Encrypter produced it.
+        invariants:
+          not-empty: An encrypted password is never empty.
+      FullName:
+        definition: A person's first and last name.
+        invariants:
+          both-names-present: A full name carries a first name and a last name.
+      Password:
+        definition: A password as a user chose it, before protection.
+        invariants:
+          not-weak: A password has at least eight characters and mixes letters, digits, and symbols.
+      Person:
+        definition: The FullName and EmailAddress of the person behind a user, kept under the user's tenant.
+      RoleID:
+        definition: The identity of a role, its tenant together with its RoleName.
+      RoleName:
+        definition: The name of a role within its tenant.
+        invariants:
+          length-within-bounds: A role name has between one and two hundred and fifty characters.
+      TenantID:
+        definition: The identity of a tenant, a generated twenty-six character token.
+        invariants:
+          well-formed: A tenant id is twenty-six base32 characters.
+      TenantName:
+        definition: The name a tenant is registered under.
+        invariants:
+          length-within-bounds: A tenant name has between one and one hundred characters.
+      UserID:
+        definition: The identity of a user, its tenant together with its Username.
+      Username:
+        definition: The name a user signs in with.
+        invariants:
+          length-within-bounds: A username has between three and two hundred and fifty characters.
+
+    events:
+      RoleProvisioned:
+        definition: A tenant gained a role.
+        raised_by: Role
+      TenantActivated:
+        definition: A tenant became active.
+        raised_by: Tenant
+      TenantDeactivated:
+        definition: A tenant became inactive.
+        raised_by: Tenant
+      TenantProvisioned:
+        definition: A tenant came into existence under its name.
+        raised_by: Tenant
+      UserAssignedToRole:
+        definition: A user became a member of a role.
+        raised_by: Role
+      UserEnablementChanged:
+        definition: A user's enablement was redefined.
+        raised_by: User
+      UserPasswordChanged:
+        definition: A user's password was replaced.
+        raised_by: User
+      UserRegistered:
+        definition: A user was registered under a tenant.
+        raised_by: User
+
+    services:
+      Encrypter:
+        definition: Protects a Password and tells whether a Password matches its protected form.
+      PasswordGenerator:
+        definition: Proposes a strong Password for a user who has not chosen one.
+      # ANCHOR: service-recording
+      TenantProvisioningService:
+        definition: >-
+          Brings a tenant into existence with its Administrator role and
+          its first administrator, registered through a one-time
+          invitation; spans Tenant, User, and Role.
+        assertions:
+          administrator-registered:
+            on: ProvisionTenant
+            statement: A provisioned tenant has an enabled user in its Administrator role.
+          initial-invitation-withdrawn:
+            on: ProvisionTenant
+            statement: Nobody else registers through the invitation the first administrator used.
+          tenant-active-on-completion:
+            on: ProvisionTenant
+            statement: A provisioned tenant is active.
+      # ANCHOR_END: service-recording
+
+    # ANCHOR: question-recording
+    questions:
+      tenant-name-uniqueness: >-
+        No two tenants share a name, but no single tenant owns that rule.
+        When a tenant's name is registered, what else must change in the
+        same transaction? If nothing, the rule is recorded as an assertion
+        of TenantProvisioningService on ProvisionTenant.
+    # ANCHOR_END: question-recording

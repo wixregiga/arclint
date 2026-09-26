@@ -70,8 +70,8 @@ zones:
     paths: "internal/delivery/cli/adapters/report/lipgloss/**"
     description: "The only package permitted to import Lipgloss."
   composition:
-    paths: "cmd/**"
-    description: "Composition roots selecting and connecting concrete adapters."
+    paths: ["cmd/**", "tools/**"]
+    description: "Composition roots selecting and connecting concrete adapters: the binary and the generators."
   source:
     paths: "internal/**"
     description: "Common source invariants for internal packages."

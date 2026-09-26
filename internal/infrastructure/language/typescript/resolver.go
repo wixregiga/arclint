@@ -123,10 +123,29 @@ func packageName(spec string) string {
 	return parts[0]
 }
 
+// substitutes maps a JavaScript extension written in a specifier to the
+// TypeScript sources and declarations tsc tries first, in its order:
+// "./mod.js" reaches mod.ts, then mod.tsx, then mod.d.ts, and only then
+// mod.js. Source: TypeScript Modules Reference, "File extension
+// substitution" (https://www.typescriptlang.org/docs/handbook/modules/reference.html).
+var substitutes = map[string][]string{
+	".js":  {".ts", ".tsx", ".d.ts"},
+	".mjs": {".mts", ".d.mts"},
+	".cjs": {".cts", ".d.cts"},
+}
+
 // resolveRelative implements extension-probing resolution for relative
-// specifiers: exact file, spec+ext, spec/index+ext, else the directory.
+// specifiers: a TypeScript substitute for a written JavaScript
+// extension, the exact file, spec+ext, spec/index+ext, else the
+// directory.
 func (r *resolver) resolveRelative(fileDir, spec string) (targetFile, targetDir string) {
 	base := path.Join(fileDir, spec)
+	ext := path.Ext(base)
+	for _, sub := range substitutes[ext] {
+		if f := strings.TrimSuffix(base, ext) + sub; r.files[f] {
+			return f, path.Dir(f)
+		}
+	}
 	if r.files[base] {
 		return base, path.Dir(base)
 	}

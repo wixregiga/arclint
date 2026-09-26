@@ -1,0 +1,56 @@
+# The identity and access example's architecture contracts. The
+# bounded context holds the model; the use case and the adapters sit
+# beside it and depend on it, never the other way round.
+
+runtime: [go]
+
+zones:
+  identityaccess:
+    paths:
+      - "identityaccess/tenant/**"
+      - "identityaccess/user/**"
+      - "identityaccess/role/**"
+      - "identityaccess/event/**"
+      - "identityaccess/provisioning/**"
+    description: "The identity and access bounded context: aggregates, values, events, and the domain service."
+  use_cases:
+    paths: "identityaccess/provisiontenant/**"
+    description: "Application services, one package per use case, named as the action."
+  adapters:
+    paths: "identityaccess/adapters/**"
+    description: "Repository, unit-of-work, and password adapters implementing ports the model declares."
+  composition:
+    paths: "identityaccess/**/*_test.go"
+    description: "Tests that wire a use case to real adapters, the example's only composition root."
+
+rules:
+  identityaccess/model-imports-nothing-outside:
+    rationale: "The model depends on nothing but itself and the standard library."
+    on: identityaccess
+    imports:
+      internal: []
+      external: forbid
+
+  use_cases/coordinate-the-model:
+    rationale: "A use case translates, runs the model, commits, and publishes; it reaches only the model."
+    on: use_cases
+    exclude:
+      paths: "identityaccess/**/*_test.go"
+      reason: "A use case's test composes it with adapters; the composition rule judges those files."
+    imports:
+      internal: [identityaccess]
+      external: forbid
+
+  adapters/implement-ports:
+    rationale: "Adapters implement ports the model and the use cases declare, and reach nothing else."
+    on: adapters
+    imports:
+      internal: [identityaccess, use_cases]
+      external: forbid
+
+  composition/wires-adapters-to-use-cases:
+    rationale: "Only composition connects a use case to concrete adapters."
+    on: composition
+    imports:
+      internal: [identityaccess, use_cases, adapters]
+      external: forbid

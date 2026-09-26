@@ -1,0 +1,14 @@
+{
+  "name": "saasovation-identityaccess",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit --strict",
+    "build": "tsc",
+    "test": "tsc && node --test dist/identityaccess/provision-tenant/provision-tenant.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.0",
+    "typescript": "^5.9.3"
+  }
+}

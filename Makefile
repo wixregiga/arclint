@@ -94,15 +94,23 @@ release:
 # Hiding targets from shell auto-completion is done by defining them via variables
 # or prefixing with an underscore.
 
-.PHONY: _quick-verify _verify _verify-ro _lint-no-fix _leak _leak-ci _leak-check _noop
+.PHONY: _quick-verify _verify _verify-ro _examples-go _lint-no-fix _leak _leak-ci _leak-check _noop
 
-_quick-verify:
+_quick-verify: _examples-go
 	$(GO) vet ./...
 	$(GO) test -short ./...
 
-_verify: vet test
+_verify: vet test _examples-go
 	$(MAKE) build
 	$(BIN) check .
+	cd docs/examples/go && $(abspath $(BIN)) check .
+	cd docs/examples/ts && $(abspath $(BIN)) check .
+
+# The Go example the Classifying page quotes is its own module, outside
+# ./..., so it is vetted and tested here. Both examples pass arclint
+# check in _verify; the TypeScript one is parsed by arclint, not run.
+_examples-go:
+	cd docs/examples/go && $(GO) vet ./... && $(GO) test ./...
 
 _verify-ro: _quick-verify
 	$(GO) run -tags "$(GRAMMARS)" ./cmd/arclint check .
