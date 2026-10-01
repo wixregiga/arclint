@@ -220,13 +220,17 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
+	installHooks, err := application.NewInstallAgentHooks(agentHooksInstaller{root: root})
+	if err != nil {
+		return configError(err)
+	}
 	rootCommand := cli.Root(buildVersion(version),
 		cli.NewCheckCommand(assess, listRules, renderer),
 		cli.NewInitCommand(initialize, renderer),
 		cli.NewRulesCommand(listRules, showRule, ruleTests, publishRuleSchema, renderer),
 		cli.NewContextCommand(getContext, renderer),
 		cli.NewDomainCommand(initDomain, getDomainOverview, listDomainDefinitions, showDomainDefinition, defineDomainDefinition, removeDomainDefinition, publishDomainSchema, renderer),
-		cli.NewAgentsCommand(publishAgents, publishSkillProtocol, publishSkillVocabulary, publishDomainSchema, renderer),
+		cli.NewAgentsCommand(publishAgents, publishSkillProtocol, publishSkillVocabulary, publishDomainSchema, renderer, installHooks),
 		cli.NewBaselineCommand(capture, refresh, renderer),
 		cli.NewPatternsCommand(patternCommands, renderer),
 		cli.NewSDKCommand(initializeSDK, renderer),
@@ -405,7 +409,8 @@ func resolveRulesPath(args []string) (string, []string, error) {
 		// and export without a ruleset, and install drafts one where
 		// none exists, so they compose against the working directory.
 		if fp := firstPositional(rest); fp == "" || fp == "help" || fp == "completion" ||
-			fp == "__complete" || fp == "__completeNoDesc" || fp == "patterns" {
+			fp == "__complete" || fp == "__completeNoDesc" || fp == "patterns" ||
+			(len(rest) >= 2 && rest[0] == "agents" && rest[1] == "hooks") {
 			fallback, absErr := filepath.Abs(rule.RulesetFileName)
 			if absErr != nil {
 				return "", nil, fmt.Errorf("rules path: %w", absErr)
