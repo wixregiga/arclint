@@ -16,12 +16,18 @@ func NewAgentsCommand(
 	publishVocabulary application.PublishSkillVocabulary,
 	publishSchema application.PublishDomainSchema,
 	render Renderer,
+	installHooks application.InstallAgentHooks,
+	setup application.SetupAgent,
+	status application.AgentSetupStatus,
 ) Command {
 	return Command{
 		Name:  "agents",
 		Short: "AGENTS.md architecture block and domain-librarian skill artifacts",
 		Subcommands: []Command{
+			newAgentSetupCommand(setup),
+			newAgentStatusCommand(status),
 			newAgentsMDCommand(publish, render),
+			newAgentHooksCommand(installHooks),
 			newAgentsSkillCommand(publishProtocol, publishVocabulary, publishSchema, render),
 		},
 	}

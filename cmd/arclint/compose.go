@@ -19,6 +19,7 @@ import (
 	"github.com/wixregiga/arclint/internal/delivery/cli/reportfactory"
 	"github.com/wixregiga/arclint/internal/domain/distribution"
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	agentfiles "github.com/wixregiga/arclint/internal/infrastructure/agents/files"
 	markdownagents "github.com/wixregiga/arclint/internal/infrastructure/agents/markdown"
 	artifactfs "github.com/wixregiga/arclint/internal/infrastructure/artifact"
 	jsonbaseline "github.com/wixregiga/arclint/internal/infrastructure/baseline/json"
@@ -220,13 +221,33 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
+	installHooks, err := application.NewInstallAgentHooks(agentHooksInstaller{root: root})
+	if err != nil {
+		return configError(err)
+	}
+	setupScaffold, err := filesystemscaffold.NewWriter(root)
+	if err != nil {
+		return configError(err)
+	}
+	setupInitialize, err := application.NewInitializeRepository(setupScaffold, builtinPatterns, localPatterns)
+	if err != nil {
+		return configError(err)
+	}
+	setup, err := application.NewSetupAgent(setupInitialize, initDomain, installHooks, agentfiles.Writer{Root: root, PreserveSkills: true}, publisher, setupScaffold)
+	if err != nil {
+		return configError(err)
+	}
+	status, err := application.NewAgentSetupStatus(agentfiles.Writer{Root: root})
+	if err != nil {
+		return configError(err)
+	}
 	rootCommand := cli.Root(buildVersion(version),
 		cli.NewCheckCommand(assess, listRules, renderer),
 		cli.NewInitCommand(initialize, renderer),
 		cli.NewRulesCommand(listRules, showRule, ruleTests, publishRuleSchema, renderer),
 		cli.NewContextCommand(getContext, renderer),
 		cli.NewDomainCommand(initDomain, getDomainOverview, listDomainDefinitions, showDomainDefinition, defineDomainDefinition, removeDomainDefinition, publishDomainSchema, renderer),
-		cli.NewAgentsCommand(publishAgents, publishSkillProtocol, publishSkillVocabulary, publishDomainSchema, renderer),
+		cli.NewAgentsCommand(publishAgents, publishSkillProtocol, publishSkillVocabulary, publishDomainSchema, renderer, installHooks, setup, status),
 		cli.NewBaselineCommand(capture, refresh, renderer),
 		cli.NewPatternsCommand(patternCommands, renderer),
 		cli.NewSDKCommand(initializeSDK, renderer),
@@ -405,7 +426,8 @@ func resolveRulesPath(args []string) (string, []string, error) {
 		// and export without a ruleset, and install drafts one where
 		// none exists, so they compose against the working directory.
 		if fp := firstPositional(rest); fp == "" || fp == "help" || fp == "completion" ||
-			fp == "__complete" || fp == "__completeNoDesc" || fp == "patterns" {
+			fp == "__complete" || fp == "__completeNoDesc" || fp == "patterns" ||
+			(len(rest) >= 2 && rest[0] == "agents" && (rest[1] == "hooks" || rest[1] == "setup" || rest[1] == "status")) {
 			fallback, absErr := filepath.Abs(rule.RulesetFileName)
 			if absErr != nil {
 				return "", nil, fmt.Errorf("rules path: %w", absErr)

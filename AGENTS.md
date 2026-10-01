@@ -2,7 +2,7 @@
 
 Repo-specific instructions for coding agents. The architecture block
 below is generated from rules.arclint.yaml; refresh it with
-`arclint agents --write` after changing the ruleset (a test fails when
+`arclint agents md --write` after changing the ruleset (a test fails when
 it drifts). Add hand-written guidance outside the markers.
 
 <!-- arclint:agents:begin -->
@@ -20,6 +20,8 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 - `arclint check .`: evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings
 - `arclint rules test`: run the rule fixtures under `.arclint/tests` after changing any rule
 - `arclint sdk init`: regenerate the extension SDK artifacts under `.arclint/extensions`
+- `arclint agents setup --host <omp|codex>`: prepare or update project-local guidance, skill and native hooks; preserves existing rules and recordings; host trust remains explicit
+- `arclint agents status`: inspect installed scope and asset integrity; host activation and a fresh review are separate
 - `arclint agents md --write`: refresh this block after changing rules.arclint.yaml or the vocabulary
 - `arclint baseline`: manage the committed baseline of adopted findings
 - `arclint patterns`: list the Patterns that resolve offline (embedded, vendored, authored); `patterns install <pattern>` extends rules.arclint.yaml with one, `patterns vendor` copies one under `.arclint/patterns`

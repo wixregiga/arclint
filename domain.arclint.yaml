@@ -5,6 +5,21 @@ description: >-
   The Ubiquitous Language of arclint itself: what a Rule is, how a
   repository adopts Rules a Pattern distributes, how conformance is
   judged, and how Patterns travel between repositories.
+  ArcLint also connects domain guidance and review to an agent host
+  such as OMP or Codex. A hook runs the supplied domain guard at a
+  supported point in the agent's work. Installing hooks writes the
+  project's connection files and selected review scope. The host
+  controls loading, activation, and any required trust. Domain review
+  provides evidence-based feedback on selected material; it does not
+  establish conformance for every architectural obligation.
+  Agent setup prepares the repository guidance, domain-librarian skill,
+  and hooks together for a chosen host. Existing recordings and Rules
+  remain the project's decisions. Domain source is code explicitly
+  selected for domain review; other supplied source is supporting
+  evidence. Explanatory comments do not belong in selected domain
+  source or recordings. Required directives and legal notices remain.
+  A review covers the current contents of all selected material.
+  Installing or updating guidance never grants the host's trust.
 contexts:
   vocabulary:
     definition: >-

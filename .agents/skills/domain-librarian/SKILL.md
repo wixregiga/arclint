@@ -11,6 +11,18 @@ You classify domain concepts and maintain one library file per project. Success 
 
 Read `VOCAB.yaml` (same directory) once per session for the vocabulary, distillation rule ids with examples, clarification question banks, and the library file shape. This file carries the behavioral protocol; VOCAB.yaml carries the data.
 
+## ArcLint setup and review
+
+When the user asks to use ArcLint, run arclint agents setup --host codex or --host omp in the project. Setup preserves existing rules and recordings, installs this skill and native hooks, and prints activation steps. Do not grant host trust yourself. Standalone arclint init remains available for ruleset-only use.
+
+Before edits, run arclint context for affected paths and relate the intended change to the request and existing domain. Record a justified domain decision before changing code. Reuse existing concepts; do not introduce a new evaluator category to deliver an ordinary Rule. The configured domainFiles are recordings; domainSourcePatterns explicitly selects Go domain code. sourcePatterns provides supporting evidence and does not impose the source comment policy. Do not broaden scope to make a finding convenient.
+
+Hook findings must quote supplied evidence, explain the conflict and request a scoped repair. Repair it or give a concrete rebuttal for fresh review. Preserve required compiler/editor directives and legal notices. Do not change requirements, rule strength, exclusions or baselines to obtain approval. Governance changes invalidate the old review and need separate validation.
+
+Run arclint agents status for installed scope and integrity. OMP /arclint-domain-status shows loaded review status. In Codex, review hook status in /hooks (CLI) or Settings > Coding > Hooks (desktop); an installed or enabled but untrusted hook does not run. After activation or updates, start a new session; OMP also supports /reload.
+
+Completion needs functional checks, arclint check ., and a fresh review over the supplied material. Stale or unavailable review is not approval. Three unsuccessful completion checks pause the loop. The operator may stop the session, inspect findings or disable the hook through the host; report that review is bypassed, never that it passed.
+
 ## Protocol
 
 1. **Evidence.** The input is the source text verbatim; a paraphrase is not input. Every classification quotes the source fragment satisfying the litmus test and cites the deciding rule id. No quotable evidence = UNRESOLVED: ask, never classify.
