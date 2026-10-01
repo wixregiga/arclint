@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/wixregiga/arclint/internal/application"
+	agentfiles "github.com/wixregiga/arclint/internal/infrastructure/agents/files"
 )
 
 //go:embed assets/guard.py
@@ -22,7 +25,7 @@ type Installer struct{ root string }
 func NewInstaller(root string) *Installer { return &Installer{root: root} }
 
 // Install adds native command hooks. Codex still requires /hooks trust review.
-func (i *Installer) Install(host string, domains []string) ([]string, error) {
+func (i *Installer) Install(host string, domains []string, scope ...application.AgentSourceScope) ([]string, error) {
 	if host != "codex" {
 		return nil, fmt.Errorf("unsupported host %q", host)
 	}
@@ -33,36 +36,10 @@ func (i *Installer) Install(host string, domains []string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("project root: %w", err)
 	}
-	for _, name := range domains {
-		path, resolveErr := filepath.EvalSymlinks(filepath.Join(root, name))
-		if resolveErr != nil {
-			return nil, fmt.Errorf("domain file: %w", resolveErr)
-		}
-		rel, relErr := filepath.Rel(root, path)
-		if relErr != nil || filepath.IsAbs(name) || rel == ".." || strings.HasPrefix(rel, "../") {
-			return nil, fmt.Errorf("domain path escapes project: %s", name)
-		}
-	}
 	configPath := filepath.Join(root, ".arclint/domain-guard.json")
-	config, err := json.MarshalIndent(struct {
-		Version     int      `json:"version"`
-		DomainFiles []string `json:"domainFiles"`
-	}{1, domains}, "", "  ")
+	config, err := agentfiles.Scope(root, domains, scope...)
 	if err != nil {
-		return nil, fmt.Errorf("guard config: %w", err)
-	}
-	config = append(config, '\n')
-	if existing, readErr := os.ReadFile(configPath); readErr == nil {
-		var parsed struct {
-			Version     int      `json:"version"`
-			DomainFiles []string `json:"domainFiles"`
-		}
-		if json.Unmarshal(existing, &parsed) != nil || parsed.Version != 1 || strings.Join(parsed.DomainFiles, "\x00") != strings.Join(domains, "\x00") {
-			return nil, fmt.Errorf("preserving different domain scope in %s", configPath)
-		}
-		config = existing
-	} else if !os.IsNotExist(readErr) {
-		return nil, fmt.Errorf("read guard config: %w", readErr)
+		return nil, fmt.Errorf("agent setup: %w", err)
 	}
 	script := filepath.Join(root, ".codex/hooks/arclint-domain-guard/guard.py")
 	quote := func(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }
@@ -117,56 +94,9 @@ func (i *Installer) Install(host string, domains []string) ([]string, error) {
 	}
 	hookBytes = append(hookBytes, '\n')
 	files := map[string][]byte{configPath: config, script: guard, hooksPath: hookBytes}
-	previous := make(map[string][]byte, len(files))
-	// Validate all paths and conflicts before the first write.
-	for path, content := range files {
-		for parent := path; parent != root; parent = filepath.Dir(parent) {
-			info, statErr := os.Lstat(parent)
-			if statErr == nil && info.Mode()&os.ModeSymlink != 0 {
-				return nil, fmt.Errorf("refusing symlinked install path: %s", parent)
-			}
-			if statErr != nil && !os.IsNotExist(statErr) {
-				return nil, fmt.Errorf("inspect install path: %w", statErr)
-			}
-		}
-		existing, readErr := os.ReadFile(path)
-		previous[path] = existing
-		if readErr == nil && path != hooksPath && !bytes.Equal(existing, content) {
-			return nil, fmt.Errorf("preserving existing different file: %s", path)
-		}
-		if readErr != nil && !os.IsNotExist(readErr) {
-			return nil, fmt.Errorf("inspect install target: %w", readErr)
-		}
+	paths, err := agentfiles.Install(root, files, configPath, hooksPath)
+	if err != nil {
+		return nil, fmt.Errorf("install hooks: %w", err)
 	}
-	for _, path := range []string{configPath, script, hooksPath} {
-		existing, readErr := os.ReadFile(path)
-		if readErr == nil && bytes.Equal(existing, files[path]) {
-			continue
-		}
-		if !bytes.Equal(existing, previous[path]) {
-			return nil, fmt.Errorf("install target changed concurrently; retry: %s", path)
-		}
-		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-			return nil, fmt.Errorf("create hook directory: %w", err)
-		}
-		file, createErr := os.CreateTemp(filepath.Dir(path), ".arclint-install-*")
-		if createErr != nil {
-			return nil, fmt.Errorf("stage hook: %w", createErr)
-		}
-		name := file.Name()
-		if _, err := file.Write(files[path]); err != nil {
-			_ = file.Close()
-			_ = os.Remove(name)
-			return nil, fmt.Errorf("write hook: %w", err)
-		}
-		if err := file.Close(); err != nil {
-			_ = os.Remove(name)
-			return nil, fmt.Errorf("close hook: %w", err)
-		}
-		if err := os.Rename(name, path); err != nil {
-			_ = os.Remove(name)
-			return nil, fmt.Errorf("install hook: %w", err)
-		}
-	}
-	return []string{configPath, script, hooksPath}, nil
+	return paths, nil
 }

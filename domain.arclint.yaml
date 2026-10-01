@@ -12,6 +12,14 @@ description: >-
   controls loading, activation, and any required trust. Domain review
   provides evidence-based feedback on selected material; it does not
   establish conformance for every architectural obligation.
+  Agent setup prepares the repository guidance, domain-librarian skill,
+  and hooks together for a chosen host. Existing recordings and Rules
+  remain the project's decisions. Domain source is code explicitly
+  selected for domain review; other supplied source is supporting
+  evidence. Explanatory comments do not belong in selected domain
+  source or recordings. Required directives and legal notices remain.
+  A review covers the current contents of all selected material.
+  Installing or updating guidance never grants the host's trust.
 contexts:
   vocabulary:
     definition: >-

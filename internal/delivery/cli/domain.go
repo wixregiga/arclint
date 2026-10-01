@@ -30,7 +30,7 @@ func NewDomainCommand(
 ) Command {
 	runOverview := overviewRunner(overview, render)
 	return Command{
-		Name:    "domain",
+		Name:    agentDomainFlag,
 		Short:   "inspect and maintain the project's ubiquitous language",
 		Long:    domainGroupLong,
 		MaxArgs: -1,

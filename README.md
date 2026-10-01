@@ -271,6 +271,31 @@ undetermined, never proof of conformance.
 
 ## Working with agents
 
+For a local Codex or OMP workflow, run one explicit setup command:
+
+```sh
+arclint agents setup --host codex
+# or: arclint agents setup --host omp
+arclint agents status
+```
+
+Setup initializes missing rules and the domain recording, publishes the existing
+domain-librarian skill, adds a short managed AGENTS.md pointer, and installs
+native project-local hooks. It preserves existing rules, recordings, unrelated
+configuration and edited guard assets. Plain `arclint init` remains ruleset-only.
+
+Choose subjects explicitly: `--domain ubiquitous-language.yaml` selects an
+existing recording; repeat `--domain-source 'internal/domain/order/*.go'` for Go
+domain code and `--source 'internal/application/place_order.go'` for supporting
+evidence. Source references are not followed automatically.
+
+**Activate separately:** OMP needs a new session or `/reload`; use
+`/arclint-domain-status`. Codex needs project and hook trust, then a new session.
+Review hooks through `/hooks` in the CLI or **Settings → Coding → Hooks** in
+desktop. Installation status does not prove activation or a passing review.
+
+See [domain guard setup and limitations](docs/site/content/docs/domain-guard.md).
+
 Three commands do the agent-facing work:
 
 - `arclint context <paths...>`: give it the files an agent touched
@@ -285,7 +310,7 @@ Three commands do the agent-facing work:
   model. Bare `arclint context` explains the repository instead: every
   zone and its import policy, the rule kinds in use with their
   meanings, the unknown-imports posture, and the whole recorded domain.
-- `arclint agents --write`: generates the AGENTS.md block from the
+- `arclint agents md --write`: generates the AGENTS.md block from the
   ruleset (this repository's [AGENTS.md](AGENTS.md) is produced this
   way), so the agent-facing context cannot drift from the enforced
   contract. `arclint agents skill` emits a skill bundle.

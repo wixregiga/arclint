@@ -268,3 +268,12 @@ otherwise it names the published copy, kept identical to
 ```
 
 `arclint domain schema --write` does the same for `domain.arclint.yaml`.
+
+## Local agent setup
+
+For an agent-assisted project, run `arclint agents setup --host codex` or
+`arclint agents setup --host omp`. This coordinates missing repository
+initialization, the domain-librarian skill, concise AGENTS.md guidance and
+native hooks. `arclint init` remains ruleset-only. Follow the printed host trust
+and reload steps, then inspect `arclint agents status`.
+See [Domain guard](../domain-guard/) for explicit source scope and limitations.

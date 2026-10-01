@@ -35,15 +35,19 @@ mean extending a Pattern; hook setup does not change that term's meaning.
 Run setup from the project root:
 
 ```sh
-arclint agents hooks --host omp
-arclint agents hooks --host codex
+arclint agents setup --host omp
+arclint agents setup --host codex
 # Repeat --domain for additional recording files:
-arclint agents hooks --host codex --domain ubiquitous-language.yaml
+arclint agents setup --host codex --domain ubiquitous-language.yaml
 ```
 
 Setup installs `.arclint/domain-guard.json` and the selected host's files:
 `.omp/extensions/arclint-domain-guard/`, or `.codex/hooks.json` and
-`.codex/hooks/arclint-domain-guard/guard.py`. It works without a ruleset.
+`.codex/hooks/arclint-domain-guard/guard.py`. Setup creates a starter ruleset and an empty recording only when absent.
+Use --pattern and --languages only when creating the ruleset; existing policy is
+preserved. A custom --domain must already exist. Setup also publishes the
+domain-librarian skill and a compact managed AGENTS.md pointer.
+The lower-level agents hooks command remains available without a ruleset.
 It preserves existing host configuration and unrelated hooks, and does not
 configure credentials or grant trust. An identical installation is a no-op;
 modified installed guard files are reported as conflicts and preserved.
@@ -71,13 +75,16 @@ a compatible Codex CLI must be available there. Native Windows-only project
 installation is not supported.
 
 Coverage is explicit. `domainFiles` lists domain recordings; optional
-`sourcePatterns` selects implementation evidence:
+`domainSourcePatterns` selects Go domain-source subjects; `sourcePatterns`
+selects supporting implementation evidence. Setup accepts repeatable
+`--domain-source` and `--source` flags for these fields:
 
 ```json
 {
   "version": 1,
   "domainFiles": ["domain.arclint.yaml"],
-  "sourcePatterns": ["internal/domain/rule/*.go"]
+  "domainSourcePatterns": ["internal/domain/rule/*.go"],
+  "sourcePatterns": ["internal/application/assess_conformance.go"]
 }
 ```
 
@@ -92,7 +99,7 @@ review fingerprint. Keep scope within 256 files and 300 KB.
 Before edits, review checks proposed domain work against the original request
 and existing model, including unjustified categories and responsibilities.
 After changes it checks missing promised concepts, classification, ownership
-and duplicated decisions. The no-comments check applies to recordings only.
+and duplicated decisions. The comment check applies to recordings and explicitly selected Go domain source. It preserves required directives and legal headers; context-only source retains its comments.
 Domain-related responses receive review even without file edits. Findings need
 an exact supplied quote, a concrete conflict and a scoped correction. Repairs
 and evidence-backed rebuttals receive fresh review; the request is not rewritten.
@@ -106,7 +113,7 @@ a replacement for functional tests, or proof that omitted code is correct.
 
 Changes to scope configuration, installed guard code, and (for Codex) hook
 definitions invalidate the session snapshot. So do changes to
-`rules.arclint.yaml`, `rules.yaml`, `.arclint/baseline.v2.json` and
+`rules.arclint.yaml`, `rules.yaml`, `.arclint/rules.yaml`, `.arclint/baseline.v2.json` and
 `.arclint/baseline.json`, including creation of previously absent files.
 Other rule/baseline paths are not automatically discovered. Restore unintended
 changes; separately validate intentional policy changes before starting a new
@@ -154,3 +161,51 @@ These tests inject review verdicts and cover repair, source freshness,
 response-only review, governance changes, failures, operator escape and
 installation preservation. They do not establish real model review quality
 or native execution of trusted Codex hooks.
+
+## Setup and scope contracts
+
+Agent setup is an application operation coordinating the existing initialization,
+guidance, skill and hook installers. It does not introduce another domain kind
+or evaluator category. Existing inward-dependency and composition Rules apply.
+
+The setup checks require preservation of existing rules and recordings, a
+repeatable install, and refusal to replace user-modified guard files. Setup must
+report activation separately from installation. Its managed AGENTS block points
+to the existing domain-librarian skill and ArcLint context instead of copying
+that protocol.
+
+Review subjects are recordings plus explicitly selected domain source.
+Supporting source is evidence, not automatically subject to the no-comments
+policy. Go comments must be distinguished from quoted strings, runes and raw
+strings. Compiler directives, cgo preambles, generated-file markers and legal
+headers remain intact. The recording's leading schema directive is also kept.
+Unsupported domain-source languages and unreadable scope are unavailable review,
+never a passing verdict. Contract tests exercise failure, repair and freshness.
+
+## Local packaging and updates
+
+Setup uses the hosts' supported project discovery: .agents/skills for the
+existing skill, .omp/extensions for the OMP extension, and .codex/hooks.json for
+Codex command hooks. No public marketplace, account, service or credentials are
+needed. This is a local native integration, not a published Codex plugin.
+Do not additionally install duplicate plugin hooks: matching native hooks all run.
+
+Repeat the same setup command to update. A receipt in .arclint/agent-assets.json
+allows replacement only of unchanged assets ArcLint installed. The original
+draft's known guard versions can migrate once. User-modified files stop the
+update for review; there is no force-overwrite switch. Setup preserves unknown
+configuration and existing scope unless source flags explicitly select it.
+Updates invalidate loaded review snapshots; reload/new session is required.
+Use arclint agents status for installed scope and changed/missing assets. It
+cannot infer whether a running host loaded or trusted those files.
+
+Existing project-authored librarian skills and vocabulary are preserved. Setup
+writes the shared ArcLint review workflow to the companion ARCLINT.md and points
+to both from AGENTS.md. It does not migrate an older domain recording or replace
+its classification protocol merely to install hooks.
+
+A legacy .arclint/rules.yaml is preserved, not masked by a fresh empty ruleset.
+The status command identifies this case: the current structural checker requires
+rules.arclint.yaml, so migration is separate work. Hook review still operates on
+the explicitly selected recording and source. A project-local verified binary
+may be used as ./.arclint/bin/arclint without replacing the user's global CLI.

@@ -54,3 +54,23 @@ func (w Writer) schemaModeline() string {
 	}
 	return "# yaml-language-server: $schema=" + rule.SchemaID
 }
+
+// Exists lets agent setup preserve the repository's chosen ruleset.
+func (w Writer) Exists() (bool, error) {
+	_, err := os.Stat(filepath.Join(w.dir, rule.RulesetFileName))
+	if os.IsNotExist(err) {
+		// Agent setup preserves a legacy policy instead of replacing it with an empty starter.
+		_, legacyErr := os.Stat(filepath.Join(w.dir, ".arclint", "rules.yaml"))
+		if legacyErr == nil {
+			return true, nil
+		}
+		if !os.IsNotExist(legacyErr) {
+			return false, fmt.Errorf("inspect legacy ruleset: %w", legacyErr)
+		}
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("inspect ruleset: %w", err)
+	}
+	return true, nil
+}

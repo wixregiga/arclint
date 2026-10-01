@@ -58,6 +58,8 @@ func AgentCommandSurface() []AgentCommandDoc {
 		{"check", "check .", "evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings"},
 		{"rules test", "rules test", "run the rule fixtures under `.arclint/tests` after changing any rule"},
 		{"sdk init", "sdk init", "regenerate the extension SDK artifacts under `.arclint/extensions`"},
+		{"agents setup", "agents setup --host <omp|codex>", "prepare or update project-local guidance, skill and native hooks; preserves existing rules and recordings; host trust remains explicit"},
+		{"agents status", "agents status", "inspect installed scope and asset integrity; host activation and a fresh review are separate"},
 		{"agents md", "agents md --write", "refresh this block after changing " + rule.RulesetFileName + " or the vocabulary"},
 		{"baseline", "baseline", "manage the committed baseline of adopted findings"},
 		{"patterns", "patterns", "list the Patterns that resolve offline (embedded, vendored, authored); `patterns install <pattern>` extends " + rule.RulesetFileName + " with one, `patterns vendor` copies one under `.arclint/patterns`"},
