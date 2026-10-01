@@ -3,6 +3,35 @@ title: Domain guard for OMP and Codex
 description: Install scoped domain review using supported local agent hooks.
 ---
 
+A hook connects ArcLint's domain guard to a supported point in an agent's
+work, so the agent can receive domain guidance and review feedback while it
+builds. The connection, the review, and installation have different jobs.
+
+| Term | Meaning and responsibility |
+| --- | --- |
+| Hook | A connection between a supported host event and the supplied domain guard. Its definition describes when the host invokes the guard. |
+| Agent host | The coding environment that provides the events and runs the hook, currently OMP or Codex. The host controls loading, activation and any required trust. The command calls this `--host`. |
+| Domain guard | The supplied review behavior over configured domain recordings, selected source evidence, and domain-related proposed changes or responses. It returns concerns with evidence and scoped repair guidance. |
+| Install hooks | The application operation that places the connection files and review configuration in a project. The host-specific installer supplies the appropriate file format and locations. |
+
+Installation preserves existing settings and unrelated hooks. Repeating an
+identical installation has no effect; conflicting installed guard changes
+are reported without overwriting them. Installing files does not establish
+that the host has loaded or trusted them.
+
+A guard finding is feedback from reviewing selected evidence. Completing a
+guard review means that its current checks completed without an outstanding
+finding; it does not establish conformance for every architectural obligation.
+The existing Rules and conformance assessment retain their own meaning,
+including evidence strength and uncertainty.
+
+`InstallAgentHooks` coordinates setup in the application layer through
+`AgentHooksInstaller`. The OMP and Codex infrastructure adapters implement that
+port; the composition root chooses the adapter, and the CLI translates the
+user's request. Host events, command definitions and installed files remain
+integration details. The recorded adoption term `Installation` continues to
+mean extending a Pattern; hook setup does not change that term's meaning.
+
 Run setup from the project root:
 
 ```sh
