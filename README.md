@@ -356,7 +356,11 @@ rules schema        print the JSON Schema for rules.arclint.yaml; --write puts i
 rules test [name]   run the rule tests under .arclint/tests; failures exit 1
 context [paths...]  the architecture, or everything binding the given paths (--zone)
 domain              inspect and maintain the project's ubiquitous language (init/overview/list/show/explain/define/remove/schema)
-agents              AGENTS.md block (--write); skill bundle (skill); SKILL.md only (md|agentmd|markdown)
+agents setup        initialize missing files, skill, AGENTS pointer and native hooks (--host)
+agents status       installed scope and asset integrity; not host activation or review approval
+agents md           architecture block; --write installs it in AGENTS.md
+agents skill        domain-librarian SKILL.md, vocabulary and schema
+agents hooks        install only native OMP/Codex hooks for an existing recording
 baseline capture    adopt current findings   ·  baseline refresh: drop stale entries
 patterns            list the patterns that resolve offline: embedded, vendored, authored (--remote lists a registry)
 patterns install    extend rules.arclint.yaml with one pattern; vendors it first when it came from the registry
