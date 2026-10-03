@@ -28,16 +28,16 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 
 ### The recorded domain
 
-6 contexts, 1 aggregates, 32 value objects, 41 invariants (domain.arclint.yaml).
+6 contexts, 1 aggregates, 30 value objects, 37 invariants (domain.arclint.yaml).
 
-- **agent**: value objects Agent, AgentHost
+- **agent**
 - **vocabulary**
 - **rule**: aggregates Rule (Zone, Pattern); value objects RuleID, ZoneName, Rationale, Constraint, Scope, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec
 - **adoption**: value objects Binding, Override, Disablement, Exclusion, Suppression, Installation
 - **conformance**: value objects DependencyImport, Facts, Violation
 - **distribution**: value objects Catalog, Digest, Index, Manifest, PatternFile, PatternSource, Registry, Selection, VendoredPattern
 
-Relations: vocabulary → agent (conformist); vocabulary → rule (conformist); vocabulary → conformance (conformist); rule → conformance (conformist); rule → adoption (conformist); rule → distribution (conformist); distribution → adoption (conformist). Full text: `arclint domain`.
+Relations: vocabulary → rule (conformist); vocabulary → conformance (conformist); rule → conformance (conformist); rule → adoption (conformist); rule → distribution (conformist); distribution → adoption (conformist). Full text: `arclint domain`.
 
 ### Changing the language
 
@@ -111,7 +111,6 @@ Before changing responsibilities, dependencies, or domain behavior:
   - main-present: contains files matching ["cmd/arclint/main.go"] Rationale: The arclint binary has a main.
 - **source**: Common source invariants for internal packages. (paths internal/**)
   - snake-case: file names use snake_case Rationale: Go file names use snake_case.
-- **agent**: Supplied agents, their instructions, and supported agent hosts. (paths internal/domain/agent/**)
 - **vocabulary**: The vocabulary bounded context: the recorded Ubiquitous Language and the meta-model it is checked against. (paths internal/domain/vocab/**)
 - **rule**: The rule bounded context: the Rule aggregate's home. (paths internal/domain/rule/**)
 - **conformance**: The conformance bounded context, downstream conformist of rule. (paths internal/domain/conformance/**)

@@ -9,6 +9,12 @@ in the project's domain. It reviews supplied requests, discussions, domain
 recordings and implementation. People decide disputed meanings; the builder
 makes the changes. The reviewer gives evidence and suggestions.
 
+A request is the caller's desired outcome or instruction. Behavior is what the
+reviewer does; an obligation says what it must do. A requirement records an
+accepted behavior or constraint, and a case supplies concrete conditions and
+an expected result. These words do not introduce ticket identities or objects
+that ArcLint stores.
+
 ## Review behavior
 
 DR-1. When invoked before or during implementation, the reviewer shall check
@@ -22,6 +28,8 @@ reviewer shall check that the corresponding decision was recorded first.
 
 DR-4. When a decision lacks support or wording obscures a meaning, the reviewer
 shall give a warning, question or suggestion with evidence in plain language.
+A recording, checklist or previous agent report is a claim to examine, not
+independent evidence that the user approved the meaning.
 
 DR-5. When invoked after implementation, the reviewer shall examine supplied
 code for missing enforcement, unjustified duplicate decisions and misplaced
@@ -39,7 +47,10 @@ implementation, the reviewer shall state that the order is unverified.
 DR-18. The reviewer shall give feedback without editing the reviewed files or
 making a disputed domain decision on the user's behalf.
 
-## Delivery behavior
+DR-15. Each review shall identify its evidence and return its findings to the
+caller, so the host's conversation records its activity.
+
+## Installer and host behavior
 
 DR-9. ArcLint shall provide a CLI command to install the reviewer.
 
@@ -49,9 +60,6 @@ DR-11. The reviewer shall share ArcLint's release version.
 
 DR-13. ArcLint shall deliver the reviewer through a host installation contract,
 with Codex as the first supported Agent Host.
-
-DR-15. Each review shall identify its evidence and return its findings to the
-caller, so the host's conversation records its activity.
 
 DR-16. ArcLint shall document installation, invocation and review limitations.
 
@@ -72,3 +80,12 @@ in the shared domain language even when their implementation is a text file.
 The contributor obligations for authoring, shipping and verifying that file
 are in [development.md](development.md). Behavioral examples are in
 [cases.md](cases.md).
+
+## Basis of these requirements
+
+[decisions.md](decisions.md) traces the retained behavior to direct user
+statements and primary specifications. DR labels identify these obligations;
+they do not establish approval by themselves. The current correction removes
+unsupported tactical classifications while preserving the requested behavior.
+The host may override a custom agent's permission defaults, so feedback-only
+behavior is an obligation to evaluate, not a security guarantee from TOML.

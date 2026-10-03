@@ -1,0 +1,9 @@
+Project: /tmp/arclint-reviewer-eval-y57glxke
+Agent: arclint-domain-reviewer
+Host: codex
+Path: /tmp/arclint-reviewer-eval-y57glxke/.codex/agents/arclint-domain-reviewer.toml
+Installed: true
+Installed ArcLint release: 0.1.0-beta.1
+Available ArcLint release: 0.1.0-beta.1
+Asset integrity: true
+Installation and integrity do not prove Codex discovery, activation or review quality. Activity records are in the Codex conversation; ArcLint does not manage their storage or retention.

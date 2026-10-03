@@ -1,0 +1,3 @@
+/tmp/arclint-reviewer-eval-98eqe7aq/.arclint/reviewer.json
+/tmp/arclint-reviewer-eval-98eqe7aq/.codex/agents/arclint-domain-reviewer.toml
+Installed arclint-domain-reviewer. Start a new Codex session and ask it to use arclint-domain-reviewer with your request, affected paths and decisions. Installation does not prove host discovery or a successful review. Review records appear in the Codex conversation; Codex owns its session history.

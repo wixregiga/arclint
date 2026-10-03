@@ -33,6 +33,13 @@ and supplying the current plan or changes. Include earlier feedback and any
 repair or rebuttal when asking for reassessment. The reviewer runs when invoked.
 This installation does not add an automatic hook or reminder.
 
+The session must expose named custom-agent invocation. If its spawn interface
+only accepts a task name and message, installation cannot add that missing
+selector. Report that the reviewer was not invoked; do not substitute a generic
+agent and claim named activation. The corrective evaluation with Codex CLI
+0.159.2 encountered this interface limit. Instruction behavior was evaluated
+separately; named invocation remains unverified in that environment.
+
 Each review names what it examined and returns warnings, questions or
 suggestions with evidence and a small next step. It distinguishes an observed
 conflict from uncertainty or missing material. Those responses form a review
@@ -53,19 +60,40 @@ and review state are separate from this named reviewer.
 
 ## The shared language
 
-An Agent is an assistant configured to carry out a stated responsibility. A
-Coding Agent performs work on software. An Agent Host loads its configuration
-and provides its tools and execution environment. A Client is the software a
-person uses to interact with a capability; it can also be an Agent Host. An LLM
-is the language model an agent uses.
+An Agent carries out a task through decisions and actions. A Coding Agent does
+software work, including review. Its Agent Host provides the runtime and tools;
+a Client is the interface through which the user interacts with it. An LLM is
+the model component, not the whole running agent. A product may provide both
+client and host roles. This distinction follows the
+[ACP client role](https://agentclientprotocol.com/protocol/v1/overview#client);
+ArcLint does not implement ACP.
 
-Agent Instructions tell an agent how to work. `AGENTS.md` carries project
-instructions, including ArcLint's generated architecture guidance and the
-project's maintained contributor guidance. A Skill packages instructions and
-supporting material for a task. A Plugin packages capabilities according to a
-host's specification. These words describe different responsibilities; a
-provider's filenames do not make them interchangeable.
+Agent Instructions guide behavior. [AGENTS.md](https://agents.md/) carries
+repository context and instructions. A [Skill](https://agentskills.io/specification)
+packages task instructions in SKILL.md and optional resources. A
+[Plugin](https://learn.chatgpt.com/docs/skills-and-plugins) packages capabilities
+under a host's installation contract. This delivery is a Codex custom-agent
+configuration, not a plugin.
 
-An instruction file can implement obligations that matter to people. Those
-meanings still belong in the recorded domain. Recording them does not require
-inventing a Go class for every word in this vocabulary.
+[Codex custom-agent files](https://learn.chatgpt.com/docs/agent-configuration/subagents)
+configure spawned sessions. They are not the running agent or its history.
+Codex can apply parent runtime permission overrides over custom-agent defaults;
+the read-only instruction and sandbox setting are not a security guarantee.
+
+These meanings are recorded in the agent context of `domain.arclint.yaml`.
+They do not require Agent or AgentHost value objects. Codex required fields
+are checked by the adapter, and the supported host is checked by the installation
+use case. Those delivery restrictions do not define what an Agent is.
+
+## What a useful review establishes
+
+A recording is a claim to examine, not proof that a person approved it. The
+reviewer should trace a disputed meaning to the request or a decision, then
+trace its obligation into code paths that can enforce it. For example, a
+method named `EnsureUniqueID` on one Rule cannot establish uniqueness among
+all Rules unless it actually has access to the required collection or boundary.
+
+A useful response identifies the unsupported decision or bypass, explains the
+consequence, proposes a correction, and revisits it when given a repair or
+rebuttal. Matching names and green tests alone are not enough. The reviewer
+can also conclude that no concern is supported and explain its coverage limits.

@@ -1,0 +1,100 @@
+{
+  "project": "/tmp/arclint-reviewer-eval-cby1ulb_",
+  "authored_sha256": "4a60283e8563425b7b11bc22598a19d2dda771569e88c0e7fe1321139e935af5",
+  "binary_sha256": "7cc643b84f1a6eff5a2ffbb423516cca8066bd2b728f6bdd7413bb676e0f66e2",
+  "inputs_sha256": "2cf365753a4e7c6121725a0c68d51628145a1fa17ce303c9cff207c93fec2ab4",
+  "codex_version": "codex-cli 0.159.2",
+  "expected_outcomes_withheld": true,
+  "installation": {
+    "exit_code": 0,
+    "timed_out": false,
+    "command": [
+      "/home/jofyi/.codex/worktrees/9b98/arclint/arclint",
+      "agents",
+      "reviewer",
+      "install",
+      "--host",
+      "codex"
+    ],
+    "cwd": "/tmp/arclint-reviewer-eval-cby1ulb_",
+    "elapsed_seconds": 0.01
+  },
+  "status": {
+    "exit_code": 0,
+    "timed_out": false,
+    "command": [
+      "/home/jofyi/.codex/worktrees/9b98/arclint/arclint",
+      "agents",
+      "reviewer",
+      "status",
+      "--format",
+      "json"
+    ],
+    "cwd": "/tmp/arclint-reviewer-eval-cby1ulb_",
+    "elapsed_seconds": 0.01
+  },
+  "installed_sha256": "4a60283e8563425b7b11bc22598a19d2dda771569e88c0e7fe1321139e935af5",
+  "multi_agent_v2_override": true,
+  "invocation": {
+    "exit_code": 0,
+    "timed_out": false,
+    "command": [
+      "codex",
+      "exec",
+      "--enable",
+      "multi_agent_v2",
+      "-C",
+      "/tmp/arclint-reviewer-eval-cby1ulb_",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "-o",
+      "/home/jofyi/.codex/worktrees/9b98/arclint/.agents/domain-reviewer/evidence/2026-10-03-v2/response.md",
+      "-"
+    ],
+    "cwd": "/tmp/arclint-reviewer-eval-cby1ulb_",
+    "elapsed_seconds": 24.86
+  },
+  "thread_ids": [
+    "01a103c8-a8bd-74a0-ac01-9e05f6928118"
+  ],
+  "host_traces": [
+    {
+      "source": "/mnt/c/Users/jofyi/.codex/sessions/2026/10/03/rollout-2026-10-03T18-00-44-01a103c8-a8bd-74a0-ac01-9e05f6928118.jsonl",
+      "external_copy": "/tmp/arclint-reviewer-eval-cby1ulb_/rollout-2026-10-03T18-00-44-01a103c8-a8bd-74a0-ac01-9e05f6928118.jsonl",
+      "copy": "activity-excerpt.jsonl",
+      "sha256": "740b49f3603da6cbc06f0d63410c21378808de095ae3784216f2b16775c2cabd",
+      "excerpt_sha256": "92fbf77c57b85e3b22664348dd9b0e7bba60aef94265ab7c4c5ec2b1e9dc2c91",
+      "excerpt_policy": "All assistant messages and all tool calls/results; private host context omitted"
+    }
+  ],
+  "authored_sha256_after": "4a60283e8563425b7b11bc22598a19d2dda771569e88c0e7fe1321139e935af5",
+  "diagnostic_resume": {
+    "exit_code": 0,
+    "prompt": "Correct discovery reasoning: inspect direct collaboration.spawn_agent selector; no generic substitution or ALL_TOOLS search",
+    "response": "resume-response.md",
+    "stdout": "resume.stdout",
+    "stderr": "resume.stderr"
+  },
+  "native_spawn_requested": false,
+  "native_spawn_observed": false,
+  "execution_status": "native-spawn-unverified",
+  "behavior_assessment": "manual assessment required; process success is not semantic approval",
+  "assessment_basis": "Retained assistant/tool activity has no named spawn call or result; CLI exit 0 is not named-agent success",
+  "external_raw_artifacts": {
+    "directory": "/tmp/arclint-reviewer-eval-cby1ulb_/evaluation-raw",
+    "files": [
+      "authored.toml",
+      "native.stdout",
+      "native.stderr",
+      "install.json",
+      "status.json",
+      "install.stderr",
+      "status.stderr",
+      "resume.stdout",
+      "resume.stderr"
+    ]
+  },
+  "authored_asset": "internal/infrastructure/agents/codex/assets/arclint-domain-reviewer.toml",
+  "input_artifact": "../2026-10-03/inputs.txt"
+}

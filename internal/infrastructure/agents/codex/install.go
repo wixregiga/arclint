@@ -26,7 +26,7 @@ func NewInstaller(root string) *Installer { return &Installer{root: root} }
 
 // Install adds native command hooks. Codex still requires /hooks trust review.
 func (i *Installer) Install(host string, domains []string, scope ...application.AgentSourceScope) ([]string, error) {
-	if host != "codex" {
+	if host != codexHost {
 		return nil, fmt.Errorf("unsupported host %q", host)
 	}
 	if runtime.GOOS != "linux" {

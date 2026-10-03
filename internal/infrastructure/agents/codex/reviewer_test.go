@@ -4,19 +4,9 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
-
-	"github.com/wixregiga/arclint/internal/domain/agent"
 )
-
-func reviewerHost(t *testing.T) agent.Host {
-	t.Helper()
-	host, err := agent.NewHost("codex")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return host
-}
 
 func TestReviewerInstallPreservesGuardAndReportsOwnedRelease(t *testing.T) {
 	root := t.TempDir()
@@ -35,14 +25,13 @@ func TestReviewerInstallPreservesGuardAndReportsOwnedRelease(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	host := reviewerHost(t)
 	installer := NewReviewer(root, "1.2.3\n")
 	for range 2 {
-		if _, err := installer.InstallReviewer(host); err != nil {
+		if _, err := installer.InstallReviewer(); err != nil {
 			t.Fatal(err)
 		}
 	}
-	status, err := installer.ReviewerStatus(host)
+	status, err := installer.ReviewerStatus()
 	if err != nil || !status.Installed || !status.Intact || status.InstalledVersion != "1.2.3" {
 		t.Fatalf("status: %+v %v", status, err)
 	}
@@ -50,15 +39,15 @@ func TestReviewerInstallPreservesGuardAndReportsOwnedRelease(t *testing.T) {
 	if err != nil || !bytes.Equal(installed, reviewerDefinition) {
 		t.Fatalf("embedded instructions changed: %v", err)
 	}
-	definition, err := shippedReviewer()
-	if err != nil || definition.Name() != "arclint-domain-reviewer" {
+	err = validateReviewerConfiguration(installed)
+	if err != nil {
 		t.Fatalf("definition: %v", err)
 	}
 	upgraded := NewReviewer(root, "1.2.4")
-	if _, err := upgraded.InstallReviewer(host); err != nil {
+	if _, err := upgraded.InstallReviewer(); err != nil {
 		t.Fatal(err)
 	}
-	status, err = upgraded.ReviewerStatus(host)
+	status, err = upgraded.ReviewerStatus()
 	if err != nil || !status.Intact || status.InstalledVersion != "1.2.4" {
 		t.Fatalf("upgrade: %+v %v", status, err)
 	}
@@ -74,9 +63,8 @@ func TestReviewerPreservesLocalInstructionsAndMetadataBeforeAnyUpgrade(t *testin
 	for _, edited := range []string{reviewerPath, reviewerMetadataPath} {
 		t.Run(edited, func(t *testing.T) {
 			root := t.TempDir()
-			host := reviewerHost(t)
 			installer := NewReviewer(root, "1.0.0")
-			if _, err := installer.InstallReviewer(host); err != nil {
+			if _, err := installer.InstallReviewer(); err != nil {
 				t.Fatal(err)
 			}
 			if err := os.WriteFile(filepath.Join(root, edited), []byte("owner edit"), 0600); err != nil {
@@ -86,7 +74,7 @@ func TestReviewerPreservesLocalInstructionsAndMetadataBeforeAnyUpgrade(t *testin
 			for _, path := range []string{reviewerPath, reviewerMetadataPath, ".arclint/agent-assets.json"} {
 				before[path], _ = os.ReadFile(filepath.Join(root, path))
 			}
-			if _, err := NewReviewer(root, "1.0.1").InstallReviewer(host); err == nil {
+			if _, err := NewReviewer(root, "1.0.1").InstallReviewer(); err == nil {
 				t.Fatal("overwrote owner edit")
 			}
 			for path, want := range before {
@@ -95,7 +83,7 @@ func TestReviewerPreservesLocalInstructionsAndMetadataBeforeAnyUpgrade(t *testin
 					t.Fatalf("partial upgrade of %s", path)
 				}
 			}
-			status, err := installer.ReviewerStatus(host)
+			status, err := installer.ReviewerStatus()
 			if err != nil || status.Intact || len(status.Problems) == 0 {
 				t.Fatalf("missed changed asset: %+v %v", status, err)
 			}
@@ -103,17 +91,11 @@ func TestReviewerPreservesLocalInstructionsAndMetadataBeforeAnyUpgrade(t *testin
 	}
 }
 
-func TestReviewerStatusMissingAndZeroHost(t *testing.T) {
+func TestReviewerStatusMissing(t *testing.T) {
 	installer := NewReviewer(t.TempDir(), "1.0.0")
-	status, err := installer.ReviewerStatus(reviewerHost(t))
+	status, err := installer.ReviewerStatus()
 	if err != nil || status.Installed || status.Intact {
 		t.Fatalf("missing status: %+v %v", status, err)
-	}
-	if _, err := installer.InstallReviewer(agent.Host{}); err == nil {
-		t.Fatal("accepted zero host")
-	}
-	if _, err := installer.ReviewerStatus(agent.Host{}); err == nil {
-		t.Fatal("accepted zero host")
 	}
 }
 
@@ -121,9 +103,8 @@ func TestReviewerStatusDoesNotCertifySymlinkedAssets(t *testing.T) {
 	for _, path := range []string{reviewerPath, reviewerMetadataPath, ".arclint/agent-assets.json", ".codex/agents"} {
 		t.Run(path, func(t *testing.T) {
 			root := t.TempDir()
-			host := reviewerHost(t)
 			installer := NewReviewer(root, "1.0.0")
-			if _, err := installer.InstallReviewer(host); err != nil {
+			if _, err := installer.InstallReviewer(); err != nil {
 				t.Fatal(err)
 			}
 			target := filepath.Join(root, path)
@@ -134,13 +115,51 @@ func TestReviewerStatusDoesNotCertifySymlinkedAssets(t *testing.T) {
 			if err := os.Symlink(outside, target); err != nil {
 				t.Skipf("symlinks unavailable: %v", err)
 			}
-			status, err := installer.ReviewerStatus(host)
+			status, err := installer.ReviewerStatus()
 			if err == nil && status.Intact {
 				t.Fatalf("certified symlinked asset: %+v", status)
 			}
-			if _, err := installer.InstallReviewer(host); err == nil {
+			if _, err := installer.InstallReviewer(); err == nil {
 				t.Fatal("installed through symlink")
 			}
 		})
+	}
+}
+
+func TestReviewerRejectsMalformedOrIncompleteCodexConfiguration(t *testing.T) {
+	valid := `name = "arclint-domain-reviewer"
+description = "Review domain decisions"
+developer_instructions = "Explain evidence and uncertainty"
+sandbox_mode = "read-only"
+`
+	if err := validateReviewerConfiguration([]byte(valid)); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct{ name, content string }{
+		{"malformed TOML", "name = ["},
+		{"wrong name", strings.Replace(valid, "arclint-domain-reviewer", "other-reviewer", 1)},
+		{"missing description", strings.Replace(valid, `description = "Review domain decisions"`, "", 1)},
+		{"blank description", strings.Replace(valid, "Review domain decisions", " ", 1)},
+		{"missing instructions", strings.Replace(valid, `developer_instructions = "Explain evidence and uncertainty"`, "", 1)},
+		{"blank instructions", strings.Replace(valid, "Explain evidence and uncertainty", " ", 1)},
+		{"write sandbox", strings.Replace(valid, "read-only", "workspace-write", 1)},
+		{"wrong field type", strings.Replace(valid, `description = "Review domain decisions"`, "description = 42", 1)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if err := validateReviewerConfiguration([]byte(test.content)); err == nil {
+				t.Fatal("accepted invalid Codex configuration")
+			}
+		})
+	}
+}
+
+func TestReviewerMissingReleaseDoesNotWrite(t *testing.T) {
+	root := t.TempDir()
+	if _, err := NewReviewer(root, " \n").InstallReviewer(); err == nil {
+		t.Fatal("accepted empty release")
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("invalid release wrote files: %v %v", entries, err)
 	}
 }

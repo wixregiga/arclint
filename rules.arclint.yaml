@@ -82,9 +82,6 @@ zones:
   # paths; these give the built-in context rules the full extent
   # of each context's code. adoption names no Zone: its values are
   # declared directly in the rule package, found the same way.
-  agent:
-    paths: "internal/domain/agent/**"
-    description: "Supplied agents, their instructions, and supported agent hosts."
   vocabulary:
     paths: "internal/domain/vocab/**"
     description: "The vocabulary bounded context: the recorded Ubiquitous Language and the meta-model it is checked against."

@@ -1,10 +1,6 @@
 package application
 
-import (
-	"fmt"
-
-	"github.com/wixregiga/arclint/internal/domain/agent"
-)
+import "fmt"
 
 // ReviewerInstallation reports files and release identity, never review approval.
 type ReviewerInstallation struct {
@@ -15,7 +11,7 @@ type ReviewerInstallation struct {
 
 // ReviewerInspector reads the native agent and its ownership evidence.
 type ReviewerInspector interface {
-	ReviewerStatus(agent.Host) (ReviewerInstallation, error)
+	ReviewerStatus() (ReviewerInstallation, error)
 }
 
 // ReviewerStatus reports installation independently of host runtime state.
@@ -31,11 +27,10 @@ func NewReviewerStatus(inspector ReviewerInspector) (ReviewerStatus, error) {
 
 // Execute validates the host and returns the current installed evidence.
 func (uc ReviewerStatus) Execute(host string) (ReviewerInstallation, error) {
-	selected, err := agent.NewHost(host)
-	if err != nil {
-		return ReviewerInstallation{}, fmt.Errorf("reviewer status: %w", err)
+	if host != codexHost {
+		return ReviewerInstallation{}, fmt.Errorf("reviewer status: host %q is unsupported; use codex", host)
 	}
-	status, err := uc.inspector.ReviewerStatus(selected)
+	status, err := uc.inspector.ReviewerStatus()
 	if err != nil {
 		return ReviewerInstallation{}, fmt.Errorf("reviewer status: %w", err)
 	}

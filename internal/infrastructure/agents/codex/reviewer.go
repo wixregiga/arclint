@@ -13,7 +13,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/wixregiga/arclint/internal/application"
-	"github.com/wixregiga/arclint/internal/domain/agent"
 	agentfiles "github.com/wixregiga/arclint/internal/infrastructure/agents/files"
 )
 
@@ -21,6 +20,8 @@ import (
 var reviewerDefinition []byte
 
 const (
+	codexHost            = "codex"
+	reviewerName         = "arclint-domain-reviewer"
 	reviewerPath         = ".codex/agents/arclint-domain-reviewer.toml"
 	reviewerMetadataPath = ".arclint/reviewer.json"
 )
@@ -39,43 +40,40 @@ func NewReviewer(root, version string) *Reviewer {
 	return &Reviewer{root: root, version: strings.TrimSpace(version)}
 }
 
-func shippedReviewer() (agent.Agent, error) {
-	var definition struct {
+// validateReviewerConfiguration checks this authored Codex delivery format.
+// These requirements do not classify an Agent or guarantee runtime permissions.
+func validateReviewerConfiguration(content []byte) error {
+	var configuration struct {
 		Name         string `toml:"name"`
 		Description  string `toml:"description"`
 		Instructions string `toml:"developer_instructions"`
 		Sandbox      string `toml:"sandbox_mode"`
 	}
-	if err := toml.Unmarshal(reviewerDefinition, &definition); err != nil {
-		return agent.Agent{}, fmt.Errorf("reviewer definition: %w", err)
+	if err := toml.Unmarshal(content, &configuration); err != nil {
+		return fmt.Errorf("reviewer configuration: %w", err)
 	}
-	if definition.Name != "arclint-domain-reviewer" || definition.Sandbox != "read-only" {
-		return agent.Agent{}, fmt.Errorf("reviewer definition must name arclint-domain-reviewer with read-only sandbox")
+	if configuration.Name != reviewerName || configuration.Sandbox != "read-only" {
+		return fmt.Errorf("reviewer configuration must name arclint-domain-reviewer with read-only sandbox default")
 	}
-	value, err := agent.New(definition.Name, definition.Description, definition.Instructions)
-	if err != nil {
-		return agent.Agent{}, fmt.Errorf("reviewer definition: %w", err)
+	if strings.TrimSpace(configuration.Description) == "" || strings.TrimSpace(configuration.Instructions) == "" {
+		return fmt.Errorf("reviewer configuration requires description and developer_instructions")
 	}
-	return value, nil
+	return nil
 }
 
 // InstallReviewer preserves owner edits and changes only reviewer-owned assets.
-func (i *Reviewer) InstallReviewer(host agent.Host) ([]string, error) {
-	if err := host.Validate(); err != nil {
-		return nil, fmt.Errorf("reviewer host: %w", err)
-	}
+func (i *Reviewer) InstallReviewer() ([]string, error) {
 	if i.version == "" {
 		return nil, fmt.Errorf("reviewer installation requires an ArcLint release version")
 	}
-	definition, err := shippedReviewer()
-	if err != nil {
+	if err := validateReviewerConfiguration(reviewerDefinition); err != nil {
 		return nil, err
 	}
 	root, err := filepath.Abs(i.root)
 	if err != nil {
 		return nil, fmt.Errorf("reviewer project: %w", err)
 	}
-	metadata, err := json.MarshalIndent(reviewerMetadata{Name: definition.Name(), Host: host.String(), ArcLintVersion: i.version}, "", "  ")
+	metadata, err := json.MarshalIndent(reviewerMetadata{Name: reviewerName, Host: codexHost, ArcLintVersion: i.version}, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("reviewer metadata: %w", err)
 	}
@@ -90,15 +88,12 @@ func (i *Reviewer) InstallReviewer(host agent.Host) ([]string, error) {
 }
 
 // ReviewerStatus checks the installed release and asset hashes without claiming discovery.
-func (i *Reviewer) ReviewerStatus(host agent.Host) (application.ReviewerInstallation, error) {
+func (i *Reviewer) ReviewerStatus() (application.ReviewerInstallation, error) {
 	root, err := filepath.Abs(i.root)
 	if err != nil {
 		return application.ReviewerInstallation{}, fmt.Errorf("reviewer project: %w", err)
 	}
-	status := application.ReviewerInstallation{Project: root, Path: filepath.Join(root, reviewerPath), Name: "arclint-domain-reviewer", Host: host.String(), AvailableVersion: i.version}
-	if err := host.Validate(); err != nil {
-		return status, fmt.Errorf("reviewer host: %w", err)
-	}
+	status := application.ReviewerInstallation{Project: root, Path: filepath.Join(root, reviewerPath), Name: reviewerName, Host: codexHost, AvailableVersion: i.version}
 	definition, err := readReviewerAsset(root, reviewerPath)
 	if errors.Is(err, os.ErrNotExist) {
 		status.Problems = append(status.Problems, "Native agent file is missing")

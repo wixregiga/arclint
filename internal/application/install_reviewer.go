@@ -1,14 +1,12 @@
 package application
 
-import (
-	"fmt"
+import "fmt"
 
-	"github.com/wixregiga/arclint/internal/domain/agent"
-)
+const codexHost = "codex"
 
 // ReviewerInstaller delivers the independent reviewer to a supported host.
 type ReviewerInstaller interface {
-	InstallReviewer(agent.Host) ([]string, error)
+	InstallReviewer() ([]string, error)
 }
 
 // InstallReviewer installs one native reviewer without installing a guard.
@@ -24,11 +22,10 @@ func NewInstallReviewer(installer ReviewerInstaller) (InstallReviewer, error) {
 
 // Execute validates the selected host before performing any writes.
 func (uc InstallReviewer) Execute(host string) ([]string, error) {
-	selected, err := agent.NewHost(host)
-	if err != nil {
-		return nil, fmt.Errorf("install reviewer: %w", err)
+	if host != codexHost {
+		return nil, fmt.Errorf("install reviewer: host %q is unsupported; use codex", host)
 	}
-	paths, err := uc.installer.InstallReviewer(selected)
+	paths, err := uc.installer.InstallReviewer()
 	if err != nil {
 		return nil, fmt.Errorf("install reviewer: %w", err)
 	}

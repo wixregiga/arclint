@@ -27,7 +27,7 @@ func NewInstallAgentHooks(installer AgentHooksInstaller) (InstallAgentHooks, err
 
 // Execute installs hooks over the explicitly configured domain files.
 func (uc InstallAgentHooks) Execute(host string, domainFiles []string, scope ...AgentSourceScope) ([]string, error) {
-	if host != "omp" && host != "codex" {
+	if host != "omp" && host != codexHost {
 		return nil, fmt.Errorf("unsupported agent host %q: supported hosts are omp and codex", host)
 	}
 	if len(domainFiles) == 0 {

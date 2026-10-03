@@ -40,7 +40,7 @@ func NewSetupAgent(initialize InitializeRepository, domain InitDomain, hooks Ins
 
 // Execute never replaces existing rules or recordings and never grants host trust.
 func (uc SetupAgent) Execute(req SetupAgentRequest) ([]string, error) {
-	if req.Host != "omp" && req.Host != "codex" {
+	if req.Host != "omp" && req.Host != codexHost {
 		return nil, fmt.Errorf("choose --host omp or --host codex")
 	}
 	existing, err := uc.ruleset.Exists()

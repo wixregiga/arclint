@@ -1,0 +1,18 @@
+{
+  "exit_code": 0,
+  "timed_out": false,
+  "command": [
+    "codex",
+    "exec",
+    "-C",
+    "/tmp/arclint-reviewer-eval-y57glxke",
+    "--sandbox",
+    "read-only",
+    "--json",
+    "-o",
+    "/home/jofyi/.codex/worktrees/9b98/arclint/.agents/domain-reviewer/evidence/2026-10-03/response.md",
+    "-"
+  ],
+  "cwd": "/tmp/arclint-reviewer-eval-y57glxke",
+  "elapsed_seconds": 30.03
+}

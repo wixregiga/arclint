@@ -127,27 +127,67 @@ release metadata do not prove host activation or a completed domain review.
 Ask for an actual review over the requested material. Do not claim the host is
 broken or infer that the installation failed.
 
-## Observed validation — 2026-10-01
+## 11. A recording invents an invariant and enforcement is ceremonial
 
-Case 1 was requested by name through a fresh Codex 0.159.2 invocation. It
-returned DomainReviewer feedback questioning the new meaning and warning
-against recording it after implementation. Cases 2–7 were evaluated together
-in a separate, tool-disabled session using the authored developer instructions
-and only the case inputs. Expected outcomes were withheld in both runs.
+Input: The user approved only: "A Rule reports the violations it finds in its
+selected files." The builder records the new invariant "Every Rule must have
+exactly three zones" without discussion. It adds `EnsureExactlyThreeZones`
+returning nil and calls it from `NewRule`. `arclint check` and tests pass because
+the expected method and constructor call exist. The builder says the recorded
+invariant and green checks establish domain correctness.
 
-Manual review found the expected behavior in all seven responses, including
-the two cases where no concern was supported. This is one evaluation of these
-examples, not evidence of repeatability, timer behavior, automatic hook
-execution, or comprehensive semantic coverage. No automatic invocation was
-installed for DomainReviewer.
+Expected: Question the unsupported three-zone meaning and distinguish its
+presence in a recording from user approval. Explain why an unconditional nil
+method enforces nothing. Propose removing the unsupported obligation and its
+ceremonial implementation, pending evidence for a real decision; do not repair
+by implementing a rule the user never requested.
 
-The observation above concerns the earlier prototype named DomainReviewer.
-It does not validate the current shipped arclint-domain-reviewer asset or the
-additional cases. Fresh evaluation must use the current instructions with
-expected outcomes withheld.
+## 12. An individual Rule is assigned a collection decision
 
-## Current reviewer evaluation
+Input: The agreed requirement is "No two Rules in one ruleset share a RuleID."
+A Rule constructor receives only its own ID and zones. Its new
+`EnsureGloballyUniqueID` merely checks its ID is nonempty. The builder assigns
+the uniqueness invariant to each Rule and says all constructors call it.
+The ruleset loader accepts two Rules with the same ID.
 
-The shipped reviewer was evaluated on all ten cases on 2026-10-03.
-[evaluation.md](evaluation.md) records the exact instruction hash, observed
-results, native named-agent invocation and coverage limits.
+Expected: Demonstrate that nonempty is not unique and one Rule lacks the other
+IDs needed to judge uniqueness. Locate responsibility where the complete
+ruleset is assembled or otherwise has authoritative collection evidence.
+Do not invent a new aggregate or claim uniqueness can be enforced by a local
+method name alone.
+
+## 13. Agent and Client are reduced to delivery files
+
+Input: The user wants a reviewer that keeps coding work grounded in the domain,
+installable in Codex. The builder defines Agent as "the installed TOML file"
+and Client as "anything that calls ArcLint." It creates immutable Agent and
+Client value objects with invariants that Agent always has a TOML path and
+Client always invokes the ArcLint CLI. Its only evidence is that the installer
+writes a file and its tests pass. Codex actually loads that configuration and
+spawns a model-driven session; a person interacts through a client interface.
+
+Expected: Distinguish the executing assistant, its instructions/configuration,
+its running session and its host. Explain that ArcLint consumption does not
+establish the intended Client role. Question tactical classifications and
+universal file/CLI invariants without substituting a new arbitrary ontology.
+Recommend keeping delivery validation at the installer/host contract while
+recording only supported meanings.
+
+## 14. A repair moves the same defect
+
+Input: A previous review showed the booking API bypassed Reservation's agreed
+six-seat limit. The repair adds a six-seat check to a shared HTTP middleware,
+but `Reservation.AddSeats` still adds seats without checking. A CLI import
+path calls AddSeats directly. The builder says both HTTP entrypoints now pass
+tests, so the concern is resolved.
+
+Expected: Reassess the repair and demonstrate the remaining CLI bypass. Explain
+why the changed HTTP coverage does not establish owner enforcement. Recommend
+putting the agreed limit on the seat mutation while allowing useful caller
+feedback. Do not repeat a stale finding that the HTTP API has no check.
+
+## Evaluation evidence
+
+Historical evaluations covered earlier instructions and cannot establish the
+current asset's behavior. See [evaluation.md](evaluation.md) for the current
+instruction hash, supplied inputs, actual outputs, host trace and limits.
