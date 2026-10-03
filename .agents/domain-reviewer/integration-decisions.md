@@ -111,3 +111,18 @@ installations, not a new Agent identity, domain aggregate or policy exception.
   files installed, host loading, actual invocation, observed protection and gaps.
 - Run repository gates and inspect outstanding baseline findings. Tests cannot
   establish the correctness of a meaning or substitute for native invocation.
+## Correct the repair exercise's contradictory fixture
+
+The production hook probe on `5db6d0b` passed comment repair and missing-file
+restoration, then rejected its final fresh-session review: the fictional recording
+called Room both a bookable space and the name of that space. Independent review
+confirmed that rejection. The failed activity remains evidence, not a successful
+recovery result.
+
+The fixture author intends Room to mean a named bookable space. This protocol
+exercise needs no equality, identity or transaction-boundary decision: it tests
+scoped comment repair, restoration and governance invalidation. Remove the
+unjustified `value_objects` fixture entry and retain the context definition and
+existing implementation. This changes test material, not guard policy, scope or
+expected protocol outcomes. A fresh semantic review must assess that material;
+the correction itself does not establish a pass.

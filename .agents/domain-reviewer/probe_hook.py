@@ -18,7 +18,7 @@ out = pathlib.Path(sys.argv[2]).resolve()
 out.mkdir(parents=True, exist_ok=False)
 root = pathlib.Path(tempfile.mkdtemp(prefix='arclint-live-hook-'))
 (root / 'src').mkdir()
-recording = 'version: 1\nproject: rooms\ncontexts:\n  booking:\n    definition: A Room is a named bookable space.\n    value_objects:\n      Room:\n        definition: The name of a bookable space.\n'
+recording = 'version: 1\nproject: rooms\ncontexts:\n  booking:\n    definition: A Room is a named bookable space.\n'
 good = 'package booking\n\ntype Room struct { Name string }\n'
 bad = 'package booking\n\n// This is the Room value.\ntype Room struct { Name string }\n'
 (root / 'domain.arclint.yaml').write_text(recording)
