@@ -335,6 +335,79 @@ func TestDomainRuleIsUnsupportedWhenNoFileYieldsItsFacts(t *testing.T) {
 	}
 }
 
+func TestDomainEvaluationDistinguishesRequiredFactAvailability(t *testing.T) {
+	knowledge := oneContext(t, vocab.BoundedContext{
+		Name: "catalog", Definition: "d", Line: 1,
+		Aggregates: []vocab.Aggregate{{
+			Name: "Event", Definition: "d", Identity: "EventID", Line: 2,
+			Invariants: []vocab.Invariant{{Key: "published-only", Statement: "published events only", Line: 3}},
+		}},
+	})
+	zones := []rule.Zone{mustZone(t, "catalog", "internal/event/**")}
+	decls := []conformance.Declaration{
+		{Kind: "struct", Name: "Event", StartLine: 1},
+		{Kind: "func", Name: "New", StartLine: 2, Results: []string{"Event", "error"}},
+		{Kind: "method", Name: "EnsurePublishedOnly", Owner: "Event", StartLine: 3},
+	}
+	tests := []struct {
+		name       string
+		ruleID     string
+		facts      conformance.LanguageFacts
+		want       conformance.Outcome
+		wantFailed bool
+	}{
+		{
+			name: "calls cannot supply missing declarations", ruleID: "aggregate/root-declared",
+			facts: conformance.LanguageFacts{Language: rule.LanguageGo, Package: "event", CallsAvailable: true},
+			want:  conformance.OutcomeUnsupported,
+		},
+		{
+			name: "observed empty declarations prove the root is missing", ruleID: "aggregate/root-declared",
+			facts: conformance.LanguageFacts{Language: rule.LanguageGo, Package: "event", DeclarationsAvailable: true},
+			want:  conformance.OutcomeViolates,
+		},
+		{
+			name: "declarations cannot supply missing calls", ruleID: "invariant/enforced-at-every-mutation",
+			facts: conformance.LanguageFacts{Language: rule.LanguageGo, Package: "event", DeclarationsAvailable: true, Declarations: decls},
+			want:  conformance.OutcomeUnsupported,
+		},
+		{
+			name: "observed empty calls prove the constructor omits enforcement", ruleID: "invariant/enforced-at-every-mutation",
+			facts: conformance.LanguageFacts{Language: rule.LanguageGo, Package: "event", DeclarationsAvailable: true, CallsAvailable: true, Declarations: decls},
+			want:  conformance.OutcomeViolates,
+		},
+		{
+			name: "observed constructor call establishes enforcement", ruleID: "invariant/enforced-at-every-mutation",
+			facts: conformance.LanguageFacts{Language: rule.LanguageGo, Package: "event", DeclarationsAvailable: true, CallsAvailable: true, Declarations: decls,
+				Calls: []conformance.Call{{Callee: "EnsurePublishedOnly", Enclosing: "New", Line: 2}}},
+			want: conformance.OutcomeConforms,
+		},
+		{
+			name: "failed parse supplies neither class and retains its diagnostic", ruleID: "invariant/enforced-at-every-mutation",
+			facts: conformance.LanguageFacts{Language: rule.LanguageGo, Package: "event", DeclarationsAvailable: true, CallsAvailable: true, ParseFailure: "unexpected token"},
+			want:  conformance.OutcomeUnsupported, wantFailed: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := runOne(t, builtInRule(t, tt.ruleID), zones, observed("internal/event/event.go"),
+				map[string]conformance.LanguageFacts{"internal/event/event.go": tt.facts}, knowledge)
+			if got := outcomesOf(a)[tt.ruleID+"|context:catalog"]; got != tt.want {
+				t.Fatalf("outcome = %s, want %s", got, tt.want)
+			}
+			var failed bool
+			for _, d := range a.Diagnostics() {
+				if d.Kind() == conformance.DiagnosticOperational && strings.Contains(d.Message(), "unexpected token") {
+					failed = true
+				}
+			}
+			if failed != tt.wantFailed {
+				t.Errorf("parse failure diagnostic = %v, want %v", failed, tt.wantFailed)
+			}
+		})
+	}
+}
+
 // An aggregate's root is the one type spelling its name, found by
 // declaration wherever it lives; nothing in the domain file names a
 // path. Two such types leave nothing to choose between and are a

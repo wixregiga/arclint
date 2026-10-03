@@ -416,7 +416,7 @@ func (cc contextCode) undecidable(facts []string) (Outcome, bool) {
 	for _, f := range facts {
 		switch rule.Fact(f) {
 		case rule.FactDeclarations, rule.FactCalls:
-			if len(cc.scopeIdx.files) == 0 {
+			if !cc.scopeIdx.supports(rule.Fact(f)) {
 				return OutcomeUnsupported, true
 			}
 		case rule.FactImports:
@@ -647,11 +647,13 @@ func recordAnchor(line int) (string, int) {
 // fileFacts is one parsed file of a context: its language, package,
 // declarations, and calls.
 type fileFacts struct {
-	path  string
-	lang  rule.Language
-	pkg   string
-	decls []Declaration
-	calls []Call
+	path                  string
+	lang                  rule.Language
+	pkg                   string
+	declarationsAvailable bool
+	callsAvailable        bool
+	decls                 []Declaration
+	calls                 []Call
 }
 
 // contractIndex is the parsed facts of a set of files.
@@ -670,14 +672,26 @@ func buildContractIndex(paths []string, supplied Facts) contractIndex {
 			continue
 		}
 		files = append(files, fileFacts{
-			path:  p,
-			lang:  facts.Language,
-			pkg:   facts.Package,
-			decls: facts.Declarations,
-			calls: facts.Calls,
+			path:                  p,
+			lang:                  facts.Language,
+			pkg:                   facts.Package,
+			declarationsAvailable: facts.DeclarationsAvailable,
+			callsAvailable:        facts.CallsAvailable,
+			decls:                 facts.Declarations,
+			calls:                 facts.Calls,
 		})
 	}
 	return contractIndex{files: files}
+}
+
+func (idx contractIndex) supports(fact rule.Fact) bool {
+	for _, f := range idx.files {
+		if (fact == rule.FactDeclarations && f.declarationsAvailable) ||
+			(fact == rule.FactCalls && f.callsAvailable) {
+			return true
+		}
+	}
+	return false
 }
 
 // within narrows the index to the files of one directory: a Go package,
