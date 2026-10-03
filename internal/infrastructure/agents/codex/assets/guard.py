@@ -471,7 +471,10 @@ def main(event):
     parser.add_argument("--root", required=True)
     args = parser.parse_args()
     root = session_root(event, args.root)
-    directory = root/".arclint/cache/codex-domain-guard"
+    # Several installed hooks can receive the same host session. Keep their
+    # states separate without treating a code update as a new installation.
+    installation = digest(str(Path(__file__).resolve()))
+    directory = root/".arclint/cache/codex-domain-guard"/installation
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     state_file = directory/(digest(event.get("session_id", "missing")) + ".json")
     state = {}

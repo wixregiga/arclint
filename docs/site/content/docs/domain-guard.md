@@ -171,8 +171,11 @@ failure and start a new turn/session when ready; a paused turn is not approval.
 Do not disable rules, edit baselines, or weaken scope to manufacture a pass.
 Findings are deduplicated and stored per session in
 `.arclint/cache/domain-guard/` (OMP) or
-`.arclint/cache/codex-domain-guard/` (Codex). Keep these caches out of version
-control. Stored reports are audit records, not independent attestations.
+`.arclint/cache/codex-domain-guard/` (Codex). Codex keeps each installed script's
+session state in a subdirectory keyed by its resolved installation path, so
+independent installations cannot overwrite each other's approval state. Updating
+the script at that path still invalidates its existing approval. Keep these caches
+out of version control. Stored reports are audit records, not independent attestations.
 
 Offline verification:
 

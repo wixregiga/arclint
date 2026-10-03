@@ -1,0 +1,14 @@
+{
+  "exit_code": 0,
+  "timed_out": false,
+  "command": [
+    "/tmp/arclint-2532422",
+    "agents",
+    "reviewer",
+    "status",
+    "--format",
+    "json"
+  ],
+  "cwd": "/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint",
+  "elapsed_seconds": 0.01
+}

@@ -79,6 +79,22 @@ both its recording and dependent ceremonial implementation, preserving separatel
 justified behavior. Do not invent a replacement rule to rescue that implementation.
 These clarify DR-4, DR-5, DR-6 and DR-17; no new invariant or host guarantee follows.
 
+## Independent installed guards must not overwrite each other's review state
+
+Before enabling the prepared additive hooks, independent fixture execution found
+that the preserved main provider and corrected local provider wrote the same
+session JSON in the target checkout. Each SessionStart replaced the other's
+protection snapshot, so the next event falsely reported governance changes in
+either start order. The immutable main script was copied for this reproduction;
+the installed original was not changed.
+
+The corrected adapter will namespace its cache by the resolved executing script's
+installation path, while retaining the existing per-session key and lock. The
+namespace is stable across content updates, so code/governance hashes still
+invalidate prior approval rather than escaping it in a new cache. Keep the legacy
+provider's files untouched. This is ownership of adapter state for independent
+installations, not a new Agent identity, domain aggregate or policy exception.
+
 ## Acceptance evidence required
 
 - Exercise permission before mutation, then post-tool and final review. Include

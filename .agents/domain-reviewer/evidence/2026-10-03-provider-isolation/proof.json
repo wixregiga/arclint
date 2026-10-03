@@ -1,0 +1,54 @@
+{
+  "original_sha256_before": "e5e271821d73723a48db33af21421a22b12ae123e1c54db459704ecd1cb0c34e",
+  "original_sha256_after": "e5e271821d73723a48db33af21421a22b12ae123e1c54db459704ecd1cb0c34e",
+  "corrected_sha256_before": "2b36529d5e10eab15dcc1c7c926889318cde1ff306583a9aa3cb99fdad3861cd",
+  "corrected_sha256_after": "2b36529d5e10eab15dcc1c7c926889318cde1ff306583a9aa3cb99fdad3861cd",
+  "evidence_directory": "/tmp/arclint-provider-isolation-proof-wim7vlru",
+  "results": [
+    {
+      "order": [
+        "preserved",
+        "corrected"
+      ],
+      "state_paths": [
+        "/tmp/arclint-provider-isolation-proof-wim7vlru/preserved-then-corrected/.arclint/cache/codex-domain-guard/92c33b211cd9e83c18bd12362f2beed8f4e1faa25b4e751e73a0b09fcc635853.json",
+        "/tmp/arclint-provider-isolation-proof-wim7vlru/preserved-then-corrected/.arclint/cache/codex-domain-guard/93e99f7567d7a9973a9d704e840ecad57d895f247127dd376b7411b2560cecb5/92c33b211cd9e83c18bd12362f2beed8f4e1faa25b4e751e73a0b09fcc635853.json"
+      ],
+      "unchanged_posts": {
+        "preserved": {},
+        "corrected": {}
+      },
+      "protection_snapshots_preserved": true,
+      "changed_corrected_script_post": {
+        "hookSpecificOutput": {
+          "hookEventName": "PostToolUse",
+          "additionalContext": "ArcLint review unavailable: Guard configuration, hook code, rules or baseline changed. Restore them or separately validate the intended policy change and start a new session; the previous approval is invalid."
+        }
+      },
+      "code_update_used_same_state_paths": true
+    },
+    {
+      "order": [
+        "corrected",
+        "preserved"
+      ],
+      "state_paths": [
+        "/tmp/arclint-provider-isolation-proof-wim7vlru/corrected-then-preserved/.arclint/cache/codex-domain-guard/92c33b211cd9e83c18bd12362f2beed8f4e1faa25b4e751e73a0b09fcc635853.json",
+        "/tmp/arclint-provider-isolation-proof-wim7vlru/corrected-then-preserved/.arclint/cache/codex-domain-guard/93e99f7567d7a9973a9d704e840ecad57d895f247127dd376b7411b2560cecb5/92c33b211cd9e83c18bd12362f2beed8f4e1faa25b4e751e73a0b09fcc635853.json"
+      ],
+      "unchanged_posts": {
+        "corrected": {},
+        "preserved": {}
+      },
+      "protection_snapshots_preserved": true,
+      "changed_corrected_script_post": {
+        "hookSpecificOutput": {
+          "hookEventName": "PostToolUse",
+          "additionalContext": "ArcLint review unavailable: Guard configuration, hook code, rules or baseline changed. Restore them or separately validate the intended policy change and start a new session; the previous approval is invalid."
+        }
+      },
+      "code_update_used_same_state_paths": true
+    }
+  ],
+  "scope": "Real subprocess protocol with copied scripts; no semantic model invoked. A first fixture incorrectly asserted full-state equality although historical PostToolUse records toolResults; this proof compares protection snapshots and actual output."
+}

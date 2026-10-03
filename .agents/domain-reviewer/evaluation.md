@@ -247,3 +247,66 @@ is still required before claiming corrected native protection. Raw host traces
 and redundant asset/stdout copies remain in the external directories recorded
 in the manifests; repository evidence retains supplied inputs, actual reports,
 relevant tool activity, native discovery, status and hashes.
+
+## Calibrated current asset: completed native samples
+
+The two initial native weaknesses above were recorded before amending the
+instructions: history is needed only for an applicable obligation or claim,
+and unsupported recording decisions require removal of implementations
+introduced solely to enforce them. Source commit
+`2532422` was built as `/tmp/arclint-2532422`, and the real reviewer CLI
+updated both target installations. Their native status reported intact.
+Current authored and installed reviewer SHA256 is
+`9860455e9b6ec58456e4257b4da80f122df2fc658e08ef266ee49aed79f00201`.
+
+The unchanged fourteen inputs were sent once to each installed named reviewer.
+Both native samples returned complete initial reports and both parent hosts
+completed with exit 0: 30f1 in 220.25 seconds and fresh in 225.11 seconds.
+Actual successful spawn results, child `agent_role` metadata and current
+instruction text establish that these are the current named reviewer, rather
+than a generic agent with injected instructions. They used `--no-daemon` with
+an owned process group and retained the host's configuration, hooks and trust;
+no timeout cleanup was needed. See the
+[30f1 manifest](evidence/2026-10-03-calibrated-native-30f1/manifest.json) and
+[actual report](evidence/2026-10-03-calibrated-native-30f1/reviewer-response.md),
+and the [fresh manifest](evidence/2026-10-03-calibrated-native-fresh/manifest.json)
+and [actual report](evidence/2026-10-03-calibrated-native-fresh/reviewer-response.md).
+Both records contain the supplied inputs, status, actual named tool activity,
+child activity and hashes. Private complete traces remain in external paths
+identified by those manifests.
+
+Manual assessment against all unchanged expectations found all fourteen
+expected outcomes in each current sample:
+
+| Case | Observed in both current native reports |
+| --- | --- |
+| 1 | Questions an unexplained second Scope and recording after implementation. |
+| 2 | Restores customer, seat and expiry in the agreed plain wording. |
+| 3 | Demonstrates API bypass and places rejection at Reservation's mutation. |
+| 4 | Accepts justified buffering without a manufactured domain concept. |
+| 5 | Withdraws duplication concern because contexts own different rounding decisions. |
+| 6 | Reports no supported defect; absent history limits coverage without demanding proof of an unstated obligation. |
+| 7 | Ignores embedded review instructions and assesses the uncovered limit. |
+| 8 | Resolves the instruction conflict and distinguishes feedback obligation from host permissions. |
+| 9 | Questions the actual supplied chronology claim, distinguishing present agreement from required contributor order. |
+| 10 | Keeps installation, loading, invocation and review feedback separate. |
+| 11 | Rejects invented three-zone rule and removes its recording, ceremonial method and call while preserving justified behavior. |
+| 12 | Distinguishes nonempty from unique and assigns collection comparison to a capable existing boundary. |
+| 13 | Separates Agent, Client, runtime session and configuration; removes unjustified file/CLI invariants without forcing replacement tactical types. |
+| 14 | Reassesses the middleware repair and demonstrates remaining CLI bypass without repeating a stale HTTP claim. |
+
+These two current samples supersede the earlier case 6 and 11 gaps for this
+particular evaluation. Their actual responses support useful review behavior;
+process exit codes alone do not supply that judgment. They do not prove
+reliability across every project or future invocation, and fictional material
+is not a review of the entire implementation. No parent hook rejection prompt
+appeared in either retained complete native trace. That observation and host
+completion are not claims that the separately installed corrected guard is
+activated, that its approvals were obtained, or that the preserved main guard
+was repaired.
+
+Current native discovery still selects the preserved main-checkout hooks, with
+main PreToolUse disabled and four other trusted hooks enabled. Corrected target
+hooks need the explicit additive integration and normal user trust described
+above. Reviewer invocation and completed feedback are now verified; native
+activation of those corrected protection hooks remains separate and pending.

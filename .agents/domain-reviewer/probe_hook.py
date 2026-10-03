@@ -39,8 +39,9 @@ def invoke(event, **payload):
     result = subprocess.run(command, cwd=root, input=json.dumps(data), capture_output=True, text=True, timeout=85)
     item = {'event': data, 'command': command, 'exit_code': result.returncode,
             'stdout': result.stdout, 'stderr': result.stderr, 'seconds': round(time.time()-start, 2)}
-    states = list((root / '.arclint/cache/codex-domain-guard').glob('*.json'))
-    item['states'] = {p.name: json.loads(p.read_text()) for p in states}
+    cache = root / '.arclint/cache/codex-domain-guard'
+    states = list(cache.rglob('*.json'))
+    item['states'] = {str(p.relative_to(cache)): json.loads(p.read_text()) for p in states}
     history.append(item)
     (out / 'activity.json').write_text(json.dumps(history, indent=2)+'\n')
     if result.returncode:
@@ -54,7 +55,8 @@ def allow(response):
         raise RuntimeError('repair or fresh review was rejected: '+json.dumps(response))
     event = history[-1]['event']
     key = hashlib.sha256(json.dumps(session, sort_keys=True).encode()).hexdigest() + '.json'
-    state = history[-1]['states'].get(key)
+    matches = [value for path, value in history[-1]['states'].items() if pathlib.Path(path).name == key]
+    state = matches[0] if len(matches) == 1 else None
     if event['hook_event_name'] == 'Stop' and (not state or state.get('verdict', {}).get('status') != 'passed'):
         raise RuntimeError('completion returned without a fresh passing verdict')
 

@@ -262,14 +262,21 @@ Path(sys.argv[sys.argv.index('--output-last-message')+1]).write_text(json.dumps(
         (self.root/".arclint/domain-guard.json").write_text(json.dumps(self.config))
 
     def event(self, name, **fields):
+        return self.event_from(self.script, name, **fields)
+
+    def event_from(self, script, name, **fields):
         event = dict(hook_event_name=name, session_id="protocol-fixture", **fields)
-        result = subprocess.run([sys.executable, "-B", str(self.script), "--root", str(self.root)],
+        result = subprocess.run([sys.executable, "-B", str(script), "--root", str(self.root)],
                                 input=json.dumps(event), text=True, capture_output=True, env=self.env, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
 
+    def state_path(self, root=None, script=None):
+        installation = guard.digest(str((script or self.script).resolve()))
+        return (root or self.root)/".arclint/cache/codex-domain-guard"/installation/(guard.digest("protocol-fixture")+".json")
+
     def state(self):
-        return json.loads(next((self.root/".arclint/cache/codex-domain-guard").glob("*.json")).read_text())
+        return json.loads(self.state_path().read_text())
 
     def allowed(self, output):
         self.assertNotEqual(output.get("hookSpecificOutput", {}).get("permissionDecision"), "deny", output)
@@ -395,7 +402,7 @@ Path(sys.argv[sys.argv.index('--output-last-message')+1]).write_text(json.dumps(
         evidence = [json.loads(line) for line in self.log.read_text().splitlines()]
         self.assertEqual(evidence[-1]["domain.yaml"], "version: 1\nproject: other-checkout\n")
         self.assertEqual(self.state(), original_state)
-        state_path = next((target/".arclint/cache/codex-domain-guard").glob("*.json"))
+        state_path = self.state_path(target)
         self.assertEqual(json.loads(state_path.read_text())["verdict"]["status"], "passed")
 
     def test_executable_translates_both_wsl_unc_forms_and_rejects_other_distribution(self):
@@ -436,10 +443,47 @@ Path(sys.argv[sys.argv.index('--output-last-message')+1]).write_text(json.dumps(
     def test_executable_fingerprints_actual_inherited_hook_code(self):
         target = self.another_checkout()
         self.event("SessionStart", cwd=str(target))
+        self.event("UserPromptSubmit", cwd=str(target), prompt="Retain this session request")
+        self.assertEqual(self.event("Stop", cwd=str(target), last_assistant_message="Reviewed"), {})
+        state_path = self.state_path(target)
+        previous = json.loads(state_path.read_text())
         self.script.write_text(self.script.read_text()+"\n# changed executing hook\n")
         result = self.event("PreToolUse", cwd=str(target), tool_name="Write", tool_input={"file_path":"domain.yaml","content":"changed"})
         self.assertEqual(result["hookSpecificOutput"]["permissionDecision"], "deny")
         self.assertIn("hook code", result["hookSpecificOutput"]["permissionDecisionReason"])
+        current = json.loads(state_path.read_text())
+        self.assertEqual(current["requests"], previous["requests"])
+        self.assertEqual(current["protection"], previous["protection"])
+        self.assertEqual(current["verdict"]["status"], "unavailable")
+        self.assertEqual(list((target/".arclint/cache/codex-domain-guard").rglob("*.json")), [state_path])
+
+    def test_executable_provider_installations_keep_independent_state_in_both_orders(self):
+        provider = Path(self.tmp.name)/"second-provider"
+        second = provider/".codex/hooks/arclint-domain-guard/guard.py"
+        second.parent.mkdir(parents=True)
+        second.write_bytes(self.script.read_bytes())
+        (provider/".codex/hooks.json").write_text('{"provider":"second"}')
+        for order, scripts in enumerate(((self.script, second), (second, self.script))):
+            with self.subTest(order=order):
+                target = self.another_checkout("coexist-"+str(order))
+                cache = target/".arclint/cache/codex-domain-guard"
+                cache.mkdir(parents=True)
+                legacy = cache/(guard.digest("protocol-fixture")+".json")
+                legacy.write_text('{"legacy":"must remain untouched"}')
+                for script in scripts:
+                    self.allowed(self.event_from(script, "SessionStart", cwd=str(target)))
+                    self.event_from(script, "UserPromptSubmit", cwd=str(target), prompt=str(script))
+                for script in scripts:
+                    other = scripts[1] if script == scripts[0] else scripts[0]
+                    other_path = self.state_path(target, other)
+                    other_state = other_path.read_bytes()
+                    self.allowed(self.event_from(script, "PostToolUse", cwd=str(target)))
+                    self.assertEqual(self.event_from(script, "Stop", cwd=str(target), last_assistant_message="Reviewed"), {})
+                    current = json.loads(self.state_path(target, script).read_text())
+                    self.assertEqual(current["requests"], [str(script)])
+                    self.assertEqual(current["verdict"]["status"], "passed")
+                    self.assertEqual(other_path.read_bytes(), other_state)
+                self.assertEqual(legacy.read_text(), '{"legacy":"must remain untouched"}')
 
     def test_executable_fingerprints_inherited_hook_provider_configuration(self):
         target = self.another_checkout()
