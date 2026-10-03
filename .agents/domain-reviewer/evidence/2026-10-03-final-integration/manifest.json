@@ -1,0 +1,86 @@
+{
+  "implementation_commit": "5db6d0b06d4b518c1da09721725395aaf2506ea2",
+  "fixture_correction_commit": "6ecaa2f6f0f20101bf7669d766a8ea215b998e15",
+  "binary": "/tmp/arclint-5db6d0b",
+  "binary_sha256": "cb8fae07756e929620c514c9918ceb8f353812d680aaa064eb3dbe599bb5d311",
+  "guard_sha256": "2b36529d5e10eab15dcc1c7c926889318cde1ff306583a9aa3cb99fdad3861cd",
+  "reviewer_sha256": "9860455e9b6ec58456e4257b4da80f122df2fc658e08ef266ee49aed79f00201",
+  "checks": {
+    "make_ci": {
+      "commit": "5db6d0b",
+      "exit_code": 0,
+      "log": "ci.log"
+    },
+    "make_check": {
+      "commit": "6ecaa2f",
+      "exit_code": 0,
+      "log": "check.log",
+      "scope": "6ecaa2f with final audit/evidence staged; no product source changes after 5db6d0b"
+    },
+    "python_tests": 41,
+    "rule_fixtures": 48,
+    "documentation_build": "passed",
+    "windows": {
+      "tested_commit": "3575d29",
+      "go_scope_tests": 5,
+      "omp_tests": 34,
+      "skips": 0,
+      "relevant_sources_identical_through": "6ecaa2f",
+      "exact_final_commit_rerun": false
+    }
+  },
+  "native_reviewer": {
+    "tested_commit": "2532422",
+    "source_unchanged_through": "6ecaa2f",
+    "30f1": {
+      "parent_exit": 0,
+      "cases": 14,
+      "expected_outcomes_observed": 14
+    },
+    "fresh": {
+      "parent_exit": 0,
+      "cases": 14,
+      "expected_outcomes_observed": 14
+    },
+    "limits": "Two fictional samples, not universal reliability or native guard activation"
+  },
+  "live_hook": {
+    "inconsistent_fixture": "live-hook-inconsistent-fixture/manifest.json",
+    "corrected_fixture": "live-hook-corrected-fixture/manifest.json",
+    "kind": "Actual installed subprocess hook and real semantic model; harness performs mutations, not autonomous native host protection",
+    "corrected_fixture_result": "passed",
+    "correction": "Removed contradictory, unjustified value-object fixture entry; retained context meaning and implementation. Guard binary, policies, scope and expected protocol outcomes unchanged."
+  },
+  "preserved_files": {
+    "/home/jofyi/.codex/worktrees/9b98/arclint/.arclint/agent-assets.json": true,
+    "/home/jofyi/.codex/worktrees/9b98/arclint/.arclint/domain-guard.json": true,
+    "/home/jofyi/.codex/worktrees/9b98/arclint/.arclint/reviewer.json": true,
+    "/home/jofyi/.codex/worktrees/9b98/arclint/critique-of-pr-80.md": true,
+    "/home/jofyi/ai/arclint/.codex/hooks/arclint-domain-guard/guard.py": true,
+    "/home/jofyi/.codex/worktrees/9b98/arclint/.codex/hooks.json": true,
+    "/home/jofyi/.codex/worktrees/9b98/arclint/.codex/hooks/arclint-domain-guard/guard.py": true,
+    "/home/jofyi/.codex/worktrees/9b98/arclint/.codex/agents/arclint-domain-reviewer.toml": true
+  },
+  "active_checkout": {
+    "path": "/home/jofyi/.codex/worktrees/30f1/arclint",
+    "head": "cf40d1b5a36ec0d9598d14210074c10a48d0157f",
+    "tracked_diff": ""
+  },
+  "native_corrected_hooks": {
+    "30f1": "installed, five additive definitions enabled but untrusted",
+    "fresh": "installed, five additive definitions enabled but untrusted",
+    "native_protection": "unverified",
+    "autonomous_native_repair": "unverified",
+    "installed_scope": [
+      "domain.arclint.yaml"
+    ],
+    "main_guard_modified": false,
+    "trust_granted": false
+  },
+  "overall_goal": "incomplete pending host trust and native protected repair evidence",
+  "independent_review": {
+    "result": "no supported overclaim or remaining code blocker",
+    "verified": "All protocol stages and retained activity bytes, binary/guard/reviewer hashes, failed fixture retention and native trust limitations",
+    "overall_completion_claim": "not supported until native protected repair observed"
+  }
+}

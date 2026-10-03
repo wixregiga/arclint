@@ -1,0 +1,16 @@
+{
+  "project": "/home/jofyi/.codex/worktrees/30f1/arclint",
+  "domainFiles": [
+    "domain.arclint.yaml"
+  ],
+  "domainSourcePatterns": [],
+  "sourcePatterns": [],
+  "installedHosts": [
+    "Codex"
+  ],
+  "changedAssets": [],
+  "problems": [],
+  "legacyRules": false,
+  "intact": true,
+  "limits": "Installation status is not a review verdict. Codex: review /hooks in CLI or Settings \u003e Coding \u003e Hooks in desktop. OMP: /arclint-domain-status."
+}

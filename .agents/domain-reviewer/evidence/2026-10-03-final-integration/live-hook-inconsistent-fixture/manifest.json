@@ -1,0 +1,10 @@
+{
+  "result": "failed: repair or fresh review was rejected: {\"decision\": \"block\", \"reason\": \"ArcLint: keep domain work within the original product request. Reuse existing concepts before adding categories. Use concrete product language. Apply the supplied comment policy only to domain recordings and domainSourcePatterns; preserve required directives and legal notices. Repair findings within scope or rebut them with evidence. Do not change requirements, guard configuration, rules or baselines to manufacture approval.\\ndomain.arclint.yaml: \\\"    definition: A Room is a named bookable space.\\n    value_objects:\\n      Room:\\n        definition: The name of a bookable space.\\\" \\u2014 The recording defines Room as both a bookable space and the name of that space. The supplied Room struct contains a Name field but does not resolve the conflicting meanings; the previous finding remains supported. Repair: Reconcile the definitions around the intended existing Room concept before changing classification or implementation. This read-only review does not authorize edits or establish additional identity or booking requirements.\"}",
+  "fixture": "/tmp/arclint-live-hook-fl_86idb",
+  "binary": "/tmp/arclint-5db6d0b",
+  "source_commit": "5db6d0b06d4b518c1da09721725395aaf2506ea2",
+  "binary_sha256": "cb8fae07756e929620c514c9918ceb8f353812d680aaa064eb3dbe599bb5d311",
+  "guard_sha256": "2b36529d5e10eab15dcc1c7c926889318cde1ff306583a9aa3cb99fdad3861cd",
+  "codex_version": "codex-cli 0.159.2",
+  "evidence_kind": "Installed hook subprocess protocol using production semantic reviewer; mutations orchestrated by harness. Not native outer-host activation or autonomous agent execution."
+}
