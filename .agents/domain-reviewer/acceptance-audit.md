@@ -1,5 +1,9 @@
 # Corrective acceptance audit — 2026-10-03
 
+This is the earlier b84a672 audit. The expanded integration and current remaining
+work are audited in [integration-audit.md](integration-audit.md). Historical
+installation and evaluation claims below do not supersede that evidence.
+
 This audits the current correction against user evidence in decisions.md.
 The earlier issue checklist, completion report and green checks are not approval
 of the rejected definitions. Status below separates behavior from mechanics.

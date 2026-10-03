@@ -1,0 +1,35 @@
+{
+  "source_commit": "3575d29c276167c52039111b5f5575804a61578c",
+  "binary": "/tmp/arclint-3575d29",
+  "binary_sha256": "70bbda4822834da8da56126134c6ab38ffb51130202e5a32dd2d06940c8841e2",
+  "guard_sha256": "acd85dcb86f2f8feb53c1f6aed4731fffded9333e225595d68dc4d918406910f",
+  "reviewer_sha256": "4a60283e8563425b7b11bc22598a19d2dda771569e88c0e7fe1321139e935af5",
+  "checks": {
+    "make_ci": "passed",
+    "make_check": "passed before commit, unchanged source",
+    "windows_go_scope_tests": 5,
+    "python_tests": 40,
+    "omp_linux_tests": 34,
+    "omp_windows_tests": 34,
+    "windows_skips": 0,
+    "rule_fixtures": 48,
+    "documentation_build": "passed"
+  },
+  "preserved_files": {
+    "/home/jofyi/.codex/worktrees/9b98/arclint/.arclint/agent-assets.json": true,
+    "/home/jofyi/.codex/worktrees/9b98/arclint/.arclint/domain-guard.json": true,
+    "/home/jofyi/.codex/worktrees/9b98/arclint/.arclint/reviewer.json": true,
+    "/home/jofyi/.codex/worktrees/9b98/arclint/critique-of-pr-80.md": true,
+    "/home/jofyi/ai/arclint/.codex/hooks/arclint-domain-guard/guard.py": true,
+    "/home/jofyi/.codex/worktrees/9b98/arclint/.codex/hooks.json": true,
+    "/home/jofyi/.codex/worktrees/9b98/arclint/.codex/hooks/arclint-domain-guard/guard.py": true,
+    "/home/jofyi/.codex/worktrees/9b98/arclint/.codex/agents/arclint-domain-reviewer.toml": true
+  },
+  "active_checkout": {
+    "path": "/home/jofyi/.codex/worktrees/30f1/arclint",
+    "head": "cf40d1b5a36ec0d9598d14210074c10a48d0157f",
+    "tracked_tree_preserved": true
+  },
+  "fresh_checkout": "/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint",
+  "native_corrected_hook_activation": "untrusted, not executed by outer host; no approval or activation claimed"
+}

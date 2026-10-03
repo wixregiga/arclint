@@ -1,0 +1,10 @@
+{
+  "operation": "hooks",
+  "host": "codex",
+  "paths": [
+    "/tmp/arclint-live-hook-oz9faszt/.arclint/domain-guard.json",
+    "/tmp/arclint-live-hook-oz9faszt/.codex/hooks.json",
+    "/tmp/arclint-live-hook-oz9faszt/.codex/hooks/arclint-domain-guard/guard.py"
+  ],
+  "activation": "Codex setup installed, not trusted. Open a new local Codex session, review project trust and the five definitions in /hooks (CLI) or Settings \u003e Coding \u003e Hooks (desktop), then start a new session. Until trusted they do not run. Use arclint agents status to inspect installed scope; host trust is shown by Codex."
+}

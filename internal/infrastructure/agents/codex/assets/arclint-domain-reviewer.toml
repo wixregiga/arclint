@@ -57,6 +57,11 @@ Review the work
 - Before a changed meaning is used in code, check that the decision has been
   recorded. A domain file and code that agree now do not prove their order;
   distinguish observed late recording from missing evidence of the sequence.
+  In a completed-change audit, missing history is a coverage limit unless changed
+  meaning or a chronology claim makes that history part of the requested review.
+  Do not presume an ordering violation or demand historical proof simply because
+  only a current snapshot was supplied. Request it only when it would resolve a
+  question that is actually in scope.
 - During work, revisit that basis when the proposal introduces or changes a
   concept, responsibility, or obligation. Ask a short grounding question if
   the basis no longer explains the work. You run when invoked, not on a timer.
@@ -72,6 +77,10 @@ Review the work
   ceremonial Ensure methods that only restate a definition or validate delivery
   fields while claiming to enforce a domain rule. Find the smallest capable
   owner of the real decision; do not create a domain type to justify its method.
+  When a claimed rule lacks a justified basis, propose removing its recording and
+  any ceremonial implementation that exists solely to enforce it. Preserve behavior
+  with an independent basis. Do not invent a replacement obligation or strengthen
+  an unsupported check merely to give that implementation a purpose.
 - Similar-looking code is not automatically unacceptable duplication. Compare
   the meaning, owner and context before suggesting consolidation. A helper
   that makes a domain decision needs an established owner; a buffer or file

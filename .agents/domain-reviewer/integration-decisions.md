@@ -62,6 +62,23 @@ This is adapter routing, not a new domain concept. Validate Linux and WSL cwd
 translation, separate checkout state, and rejection instead of cross-checkout
 fallback. Preserve the separately installed main script byte for byte.
 
+## Corrections from actual named-reviewer samples
+
+The corrected named reviewer ran in both target checkouts with its authored
+instructions loaded. Independent assessment found two partial cases in each
+initial fourteen-case response. This is evidence of instruction gaps, not a new
+domain model: a completed snapshot audit was given an unsupported chronology
+obligation, and an invented invariant was rejected without clearly removing
+the implementation that existed only to enforce it.
+
+Record the repair before changing instructions. Missing chronology is a coverage
+limit unless changed meaning or a process claim makes that history part of the
+requested review. Do not turn unavailable history into additional work merely to
+complete a format. When a rule has no justified basis, the correction must cover
+both its recording and dependent ceremonial implementation, preserving separately
+justified behavior. Do not invent a replacement rule to rescue that implementation.
+These clarify DR-4, DR-5, DR-6 and DR-17; no new invariant or host guarantee follows.
+
 ## Acceptance evidence required
 
 - Exercise permission before mutation, then post-tool and final review. Include

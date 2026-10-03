@@ -1,0 +1,10 @@
+{
+  "result": "passed",
+  "fixture": "/tmp/arclint-live-hook-oz9faszt",
+  "binary": "/tmp/arclint-3575d29",
+  "source_commit": "3575d29c276167c52039111b5f5575804a61578c",
+  "binary_sha256": "70bbda4822834da8da56126134c6ab38ffb51130202e5a32dd2d06940c8841e2",
+  "guard_sha256": "acd85dcb86f2f8feb53c1f6aed4731fffded9333e225595d68dc4d918406910f",
+  "codex_version": "codex-cli 0.159.2",
+  "evidence_kind": "Installed hook subprocess protocol using production semantic reviewer; mutations orchestrated by harness. Not native outer-host activation or autonomous agent execution."
+}

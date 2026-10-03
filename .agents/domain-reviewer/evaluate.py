@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 import re
 import selectors
+import signal
 import shutil
 import subprocess
 import sys
@@ -35,17 +36,33 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 def invoke(command, cwd, output, timeout=30, input_text=None):
+    """Own the process group so a bounded diagnostic cannot leave child turns."""
     started = time.time()
+    process = subprocess.Popen(command, cwd=cwd, stdin=subprocess.PIPE,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               text=True, start_new_session=True)
     try:
-        result = subprocess.run(command, cwd=cwd, input=input_text, text=True,
-                                capture_output=True, timeout=timeout)
-        status = {"exit_code": result.returncode, "timed_out": False}
-        output.with_suffix(".stdout").write_text(result.stdout)
-        output.with_suffix(".stderr").write_text(result.stderr)
-    except subprocess.TimeoutExpired as error:
-        status = {"exit_code": None, "timed_out": True}
-        output.with_suffix(".stdout").write_bytes(error.stdout or b"")
-        output.with_suffix(".stderr").write_bytes(error.stderr or b"")
+        stdout, stderr = process.communicate(input=input_text, timeout=timeout)
+        status = {"exit_code": process.returncode, "timed_out": False}
+    except subprocess.TimeoutExpired:
+        # This PID is our new session's process-group ID, never the shared host.
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            stdout, stderr = process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            stdout, stderr = process.communicate()
+        status = {"exit_code": None, "timed_out": True,
+                  "owned_process_group_terminated": True,
+                  "terminated_process_returncode": process.returncode}
+    output.with_suffix(".stdout").write_text(stdout)
+    output.with_suffix(".stderr").write_text(stderr)
     status.update(command=command, cwd=str(cwd), elapsed_seconds=round(time.time()-started, 2))
     output.with_suffix(".json").write_text(json.dumps(status, indent=2)+"\n")
     return status
@@ -150,17 +167,19 @@ def main():
         metadata["execution_status"] = "instruction-hash-mismatch"
     else:
         metadata["installed_sha256"] = digest(installed)
-        command = ["codex", "exec", "-C", str(project), "--sandbox", "read-only",
-                   "--json", "-o", str(evidence/"response.md"), "-"]
+        host_options = ["--no-daemon"]
         if direct_instructions:
             instructions = tomllib.loads(ASSET.read_text())["developer_instructions"]
-            command[2:2] = ["-c", "developer_instructions=" + json.dumps(instructions)]
+            host_options += ["-c", "developer_instructions=" + json.dumps(instructions)]
         if arguments.show_agent_selector:
-            command[2:2] = ["-c", "features.multi_agent_v2.hide_spawn_agent_metadata=false"]
+            host_options += ["-c", "features.multi_agent_v2.hide_spawn_agent_metadata=false"]
         metadata["agent_selector_visibility_override"] = arguments.show_agent_selector
         if enable_v2:
-            command[2:2] = ["--enable", "multi_agent_v2"]
+            host_options += ["--enable", "multi_agent_v2"]
         metadata["multi_agent_v2_override"] = enable_v2
+        metadata["host_process_mode"] = "fresh host (--no-daemon), owned process group"
+        command = ["codex", *host_options, "exec", "-C", str(project),
+                   "--sandbox", "read-only", "--json", "-o", str(evidence/"response.md"), "-"]
         metadata["invocation"] = invoke(command, project, evidence/"native", timeout=240, input_text=prompt)
         # Keep the host-owned trace when this invocation produced a persisted thread.
         stdout = (evidence/"native.stdout").read_text()
@@ -235,9 +254,14 @@ def main():
                     (evidence/"child-activity-excerpt.jsonl").write_text("\n".join(json.dumps(record) for record in selected)+"\n")
                     finals = [record["payload"] for record in selected if record["payload"].get("type") == "message" and record["payload"].get("phase") in ("final", "final_answer")]
                     if finals:
-                        response = "\n".join(content.get("text", "") for content in finals[-1].get("content", []))
+                        response = "\n".join(content.get("text", "") for content in finals[0].get("content", []))
                         (evidence/"reviewer-response.md").write_text(response+"\n")
                         metadata["native_review_returned"] = bool(response.strip())
+                        metadata["reviewer_final_count"] = len(finals)
+                        metadata["reviewer_response_selection"] = "Initial reviewer final report; later host-requested corrections retained separately"
+                        if len(finals) > 1:
+                            followup = "\n\n".join("\n".join(content.get("text", "") for content in final.get("content", [])) for final in finals[1:])
+                            (evidence/"reviewer-followup-response.md").write_text(followup+"\n")
                     metadata["child_trace_sha256"] = digest(child_trace)
     if "execution_status" not in metadata:
         invocation_ok = metadata.get("invocation", {}).get("exit_code") == 0

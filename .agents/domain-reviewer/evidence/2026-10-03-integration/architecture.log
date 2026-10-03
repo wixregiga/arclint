@@ -1,0 +1,4 @@
+coverage: baseline: 7 adopted finding(s) no longer occur; refresh the baseline
+coverage: rule infrastructure/outbound-only: 2 subject(s) could not be evaluated (unsupported)
+coverage: rule web/launch-surfaces-present is disabled: Web is not implemented yet; re-enable when its launch surfaces are added.; not evaluated
+0 active finding(s) · 0 suppressed · 26 baselined · 59 rule(s) applied

@@ -1,0 +1,1008 @@
+[
+  {
+    "event": {
+      "hook_event_name": "SessionStart",
+      "session_id": "arclint-live-repair-1791067670434990242",
+      "cwd": "/tmp/arclint-live-hook-oz9faszt"
+    },
+    "command": [
+      "python3",
+      "/tmp/arclint-live-hook-oz9faszt/.codex/hooks/arclint-domain-guard/guard.py",
+      "--root",
+      "/tmp/arclint-live-hook-oz9faszt"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"hookSpecificOutput\": {\"hookEventName\": \"SessionStart\", \"additionalContext\": \"ArcLint: keep domain work within the original product request. Reuse existing concepts before adding categories. Use concrete product language. Apply the supplied comment policy only to domain recordings and domainSourcePatterns; preserve required directives and legal notices. Repair findings within scope or rebut them with evidence. Do not change requirements, guard configuration, rules or baselines to manufacture approval.\"}, \"systemMessage\": \"ArcLint domain guard loaded; fresh review required. Scope: domain.arclint.yaml, src/room.go\"}\n",
+    "stderr": "",
+    "seconds": 0.06,
+    "states": {
+      "0feefb35a6077c249ce467017d68be30412abe7b69bfebcf99f69a858afb99d8.json": {
+        "requests": [],
+        "findings": {},
+        "active": false,
+        "attempts": 0,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": null,
+        "filesFingerprint": "f536a32a9aafb537d89248cf0843aa78686d382ff0339088d13e87c5b95365c2",
+        "error": null
+      }
+    }
+  },
+  {
+    "event": {
+      "hook_event_name": "UserPromptSubmit",
+      "session_id": "arclint-live-repair-1791067670434990242",
+      "cwd": "/tmp/arclint-live-hook-oz9faszt",
+      "prompt": "Preserve the existing Room meaning and Go type. Remove the explanatory source comment to comply with the configured domain-source comment policy. If src/room.go becomes missing, restore exactly that Room implementation without the comment. Do not change rules, configuration, scope or other files."
+    },
+    "command": [
+      "python3",
+      "/tmp/arclint-live-hook-oz9faszt/.codex/hooks/arclint-domain-guard/guard.py",
+      "--root",
+      "/tmp/arclint-live-hook-oz9faszt"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"hookSpecificOutput\": {\"hookEventName\": \"UserPromptSubmit\", \"additionalContext\": \"ArcLint: keep domain work within the original product request. Reuse existing concepts before adding categories. Use concrete product language. Apply the supplied comment policy only to domain recordings and domainSourcePatterns; preserve required directives and legal notices. Repair findings within scope or rebut them with evidence. Do not change requirements, guard configuration, rules or baselines to manufacture approval.\\nsrc/room.go: \\\"// This is the Room value.\\\" \\u2014 This explanatory comment is in explicitly scoped domain source and violates the fixed Go domain-source comment ban. It is not a preserved directive or legal notice. Repair: Remove only this comment, preserving package booking and type Room struct { Name string }. If the file becomes missing, restore exactly that implementation without the comment; leave all other files and configuration unchanged.\"}}\n",
+    "stderr": "",
+    "seconds": 23.13,
+    "states": {
+      "0feefb35a6077c249ce467017d68be30412abe7b69bfebcf99f69a858afb99d8.json": {
+        "requests": [
+          "Preserve the existing Room meaning and Go type. Remove the explanatory source comment to comply with the configured domain-source comment policy. If src/room.go becomes missing, restore exactly that Room implementation without the comment. Do not change rules, configuration, scope or other files."
+        ],
+        "findings": {
+          "914682a5d5bbe64d5f96a74929391daf9edabb3e340029c2b57e28bf40cbf1a1": {
+            "file": "src/room.go",
+            "quote": "// This is the Room value.",
+            "reason": "This explanatory comment is in explicitly scoped domain source and violates the fixed Go domain-source comment ban. It is not a preserved directive or legal notice.",
+            "repair": "Remove only this comment, preserving package booking and type Room struct { Name string }. If the file becomes missing, restore exactly that implementation without the comment; leave all other files and configuration unchanged.",
+            "open": true
+          }
+        },
+        "active": true,
+        "attempts": 0,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": {
+          "event": "UserPromptSubmit",
+          "fingerprint": "561a66abd1e5ed28451aac8e1c8d7a9c44e0e9a0aa45e00ea173b1fbf8c4216a",
+          "status": "findings",
+          "files": [
+            "domain.arclint.yaml",
+            "src/room.go"
+          ],
+          "reviewedAt": 1791067693.6235502
+        },
+        "filesFingerprint": "f536a32a9aafb537d89248cf0843aa78686d382ff0339088d13e87c5b95365c2",
+        "error": null
+      }
+    }
+  },
+  {
+    "event": {
+      "hook_event_name": "Stop",
+      "session_id": "arclint-live-repair-1791067670434990242",
+      "cwd": "/tmp/arclint-live-hook-oz9faszt",
+      "last_assistant_message": "The Room implementation still contains its explanatory source comment."
+    },
+    "command": [
+      "python3",
+      "/tmp/arclint-live-hook-oz9faszt/.codex/hooks/arclint-domain-guard/guard.py",
+      "--root",
+      "/tmp/arclint-live-hook-oz9faszt"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"decision\": \"block\", \"reason\": \"ArcLint: keep domain work within the original product request. Reuse existing concepts before adding categories. Use concrete product language. Apply the supplied comment policy only to domain recordings and domainSourcePatterns; preserve required directives and legal notices. Repair findings within scope or rebut them with evidence. Do not change requirements, guard configuration, rules or baselines to manufacture approval.\\nsrc/room.go: \\\"// This is the Room value.\\\" \\u2014 Comment on line 3; this file is an explicit domain-source subject. Repair: Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass.\"}\n",
+    "stderr": "",
+    "seconds": 0.08,
+    "states": {
+      "0feefb35a6077c249ce467017d68be30412abe7b69bfebcf99f69a858afb99d8.json": {
+        "requests": [
+          "Preserve the existing Room meaning and Go type. Remove the explanatory source comment to comply with the configured domain-source comment policy. If src/room.go becomes missing, restore exactly that Room implementation without the comment. Do not change rules, configuration, scope or other files."
+        ],
+        "findings": {
+          "914682a5d5bbe64d5f96a74929391daf9edabb3e340029c2b57e28bf40cbf1a1": {
+            "file": "src/room.go",
+            "quote": "// This is the Room value.",
+            "reason": "Comment on line 3; this file is an explicit domain-source subject.",
+            "repair": "Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass.",
+            "open": true
+          }
+        },
+        "active": true,
+        "attempts": 1,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": {
+          "event": "Stop",
+          "fingerprint": "832231c3a1b5707815e1d06231cac9a66b59974c128dc07b18cd4a9823de7bdb",
+          "status": "findings",
+          "files": [
+            "domain.arclint.yaml",
+            "src/room.go"
+          ],
+          "reviewedAt": 1791067693.7000463
+        },
+        "filesFingerprint": "f536a32a9aafb537d89248cf0843aa78686d382ff0339088d13e87c5b95365c2",
+        "error": null,
+        "continuation": "ArcLint: keep domain work within the original product request. Reuse existing concepts before adding categories. Use concrete product language. Apply the supplied comment policy only to domain recordings and domainSourcePatterns; preserve required directives and legal notices. Repair findings within scope or rebut them with evidence. Do not change requirements, guard configuration, rules or baselines to manufacture approval.\nsrc/room.go: \"// This is the Room value.\" \u2014 Comment on line 3; this file is an explicit domain-source subject. Repair: Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass."
+      }
+    }
+  },
+  {
+    "event": {
+      "hook_event_name": "PreToolUse",
+      "session_id": "arclint-live-repair-1791067670434990242",
+      "cwd": "/tmp/arclint-live-hook-oz9faszt",
+      "tool_name": "apply_patch",
+      "tool_input": {
+        "input": "*** Begin Patch\n*** Update File: src/room.go\n@@\n-// This is the Room value.\n type Room struct { Name string }\n*** End Patch\n"
+      }
+    },
+    "command": [
+      "python3",
+      "/tmp/arclint-live-hook-oz9faszt/.codex/hooks/arclint-domain-guard/guard.py",
+      "--root",
+      "/tmp/arclint-live-hook-oz9faszt"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"additionalContext\": \"ArcLint: keep domain work within the original product request. Reuse existing concepts before adding categories. Use concrete product language. Apply the supplied comment policy only to domain recordings and domainSourcePatterns; preserve required directives and legal notices. Repair findings within scope or rebut them with evidence. Do not change requirements, guard configuration, rules or baselines to manufacture approval.\"}}\n",
+    "stderr": "",
+    "seconds": 12.8,
+    "states": {
+      "0feefb35a6077c249ce467017d68be30412abe7b69bfebcf99f69a858afb99d8.json": {
+        "requests": [
+          "Preserve the existing Room meaning and Go type. Remove the explanatory source comment to comply with the configured domain-source comment policy. If src/room.go becomes missing, restore exactly that Room implementation without the comment. Do not change rules, configuration, scope or other files."
+        ],
+        "findings": {
+          "914682a5d5bbe64d5f96a74929391daf9edabb3e340029c2b57e28bf40cbf1a1": {
+            "file": "src/room.go",
+            "quote": "// This is the Room value.",
+            "reason": "Comment on line 3; this file is an explicit domain-source subject.",
+            "repair": "Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass.",
+            "open": true
+          }
+        },
+        "active": true,
+        "attempts": 1,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": {
+          "event": "PreToolUse",
+          "fingerprint": "d7a938a8a7e2034f41255c17a481b509bb1390842360b42b0ec035ab647f1217",
+          "status": "permitted",
+          "files": [
+            "domain.arclint.yaml",
+            "src/room.go"
+          ],
+          "reviewedAt": 1791067706.499211
+        },
+        "filesFingerprint": "f536a32a9aafb537d89248cf0843aa78686d382ff0339088d13e87c5b95365c2",
+        "error": null,
+        "continuation": "ArcLint: keep domain work within the original product request. Reuse existing concepts before adding categories. Use concrete product language. Apply the supplied comment policy only to domain recordings and domainSourcePatterns; preserve required directives and legal notices. Repair findings within scope or rebut them with evidence. Do not change requirements, guard configuration, rules or baselines to manufacture approval.\nsrc/room.go: \"// This is the Room value.\" \u2014 Comment on line 3; this file is an explicit domain-source subject. Repair: Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass."
+      }
+    }
+  },
+  {
+    "event": {
+      "hook_event_name": "PostToolUse",
+      "session_id": "arclint-live-repair-1791067670434990242",
+      "cwd": "/tmp/arclint-live-hook-oz9faszt",
+      "tool_name": "apply_patch",
+      "tool_input": {
+        "input": "*** Begin Patch\n*** Update File: src/room.go\n@@\n-// This is the Room value.\n type Room struct { Name string }\n*** End Patch\n"
+      },
+      "tool_response": "Removed only the explanatory comment."
+    },
+    "command": [
+      "python3",
+      "/tmp/arclint-live-hook-oz9faszt/.codex/hooks/arclint-domain-guard/guard.py",
+      "--root",
+      "/tmp/arclint-live-hook-oz9faszt"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"ArcLint: keep domain work within the original product request. Reuse existing concepts before adding categories. Use concrete product language. Apply the supplied comment policy only to domain recordings and domainSourcePatterns; preserve required directives and legal notices. Repair findings within scope or rebut them with evidence. Do not change requirements, guard configuration, rules or baselines to manufacture approval.\"}}\n",
+    "stderr": "",
+    "seconds": 13.8,
+    "states": {
+      "0feefb35a6077c249ce467017d68be30412abe7b69bfebcf99f69a858afb99d8.json": {
+        "requests": [
+          "Preserve the existing Room meaning and Go type. Remove the explanatory source comment to comply with the configured domain-source comment policy. If src/room.go becomes missing, restore exactly that Room implementation without the comment. Do not change rules, configuration, scope or other files."
+        ],
+        "findings": {
+          "914682a5d5bbe64d5f96a74929391daf9edabb3e340029c2b57e28bf40cbf1a1": {
+            "file": "src/room.go",
+            "quote": "// This is the Room value.",
+            "reason": "Comment on line 3; this file is an explicit domain-source subject.",
+            "repair": "Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass.",
+            "open": false
+          }
+        },
+        "active": true,
+        "attempts": 1,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": {
+          "event": "PostToolUse",
+          "fingerprint": "ab7c1e58575a59779471d2ce1cbd0cbb79a0083d8451aeffcd8fc9658d5c7a33",
+          "status": "passed",
+          "files": [
+            "domain.arclint.yaml",
+            "src/room.go"
+          ],
+          "reviewedAt": 1791067720.308182
+        },
+        "filesFingerprint": "c6379a697a44aa51a81d996d764b99ca4ea95faf273cdf0ab9f579f1ffd4c870",
+        "error": null,
+        "continuation": "ArcLint: keep domain work within the original product request. Reuse existing concepts before adding categories. Use concrete product language. Apply the supplied comment policy only to domain recordings and domainSourcePatterns; preserve required directives and legal notices. Repair findings within scope or rebut them with evidence. Do not change requirements, guard configuration, rules or baselines to manufacture approval.\nsrc/room.go: \"// This is the Room value.\" \u2014 Comment on line 3; this file is an explicit domain-source subject. Repair: Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass."
+      }
+    }
+  },
+  {
+    "event": {
+      "hook_event_name": "Stop",
+      "session_id": "arclint-live-repair-1791067670434990242",
+      "cwd": "/tmp/arclint-live-hook-oz9faszt",
+      "last_assistant_message": "Removed the explanatory comment. The existing Room value and its name are unchanged. No functional or architecture checks are claimed."
+    },
+    "command": [
+      "python3",
+      "/tmp/arclint-live-hook-oz9faszt/.codex/hooks/arclint-domain-guard/guard.py",
+      "--root",
+      "/tmp/arclint-live-hook-oz9faszt"
+    ],
+    "exit_code": 0,
+    "stdout": "{}\n",
+    "stderr": "",
+    "seconds": 13.7,
+    "states": {
+      "0feefb35a6077c249ce467017d68be30412abe7b69bfebcf99f69a858afb99d8.json": {
+        "requests": [
+          "Preserve the existing Room meaning and Go type. Remove the explanatory source comment to comply with the configured domain-source comment policy. If src/room.go becomes missing, restore exactly that Room implementation without the comment. Do not change rules, configuration, scope or other files."
+        ],
+        "findings": {
+          "914682a5d5bbe64d5f96a74929391daf9edabb3e340029c2b57e28bf40cbf1a1": {
+            "file": "src/room.go",
+            "quote": "// This is the Room value.",
+            "reason": "Comment on line 3; this file is an explicit domain-source subject.",
+            "repair": "Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass.",
+            "open": false
+          }
+        },
+        "active": true,
+        "attempts": 0,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": {
+          "event": "Stop",
+          "fingerprint": "3c6eb7cbf1c4a51910c0f572b56db3761dd1cdbecd4511e4492e065dfdba7994",
+          "status": "passed",
+          "files": [
+            "domain.arclint.yaml",
+            "src/room.go"
+          ],
+          "reviewedAt": 1791067734.0077658
+        },
+        "filesFingerprint": "c6379a697a44aa51a81d996d764b99ca4ea95faf273cdf0ab9f579f1ffd4c870",
+        "error": null,
+        "continuation": "ArcLint: keep domain work within the original product request. Reuse existing concepts before adding categories. Use concrete product language. Apply the supplied comment policy only to domain recordings and domainSourcePatterns; preserve required directives and legal notices. Repair findings within scope or rebut them with evidence. Do not change requirements, guard configuration, rules or baselines to manufacture approval.\nsrc/room.go: \"// This is the Room value.\" \u2014 Comment on line 3; this file is an explicit domain-source subject. Repair: Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass."
+      }
+    }
+  },
+  {
+    "event": {
+      "hook_event_name": "Stop",
+      "session_id": "arclint-live-repair-1791067670434990242",
+      "cwd": "/tmp/arclint-live-hook-oz9faszt",
+      "last_assistant_message": "src/room.go is missing and requires restoration."
+    },
+    "command": [
+      "python3",
+      "/tmp/arclint-live-hook-oz9faszt/.codex/hooks/arclint-domain-guard/guard.py",
+      "--root",
+      "/tmp/arclint-live-hook-oz9faszt"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"decision\": \"block\", \"reason\": \"ArcLint review unavailable: Missing configured material; no approval issued: [{\\\"kind\\\": \\\"source\\\", \\\"pattern\\\": \\\"src/room.go\\\"}]\"}\n",
+    "stderr": "",
+    "seconds": 0.06,
+    "states": {
+      "0feefb35a6077c249ce467017d68be30412abe7b69bfebcf99f69a858afb99d8.json": {
+        "requests": [
+          "Preserve the existing Room meaning and Go type. Remove the explanatory source comment to comply with the configured domain-source comment policy. If src/room.go becomes missing, restore exactly that Room implementation without the comment. Do not change rules, configuration, scope or other files."
+        ],
+        "findings": {
+          "914682a5d5bbe64d5f96a74929391daf9edabb3e340029c2b57e28bf40cbf1a1": {
+            "file": "src/room.go",
+            "quote": "// This is the Room value.",
+            "reason": "Comment on line 3; this file is an explicit domain-source subject.",
+            "repair": "Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass.",
+            "open": false
+          }
+        },
+        "active": true,
+        "attempts": 1,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": {
+          "status": "unavailable"
+        },
+        "filesFingerprint": "c6379a697a44aa51a81d996d764b99ca4ea95faf273cdf0ab9f579f1ffd4c870",
+        "error": "Missing configured material; no approval issued: [{\"kind\": \"source\", \"pattern\": \"src/room.go\"}]",
+        "continuation": "ArcLint review unavailable: Missing configured material; no approval issued: [{\"kind\": \"source\", \"pattern\": \"src/room.go\"}]"
+      }
+    }
+  },
+  {
+    "event": {
+      "hook_event_name": "PreToolUse",
+      "session_id": "arclint-live-repair-1791067670434990242",
+      "cwd": "/tmp/arclint-live-hook-oz9faszt",
+      "tool_name": "apply_patch",
+      "tool_input": {
+        "input": "*** Begin Patch\n*** Add File: src/room.go\n+package booking\n+\n+type Room struct { Name string }\n*** End Patch\n"
+      }
+    },
+    "command": [
+      "python3",
+      "/tmp/arclint-live-hook-oz9faszt/.codex/hooks/arclint-domain-guard/guard.py",
+      "--root",
+      "/tmp/arclint-live-hook-oz9faszt"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"additionalContext\": \"ArcLint: keep domain work within the original product request. Reuse existing concepts before adding categories. Use concrete product language. Apply the supplied comment policy only to domain recordings and domainSourcePatterns; preserve required directives and legal notices. Repair findings within scope or rebut them with evidence. Do not change requirements, guard configuration, rules or baselines to manufacture approval.\"}}\n",
+    "stderr": "",
+    "seconds": 14.74,
+    "states": {
+      "0feefb35a6077c249ce467017d68be30412abe7b69bfebcf99f69a858afb99d8.json": {
+        "requests": [
+          "Preserve the existing Room meaning and Go type. Remove the explanatory source comment to comply with the configured domain-source comment policy. If src/room.go becomes missing, restore exactly that Room implementation without the comment. Do not change rules, configuration, scope or other files."
+        ],
+        "findings": {
+          "914682a5d5bbe64d5f96a74929391daf9edabb3e340029c2b57e28bf40cbf1a1": {
+            "file": "src/room.go",
+            "quote": "// This is the Room value.",
+            "reason": "Comment on line 3; this file is an explicit domain-source subject.",
+            "repair": "Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass.",
+            "open": false
+          }
+        },
+        "active": true,
+        "attempts": 1,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": {
+          "event": "PreToolUse",
+          "fingerprint": "fbb9085d0738ef19cd65974cb577f8291c0b3f1897044dbea09edda61406ff6b",
+          "status": "permitted",
+          "files": [
+            "domain.arclint.yaml"
+          ],
+          "reviewedAt": 1791067748.8092225
+        },
+        "filesFingerprint": "ff3aa24b10a0edff66a9228dcb6d66347f406e2404d0f3e8480d62ec048e7f24",
+        "error": "Missing configured material; restoration permission is not approval: [{\"kind\": \"source\", \"pattern\": \"src/room.go\"}]",
+        "continuation": "ArcLint review unavailable: Missing configured material; no approval issued: [{\"kind\": \"source\", \"pattern\": \"src/room.go\"}]"
+      }
+    }
+  },
+  {
+    "event": {
+      "hook_event_name": "PostToolUse",
+      "session_id": "arclint-live-repair-1791067670434990242",
+      "cwd": "/tmp/arclint-live-hook-oz9faszt",
+      "tool_name": "apply_patch",
+      "tool_input": {
+        "input": "*** Begin Patch\n*** Add File: src/room.go\n+package booking\n+\n+type Room struct { Name string }\n*** End Patch\n"
+      },
+      "tool_response": "Restored the scoped Room file."
+    },
+    "command": [
+      "python3",
+      "/tmp/arclint-live-hook-oz9faszt/.codex/hooks/arclint-domain-guard/guard.py",
+      "--root",
+      "/tmp/arclint-live-hook-oz9faszt"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"hookSpecificOutput\": {\"hookEventName\": \"PostToolUse\", \"additionalContext\": \"ArcLint: keep domain work within the original product request. Reuse existing concepts before adding categories. Use concrete product language. Apply the supplied comment policy only to domain recordings and domainSourcePatterns; preserve required directives and legal notices. Repair findings within scope or rebut them with evidence. Do not change requirements, guard configuration, rules or baselines to manufacture approval.\"}}\n",
+    "stderr": "",
+    "seconds": 14.03,
+    "states": {
+      "0feefb35a6077c249ce467017d68be30412abe7b69bfebcf99f69a858afb99d8.json": {
+        "requests": [
+          "Preserve the existing Room meaning and Go type. Remove the explanatory source comment to comply with the configured domain-source comment policy. If src/room.go becomes missing, restore exactly that Room implementation without the comment. Do not change rules, configuration, scope or other files."
+        ],
+        "findings": {
+          "914682a5d5bbe64d5f96a74929391daf9edabb3e340029c2b57e28bf40cbf1a1": {
+            "file": "src/room.go",
+            "quote": "// This is the Room value.",
+            "reason": "Comment on line 3; this file is an explicit domain-source subject.",
+            "repair": "Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass.",
+            "open": false
+          }
+        },
+        "active": true,
+        "attempts": 1,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": {
+          "event": "PostToolUse",
+          "fingerprint": "ab7c1e58575a59779471d2ce1cbd0cbb79a0083d8451aeffcd8fc9658d5c7a33",
+          "status": "passed",
+          "files": [
+            "domain.arclint.yaml",
+            "src/room.go"
+          ],
+          "reviewedAt": 1791067762.8274434
+        },
+        "filesFingerprint": "c6379a697a44aa51a81d996d764b99ca4ea95faf273cdf0ab9f579f1ffd4c870",
+        "error": null,
+        "continuation": "ArcLint review unavailable: Missing configured material; no approval issued: [{\"kind\": \"source\", \"pattern\": \"src/room.go\"}]"
+      }
+    }
+  },
+  {
+    "event": {
+      "hook_event_name": "Stop",
+      "session_id": "arclint-live-repair-1791067670434990242",
+      "cwd": "/tmp/arclint-live-hook-oz9faszt",
+      "last_assistant_message": "Restored src/room.go with the same Room type and Name field, without the explanatory comment. No functional or architecture checks are claimed."
+    },
+    "command": [
+      "python3",
+      "/tmp/arclint-live-hook-oz9faszt/.codex/hooks/arclint-domain-guard/guard.py",
+      "--root",
+      "/tmp/arclint-live-hook-oz9faszt"
+    ],
+    "exit_code": 0,
+    "stdout": "{}\n",
+    "stderr": "",
+    "seconds": 18.92,
+    "states": {
+      "0feefb35a6077c249ce467017d68be30412abe7b69bfebcf99f69a858afb99d8.json": {
+        "requests": [
+          "Preserve the existing Room meaning and Go type. Remove the explanatory source comment to comply with the configured domain-source comment policy. If src/room.go becomes missing, restore exactly that Room implementation without the comment. Do not change rules, configuration, scope or other files."
+        ],
+        "findings": {
+          "914682a5d5bbe64d5f96a74929391daf9edabb3e340029c2b57e28bf40cbf1a1": {
+            "file": "src/room.go",
+            "quote": "// This is the Room value.",
+            "reason": "Comment on line 3; this file is an explicit domain-source subject.",
+            "repair": "Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass.",
+            "open": false
+          }
+        },
+        "active": true,
+        "attempts": 0,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": {
+          "event": "Stop",
+          "fingerprint": "daf34438018daf944d1803d4d036ff8ddf678107d8b07fd87ce33392476f8a7b",
+          "status": "passed",
+          "files": [
+            "domain.arclint.yaml",
+            "src/room.go"
+          ],
+          "reviewedAt": 1791067781.769703
+        },
+        "filesFingerprint": "c6379a697a44aa51a81d996d764b99ca4ea95faf273cdf0ab9f579f1ffd4c870",
+        "error": null,
+        "continuation": "ArcLint review unavailable: Missing configured material; no approval issued: [{\"kind\": \"source\", \"pattern\": \"src/room.go\"}]"
+      }
+    }
+  },
+  {
+    "event": {
+      "hook_event_name": "PreToolUse",
+      "session_id": "arclint-live-repair-1791067670434990242",
+      "cwd": "/tmp/arclint-live-hook-oz9faszt",
+      "tool_name": "apply_patch",
+      "tool_input": {
+        "input": "*** Begin Patch\n*** Add File: src/room.go\n+package booking\n+\n+type Room struct { Name string }\n*** End Patch\n"
+      }
+    },
+    "command": [
+      "python3",
+      "/tmp/arclint-live-hook-oz9faszt/.codex/hooks/arclint-domain-guard/guard.py",
+      "--root",
+      "/tmp/arclint-live-hook-oz9faszt"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"ArcLint review unavailable: Guard configuration, hook code, rules or baseline changed. Restore them or separately validate the intended policy change and start a new session; the previous approval is invalid.\"}}\n",
+    "stderr": "",
+    "seconds": 0.05,
+    "states": {
+      "0feefb35a6077c249ce467017d68be30412abe7b69bfebcf99f69a858afb99d8.json": {
+        "requests": [
+          "Preserve the existing Room meaning and Go type. Remove the explanatory source comment to comply with the configured domain-source comment policy. If src/room.go becomes missing, restore exactly that Room implementation without the comment. Do not change rules, configuration, scope or other files."
+        ],
+        "findings": {
+          "914682a5d5bbe64d5f96a74929391daf9edabb3e340029c2b57e28bf40cbf1a1": {
+            "file": "src/room.go",
+            "quote": "// This is the Room value.",
+            "reason": "Comment on line 3; this file is an explicit domain-source subject.",
+            "repair": "Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass.",
+            "open": false
+          }
+        },
+        "active": true,
+        "attempts": 0,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": {
+          "status": "unavailable"
+        },
+        "filesFingerprint": "c6379a697a44aa51a81d996d764b99ca4ea95faf273cdf0ab9f579f1ffd4c870",
+        "error": "Guard configuration, hook code, rules or baseline changed. Restore them or separately validate the intended policy change and start a new session; the previous approval is invalid.",
+        "continuation": "ArcLint review unavailable: Missing configured material; no approval issued: [{\"kind\": \"source\", \"pattern\": \"src/room.go\"}]"
+      }
+    }
+  },
+  {
+    "event": {
+      "hook_event_name": "PreToolUse",
+      "session_id": "arclint-live-repair-1791067670434990242",
+      "cwd": "/tmp/arclint-live-hook-oz9faszt",
+      "tool_name": "get_goal",
+      "tool_input": {}
+    },
+    "command": [
+      "python3",
+      "/tmp/arclint-live-hook-oz9faszt/.codex/hooks/arclint-domain-guard/guard.py",
+      "--root",
+      "/tmp/arclint-live-hook-oz9faszt"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"additionalContext\": \"Inspection or task bookkeeping is permitted; it does not approve work. Guard governance changed; previous approval is invalid. Separately validate and start a fresh session.\"}}\n",
+    "stderr": "",
+    "seconds": 0.05,
+    "states": {
+      "0feefb35a6077c249ce467017d68be30412abe7b69bfebcf99f69a858afb99d8.json": {
+        "requests": [
+          "Preserve the existing Room meaning and Go type. Remove the explanatory source comment to comply with the configured domain-source comment policy. If src/room.go becomes missing, restore exactly that Room implementation without the comment. Do not change rules, configuration, scope or other files."
+        ],
+        "findings": {
+          "914682a5d5bbe64d5f96a74929391daf9edabb3e340029c2b57e28bf40cbf1a1": {
+            "file": "src/room.go",
+            "quote": "// This is the Room value.",
+            "reason": "Comment on line 3; this file is an explicit domain-source subject.",
+            "repair": "Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass.",
+            "open": false
+          }
+        },
+        "active": true,
+        "attempts": 0,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": {
+          "status": "unavailable"
+        },
+        "filesFingerprint": "c6379a697a44aa51a81d996d764b99ca4ea95faf273cdf0ab9f579f1ffd4c870",
+        "error": "Guard governance changed; previous approval is invalid. Separately validate and start a fresh session.",
+        "continuation": "ArcLint review unavailable: Missing configured material; no approval issued: [{\"kind\": \"source\", \"pattern\": \"src/room.go\"}]"
+      }
+    }
+  },
+  {
+    "event": {
+      "hook_event_name": "Stop",
+      "session_id": "arclint-live-repair-1791067670434990242",
+      "cwd": "/tmp/arclint-live-hook-oz9faszt",
+      "last_assistant_message": "The rules file changed; review approval is invalid."
+    },
+    "command": [
+      "python3",
+      "/tmp/arclint-live-hook-oz9faszt/.codex/hooks/arclint-domain-guard/guard.py",
+      "--root",
+      "/tmp/arclint-live-hook-oz9faszt"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"decision\": \"block\", \"reason\": \"ArcLint review unavailable: Guard configuration, hook code, rules or baseline changed. Restore them or separately validate the intended policy change and start a new session; the previous approval is invalid.\"}\n",
+    "stderr": "",
+    "seconds": 0.05,
+    "states": {
+      "0feefb35a6077c249ce467017d68be30412abe7b69bfebcf99f69a858afb99d8.json": {
+        "requests": [
+          "Preserve the existing Room meaning and Go type. Remove the explanatory source comment to comply with the configured domain-source comment policy. If src/room.go becomes missing, restore exactly that Room implementation without the comment. Do not change rules, configuration, scope or other files."
+        ],
+        "findings": {
+          "914682a5d5bbe64d5f96a74929391daf9edabb3e340029c2b57e28bf40cbf1a1": {
+            "file": "src/room.go",
+            "quote": "// This is the Room value.",
+            "reason": "Comment on line 3; this file is an explicit domain-source subject.",
+            "repair": "Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass.",
+            "open": false
+          }
+        },
+        "active": true,
+        "attempts": 1,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": {
+          "status": "unavailable"
+        },
+        "filesFingerprint": "c6379a697a44aa51a81d996d764b99ca4ea95faf273cdf0ab9f579f1ffd4c870",
+        "error": "Guard configuration, hook code, rules or baseline changed. Restore them or separately validate the intended policy change and start a new session; the previous approval is invalid.",
+        "continuation": "ArcLint review unavailable: Guard configuration, hook code, rules or baseline changed. Restore them or separately validate the intended policy change and start a new session; the previous approval is invalid."
+      }
+    }
+  },
+  {
+    "event": {
+      "hook_event_name": "SessionStart",
+      "session_id": "arclint-live-repair-1791067670434990242-fresh",
+      "cwd": "/tmp/arclint-live-hook-oz9faszt"
+    },
+    "command": [
+      "python3",
+      "/tmp/arclint-live-hook-oz9faszt/.codex/hooks/arclint-domain-guard/guard.py",
+      "--root",
+      "/tmp/arclint-live-hook-oz9faszt"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"hookSpecificOutput\": {\"hookEventName\": \"SessionStart\", \"additionalContext\": \"ArcLint: keep domain work within the original product request. Reuse existing concepts before adding categories. Use concrete product language. Apply the supplied comment policy only to domain recordings and domainSourcePatterns; preserve required directives and legal notices. Repair findings within scope or rebut them with evidence. Do not change requirements, guard configuration, rules or baselines to manufacture approval.\"}, \"systemMessage\": \"ArcLint domain guard loaded; fresh review required. Scope: domain.arclint.yaml, src/room.go\"}\n",
+    "stderr": "",
+    "seconds": 0.05,
+    "states": {
+      "0feefb35a6077c249ce467017d68be30412abe7b69bfebcf99f69a858afb99d8.json": {
+        "requests": [
+          "Preserve the existing Room meaning and Go type. Remove the explanatory source comment to comply with the configured domain-source comment policy. If src/room.go becomes missing, restore exactly that Room implementation without the comment. Do not change rules, configuration, scope or other files."
+        ],
+        "findings": {
+          "914682a5d5bbe64d5f96a74929391daf9edabb3e340029c2b57e28bf40cbf1a1": {
+            "file": "src/room.go",
+            "quote": "// This is the Room value.",
+            "reason": "Comment on line 3; this file is an explicit domain-source subject.",
+            "repair": "Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass.",
+            "open": false
+          }
+        },
+        "active": true,
+        "attempts": 1,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": {
+          "status": "unavailable"
+        },
+        "filesFingerprint": "c6379a697a44aa51a81d996d764b99ca4ea95faf273cdf0ab9f579f1ffd4c870",
+        "error": "Guard configuration, hook code, rules or baseline changed. Restore them or separately validate the intended policy change and start a new session; the previous approval is invalid.",
+        "continuation": "ArcLint review unavailable: Guard configuration, hook code, rules or baseline changed. Restore them or separately validate the intended policy change and start a new session; the previous approval is invalid."
+      },
+      "b967d95a977bb0f191639a0e824424d74af5ea99a2b93ced8f79c486239cee69.json": {
+        "requests": [],
+        "findings": {},
+        "active": false,
+        "attempts": 0,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": null,
+        "filesFingerprint": "c6379a697a44aa51a81d996d764b99ca4ea95faf273cdf0ab9f579f1ffd4c870",
+        "error": null
+      }
+    }
+  },
+  {
+    "event": {
+      "hook_event_name": "UserPromptSubmit",
+      "session_id": "arclint-live-repair-1791067670434990242-fresh",
+      "cwd": "/tmp/arclint-live-hook-oz9faszt",
+      "prompt": "Review the existing Room recording and implementation. The original rules bytes have been restored. Do not edit anything or claim unrun checks."
+    },
+    "command": [
+      "python3",
+      "/tmp/arclint-live-hook-oz9faszt/.codex/hooks/arclint-domain-guard/guard.py",
+      "--root",
+      "/tmp/arclint-live-hook-oz9faszt"
+    ],
+    "exit_code": 0,
+    "stdout": "{\"hookSpecificOutput\": {\"hookEventName\": \"UserPromptSubmit\", \"additionalContext\": \"ArcLint: keep domain work within the original product request. Reuse existing concepts before adding categories. Use concrete product language. Apply the supplied comment policy only to domain recordings and domainSourcePatterns; preserve required directives and legal notices. Repair findings within scope or rebut them with evidence. Do not change requirements, guard configuration, rules or baselines to manufacture approval.\"}}\n",
+    "stderr": "",
+    "seconds": 15.61,
+    "states": {
+      "0feefb35a6077c249ce467017d68be30412abe7b69bfebcf99f69a858afb99d8.json": {
+        "requests": [
+          "Preserve the existing Room meaning and Go type. Remove the explanatory source comment to comply with the configured domain-source comment policy. If src/room.go becomes missing, restore exactly that Room implementation without the comment. Do not change rules, configuration, scope or other files."
+        ],
+        "findings": {
+          "914682a5d5bbe64d5f96a74929391daf9edabb3e340029c2b57e28bf40cbf1a1": {
+            "file": "src/room.go",
+            "quote": "// This is the Room value.",
+            "reason": "Comment on line 3; this file is an explicit domain-source subject.",
+            "repair": "Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass.",
+            "open": false
+          }
+        },
+        "active": true,
+        "attempts": 1,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": {
+          "status": "unavailable"
+        },
+        "filesFingerprint": "c6379a697a44aa51a81d996d764b99ca4ea95faf273cdf0ab9f579f1ffd4c870",
+        "error": "Guard configuration, hook code, rules or baseline changed. Restore them or separately validate the intended policy change and start a new session; the previous approval is invalid.",
+        "continuation": "ArcLint review unavailable: Guard configuration, hook code, rules or baseline changed. Restore them or separately validate the intended policy change and start a new session; the previous approval is invalid."
+      },
+      "b967d95a977bb0f191639a0e824424d74af5ea99a2b93ced8f79c486239cee69.json": {
+        "requests": [
+          "Review the existing Room recording and implementation. The original rules bytes have been restored. Do not edit anything or claim unrun checks."
+        ],
+        "findings": {},
+        "active": true,
+        "attempts": 0,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": {
+          "event": "UserPromptSubmit",
+          "fingerprint": "ea30ffdb38ef9657d3259bccdb8d0254f986e26537662f1d90daf3f3bf8286da",
+          "status": "passed",
+          "files": [
+            "domain.arclint.yaml",
+            "src/room.go"
+          ],
+          "reviewedAt": 1791067797.5841534
+        },
+        "filesFingerprint": "c6379a697a44aa51a81d996d764b99ca4ea95faf273cdf0ab9f579f1ffd4c870",
+        "error": null
+      }
+    }
+  },
+  {
+    "event": {
+      "hook_event_name": "Stop",
+      "session_id": "arclint-live-repair-1791067670434990242-fresh",
+      "cwd": "/tmp/arclint-live-hook-oz9faszt",
+      "last_assistant_message": "The Room recording and implementation are unchanged; no unrun checks are claimed."
+    },
+    "command": [
+      "python3",
+      "/tmp/arclint-live-hook-oz9faszt/.codex/hooks/arclint-domain-guard/guard.py",
+      "--root",
+      "/tmp/arclint-live-hook-oz9faszt"
+    ],
+    "exit_code": 0,
+    "stdout": "{}\n",
+    "stderr": "",
+    "seconds": 15.28,
+    "states": {
+      "0feefb35a6077c249ce467017d68be30412abe7b69bfebcf99f69a858afb99d8.json": {
+        "requests": [
+          "Preserve the existing Room meaning and Go type. Remove the explanatory source comment to comply with the configured domain-source comment policy. If src/room.go becomes missing, restore exactly that Room implementation without the comment. Do not change rules, configuration, scope or other files."
+        ],
+        "findings": {
+          "914682a5d5bbe64d5f96a74929391daf9edabb3e340029c2b57e28bf40cbf1a1": {
+            "file": "src/room.go",
+            "quote": "// This is the Room value.",
+            "reason": "Comment on line 3; this file is an explicit domain-source subject.",
+            "repair": "Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass.",
+            "open": false
+          }
+        },
+        "active": true,
+        "attempts": 1,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": {
+          "status": "unavailable"
+        },
+        "filesFingerprint": "c6379a697a44aa51a81d996d764b99ca4ea95faf273cdf0ab9f579f1ffd4c870",
+        "error": "Guard configuration, hook code, rules or baseline changed. Restore them or separately validate the intended policy change and start a new session; the previous approval is invalid.",
+        "continuation": "ArcLint review unavailable: Guard configuration, hook code, rules or baseline changed. Restore them or separately validate the intended policy change and start a new session; the previous approval is invalid."
+      },
+      "b967d95a977bb0f191639a0e824424d74af5ea99a2b93ced8f79c486239cee69.json": {
+        "requests": [
+          "Review the existing Room recording and implementation. The original rules bytes have been restored. Do not edit anything or claim unrun checks."
+        ],
+        "findings": {},
+        "active": true,
+        "attempts": 0,
+        "protection": {
+          ".arclint/domain-guard.json": "361c74bbd3f4a8f141c16788e7a5dbeb4c3b961337e246c58004994ff29b41fa",
+          ".codex/hooks.json": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d",
+          ".codex/hooks/arclint-domain-guard/guard.py": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "rules.arclint.yaml": null,
+          "rules.yaml": null,
+          ".arclint/rules.yaml": null,
+          ".arclint/baseline.v2.json": null,
+          ".arclint/baseline.json": null,
+          "executingHook": "387ee7bf1ffc429ac78a6a75ea83f0fb54b9b9b8b5f75eb6f724849c2da151ab",
+          "executingHooks": "ac2f6f9b184ff4d94d917e156abd50149e002f07da8036358a3c7bc5a17d859d"
+        },
+        "verdict": {
+          "event": "Stop",
+          "fingerprint": "a34f65143936b3d0fcdc5b4d9b8201337fa2b33ded9c2b7da3416fe7fcf78ab0",
+          "status": "passed",
+          "files": [
+            "domain.arclint.yaml",
+            "src/room.go"
+          ],
+          "reviewedAt": 1791067812.8674102
+        },
+        "filesFingerprint": "c6379a697a44aa51a81d996d764b99ca4ea95faf273cdf0ab9f579f1ffd4c870",
+        "error": null
+      }
+    }
+  }
+]

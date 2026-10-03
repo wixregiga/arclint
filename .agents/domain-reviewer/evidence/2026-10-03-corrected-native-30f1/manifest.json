@@ -1,0 +1,168 @@
+{
+  "project": "/home/jofyi/.codex/worktrees/30f1/arclint",
+  "existing_project": true,
+  "raw_directory": "/tmp/arclint-reviewer-raw-2x9ydywq",
+  "authored_sha256": "4a60283e8563425b7b11bc22598a19d2dda771569e88c0e7fe1321139e935af5",
+  "binary_sha256": "70bbda4822834da8da56126134c6ab38ffb51130202e5a32dd2d06940c8841e2",
+  "inputs_sha256": "24fdd9a7e67831853a88b67f3f8645a0704a7206389f328ffe84373df3c25e26",
+  "codex_version": "codex-cli 0.159.2",
+  "expected_outcomes_withheld": true,
+  "evaluation_mode": "native-name",
+  "installation": {
+    "not_attempted": true,
+    "reason": "existing project installation preserved"
+  },
+  "status": {
+    "exit_code": 0,
+    "timed_out": false,
+    "command": [
+      "/tmp/arclint-3575d29",
+      "agents",
+      "reviewer",
+      "status",
+      "--format",
+      "json"
+    ],
+    "cwd": "/home/jofyi/.codex/worktrees/30f1/arclint",
+    "elapsed_seconds": 0.01
+  },
+  "native_host_discovery": {
+    "project_layers": [
+      {
+        "name": {
+          "type": "project",
+          "dotCodexFolder": "/home/jofyi/.codex/worktrees/30f1/arclint/.codex"
+        },
+        "disabledReason": null
+      }
+    ],
+    "arclint_hooks": [
+      {
+        "key": "/home/jofyi/ai/arclint/.codex/hooks.json:pre_tool_use:0:0",
+        "eventName": "preToolUse",
+        "command": "python3 '/home/jofyi/ai/arclint/.codex/hooks/arclint-domain-guard/guard.py' --root '/home/jofyi/ai/arclint'",
+        "sourcePath": "/home/jofyi/ai/arclint/.codex/hooks.json",
+        "source": "project",
+        "enabled": false,
+        "currentHash": "sha256:95a1367f2c2bb2c15346382ae1d67df4244f2f674648c505f380e025133e6bd2",
+        "trustStatus": "trusted"
+      },
+      {
+        "key": "/home/jofyi/ai/arclint/.codex/hooks.json:post_tool_use:0:0",
+        "eventName": "postToolUse",
+        "command": "python3 '/home/jofyi/ai/arclint/.codex/hooks/arclint-domain-guard/guard.py' --root '/home/jofyi/ai/arclint'",
+        "sourcePath": "/home/jofyi/ai/arclint/.codex/hooks.json",
+        "source": "project",
+        "enabled": true,
+        "currentHash": "sha256:0548cce792aca4b5495cedeb755c6f00987b95ac0567d4eb33578b6004da0185",
+        "trustStatus": "trusted"
+      },
+      {
+        "key": "/home/jofyi/ai/arclint/.codex/hooks.json:session_start:0:0",
+        "eventName": "sessionStart",
+        "command": "python3 '/home/jofyi/ai/arclint/.codex/hooks/arclint-domain-guard/guard.py' --root '/home/jofyi/ai/arclint'",
+        "sourcePath": "/home/jofyi/ai/arclint/.codex/hooks.json",
+        "source": "project",
+        "enabled": true,
+        "currentHash": "sha256:da362c71e7bc923ecc707839d28d944e35fe4600bb5117c4bb4efa46b4e700f5",
+        "trustStatus": "trusted"
+      },
+      {
+        "key": "/home/jofyi/ai/arclint/.codex/hooks.json:user_prompt_submit:0:0",
+        "eventName": "userPromptSubmit",
+        "command": "python3 '/home/jofyi/ai/arclint/.codex/hooks/arclint-domain-guard/guard.py' --root '/home/jofyi/ai/arclint'",
+        "sourcePath": "/home/jofyi/ai/arclint/.codex/hooks.json",
+        "source": "project",
+        "enabled": true,
+        "currentHash": "sha256:75c56beaa5c7987322f0ab0e1ba9c044a268bfe9f230e719347cea3c112887bf",
+        "trustStatus": "trusted"
+      },
+      {
+        "key": "/home/jofyi/ai/arclint/.codex/hooks.json:stop:0:0",
+        "eventName": "stop",
+        "command": "python3 '/home/jofyi/ai/arclint/.codex/hooks/arclint-domain-guard/guard.py' --root '/home/jofyi/ai/arclint'",
+        "sourcePath": "/home/jofyi/ai/arclint/.codex/hooks.json",
+        "source": "project",
+        "enabled": true,
+        "currentHash": "sha256:08aa7516e9148873a7480d946d20209aef309c901f29682fbc6a5d88a806b463",
+        "trustStatus": "trusted"
+      }
+    ],
+    "read_only_discovery": true
+  },
+  "installed_sha256": "4a60283e8563425b7b11bc22598a19d2dda771569e88c0e7fe1321139e935af5",
+  "agent_selector_visibility_override": true,
+  "multi_agent_v2_override": false,
+  "invocation": {
+    "exit_code": null,
+    "timed_out": true,
+    "command": [
+      "codex",
+      "exec",
+      "-c",
+      "features.multi_agent_v2.hide_spawn_agent_metadata=false",
+      "-C",
+      "/home/jofyi/.codex/worktrees/30f1/arclint",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "-o",
+      "/tmp/arclint-corrected-native-30f1-3575d29/response.md",
+      "-"
+    ],
+    "cwd": "/home/jofyi/.codex/worktrees/30f1/arclint",
+    "elapsed_seconds": 240.04
+  },
+  "thread_ids": [
+    "01a103f4-236e-7d71-9577-eb4b53d5f92e"
+  ],
+  "host_traces": [
+    {
+      "source": "/mnt/c/Users/jofyi/.codex/sessions/2026/10/03/rollout-2026-10-03T18-48-14-01a103f4-236e-7d71-9577-eb4b53d5f92e.jsonl",
+      "external_copy": "/tmp/arclint-reviewer-raw-2x9ydywq/rollout-2026-10-03T18-48-14-01a103f4-236e-7d71-9577-eb4b53d5f92e.jsonl",
+      "copy": "activity-excerpt.jsonl",
+      "sha256": "701ea7977ecd5934dcba3e731bbcd65a2f83e5a402cd6601cbb567acea6f6ddf",
+      "excerpt_sha256": "0783576cb06b04e0efd9c2ce696cdd374f2bc05795c015d0b77a8484aa01ef72",
+      "excerpt_policy": "All assistant messages and all tool calls/results; private host context omitted"
+    }
+  ],
+  "native_spawn_requested": true,
+  "native_spawn_observed": true,
+  "native_spawn_result_received": true,
+  "native_review_returned": true,
+  "native_spawn_result": {
+    "task_name": "/root/fictional_domain_reviews",
+    "nickname": "Heisenberg"
+  },
+  "child_role_evidence": {
+    "thread_id": "01a103f5-7084-7b83-beda-4e3d1de11f23",
+    "source": {
+      "subagent": {
+        "thread_spawn": {
+          "parent_thread_id": "01a103f4-236e-7d71-9577-eb4b53d5f92e",
+          "depth": 1,
+          "agent_path": "/root/fictional_domain_reviews",
+          "agent_nickname": "Heisenberg",
+          "agent_role": "arclint-domain-reviewer"
+        }
+      }
+    },
+    "current_instructions_loaded": true
+  },
+  "child_trace_sha256": "84f3d8fb46bd015be9ab747b7dd6cb344d92117c90d3ff5bf7d397b17d5f249f",
+  "execution_status": "native-review-returned-host-incomplete",
+  "behavior_assessment": "manual assessment required; process success is not semantic approval",
+  "authored_sha256_after": "4a60283e8563425b7b11bc22598a19d2dda771569e88c0e7fe1321139e935af5",
+  "reviewer_response_selection": "Initial reviewer final report; any later host-requested correction retained separately",
+  "reviewer_final_count": 1,
+  "original_evidence_directory": "/tmp/arclint-corrected-native-30f1-3575d29",
+  "retained_files_sha256": {
+    "inputs.txt": "24fdd9a7e67831853a88b67f3f8645a0704a7206389f328ffe84373df3c25e26",
+    "reviewer-response.md": "c9a6471469fc7d043530fe37ab6e6187f5ed702e1ccaa88f2c18bf4e0d0fa644",
+    "activity-excerpt.jsonl": "0783576cb06b04e0efd9c2ce696cdd374f2bc05795c015d0b77a8484aa01ef72",
+    "child-activity-excerpt.jsonl": "898d0555c24d698411eea38bb01cdcabec2df04dc5fa4533f1efbc0a9f723f60",
+    "status.stdout": "c57d9ae1b8572bd2b09c6e75eb030ee4797bdff97034d177eb003057deda824a",
+    "status.json": "01d6e086968b2ed9e9e872708794db35a8f90cc2df0a763f3ce4064ce30785fb",
+    "hook-rejection.txt": "d96a719ff8018736f8c38f053e174710331ccd6822b21f4e4c227e41d55c2346"
+  }
+}

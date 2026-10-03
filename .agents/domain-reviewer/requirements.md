@@ -43,6 +43,8 @@ problems and missing evidence.
 
 DR-17. When evidence cannot establish the order of discussion, recording and
 implementation, the reviewer shall state that the order is unverified.
+Missing history is a coverage limit unless changed meaning or a process claim
+makes chronology part of the requested review; it does not itself require more work.
 
 DR-18. The reviewer shall give feedback without editing the reviewed files or
 making a disputed domain decision on the user's behalf.

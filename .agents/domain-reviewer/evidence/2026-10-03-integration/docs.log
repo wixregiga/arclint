@@ -1,0 +1,11 @@
+cd docs/site && zola build
+Building site...
+Warning: Highlight language console not found in docs/contracts.md
+Warning: Highlight language text not found in docs/chain-of-custody.md
+Warning: Highlight language console not found in docs/contracts.md
+Warning: Highlight language console not found in docs/contracts.md
+Checking all internal links with anchors.
+> Successfully checked 149 internal link(s) with anchors.
+-> Creating 11 pages (0 orphan) and 1 sections
+Done in 235ms.
+

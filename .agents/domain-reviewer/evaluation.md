@@ -174,3 +174,76 @@ those findings or establish guard approval. No repeated model probe was run to
 try to escape the rejection. Raw host traces remain outside the repository at
 `/tmp/arclint-native-discovery-2bikwzey/raw`; only the supplied input, response,
 relevant activity and hashes are retained here.
+
+## Corrected named reviewer in active and fresh linked worktrees
+
+Commit `3575d29c276167c52039111b5f5575804a61578c` was built as
+`/tmp/arclint-3575d29`. The corrected reviewer was already installed by the
+integration work in active 30f1 and the fresh managed linked checkout
+`/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint`. The evaluator
+preserved these installations and invoked one bounded native sample per target
+with `--project` and `--show-agent-selector`. Expectations remained withheld.
+Both actual installed hashes match current authored asset
+`4a60283e8563425b7b11bc22598a19d2dda771569e88c0e7fe1321139e935af5`.
+
+Both native calls returned a successful `task_name`, and child metadata
+recorded `agent_role="arclint-domain-reviewer"`. Actual child developer text
+contains the current authored instructions. Both child reviewers returned all
+fourteen case reviews. This establishes native loading, named invocation and
+reviewer activity for the corrected installation in each target. See the
+[30f1 manifest](evidence/2026-10-03-corrected-native-30f1/manifest.json) and
+[initial response](evidence/2026-10-03-corrected-native-30f1/reviewer-response.md),
+and the [fresh manifest](evidence/2026-10-03-corrected-native-fresh/manifest.json)
+and [initial response](evidence/2026-10-03-corrected-native-fresh/reviewer-response.md).
+
+These are successful reviewer invocations, **not completed parent host runs**.
+Each parent CLI exceeded its 240-second diagnostic bound after the preserved
+main Stop hook questioned the reviewer’s case 6 response. The script exited 2
+and recorded `native-review-returned-host-incomplete`. The exact
+[30f1 rejection](evidence/2026-10-03-corrected-native-30f1/hook-rejection.txt)
+and [fresh rejection](evidence/2026-10-03-corrected-native-fresh/hook-rejection.txt)
+say case 6 supplies no independent implementation-order obligation, so demanding
+historical proof imports an unsupported requirement. This is a useful
+independent concern: both initial responses presented that sequence as required
+without making their history request conditional on an applicable process claim.
+The previous conditional expectation does not justify that overreach.
+
+The parent hosts asked the same reviewers to reassess case 6. The fresh child
+[returned a correction](evidence/2026-10-03-corrected-native-fresh/reviewer-followup-response.md)
+reporting no supported concern and treating unavailable history as a limitation.
+The 30f1 child follow-up was interrupted by the outer bound, so no corrected
+response is claimed there. No retry or policy change was used. Supported native
+`thread/read` afterward reported all four owned parent/child threads not loaded;
+the parent turns and 30f1 follow-up were interrupted, while the fresh child
+follow-up was completed. The
+[cleanup record](evidence/2026-10-03-corrected-native-30f1/owned-turn-cleanup.json)
+contains only these owned thread statuses.
+
+Manual assessment of both initial fourteen-case samples found useful supported
+reasoning for cases 1–5, 7–10 and 12–14: existing-concept reuse, plain language,
+owner enforcement and bypasses, justified technical helpers, distinct rounding
+ownership, instruction conflicts, stated contributor order, delivery versus
+activation, collection-level uniqueness, system/configuration distinctions,
+and repair reassessment. Case 6 overreaches as described above. Case 11 rejects
+the invented invariant and the unconditional nil method, but neither response
+explicitly recommends removing that ceremonial implementation and its dependent
+code. Its correction coverage remains partial. No blanket fourteen-case pass
+is claimed. The fresh case 6 follow-up improves that case after real external
+feedback; it does not erase the initial finding. These fictional samples do not
+prove reliability in every project.
+
+Native hook discovery confirms both target project layers active and selects
+the preserved main-checkout hooks, including its disabled/trusted PreToolUse
+and four enabled/trusted hooks. It does not select corrected worktree-local
+hook definitions. Read-only additive activation discovery retained the exact
+installed five handler definitions, including both platform commands, timeout
+90 seconds and status message. See the concrete quoted commands and actual
+current hashes in [30f1 activation discovery](evidence/2026-10-03-corrected-native-30f1/activation-discovery.json)
+and [fresh activation discovery](evidence/2026-10-03-corrected-native-fresh/activation-discovery.json).
+The supported session configuration discovers all five corrected target hooks
+alongside the main definitions, enabled but **untrusted**. The agent neither
+trusted nor executed them. Normal user `/hooks` approval of these exact hooks
+is still required before claiming corrected native protection. Raw host traces
+and redundant asset/stdout copies remain in the external directories recorded
+in the manifests; repository evidence retains supplied inputs, actual reports,
+relevant tool activity, native discovery, status and hashes.

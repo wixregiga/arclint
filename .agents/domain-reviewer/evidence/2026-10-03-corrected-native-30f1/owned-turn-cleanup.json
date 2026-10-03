@@ -1,0 +1,50 @@
+[
+  {
+    "thread": "01a103f4-236e-7d71-9577-eb4b53d5f92e",
+    "status": {
+      "type": "notLoaded"
+    },
+    "last_turn": {
+      "id": "01a103f4-3855-7c70-b7a9-8c7edeb55fa2",
+      "status": "interrupted",
+      "error": null
+    },
+    "error": null
+  },
+  {
+    "thread": "01a103f5-7084-7b83-beda-4e3d1de11f23",
+    "status": {
+      "type": "notLoaded"
+    },
+    "last_turn": {
+      "id": "01a103f7-c565-79d0-b688-f856af79fa1c",
+      "status": "interrupted",
+      "error": null
+    },
+    "error": null
+  },
+  {
+    "thread": "01a103f4-237f-7f71-8967-c909c10c230d",
+    "status": {
+      "type": "notLoaded"
+    },
+    "last_turn": {
+      "id": "01a103f4-4164-7803-a5c1-233565e0982a",
+      "status": "interrupted",
+      "error": null
+    },
+    "error": null
+  },
+  {
+    "thread": "01a103f5-7121-74c2-8d34-fe98cede8be3",
+    "status": {
+      "type": "notLoaded"
+    },
+    "last_turn": {
+      "id": "01a103f7-7b25-7d02-9593-49ba64798a46",
+      "status": "completed",
+      "error": null
+    },
+    "error": null
+  }
+]

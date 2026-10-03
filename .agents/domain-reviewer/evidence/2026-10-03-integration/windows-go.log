@@ -1,0 +1,11 @@
+=== RUN   TestScopeUpdatesOnlyExplicitSelections
+--- PASS: TestScopeUpdatesOnlyExplicitSelections (0.07s)
+=== RUN   TestScopeRejectsResolvedEscapesOnNativePlatform
+--- PASS: TestScopeRejectsResolvedEscapesOnNativePlatform (0.03s)
+=== RUN   TestPlannedScopePermitsOnlyAbsentDefaultRecording
+--- PASS: TestPlannedScopePermitsOnlyAbsentDefaultRecording (0.02s)
+=== RUN   TestScopeWindowsBackslashTraversal
+--- PASS: TestScopeWindowsBackslashTraversal (0.01s)
+=== RUN   TestScopeDoubleStarRequiresActualReadableMatches
+--- PASS: TestScopeDoubleStarRequiresActualReadableMatches (0.08s)
+PASS

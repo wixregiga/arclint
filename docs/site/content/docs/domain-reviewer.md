@@ -105,3 +105,6 @@ A useful response identifies the unsupported decision or bypass, explains the
 consequence, proposes a correction, and revisits it when given a repair or
 rebuttal. Matching names and green tests alone are not enough. The reviewer
 can also conclude that no concern is supported and explain its coverage limits.
+An unsupported rule calls for removing both the claim and code that exists solely
+to enforce it, while preserving independently justified behavior. Missing history
+in a completed snapshot audit is a limit, not automatically a demand for more work.

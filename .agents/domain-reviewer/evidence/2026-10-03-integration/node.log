@@ -1,0 +1,42 @@
+✔ comments distinguish quoted hashes, block scalars and apostrophes (3.889418ms)
+✔ loaded host commands are inert and completion requires a fresh response review (16.137796ms)
+✔ comment violation blocks; scoped repair passes; state deduplicates and resolves (16.06122ms)
+✔ proposal rejects evidenced scope expansion before execution (7.563902ms)
+✔ an external or shell edit after review makes completion stale (7.433341ms)
+✔ changes during semantic review cannot receive approval (6.544011ms)
+✔ unavailable host capability never passes, repeated failures pause (5.377466ms)
+✔ malformed and unevidenced reviewer output never passes (9.613479ms)
+✔ timeout fails closed within the host handler budget (17.989134ms)
+✔ configuration weakening after approval is detected (9.475121ms)
+✔ findings about irrelevant response reach the builder (6.210013ms)
+✔ changes outside configured domain do not invalidate a passing verdict (8.467427ms)
+✔ stop continuations neither reset retry limit nor rewrite the user request (8.348463ms)
+✔ explicit source patterns are reviewed, source edits invalidate completion (11.140615ms)
+✔ explicit source path receives pre-edit review even without YAML edit (11.719239ms)
+✔ rules and baseline changes invalidate approval (12.239781ms)
+✔ empty source pattern fails closed (4.362175ms)
+✔ Go lexer ignores URL/string/rune/raw literals and reports real comment lines (0.943013ms)
+✔ Go policy preserves required directives, legal headers, generated markers and cgo (0.701486ms)
+✔ domain-source comments block and repair while contextual source comments remain (15.111308ms)
+✔ unsupported domain-source languages fail unavailable instead of silently passing (2.640798ms)
+✔ unterminated Go literals and comments cannot pass review (0.548133ms)
+✔ directives survive adjacent explanation and line cgo (0.323501ms)
+✔ missing recordings, literal sources and empty globs allow reviewed restoration only (34.370056ms)
+✔ restoration does not exempt protected, unrelated, existing, opaque or rejected proposals (7.79863ms)
+✔ ordinary finding repair receives pre-tool permission before mutation (11.151811ms)
+✔ inspection reports invalidation and never grants governance approval (8.376455ms)
+✔ native linux containment rejects sibling paths and symlink ancestors (3.951099ms)
+✔ native platform containment permits in-project absolute restoration (4.866521ms)
+✔ OMP module entrypoint registers executable repair lifecycle in a fresh subprocess (100.698901ms)
+✔ status observes changed material without reusing completion approval (6.879609ms)
+✔ native linux configured symlink scope cannot read a sibling checkout (4.763652ms)
+✔ custom recording under .arclint can be restored but selected metadata stays protected (39.155702ms)
+✔ native linux in-project symlink alias cannot restore protected governance (4.880017ms)
+ℹ tests 34
+ℹ suites 0
+ℹ pass 34
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 550.00747

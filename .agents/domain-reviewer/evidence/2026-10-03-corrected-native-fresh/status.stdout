@@ -1,0 +1,12 @@
+{
+  "project": "/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint",
+  "name": "arclint-domain-reviewer",
+  "host": "codex",
+  "path": "/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/agents/arclint-domain-reviewer.toml",
+  "installedVersion": "0.1.0-beta.1",
+  "availableVersion": "0.1.0-beta.1",
+  "installed": true,
+  "intact": true,
+  "problems": [],
+  "limits": "Installation and integrity do not prove Codex discovery, activation or review quality. Activity records are in the Codex conversation; ArcLint does not manage their storage or retention."
+}
