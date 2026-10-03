@@ -5,46 +5,120 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+	"sort"
+
+	"github.com/wixregiga/arclint/internal/application"
 )
 
 // Status describes installed artifacts; only the host can report current activation and trust.
-func (w Writer) Status() (string, error) {
-	content, err := os.ReadFile(filepath.Join(w.Root, ".arclint/domain-guard.json"))
+func (w Writer) Status() (application.AgentInstallation, error) {
+	root, err := filepath.Abs(w.Root)
 	if err != nil {
-		return "", fmt.Errorf("agent setup not readable: %w", err)
+		return application.AgentInstallation{}, fmt.Errorf("inspect agent installation path: %w", err)
+	}
+	configPath := ".arclint/domain-guard.json"
+	if err := safePath(root, filepath.Join(root, configPath)); err != nil {
+		return application.AgentInstallation{}, fmt.Errorf("inspect agent installation path: %w", err)
+	}
+	content, err := os.ReadFile(filepath.Join(root, configPath))
+	if err != nil {
+		return application.AgentInstallation{}, fmt.Errorf("agent setup not readable: %w", err)
 	}
 	var config struct{ DomainFiles, DomainSourcePatterns, SourcePatterns []string }
 	if err := json.Unmarshal(content, &config); err != nil {
-		return "", fmt.Errorf("agent status: %w", err)
+		return application.AgentInstallation{}, fmt.Errorf("agent status: %w", err)
 	}
-	var out strings.Builder
-	if _, err := os.Stat(filepath.Join(w.Root, "rules.arclint.yaml")); os.IsNotExist(err) {
-		if _, err := os.Stat(filepath.Join(w.Root, ".arclint/rules.yaml")); err == nil {
-			out.WriteString("Legacy rules preserved: this build needs rules.arclint.yaml for structural conformance; no automatic migration or replacement was performed.\n")
+	status := application.AgentInstallation{Project: root, DomainFiles: config.DomainFiles, DomainSourcePatterns: config.DomainSourcePatterns, SourcePatterns: config.SourcePatterns, InstalledHosts: []string{}, ChangedAssets: []string{}, Problems: []string{}, Intact: true}
+	if _, err := os.Stat(filepath.Join(root, "rules.arclint.yaml")); os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(root, ".arclint/rules.yaml")); err == nil {
+			status.LegacyRules = true
 		}
 	}
-	fmt.Fprintf(&out, "Project: %s\nRecordings: %s\nDomain source subjects: %s\nSupporting evidence: %s\n", w.Root, strings.Join(config.DomainFiles, ", "), strings.Join(config.DomainSourcePatterns, ", "), strings.Join(config.SourcePatterns, ", "))
-	for host, entry := range map[string]string{"OMP": ".omp/extensions/arclint-domain-guard/index.js", "Codex": ".codex/hooks.json"} {
-		_, err := os.Stat(filepath.Join(w.Root, entry))
-		if err == nil {
-			fmt.Fprintf(&out, "%s: installed; activation/trust must be checked in the host\n", host)
-		}
-	}
-	receiptBytes, err := os.ReadFile(filepath.Join(w.Root, ".arclint/agent-assets.json"))
-	if err != nil {
-		return "", fmt.Errorf("asset receipt unavailable; integrity not verified: %w", err)
-	}
+	receiptPath := ".arclint/agent-assets.json"
 	receipt := map[string]string{}
-	if err := json.Unmarshal(receiptBytes, &receipt); err != nil {
-		return "", fmt.Errorf("agent status: %w", err)
+	changed := map[string]bool{}
+	mark := func(path string) { changed[path] = true; status.Intact = false }
+	if err := safePath(root, filepath.Join(root, receiptPath)); err != nil {
+		mark(receiptPath)
+		status.Problems = append(status.Problems, "Asset receipt is unsafe; integrity unverified: "+err.Error())
+	} else if data, err := os.ReadFile(filepath.Join(root, receiptPath)); err != nil {
+		mark(receiptPath)
+		status.Problems = append(status.Problems, "Asset receipt unavailable; integrity unverified: "+err.Error())
+	} else if err := json.Unmarshal(data, &receipt); err != nil {
+		mark(receiptPath)
+		status.Problems = append(status.Problems, "Asset receipt invalid; integrity unverified: "+err.Error())
+	} else if len(receipt) == 0 {
+		mark(receiptPath)
+		status.Problems = append(status.Problems, "Asset receipt empty; integrity unverified")
 	}
-	for name, expected := range receipt {
-		content, err := os.ReadFile(filepath.Join(w.Root, name))
-		if err != nil || digest(content) != expected {
-			fmt.Fprintf(&out, "Changed or missing installed asset: %s\n", name)
+	verify := func(path string) {
+		target := filepath.Join(root, path)
+		if err := safePath(root, target); err != nil {
+			mark(path)
+			return
+		}
+		data, err := os.ReadFile(target)
+		if err != nil || receipt[path] == "" || digest(data) != receipt[path] {
+			mark(path)
+			return
 		}
 	}
-	out.WriteString("Installation status is not a review verdict. Codex: review /hooks in CLI or Settings > Coding > Hooks in desktop. OMP: /arclint-domain-status.\n")
-	return out.String(), nil
+	verify(configPath)
+	for path := range receipt {
+		verify(path)
+	}
+	if len(w.HostInspectors) == 0 {
+		status.Intact = false
+		status.Problems = append(status.Problems, "Host registration inspection unavailable; integrity unverified")
+	}
+	foundHost := false
+	for _, inspector := range w.HostInspectors {
+		host, err := inspector.InspectHostInstallation()
+		if err != nil {
+			status.Intact = false
+			status.Problems = append(status.Problems, err.Error())
+			continue
+		}
+		applies := host.Present || host.Registered
+		for _, path := range host.Paths {
+			if _, found := receipt[path]; found {
+				applies = true
+			}
+		}
+		if !applies {
+			continue
+		}
+		foundHost = true
+		status.Problems = append(status.Problems, host.Problems...)
+		if len(host.Problems) > 0 {
+			status.Intact = false
+		}
+		present := host.Registered
+		for _, path := range host.Paths {
+			verify(path)
+			target := filepath.Join(root, path)
+			if err := safePath(root, target); err != nil {
+				present = false
+			} else if _, err := os.ReadFile(target); err != nil {
+				present = false
+			}
+		}
+		if !host.Registered {
+			status.Intact = false
+		}
+		if present {
+			status.InstalledHosts = append(status.InstalledHosts, host.Name)
+		}
+	}
+	if !foundHost {
+		status.Intact = false
+		status.Problems = append(status.Problems, "No complete ArcLint host registration was identified; integrity unverified")
+	}
+	for path := range changed {
+		status.ChangedAssets = append(status.ChangedAssets, path)
+	}
+	sort.Strings(status.InstalledHosts)
+	sort.Strings(status.ChangedAssets)
+	sort.Strings(status.Problems)
+	return status, nil
 }

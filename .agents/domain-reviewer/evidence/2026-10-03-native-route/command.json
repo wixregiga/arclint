@@ -1,0 +1,14 @@
+[
+  "codex",
+  "exec",
+  "-C",
+  "/home/jofyi/.codex/worktrees/9b98/arclint",
+  "--sandbox",
+  "read-only",
+  "-c",
+  "features.multi_agent_v2.hide_spawn_agent_metadata=false",
+  "--json",
+  "-o",
+  "/tmp/arclint-native-discovery-2bikwzey/response.md",
+  "-"
+]

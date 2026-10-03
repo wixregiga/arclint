@@ -97,6 +97,12 @@ func (r renderer) Render(w io.Writer, rep cli.Report) error {
 		writePatternInstall(p, th, x.Result)
 	case cli.PatternExportReport:
 		writePatternExport(p, th, x.Result)
+	case cli.AgentInstallReport:
+		writeAgentInstall(p, th, x)
+	case cli.AgentStatusReport:
+		writeAgentStatus(p, th, x)
+	case cli.ReviewerStatusReport:
+		writeReviewerStatus(p, th, x)
 	case cli.SDKInitReport:
 		writeSDKInit(p, th, x.Paths)
 	default:

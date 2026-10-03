@@ -26,6 +26,16 @@ func NewInstaller(root string) *Installer { return &Installer{root: root} }
 
 // Install adds native command hooks. Codex still requires /hooks trust review.
 func (i *Installer) Install(host string, domains []string, scope ...application.AgentSourceScope) ([]string, error) {
+	return i.install(host, domains, false, scope...)
+}
+
+// Preflight validates host, scope, configuration and ownership without writing.
+func (i *Installer) Preflight(host string, domains []string, scope ...application.AgentSourceScope) error {
+	_, err := i.install(host, domains, true, scope...)
+	return err
+}
+
+func (i *Installer) install(host string, domains []string, checkOnly bool, scope ...application.AgentSourceScope) ([]string, error) {
 	if host != codexHost {
 		return nil, fmt.Errorf("unsupported host %q", host)
 	}
@@ -37,14 +47,18 @@ func (i *Installer) Install(host string, domains []string, scope ...application.
 		return nil, fmt.Errorf("project root: %w", err)
 	}
 	configPath := filepath.Join(root, ".arclint/domain-guard.json")
-	config, err := agentfiles.Scope(root, domains, scope...)
+	scopeConfig := agentfiles.Scope
+	if checkOnly {
+		scopeConfig = agentfiles.PlannedScope
+	}
+	config, err := scopeConfig(root, domains, scope...)
 	if err != nil {
 		return nil, fmt.Errorf("agent setup: %w", err)
 	}
 	script := filepath.Join(root, ".codex/hooks/arclint-domain-guard/guard.py")
 	quote := func(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'" }
 	command := "python3 " + quote(script) + " --root " + quote(root)
-	handler := map[string]any{"type": "command", "command": command, "timeout": 90, "statusMessage": "ArcLint domain review"}
+	handler := map[string]any{"type": codexHookTypeCommand, "command": command, "timeout": 90, "statusMessage": "ArcLint domain review"}
 	if distro := os.Getenv("WSL_DISTRO_NAME"); distro != "" {
 		if strings.ContainsAny(distro+script+root, "\"\r\n") {
 			return nil, fmt.Errorf("unsupported character in Windows hook path")
@@ -94,6 +108,12 @@ func (i *Installer) Install(host string, domains []string, scope ...application.
 	}
 	hookBytes = append(hookBytes, '\n')
 	files := map[string][]byte{configPath: config, script: guard, hooksPath: hookBytes}
+	if checkOnly {
+		if err := agentfiles.Preflight(root, files, configPath, hooksPath); err != nil {
+			return nil, fmt.Errorf("hook preflight: %w", err)
+		}
+		return nil, nil
+	}
 	paths, err := agentfiles.Install(root, files, configPath, hooksPath)
 	if err != nil {
 		return nil, fmt.Errorf("install hooks: %w", err)

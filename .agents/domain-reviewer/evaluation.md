@@ -120,3 +120,57 @@ fails, even if Codex itself exits 0. Authored-instruction mode records response
 production separately and requires manual semantic assessment. The preserved
 historical process exit codes remain unchanged; their manifests explicitly
 record the unmet native execution.
+
+## Native loader investigation after the initial evaluation
+
+The initial native failures above are superseded as loader diagnostics. A real
+`config/read` found the fresh temporary project layer disabled because it was
+untrusted. This prevented project-local configuration discovery; the earlier
+model reports did not identify that cause. No trust was granted.
+
+A separate bounded route-only invocation in the already trusted 9b98 linked
+worktree used Codex CLI 0.159.2 and the invocation-only setting
+`features.multi_agent_v2.hide_spawn_agent_metadata=false`. The native
+`collaboration.spawn_agent` call actually selected
+`agent_type="arclint-domain-reviewer"`, returned
+`task_name="/root/native_reviewer_probe"`, and the child session metadata
+recorded `agent_role="arclint-domain-reviewer"`. The
+[manifest](evidence/2026-10-03-native-route/manifest.json),
+[tool activity](evidence/2026-10-03-native-route/native-activity-excerpt.jsonl)
+and [child response](evidence/2026-10-03-native-route/reviewer-response.md)
+establish this native route. That installation has historical asset hash
+`00c93a87b32950ef674141415bf193d59f81d2a07fb119e6ef93a0c6d5df40e1`;
+this run does not establish native loading of the corrected authored asset.
+It did not change installations, hooks, trust, or permissions.
+
+The official implementation
+[tool selection](https://github.com/openai/codex/blob/main/codex-rs/core/src/tools/spec_plan.rs)
+exposes the agent selector when configured roles exist. Its
+[configuration](https://github.com/openai/codex/blob/main/codex-rs/core/src/config/mod.rs)
+default hides spawn metadata in the v2 tool schema. This explains the observed
+route in the installed CLI; current upstream source is not claimed to be its
+exact build revision or a guarantee for every Codex host. The override reveals
+the requested selector; it does not disable hooks or bypass trust.
+
+Read-only native [project discovery](evidence/2026-10-03-native-route/project-discovery.json)
+shows the 9b98 layer active, with hook definitions selected from the main
+checkout. Main PreToolUse remains disabled and trusted; its other four hooks
+remain enabled and trusted. The host's
+[root-checkout mapping](https://github.com/openai/codex/blob/main/codex-rs/config/src/loader/mod.rs)
+selects main-checkout hook configuration for linked worktrees. A worktree-local
+hooks.json alone therefore does not prove its new protection runs. The
+[discovery implementation](https://github.com/openai/codex/blob/main/codex-rs/hooks/src/engine/discovery.rs)
+also supports additive inline session configuration as a separate source. A
+read-only probe registered a target command from `/<session-flags>/config.toml`
+alongside the unchanged main definitions; that new hook was **untrusted**.
+Registration is not execution. Exact current hook hashes require the user's
+normal Codex `/hooks` review before activation; the agent did not grant trust.
+
+The historical route invocation received the preserved main Stop hook's
+[rejection](evidence/2026-10-03-native-route/hook-rejection-excerpt.txt),
+identified by `stop:4:/home/jofyi/ai/arclint/.codex/hooks.json`. It reported
+existing domain-source comment-policy findings. Process exit 0 did not clear
+those findings or establish guard approval. No repeated model probe was run to
+try to escape the rejection. Raw host traces remain outside the repository at
+`/tmp/arclint-native-discovery-2bikwzey/raw`; only the supplied input, response,
+relevant activity and hashes are retained here.

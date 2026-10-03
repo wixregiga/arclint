@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/wixregiga/arclint/internal/application"
+	agentfiles "github.com/wixregiga/arclint/internal/infrastructure/agents/files"
 )
 
 // Publisher implements the application's AgentsPublisher port over one
@@ -33,10 +34,26 @@ func NewPublisher(root string) (Publisher, error) {
 // the block appended; a missing file is created holding only the
 // block. One marker without the other is a corruption error.
 func (p Publisher) Install(block string) (bool, string, error) {
+	return p.install(block, false)
+}
+
+// Preflight validates the existing guidance markers without writing.
+func (p Publisher) Preflight(block string) error {
+	_, _, err := p.install(block, true)
+	return err
+}
+
+func (p Publisher) install(block string, checkOnly bool) (bool, string, error) {
 	target := filepath.Join(p.root, "AGENTS.md")
+	if err := agentfiles.CheckPath(p.root, target); err != nil {
+		return false, target, fmt.Errorf("guidance path: %w", err)
+	}
 	existing, err := os.ReadFile(target)
 	switch {
 	case os.IsNotExist(err):
+		if checkOnly {
+			return true, target, nil
+		}
 		if err := os.WriteFile(target, []byte(block), 0o600); err != nil {
 			return false, target, fmt.Errorf("write %s: %w", target, err)
 		}
@@ -59,7 +76,7 @@ func (p Publisher) Install(block string) (bool, string, error) {
 	default:
 		return false, target, fmt.Errorf("%s: found one arclint marker without the other; repair or delete the block", target)
 	}
-	if next == content {
+	if checkOnly || next == content {
 		return false, target, nil
 	}
 	if err := os.WriteFile(target, []byte(next), 0o600); err != nil {

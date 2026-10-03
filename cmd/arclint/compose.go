@@ -22,6 +22,7 @@ import (
 	codexagents "github.com/wixregiga/arclint/internal/infrastructure/agents/codex"
 	agentfiles "github.com/wixregiga/arclint/internal/infrastructure/agents/files"
 	markdownagents "github.com/wixregiga/arclint/internal/infrastructure/agents/markdown"
+	ompagents "github.com/wixregiga/arclint/internal/infrastructure/agents/omp"
 	artifactfs "github.com/wixregiga/arclint/internal/infrastructure/artifact"
 	jsonbaseline "github.com/wixregiga/arclint/internal/infrastructure/baseline/json"
 	sobekextension "github.com/wixregiga/arclint/internal/infrastructure/extension/sobek"
@@ -234,11 +235,11 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	setup, err := application.NewSetupAgent(setupInitialize, initDomain, installHooks, agentfiles.Writer{Root: root, PreserveSkills: true}, publisher, setupScaffold)
+	setup, err := application.NewSetupAgent(setupInitialize, initDomain, installHooks, agentfiles.Writer{Root: root, PreserveSkills: true}, publisher, setupScaffold, agentSetupPreflight{root: root})
 	if err != nil {
 		return configError(err)
 	}
-	status, err := application.NewAgentSetupStatus(agentfiles.Writer{Root: root})
+	status, err := application.NewAgentSetupStatus(agentfiles.Writer{Root: root, HostInspectors: []agentfiles.HostInspector{codexagents.NewInstaller(root), ompagents.NewInstaller(root)}})
 	if err != nil {
 		return configError(err)
 	}

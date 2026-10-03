@@ -1,0 +1,71 @@
+{
+  "/home/jofyi/.codex/worktrees/9b98/arclint": {
+    "project_layers": [
+      {
+        "name": {
+          "type": "project",
+          "dotCodexFolder": "/home/jofyi/.codex/worktrees/9b98/arclint/.codex"
+        },
+        "disabledReason": null
+      }
+    ],
+    "arclint_hooks": [
+      {
+        "key": "/home/jofyi/ai/arclint/.codex/hooks.json:pre_tool_use:0:0",
+        "eventName": "preToolUse",
+        "command": "python3 '/home/jofyi/ai/arclint/.codex/hooks/arclint-domain-guard/guard.py' --root '/home/jofyi/ai/arclint'",
+        "sourcePath": "/home/jofyi/ai/arclint/.codex/hooks.json",
+        "source": "project",
+        "enabled": false,
+        "currentHash": "sha256:95a1367f2c2bb2c15346382ae1d67df4244f2f674648c505f380e025133e6bd2",
+        "trustStatus": "trusted"
+      },
+      {
+        "key": "/home/jofyi/ai/arclint/.codex/hooks.json:post_tool_use:0:0",
+        "eventName": "postToolUse",
+        "command": "python3 '/home/jofyi/ai/arclint/.codex/hooks/arclint-domain-guard/guard.py' --root '/home/jofyi/ai/arclint'",
+        "sourcePath": "/home/jofyi/ai/arclint/.codex/hooks.json",
+        "source": "project",
+        "enabled": true,
+        "currentHash": "sha256:0548cce792aca4b5495cedeb755c6f00987b95ac0567d4eb33578b6004da0185",
+        "trustStatus": "trusted"
+      },
+      {
+        "key": "/home/jofyi/ai/arclint/.codex/hooks.json:session_start:0:0",
+        "eventName": "sessionStart",
+        "command": "python3 '/home/jofyi/ai/arclint/.codex/hooks/arclint-domain-guard/guard.py' --root '/home/jofyi/ai/arclint'",
+        "sourcePath": "/home/jofyi/ai/arclint/.codex/hooks.json",
+        "source": "project",
+        "enabled": true,
+        "currentHash": "sha256:da362c71e7bc923ecc707839d28d944e35fe4600bb5117c4bb4efa46b4e700f5",
+        "trustStatus": "trusted"
+      },
+      {
+        "key": "/home/jofyi/ai/arclint/.codex/hooks.json:user_prompt_submit:0:0",
+        "eventName": "userPromptSubmit",
+        "command": "python3 '/home/jofyi/ai/arclint/.codex/hooks/arclint-domain-guard/guard.py' --root '/home/jofyi/ai/arclint'",
+        "sourcePath": "/home/jofyi/ai/arclint/.codex/hooks.json",
+        "source": "project",
+        "enabled": true,
+        "currentHash": "sha256:75c56beaa5c7987322f0ab0e1ba9c044a268bfe9f230e719347cea3c112887bf",
+        "trustStatus": "trusted"
+      },
+      {
+        "key": "/home/jofyi/ai/arclint/.codex/hooks.json:stop:0:0",
+        "eventName": "stop",
+        "command": "python3 '/home/jofyi/ai/arclint/.codex/hooks/arclint-domain-guard/guard.py' --root '/home/jofyi/ai/arclint'",
+        "sourcePath": "/home/jofyi/ai/arclint/.codex/hooks.json",
+        "source": "project",
+        "enabled": true,
+        "currentHash": "sha256:08aa7516e9148873a7480d946d20209aef309c901f29682fbc6a5d88a806b463",
+        "trustStatus": "trusted"
+      }
+    ],
+    "read_only_discovery": true
+  },
+  "/home/jofyi/.codex/worktrees/30f1/arclint": {
+    "project_layers": [],
+    "arclint_hooks": [],
+    "read_only_discovery": true
+  }
+}

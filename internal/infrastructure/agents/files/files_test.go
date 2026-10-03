@@ -4,6 +4,7 @@ import (
 	"github.com/wixregiga/arclint/internal/application"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -61,5 +62,109 @@ func TestScopeUpdatesOnlyExplicitSelections(t *testing.T) {
 		if _, err := Scope(root, []string{"domain.yaml"}, application.AgentSourceScope{DomainSources: []string{pattern}}); err == nil {
 			t.Fatalf("accepted unsafe or unsupported %s", pattern)
 		}
+	}
+}
+
+func TestScopeRejectsResolvedEscapesOnNativePlatform(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "secret.yaml"), []byte("secret"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	relative, err := filepath.Rel(root, filepath.Join(outside, "secret.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Scope(root, []string{relative}); err == nil {
+		t.Fatal("accepted platform-native parent escape")
+	}
+	if _, err := Scope(root, []string{filepath.Join(outside, "secret.yaml")}); err == nil {
+		t.Fatal("accepted absolute recording")
+	}
+	if err := os.WriteFile(filepath.Join(root, "domain.yaml"), []byte("domain"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "linked")); err != nil {
+		t.Skipf("native symlinks unavailable: %v", err)
+	}
+	if _, err := Scope(root, []string{"linked/secret.yaml"}); err == nil {
+		t.Fatal("accepted escaped domain symlink")
+	}
+	if _, err := Scope(root, []string{"domain.yaml"}, application.AgentSourceScope{Sources: []string{"linked/*.go"}}); err == nil {
+		t.Fatal("accepted escaped source-prefix symlink")
+	}
+}
+
+func TestPlannedScopePermitsOnlyAbsentDefaultRecording(t *testing.T) {
+	root := t.TempDir()
+	if _, err := PlannedScope(root, []string{"domain.arclint.yaml"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PlannedScope(root, []string{"domain.arclint.yaml", "other.yaml"}); err == nil {
+		t.Fatal("preflight accepted missing default that setup will not create")
+	}
+	if _, err := Scope(root, []string{"domain.arclint.yaml"}); err == nil {
+		t.Fatal("normal install accepted absent recording")
+	}
+	if _, err := PlannedScope(root, []string{"custom.yaml"}); err == nil {
+		t.Fatal("preflight accepted absent custom recording")
+	}
+	if err := os.Symlink(filepath.Join(t.TempDir(), "missing.yaml"), filepath.Join(root, "domain.arclint.yaml")); err != nil {
+		t.Skipf("native symlinks unavailable: %v", err)
+	}
+	if _, err := PlannedScope(root, []string{"domain.arclint.yaml"}); err == nil {
+		t.Fatal("preflight accepted dangling recording symlink")
+	}
+}
+
+func TestScopeWindowsBackslashTraversal(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("requires native Windows filepath semantics")
+	}
+	parent := t.TempDir()
+	root := filepath.Join(parent, "project")
+	if err := os.Mkdir(root, 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(parent, "secret.yaml"), []byte("outside evidence"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Scope(root, []string{`..\secret.yaml`}); err == nil {
+		t.Fatal("accepted explicit Windows parent path")
+	}
+	if _, err := PlannedScope(root, []string{`..\secret.yaml`}); err == nil {
+		t.Fatal("planned scope accepted explicit Windows parent path")
+	}
+}
+
+func TestScopeDoubleStarRequiresActualReadableMatches(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "domain.yaml"), []byte("domain"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "src", "nested"), 0750); err != nil {
+		t.Fatal(err)
+	}
+	selection := application.AgentSourceScope{Sources: []string{"src/**/*.go"}}
+	if _, err := Scope(root, []string{"domain.yaml"}, selection); err == nil {
+		t.Fatal("accepted empty recursive glob")
+	}
+	for _, name := range []string{"src/direct.go", "src/nested/deep.go"} {
+		if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(name)), []byte("package source"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := Scope(root, []string{"domain.yaml"}, selection); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "secret.go")
+	if err := os.WriteFile(outside, []byte("outside source"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "src", "secret.go")); err != nil {
+		t.Skipf("native symlinks unavailable: %v", err)
+	}
+	if _, err := Scope(root, []string{"domain.yaml"}, selection); err == nil {
+		t.Fatal("accepted escaping matched symlink alongside valid files")
 	}
 }

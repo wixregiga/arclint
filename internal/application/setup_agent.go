@@ -10,6 +10,9 @@ import (
 // RulesetPresence lets setup initialize only a repository without a ruleset.
 type RulesetPresence interface{ Exists() (bool, error) }
 
+// AgentSetupPreflight validates the requested integration without writes.
+type AgentSetupPreflight interface{ Validate(SetupAgentRequest) error }
+
 // SetupAgent coordinates the existing setup operations; the host owns activation.
 type SetupAgent struct {
 	initialize InitializeRepository
@@ -18,6 +21,7 @@ type SetupAgent struct {
 	artifacts  ArtifactWriter
 	publisher  AgentsPublisher
 	ruleset    RulesetPresence
+	preflight  AgentSetupPreflight
 }
 
 // SetupAgentRequest carries the explicit host and subject/evidence choices.
@@ -31,17 +35,28 @@ type SetupAgentRequest struct {
 }
 
 // NewSetupAgent reuses the existing initialization and publication operations.
-func NewSetupAgent(initialize InitializeRepository, domain InitDomain, hooks InstallAgentHooks, artifacts ArtifactWriter, publisher AgentsPublisher, ruleset RulesetPresence) (SetupAgent, error) {
-	if artifacts == nil || publisher == nil || ruleset == nil || hooks.installer == nil {
+func NewSetupAgent(initialize InitializeRepository, domain InitDomain, hooks InstallAgentHooks, artifacts ArtifactWriter, publisher AgentsPublisher, ruleset RulesetPresence, preflight AgentSetupPreflight) (SetupAgent, error) {
+	if domain.knowledge == nil || initialize.scaffold == nil || preflight == nil || artifacts == nil || publisher == nil || ruleset == nil || hooks.installer == nil {
 		return SetupAgent{}, fmt.Errorf("agent setup: missing dependency")
 	}
-	return SetupAgent{initialize: initialize, domain: domain, hooks: hooks, artifacts: artifacts, publisher: publisher, ruleset: ruleset}, nil
+	return SetupAgent{initialize: initialize, domain: domain, hooks: hooks, artifacts: artifacts, publisher: publisher, ruleset: ruleset, preflight: preflight}, nil
 }
 
 // Execute never replaces existing rules or recordings and never grants host trust.
 func (uc SetupAgent) Execute(req SetupAgentRequest) ([]string, error) {
 	if req.Host != "omp" && req.Host != codexHost {
 		return nil, fmt.Errorf("choose --host omp or --host codex")
+	}
+	if len(req.DomainFiles) == 0 {
+		req.DomainFiles = []string{vocab.UbiquitousLanguageFileName}
+	}
+	if len(req.DomainFiles) == 1 && req.DomainFiles[0] == vocab.UbiquitousLanguageFileName {
+		if _, _, err := uc.domain.knowledge.RecordedLanguage(); err != nil {
+			return nil, fmt.Errorf("agent setup recording: %w", err)
+		}
+	}
+	if err := uc.preflight.Validate(req); err != nil {
+		return nil, fmt.Errorf("agent setup preflight: %w", err)
 	}
 	existing, err := uc.ruleset.Exists()
 	if err != nil {
@@ -64,10 +79,30 @@ func (uc SetupAgent) Execute(req SetupAgentRequest) ([]string, error) {
 		}
 		req.DomainFiles = []string{result.Source}
 	}
-	protocol, _ := NewPublishSkillProtocol(uc.artifacts)
-	vocabulary, _ := NewPublishSkillVocabulary(uc.artifacts)
-	schema, _ := NewPublishDomainSchema(uc.artifacts)
-	_, workflow, err := uc.artifacts.Write(DomainLibrarianSkillDir, "ARCLINT.md", []byte("# ArcLint setup and review\n\n"+vocab.SkillAgentWorkflow+"\n"))
+	artifactPaths, err := PublishAgentSetupArtifacts(uc.artifacts)
+	if err != nil {
+		return nil, err
+	}
+	paths = append(paths, artifactPaths...)
+	hookPaths, err := uc.hooks.Execute(req.Host, req.DomainFiles, AgentSourceScope{DomainSources: req.DomainSources, Sources: req.Sources})
+	if err != nil {
+		return nil, fmt.Errorf("agent setup: %w", err)
+	}
+	paths = append(paths, hookPaths...)
+	_, path, err := uc.publisher.Install(AgentSetupGuidance(req.DomainFiles))
+	if err != nil {
+		return nil, fmt.Errorf("agent setup: %w", err)
+	}
+	return append(paths, path), nil
+}
+
+// PublishAgentSetupArtifacts writes the coordinated authored workflow and generated assets.
+func PublishAgentSetupArtifacts(writer ArtifactWriter) ([]string, error) {
+	paths := []string{}
+	protocol, _ := NewPublishSkillProtocol(writer)
+	vocabulary, _ := NewPublishSkillVocabulary(writer)
+	schema, _ := NewPublishDomainSchema(writer)
+	_, workflow, err := writer.Write(DomainLibrarianSkillDir, "ARCLINT.md", []byte("# ArcLint setup and review\n\n"+vocab.SkillAgentWorkflow+"\n"))
 	if err != nil {
 		return nil, fmt.Errorf("agent setup workflow: %w", err)
 	}
@@ -84,19 +119,12 @@ func (uc SetupAgent) Execute(req SetupAgentRequest) ([]string, error) {
 		return nil, fmt.Errorf("agent setup: %w", err)
 	}
 	paths = append(paths, path)
-	hookPaths, err := uc.hooks.Execute(req.Host, req.DomainFiles, AgentSourceScope{DomainSources: req.DomainSources, Sources: req.Sources})
-	if err != nil {
-		return nil, fmt.Errorf("agent setup: %w", err)
-	}
-	paths = append(paths, hookPaths...)
-	_, path, err = uc.publisher.Install(agentSetupGuidance(req.DomainFiles))
-	if err != nil {
-		return nil, fmt.Errorf("agent setup: %w", err)
-	}
-	return append(paths, path), nil
+
+	return paths, nil
 }
 
-func agentSetupGuidance(domains []string) string {
+// AgentSetupGuidance renders setup guidance for preflight and publication.
+func AgentSetupGuidance(domains []string) string {
 	return AgentsBegin + "\n## Architecture guidance (ArcLint)\n\n" +
 		"Use .arclint/bin/arclint when installed, otherwise arclint.\n" +
 		"Run arclint context [paths...] before changing architecture or domain behavior.\n" +

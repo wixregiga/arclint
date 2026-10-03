@@ -52,6 +52,13 @@ The lower-level agents hooks command remains available without a ruleset.
 It preserves existing host configuration and unrelated hooks, and does not
 configure credentials or grant trust. An identical installation is a no-op;
 modified installed guard files are reported as conflicts and preserved.
+Setup validates hook scope, host support and existing managed-file conflicts
+before creating its rules, recording or guidance files. A rejected validation
+leaves those files untouched. This does not promise crash-atomic filesystem writes.
+
+Setup, hooks installation, guard status, reviewer installation and reviewer status
+honor `--format json` through the normal report renderer. Their structured results
+describe installed paths, scope and integrity; they cannot report host activation.
 
 For OMP 18.4.4, start a new session or run `/reload`, then use
 `/arclint-domain-status` to check loading, scope and the last review.
@@ -69,6 +76,14 @@ section, and per-hook Trust controls. Its folder-opening flow includes
 "Trust this folder?" and "Trust folder"; explicitly untrusted folders instead
 retain restrictions. These controls were verified in bundled UI code, not an
 interactive activation walkthrough. The `/hooks` command is CLI-specific. Cloud-orchestrated sessions are unsupported.
+
+Codex 0.159.2 loads linked-worktree hook definitions from the main checkout.
+Writing a worktree-local hooks.json does not activate it in that version. The
+shipped guard uses the event's session directory and that checkout's own explicit
+scope, with separate session state; missing checkout configuration is unavailable
+review. This routing does not update an older guard installed in the main checkout.
+An independent new command definition requires the host's ordinary trust approval.
+Do not replace a separate main installation or bypass hook trust for a test pass.
 
 The Codex installer targets Linux/WSL projects. It includes a Windows command
 override invoking Python in the installation's WSL distribution. Python 3 and
@@ -90,7 +105,9 @@ selects supporting implementation evidence. Setup accepts repeatable
 ```
 
 Source patterns must have a literal project-relative prefix. They support
-`*`, `?` and `**`; missing matches and paths escaping the project fail review.
+`*`, `?` and `**`. Paths escaping the project fail review using the host platform's
+path semantics. Missing configured material remains required evidence and prevents
+a completion pass.
 The guard does not follow recording references automatically, infer a complete
 domain boundary, or review the whole repository. Selected application or
 delivery files can provide evidence for a recorded obligation without becoming
@@ -104,6 +121,14 @@ and duplicated decisions. The comment check applies to recordings and explicitly
 Domain-related responses receive review even without file edits. Findings need
 an exact supplied quote, a concrete conflict and a scoped correction. Repairs
 and evidence-backed rebuttals receive fresh review; the request is not rewritten.
+
+The pre-tool hook reviews a directly inspectable proposal to restore missing
+scoped material. Permission to make that repair does not approve its contents:
+the resulting files and completion response must receive fresh review. A mixed
+patch that also changes unrelated or protected files gets no restoration exemption.
+Malformed scope and escaping paths are errors, not missing material. Dedicated
+inspection can report the problem without renewing an approval; arbitrary shell
+commands are not presumed read-only.
 
 Known edit and shell tools receive pre-edit review during domain work, and
 explicitly referenced scoped files trigger review before a domain-work flag
@@ -158,7 +183,7 @@ node --test internal/infrastructure/agents/omp/assets/guard.test.mjs
 python3 internal/infrastructure/agents/codex/assets/guard_test.py
 ```
 
-These tests inject review verdicts and cover repair, source freshness,
+These tests inject review verdicts and cover pre-tool repair permission, source freshness,
 response-only review, governance changes, failures, operator escape and
 installation preservation. They do not establish real model review quality
 or native execution of trusted Codex hooks.

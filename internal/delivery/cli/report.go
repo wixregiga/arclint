@@ -210,3 +210,31 @@ func (SDKInitReport) report() {}
 func NewDomainDefineReport(result application.DomainDefineResult, req application.DefineDomainRequest) DomainDefineReport {
 	return DomainDefineReport{Result: result, Change: req.Change}
 }
+
+// AgentInstallReport reports the written paths and remaining host steps.
+// Activation is guidance, never evidence that the host activated anything.
+type AgentInstallReport struct {
+	Operation, Host string
+	Paths           []string
+	Activation      string
+}
+
+func (AgentInstallReport) report() {}
+
+// AgentStatusReport carries observed guard installation facts.
+type AgentStatusReport struct{ Installation application.AgentInstallation }
+
+func (AgentStatusReport) report() {}
+
+// ReviewerStatusReport carries observed separate reviewer installation facts.
+type ReviewerStatusReport struct {
+	Installation application.ReviewerInstallation
+}
+
+func (ReviewerStatusReport) report() {}
+
+// Installation limits accompany facts without claiming host activation or approval.
+const (
+	AgentStatusLimits    = "Installation status is not a review verdict. Codex: review /hooks in CLI or Settings > Coding > Hooks in desktop. OMP: /arclint-domain-status."
+	ReviewerStatusLimits = "Installation and integrity do not prove Codex discovery, activation or review quality. Activity records are in the Codex conversation; ArcLint does not manage their storage or retention."
+)

@@ -26,11 +26,11 @@ func NewAgentsCommand(
 		Name:  "agents",
 		Short: "AGENTS.md architecture block and domain-librarian skill artifacts",
 		Subcommands: []Command{
-			newAgentReviewerCommand(installReviewer, reviewerStatus),
-			newAgentSetupCommand(setup),
-			newAgentStatusCommand(status),
+			newAgentReviewerCommand(installReviewer, reviewerStatus, render),
+			newAgentSetupCommand(setup, render),
+			newAgentStatusCommand(status, render),
 			newAgentsMDCommand(publish, render),
-			newAgentHooksCommand(installHooks),
+			newAgentHooksCommand(installHooks, render),
 			newAgentsSkillCommand(publishProtocol, publishVocabulary, publishSchema, render),
 		},
 	}

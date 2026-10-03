@@ -14,7 +14,7 @@ const (
 	agentDomainFlag = "domain"
 )
 
-func newAgentSetupCommand(setup application.SetupAgent) Command {
+func newAgentSetupCommand(setup application.SetupAgent, render Renderer) Command {
 	return Command{
 		Name:  "setup",
 		Short: "prepare rules, domain guidance, skill and native hooks for one chosen host",
@@ -37,13 +37,7 @@ func newAgentSetupCommand(setup application.SetupAgent) Command {
 			if err != nil {
 				return ConfigError(err)
 			}
-			for _, path := range paths {
-				if _, err := fmt.Fprintln(ctx.Stdout, path); err != nil {
-					return fmt.Errorf("write agent setup output: %w", err)
-				}
-			}
-			_, err = fmt.Fprintln(ctx.Stdout, agentActivation(ctx.String(agentHostFlag)))
-			if err != nil {
+			if err := render.Render(ctx.Stdout, AgentInstallReport{Operation: "setup", Host: ctx.String(agentHostFlag), Paths: paths, Activation: agentActivation(ctx.String(agentHostFlag))}); err != nil {
 				return fmt.Errorf("write agent setup output: %w", err)
 			}
 			return nil

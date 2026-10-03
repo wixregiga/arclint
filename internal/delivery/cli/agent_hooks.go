@@ -6,7 +6,7 @@ import (
 	"github.com/wixregiga/arclint/internal/application"
 )
 
-func newAgentHooksCommand(install application.InstallAgentHooks) Command {
+func newAgentHooksCommand(install application.InstallAgentHooks, render Renderer) Command {
 	return Command{
 		Name:  "hooks",
 		Short: "install a project-local domain guard for OMP or Codex",
@@ -21,14 +21,7 @@ func newAgentHooksCommand(install application.InstallAgentHooks) Command {
 			if err != nil {
 				return ConfigError(err)
 			}
-			for _, path := range paths {
-				if _, err := fmt.Fprintln(ctx.Stdout, path); err != nil {
-					return fmt.Errorf("write hook installation output: %w", err)
-				}
-			}
-			message := agentActivation(ctx.String(agentHostFlag))
-			_, err = fmt.Fprintln(ctx.Stdout, message)
-			if err != nil {
+			if err := render.Render(ctx.Stdout, AgentInstallReport{Operation: "hooks", Host: ctx.String(agentHostFlag), Paths: paths, Activation: agentActivation(ctx.String(agentHostFlag))}); err != nil {
 				return fmt.Errorf("write hook installation output: %w", err)
 			}
 			return nil

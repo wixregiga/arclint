@@ -1,0 +1,13 @@
+<hook_prompt hook_run_id="stop:4:/home/jofyi/ai/arclint/.codex/hooks.json">Warning: truncated output (original token count: 27268)
+Total output lines: 505
+
+ArcLint: keep domain work within the original product request. Reuse existing concepts before adding categories. Use concrete product language. Apply the supplied comment policy only to domain recordings and domainSourcePatterns; preserve required directives and legal notices. Repair findings within scope or rebut them with evidence. Do not change requirements, guard configuration, rules or baselines to manufacture approval.
+internal/domain/rule/root.go: "// Package rule holds the Rule aggregate and the domain values ArcLint
+// uses to evaluate repository conformance. Rule is the sole aggregate
+// root: one independently identifiable lint rule carrying a Constraint,
+// optional Rationale, and where and how ArcLint evaluates it. Invalid
+// Rules cannot be constructed, and no code outside the aggregate
+// enforces its invariants." — Comment on line 1; this file is an explicit domain-source subject. Repair: Express the intent in domain code or move explanation outside the domain source. Preserve required directives and legal notices; do not delete them to pass.
+internal/domain/rule/root.go: "// Rule is the aggregate root. Values are immutable: configuration
+// methods return a new Rule with the same identity." — Comment on line
+[remaining output omitted; original in external raw trace]

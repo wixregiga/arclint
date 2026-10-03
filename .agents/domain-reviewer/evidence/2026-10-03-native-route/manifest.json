@@ -1,0 +1,31 @@
+{
+  "purpose": "native loader/selector route only; historical installed asset",
+  "cli_version": "0.159.2",
+  "installed_hash": "00c93a87b32950ef674141415bf193d59f81d2a07fb119e6ef93a0c6d5df40e1",
+  "native_spawn_requested": true,
+  "native_spawn_observed": true,
+  "spawn_result": {
+    "task_name": "/root/native_reviewer_probe",
+    "nickname": "Fermat"
+  },
+  "child_source": {
+    "subagent": {
+      "thread_spawn": {
+        "parent_thread_id": "01a103e3-2d72-7560-a9d6-d1e4e03dcf78",
+        "depth": 1,
+        "agent_path": "/root/native_reviewer_probe",
+        "agent_nickname": "Fermat",
+        "agent_role": "arclint-domain-reviewer"
+      }
+    }
+  },
+  "parent_thread": "01a103e3-2d72-7560-a9d6-d1e4e03dcf78",
+  "child_thread": "01a103e4-6d5f-7891-8495-8423a95fde76",
+  "hook_prompt_id": "<hook_prompt hook_run_id=\"stop:4:/home/jofyi/ai/arclint/.codex/hooks.json\">",
+  "exit_code": 0,
+  "corrected_semantic_validation": false,
+  "raw_trace_hashes": {
+    "rollout-2026-10-03T18-29-43-01a103e3-2d72-7560-a9d6-d1e4e03dcf78.jsonl": "dee955002ea9d1aa4092b0b6dc39ad2b3004791bb256247b50f280131c16389f",
+    "rollout-2026-10-03T18-31-04-01a103e4-6d5f-7891-8495-8423a95fde76.jsonl": "e7bac9e2389a03fd0ce01785e6574fdf14733bc071e9f24f3a0e279465c1e656"
+  }
+}

@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 import subprocess
@@ -220,6 +221,285 @@ class GuardTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Unterminated Go"):
                 guard.go_comments(source)
 
+
+
+
+class GuardProtocolTests(unittest.TestCase):
+    """Run the installed script over stdin/stdout; the model executable is a unit fixture."""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)/"project"
+        self.root.mkdir()
+        (self.root/".arclint").mkdir()
+        (self.root/".codex/hooks/arclint-domain-guard").mkdir(parents=True)
+        self.script = self.root/".codex/hooks/arclint-domain-guard/guard.py"
+        self.script.write_bytes(Path(guard.__file__).read_bytes())
+        (self.root/".codex/hooks.json").write_text("{}")
+        (self.root/"domain.yaml").write_text("version: 1\ncontexts: {}\n")
+        (self.root/"src").mkdir()
+        (self.root/"src/domain.go").write_text("package domain\n")
+        self.config = {"version":1,"domainFiles":["domain.yaml"],"sourcePatterns":["src/domain.go"]}
+        self.configure()
+        self.log = Path(self.tmp.name)/"model-calls.jsonl"
+        binary = Path(self.tmp.name)/"codex"
+        binary.write_text("#!" + sys.executable + "\n" + r"""
+import json,os,sys
+from pathlib import Path
+prompt = sys.stdin.read()
+evidence = json.loads(prompt.split('\nEvidence:\n', 1)[1].split('\nPrevious findings:\n', 1)[0])
+with open(os.environ['ARCLINT_UNIT_REVIEW_LOG'], 'a') as stream:
+    stream.write(json.dumps(evidence) + '\n')
+findings = []
+if 'FORBIDDEN_NEW_MEANING' in evidence.get('proposal', ''):
+    findings = [{'file':'proposal','quote':'FORBIDDEN_NEW_MEANING','reason':'Unit fixture rejects this proposal.','repair':'Restore only the agreed content.'}]
+Path(sys.argv[sys.argv.index('--output-last-message')+1]).write_text(json.dumps({'relevant':True,'findings':findings}))
+""")
+        binary.chmod(0o700)
+        self.env = dict(os.environ, PATH=self.tmp.name+os.pathsep+os.environ["PATH"], ARCLINT_UNIT_REVIEW_LOG=str(self.log))
+
+    def configure(self):
+        (self.root/".arclint/domain-guard.json").write_text(json.dumps(self.config))
+
+    def event(self, name, **fields):
+        event = dict(hook_event_name=name, session_id="protocol-fixture", **fields)
+        result = subprocess.run([sys.executable, "-B", str(self.script), "--root", str(self.root)],
+                                input=json.dumps(event), text=True, capture_output=True, env=self.env, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return json.loads(result.stdout)
+
+    def state(self):
+        return json.loads(next((self.root/".arclint/cache/codex-domain-guard").glob("*.json")).read_text())
+
+    def allowed(self, output):
+        self.assertNotEqual(output.get("hookSpecificOutput", {}).get("permissionDecision"), "deny", output)
+        self.assertNotEqual(output.get("continue"), False, output)
+
+    def restore(self, path, content):
+        patch = "*** Begin Patch\n*** Add File: " + path + "\n" + "".join("+"+line+"\n" for line in content.splitlines()) + "*** End Patch"
+        return self.event("PreToolUse", tool_name="apply_patch", tool_input={"input":patch})
+
+    def test_missing_recording_restores_through_pre_post_and_fresh_stop(self):
+        self.missing_lifecycle("domain.yaml", "version: 1\ncontexts: {}\n")
+
+    def test_missing_literal_source_restores_through_pre_post_and_fresh_stop(self):
+        self.missing_lifecycle("src/domain.go", "package domain\n")
+
+    def test_custom_recording_under_arclint_restores_without_metadata_exemption(self):
+        self.config["domainFiles"] = [".arclint/domain.yaml"]
+        self.configure()
+        (self.root/".arclint/domain.yaml").write_text("version: 1\ncontexts: {}\n")
+        self.missing_lifecycle(".arclint/domain.yaml", "version: 1\ncontexts: {}\n")
+
+    def test_selecting_missing_metadata_does_not_make_it_restorable(self):
+        for name in ("rules.arclint.yaml", ".arclint/baseline.v2.json", ".arclint/agent-assets.json", ".arclint/reviewer.json", ".arclint/cache/fake.json", ".codex/config.toml"):
+            with self.subTest(name=name):
+                self.config["domainFiles"] = [name]
+                self.configure()
+                self.event("SessionStart")
+                result = self.restore(name, "weakened")
+                self.assertEqual(result["hookSpecificOutput"]["permissionDecision"], "deny")
+                self.assertIn("protected", result["hookSpecificOutput"]["permissionDecisionReason"])
+                self.assertFalse((self.root/name).exists())
+
+    def test_empty_glob_restores_through_pre_post_and_fresh_stop(self):
+        self.config["sourcePatterns"] = ["src/**/*.go"]
+        self.configure()
+        self.missing_lifecycle("src/domain.go", "package domain\n")
+
+    def missing_lifecycle(self, name, content):
+        (self.root/name).unlink()
+        start = self.event("SessionStart")
+        self.assertIn("Missing configured material", start["systemMessage"])
+        self.event("UserPromptSubmit", prompt="Restore the missing scoped material with its agreed meaning.")
+        self.assertEqual(self.event("Stop", last_assistant_message="Not restored yet")["decision"], "block")
+        self.allowed(self.restore(name, content))
+        self.assertEqual(self.state()["verdict"]["status"], "permitted")
+        self.assertIn("not approval", self.state()["error"])
+        self.assertEqual(self.event("Stop", last_assistant_message="Permission is not restoration")["decision"], "block")
+        (self.root/name).write_text(content)
+        self.event("PostToolUse")
+        self.assertEqual(self.state()["verdict"]["event"], "PostToolUse")
+        self.assertEqual(self.event("Stop", last_assistant_message="Restored and reviewed"), {})
+        evidence = [json.loads(line) for line in self.log.read_text().splitlines()]
+        self.assertEqual([item["review_stage"] for item in evidence], ["PreToolUse", "PostToolUse", "Stop"])
+        self.assertTrue(json.loads(evidence[0]["missing_material"]))
+        self.assertEqual(evidence[-1][name], content)
+        self.assertEqual(json.loads(evidence[-1]["missing_material"]), [])
+
+    def test_ordinary_finding_repair_passes_permission_before_mutation(self):
+        (self.root/"domain.yaml").write_text("# remove this comment\nversion: 1\n")
+        self.event("SessionStart")
+        self.event("UserPromptSubmit", prompt="Repair the domain comment.")
+        self.assertEqual(self.event("Stop", last_assistant_message="Done")["decision"], "block")
+        content = "version: 1\ncontexts: {}\n"
+        self.allowed(self.event("PreToolUse", tool_name="Write", tool_input={"file_path":str(self.root/"domain.yaml"), "content":content}))
+        self.assertTrue(any(item["open"] for item in self.state()["findings"].values()))
+        self.assertEqual(self.state()["verdict"]["status"], "permitted")
+        (self.root/"domain.yaml").write_text(content)
+        self.event("PostToolUse")
+        self.assertEqual(self.event("Stop", last_assistant_message="Repaired comment"), {})
+        self.assertFalse(any(item["open"] for item in self.state()["findings"].values()))
+
+    def test_restoration_is_reviewed_and_mixed_or_opaque_edits_are_denied(self):
+        (self.root/"src/domain.go").unlink()
+        self.event("SessionStart")
+        rejected = self.restore("src/domain.go", "FORBIDDEN_NEW_MEANING")
+        self.assertEqual(rejected["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertIn("Unit fixture rejects", rejected["hookSpecificOutput"]["permissionDecisionReason"])
+        proposals = [
+            ("exec_command", {"cmd":"touch src/domain.go"}),
+            ("Write", {"file_path":"unrelated.go", "content":"package unrelated"}),
+            ("Write", {"file_path":"domain.yaml", "content":"changed"}),
+            ("Write", {"file_path":"rules.arclint.yaml", "content":"weaker"}),
+            ("Write", {"file_path":"../outside.go", "content":"outside"}),
+            ("apply_patch", {"input":"*** Begin Patch\n*** Add File: src/domain.go\n+package domain\n*** Add File: unrelated.go\n+package unrelated\n*** End Patch"}),
+            ("apply_patch", {"input":"*** Begin Patch\n*** Add File: src/domain.go\n+package domain\n*** Update File: domain.yaml\n@@\n-changed\n+also changed\n*** End Patch"}),
+        ]
+        for tool, inputs in proposals:
+            with self.subTest(tool=tool, inputs=inputs):
+                output = self.event("PreToolUse", tool_name=tool, tool_input=inputs)
+                self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertFalse((self.root/"src/domain.go").exists())
+
+    def test_inspection_does_not_renew_governance_approval(self):
+        self.event("SessionStart")
+        self.event("UserPromptSubmit", prompt="Review domain")
+        self.assertEqual(self.event("Stop", last_assistant_message="Reviewed"), {})
+        (self.root/"rules.arclint.yaml").write_text("changed")
+        self.allowed(self.event("PreToolUse", tool_name="Read", tool_input={"file_path":"rules.arclint.yaml"}))
+        self.assertEqual(self.state()["verdict"]["status"], "unavailable")
+        self.assertEqual(self.event("PreToolUse", tool_name="exec_command", tool_input={"cmd":"make check-ro"})["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertEqual(self.event("Stop", last_assistant_message="Read is not approval")["decision"], "block")
+        (self.root/"rules.arclint.yaml").unlink()
+        self.assertEqual(self.event("Stop", last_assistant_message="Restored original governance and reviewed again"), {})
+
+    def another_checkout(self, name="worktree"):
+        target = Path(self.tmp.name)/name
+        target.mkdir()
+        (target/".git").write_text("gitdir: ../project/.git/worktrees/fixture\n")
+        (target/".arclint").mkdir()
+        (target/".arclint/domain-guard.json").write_text(json.dumps({"version":1,"domainFiles":["domain.yaml"]}))
+        (target/"domain.yaml").write_text("version: 1\nproject: other-checkout\n")
+        (target/"nested").mkdir()
+        return target
+
+    def test_executable_routes_host_cwd_to_its_own_scope_and_state(self):
+        self.event("SessionStart")
+        original_state = self.state()
+        target = self.another_checkout()
+        cwd = str(target/"nested")
+        self.event("SessionStart", cwd=cwd)
+        self.event("UserPromptSubmit", cwd=cwd, prompt="Review this checkout")
+        self.assertEqual(self.event("Stop", cwd=cwd, last_assistant_message="Reviewed current checkout"), {})
+        evidence = [json.loads(line) for line in self.log.read_text().splitlines()]
+        self.assertEqual(evidence[-1]["domain.yaml"], "version: 1\nproject: other-checkout\n")
+        self.assertEqual(self.state(), original_state)
+        state_path = next((target/".arclint/cache/codex-domain-guard").glob("*.json"))
+        self.assertEqual(json.loads(state_path.read_text())["verdict"]["status"], "passed")
+
+    def test_executable_translates_both_wsl_unc_forms_and_rejects_other_distribution(self):
+        target = self.another_checkout()
+        self.env["WSL_DISTRO_NAME"] = "Fixture-Distro"
+        for host in ("wsl$", "wsl.localhost"):
+            cwd = "\\\\" + host + "\\Fixture-Distro" + str(target/"nested").replace("/", "\\")
+            self.allowed(self.event("SessionStart", cwd=cwd))
+            self.event("UserPromptSubmit", cwd=cwd, prompt="Review current worktree")
+            self.assertEqual(self.event("Stop", cwd=cwd, last_assistant_message="Reviewed"), {})
+        wrong = "\\\\wsl.localhost\\Other-Distro" + str(target).replace("/", "\\")
+        rejected = self.event("PreToolUse", cwd=wrong, tool_name="Write", tool_input={"file_path":"domain.yaml","content":"wrong checkout"})
+        self.assertEqual(rejected["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertIn("distribution", rejected["hookSpecificOutput"]["permissionDecisionReason"])
+
+    def test_executable_stops_at_repository_boundary_without_fallback(self):
+        self.event("SessionStart")
+        previous = self.state()
+        nested = self.root/"nested-repo"
+        nested.mkdir()
+        (nested/".git").write_text("gitdir: somewhere\n")
+        result = self.event("PreToolUse", cwd=str(nested), tool_name="Write", tool_input={"file_path":"domain.yaml","content":"wrong checkout"})
+        self.assertEqual(result["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertIn("no domain guard configuration", result["hookSpecificOutput"]["permissionDecisionReason"])
+        self.assertEqual(self.state(), previous)
+        self.assertFalse((nested/".arclint/cache").exists())
+        self.assertFalse(self.log.exists())
+
+    def test_executable_rejects_missing_cwd_instead_of_reviewing_fallback(self):
+        self.event("SessionStart")
+        previous = self.state()
+        result = self.event("Stop", cwd=str(self.root/"absent"), last_assistant_message="Not reviewed")
+        self.assertFalse(result["continue"])
+        self.assertIn("no approval", result["stopReason"])
+        self.assertEqual(self.state(), previous)
+        self.assertFalse(self.log.exists())
+
+    def test_executable_fingerprints_actual_inherited_hook_code(self):
+        target = self.another_checkout()
+        self.event("SessionStart", cwd=str(target))
+        self.script.write_text(self.script.read_text()+"\n# changed executing hook\n")
+        result = self.event("PreToolUse", cwd=str(target), tool_name="Write", tool_input={"file_path":"domain.yaml","content":"changed"})
+        self.assertEqual(result["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertIn("hook code", result["hookSpecificOutput"]["permissionDecisionReason"])
+
+    def test_executable_fingerprints_inherited_hook_provider_configuration(self):
+        target = self.another_checkout()
+        self.event("SessionStart", cwd=str(target))
+        (self.root/".codex/hooks.json").write_text('{"hooks":{}}')
+        result = self.event("PreToolUse", cwd=str(target), tool_name="Write", tool_input={"file_path":"domain.yaml","content":"changed"})
+        self.assertEqual(result["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertIn("hook code", result["hookSpecificOutput"]["permissionDecisionReason"])
+        self.assertFalse((target/".codex/hooks.json").exists())
+
+    def test_inspection_before_session_start_leaves_usable_state(self):
+        self.allowed(self.event("PreToolUse", tool_name="Read", tool_input={"file_path":"domain.yaml"}))
+        self.event("UserPromptSubmit", prompt="Review this domain")
+        self.assertEqual(self.event("Stop", last_assistant_message="Reviewed"), {})
+        self.assertEqual(self.state()["requests"], ["Review this domain"])
+
+    def test_goal_bookkeeping_is_allowed_but_does_not_accept_governance(self):
+        self.event("SessionStart")
+        (self.root/"rules.arclint.yaml").write_text("changed")
+        self.allowed(self.event("PreToolUse", tool_name="update_goal", tool_input={"status":"blocked"}))
+        self.assertEqual(self.state()["verdict"]["status"], "unavailable")
+        self.assertEqual(self.event("Stop", last_assistant_message="Still unavailable")["decision"], "block")
+
+    def test_inspection_detects_missing_material_without_approving_it(self):
+        self.event("SessionStart")
+        self.event("UserPromptSubmit", prompt="Review domain")
+        self.assertEqual(self.event("Stop", last_assistant_message="Reviewed"), {})
+        (self.root/"src/domain.go").unlink()
+        self.allowed(self.event("PreToolUse", tool_name="Read", tool_input={"file_path":"domain.yaml"}))
+        self.assertEqual(self.state()["verdict"]["status"], "unavailable")
+        self.assertEqual(self.event("Stop", last_assistant_message="Still missing")["decision"], "block")
+
+    def test_in_project_symlink_alias_cannot_restore_protected_governance(self):
+        (self.root/"alias").symlink_to(self.root, target_is_directory=True)
+        self.config["domainFiles"] = ["alias/rules.yaml"]
+        self.configure()
+        self.event("SessionStart")
+        result = self.restore("alias/rules.yaml", "weakened")
+        self.assertEqual(result["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertIn("symlink", result["hookSpecificOutput"]["permissionDecisionReason"])
+        self.assertFalse((self.root/"rules.yaml").exists())
+
+    def test_escaping_symlink_is_not_missing_restorable_material(self):
+        (self.root/"src/domain.go").unlink()
+        (self.root/"src").rmdir()
+        outside = Path(self.tmp.name)/"outside"
+        outside.mkdir()
+        (self.root/"src").symlink_to(outside, target_is_directory=True)
+        self.event("SessionStart")
+        result = self.restore("src/domain.go", "package domain\n")
+        self.assertEqual(result["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertIn("escapes", result["hookSpecificOutput"]["permissionDecisionReason"])
+        self.assertFalse((outside/"domain.go").exists())
+
+    def test_changed_source_after_post_review_requires_another_review(self):
+        self.event("SessionStart")
+        self.event("UserPromptSubmit", prompt="Keep the domain clean")
+        self.event("PostToolUse")
+        (self.root/"domain.yaml").write_text("# late defect\nversion: 1\n")
+        self.assertEqual(self.event("Stop", last_assistant_message="Done")["decision"], "block")
 
 
 if __name__=="__main__":

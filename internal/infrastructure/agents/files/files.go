@@ -11,12 +11,22 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/wixregiga/arclint/internal/application"
 )
+
+// HostInspector supplies host-owned registration evidence to the asset inspector.
+// It is an infrastructure seam; the application receives the resulting status.
+type HostInspector interface {
+	InspectHostInstallation() (application.AgentHostInstallation, error)
+}
 
 // Writer publishes generated setup artifacts under one project root.
 type Writer struct {
+	HostInspectors []HostInspector
 	Root           string
 	PreserveSkills bool
+	CheckOnly      bool
 }
 
 func digest(content []byte) string { sum := sha256.Sum256(content); return hex.EncodeToString(sum[:]) }
@@ -31,6 +41,9 @@ var legacy = map[string]string{
 // Write implements the generated artifact port using the same ownership checks as hooks.
 func (w Writer) Write(dir, name string, content []byte) (bool, string, error) {
 	target := filepath.Join(w.Root, dir, name)
+	if err := safePath(w.Root, target); err != nil {
+		return false, target, err
+	}
 	before, readErr := os.ReadFile(target)
 	if w.PreserveSkills && readErr == nil && (name == "SKILL.md" || name == "VOCAB.yaml") && !bytes.Equal(before, content) {
 		rel, _ := filepath.Rel(w.Root, target)
@@ -41,13 +54,23 @@ func (w Writer) Write(dir, name string, content []byte) (bool, string, error) {
 			return false, target, nil
 		}
 	}
-	_, err := Install(w.Root, map[string][]byte{target: content})
+	_, err := install(w.Root, map[string][]byte{target: content}, w.CheckOnly)
 	return !bytes.Equal(before, content), target, err
 }
 
 // Install preflights every path, preserves changed assets and records installed hashes.
 // Merge paths must have been validated and merged by their format-specific adapter.
 func Install(root string, files map[string][]byte, mergePaths ...string) ([]string, error) {
+	return install(root, files, false, mergePaths...)
+}
+
+// Preflight checks the same paths and ownership as Install without writes.
+func Preflight(root string, files map[string][]byte, mergePaths ...string) error {
+	_, err := install(root, files, true, mergePaths...)
+	return err
+}
+
+func install(root string, files map[string][]byte, checkOnly bool, mergePaths ...string) ([]string, error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return nil, fmt.Errorf("agent setup: %w", err)
@@ -99,6 +122,9 @@ func Install(root string, files map[string][]byte, mergePaths ...string) ([]stri
 		writes[target] = content
 	}
 	writes[receiptPath] = append(receiptContent, '\n')
+	if checkOnly {
+		return targets, nil
+	}
 	for _, target := range append(append([]string{}, targets...), receiptPath) {
 		before, err := os.ReadFile(target)
 		if err != nil && !os.IsNotExist(err) {
@@ -131,6 +157,9 @@ func Install(root string, files map[string][]byte, mergePaths ...string) ([]stri
 	}
 	return targets, nil
 }
+
+// CheckPath rejects escaping and symlinked managed output paths.
+func CheckPath(root, target string) error { return safePath(root, target) }
 
 func safePath(root, target string) error {
 	rel, err := filepath.Rel(root, target)

@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { createGuard, commentLines, goComments } from "./guard.mjs";
 
@@ -260,4 +261,216 @@ test("directives survive adjacent explanation and line cgo", () => {
   const source = 'package domain\n//go:embed file.txt\n// explanation\nvar text string\n/*line generated.go:2*/\n// #include <stdio.h>\nimport "C"\n';
   assert.deepEqual(goComments(source).filter(x => !x.preservedBy).map(x => x.quote), ["// explanation"]);
   assert.deepEqual(commentLines("# yaml-language-server: $schema=domain.json\n# explanation\n").map(x => x.line), [2]);
+});
+
+
+test("missing recordings, literal sources and empty globs allow reviewed restoration only", async t => {
+  for (const kind of ["recording", "literal", "glob"]) {
+    const h = harness(t);
+    const name = kind === "recording" ? "domain.yaml" : "src/domain.go";
+    if (kind === "recording") rmSync(join(h.root, name));
+    else writeFileSync(join(h.root,".arclint/domain-guard.json"), JSON.stringify({version:1,domainFiles:["domain.yaml"],sourcePatterns:[kind === "glob" ? "src/**/*.go" : name]}));
+    await h.emit("session_start");
+    await h.emit("before_agent_start", {prompt:"Restore the agreed scoped material."});
+    await h.answer("Missing material is not a pass.");
+    assert.equal((await h.emit("session_stop")).decision, "block");
+    const content = kind === "recording" ? "version: 1\ncontexts: {}\n" : "package domain\n";
+    const permission = await h.emit("tool_call", {toolName:"write",input:{path:join(h.root,name),content}});
+    assert.notEqual(permission.block, true, permission.reason);
+    assert.equal(h.state().verdict.status, "permitted");
+    assert.match(h.state().error, /not approval/);
+    assert.equal((await h.emit("session_stop")).decision, "block");
+    if (kind !== "recording") mkdirSync(join(h.root,"src"));
+    writeFileSync(join(h.root,name),content);
+    await h.emit("tool_result");
+    assert.equal(h.state().verdict.kind, "changed");
+    await h.answer("Restored the agreed material.");
+    assert.equal(await h.emit("session_stop"), undefined);
+    assert.equal(h.state().verdict.kind, "completion");
+    assert.equal(h.calls(), 3);
+  }
+});
+
+test("restoration does not exempt protected, unrelated, existing, opaque or rejected proposals", async t => {
+  const h = harness(t, options => options.promptText.includes("FORBIDDEN_NEW_MEANING") ?
+    {relevant:true,findings:[{file:"proposal",quote:"FORBIDDEN_NEW_MEANING",reason:"Unit fixture rejects the proposal.",repair:"Restore the agreed content."}]} : {relevant:true,findings:[]});
+  writeFileSync(join(h.root,".arclint/domain-guard.json"), JSON.stringify({version:1,domainFiles:["domain.yaml"],sourcePatterns:["src/domain.go"]}));
+  await h.emit("session_start");
+  for (const [toolName,input] of [
+    ["bash",{command:"touch src/domain.go"}],
+    ["write",{path:"domain.yaml",content:"changed existing file"}],
+    ["write",{path:"other.go",content:"outside scope"}],
+    ["write",{path:"rules.arclint.yaml",content:"weaker"}],
+    ["write",{path:"../outside.go",content:"escaped"}],
+    ["write",{path:"src/domain.go",content:"FORBIDDEN_NEW_MEANING"}],
+  ]) {
+    const result = await h.emit("tool_call",{toolName,input});
+    assert.equal(result.block, true, JSON.stringify(input));
+  }
+  assert.match(h.state().verdict.findings[0].reason, /Unit fixture rejects/);
+});
+
+test("ordinary finding repair receives pre-tool permission before mutation", async t => {
+  const h = harness(t);
+  await h.emit("before_agent_start",{prompt:"Remove the domain comment."});
+  h.write("# unwanted comment\nversion: 1\n");
+  await h.emit("tool_result");
+  await h.answer("Done.");
+  assert.equal((await h.emit("session_stop")).decision,"block");
+  const permission = await h.emit("tool_call",{toolName:"write",input:{path:"domain.yaml",content:"version: 1\ncontexts: {}\n"}});
+  assert.notEqual(permission.block,true);
+  assert.equal(h.state().findings[0].open,true);
+  assert.equal(h.state().verdict.status,"permitted");
+  h.write("version: 1\ncontexts: {}\n");
+  await h.emit("tool_result");
+  await h.answer("Removed the comment.");
+  assert.equal(await h.emit("session_stop"),undefined);
+  assert.equal(h.state().findings[0].open,false);
+});
+
+test("inspection reports invalidation and never grants governance approval", async t => {
+  const h = harness(t);
+  await h.emit("before_agent_start",{prompt:"Review domain."});
+  await h.answer("Reviewed.");
+  writeFileSync(join(h.root,"rules.arclint.yaml"),"changed");
+  const inspect = await h.emit("tool_call",{toolName:"read",input:{path:"rules.arclint.yaml"}});
+  assert.notEqual(inspect.block,true);
+  assert.match(inspect.additionalContext,/does not approve/);
+  assert.equal(h.state().verdict.status,"unavailable");
+  assert.equal((await h.emit("tool_call",{toolName:"bash",input:{command:"make check-ro"}})).block,true);
+  assert.equal((await h.emit("session_stop")).decision,"block");
+  rmSync(join(h.root,"rules.arclint.yaml"));
+  await h.answer("Restored governance and reviewed current material.");
+  assert.equal(await h.emit("session_stop"),undefined);
+});
+
+test(`native ${process.platform} containment rejects sibling paths and symlink ancestors`, async t => {
+  const h = harness(t);
+  const outside = h.root + "-outside";
+  mkdirSync(outside);
+  t.after(()=>rmSync(outside,{recursive:true,force:true}));
+  writeFileSync(join(h.root,".arclint/domain-guard.json"),JSON.stringify({version:1,domainFiles:["domain.yaml"],sourcePatterns:["src/domain.go"]}));
+  await h.emit("session_start");
+  const escaped = await h.emit("tool_call",{toolName:"write",input:{path:join(outside,"domain.go"),content:"outside"}});
+  assert.equal(escaped.block,true);
+  assert.match(escaped.reason,/escapes/);
+  symlinkSync(outside,join(h.root,"src"),process.platform === "win32" ? "junction" : "dir");
+  const linked = await h.emit("tool_call",{toolName:"write",input:{path:join(h.root,"src/domain.go"),content:"outside"}});
+  assert.equal(linked.block,true);
+  assert.match(linked.reason,/escapes/);
+});
+
+test("native platform containment permits in-project absolute restoration", async t => {
+  const h = harness(t);
+  rmSync(join(h.root,"domain.yaml"));
+  await h.emit("session_start");
+  const result = await h.emit("tool_call",{toolName:"write",input:{path:join(h.root,"domain.yaml"),content:"version: 1\ncontexts: {}\n"}});
+  assert.notEqual(result.block,true,result.reason);
+});
+
+test("OMP module entrypoint registers executable repair lifecycle in a fresh subprocess", () => {
+  // The host callbacks and semantic replies here are fixtures, not native OMP activation evidence.
+  const entry = new URL("./index.js",import.meta.url).href;
+  const result = spawnSync(process.execPath,["--input-type=module","-"],{encoding:"utf8",input:`
+    import install from ${JSON.stringify(entry)};
+    import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
+    import {tmpdir} from 'node:os'; import {join} from 'node:path';
+    const root=mkdtempSync(join(tmpdir(),'arclint-entry-test-'));
+    try {
+      mkdirSync(join(root,'.arclint'));
+      writeFileSync(join(root,'.arclint/domain-guard.json'),JSON.stringify({version:1,domainFiles:['domain.yaml']}));
+      const handlers={}, commands={}, stages=[], notices=[];
+      install({on(name,fn){handlers[name]=fn;},registerCommand(name,command){commands[name]=command;}});
+      const ctx={cwd:root,sessionManager:{getSessionId:()=> 'entry-test'},ui:{setStatus(){},notify(text){notices.push(text);}},abort(){},runEphemeralTurn:async ({promptText})=>{
+        stages.push(promptText.match(/Review stage: (\\w+)/)[1]);
+        return {replyText:JSON.stringify({relevant:true,findings:[]})};
+      }};
+      await handlers.session_start({},ctx);
+      await handlers.before_agent_start({prompt:'Restore the agreed domain recording.'},ctx);
+      const input={path:join(root,'domain.yaml'),content:'version: 1\\ncontexts: {}\\n'};
+      const permission=await handlers.tool_call({toolName:'write',input},ctx);
+      if(permission.block) throw new Error(permission.reason);
+      const before=handlers.session_stop({},ctx);
+      writeFileSync(input.path,input.content);
+      await handlers.tool_result({},ctx);
+      await handlers.assistant_message({message:{content:[{type:'text',text:'Restored the recording.'}]}},ctx);
+      const after=handlers.session_stop({},ctx);
+      writeFileSync(input.path,'version: 2\\ncontexts: {}\\n');
+      await commands['arclint-domain-status'].handler('',ctx);
+      const staleSource=notices.at(-1);
+      await handlers.assistant_message({message:{content:[{type:'text',text:'Review the current changed recording.'}]}},ctx);
+      writeFileSync(join(root,'rules.arclint.yaml'),'changed');
+      await commands['arclint-domain-status'].handler('',ctx);
+      const staleGovernance=notices.at(-1);
+      const governanceStop=handlers.session_stop({},ctx);
+      process.stdout.write(JSON.stringify({permission,before,after:after??null,stages,staleSource,staleGovernance,governanceStop}));
+    } finally {rmSync(root,{recursive:true,force:true});}
+  `});
+  assert.equal(result.status,0,result.stderr);
+  const observed=JSON.parse(result.stdout);
+  assert.equal(observed.before.decision,"block");
+  assert.equal(observed.after,null);
+  assert.deepEqual(observed.stages,["proposal","changed","completion","completion"]);
+  assert.match(observed.staleSource,/Configured material changed; fresh review required/);
+  assert.match(observed.staleGovernance,/Rules or baseline changed/);
+  assert.equal(observed.governanceStop.decision,"block");
+});
+
+test("status observes changed material without reusing completion approval", async t => {
+  const h = harness(t);
+  await h.emit("before_agent_start",{prompt:"Review domain."});
+  await h.answer("Reviewed.");
+  h.write("version: 2\ncontexts: {}\n");
+  await h.commands["arclint-domain-status"].handler("",h.ctx);
+  assert.equal(h.state().verdict.status,"unavailable");
+  assert.match(h.notices.at(-1),/fresh review/);
+  assert.equal((await h.emit("session_stop")).decision,"block");
+});
+
+test(`native ${process.platform} configured symlink scope cannot read a sibling checkout`, async t => {
+  const h = harness(t);
+  const outside = h.root + "-outside";
+  mkdirSync(outside);
+  t.after(()=>rmSync(outside,{recursive:true,force:true}));
+  writeFileSync(join(outside,"domain.go"),"package outside\n");
+  symlinkSync(outside,join(h.root,"linked"),process.platform === "win32" ? "junction" : "dir");
+  writeFileSync(join(h.root,".arclint/domain-guard.json"),JSON.stringify({version:1,domainFiles:["domain.yaml"],sourcePatterns:["linked/domain.go"]}));
+  await h.emit("session_start");
+  await h.emit("before_agent_start",{prompt:"Review only the project scope."});
+  const result = await h.emit("tool_call",{toolName:"write",input:{path:"domain.yaml",content:"changed"}});
+  assert.equal(result.block,true);
+  assert.match(result.reason,/escapes/);
+  assert.equal(h.calls(),0);
+});
+
+test("custom recording under .arclint can be restored but selected metadata stays protected", async t => {
+  const h = harness(t);
+  writeFileSync(join(h.root,".arclint/domain-guard.json"),JSON.stringify({version:1,domainFiles:[".arclint/domain.yaml"]}));
+  await h.emit("session_start");
+  await h.emit("before_agent_start",{prompt:"Restore the agreed custom domain recording."});
+  const input={path:".arclint/domain.yaml",content:"version: 1\ncontexts: {}\n"};
+  assert.notEqual((await h.emit("tool_call",{toolName:"write",input})).block,true);
+  writeFileSync(join(h.root,input.path),input.content);
+  await h.emit("tool_result");
+  await h.answer("Restored custom recording.");
+  assert.equal(await h.emit("session_stop"),undefined);
+  for (const path of ["rules.arclint.yaml",".arclint/baseline.v2.json",".arclint/agent-assets.json",".arclint/reviewer.json",".arclint/cache/fake.json",".codex/config.toml"]) {
+    const protectedGuard = harness(t);
+    writeFileSync(join(protectedGuard.root,".arclint/domain-guard.json"),JSON.stringify({version:1,domainFiles:[path]}));
+    await protectedGuard.emit("session_start");
+    const result = await protectedGuard.emit("tool_call",{toolName:"write",input:{path,content:"weakened"}});
+    assert.equal(result.block,true,path);
+    assert.match(result.reason,/protected/);
+  }
+});
+
+test(`native ${process.platform} in-project symlink alias cannot restore protected governance`, async t => {
+  const h = harness(t);
+  symlinkSync(h.root,join(h.root,"alias"),process.platform === "win32" ? "junction" : "dir");
+  writeFileSync(join(h.root,".arclint/domain-guard.json"),JSON.stringify({version:1,domainFiles:["alias/rules.yaml"]}));
+  await h.emit("session_start");
+  const result = await h.emit("tool_call",{toolName:"write",input:{path:"alias/rules.yaml",content:"weakened"}});
+  assert.equal(result.block,true);
+  assert.match(result.reason,/symlink/);
+  assert.equal(readdirSync(h.root).includes("rules.yaml"),false);
 });

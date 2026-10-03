@@ -21,6 +21,16 @@ func NewInstaller(root string) *Installer { return &Installer{root: root} }
 
 // Install preserves configuration and upgrades only unchanged owned assets.
 func (i *Installer) Install(host string, domains []string, scope ...application.AgentSourceScope) ([]string, error) {
+	return i.install(host, domains, false, scope...)
+}
+
+// Preflight validates host, scope, configuration and ownership without writing.
+func (i *Installer) Preflight(host string, domains []string, scope ...application.AgentSourceScope) error {
+	_, err := i.install(host, domains, true, scope...)
+	return err
+}
+
+func (i *Installer) install(host string, domains []string, checkOnly bool, scope ...application.AgentSourceScope) ([]string, error) {
 	if host != "omp" {
 		return nil, fmt.Errorf("unsupported host %q", host)
 	}
@@ -28,7 +38,11 @@ func (i *Installer) Install(host string, domains []string, scope ...application.
 	if err != nil {
 		return nil, fmt.Errorf("agent setup: %w", err)
 	}
-	config, err := agentfiles.Scope(root, domains, scope...)
+	scopeConfig := agentfiles.Scope
+	if checkOnly {
+		scopeConfig = agentfiles.PlannedScope
+	}
+	config, err := scopeConfig(root, domains, scope...)
 	if err != nil {
 		return nil, fmt.Errorf("agent setup: %w", err)
 	}
@@ -40,6 +54,12 @@ func (i *Installer) Install(host string, domains []string, scope ...application.
 			return nil, fmt.Errorf("agent setup: %w", err)
 		}
 		files[filepath.Join(root, ".omp/extensions/arclint-domain-guard", name)] = content
+	}
+	if checkOnly {
+		if err := agentfiles.Preflight(root, files, configPath); err != nil {
+			return nil, fmt.Errorf("hook preflight: %w", err)
+		}
+		return nil, nil
 	}
 	paths, err := agentfiles.Install(root, files, configPath)
 	if err != nil {

@@ -33,12 +33,20 @@ and supplying the current plan or changes. Include earlier feedback and any
 repair or rebuttal when asking for reassessment. The reviewer runs when invoked.
 This installation does not add an automatic hook or reminder.
 
-The session must expose named custom-agent invocation. If its spawn interface
-only accepts a task name and message, installation cannot add that missing
-selector. Report that the reviewer was not invoked; do not substitute a generic
-agent and claim named activation. The corrective evaluation with Codex CLI
-0.159.2 encountered this interface limit. Instruction behavior was evaluated
-separately; named invocation remains unverified in that environment.
+The session must load the project's agent configuration and expose named
+custom-agent invocation. Untrusted project configuration is not loaded.
+Codex CLI 0.159.2 can hide the selector in its multi-agent tool schema. For that
+version, a session-only configuration option exposes it:
+
+```sh
+codex -c features.multi_agent_v2.hide_spawn_agent_metadata=false
+```
+
+This controls tool metadata; it does not grant project or hook trust. Native
+activity must show a spawn with `agent_type = "arclint-domain-reviewer"` and the
+corresponding child role. A task name alone is insufficient. If the selector is
+still absent, report the failure; do not claim a generic substitute was the
+installed reviewer. Instruction behavior and native loading need separate evidence.
 
 Each review names what it examined and returns warnings, questions or
 suggestions with evidence and a small next step. It distinguishes an observed

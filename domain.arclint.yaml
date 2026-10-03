@@ -43,7 +43,12 @@ contexts:
       instructions with ArcLint's release and reports installed files and their
       integrity. The host controls discovery, execution, permissions and history
       retention. Installation proves neither activation nor a completed review.
-      The existing domain guard has a separate lifecycle.
+      The existing domain guard has a separate lifecycle. It checks work against
+      the request and configured domain evidence. A finding calls for a scoped
+      repair or an evidenced rebuttal, followed by fresh review. Missing evidence
+      is not approval and must not make its own restoration impossible. Changes
+      to the protected rules or configuration invalidate prior approval; inspection
+      does not renew it, and separately validated changes need a fresh session.
     questions:
       external-request-reference: >-
         A future external work-item integration needs a reference and history
