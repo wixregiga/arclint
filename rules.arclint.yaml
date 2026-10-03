@@ -79,9 +79,12 @@ zones:
   # domain.arclint.yaml locates its code from the declarations that
   # spell its recorded terms, searched across the whole repository. A
   # Zone spelled with the context's name narrows that search to its
-  # paths; these four give the built-in context rules the full extent
+  # paths; these give the built-in context rules the full extent
   # of each context's code. adoption names no Zone: its values are
   # declared directly in the rule package, found the same way.
+  agent:
+    paths: "internal/domain/agent/**"
+    description: "Supplied agents, their instructions, and supported agent hosts."
   vocabulary:
     paths: "internal/domain/vocab/**"
     description: "The vocabulary bounded context: the recorded Ubiquitous Language and the meta-model it is checked against."

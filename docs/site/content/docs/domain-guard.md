@@ -1,5 +1,6 @@
 ---
 title: Domain guard for OMP and Codex
+weight: 9
 description: Install scoped domain review using supported local agent hooks.
 ---
 

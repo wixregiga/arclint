@@ -19,11 +19,14 @@ func NewAgentsCommand(
 	installHooks application.InstallAgentHooks,
 	setup application.SetupAgent,
 	status application.AgentSetupStatus,
+	installReviewer application.InstallReviewer,
+	reviewerStatus application.ReviewerStatus,
 ) Command {
 	return Command{
 		Name:  "agents",
 		Short: "AGENTS.md architecture block and domain-librarian skill artifacts",
 		Subcommands: []Command{
+			newAgentReviewerCommand(installReviewer, reviewerStatus),
 			newAgentSetupCommand(setup),
 			newAgentStatusCommand(status),
 			newAgentsMDCommand(publish, render),

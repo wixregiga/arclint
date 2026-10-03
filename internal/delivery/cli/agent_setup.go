@@ -8,6 +8,7 @@ import (
 )
 
 const (
+	agentHostFlag   = "host"
 	agentHostCodex  = "codex"
 	agentHostOMP    = "omp"
 	agentDomainFlag = "domain"
@@ -18,7 +19,7 @@ func newAgentSetupCommand(setup application.SetupAgent) Command {
 		Name:  "setup",
 		Short: "prepare rules, domain guidance, skill and native hooks for one chosen host",
 		Flags: []Flag{
-			{Name: "host", Options: []string{agentHostOMP, agentHostCodex}, Doc: "required agent host; installation does not grant trust"},
+			{Name: agentHostFlag, Options: []string{agentHostOMP, agentHostCodex}, Doc: "required agent host; installation does not grant trust"},
 			{Name: agentDomainFlag, Repeat: true, Doc: "existing project-relative recording; repeat for several (default domain.arclint.yaml)"},
 			{Name: "domain-source", Repeat: true, Doc: "Go domain-source path/glob subject to the comment policy; repeat for several"},
 			{Name: "source", Repeat: true, Doc: "supporting source path/glob; comments remain allowed"},
@@ -32,7 +33,7 @@ func newAgentSetupCommand(setup application.SetupAgent) Command {
 					languages = append(languages, strings.TrimSpace(value))
 				}
 			}
-			paths, err := setup.Execute(application.SetupAgentRequest{Host: ctx.String("host"), DomainFiles: ctx.Strings(agentDomainFlag), DomainSources: ctx.Strings("domain-source"), Sources: ctx.Strings("source"), Languages: languages, Pattern: ctx.String("pattern")})
+			paths, err := setup.Execute(application.SetupAgentRequest{Host: ctx.String(agentHostFlag), DomainFiles: ctx.Strings(agentDomainFlag), DomainSources: ctx.Strings("domain-source"), Sources: ctx.Strings("source"), Languages: languages, Pattern: ctx.String("pattern")})
 			if err != nil {
 				return ConfigError(err)
 			}
@@ -41,7 +42,7 @@ func newAgentSetupCommand(setup application.SetupAgent) Command {
 					return fmt.Errorf("write agent setup output: %w", err)
 				}
 			}
-			_, err = fmt.Fprintln(ctx.Stdout, agentActivation(ctx.String("host")))
+			_, err = fmt.Fprintln(ctx.Stdout, agentActivation(ctx.String(agentHostFlag)))
 			if err != nil {
 				return fmt.Errorf("write agent setup output: %w", err)
 			}

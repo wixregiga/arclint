@@ -4,7 +4,8 @@ project: arclint
 description: >-
   The Ubiquitous Language of arclint itself: what a Rule is, how a
   repository adopts Rules a Pattern distributes, how conformance is
-  judged, and how Patterns travel between repositories.
+  judged, how Patterns travel between repositories, and how agents
+  receive guidance and provide review.
   ArcLint also connects domain guidance and review to an agent host
   such as OMP or Codex. A hook runs the supplied domain guard at a
   supported point in the agent's work. Installing hooks writes the
@@ -21,6 +22,111 @@ description: >-
   A review covers the current contents of all selected material.
   Installing or updating guidance never grants the host's trust.
 contexts:
+  agent:
+    definition: |
+      ArcLint's agent context owns the meaning of supplied agents and their
+      instructions. It covers the boundary where people and coding agents
+      use ArcLint's guidance, CLI commands, and review. It does not run a
+      language model or own a host's activation and trust decisions.
+
+      An Agent is an assistant configured to carry out a stated
+      responsibility. A Coding Agent is an Agent that understands, changes,
+      or reviews software. Coding Agent names a role, not another identity.
+      ArcLint supplies named Agent definitions; a running conversation and
+      its history are not the definition shipped with ArcLint.
+
+      Agent Instructions explain an Agent's responsibilities, how to carry
+      out its work, and the constraints that apply. They contain obligations,
+      explanations, and recommendations; not every sentence is an obligation.
+      AGENTS.md is a repository document carrying Agent Instructions. Its
+      generated architecture section conveys the recorded contracts, while
+      maintained contributor guidance explains the repository's workflow.
+      The document's format does not decide who owns an obligation.
+
+      An Agent Host loads agent definitions or instructions and provides the
+      means for an Agent to operate. AgentHost names a supported delivery
+      choice for ArcLint's separately installed agents. A Client is software
+      through which someone uses ArcLint or its capabilities. One program
+      may act as both a Client and an Agent Host. An LLM is a language model
+      an Agent uses to interpret information and produce responses. A Skill
+      packages reusable task instructions and supporting material. A Plugin
+      extends a host with capabilities and may package agents or skills.
+      These words describe roles and packaging; they do not require a
+      separately modeled object for each word.
+
+      Behavior is what an actor or product does in observable circumstances.
+      An obligation states what an identified actor must do when its stated
+      conditions apply. A requirement is an accepted statement of behavior
+      or a constraint. A case describes concrete conditions and an expected
+      result. A request is an instruction or desired outcome submitted by
+      an authorized caller; it does not automatically become a lasting
+      product requirement. DR identifiers name requirements of the Domain
+      Reviewer, not requirements of the feature being reviewed.
+
+      ArcLint Domain Reviewer is the Coding Agent named
+      arclint-domain-reviewer. People explicitly invoke it in Codex to assess
+      the domain basis before and during implementation and to examine
+      actual enforcement, misplaced responsibilities, and unjustified
+      duplication afterward. It explains evidence, distinguishes suspected
+      problems from demonstrated ones, discloses missing history, suggests
+      repairs, and reassesses repairs and reasoned rebuttals. Its feedback
+      is not approval. No automatic timer or blocking behavior is selected.
+      This Agent is separate from the installed arclint-domain-guard hook.
+
+      The contributing Coding Agent explains meanings before recording
+      them, records changed domain contracts before implementing them, and
+      follows the required verification workflow. The domain-librarian
+      Skill helps it explain and record those meanings. The Domain Reviewer
+      assesses the available evidence that those obligations were fulfilled;
+      it does not silently supply a missing product decision or recording.
+      These contributor instructions differ from requirements governing
+      the reviewer's own behavior.
+
+      People use the CLI to install an Agent and inspect its installation.
+      Host-specific delivery owns file formats and locations. The release
+      ships editable Agent Instructions with ArcLint's own version, without
+      a separate agent release. Documentation explains installation and
+      invocation; tests verify delivery and behavior; diagnostics describe
+      failures. These are delivery and contributor obligations, not new
+      aggregate invariants or Pattern Installations.
+    value_objects:
+      Agent:
+        definition: >-
+          The supplied definition of one named assistant: its installation
+          name, a description of its purpose, and its Agent Instructions.
+          ArcLint ships editable instructions with its release. Editing
+          them produces another definition;
+          equal names, descriptions, and instructions are interchangeable.
+          This value does not track a running agent or its history, and it
+          carries no release version independent of ArcLint.
+        invariants:
+          described-purpose: >-
+            An Agent carries a nonempty description of its purpose.
+          supplied-instructions: >-
+            An Agent carries nonempty Agent Instructions.
+          installable-name: >-
+            An Agent's installation name consists of lowercase words or
+            numbers separated by single hyphens, beginning with a letter.
+      AgentHost:
+        definition: >-
+          The supported host selected for delivering a separately installed
+          Agent. Equal host names select the same host and are
+          interchangeable. Codex is the supported host for this delivery;
+          the existing OMP and Codex hook setup remains a separate workflow.
+        invariants:
+          supported-host: >-
+            An AgentHost for separately installed agents names Codex;
+            unsupported host names are rejected instead of selecting
+            another host.
+    questions:
+      external-request-reference: >-
+        When a reviewer is given an external work item, what reference and
+        history should the request retain? The current review accepts the
+        caller's supplied material without inventing an external identity.
+      plugin-delivery: >-
+        If agents are later distributed through a Plugin, which Client
+        package contract and installation route must that delivery follow?
+        The current named-agent delivery targets Codex directly.
   vocabulary:
     definition: >-
       The recorded Ubiquitous Language of a project and the meta-model
@@ -125,10 +231,11 @@ contexts:
         definition: >-
           The one checkable proposition a Rule carries, written in
           rules.arclint.yaml as exactly one constraint key with its
-          parameters: imports, structure, naming, invariants, layers,
-          imported_by, independent, acyclic, content, or uses. The key
-          alone decides how the Rule is evaluated; a Rule never carries
-          two.
+          parameters: imports, structure, naming, layers, imported_by,
+          independent, acyclic, content, or uses. Built-in domain checks
+          carry a Constraint without an authored constraint key; invariants
+          records domain obligations, not a ruleset constraint key. An
+          authored Rule never carries two constraint keys.
       Scope:
         definition: >-
           Which code a Rule applies to: the repository or selected
@@ -466,6 +573,13 @@ contexts:
             A VendoredPattern whose PatternFiles no longer match its
             Manifest is rejected at load, never used silently.
 relations:
+  - from: vocabulary
+    to: agent
+    kind: conformist
+    description: >-
+      Agent Instructions and domain review use the recorded domain meanings
+      unchanged. The agent context does not redefine the vocabulary
+      meta-model or turn delivery instructions into domain invariants.
   - from: vocabulary
     to: rule
     kind: conformist
