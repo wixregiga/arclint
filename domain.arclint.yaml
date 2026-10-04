@@ -5,6 +5,56 @@ description: >-
   ArcLint records domain meanings, checks architectural Rules, distributes
   Patterns, and supplies guidance and domain review to coding agents.
 contexts:
+  workflow:
+    definition: >-
+      Reviewing whether the current work follows the project's domain workflow.
+      The task, established meanings, affected work and supplied activity are
+      the basis for feedback. Missing evidence limits what a review can say.
+      Any project using ArcLint can request this review; ArcLint uses the same
+      feature for its own work.
+    value_objects:
+      Assessment:
+        definition: >-
+          Findings and coverage limits for supplied work. An assessment advises
+          its recipient; it carries no approval or authority to block work.
+      Evidence:
+        definition: >-
+          The current task, named supplied passages and known coverage limits
+          used to assess the work.
+      Finding:
+        definition: >-
+          A specific departure from the workflow, supported by a quote from
+          named evidence and accompanied by a useful correction.
+    services:
+      WorkflowReview:
+        definition: >-
+          Assesses the supplied work against its request and established domain.
+          It questions missing context before source inspection, unexplained or
+          unrecorded changes of meaning, missing enforcement, misplaced ownership
+          and unjustified duplication, and reassesses repairs and rebuttals.
+          Semantic evaluation identifies potential departures; Assess accepts
+          grounded findings and states coverage limits. Its feedback advises the
+          coding agent and user; it does not approve or block their work.
+        assertions:
+          findings-grounded-in-evidence:
+            on: Assess
+            statement: >-
+              WorkflowReview accepts a finding only when it identifies supplied
+              evidence with an exact quote.
+          findings-explain-departure:
+            on: Assess
+            statement: >-
+              WorkflowReview accepts a finding only when it states a specific
+              departure and a correction.
+          task-required:
+            on: Assess
+            statement: >-
+              WorkflowReview requires the current task before assessing work.
+          coverage-stated:
+            on: Assess
+            statement: >-
+              WorkflowReview preserves the coverage limits supplied with the
+              evidence and candidate assessment in the assessment it returns.
   agent:
     definition: |
       The language of agents using ArcLint and of ArcLint's Domain Reviewer.
@@ -35,7 +85,7 @@ contexts:
       and reassesses repairs and rebuttals. It explains evidence, uncertainty
       and useful corrections without deciding disputed meanings for the user
       or editing the reviewed files. Its response is activity evidence in the
-      host conversation, not guard approval.
+      host conversation.
 
       The contributor explains justified meanings and records changed contracts
       before implementing them. The domain-librarian Skill supports that work;
@@ -43,12 +93,6 @@ contexts:
       instructions with ArcLint's release and reports installed files and their
       integrity. The host controls discovery, execution, permissions and history
       retention. Installation proves neither activation nor a completed review.
-      The existing domain guard has a separate lifecycle. It checks work against
-      the request and configured domain evidence. A finding calls for a scoped
-      repair or an evidenced rebuttal, followed by fresh review. Missing evidence
-      is not approval and must not make its own restoration impossible. Changes
-      to the protected rules or configuration invalidate prior approval; inspection
-      does not renew it, and separately validated changes need a fresh session.
     questions:
       external-request-reference: >-
         A future external work-item integration needs a reference and history

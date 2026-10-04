@@ -20,9 +20,8 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/distribution"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	codexagents "github.com/wixregiga/arclint/internal/infrastructure/agents/codex"
-	agentfiles "github.com/wixregiga/arclint/internal/infrastructure/agents/files"
 	markdownagents "github.com/wixregiga/arclint/internal/infrastructure/agents/markdown"
-	ompagents "github.com/wixregiga/arclint/internal/infrastructure/agents/omp"
+	workflowagents "github.com/wixregiga/arclint/internal/infrastructure/agents/workflow"
 	artifactfs "github.com/wixregiga/arclint/internal/infrastructure/artifact"
 	jsonbaseline "github.com/wixregiga/arclint/internal/infrastructure/baseline/json"
 	sobekextension "github.com/wixregiga/arclint/internal/infrastructure/extension/sobek"
@@ -223,26 +222,6 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	installHooks, err := application.NewInstallAgentHooks(agentHooksInstaller{root: root})
-	if err != nil {
-		return configError(err)
-	}
-	setupScaffold, err := filesystemscaffold.NewWriter(root)
-	if err != nil {
-		return configError(err)
-	}
-	setupInitialize, err := application.NewInitializeRepository(setupScaffold, builtinPatterns, localPatterns)
-	if err != nil {
-		return configError(err)
-	}
-	setup, err := application.NewSetupAgent(setupInitialize, initDomain, installHooks, agentfiles.Writer{Root: root, PreserveSkills: true}, publisher, setupScaffold, agentSetupPreflight{root: root})
-	if err != nil {
-		return configError(err)
-	}
-	status, err := application.NewAgentSetupStatus(agentfiles.Writer{Root: root, HostInspectors: []agentfiles.HostInspector{codexagents.NewInstaller(root), ompagents.NewInstaller(root)}})
-	if err != nil {
-		return configError(err)
-	}
 	reviewer := codexagents.NewReviewer(root, version)
 	installReviewer, err := application.NewInstallReviewer(reviewer)
 	if err != nil {
@@ -252,13 +231,37 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
+	workflowEvaluator := workflowagents.NewEvaluator("codex", "")
+	workflowInstructions := filepath.Join(root, ".codex", "hooks", "arclint-workflow-guard", "instructions.md")
+	_, instructionsErr := os.Stat(workflowInstructions)
+	workflowEventInvocation := len(rest) >= 3 && rest[0] == "agents" && rest[1] == "workflow" && rest[2] == "event"
+	if workflowEventInvocation || instructionsErr == nil {
+		workflowEvaluator = workflowEvaluator.WithInstructionsFile(workflowInstructions)
+	}
+	workflowReview, err := application.NewReviewWorkflow(workflowEvaluator)
+	if err != nil {
+		return configError(err)
+	}
+	workflowCollector, err := workflowagents.NewCollector(root)
+	if err != nil {
+		return configError(err)
+	}
+	workflowEvents, err := workflowagents.NewEvents(root, workflowCollector, workflowReview)
+	if err != nil {
+		return configError(err)
+	}
+	workflowBinary, err := os.Executable()
+	if err != nil {
+		return configError(fmt.Errorf("workflow installer executable: %w", err))
+	}
+	workflowCommand := cli.NewWorkflowCommand(workflowReview, workflowagents.NewInstaller(root, workflowBinary, version), workflowEvents, renderer)
 	rootCommand := cli.Root(buildVersion(version),
 		cli.NewCheckCommand(assess, listRules, renderer),
 		cli.NewInitCommand(initialize, renderer),
 		cli.NewRulesCommand(listRules, showRule, ruleTests, publishRuleSchema, renderer),
 		cli.NewContextCommand(getContext, renderer),
 		cli.NewDomainCommand(initDomain, getDomainOverview, listDomainDefinitions, showDomainDefinition, defineDomainDefinition, removeDomainDefinition, publishDomainSchema, renderer),
-		cli.NewAgentsCommand(publishAgents, publishSkillProtocol, publishSkillVocabulary, publishDomainSchema, renderer, installHooks, setup, status, installReviewer, reviewerStatus),
+		cli.NewAgentsCommand(publishAgents, publishSkillProtocol, publishSkillVocabulary, publishDomainSchema, renderer, installReviewer, reviewerStatus, workflowCommand),
 		cli.NewBaselineCommand(capture, refresh, renderer),
 		cli.NewPatternsCommand(patternCommands, renderer),
 		cli.NewSDKCommand(initializeSDK, renderer),
@@ -438,7 +441,7 @@ func resolveRulesPath(args []string) (string, []string, error) {
 		// none exists, so they compose against the working directory.
 		if fp := firstPositional(rest); fp == "" || fp == "help" || fp == "completion" ||
 			fp == "__complete" || fp == "__completeNoDesc" || fp == "patterns" ||
-			(len(rest) >= 2 && rest[0] == "agents" && (rest[1] == "hooks" || rest[1] == "setup" || rest[1] == "status" || rest[1] == "reviewer")) {
+			(len(rest) >= 2 && rest[0] == "agents" && (rest[1] == "reviewer" || rest[1] == "workflow")) {
 			fallback, absErr := filepath.Abs(rule.RulesetFileName)
 			if absErr != nil {
 				return "", nil, fmt.Errorf("rules path: %w", absErr)

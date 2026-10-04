@@ -99,8 +99,8 @@ func (r renderer) Render(w io.Writer, rep cli.Report) error {
 		writePatternExport(p, th, x.Result)
 	case cli.AgentInstallReport:
 		writeAgentInstall(p, th, x)
-	case cli.AgentStatusReport:
-		writeAgentStatus(p, th, x)
+	case cli.WorkflowStatusReport:
+		writeWorkflowStatus(p, th, x)
 	case cli.ReviewerStatusReport:
 		writeReviewerStatus(p, th, x)
 	case cli.SDKInitReport:

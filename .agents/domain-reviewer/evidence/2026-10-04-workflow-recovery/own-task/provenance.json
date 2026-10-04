@@ -1,0 +1,29 @@
+{
+  "utc": "2026-10-04T01:32:53.623104+00:00",
+  "cwd": "/home/jofyi/.codex/worktrees/9b98/arclint",
+  "git_head": "f6a50a04797b17944a5f84101a7a09c55aace11b",
+  "binary": "/tmp/arclint-workflow",
+  "binary_sha256_before": "851fbb53d361eb88c415df7622eb28648ceb045826c3e2784bde9db3b8524101",
+  "input_sha256": "9677f99620d5dec49c3624d60335f01a3d03b854baf754772f05dc00d2cfe3d8",
+  "passage_sha256": {
+    ".agents/domain-reviewer/workflow-recovery.md": "499b6dc4ec915b809f3db017b7cacc9af4decdded91a8b22b4c0e2eccb2c9104",
+    "internal/domain/workflow/workflow_review.go": "e80accfb5b74cb56d27debc3f7ab54e6038cd8858a70fa4f8c5048333c4fa393",
+    "internal/domain/workflow/workflow_review_test.go": "9ffe6779705cb5797abc34b0e9326ea57a699086952046047f54ceb1b6ca9067",
+    "internal/application/review_workflow.go": "59526dd093060ac7d7c3ccb56baf4491428704134456750e95a51edc38d3790a",
+    "internal/application/review_workflow_test.go": "cbb512f7e27476405ac27a135b45c28d973edb16aa7e0c64f258678f93f65683",
+    "internal/infrastructure/agents/workflow/assets/instructions.md": "4cc9b76560da617f366823d9cc1a72bfb8a207ce3fcff6547df5b13091612a0e",
+    "internal/infrastructure/agents/workflow/evaluator.go": "097c6230f6a66c94e0d53b17f84bed2430bfb7bba48e177572d6ef57065604f5",
+    "internal/infrastructure/agents/workflow/events.go": "c7e0ef491381e72f96cf1af7a005564e87acf3d97a2022d154af00e27d05dc9f",
+    "domain-workflow-context": "9e70eb131e384306b7317a47f956cc5f6f681f904052e4bde37403bc60589a5d",
+    "project-workflow": "4e127afbb21e0b0d5f2c81ddbd653deca502726b0d363a6f06b88f733f309240",
+    "original-user-reset": "7d034643ea4026e0d518ce503989cf524b8d29b8581d787d44d0d2fca47d4dff",
+    "user-public-tool-clarification": "bee4dccb73b533b1f6a6c13a1792adec4c9b6eef0e4fedf5d190e0c7ba8456c6",
+    "current-tracked-domain-and-assembly-diff": "5c800e44c2e758f27a98d90b156abd945e2996f0ec50573a374e478319cd92dd"
+  },
+  "command": "/tmp/arclint-workflow agents workflow review < input.json > output.json 2> stderr.txt",
+  "evidence_type": "Real public CLI and production semantic evaluator on current ArcLint recovery evidence; not native host hook activation.",
+  "exit_code": 0,
+  "completed_utc": "2026-10-04T01:33:37.958449+00:00",
+  "binary_sha256_after": "851fbb53d361eb88c415df7622eb28648ceb045826c3e2784bde9db3b8524101",
+  "output_sha256": "ce9bce2b8a73c3226a222b1b7393af330ee78767cf9ceca94d5b65b4d9eec3b8"
+}

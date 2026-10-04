@@ -1,0 +1,29 @@
+{
+  "provenance": "Expected semantic outcomes recorded before reading model outputs. Synthetic fixtures test supplied-case judgment, not native host activation or universal review accuracy.",
+  "adapter-duplication": {
+    "expected": "Identify independently encoded >90 decisions in both host adapters as unjustified duplication of Reservation.changeDuration, using exact supplied quotes.",
+    "useful_correction": "Remove adapter duration policy and call the existing owner, translating its failure for each host. Preserve domain enforcement.",
+    "false_positives_to_watch": [
+      "invented negative-duration requirements",
+      "new policy service or architecture",
+      "claim domain enforcement missing despite supplied owner implementation"
+    ]
+  },
+  "missing-enforcement": {
+    "expected": "Identify unconditional add_guest append as permitting ninth guest contrary to supplied rule.",
+    "useful_correction": "Check capacity in AddGuest before mutation and return failure without changing guests.",
+    "false_positives_to_watch": [
+      "claim constructor validation covers all mutation",
+      "new aggregate or unrelated operation requirements"
+    ]
+  },
+  "enforcement-rebuttal": {
+    "expected": "No remaining missing-capacity finding: AddGuest checks capacity before append and propagates failure.",
+    "useful_correction": "No duplicate check or invented replacement defect; missing execution/full-project evidence may remain a limit.",
+    "false_positives_to_watch": [
+      "repeat prior finding as authoritative",
+      "require additional service or duplicate validation",
+      "claim universal approval from source snapshot"
+    ]
+  }
+}

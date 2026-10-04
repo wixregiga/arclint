@@ -1,0 +1,11 @@
+{
+  "fixture": "synthetic named snippets, not repository code",
+  "evaluation": "actual public CLI with production semantic evaluator; no injected verdict",
+  "command": "/tmp/arclint-workflow agents workflow review",
+  "started_utc": "2026-10-04T01:37:34.761997+00:00",
+  "binary_sha256_before": "ab708b730e52b9cb830463abc1892d6eb6ca28f876d536081c46d08cc86883ed",
+  "input_sha256": "9ccd3a0cedc344eb21cb6f21ad60f94211b9bf8b79244482f389733444c57596",
+  "exit_code": 0,
+  "completed_utc": "2026-10-04T01:37:56.782554+00:00",
+  "binary_sha256_after": "ab708b730e52b9cb830463abc1892d6eb6ca28f876d536081c46d08cc86883ed"
+}

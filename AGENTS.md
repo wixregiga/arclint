@@ -20,16 +20,17 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 - `arclint check .`: evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings
 - `arclint rules test`: run the rule fixtures under `.arclint/tests` after changing any rule
 - `arclint sdk init`: regenerate the extension SDK artifacts under `.arclint/extensions`
-- `arclint agents setup --host <omp|codex>`: prepare or update project-local guidance, skill and native hooks; preserves existing rules and recordings; host trust remains explicit
-- `arclint agents status`: inspect installed scope and asset integrity; host activation and a fresh review are separate
+- `arclint agents workflow install`: install project-local Codex workflow hooks and editable review instructions; preserves unrelated hooks; host activation requires its own trust review
+- `arclint agents workflow status`: inspect workflow assets and hook registrations; intact files do not prove host activation or successful review
 - `arclint agents md --write`: refresh this block after changing rules.arclint.yaml or the vocabulary
 - `arclint baseline`: manage the committed baseline of adopted findings
 - `arclint patterns`: list the Patterns that resolve offline (embedded, vendored, authored); `patterns install <pattern>` extends rules.arclint.yaml with one, `patterns vendor` copies one under `.arclint/patterns`
 
 ### The recorded domain
 
-6 contexts, 1 aggregates, 30 value objects, 37 invariants (domain.arclint.yaml).
+7 contexts, 1 aggregates, 33 value objects, 37 invariants (domain.arclint.yaml).
 
+- **workflow**: value objects Assessment, Evidence, Finding; services WorkflowReview
 - **agent**
 - **vocabulary**
 - **rule**: aggregates Rule (Zone, Pattern); value objects RuleID, ZoneName, Rationale, Constraint, Scope, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec
@@ -115,6 +116,7 @@ Before changing responsibilities, dependencies, or domain behavior:
 - **rule**: The rule bounded context: the Rule aggregate's home. (paths internal/domain/rule/**)
 - **conformance**: The conformance bounded context, downstream conformist of rule. (paths internal/domain/conformance/**)
 - **distribution**: The distribution bounded context: Patterns travelling between repositories. (paths internal/domain/distribution/**)
+- **workflow**: Task-focused domain workflow assessment and evidence-grounded findings. (paths internal/domain/workflow/**)
 - **web**: Web frontend package, build configuration, and public assets. (paths web/**)
   - launch-surfaces-present (disabled: Web is not implemented yet; re-enable when its launch surfaces are added.): contains files matching ["web/package.json", "web/vite.config.ts", "web/index.html", "web/public/manifest.webmanifest", "web/src/app/entrypoints/start-web.ts", "web/src/app/entrypoints/mount-web.ts"] Rationale: Web has separate standalone startup and host-controlled mounting entrypoints, plus an authored web app manifest; presence alone proves no runtime behavior.
 - **web_source**: Browser-portable Web source, organized by FSD responsibility. (paths web/src/**)

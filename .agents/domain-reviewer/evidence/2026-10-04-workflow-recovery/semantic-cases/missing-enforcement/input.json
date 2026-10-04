@@ -1,0 +1,11 @@
+{
+  "Task": "Review whether the implemented guest addition enforces the agreed capacity rule. Suggest the smallest repair in the recorded owner.",
+  "Passages": {
+    "project-workflow": "The project workflow requires explaining and recording changed domain meanings before implementation, enforcing domain decisions in their recorded owner, checking unjustified duplication, and reassessing repairs and rebuttals against current evidence. Adapters translate requests and responses; Reservation owns reservation duration and guest capacity decisions. Feedback must cite supplied evidence and offer corrections within the task.",
+    "approved-domain-decision": "Reservation holds at most eight guests. AddGuest is the only operation adding guests, and it must reject a ninth guest without changing the reservation. Existing valid reservations begin with at most eight guests.",
+    "reservation.py": "class Reservation:\n    def __init__(self, guests):\n        if len(guests) > 8:\n            raise ValueError(\"Reservation has too many guests\")\n        self.guests = list(guests)\n\n    def add_guest(self, guest):\n        self.guests.append(guest)\n"
+  },
+  "Limits": [
+    "Synthetic semantic fixture, not repository code. No execution trace or tests supplied. Review the shown AddGuest behavior; do not infer requirements for other operations."
+  ]
+}

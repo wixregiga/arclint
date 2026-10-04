@@ -1,0 +1,10 @@
+{
+  "project": "/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint",
+  "hooksPath": "/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/hooks.json",
+  "command": "'/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/hooks/arclint-workflow-guard/arclint' --rules '/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/rules.arclint.yaml' agents workflow event",
+  "version": "0.1.0-beta.1",
+  "installed": true,
+  "intact": true,
+  "problems": [],
+  "limits": "Installation integrity does not prove host activation. Review these independent hooks in Codex /hooks; no trust is granted by installation. Workflow findings are advisory feedback, never approval or automatic blocking."
+}

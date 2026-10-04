@@ -221,11 +221,6 @@ type AgentInstallReport struct {
 
 func (AgentInstallReport) report() {}
 
-// AgentStatusReport carries observed guard installation facts.
-type AgentStatusReport struct{ Installation application.AgentInstallation }
-
-func (AgentStatusReport) report() {}
-
 // ReviewerStatusReport carries observed separate reviewer installation facts.
 type ReviewerStatusReport struct {
 	Installation application.ReviewerInstallation
@@ -235,6 +230,15 @@ func (ReviewerStatusReport) report() {}
 
 // Installation limits accompany facts without claiming host activation or approval.
 const (
-	AgentStatusLimits    = "Installation status is not a review verdict. Codex: review /hooks in CLI or Settings > Coding > Hooks in desktop. OMP: /arclint-domain-status."
 	ReviewerStatusLimits = "Installation and integrity do not prove Codex discovery, activation or review quality. Activity records are in the Codex conversation; ArcLint does not manage their storage or retention."
 )
+
+// WorkflowStatusReport contains installation facts for task-focused reporting.
+type WorkflowStatusReport struct {
+	Status application.WorkflowHookStatus
+}
+
+func (WorkflowStatusReport) report() {}
+
+// WorkflowStatusLimits separates delivered assets from host activation and review.
+const WorkflowStatusLimits = "Installation integrity does not prove host activation. Review these independent hooks in Codex /hooks; no trust is granted by installation. Workflow findings are advisory feedback, never approval or automatic blocking."

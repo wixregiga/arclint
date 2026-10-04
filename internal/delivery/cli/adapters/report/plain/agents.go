@@ -3,7 +3,6 @@ package plain
 import (
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/wixregiga/arclint/internal/delivery/cli"
 )
@@ -15,38 +14,6 @@ func writeAgentInstall(w io.Writer, r cli.AgentInstallReport) error {
 		}
 	}
 	_, err := fmt.Fprintln(w, r.Activation)
-	if err != nil {
-		return fmt.Errorf("write agent report: %w", err)
-	}
-	return nil
-}
-
-func writeAgentStatus(w io.Writer, r cli.AgentStatusReport) error {
-	s := r.Installation
-	if s.LegacyRules {
-		if _, err := fmt.Fprintln(w, "Legacy rules preserved: this build needs rules.arclint.yaml for structural conformance; no automatic migration or replacement was performed."); err != nil {
-			return fmt.Errorf("write agent report: %w", err)
-		}
-	}
-	if _, err := fmt.Fprintf(w, "Project: %s\nRecordings: %s\nDomain source subjects: %s\nSupporting evidence: %s\n", s.Project, strings.Join(s.DomainFiles, ", "), strings.Join(s.DomainSourcePatterns, ", "), strings.Join(s.SourcePatterns, ", ")); err != nil {
-		return fmt.Errorf("write agent report: %w", err)
-	}
-	for _, host := range s.InstalledHosts {
-		if _, err := fmt.Fprintf(w, "%s: installed; activation/trust must be checked in the host\n", host); err != nil {
-			return fmt.Errorf("write agent report: %w", err)
-		}
-	}
-	for _, name := range s.ChangedAssets {
-		if _, err := fmt.Fprintf(w, "Changed or missing installed asset: %s\n", name); err != nil {
-			return fmt.Errorf("write agent report: %w", err)
-		}
-	}
-	for _, problem := range s.Problems {
-		if _, err := fmt.Fprintln(w, problem); err != nil {
-			return fmt.Errorf("write agent report: %w", err)
-		}
-	}
-	_, err := fmt.Fprintln(w, cli.AgentStatusLimits)
 	if err != nil {
 		return fmt.Errorf("write agent report: %w", err)
 	}
@@ -66,6 +33,22 @@ func writeReviewerStatus(w io.Writer, r cli.ReviewerStatusReport) error {
 	_, err := fmt.Fprintln(w, cli.ReviewerStatusLimits)
 	if err != nil {
 		return fmt.Errorf("write agent report: %w", err)
+	}
+	return nil
+}
+
+func writeWorkflowStatus(w io.Writer, r cli.WorkflowStatusReport) error {
+	s := r.Status
+	if _, err := fmt.Fprintf(w, "Project: %s\nHooks: %s\nCommand: %s\nRelease: %s\nInstalled: %t\nAsset integrity: %t\n", s.Project, s.HooksPath, s.Command, s.Version, s.Installed, s.Intact); err != nil {
+		return fmt.Errorf("write workflow status: %w", err)
+	}
+	for _, problem := range s.Problems {
+		if _, err := fmt.Fprintln(w, problem); err != nil {
+			return fmt.Errorf("write workflow status: %w", err)
+		}
+	}
+	if _, err := fmt.Fprintln(w, cli.WorkflowStatusLimits); err != nil {
+		return fmt.Errorf("write workflow status: %w", err)
 	}
 	return nil
 }

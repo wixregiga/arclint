@@ -88,8 +88,8 @@ func (Renderer) Render(w io.Writer, r cli.Report) error {
 		return writePatternExport(w, v)
 	case cli.AgentInstallReport:
 		return writeAgentInstall(w, v)
-	case cli.AgentStatusReport:
-		return writeAgentStatus(w, v)
+	case cli.WorkflowStatusReport:
+		return writeWorkflowStatus(w, v)
 	case cli.ReviewerStatusReport:
 		return writeReviewerStatus(w, v)
 	case cli.SDKInitReport:

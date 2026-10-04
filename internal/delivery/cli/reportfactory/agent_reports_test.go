@@ -14,15 +14,6 @@ import (
 )
 
 func TestAgentReportsPreserveFactsAcrossRenderers(t *testing.T) {
-	guard := cli.AgentStatusReport{}
-	guard.Installation.Project = "/project"
-	guard.Installation.DomainFiles = []string{"language.yaml"}
-	guard.Installation.DomainSourcePatterns = []string{"domain/*.go"}
-	guard.Installation.SourcePatterns = []string{"app/*.go"}
-	guard.Installation.InstalledHosts = []string{"Codex"}
-	guard.Installation.ChangedAssets = []string{"edited.md"}
-	guard.Installation.LegacyRules = true
-	guard.Installation.Problems = []string{"Integrity unverified"}
 	reviewer := cli.ReviewerStatusReport{}
 	reviewer.Installation.Project = "/project"
 	reviewer.Installation.Name = "arclint-domain-reviewer"
@@ -32,6 +23,13 @@ func TestAgentReportsPreserveFactsAcrossRenderers(t *testing.T) {
 	reviewer.Installation.InstalledVersion = "1.0.0"
 	reviewer.Installation.AvailableVersion = "1.1.0"
 	reviewer.Installation.Problems = []string{"edited reviewer"}
+	workflow := cli.WorkflowStatusReport{}
+	workflow.Status.Project = "/project"
+	workflow.Status.HooksPath = "workflow-hooks.json"
+	workflow.Status.Command = "arclint agents workflow event"
+	workflow.Status.Version = "1.2.0"
+	workflow.Status.Installed = true
+	workflow.Status.Problems = []string{"edited workflow instructions"}
 	cases := []struct {
 		name    string
 		report  cli.Report
@@ -39,7 +37,7 @@ func TestAgentReportsPreserveFactsAcrossRenderers(t *testing.T) {
 		jsonKey string
 	}{
 		{"install", cli.AgentInstallReport{Operation: "reviewer", Host: "codex", Paths: []string{"reviewer.toml"}, Activation: "Restart the host to discover instructions."}, []string{"reviewer.toml", "Restart the host"}, "paths"},
-		{"guard status", guard, []string{"/project", "language.yaml", "domain/*.go", "app/*.go", "Codex", "edited.md", "Legacy rules preserved", "not a review verdict", "Integrity unverified"}, "changedAssets"},
+		{"workflow status", workflow, []string{"/project", "workflow-hooks.json", "arclint agents workflow event", "1.2.0", "edited workflow instructions", "never approval"}, "hooksPath"},
 		{"reviewer status", reviewer, []string{"/project", "arclint-domain-reviewer", "reviewer.toml", "1.0.0", "1.1.0", "edited reviewer", "do not prove"}, "problems"},
 	}
 	ansi := regexp.MustCompile(`\x1b\[[0-9;]*m`)

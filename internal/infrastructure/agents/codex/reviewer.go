@@ -1,3 +1,4 @@
+// Package codex delivers the authored domain reviewer to the native agent host.
 package codex
 
 import (

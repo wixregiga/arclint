@@ -1,0 +1,12 @@
+{
+  "operation": "workflow",
+  "host": "codex",
+  "paths": [
+    "/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.arclint/workflow-guard.json",
+    "/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/hooks.json",
+    "/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/hooks/arclint-workflow-guard/arclint",
+    "/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/hooks/arclint-workflow-guard/instructions.md",
+    "/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/hooks/arclint-workflow-guard/start-codex.sh"
+  ],
+  "activation": "Run bash .codex/hooks/arclint-workflow-guard/start-codex.sh. Review and approve the displayed workflow hooks in Codex /hooks, then restart with the same launcher. Installation integrity does not prove host activation. Review these independent hooks in Codex /hooks; no trust is granted by installation. Workflow findings are advisory feedback, never approval or automatic blocking."
+}

@@ -1,0 +1,19 @@
+{
+  "reviewed_output": "output.json",
+  "supported_findings": [],
+  "independent_conclusion": "No demonstrated departure from the four recorded domain acceptance assertions in the supplied snapshot. This does not establish full feature completion.",
+  "basis": [
+    "Assess calls the task, evidence, explanation and coverage assertion methods before returning.",
+    "Evidence grounding rejects missing passage keys, blank quotes and nonmatching supplied text.",
+    "The semantic evaluator owns judgment of whether a quoted passage actually demonstrates a departure; nonempty departure/correction checks do not purport to decide that meaning.",
+    "Application orchestration invokes the domain operation, preserves caller evidence across the provider call, and returns provider/domain failures as unavailable.",
+    "Coverage preservation merges evidence and candidate limits, then checks that neither set was omitted."
+  ],
+  "limits_assessment": "The output preserves all four supplied limits and does not infer chronology, native activation or successful tests. One limit entry is actually a supported positive ownership observation; that is presentation imprecision, not an invented violation.",
+  "not_proven": [
+    "Full evidence collector correctness (collector source intentionally not supplied).",
+    "Native host invocation/trust or resumed-session behavior.",
+    "Repository gate execution or correctness of domain meanings beyond the supplied assessment contract."
+  ],
+  "provenance": "Public /tmp/arclint-workflow agents workflow review invocation, production Codex evaluator, actual current ArcLint domain/decision/source/diff evidence; no deterministic model fixture."
+}

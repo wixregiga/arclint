@@ -1,0 +1,13 @@
+{
+  "status": "completed",
+  "final_feedback": {
+    "systemMessage": "ArcLint workflow review: advisory feedback on the current task.\nNo supported workflow departure in the supplied evidence.\nCoverage: Up to five previous workflow reports are claims to reassess against current evidence, not proof that old defects persist or approval of current work.\nCoverage: The repair result and current work/src/invoice.ts demonstrate removal of the VIP category and total mutation while retaining email(invoice.billingEmail); the earlier departures no longer persist.\nCoverage: A successful arclint context run is supplied, but the bounded evidence does not establish source-reading order or behavior and architecture verification. The current response does not claim unrun checks.\nCoverage: Previous workflow reports are claims to reassess, not proof of persistent defects. This review does not certify domain meanings or grant approval.\n"
+  },
+  "root": "/tmp/arclint-workflow-adopter-r1qpw9g1",
+  "binary": "/tmp/arclint-workflow",
+  "session": "task-focused-proof-1791077202955237111",
+  "evidence_kind": "Real installed public CLI hook subprocesses and real model; fixture mutations by harness, not native outer-host dispatch.",
+  "tested_binary_sha256": "9a7e6dd0368fc423cdea0012862992a92653becfadfde56bd8c48d3d052c4d9f",
+  "tested_instructions_sha256": "4cc9b76560da617f366823d9cc1a72bfb8a207ce3fcff6547df5b13091612a0e",
+  "source_state": "Uncommitted workflow recovery during implementation; not final release binary."
+}

@@ -87,8 +87,8 @@ func (renderer) Render(w io.Writer, r cli.Report) error {
 		doc = patternExportDocOf(x.Result)
 	case cli.AgentInstallReport:
 		doc = agentInstallDocOf(x)
-	case cli.AgentStatusReport:
-		doc = agentStatusDocOf(x)
+	case cli.WorkflowStatusReport:
+		doc = workflowStatusDocOf(x)
 	case cli.ReviewerStatusReport:
 		doc = reviewerStatusDocOf(x)
 	case cli.SDKInitReport:

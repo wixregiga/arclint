@@ -1,0 +1,50 @@
+[
+  {
+    "path": "/home/jofyi/.codex/worktrees/9b98/arclint/.arclint/agent-assets.json",
+    "before": "13afedbf9737871b5c99b8ab2bcb596c10f3724c338c262fc33d1670770bb782",
+    "after": "13afedbf9737871b5c99b8ab2bcb596c10f3724c338c262fc33d1670770bb782",
+    "unchanged": true
+  },
+  {
+    "path": "/home/jofyi/.codex/worktrees/9b98/arclint/.arclint/domain-guard.json",
+    "before": "c384f812ff55f8a5e05437f17b8794cc5045eb90e2a5965a26885cbbbb29e671",
+    "after": "c384f812ff55f8a5e05437f17b8794cc5045eb90e2a5965a26885cbbbb29e671",
+    "unchanged": true
+  },
+  {
+    "path": "/home/jofyi/.codex/worktrees/9b98/arclint/.arclint/reviewer.json",
+    "before": "d157b88a383724d600cef463ece58ab96241aa9d2d413b3d650e0cdb0c4d9f73",
+    "after": "d157b88a383724d600cef463ece58ab96241aa9d2d413b3d650e0cdb0c4d9f73",
+    "unchanged": true
+  },
+  {
+    "path": "/home/jofyi/.codex/worktrees/9b98/arclint/critique-of-pr-80.md",
+    "before": "8f921d3a042f0e5f21cc393898d342730fa31d8cc5e092f70ef793f6380d0668",
+    "after": "8f921d3a042f0e5f21cc393898d342730fa31d8cc5e092f70ef793f6380d0668",
+    "unchanged": true
+  },
+  {
+    "path": "/home/jofyi/ai/arclint/.codex/hooks/arclint-domain-guard/guard.py",
+    "before": "e5e271821d73723a48db33af21421a22b12ae123e1c54db459704ecd1cb0c34e",
+    "after": "e5e271821d73723a48db33af21421a22b12ae123e1c54db459704ecd1cb0c34e",
+    "unchanged": true
+  },
+  {
+    "path": "/home/jofyi/.codex/worktrees/9b98/arclint/.codex/hooks.json",
+    "before": "316025b5ad7da09d452122efb17ee3c7c86642a96106927a64f7876591b7775b",
+    "after": "316025b5ad7da09d452122efb17ee3c7c86642a96106927a64f7876591b7775b",
+    "unchanged": true
+  },
+  {
+    "path": "/home/jofyi/.codex/worktrees/9b98/arclint/.codex/hooks/arclint-domain-guard/guard.py",
+    "before": "b772228ceb55c30adf6b8183913bf0cc3662986a19941115b42cfd779f7d64a9",
+    "after": "b772228ceb55c30adf6b8183913bf0cc3662986a19941115b42cfd779f7d64a9",
+    "unchanged": true
+  },
+  {
+    "path": "/home/jofyi/.codex/worktrees/9b98/arclint/.codex/agents/arclint-domain-reviewer.toml",
+    "before": "00c93a87b32950ef674141415bf193d59f81d2a07fb119e6ef93a0c6d5df40e1",
+    "after": "00c93a87b32950ef674141415bf193d59f81d2a07fb119e6ef93a0c6d5df40e1",
+    "unchanged": true
+  }
+]

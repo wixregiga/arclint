@@ -1,0 +1,43 @@
+{
+  "provenance": "Three synthetic fixtures through actual public CLI and production semantic evaluator. No injected verdicts. One observed response per fixture; not a reliability estimate, actual-project defect finding, or native-hook activation proof.",
+  "cases": [
+    {
+      "case": "adapter-duplication",
+      "expected_behavior": "observed",
+      "finding_count": 1,
+      "exact_quote_grounding": true,
+      "supplied_limits_preserved": true,
+      "independent_assessment": "Supported. Both supplied adapters encode the same >90 policy already owned by Reservation.changeDuration. The correction reuses that owner and translates errors; it preserves domain enforcement and proposes no new abstraction. The quoted anchor is the approved ownership decision rather than a code line, but the departure names both supplied implementations and is supported by them.",
+      "unsupported_findings_observed": false,
+      "binary_sha256": "ab708b730e52b9cb830463abc1892d6eb6ca28f876d536081c46d08cc86883ed",
+      "exit_code": 0
+    },
+    {
+      "case": "missing-enforcement",
+      "expected_behavior": "observed",
+      "finding_count": 1,
+      "exact_quote_grounding": true,
+      "supplied_limits_preserved": true,
+      "independent_assessment": "Supported. The quoted unconditional append permits a ninth guest from an explicitly valid eight-guest starting state. The proposed pre-mutation capacity check is the smallest owner-local repair; constructor validation is correctly distinguished from mutation enforcement.",
+      "unsupported_findings_observed": false,
+      "binary_sha256": "ab708b730e52b9cb830463abc1892d6eb6ca28f876d536081c46d08cc86883ed",
+      "exit_code": 0
+    },
+    {
+      "case": "enforcement-rebuttal",
+      "expected_behavior": "observed",
+      "finding_count": 0,
+      "exact_quote_grounding": true,
+      "supplied_limits_preserved": true,
+      "independent_assessment": "Supported empty findings. The current method calls its capacity check before mutation and propagates its error. The response acknowledges that the previous concern is addressed, retains execution/full-project limits, and does not demand duplicate validation.",
+      "unsupported_findings_observed": false,
+      "binary_sha256": "ab708b730e52b9cb830463abc1892d6eb6ca28f876d536081c46d08cc86883ed",
+      "exit_code": 0
+    }
+  ],
+  "limits": [
+    "No native host activation established by this protocol.",
+    "These cases establish sampled semantic behavior, not universal domain judgment or completion of the whole implementation.",
+    "The duplicated-policy finding cites its approved decision rather than the implementation line; support was independently checked in both supplied adapters."
+  ]
+}

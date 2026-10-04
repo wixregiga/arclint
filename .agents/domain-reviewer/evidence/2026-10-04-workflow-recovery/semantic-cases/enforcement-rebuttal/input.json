@@ -1,0 +1,13 @@
+{
+  "Task": "Reassess the previous missing-capacity finding against this current code and the builder rebuttal. If the concern is already addressed, do not invent a replacement defect or ask for duplicate validation.",
+  "Passages": {
+    "project-workflow": "The project workflow requires explaining and recording changed domain meanings before implementation, enforcing domain decisions in their recorded owner, checking unjustified duplication, and reassessing repairs and rebuttals against current evidence. Adapters translate requests and responses; Reservation owns reservation duration and guest capacity decisions. Feedback must cite supplied evidence and offer corrections within the task.",
+    "approved-domain-decision": "Reservation holds at most eight guests. AddGuest is the only operation adding guests, and it must reject a ninth guest without changing the reservation. Existing valid reservations begin with at most eight guests.",
+    "previous-review": "Reservation.AddGuest appends unconditionally and lacks the required capacity enforcement. Add a capacity check before changing guests.",
+    "builder-rebuttal": "The current AddGuest already invokes assertGuestCapacity before append. A full reservation returns an error without mutation. The earlier finding describes an older implementation.",
+    "reservation.go": "type Reservation struct { guests []string }\n\nfunc (r *Reservation) AddGuest(guest string) error {\n    if err := r.assertGuestCapacity(); err != nil {\n        return err\n    }\n    r.guests = append(r.guests, guest)\n    return nil\n}\n\nfunc (r *Reservation) assertGuestCapacity() error {\n    if len(r.guests) >= 8 {\n        return errors.New(\"reservation holds at most eight guests\")\n    }\n    return nil\n}\n"
+  },
+  "Limits": [
+    "Synthetic semantic fixture, not repository code. Supplied method source establishes the shown control flow; no execution results or complete project are supplied. The earlier review is a claim to reassess, not authority."
+  ]
+}

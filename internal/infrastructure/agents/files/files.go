@@ -11,19 +11,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-
-	"github.com/wixregiga/arclint/internal/application"
 )
-
-// HostInspector supplies host-owned registration evidence to the asset inspector.
-// It is an infrastructure seam; the application receives the resulting status.
-type HostInspector interface {
-	InspectHostInstallation() (application.AgentHostInstallation, error)
-}
 
 // Writer publishes generated setup artifacts under one project root.
 type Writer struct {
-	HostInspectors []HostInspector
 	Root           string
 	PreserveSkills bool
 	CheckOnly      bool
@@ -33,12 +24,10 @@ func digest(content []byte) string { sum := sha256.Sum256(content); return hex.E
 
 // Original draft installations predate the asset receipt.
 var legacy = map[string]string{
-	".codex/hooks/arclint-domain-guard/guard.py":     "acbdbd762f84d56c7d4a8dcc72d818e00e9c991f7469d6b8db66d3da29a8ac47",
-	".omp/extensions/arclint-domain-guard/guard.mjs": "1de998554c584f0dcf701f8326bf396025fe4008cd25937bf344c2e3ccd123be",
-	".agents/skills/domain-librarian/SKILL.md":       "48ccddde71e85a854c8965b3be99be2d796893bca14d020a745d8c1f33776490",
+	".agents/skills/domain-librarian/SKILL.md": "48ccddde71e85a854c8965b3be99be2d796893bca14d020a745d8c1f33776490",
 }
 
-// Write implements the generated artifact port using the same ownership checks as hooks.
+// Write implements the generated artifact port using the shared asset ownership checks.
 func (w Writer) Write(dir, name string, content []byte) (bool, string, error) {
 	target := filepath.Join(w.Root, dir, name)
 	if err := safePath(w.Root, target); err != nil {

@@ -1,0 +1,36 @@
+{
+  "status": "implementation validated; native activation pending trust",
+  "source": "feat/scoped-domain-guard; recovery commit follows this evidence recording",
+  "checks": {
+    "make_ci": "passed",
+    "rule_fixtures": "48 passed, 0 failed",
+    "docs_build": "passed",
+    "make_check": "passed"
+  },
+  "semantic_samples": {
+    "installed_protocol": "9 real CLI/model events, harness-mutated TypeScript fixture",
+    "own_task": "Actual ArcLint assessment code, no supported finding; bounded snapshot",
+    "cases": [
+      "duplicated adapter policy",
+      "absent mutation enforcement",
+      "supported enforcement rebuttal"
+    ]
+  },
+  "installation": {
+    "targets": [
+      "/home/jofyi/.codex/worktrees/30f1/arclint",
+      "/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint"
+    ],
+    "new_directory": ".codex/hooks/arclint-workflow-guard",
+    "intact": true,
+    "native_discovery": "all five enabled, untrusted",
+    "native_execution_verified": false
+  },
+  "protected_main_guard_sha256": "e5e271821d73723a48db33af21421a22b12ae123e1c54db459704ecd1cb0c34e",
+  "limits": [
+    "Earlier sampled binaries are identified by hash, not represented as final release runs.",
+    "Native desktop and resume behavior not established by envelope tests.",
+    "Semantic samples do not certify all domain meanings.",
+    "No existing installed guard repaired or overwritten."
+  ]
+}

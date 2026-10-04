@@ -6,6 +6,12 @@ import (
 	"github.com/wixregiga/arclint/internal/application"
 )
 
+const (
+	agentHostFlag   = "host"
+	agentHostCodex  = "codex"
+	agentDomainFlag = "domain"
+)
+
 // NewAgentsCommand is the agents command group: md installs or prints the
 // AGENTS.md architecture block; skill emits domain-librarian artifacts.
 // Status lines for write operations use the injected Renderer; raw
@@ -16,23 +22,18 @@ func NewAgentsCommand(
 	publishVocabulary application.PublishSkillVocabulary,
 	publishSchema application.PublishDomainSchema,
 	render Renderer,
-	installHooks application.InstallAgentHooks,
-	setup application.SetupAgent,
-	status application.AgentSetupStatus,
 	installReviewer application.InstallReviewer,
 	reviewerStatus application.ReviewerStatus,
+	extraCommands ...Command,
 ) Command {
 	return Command{
 		Name:  "agents",
 		Short: "AGENTS.md architecture block and domain-librarian skill artifacts",
-		Subcommands: []Command{
+		Subcommands: append([]Command{
 			newAgentReviewerCommand(installReviewer, reviewerStatus, render),
-			newAgentSetupCommand(setup, render),
-			newAgentStatusCommand(status, render),
 			newAgentsMDCommand(publish, render),
-			newAgentHooksCommand(installHooks, render),
 			newAgentsSkillCommand(publishProtocol, publishVocabulary, publishSchema, render),
-		},
+		}, extraCommands...),
 	}
 }
 

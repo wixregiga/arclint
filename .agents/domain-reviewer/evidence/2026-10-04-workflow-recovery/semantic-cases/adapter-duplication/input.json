@@ -1,0 +1,13 @@
+{
+  "Task": "Review the current implementation for enforcing the agreed reservation duration policy in its owner without duplicated host policy. Do not add a new architecture or rename existing concepts.",
+  "Passages": {
+    "project-workflow": "The project workflow requires explaining and recording changed domain meanings before implementation, enforcing domain decisions in their recorded owner, checking unjustified duplication, and reassessing repairs and rebuttals against current evidence. Adapters translate requests and responses; Reservation owns reservation duration and guest capacity decisions. Feedback must cite supplied evidence and offer corrections within the task.",
+    "approved-domain-decision": "A reservation may last at most 90 minutes. Reservation.ChangeDuration owns this decision. HTTP and command-line adapters parse inputs and call that operation; they do not choose their own duration limits.",
+    "reservation.ts": "export class Reservation {\n  private minutes = 30;\n  changeDuration(minutes: number) {\n    if (minutes > 90) throw new Error(\"Reservation exceeds 90 minutes\");\n    this.minutes = minutes;\n  }\n}\n",
+    "http-change.ts": "export function changeDurationHttp(reservation: Reservation, body: { minutes: number }) {\n  if (body.minutes > 90) return { status: 400, error: \"Too long\" };\n  reservation.changeDuration(body.minutes);\n  return { status: 200 };\n}\n",
+    "cli-change.ts": "export function changeDurationCli(reservation: Reservation, minutes: number) {\n  if (minutes > 90) throw new Error(\"Too long\");\n  reservation.changeDuration(minutes);\n}\n"
+  },
+  "Limits": [
+    "Synthetic semantic fixture, not repository code. Supplied source is a snapshot; chronology and runtime test results are unavailable."
+  ]
+}

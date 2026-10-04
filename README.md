@@ -271,30 +271,28 @@ undetermined, never proof of conformance.
 
 ## Working with agents
 
-For a local Codex or OMP workflow, run one explicit setup command:
+Install task-focused workflow feedback in a project using ArcLint:
 
 ```sh
-arclint agents setup --host codex
-# or: arclint agents setup --host omp
-arclint agents status
+arclint agents workflow install
+arclint agents workflow status
+bash .codex/hooks/arclint-workflow-guard/start-codex.sh
 ```
 
-Setup initializes missing rules and the domain recording, publishes the existing
-domain-librarian skill, adds a short managed AGENTS.md pointer, and installs
-native project-local hooks. It preserves existing rules, recordings, unrelated
-configuration and edited guard assets. Plain `arclint init` remains ruleset-only.
+The Codex hooks review the current task, observed actions and affected files
+against the project's domain workflow. Findings quote evidence, explain the
+departure and suggest a correction. Repairs and rebuttals are reassessed. Reports
+are advisory; they do not grant approval or certify the domain.
 
-Choose subjects explicitly: `--domain ubiquitous-language.yaml` selects an
-existing recording; repeat `--domain-source 'internal/domain/order/*.go'` for Go
-domain code and `--source 'internal/application/place_order.go'` for supporting
-evidence. Source references are not followed automatically.
+Installation preserves existing hooks and writes an executable and editable
+instructions under `.codex/hooks/arclint-workflow-guard/`. Review the new hook
+in Codex's `/hooks` interface, follow its trust steps, then start a fresh session
+through the launcher. Status reports file integrity, not activation. Existing
+installed guards are separate and remain untouched.
 
-**Activate separately:** OMP needs a new session or `/reload`; use
-`/arclint-domain-status`. Codex needs project and hook trust, then a new session.
-Review hooks through `/hooks` in the CLI or **Settings → Coding → Hooks** in
-desktop. Installation status does not prove activation or a passing review.
-
-See [domain guard setup and limitations](docs/site/content/docs/domain-guard.md).
+See [workflow hooks and verification limits](docs/site/content/docs/workflow-hooks.md).
+The independently invoked `arclint-domain-reviewer` is also available through
+`arclint agents reviewer install --host codex` and `arclint agents reviewer status`.
 
 Three commands do the agent-facing work:
 
@@ -356,11 +354,10 @@ rules schema        print the JSON Schema for rules.arclint.yaml; --write puts i
 rules test [name]   run the rule tests under .arclint/tests; failures exit 1
 context [paths...]  the architecture, or everything binding the given paths (--zone)
 domain              inspect and maintain the project's ubiquitous language (init/overview/list/show/explain/define/remove/schema)
-agents setup        initialize missing files, skill, AGENTS pointer and native hooks (--host)
-agents status       installed scope and asset integrity; not host activation or review approval
+agents workflow     install/status native Codex workflow hooks; review supplied evidence
+agents reviewer     install/status the separately named domain reviewer
 agents md           architecture block; --write installs it in AGENTS.md
 agents skill        domain-librarian SKILL.md, vocabulary and schema
-agents hooks        install only native OMP/Codex hooks for an existing recording
 baseline capture    adopt current findings   ·  baseline refresh: drop stale entries
 patterns            list the patterns that resolve offline: embedded, vendored, authored (--remote lists a registry)
 patterns install    extend rules.arclint.yaml with one pattern; vendors it first when it came from the registry

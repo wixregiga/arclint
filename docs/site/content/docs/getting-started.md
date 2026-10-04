@@ -271,9 +271,11 @@ otherwise it names the published copy, kept identical to
 
 ## Local agent setup
 
-For an agent-assisted project, run `arclint agents setup --host codex` or
-`arclint agents setup --host omp`. This coordinates missing repository
-initialization, the domain-librarian skill, concise AGENTS.md guidance and
-native hooks. `arclint init` remains ruleset-only. Follow the printed host trust
-and reload steps, then inspect `arclint agents status`.
-See [Domain guard](../domain-guard/) for explicit source scope and limitations.
+For feedback on a coding agent's current task, run
+`arclint agents workflow install` in your project. The
+[task-focused workflow hooks](../workflow-hooks/) report departures from the
+domain workflow with evidence and suggested corrections. The guide explains
+the installed Codex launcher, host trust, fresh-session activation and status.
+ArcLint uses this same public feature for its own development.
+
+`arclint init` remains ruleset-only.

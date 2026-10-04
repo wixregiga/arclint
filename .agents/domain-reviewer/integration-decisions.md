@@ -1,5 +1,10 @@
 # Finishing the integration — 2026-10-03
 
+> Historical record. The user reset this work to task-focused workflow hooks.
+> Current decisions and evidence are in [workflow-recovery.md](workflow-recovery.md)
+> and [workflow-audit.md](workflow-audit.md). Rejected guard behavior below is
+> not a current product contract or evidence of user approval.
+
 Recorded before implementation, following the corrective meanings in decisions.md.
 The user requests the whole integration, including inherited guard code, actual
 repair through a running hook, restoration of missing scoped files, native reviewer

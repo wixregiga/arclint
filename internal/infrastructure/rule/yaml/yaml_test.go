@@ -39,8 +39,8 @@ func TestLoadTargetRuleset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConfiguredRules: %v", err)
 	}
-	if len(cfg.Zones) != 27 {
-		t.Errorf("zones = %d, want 27", len(cfg.Zones))
+	if len(cfg.Zones) != 28 {
+		t.Errorf("zones = %d, want 28", len(cfg.Zones))
 	}
 	builtIn, err := rule.BuiltIn()
 	if err != nil {

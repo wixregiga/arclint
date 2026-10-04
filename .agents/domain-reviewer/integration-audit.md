@@ -1,5 +1,10 @@
 # Integration audit — 2026-10-03
 
+> Historical record. The user reset this work to task-focused workflow hooks.
+> Current decisions and evidence are in [workflow-recovery.md](workflow-recovery.md)
+> and [workflow-audit.md](workflow-audit.md). Rejected guard behavior below is
+> not a current product contract or evidence of user approval.
+
 Audit target: implementation commit `5db6d0b06d4b518c1da09721725395aaf2506ea2`.
 The current named reviewer has successfully completed native reviews in both
 requested checkouts. The whole integration remains incomplete: autonomous repair
