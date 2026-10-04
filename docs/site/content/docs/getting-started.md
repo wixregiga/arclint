@@ -268,3 +268,14 @@ otherwise it names the published copy, kept identical to
 ```
 
 `arclint domain schema --write` does the same for `domain.arclint.yaml`.
+
+## Local agent setup
+
+For feedback on a coding agent's current task, run
+`arclint agents workflow install` in your project. The
+[task-focused workflow hooks](../workflow-hooks/) report departures from the
+domain workflow with evidence and suggested corrections. The guide explains
+the installed Codex launcher, host trust, fresh-session activation and status.
+ArcLint uses this same public feature for its own development.
+
+`arclint init` remains ruleset-only.

@@ -271,6 +271,29 @@ undetermined, never proof of conformance.
 
 ## Working with agents
 
+Install task-focused workflow feedback in a project using ArcLint:
+
+```sh
+arclint agents workflow install
+arclint agents workflow status
+bash .codex/hooks/arclint-workflow-guard/start-codex.sh
+```
+
+The Codex hooks review the current task, observed actions and affected files
+against the project's domain workflow. Findings quote evidence, explain the
+departure and suggest a correction. Repairs and rebuttals are reassessed. Reports
+are advisory; they do not grant approval or certify the domain.
+
+Installation preserves existing hooks and writes an executable and editable
+instructions under `.codex/hooks/arclint-workflow-guard/`. Review the new hook
+in Codex's `/hooks` interface, follow its trust steps, then start a fresh session
+through the launcher. Status reports file integrity, not activation. Existing
+installed guards are separate and remain untouched.
+
+See [workflow hooks and verification limits](docs/site/content/docs/workflow-hooks.md).
+The independently invoked `arclint-domain-reviewer` is also available through
+`arclint agents reviewer install --host codex` and `arclint agents reviewer status`.
+
 Three commands do the agent-facing work:
 
 - `arclint context <paths...>`: give it the files an agent touched
@@ -285,7 +308,7 @@ Three commands do the agent-facing work:
   model. Bare `arclint context` explains the repository instead: every
   zone and its import policy, the rule kinds in use with their
   meanings, the unknown-imports posture, and the whole recorded domain.
-- `arclint agents --write`: generates the AGENTS.md block from the
+- `arclint agents md --write`: generates the AGENTS.md block from the
   ruleset (this repository's [AGENTS.md](AGENTS.md) is produced this
   way), so the agent-facing context cannot drift from the enforced
   contract. `arclint agents skill` emits a skill bundle.
@@ -331,7 +354,10 @@ rules schema        print the JSON Schema for rules.arclint.yaml; --write puts i
 rules test [name]   run the rule tests under .arclint/tests; failures exit 1
 context [paths...]  the architecture, or everything binding the given paths (--zone)
 domain              inspect and maintain the project's ubiquitous language (init/overview/list/show/explain/define/remove/schema)
-agents              AGENTS.md block (--write); skill bundle (skill); SKILL.md only (md|agentmd|markdown)
+agents workflow     install/status native Codex workflow hooks; review supplied evidence
+agents reviewer     install/status the separately named domain reviewer
+agents md           architecture block; --write installs it in AGENTS.md
+agents skill        domain-librarian SKILL.md, vocabulary and schema
 baseline capture    adopt current findings   ·  baseline refresh: drop stale entries
 patterns            list the patterns that resolve offline: embedded, vendored, authored (--remote lists a registry)
 patterns install    extend rules.arclint.yaml with one pattern; vendors it first when it came from the registry

@@ -125,7 +125,7 @@ func TestContextWorksiteScopesDomain(t *testing.T) {
 		t.Fatalf("context worksite: exit %d\nstderr: %s", code, stderr)
 	}
 	for _, want := range []string{
-		"project domain (domain.arclint.yaml): 1 of 5 contexts,",
+		"project domain (domain.arclint.yaml): 1 of 7 contexts,",
 		"anchor into this scope; --full shows the whole model\n",
 		"  context rule:\n",
 		"    aggregates: Rule (RuleID; Zone, Pattern)\n",
@@ -139,7 +139,7 @@ func TestContextWorksiteScopesDomain(t *testing.T) {
 			t.Errorf("scoped context missing %q:\n%s", want, stdout)
 		}
 	}
-	for _, absent := range []string{"context vocabulary:", "context adoption:", "context conformance:", "context distribution:"} {
+	for _, absent := range []string{"context agent:", "context vocabulary:", "context adoption:", "context conformance:", "context distribution:"} {
 		if strings.Contains(stdout, absent) {
 			t.Errorf("scoped context leaks %q:\n%s", absent, stdout)
 		}
@@ -152,7 +152,7 @@ func TestContextWorksiteScopesDomain(t *testing.T) {
 	if strings.Contains(full, "--full") {
 		t.Errorf("a full listing must not point at --full:\n%s", full)
 	}
-	for _, want := range []string{"context vocabulary:", "context rule:", "context adoption:", "context conformance:", "context distribution:", "unanchored contracts: 5 missing"} {
+	for _, want := range []string{"context agent:", "context vocabulary:", "context rule:", "context adoption:", "context conformance:", "context distribution:", "unanchored contracts: 5 missing"} {
 		if !strings.Contains(full, want) {
 			t.Errorf("full context missing %q:\n%s", want, full)
 		}
@@ -189,7 +189,7 @@ func TestContextWorksiteScopesDomain(t *testing.T) {
 	if !d.Scoped || !d.Located {
 		t.Fatalf("scoped=%v located=%v", d.Scoped, d.Located)
 	}
-	if d.Counts.Contexts != 5 || d.Shown.Contexts != 1 || d.Shown.Invariants != 6 {
+	if d.Counts.Contexts != 7 || d.Shown.Contexts != 1 || d.Shown.Invariants != 6 {
 		t.Fatalf("counts %+v shown %+v", d.Counts, d.Shown)
 	}
 	if len(d.Contexts) != 1 || d.Contexts[0].Name != "rule" {
@@ -224,7 +224,7 @@ func TestContextOutsideDomainSaysSo(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("context main.go: exit %d\nstderr: %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "project domain (domain.arclint.yaml): nothing recorded anchors into this scope; --full shows the whole model (5 contexts ·") {
+	if !strings.Contains(stdout, "project domain (domain.arclint.yaml): nothing recorded anchors into this scope; --full shows the whole model (7 contexts ·") {
 		t.Fatalf("empty-scope headline missing:\n%s", stdout)
 	}
 	if strings.Contains(stdout, "  context ") || strings.Contains(stdout, "unanchored contracts:") {

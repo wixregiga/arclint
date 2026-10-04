@@ -210,3 +210,35 @@ func (SDKInitReport) report() {}
 func NewDomainDefineReport(result application.DomainDefineResult, req application.DefineDomainRequest) DomainDefineReport {
 	return DomainDefineReport{Result: result, Change: req.Change}
 }
+
+// AgentInstallReport reports the written paths and remaining host steps.
+// Activation is guidance, never evidence that the host activated anything.
+type AgentInstallReport struct {
+	Operation, Host string
+	Paths           []string
+	Activation      string
+}
+
+func (AgentInstallReport) report() {}
+
+// ReviewerStatusReport carries observed separate reviewer installation facts.
+type ReviewerStatusReport struct {
+	Installation application.ReviewerInstallation
+}
+
+func (ReviewerStatusReport) report() {}
+
+// Installation limits accompany facts without claiming host activation or approval.
+const (
+	ReviewerStatusLimits = "Installation and integrity do not prove Codex discovery, activation or review quality. Activity records are in the Codex conversation; ArcLint does not manage their storage or retention."
+)
+
+// WorkflowStatusReport contains installation facts for task-focused reporting.
+type WorkflowStatusReport struct {
+	Status application.WorkflowHookStatus
+}
+
+func (WorkflowStatusReport) report() {}
+
+// WorkflowStatusLimits separates delivered assets from host activation and review.
+const WorkflowStatusLimits = "Installation integrity does not prove host activation. Review these independent hooks in Codex /hooks; no trust is granted by installation. Workflow findings are advisory feedback, never approval or automatic blocking."

@@ -85,6 +85,12 @@ func (renderer) Render(w io.Writer, r cli.Report) error {
 		doc = patternInstallDocOf(x.Result)
 	case cli.PatternExportReport:
 		doc = patternExportDocOf(x.Result)
+	case cli.AgentInstallReport:
+		doc = agentInstallDocOf(x)
+	case cli.WorkflowStatusReport:
+		doc = workflowStatusDocOf(x)
+	case cli.ReviewerStatusReport:
+		doc = reviewerStatusDocOf(x)
 	case cli.SDKInitReport:
 		doc = sdkInitDoc{Paths: x.Paths}
 	default:

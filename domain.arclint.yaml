@@ -2,10 +2,105 @@
 version: 1
 project: arclint
 description: >-
-  The Ubiquitous Language of arclint itself: what a Rule is, how a
-  repository adopts Rules a Pattern distributes, how conformance is
-  judged, and how Patterns travel between repositories.
+  ArcLint records domain meanings, checks architectural Rules, distributes
+  Patterns, and supplies guidance and domain review to coding agents.
 contexts:
+  workflow:
+    definition: >-
+      Reviewing whether the current work follows the project's domain workflow.
+      The task, established meanings, affected work and supplied activity are
+      the basis for feedback. Missing evidence limits what a review can say.
+      Any project using ArcLint can request this review; ArcLint uses the same
+      feature for its own work.
+    value_objects:
+      Assessment:
+        definition: >-
+          Findings and coverage limits for supplied work. An assessment advises
+          its recipient; it carries no approval or authority to block work.
+      Evidence:
+        definition: >-
+          The current task, named supplied passages and known coverage limits
+          used to assess the work.
+      Finding:
+        definition: >-
+          A specific departure from the workflow, supported by a quote from
+          named evidence and accompanied by a useful correction.
+    services:
+      WorkflowReview:
+        definition: >-
+          Assesses the supplied work against its request and established domain.
+          It questions missing context before source inspection, unexplained or
+          unrecorded changes of meaning, missing enforcement, misplaced ownership
+          and unjustified duplication, and reassesses repairs and rebuttals.
+          Semantic evaluation identifies potential departures; Assess accepts
+          grounded findings and states coverage limits. Its feedback advises the
+          coding agent and user; it does not approve or block their work.
+        assertions:
+          findings-grounded-in-evidence:
+            on: Assess
+            statement: >-
+              WorkflowReview accepts a finding only when it identifies supplied
+              evidence with an exact quote.
+          findings-explain-departure:
+            on: Assess
+            statement: >-
+              WorkflowReview accepts a finding only when it states a specific
+              departure and a correction.
+          task-required:
+            on: Assess
+            statement: >-
+              WorkflowReview requires the current task before assessing work.
+          coverage-stated:
+            on: Assess
+            statement: >-
+              WorkflowReview preserves the coverage limits supplied with the
+              evidence and candidate assessment in the assessment it returns.
+  agent:
+    definition: |
+      The language of agents using ArcLint and of ArcLint's Domain Reviewer.
+      These roles and instruction formats do not imply tactical domain objects.
+
+      An Agent is a software system that pursues a task by choosing and carrying
+      out actions. A Coding Agent is an Agent that performs software development
+      tasks. An LLM is a language model used for interpretation and generation;
+      it is a component of an LLM-based Agent, not the entire Agent.
+
+      An Agent Host provides the runtime, tools and configuration through which
+      an Agent operates. A Client provides the user-facing interaction with an
+      Agent. A product may provide both roles. Client does not mean any software
+      that calls ArcLint, nor does it mean the protocol client inside an MCP host.
+
+      Agent Instructions guide an Agent's responsibilities and behavior.
+      AGENTS.md is a Markdown convention for supplying repository instructions
+      and context to coding agents. A Skill packages reusable task instructions
+      in SKILL.md with optional scripts and resources. A Plugin is an installable
+      package of capabilities for a host; its manifest and supported contents
+      depend on the host's specification. Instructions, skills and plugins are
+      not running agents. A Codex custom-agent TOML file configures spawned
+      sessions; it does not contain the runtime or its conversation history.
+
+      ArcLint Domain Reviewer is the Coding Agent named arclint-domain-reviewer.
+      When invoked, it questions unsupported meanings before and during work,
+      examines enforcement, ownership and unjustified duplication afterward,
+      and reassesses repairs and rebuttals. It explains evidence, uncertainty
+      and useful corrections without deciding disputed meanings for the user
+      or editing the reviewed files. Its response is activity evidence in the
+      host conversation.
+
+      The contributor explains justified meanings and records changed contracts
+      before implementing them. The domain-librarian Skill supports that work;
+      the reviewer assesses its evidence. The installer delivers editable
+      instructions with ArcLint's release and reports installed files and their
+      integrity. The host controls discovery, execution, permissions and history
+      retention. Installation proves neither activation nor a completed review.
+    questions:
+      external-request-reference: >-
+        A future external work-item integration needs a reference and history
+        contract. The current reviewer accepts supplied material without
+        inventing an external identity.
+      plugin-delivery: >-
+        A later Plugin delivery needs a selected host specification and route;
+        this delivery installs a Codex custom-agent configuration directly.
   vocabulary:
     definition: >-
       The recorded Ubiquitous Language of a project and the meta-model

@@ -27,6 +27,11 @@ weight = 6
 | `arclint agents` | command group for agent-facing artifacts |
 | `arclint agents md` | print the generated `AGENTS.md` architecture block (`markdown`, `agentsmd` aliases); `--write` installs or refreshes it between markers without changing surrounding text |
 | `arclint agents skill` | write generated `SKILL.md` and `VOCAB.yaml` to `--dir` (default `.agents/skills/domain-librarian/`), and the domain schema they point at to `.arclint/schemas/domain.arclint.schema.json` |
+| `arclint agents workflow install` | install task-focused advisory hooks and a Codex launcher in this project; preserves unrelated hooks and does not grant host trust |
+| `arclint agents workflow status` | report workflow installation and file integrity; does not establish native activation |
+| `arclint agents workflow review` | assess current task evidence supplied as JSON on stdin; return grounded findings and coverage limits as JSON |
+| `arclint agents reviewer install --host codex` | install the separately invoked `arclint-domain-reviewer` with editable instructions |
+| `arclint agents reviewer status` | report the named reviewer's installation and file integrity |
 | `arclint rules [selector]` | list configured Rules, or show one complete Rule when the selector has one exact match; broader selectors produce a narrowed list |
 | `arclint rules schema` | print the indented JSON Schema accepted for `rules.arclint.yaml`; `--write` puts it at `.arclint/schemas/rules.arclint.schema.json` (or under `--dir`) so the ruleset's modeline can name a local copy |
 | `arclint rules test [name]` | run all Rule Tests under `.arclint/tests`, or one test selected by name |
@@ -36,6 +41,8 @@ weight = 6
 report. Human output is styled when stdout is a terminal. `--no-color`
 or a non-empty `NO_COLOR` environment variable selects the byte-stable
 plain renderer. Raw schema and generated markdown commands are unchanged.
+`agents workflow review` uses its raw assessment JSON protocol. See
+[workflow hooks](../workflow-hooks/) for input, output and activation steps.
 
 Exit codes are `0` for a clean command, `1` when the gate fails or a
 Rule Test does not match its expectation, and `2` for configuration or

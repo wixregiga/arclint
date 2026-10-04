@@ -24,7 +24,7 @@ func DistillationRules() []DistillationRule {
 		},
 		{
 			ID:      "invariant-ownership",
-			Rule:    "Every must-always/must-never statement -> invariant (or assertion) under exactly one owner. Always-true -> the owner's invariants, keyed; named operation -> the owner's assertions, keyed, with on: the aggregate's for its command, the domain service's for its operation. A value object's key names value integrity checked at construction; an aggregate's key names the root method that enforces the cluster rule.",
+			Rule:    "First establish a domain consistency rule and its capable owner; must-always/must-never wording alone does not establish one. Reviewer guidance, contributor workflow, host guarantees, delivery validation and programming guards are not automatically invariants or assertions. A justified rule holding at all observable times -> the owner's invariants, keyed; a justified guarantee of a named domain operation -> the owner's assertions, keyed, with on: the aggregate's for its command, the domain service's for its operation. A value object's key names value integrity checked at construction; an aggregate's key names the root method that enforces the cluster rule.",
 			Example: "total = sum of lines -> Order.invariants.total-is-sum-of-lines; every tier priced before Publish -> Order.assertions.tiers-priced on Publish",
 		},
 		{

@@ -25,6 +25,9 @@ func SkillMarkdown() string {
 	b.WriteString("## Reference\n\n")
 	b.WriteString(SkillReference)
 	b.WriteString("\n\n")
+	b.WriteString("## ArcLint setup and review\n\n")
+	b.WriteString(SkillAgentWorkflow)
+	b.WriteString("\n\n")
 	b.WriteString("## Protocol\n\n")
 	for i, rule := range SkillProtocolRules() {
 		b.WriteString(strconv.Itoa(i + 1))
