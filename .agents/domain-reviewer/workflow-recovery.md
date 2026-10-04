@@ -94,3 +94,15 @@ They are not application use cases merely because their methods cross an adapter
 boundary. The semantic ReviewWorkflow application operation remains responsible
 for evaluation and domain acceptance. This correction removes misplaced interface
 ownership instead of adding empty forwarding use cases or weakening lint.
+
+## Quoting native action evidence
+
+A repeat of the installed protocol test against implementation commit 65691d9
+failed at the proposed-action event: a model quote did not match the JSON-escaped
+native action passage, so domain acceptance correctly returned unavailable.
+Keep this failure as evidence. Present decoded tool string content as named text
+passages with its event/tool provenance, including actual newlines and symbols,
+so a reviewer can cite the supplied proposal directly. Preserve action chronology
+and coverage limits. Do not relax the exact-quote assertion or count an unavailable
+assessment as a successful report. This is evidence presentation, not a changed
+domain rule or a new approval policy.

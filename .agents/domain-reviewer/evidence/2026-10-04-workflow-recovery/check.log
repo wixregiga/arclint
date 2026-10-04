@@ -57,7 +57,7 @@ ok  	github.com/wixregiga/arclint/tools/gensdktypes	(cached)
 ?   	github.com/wixregiga/arclint/tools/genstdlib	[no test files]
 spectral lint -F error -D --ruleset .spectral.yaml docs/schemas/rules.arclint.schema.json docs/schemas/domain.arclint.schema.json .arclint/schemas/rules.arclint.schema.json .arclint/schemas/domain.arclint.schema.json testing/boxoffice/.arclint/schemas/rules.arclint.schema.json testing/boxoffice/.arclint/schemas/domain.arclint.schema.json
 No results with a severity of 'error' found!
-gitleaks protect --staged --verbose 
+gitleaks protect --staged --verbose
 
     ○
     │╲

@@ -11,7 +11,38 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	workflowdomain "github.com/wixregiga/arclint/internal/domain/workflow"
 )
+
+func TestCollectorSuppliesDecodedNativePatchForExactGrounding(t *testing.T) {
+	root := t.TempDir()
+	collector, err := NewCollector(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if _, err := collector.Collect(ctx, CodexEvent{HookEventName: userPromptSubmitEvent, SessionID: "patch-text", Prompt: "Implement the recorded behavior."}); err != nil {
+		t.Fatal(err)
+	}
+	const patch = "*** Begin Patch\n*** Add File: sample.ts\n+export const review = () => \"required\";\n*** End Patch"
+	input, err := json.Marshal(map[string]string{"input": patch})
+	if err != nil {
+		t.Fatal(err)
+	}
+	evidence, err := collector.Collect(ctx, CodexEvent{HookEventName: preToolUseEvent, SessionID: "patch-text", ToolName: "apply_patch", ToolInput: input})
+	if err != nil || !strings.Contains(evidence.Passages["current-tool-input"], patch) {
+		t.Fatalf("native patch text is escaped or missing: %+v %v", evidence, err)
+	}
+	candidate := workflowdomain.Assessment{Findings: []workflowdomain.Finding{{Evidence: "current-tool-input", Quote: "+export const review = () => \"required\";", Departure: "The proposed behavior needs its recorded justification.", Correction: "Verify the recorded behavior before applying this patch."}}}
+	if _, err := (workflowdomain.Review{}).Assess(evidence, candidate); err != nil {
+		t.Fatalf("unescaped exact native quote failed domain grounding: %v", err)
+	}
+	stopped, err := collector.Collect(ctx, CodexEvent{HookEventName: stopEvent, SessionID: "patch-text"})
+	if err != nil || !strings.Contains(stopped.Passages["task-tool-text"], patch) {
+		t.Fatalf("decoded patch history missing at Stop: %+v %v", stopped, err)
+	}
+}
 
 func TestCollectorPersistsSelectedPathsOnceAcrossRepeatedEvents(t *testing.T) {
 	root := t.TempDir()

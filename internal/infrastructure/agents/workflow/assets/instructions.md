@@ -24,5 +24,10 @@ give a useful correction within the user's task. Use an empty findings array whe
 no departure is demonstrated. Explain material uncertainty in limits. Neither an
 empty result nor successful tests certify the domain meanings or grant approval.
 
+For native tool text, cite current-tool-input, current-tool-result or task-tool-text
+when available. Those passages preserve actual newlines, quotes and source text.
+The separate task-actions passage is a structured JSON timeline; its escaping is
+part of that passage, so a decoded source quote does not occur there verbatim.
+
 Return JSON only with findings and limits. Each finding has evidence, quote,
 departure and correction strings. limits is an array of strings.

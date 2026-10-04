@@ -1,0 +1,67 @@
+[
+  {
+    "input": {
+      "hook_event_name": "SessionStart",
+      "session_id": "task-focused-proof-1791078360712923952",
+      "cwd": "/tmp/arclint-workflow-adopter-ono0hfug"
+    },
+    "output": {
+      "hookSpecificOutput": {
+        "additionalContext": "ArcLint workflow evidence initialized; no review performed before a task or action.",
+        "hookEventName": "SessionStart"
+      }
+    }
+  },
+  {
+    "input": {
+      "hook_event_name": "UserPromptSubmit",
+      "session_id": "task-focused-proof-1791078360712923952",
+      "cwd": "/tmp/arclint-workflow-adopter-ono0hfug",
+      "prompt": "Update src/invoice.ts receipt delivery to email the existing billingEmail. Do not change pricing or introduce customer categories. Follow the project domain workflow."
+    },
+    "output": {
+      "hookSpecificOutput": {
+        "additionalContext": "ArcLint workflow review: advisory feedback on the current task.\nNo supported workflow departure in the supplied evidence.\nCoverage: The evidence shows the task, recorded guidance, domain definition and source snapshot, but no coding-agent actions or results. At UserPromptSubmit, workflow compliance and implementation behavior cannot yet be assessed.\n",
+        "hookEventName": "UserPromptSubmit"
+      }
+    }
+  },
+  {
+    "input": {
+      "hook_event_name": "PostToolUse",
+      "session_id": "task-focused-proof-1791078360712923952",
+      "cwd": "/tmp/arclint-workflow-adopter-ono0hfug",
+      "tool_name": "exec_command",
+      "tool_input": {
+        "cmd": "arclint context src/invoice.ts"
+      },
+      "tool_response": {
+        "exit_code": 0,
+        "output": "scope: src/invoice.ts\n  src/invoice.ts \u2192 billing\nlanguages: typescript\nconfigured rules: 20\n\nzone billing\n  paths: src/**\n\nproject domain (domain.arclint.yaml): nothing recorded anchors into this scope; --full shows the whole model (1 context)\n"
+      }
+    },
+    "output": {
+      "hookSpecificOutput": {
+        "additionalContext": "ArcLint workflow review: advisory feedback on the current task.\nNo supported workflow departure in the supplied evidence.\nCoverage: Up to five previous workflow reports are claims to reassess against current evidence, not proof that old defects persist or approval of current work.\nCoverage: The evidence shows that arclint context src/invoice.ts completed successfully. It does not show a source-reading action, implementation, enforcement review, verification checks, or completion claim, so subsequent workflow compliance and receipt-delivery behavior cannot yet be assessed.\nCoverage: The context result says no recorded domain content anchors into this scope, while the supplied domain recording defines Invoice and receipt behavior. This alone does not demonstrate an agent departure.\n",
+        "hookEventName": "PostToolUse"
+      }
+    }
+  },
+  {
+    "input": {
+      "hook_event_name": "PreToolUse",
+      "session_id": "task-focused-proof-1791078360712923952",
+      "cwd": "/tmp/arclint-workflow-adopter-ono0hfug",
+      "tool_name": "apply_patch",
+      "tool_input": {
+        "input": "*** Begin Patch\n*** Update File: src/invoice.ts\n@@\n-type Invoice = { total: number; billingEmail: string };\n-export function sendReceipt(invoice: Invoice, email: (address: string) => void) { }\n+type Invoice = { total: number; billingEmail: string };\n+type VIPCustomer = { tier: \"gold\" };\n+export function sendReceipt(invoice: Invoice, email: (address: string) => void) { invoice.total *= 0.9; email(invoice.billingEmail); }\n*** End Patch\n"
+      }
+    },
+    "output": {
+      "hookSpecificOutput": {
+        "additionalContext": "ArcLint workflow review unavailable: workflow review unavailable: workflow finding lacks exact supplied evidence: finding 1 cites \"task-actions\"",
+        "hookEventName": "PreToolUse"
+      }
+    }
+  }
+]

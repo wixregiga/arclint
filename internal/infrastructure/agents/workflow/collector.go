@@ -133,6 +133,12 @@ func (c *Collector) Collect(ctx context.Context, event CodexEvent) (evidence wor
 		if len(result) == 0 {
 			result = event.ToolResult
 		}
+		if len(event.ToolInput) > 0 {
+			evidence.Passages["current-tool-input"] = boundedPassage(nativeText(event.ToolInput), &evidence.Limits, "current native tool input")
+		}
+		if len(result) > 0 {
+			evidence.Passages["current-tool-result"] = boundedPassage(nativeText(result), &evidence.Limits, "current native tool result")
+		}
 		action, _ := json.Marshal(struct {
 			Stage, Tool   string
 			Input, Result json.RawMessage
@@ -156,6 +162,11 @@ func (c *Collector) Collect(ctx context.Context, event CodexEvent) (evidence wor
 	evidence.Passages["current-stage"] = event.HookEventName
 	if len(state.Actions) > 0 {
 		evidence.Passages["task-actions"] = strings.Join(state.Actions, "\n")
+		texts := make([]string, 0, len(state.Actions))
+		for _, action := range state.Actions {
+			texts = append(texts, nativeText([]byte(action)))
+		}
+		evidence.Passages["task-tool-text"] = boundedPassage(strings.Join(texts, "\n\n"), &evidence.Limits, "decoded native tool history")
 	}
 	if event.LastAssistantMessage != "" {
 		evidence.Passages["current-response"] = boundedPassage(event.LastAssistantMessage, &evidence.Limits, "current response")

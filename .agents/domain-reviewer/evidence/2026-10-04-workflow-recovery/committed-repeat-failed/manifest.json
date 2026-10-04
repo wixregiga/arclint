@@ -1,0 +1,10 @@
+{
+  "status": "failed",
+  "error": "did not report unsupported proposal",
+  "root": "/tmp/arclint-workflow-adopter-ono0hfug",
+  "binary": "/tmp/arclint-workflow",
+  "session": "task-focused-proof-1791078360712923952",
+  "evidence_kind": "Real installed public CLI hook subprocesses and real model; fixture mutations by harness, not native outer-host dispatch.",
+  "source_commit": "65691d91c5c9a3e576a95823613f9fab196abdd5",
+  "binary_sha256": "42e7a4ac2a930723e0f068ce89b542034e8f2d6e4feb2dcf065be91ad7a10045"
+}
