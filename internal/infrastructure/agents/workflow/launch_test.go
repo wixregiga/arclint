@@ -139,3 +139,57 @@ func TestLaunchLinkedWorktreePreservesExactHandlersAndInheritedProvider(t *testi
 		t.Fatal("launcher generation changed the main checkout")
 	}
 }
+
+func TestLaunchInstalledSiblingsShareStableTrustDefinitions(t *testing.T) {
+	repository := t.TempDir()
+	gitFixture(t, repository, "init", "--quiet")
+	gitFixture(t, repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--quiet", "--allow-empty", "-m", "fixture")
+	roots := []string{filepath.Join(t.TempDir(), "a"), filepath.Join(t.TempDir(), "b")}
+	for _, root := range roots {
+		gitFixture(t, repository, "worktree", "add", "--quiet", "--detach", root)
+	}
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, index := range []int{0, 1, 0} {
+		if _, err := NewInstaller(roots[index], binary, "fixture").Install(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var captured [][]string
+	for _, root := range roots {
+		script, err := os.ReadFile(filepath.Join(root, ".codex/hooks/arclint-workflow-guard/start-codex.sh"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		captured = append(captured, captureLaunch(t, script))
+	}
+	if !reflect.DeepEqual(captured[0][3:], captured[1][3:]) {
+		t.Fatalf("sibling hook definitions diverged: %#v != %#v", captured[0], captured[1])
+	}
+	for index, event := range workflowEvents {
+		var decoded struct {
+			Hooks map[string][]struct{ Hooks []map[string]any }
+		}
+		if err := toml.Unmarshal([]byte(captured[0][4+index*2]), &decoded); err != nil {
+			t.Fatal(err)
+		}
+		groups := decoded.Hooks[event]
+		if len(groups) != 2 || len(groups[0].Hooks) != 1 || len(groups[1].Hooks) != 1 {
+			t.Fatalf("expected two explicit providers: %#v", groups)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(roots[1], ".codex/hooks/arclint-workflow-guard/instructions.md"), []byte("Custom editable review instructions."), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := launchScript(roots[0], map[string]any{"type": "command", "command": "current"}); err != nil {
+		t.Fatalf("editable instructions must remain supported: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(roots[1], ".codex/hooks/arclint-workflow-guard/arclint"), []byte("tampered executable"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := launchScript(roots[0], map[string]any{"type": "command", "command": "current"}); err == nil {
+		t.Fatal("changed sibling executable must not silently enter trusted definitions")
+	}
+}

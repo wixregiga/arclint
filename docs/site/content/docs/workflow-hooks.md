@@ -33,10 +33,16 @@ bash .codex/hooks/arclint-workflow-guard/start-codex.sh
 ```
 
 For an ordinary checkout, it starts Codex in the project with normal
-configuration. For a linked worktree, it also supplies that installation's
-exact hook definitions for the session, alongside inherited hooks. This avoids
-depending on whether the host discovers a worktree-local registration; the
-launcher does not edit the main checkout's hooks.
+configuration. Linked-worktree launchers supply an identical, sorted inventory
+of the exact workflow-hook definitions installed across sibling worktrees,
+alongside inherited hooks. Only the provider belonging to the current worktree
+reviews its events; the others do nothing. The shared definitions avoid
+conflicting trust records between worktree sessions. The launcher does not edit
+the main checkout's hooks.
+
+After adding or removing a sibling workflow installation, rerun
+`arclint agents workflow install` in previously installed worktrees to refresh
+their launchers. Changed definitions require Codex's normal trust review again.
 
 Installation and launching do not grant trust. In the launched session, inspect
 the definitions with `/hooks` and follow Codex's trust steps. Then exit and run

@@ -106,3 +106,21 @@ so a reviewer can cite the supplied proposal directly. Preserve action chronolog
 and coverage limits. Do not relax the exact-quote assertion or count an unavailable
 assessment as a successful report. This is evidence presentation, not a changed
 domain rule or a new approval policy.
+
+## Linked-worktree native trust identity
+
+Actual Codex 0.159.2 trust inspection showed that session-config hook definitions
+use the same /<session-flags>/config.toml event/group key in both worktrees.
+Trusting one root's definition therefore marked the other root's definition
+modified. This was not an old guard rejection, and repeatedly approving two
+conflicting definitions is not a recovery.
+
+For a linked checkout, installation prepares one deterministic inventory of the
+exact installed workflow providers in that Git worktree family. Both launchers
+present the same ordered native groups, so each root has its own stable group key
+within that inventory. Include no uninstalled provider or invented padding. Each
+provider already rejects events outside its root before collection or evaluation.
+Inherited host hooks remain intact, and trust remains Codex's normal explicit
+flow. Adding or removing a sibling installation requires refreshing the earlier
+launchers and reviewing changed native definitions; no trust is auto-renewed.
+This is host delivery identity, not a new domain concept or review policy.

@@ -20,12 +20,20 @@ func launchScript(root string, handler map[string]any) ([]byte, error) {
 		return nil, err
 	}
 	if linked {
-		configuration, err := inlineHookValue(map[string]any{hooksField: []any{handler}})
+		handlers, err := installedSiblingHandlers(root, handler)
 		if err != nil {
-			return nil, fmt.Errorf("workflow launch handler: %w", err)
+			return nil, err
+		}
+		groups := make([]any, 0, len(handlers))
+		for _, sibling := range handlers {
+			groups = append(groups, map[string]any{hooksField: []any{sibling}})
+		}
+		configuration, err := inlineHookValue(groups)
+		if err != nil {
+			return nil, fmt.Errorf("workflow launch handlers: %w", err)
 		}
 		for _, event := range workflowEvents {
-			arguments = append(arguments, "-c", "hooks."+event+"=["+configuration+"]")
+			arguments = append(arguments, "-c", "hooks."+event+"="+configuration)
 		}
 	}
 	quoted := make([]string, len(arguments))
@@ -102,4 +110,78 @@ func inlineHookValue(value any) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported hook field type %T", value)
 	}
+}
+
+// installedSiblingHandlers snapshots only verified installed providers in this Git repository.
+// Every linked launcher uses the same ordered groups; trust keys cannot collide across siblings.
+func installedSiblingHandlers(root string, current map[string]any) ([]map[string]any, error) {
+	command := exec.CommandContext(context.Background(), "git", "-C", root, "worktree", "list", "--porcelain", "-z")
+	output, err := command.Output()
+	if err != nil {
+		return nil, fmt.Errorf("list workflow sibling checkouts: %w", err)
+	}
+	providers := map[string]map[string]any{filepath.Clean(root): current}
+	for _, field := range strings.Split(string(output), "\x00") {
+		if !strings.HasPrefix(field, "worktree ") {
+			continue
+		}
+		sibling := filepath.Clean(strings.TrimPrefix(field, "worktree "))
+		if sibling == filepath.Clean(root) {
+			continue
+		}
+		receipt := filepath.Join(sibling, workflowReceipt)
+		_, err := os.Stat(receipt)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("inspect sibling workflow receipt: %w", err)
+		}
+		status, err := NewInstaller(sibling, "", "").Status()
+		if err != nil {
+			return nil, fmt.Errorf("verify sibling workflow installation %s: %w", sibling, err)
+		}
+		if !status.Installed || (!status.Intact && !onlyEditableInstructionsChanged(sibling, status.Problems)) {
+			return nil, fmt.Errorf("sibling workflow installation %s is not intact: %s", sibling, strings.Join(status.Problems, "; "))
+		}
+		content, err := os.ReadFile(receipt)
+		if err != nil {
+			return nil, fmt.Errorf("read sibling workflow handler: %w", err)
+		}
+		var metadata installation
+		if err := json.Unmarshal(content, &metadata); err != nil {
+			return nil, fmt.Errorf("decode sibling workflow handler: %w", err)
+		}
+		if metadata.Handler == nil {
+			return nil, fmt.Errorf("sibling workflow handler absent: %s", sibling)
+		}
+		providers[sibling] = metadata.Handler
+		if len(providers) > 64 {
+			return nil, fmt.Errorf("workflow launcher inventory exceeds 64 installed providers")
+		}
+	}
+	roots := make([]string, 0, len(providers))
+	for sibling := range providers {
+		roots = append(roots, sibling)
+	}
+	sort.Strings(roots)
+	handlers := make([]map[string]any, 0, len(roots))
+	for _, sibling := range roots {
+		handlers = append(handlers, providers[sibling])
+	}
+	return handlers, nil
+}
+
+// onlyEditableInstructionsChanged permits customization without accepting altered runtime assets.
+func onlyEditableInstructionsChanged(root string, problems []string) bool {
+	path := filepath.Join(workflowDirectory, "instructions.md")
+	if len(problems) != 1 || problems[0] != "Missing or changed asset: "+path {
+		return false
+	}
+	info, err := os.Lstat(filepath.Join(root, path))
+	if err != nil || !info.Mode().IsRegular() {
+		return false
+	}
+	content, err := os.ReadFile(filepath.Join(root, path))
+	return err == nil && strings.TrimSpace(string(content)) != ""
 }
