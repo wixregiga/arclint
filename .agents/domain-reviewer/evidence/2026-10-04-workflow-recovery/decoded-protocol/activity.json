@@ -1,0 +1,145 @@
+[
+  {
+    "input": {
+      "hook_event_name": "SessionStart",
+      "session_id": "task-focused-proof-1791078639815373002",
+      "cwd": "/tmp/arclint-workflow-adopter-q7rc1kb9"
+    },
+    "output": {
+      "hookSpecificOutput": {
+        "additionalContext": "ArcLint workflow evidence initialized; no review performed before a task or action.",
+        "hookEventName": "SessionStart"
+      }
+    }
+  },
+  {
+    "input": {
+      "hook_event_name": "UserPromptSubmit",
+      "session_id": "task-focused-proof-1791078639815373002",
+      "cwd": "/tmp/arclint-workflow-adopter-q7rc1kb9",
+      "prompt": "Update src/invoice.ts receipt delivery to email the existing billingEmail. Do not change pricing or introduce customer categories. Follow the project domain workflow."
+    },
+    "output": {
+      "hookSpecificOutput": {
+        "additionalContext": "ArcLint workflow review: advisory feedback on the current task.\nNo supported workflow departure in the supplied evidence.\nCoverage: The supplied evidence contains project guidance and a source snapshot, but no agent actions or results. At UserPromptSubmit, no workflow departure or completed implementation is demonstrated.\n",
+        "hookEventName": "UserPromptSubmit"
+      }
+    }
+  },
+  {
+    "input": {
+      "hook_event_name": "PostToolUse",
+      "session_id": "task-focused-proof-1791078639815373002",
+      "cwd": "/tmp/arclint-workflow-adopter-q7rc1kb9",
+      "tool_name": "exec_command",
+      "tool_input": {
+        "cmd": "arclint context src/invoice.ts"
+      },
+      "tool_response": {
+        "exit_code": 0,
+        "output": "scope: src/invoice.ts\n  src/invoice.ts \u2192 billing\nlanguages: typescript\nconfigured rules: 20\n\nzone billing\n  paths: src/**\n\nproject domain (domain.arclint.yaml): nothing recorded anchors into this scope; --full shows the whole model (1 context)\n"
+      }
+    },
+    "output": {
+      "hookSpecificOutput": {
+        "additionalContext": "ArcLint workflow review: advisory feedback on the current task.\nNo supported workflow departure in the supplied evidence.\nCoverage: Up to five previous workflow reports are claims to reassess against current evidence, not proof that old defects persist or approval of current work.\nCoverage: The supplied actions show only a successful arclint context call for src/invoice.ts. No source read, implementation, enforcement check, or completion claim is demonstrated, so subsequent workflow compliance and receipt delivery behavior remain unassessed.\nCoverage: The context result says no recorded domain anchors into this scope, while the supplied domain recording defines an Invoice and receipt behavior. This discrepancy does not itself demonstrate an agent departure.\n",
+        "hookEventName": "PostToolUse"
+      }
+    }
+  },
+  {
+    "input": {
+      "hook_event_name": "PreToolUse",
+      "session_id": "task-focused-proof-1791078639815373002",
+      "cwd": "/tmp/arclint-workflow-adopter-q7rc1kb9",
+      "tool_name": "apply_patch",
+      "tool_input": {
+        "input": "*** Begin Patch\n*** Update File: src/invoice.ts\n@@\n-type Invoice = { total: number; billingEmail: string };\n-export function sendReceipt(invoice: Invoice, email: (address: string) => void) { }\n+type Invoice = { total: number; billingEmail: string };\n+type VIPCustomer = { tier: \"gold\" };\n+export function sendReceipt(invoice: Invoice, email: (address: string) => void) { invoice.total *= 0.9; email(invoice.billingEmail); }\n*** End Patch\n"
+      }
+    },
+    "output": {
+      "hookSpecificOutput": {
+        "additionalContext": "ArcLint workflow review: advisory feedback on the current task.\ncurrent-tool-input: \"invoice.total *= 0.9;\"\nDeparture: The proposed receipt implementation reduces the invoice total by 10%, contrary to the user's instruction to leave pricing unchanged and the recorded domain meaning that sending a receipt does not change the total.\nCorrection: Remove the total mutation and implement receipt delivery with email(invoice.billingEmail).\ncurrent-tool-input: \"type VIPCustomer = { tier: \\\"gold\\\" };\"\nDeparture: The proposed patch introduces a customer category that the user explicitly prohibited and that is unnecessary for receipt delivery using the existing billingEmail.\nCorrection: Remove VIPCustomer and reuse the existing Invoice concept.\nCoverage: Up to five previous workflow reports are claims to reassess against current evidence, not proof that old defects persist or approval of current work.\nCoverage: The patch is shown at PreToolUse with no result; these findings concern the proposed action, not an applied implementation.\nCoverage: A successful arclint context call is demonstrated. The supplied evidence does not establish subsequent domain recording, enforcement verification, tests, or completion claims.\nCoverage: The context output reports no domain anchors in scope, while the supplied domain recording defines Invoice and receipt behavior. That discrepancy alone does not demonstrate an agent departure.\n",
+        "hookEventName": "PreToolUse"
+      }
+    }
+  },
+  {
+    "input": {
+      "hook_event_name": "PostToolUse",
+      "session_id": "task-focused-proof-1791078639815373002",
+      "cwd": "/tmp/arclint-workflow-adopter-q7rc1kb9",
+      "tool_name": "apply_patch",
+      "tool_input": {
+        "input": "*** Begin Patch\n*** Update File: src/invoice.ts\n@@\n-type Invoice = { total: number; billingEmail: string };\n-export function sendReceipt(invoice: Invoice, email: (address: string) => void) { }\n+type Invoice = { total: number; billingEmail: string };\n+type VIPCustomer = { tier: \"gold\" };\n+export function sendReceipt(invoice: Invoice, email: (address: string) => void) { invoice.total *= 0.9; email(invoice.billingEmail); }\n*** End Patch\n"
+      },
+      "tool_response": "Applied the proposed TypeScript change."
+    },
+    "output": {
+      "hookSpecificOutput": {
+        "additionalContext": "ArcLint workflow review: advisory feedback on the current task.\nwork/src/invoice.ts: \"invoice.total *= 0.9;\"\nDeparture: The applied receipt implementation reduces the invoice total by 10%. This violates the user's instruction to leave pricing unchanged and the recorded domain contract that sending a receipt does not change the total.\nCorrection: Remove the total mutation and retain email(invoice.billingEmail). Verify receipt delivery uses the existing billingEmail and preserves the total.\nwork/src/invoice.ts: \"type VIPCustomer = { tier: \\\"gold\\\" };\"\nDeparture: The applied change introduces a customer category explicitly prohibited by the user. It also departs from the project's instruction to reuse existing domain concepts.\nCorrection: Remove VIPCustomer and use the existing Invoice type for receipt delivery.\nCoverage: Up to five previous workflow reports are claims to reassess against current evidence, not proof that old defects persist or approval of current work.\nCoverage: The successful arclint context call is demonstrated. The supplied collection does not establish source-read ordering, domain recording, enforcement verification, tests, or completion claims; their absence does not prove they never occurred.\nCoverage: The context output reports no domain anchors in scope, while the supplied domain recording defines Invoice and receipt behavior. This discrepancy alone does not demonstrate an agent departure.\nCoverage: Previous reports were reassessed against the successful patch result and current source snapshot. These findings concern applied changes, not merely a proposal.\n",
+        "hookEventName": "PostToolUse"
+      }
+    }
+  },
+  {
+    "input": {
+      "hook_event_name": "UserPromptSubmit",
+      "session_id": "task-focused-proof-1791078639815373002",
+      "cwd": "/tmp/arclint-workflow-adopter-q7rc1kb9",
+      "prompt": "Repair the reported departures: remove the VIP category and discount mutation. Keep the receipt email change using existing billingEmail. Reassess the corrected result; do not claim unrun checks."
+    },
+    "output": {
+      "hookSpecificOutput": {
+        "additionalContext": "ArcLint workflow review: advisory feedback on the current task.\nwork/src/invoice.ts: \"invoice.total *= 0.9;\"\nDeparture: The supplied current source still reduces the invoice total by 10% when sending a receipt, contrary to the user's task and the recorded contract that receipt delivery preserves the total.\nCorrection: Remove the total mutation, retain email(invoice.billingEmail), and verify that receipt delivery preserves the total.\nwork/src/invoice.ts: \"type VIPCustomer = { tier: \\\"gold\\\" };\"\nDeparture: The supplied current source still introduces the prohibited VIP customer category. This also conflicts with the project's instruction to reuse existing domain concepts.\nCorrection: Remove VIPCustomer and retain the existing Invoice type and billingEmail.\nCoverage: Up to five previous workflow reports are claims to reassess against current evidence, not proof that old defects persist or approval of current work.\nCoverage: The findings are supported by the supplied source snapshot and successful patch result, not merely by previous reports.\nCoverage: The follow-up requests repairs, but no repair action or corrected source is supplied; a corrected result cannot yet be assessed.\nCoverage: A successful arclint context call is demonstrated. The bounded evidence does not establish source-read ordering, domain recording, enforcement verification, tests, or completion claims. Their absence does not prove they never occurred.\nCoverage: The context output reports no domain anchors in scope despite the supplied Invoice domain recording. This discrepancy alone does not demonstrate an agent departure.\n",
+        "hookEventName": "UserPromptSubmit"
+      }
+    }
+  },
+  {
+    "input": {
+      "hook_event_name": "PreToolUse",
+      "session_id": "task-focused-proof-1791078639815373002",
+      "cwd": "/tmp/arclint-workflow-adopter-q7rc1kb9",
+      "tool_name": "apply_patch",
+      "tool_input": {
+        "input": "*** Begin Patch\n*** Update File: src/invoice.ts\n@@\n-type Invoice = { total: number; billingEmail: string };\n-type VIPCustomer = { tier: \"gold\" };\n-export function sendReceipt(invoice: Invoice, email: (address: string) => void) { invoice.total *= 0.9; email(invoice.billingEmail); }\n+type Invoice = { total: number; billingEmail: string };\n+export function sendReceipt(invoice: Invoice, email: (address: string) => void) { email(invoice.billingEmail); }\n*** End Patch\n"
+      }
+    },
+    "output": {
+      "hookSpecificOutput": {
+        "additionalContext": "ArcLint workflow review: advisory feedback on the current task.\nNo supported workflow departure in the supplied evidence.\nCoverage: Up to five previous workflow reports are claims to reassess against current evidence, not proof that old defects persist or approval of current work.\nCoverage: The current repair proposal removes VIPCustomer and the total mutation while retaining email(invoice.billingEmail), addressing both reported departures. It is shown at PreToolUse without a result, so application is not established; work/src/invoice.ts still shows the earlier defects.\nCoverage: A successful arclint context call is demonstrated. The bounded evidence does not establish source-read ordering, domain recording, behavior or architecture verification, or completion claims. Absence does not prove those actions never occurred.\nCoverage: The context result reports no domain anchors in scope despite the supplied Invoice domain recording. This discrepancy alone does not demonstrate an agent departure.\n",
+        "hookEventName": "PreToolUse"
+      }
+    }
+  },
+  {
+    "input": {
+      "hook_event_name": "PostToolUse",
+      "session_id": "task-focused-proof-1791078639815373002",
+      "cwd": "/tmp/arclint-workflow-adopter-q7rc1kb9",
+      "tool_name": "apply_patch",
+      "tool_input": {
+        "input": "*** Begin Patch\n*** Update File: src/invoice.ts\n@@\n-type Invoice = { total: number; billingEmail: string };\n-type VIPCustomer = { tier: \"gold\" };\n-export function sendReceipt(invoice: Invoice, email: (address: string) => void) { invoice.total *= 0.9; email(invoice.billingEmail); }\n+type Invoice = { total: number; billingEmail: string };\n+export function sendReceipt(invoice: Invoice, email: (address: string) => void) { email(invoice.billingEmail); }\n*** End Patch\n"
+      },
+      "tool_response": "Removed the unrequested category and price mutation; receipt uses billingEmail."
+    },
+    "output": {
+      "hookSpecificOutput": {
+        "additionalContext": "ArcLint workflow review: advisory feedback on the current task.\nNo supported workflow departure in the supplied evidence.\nCoverage: Up to five previous workflow reports are claims to reassess against current evidence, not proof that old defects persist or approval of current work.\nCoverage: The successful repair result and work/src/invoice.ts show that VIPCustomer and the total mutation were removed while email(invoice.billingEmail) was retained. The previously reported departures are resolved in the supplied current evidence.\nCoverage: A successful arclint context call is demonstrated. The bounded collection does not establish source-read ordering, domain recording, behavior or architecture verification, or completion claims; absence does not prove those actions never occurred.\nCoverage: The context output reports no domain anchors in scope despite the supplied Invoice domain recording. This discrepancy alone does not demonstrate an agent departure.\nCoverage: Previous reports are claims reassessed against current evidence. This empty finding set does not certify domain meanings or grant approval.\n",
+        "hookEventName": "PostToolUse"
+      }
+    }
+  },
+  {
+    "input": {
+      "hook_event_name": "Stop",
+      "session_id": "task-focused-proof-1791078639815373002",
+      "cwd": "/tmp/arclint-workflow-adopter-q7rc1kb9",
+      "last_assistant_message": "The receipt uses existing billingEmail. Removed the unrequested VIP category and price mutation. No typecheck or functional-test result is claimed."
+    },
+    "output": {
+      "systemMessage": "ArcLint workflow review: advisory feedback on the current task.\nNo supported workflow departure in the supplied evidence.\nCoverage: Up to five previous workflow reports are claims to reassess against current evidence, not proof that old defects persist or approval of current work.\nCoverage: The successful repair result in task-actions and current work/src/invoice.ts show that the VIP category and total mutation were removed while email(invoice.billingEmail) was retained. The earlier departures are resolved.\nCoverage: A successful arclint context call is demonstrated. The supplied evidence does not establish source-read ordering, domain recording, or behavior and architecture checks; absence from this collection does not prove those actions never occurred.\nCoverage: current-response claims no typecheck or functional-test result. Runtime verification remains unestablished.\nCoverage: The context output reports no domain anchors in scope despite the supplied Invoice domain recording. That discrepancy alone does not demonstrate an agent departure.\nCoverage: This assessment uses only the supplied evidence. An empty findings array neither certifies domain meanings nor grants approval.\n"
+    }
+  }
+]

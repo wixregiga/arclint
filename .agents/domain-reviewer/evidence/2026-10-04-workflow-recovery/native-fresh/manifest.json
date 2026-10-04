@@ -1,0 +1,11 @@
+{
+  "root": "/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint",
+  "exit_code": 0,
+  "binary_sha256": "b14774ac0499eb4cf29fcb8c8a933e06b567a7ee6b9023a3caf72f66e55532c6",
+  "new_report_files": [
+    "5cb235852d77c5c8d26777dbd0d1daa86f8ab0005b1e3bea05a204fa7cdfec42.jsonl"
+  ],
+  "trust_bypassed": false,
+  "host": "Codex CLI 0.159.2 Linux/WSL",
+  "scope": "Native lifecycle dispatch in actual checkout; read-only two-command smoke test, not autonomous defect repair."
+}

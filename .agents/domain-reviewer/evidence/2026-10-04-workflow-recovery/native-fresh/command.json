@@ -1,0 +1,23 @@
+[
+  "codex",
+  "--no-daemon",
+  "-C",
+  "/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint",
+  "-c",
+  "hooks.SessionStart=[{\"hooks\"=[{\"command\"=\"'/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/hooks/arclint-workflow-guard/arclint' --rules '/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/rules.arclint.yaml' agents workflow event\",\"commandWindows\"=\"wsl.exe -d \\\"Ubuntu-24.04\\\" -- \\\"/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/hooks/arclint-workflow-guard/arclint\\\" --rules \\\"/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/rules.arclint.yaml\\\" agents workflow event\",\"statusMessage\"=\"ArcLint workflow review\",\"timeout\"=90,\"type\"=\"command\"}]}]",
+  "-c",
+  "hooks.UserPromptSubmit=[{\"hooks\"=[{\"command\"=\"'/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/hooks/arclint-workflow-guard/arclint' --rules '/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/rules.arclint.yaml' agents workflow event\",\"commandWindows\"=\"wsl.exe -d \\\"Ubuntu-24.04\\\" -- \\\"/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/hooks/arclint-workflow-guard/arclint\\\" --rules \\\"/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/rules.arclint.yaml\\\" agents workflow event\",\"statusMessage\"=\"ArcLint workflow review\",\"timeout\"=90,\"type\"=\"command\"}]}]",
+  "-c",
+  "hooks.PreToolUse=[{\"hooks\"=[{\"command\"=\"'/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/hooks/arclint-workflow-guard/arclint' --rules '/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/rules.arclint.yaml' agents workflow event\",\"commandWindows\"=\"wsl.exe -d \\\"Ubuntu-24.04\\\" -- \\\"/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/hooks/arclint-workflow-guard/arclint\\\" --rules \\\"/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/rules.arclint.yaml\\\" agents workflow event\",\"statusMessage\"=\"ArcLint workflow review\",\"timeout\"=90,\"type\"=\"command\"}]}]",
+  "-c",
+  "hooks.PostToolUse=[{\"hooks\"=[{\"command\"=\"'/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/hooks/arclint-workflow-guard/arclint' --rules '/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/rules.arclint.yaml' agents workflow event\",\"commandWindows\"=\"wsl.exe -d \\\"Ubuntu-24.04\\\" -- \\\"/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/hooks/arclint-workflow-guard/arclint\\\" --rules \\\"/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/rules.arclint.yaml\\\" agents workflow event\",\"statusMessage\"=\"ArcLint workflow review\",\"timeout\"=90,\"type\"=\"command\"}]}]",
+  "-c",
+  "hooks.Stop=[{\"hooks\"=[{\"command\"=\"'/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/hooks/arclint-workflow-guard/arclint' --rules '/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/rules.arclint.yaml' agents workflow event\",\"commandWindows\"=\"wsl.exe -d \\\"Ubuntu-24.04\\\" -- \\\"/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/hooks/arclint-workflow-guard/arclint\\\" --rules \\\"/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/rules.arclint.yaml\\\" agents workflow event\",\"statusMessage\"=\"ArcLint workflow review\",\"timeout\"=90,\"type\"=\"command\"}]}]",
+  "exec",
+  "--json",
+  "--sandbox",
+  "read-only",
+  "--output-last-message",
+  "/tmp/arclint-workflow-native-fresh/response.md",
+  "Read-only native workflow-hook smoke test. First run '/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/.codex/hooks/arclint-workflow-guard/arclint' --rules '/home/jofyi/.codex/worktrees/arclint-integration-proof/arclint/rules.arclint.yaml' context internal/domain/rule (do not open source files). Then run printf 'native-workflow-smoke\\n'. Report the observed output and any hook feedback. Do not edit files or claim changes or approvals. This verification task is limited to those two commands; no repository test suite is requested."
+]

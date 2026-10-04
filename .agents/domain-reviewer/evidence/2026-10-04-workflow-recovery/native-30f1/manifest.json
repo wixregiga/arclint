@@ -1,0 +1,13 @@
+{
+  "root": "/home/jofyi/.codex/worktrees/30f1/arclint",
+  "exit_code": 0,
+  "binary_sha256": "d4b5c710491f8240f59b8de29ade60697fb405924476b96d52500024f37e5f31",
+  "new_report_files": [
+    "55eb67ffdaac7b2f5be9ec672b48307288d3245b7e0851d1e962833f9c272353.jsonl"
+  ],
+  "trust_bypassed": false,
+  "host": "Codex CLI 0.159.2 Linux/WSL",
+  "scope": "Native lifecycle dispatch in active checkout; read-only one-command context smoke, not autonomous defect repair.",
+  "source_commit": "4ba7815c6c33c5bc356099ec5cc68e46368410a8",
+  "source_archive_build": true
+}

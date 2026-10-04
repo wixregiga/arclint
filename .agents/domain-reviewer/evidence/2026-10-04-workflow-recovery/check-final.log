@@ -1,0 +1,70 @@
+golangci-lint run --fix ./...
+0 issues.
+cd docs/examples/go && go vet ./... && go test ./...
+?   	example.com/saasovation/identityaccess/adapters/memory	[no test files]
+?   	example.com/saasovation/identityaccess/adapters/passwords	[no test files]
+?   	example.com/saasovation/identityaccess/event	[no test files]
+?   	example.com/saasovation/identityaccess/provisioning	[no test files]
+ok  	example.com/saasovation/identityaccess/provisiontenant	(cached)
+?   	example.com/saasovation/identityaccess/role	[no test files]
+?   	example.com/saasovation/identityaccess/tenant	[no test files]
+?   	example.com/saasovation/identityaccess/user	[no test files]
+go vet ./...
+go test -short ./...
+ok  	github.com/wixregiga/arclint/cmd/arclint	19.932s
+ok  	github.com/wixregiga/arclint/internal/application	(cached)
+ok  	github.com/wixregiga/arclint/internal/delivery/cli	(cached)
+ok  	github.com/wixregiga/arclint/internal/delivery/cli/adapters/cobra	(cached)
+?   	github.com/wixregiga/arclint/internal/delivery/cli/adapters/report/internal/domaintext	[no test files]
+ok  	github.com/wixregiga/arclint/internal/delivery/cli/adapters/report/internal/out	(cached)
+ok  	github.com/wixregiga/arclint/internal/delivery/cli/adapters/report/json	(cached)
+ok  	github.com/wixregiga/arclint/internal/delivery/cli/adapters/report/lipgloss	(cached)
+ok  	github.com/wixregiga/arclint/internal/delivery/cli/adapters/report/plain	(cached)
+?   	github.com/wixregiga/arclint/internal/delivery/cli/factory	[no test files]
+ok  	github.com/wixregiga/arclint/internal/delivery/cli/reportfactory	(cached)
+ok  	github.com/wixregiga/arclint/internal/domain/adoption	(cached)
+ok  	github.com/wixregiga/arclint/internal/domain/baseline	(cached)
+ok  	github.com/wixregiga/arclint/internal/domain/conformance	(cached)
+ok  	github.com/wixregiga/arclint/internal/domain/distribution	(cached)
+ok  	github.com/wixregiga/arclint/internal/domain/rule	(cached)
+ok  	github.com/wixregiga/arclint/internal/domain/vocab	(cached)
+ok  	github.com/wixregiga/arclint/internal/domain/workflow	(cached)
+ok  	github.com/wixregiga/arclint/internal/infrastructure/agents/codex	(cached)
+ok  	github.com/wixregiga/arclint/internal/infrastructure/agents/files	(cached)
+ok  	github.com/wixregiga/arclint/internal/infrastructure/agents/markdown	(cached)
+ok  	github.com/wixregiga/arclint/internal/infrastructure/agents/workflow	1.308s
+ok  	github.com/wixregiga/arclint/internal/infrastructure/artifact	(cached)
+ok  	github.com/wixregiga/arclint/internal/infrastructure/baseline/json	(cached)
+ok  	github.com/wixregiga/arclint/internal/infrastructure/extension/sobek	0.525s
+ok  	github.com/wixregiga/arclint/internal/infrastructure/language/fanout	(cached)
+ok  	github.com/wixregiga/arclint/internal/infrastructure/language/golang	(cached)
+ok  	github.com/wixregiga/arclint/internal/infrastructure/language/python	(cached)
+ok  	github.com/wixregiga/arclint/internal/infrastructure/language/typescript	(cached)
+ok  	github.com/wixregiga/arclint/internal/infrastructure/observation/filesystem	(cached)
+ok  	github.com/wixregiga/arclint/internal/infrastructure/pattern/embedded	(cached)
+?   	github.com/wixregiga/arclint/internal/infrastructure/pattern/files	[no test files]
+ok  	github.com/wixregiga/arclint/internal/infrastructure/pattern/filesystem	(cached)
+ok  	github.com/wixregiga/arclint/internal/infrastructure/pattern/registry	(cached)
+ok  	github.com/wixregiga/arclint/internal/infrastructure/rule/yaml	(cached)
+ok  	github.com/wixregiga/arclint/internal/infrastructure/ruletest	0.092s
+ok  	github.com/wixregiga/arclint/internal/infrastructure/scaffold/filesystem	(cached)
+ok  	github.com/wixregiga/arclint/internal/infrastructure/vocab/yaml	(cached)
+ok  	github.com/wixregiga/arclint/tools/genclassifying	(cached)
+ok  	github.com/wixregiga/arclint/tools/genmetamodel	(cached)
+?   	github.com/wixregiga/arclint/tools/gennodestdlib	[no test files]
+?   	github.com/wixregiga/arclint/tools/genpystdlib	[no test files]
+ok  	github.com/wixregiga/arclint/tools/gensdktypes	(cached)
+?   	github.com/wixregiga/arclint/tools/genstdlib	[no test files]
+spectral lint -F error -D --ruleset .spectral.yaml docs/schemas/rules.arclint.schema.json docs/schemas/domain.arclint.schema.json .arclint/schemas/rules.arclint.schema.json .arclint/schemas/domain.arclint.schema.json testing/boxoffice/.arclint/schemas/rules.arclint.schema.json testing/boxoffice/.arclint/schemas/domain.arclint.schema.json
+No results with a severity of 'error' found!
+gitleaks protect --staged --verbose
+
+    ○
+    │╲
+    │ ○
+    ○ ░
+    ░    gitleaks
+
+10:02PM INF 0 commits scanned.
+10:02PM INF scanned ~0 bytes (0) in 293ms
+10:02PM INF no leaks found

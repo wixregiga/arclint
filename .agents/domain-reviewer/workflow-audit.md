@@ -72,21 +72,34 @@ Each sample records the binary hash it actually used; historical samples are not
 misrepresented as an exact final release run.
 
 Installation/status in 30f1 and the integration-proof worktree reported intact
-files. A read-only Codex 0.159.2 hooks/list call using each installed launcher's
-exact arguments discovered all five new definitions, enabled but **untrusted**.
-No trust was granted, and native dispatch/activation of these new hooks is not
-claimed. Windows desktop delivery remains unobserved; narrow current-distro WSL
-UNC envelope handling is tested, and native Windows collector/parser tests do not
-prove native Windows installation or desktop activation.
+files. The user explicitly approved the new hooks, and they were trusted through
+Codex's normal UI. A discovered session-key collision between sibling launchers
+was corrected with identical ordered provider definitions; both native hooks/list
+results now show the same ten enabled trusted definitions, five per root. Existing
+main hook trust and enabled flags remain unchanged.
+
+The fresh-worktree native smoke executed both requested commands. All five native
+lifecycle types ran, producing seven reports and six semantic reviews with no
+unavailable review. The working agent received feedback; Stop assessed its final
+response. This proves Linux/WSL CLI dispatch and sampled semantic feedback, not an
+autonomous defect repair or Windows desktop activation. The active checkout's final native run also completed, covering all five
+lifecycle types with agent-visible feedback and no unavailable review. Its
+installed binary came from the exact 4ba7815 source archive.
+
+The final installed binary is built from an archive of commit 4ba7815, excluding
+uncommitted source. Earlier sample binaries retain their actual hashes and build
+limits. A repeat against 65691d9 failed exact-quote acceptance; decoded native text
+passages repaired the evidence presentation without weakening domain checks. The
+subsequent nine-event protocol run found the departures and withdrew them after
+repair. Both the failed and successful runs are retained.
 
 ## Remaining limits
 
 Semantic responses can be wrong; samples and exact quotes are evidence, not a
 certification of all domain meanings. Bounded collection cannot reconstruct
 missing history. Existing main-repository hook behavior remains separate and was
-not repaired, disabled or overwritten. The user must explicitly trust the new
-hook definitions through Codex's normal trust flow before a fresh native session
-can establish activation.
+not repaired, disabled or overwritten. Native Windows desktop and native resume remain unverified; tested envelopes
+and sampled reviews do not establish those outcomes.
 
 The final staged `make check`, full `make ci` race suite, 48 rule fixtures and
 documentation build passed. Architecture reports zero active findings and 26

@@ -1,0 +1,85 @@
+make check CHECK_LINT=_lint-no-fix CHECK_VERIFY=_verify CHECK_LEAK=_leak-ci
+make[1]: Entering directory '/home/jofyi/.codex/worktrees/9b98/arclint'
+golangci-lint run --fix=false ./...
+0 issues.
+go vet ./...
+go vet -tags bench ./internal/bench/
+go test -race -timeout 30m -coverprofile=coverage.out -covermode=atomic ./...
+ok  	github.com/wixregiga/arclint/cmd/arclint	17.442s	coverage: 19.5% of statements
+ok  	github.com/wixregiga/arclint/internal/application	(cached)	coverage: 85.0% of statements
+ok  	github.com/wixregiga/arclint/internal/delivery/cli	(cached)	coverage: 4.5% of statements
+ok  	github.com/wixregiga/arclint/internal/delivery/cli/adapters/cobra	(cached)	coverage: 86.4% of statements
+	github.com/wixregiga/arclint/internal/delivery/cli/adapters/report/internal/domaintext		coverage: 0.0% of statements
+ok  	github.com/wixregiga/arclint/internal/delivery/cli/adapters/report/internal/out	(cached)	coverage: 38.9% of statements
+ok  	github.com/wixregiga/arclint/internal/delivery/cli/adapters/report/json	(cached)	coverage: 48.0% of statements
+ok  	github.com/wixregiga/arclint/internal/delivery/cli/adapters/report/lipgloss	(cached)	coverage: 44.1% of statements
+ok  	github.com/wixregiga/arclint/internal/delivery/cli/adapters/report/plain	(cached)	coverage: 53.6% of statements
+	github.com/wixregiga/arclint/internal/delivery/cli/factory		coverage: 0.0% of statements
+ok  	github.com/wixregiga/arclint/internal/delivery/cli/reportfactory	(cached)	coverage: 100.0% of statements
+ok  	github.com/wixregiga/arclint/internal/domain/adoption	(cached)	coverage: 93.9% of statements
+ok  	github.com/wixregiga/arclint/internal/domain/baseline	(cached)	coverage: 66.3% of statements
+ok  	github.com/wixregiga/arclint/internal/domain/conformance	(cached)	coverage: 80.4% of statements
+ok  	github.com/wixregiga/arclint/internal/domain/distribution	(cached)	coverage: 75.1% of statements
+ok  	github.com/wixregiga/arclint/internal/domain/rule	(cached)	coverage: 82.8% of statements
+ok  	github.com/wixregiga/arclint/internal/domain/vocab	(cached)	coverage: 89.2% of statements
+ok  	github.com/wixregiga/arclint/internal/domain/workflow	(cached)	coverage: 97.2% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/agents/codex	(cached)	coverage: 91.9% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/agents/files	(cached)	coverage: 60.2% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/agents/markdown	(cached)	coverage: 66.7% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/agents/workflow	7.889s	coverage: 81.1% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/artifact	(cached)	coverage: 73.9% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/baseline/json	(cached)	coverage: 83.3% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/extension/sobek	2.238s	coverage: 81.1% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/language/fanout	(cached)	coverage: 100.0% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/language/golang	(cached)	coverage: 88.3% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/language/python	(cached)	coverage: 86.9% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/language/typescript	(cached)	coverage: 84.2% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/observation/filesystem	(cached)	coverage: 83.3% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/pattern/embedded	(cached)	coverage: 76.1% of statements
+	github.com/wixregiga/arclint/internal/infrastructure/pattern/files		coverage: 0.0% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/pattern/filesystem	(cached)	coverage: 77.1% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/pattern/registry	(cached)	coverage: 73.9% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/rule/yaml	(cached)	coverage: 85.3% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/ruletest	1.371s	coverage: 86.3% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/scaffold/filesystem	(cached)	coverage: 51.9% of statements
+ok  	github.com/wixregiga/arclint/internal/infrastructure/vocab/yaml	(cached)	coverage: 89.8% of statements
+ok  	github.com/wixregiga/arclint/tools/genclassifying	(cached)	coverage: 83.0% of statements
+ok  	github.com/wixregiga/arclint/tools/genmetamodel	(cached)	coverage: 88.2% of statements
+	github.com/wixregiga/arclint/tools/gennodestdlib		coverage: 0.0% of statements
+	github.com/wixregiga/arclint/tools/genpystdlib		coverage: 0.0% of statements
+ok  	github.com/wixregiga/arclint/tools/gensdktypes	(cached)	coverage: 61.1% of statements
+	github.com/wixregiga/arclint/tools/genstdlib		coverage: 0.0% of statements
+cd docs/examples/go && go vet ./... && go test ./...
+?   	example.com/saasovation/identityaccess/adapters/memory	[no test files]
+?   	example.com/saasovation/identityaccess/adapters/passwords	[no test files]
+?   	example.com/saasovation/identityaccess/event	[no test files]
+?   	example.com/saasovation/identityaccess/provisioning	[no test files]
+ok  	example.com/saasovation/identityaccess/provisiontenant	(cached)
+?   	example.com/saasovation/identityaccess/role	[no test files]
+?   	example.com/saasovation/identityaccess/tenant	[no test files]
+?   	example.com/saasovation/identityaccess/user	[no test files]
+make build
+make[2]: Entering directory '/home/jofyi/.codex/worktrees/9b98/arclint'
+CGO_ENABLED=0 go build -tags "grammar_subset grammar_subset_typescript grammar_subset_tsx grammar_subset_python" -trimpath -ldflags "-s -w" -o ./arclint ./cmd/arclint
+make[2]: Leaving directory '/home/jofyi/.codex/worktrees/9b98/arclint'
+./arclint check .
+coverage: baseline: 7 adopted finding(s) no longer occur; refresh the baseline
+coverage: rule web/launch-surfaces-present is disabled: Web is not implemented yet; re-enable when its launch surfaces are added.; not evaluated
+0 active finding(s) · 0 suppressed · 26 baselined · 59 rule(s) applied
+cd docs/examples/go && /home/jofyi/.codex/worktrees/9b98/arclint/arclint check .
+0 active finding(s) · 0 suppressed · 0 baselined · 24 rule(s) applied
+cd docs/examples/ts && /home/jofyi/.codex/worktrees/9b98/arclint/arclint check .
+0 active finding(s) · 0 suppressed · 0 baselined · 24 rule(s) applied
+spectral lint -F error -D --ruleset .spectral.yaml docs/schemas/rules.arclint.schema.json docs/schemas/domain.arclint.schema.json .arclint/schemas/rules.arclint.schema.json .arclint/schemas/domain.arclint.schema.json testing/boxoffice/.arclint/schemas/rules.arclint.schema.json testing/boxoffice/.arclint/schemas/domain.arclint.schema.json
+No results with a severity of 'error' found!
+gitleaks detect --no-git --verbose
+
+    ○
+    │╲
+    │ ○
+    ○ ░
+    ░    gitleaks
+
+10:01PM INF scanned ~6828864 bytes (6.83 MB) in 589ms
+10:01PM INF no leaks found
+make[1]: Leaving directory '/home/jofyi/.codex/worktrees/9b98/arclint'

@@ -1,0 +1,13 @@
+{
+  "status": "completed",
+  "final_feedback": {
+    "systemMessage": "ArcLint workflow review: advisory feedback on the current task.\nNo supported workflow departure in the supplied evidence.\nCoverage: Up to five previous workflow reports are claims to reassess against current evidence, not proof that old defects persist or approval of current work.\nCoverage: The successful repair result in task-actions and current work/src/invoice.ts show that the VIP category and total mutation were removed while email(invoice.billingEmail) was retained. The earlier departures are resolved.\nCoverage: A successful arclint context call is demonstrated. The supplied evidence does not establish source-read ordering, domain recording, or behavior and architecture checks; absence from this collection does not prove those actions never occurred.\nCoverage: current-response claims no typecheck or functional-test result. Runtime verification remains unestablished.\nCoverage: The context output reports no domain anchors in scope despite the supplied Invoice domain recording. That discrepancy alone does not demonstrate an agent departure.\nCoverage: This assessment uses only the supplied evidence. An empty findings array neither certifies domain meanings nor grants approval.\n"
+  },
+  "root": "/tmp/arclint-workflow-adopter-q7rc1kb9",
+  "binary": "/tmp/arclint-workflow",
+  "session": "task-focused-proof-1791078639815373002",
+  "evidence_kind": "Real installed public CLI hook subprocesses and real model; fixture mutations by harness, not native outer-host dispatch.",
+  "binary_sha256": "5fa611e28217293b58d40c5f8e8abd2aebf584cb179a41683cbfbb57e6b6c652",
+  "instructions_sha256": "4cc9b76560da617f366823d9cc1a72bfb8a207ce3fcff6547df5b13091612a0e",
+  "source_state": "Decoded evidence correction; instruction refinement followed this build. Failed prior committed repeat is retained separately."
+}

@@ -1,11 +1,11 @@
 {
-  "status": "implementation validated; native activation pending trust",
-  "source": "feat/scoped-domain-guard; recovery commit follows this evidence recording",
+  "status": "implemented, installed, trusted and native CLI dispatch verified",
+  "source": "4ba7815c6c33c5bc356099ec5cc68e46368410a8",
   "checks": {
-    "make_ci": "passed",
+    "make_ci": "passed after final source change",
     "rule_fixtures": "48 passed, 0 failed",
     "docs_build": "passed",
-    "make_check": "passed"
+    "make_check": "passed after final source change"
   },
   "semantic_samples": {
     "installed_protocol": "9 real CLI/model events, harness-mutated TypeScript fixture",
@@ -23,14 +23,16 @@
     ],
     "new_directory": ".codex/hooks/arclint-workflow-guard",
     "intact": true,
-    "native_discovery": "all five enabled, untrusted",
-    "native_execution_verified": false
+    "native_discovery": "both launchers show the same ten enabled trusted definitions, five for each root",
+    "native_execution_verified": "all five lifecycle types in both checkouts; active checkout uses exact archive-built 4ba7815 binary"
   },
   "protected_main_guard_sha256": "e5e271821d73723a48db33af21421a22b12ae123e1c54db459704ecd1cb0c34e",
   "limits": [
     "Earlier sampled binaries are identified by hash, not represented as final release runs.",
     "Native desktop and resume behavior not established by envelope tests.",
     "Semantic samples do not certify all domain meanings.",
-    "No existing installed guard repaired or overwritten."
-  ]
+    "No existing installed guard repaired or overwritten.",
+    "A committed repeat failed exact quotation; failure retained, decoded evidence repaired it and the next nine-event run succeeded."
+  ],
+  "trust_authorization": "User explicitly approved the new workflow hooks; ordinary Codex TUI trust flow used. Existing main hook flags/hashes unchanged."
 }
