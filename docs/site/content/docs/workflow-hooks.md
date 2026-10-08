@@ -10,17 +10,21 @@ the agent does and advise when it skips a step of the project's workflow:
 
 1. Run `arclint context <paths>` on the files you will read or change,
    before opening them.
-2. Decide whether the work introduces or changes a meaning. If it does,
-   record it in `domain.arclint.yaml` first, using the domain-librarian
-   skill. If it does not, say so in one sentence before editing.
-3. Implement the change inside the zones `arclint context` reported, and
-   keep existing behavior intact unless the task changes it.
-4. Run `arclint check .` and the project's tests before finishing. Fix the
-   findings in the code you changed, including baseline findings there;
-   never weaken rules, baselines or exclusions to clear a finding.
+2. Before editing, state what the change does, who owns its decisions,
+   what the caller uses and which existing behavior must remain intact.
+3. If the change introduces or changes a meaning, record it in
+   `domain.arclint.yaml` before writing code, using the domain-librarian
+   skill. If it does not, say so.
+4. Implement one complete behavior path through the zones
+   `arclint context` reported, keeping existing behavior intact.
+5. Verify the changed behavior, then run `arclint check .` and the
+   project's tests. Fix the findings in the code you changed, including
+   baseline findings there; never weaken rules, baselines or exclusions to
+   clear a finding.
 
-The same four steps open the generated `AGENTS.md` block, and the hooks
-repeat them when a session starts; both come from one source in ArcLint.
+The generated `AGENTS.md` block opens with these steps in full, and the
+hooks repeat them when a session starts; both come from one source in
+ArcLint.
 
 The hooks advise; they never block a tool call. Each reminder is given once,
 so repeating an action does not repeat the reminder. Any project using

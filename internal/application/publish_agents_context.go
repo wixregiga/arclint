@@ -67,8 +67,8 @@ func AgentCommandSurface() []AgentCommandDoc {
 	}
 }
 
-// AgentWorkflow is the order a coding agent works in, one instruction for
-// each step. The generated block and the workflow hooks' session-start
+// AgentWorkflow is the order a coding agent works in, one action for each
+// step. The generated block and the workflow hooks' session-start
 // orientation both state it from here, so the two cannot drift. recording
 // is the domain recording's path relative to the project root.
 func AgentWorkflow(recording string) []string {
@@ -76,14 +76,24 @@ func AgentWorkflow(recording string) []string {
 		"Run `arclint context <paths>` on the files you will read or change, before opening them. " +
 			"It answers with the zones, contracts and recorded domain that bind them; " +
 			"do not learn the architecture by reading file after file or guessing from folder names.",
-		"Decide whether the work introduces or changes a meaning. If it does, record it in `" + recording +
-			"` first, using the " + vocab.SkillName + " skill. If it does not, say so in one sentence before editing.",
-		"Implement the change inside the zones `arclint context` reported, " +
-			"and keep existing behavior intact unless the task changes it.",
-		"Run `arclint check .` and the project's tests before finishing. " +
+		"Before editing, state in the project's language:\n" +
+			"   - This change does ___.\n" +
+			"   - These decisions belong to ___.\n" +
+			"   - The caller uses ___.\n" +
+			"   - Existing behavior ___ must remain intact.\n\n" +
+			"   Resolve contradictions with the recorded domain and the user's instructions before proceeding. " +
+			"Ask only when an unresolved product decision needs the user's input. " +
+			"This statement is not an approval checkpoint.",
+		"If the change introduces or changes a meaning, record it in `" + recording + "` before writing code, " +
+			"using the " + vocab.SkillName + " skill. If it does not, say so.",
+		"Implement one complete behavior path through the zones `arclint context` reported, " +
+			"keeping existing behavior intact unless the task changes it. " +
+			"Keep names and files understandable from their responsibilities: callers use contracts, " +
+			"and implementations own their specific decisions.",
+		"Verify the changed behavior through those contracts, then run `arclint check .` and the project's tests before finishing. " +
 			"Fix the findings in the code you changed, including baseline findings there; " +
 			"never weaken rules, baselines or exclusions to clear a finding. " +
-			"Report what you verified and what remains open.",
+			"Report the behavior verified, the checks passed and what remains open, separately.",
 	}
 }
 
