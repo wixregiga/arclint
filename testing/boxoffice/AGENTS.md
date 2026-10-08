@@ -23,9 +23,16 @@ Enforced from rules.arclint.yaml: 52 rules over languages [go, typescript].
 IMPORTANT: work in this order on every change.
 
 1. Run `arclint context <paths>` on the files you will read or change, before opening them. It answers with the zones, contracts and recorded domain that bind them; do not learn the architecture by reading file after file or guessing from folder names.
-2. Decide whether the work introduces or changes a meaning. If it does, record it in `domain.arclint.yaml` first, using the domain-librarian skill. If it does not, say so in one sentence before editing.
-3. Implement the change inside the zones `arclint context` reported, and keep existing behavior intact unless the task changes it.
-4. Run `arclint check .` and the project's tests before finishing. Fix the findings in the code you changed, including baseline findings there; never weaken rules, baselines or exclusions to clear a finding. Report what you verified and what remains open.
+2. Before editing, state in the project's language:
+   - This change does ___.
+   - These decisions belong to ___.
+   - The caller uses ___.
+   - Existing behavior ___ must remain intact.
+
+   Resolve contradictions with the recorded domain and the user's instructions before proceeding. Ask only when an unresolved product decision needs the user's input. This statement is not an approval checkpoint.
+3. If the change introduces or changes a meaning, record it in `domain.arclint.yaml` before writing code, using the domain-librarian skill. If it does not, say so.
+4. Implement one complete behavior path through the zones `arclint context` reported, keeping existing behavior intact unless the task changes it. Keep names and files understandable from their responsibilities: callers use contracts, and implementations own their specific decisions.
+5. Verify the changed behavior through those contracts, then run `arclint check .` and the project's tests before finishing. Fix the findings in the code you changed, including baseline findings there; never weaken rules, baselines or exclusions to clear a finding. Report the behavior verified, the checks passed and what remains open, separately.
 
 ### Commands
 
