@@ -78,9 +78,12 @@ func AgentWorkflow(recording string) []string {
 			"do not learn the architecture by reading file after file or guessing from folder names.",
 		"Decide whether the work introduces or changes a meaning. If it does, record it in `" + recording +
 			"` first, using the " + vocab.SkillName + " skill. If it does not, say so in one sentence before editing.",
-		"Implement the change inside the zones `arclint context` reported.",
+		"Implement the change inside the zones `arclint context` reported, " +
+			"and keep existing behavior intact unless the task changes it.",
 		"Run `arclint check .` and the project's tests before finishing. " +
-			"Fix the findings in the code you changed, and report what you verified and what remains open.",
+			"Fix the findings in the code you changed, including baseline findings there; " +
+			"never weaken rules, baselines or exclusions to clear a finding. " +
+			"Report what you verified and what remains open.",
 	}
 }
 

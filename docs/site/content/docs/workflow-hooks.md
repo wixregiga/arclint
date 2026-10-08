@@ -13,8 +13,11 @@ the agent does and advise when it skips a step of the project's workflow:
 2. Decide whether the work introduces or changes a meaning. If it does,
    record it in `domain.arclint.yaml` first, using the domain-librarian
    skill. If it does not, say so in one sentence before editing.
-3. Implement the change inside the zones `arclint context` reported.
-4. Run `arclint check .` and the project's tests before finishing.
+3. Implement the change inside the zones `arclint context` reported, and
+   keep existing behavior intact unless the task changes it.
+4. Run `arclint check .` and the project's tests before finishing. Fix the
+   findings in the code you changed, including baseline findings there;
+   never weaken rules, baselines or exclusions to clear a finding.
 
 The same four steps open the generated `AGENTS.md` block, and the hooks
 repeat them when a session starts; both come from one source in ArcLint.

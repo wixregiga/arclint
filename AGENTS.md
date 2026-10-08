@@ -16,8 +16,8 @@ IMPORTANT: work in this order on every change.
 
 1. Run `arclint context <paths>` on the files you will read or change, before opening them. It answers with the zones, contracts and recorded domain that bind them; do not learn the architecture by reading file after file or guessing from folder names.
 2. Decide whether the work introduces or changes a meaning. If it does, record it in `domain.arclint.yaml` first, using the domain-librarian skill. If it does not, say so in one sentence before editing.
-3. Implement the change inside the zones `arclint context` reported.
-4. Run `arclint check .` and the project's tests before finishing. Fix the findings in the code you changed, and report what you verified and what remains open.
+3. Implement the change inside the zones `arclint context` reported, and keep existing behavior intact unless the task changes it.
+4. Run `arclint check .` and the project's tests before finishing. Fix the findings in the code you changed, including baseline findings there; never weaken rules, baselines or exclusions to clear a finding. Report what you verified and what remains open.
 
 ### Commands
 
