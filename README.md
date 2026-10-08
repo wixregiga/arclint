@@ -271,28 +271,25 @@ undetermined, never proof of conformance.
 
 ## Working with agents
 
-Install task-focused workflow feedback in a project using ArcLint:
+Install the workflow hooks for Claude Code and Codex in a project using ArcLint:
 
 ```sh
 arclint agents workflow install
 arclint agents workflow status
-bash .codex/hooks/arclint-workflow-guard/start-codex.sh
 ```
 
-The Codex hooks review the current task, observed actions and affected files
-against the project's domain workflow. Findings quote evidence, explain the
-departure and suggest a correction. Repairs and rebuttals are reassessed. Reports
-are advisory; they do not grant approval or certify the domain.
+The hooks advise the agent when observed work skips a step of the workflow:
+`arclint context` before changing files, recording a new or changed meaning in
+`domain.arclint.yaml` before implementing it, and `arclint check .` before
+finishing. Each reminder is given once, and the hooks never block a tool call.
+Installation writes one command into `.claude/settings.json` and
+`.codex/hooks.json` and keeps every other setting; Codex runs it after you trust
+it in `/hooks`. See [workflow hooks](docs/site/content/docs/workflow-hooks.md).
 
-Installation preserves existing hooks and writes an executable and editable
-instructions under `.codex/hooks/arclint-workflow-guard/`. Review the new hook
-in Codex's `/hooks` interface, follow its trust steps, then start a fresh session
-through the launcher. Status reports file integrity, not activation. Existing
-installed guards are separate and remain untouched.
-
-See [workflow hooks and verification limits](docs/site/content/docs/workflow-hooks.md).
-The independently invoked `arclint-domain-reviewer` is also available through
-`arclint agents reviewer install --host codex` and `arclint agents reviewer status`.
+The independently invoked `arclint-domain-reviewer` questions meanings,
+enforcement, ownership and duplication; install it with
+`arclint agents reviewer install --host codex` and check it with
+`arclint agents reviewer status`.
 
 Three commands do the agent-facing work:
 
@@ -354,7 +351,7 @@ rules schema        print the JSON Schema for rules.arclint.yaml; --write puts i
 rules test [name]   run the rule tests under .arclint/tests; failures exit 1
 context [paths...]  the architecture, or everything binding the given paths (--zone)
 domain              inspect and maintain the project's ubiquitous language (init/overview/list/show/explain/define/remove/schema)
-agents workflow     install/status native Codex workflow hooks; review supplied evidence
+agents workflow     install/status the Claude Code and Codex workflow hooks; event answers a host
 agents reviewer     install/status the separately named domain reviewer
 agents md           architecture block; --write installs it in AGENTS.md
 agents skill        domain-librarian SKILL.md, vocabulary and schema

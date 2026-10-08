@@ -17,9 +17,8 @@ limit. `--direct-instructions` evaluates the authored instructions separately;
 it does not establish native activation. The manifest distinguishes these modes
 and records instruction hashes and observed host activity.
 
-Deterministic tests cover the workflow review contract, event feedback,
-collection limits, installation/status, preservation of edits, and linked
-worktree launchers. Run `make check` and `make ci`. Representative semantic
+Deterministic tests cover the reviewer's installation, status and preservation
+of edits. Run `make check` and `make ci`. Representative semantic
 review still needs separate evaluation, including unsupported changes, missing
 enforcement, unjustified duplication, and reassessment of repairs and rebuttals.
 

@@ -1,55 +1,60 @@
 package cli
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/wixregiga/arclint/internal/application"
-	"github.com/wixregiga/arclint/internal/domain/workflow"
 )
 
-const (
-	workflowInstallCommand = "install"
-	workflowStatusCommand  = "status"
-)
+const agentHostClaude = "claude"
 
-// WorkflowHooks is the CLI-owned installation and status boundary.
+// WorkflowHooks is the CLI-owned boundary for writing and inspecting the
+// workflow hooks in each Agent Host's project configuration.
 type WorkflowHooks interface {
-	Install() ([]string, error)
+	Install(hosts []string) ([]string, error)
 	Status() (application.WorkflowHookStatus, error)
 }
 
-// WorkflowEvents is the CLI-owned native event translation boundary.
-// Its response is an advisory host protocol, never a domain approval.
+// WorkflowEvents is the CLI-owned boundary that answers one host hook
+// event. Its answer advises the agent; it never blocks a tool call.
 type WorkflowEvents interface {
-	Handle(context.Context, []byte) ([]byte, error)
+	Handle(input []byte) ([]byte, error)
 }
 
-// NewWorkflowCommand supplies the independent task-focused reporting surface.
-func NewWorkflowCommand(review application.ReviewWorkflow, hooks WorkflowHooks, events WorkflowEvents, render Renderer) Command {
-	return Command{Name: "workflow", Short: "report task-focused domain workflow departures", Subcommands: []Command{
-		{Name: workflowInstallCommand, Short: "install independent advisory workflow hooks", Run: func(ctx Context) error {
-			paths, err := hooks.Install()
+// WorkflowActivation tells the user what each host needs after installation.
+const WorkflowActivation = "Claude Code reads the hooks when a session starts. " +
+	"Codex runs project hooks only after you trust them: open /hooks in Codex, trust the ArcLint hooks, and start a new session. " +
+	"Each hook runs `arclint agents workflow event`, so arclint must be on the host's PATH."
+
+// NewWorkflowCommand is the workflow hook surface: install and status
+// manage host configuration, event answers the hosts.
+func NewWorkflowCommand(hooks WorkflowHooks, events WorkflowEvents, render Renderer) Command {
+	return Command{Name: "workflow", Short: "advise coding agents through the domain workflow with native hooks", Subcommands: []Command{
+		{Name: agentInstallCommand, Short: "write the workflow hooks into Claude Code and Codex project configuration", Flags: []Flag{
+			{Name: agentHostFlag, Repeat: true, Options: []string{agentHostClaude, agentHostCodex}, Doc: "agent host to install for (claude, codex); repeatable; default both"},
+		}, Run: func(ctx Context) error {
+			hosts := ctx.Strings(agentHostFlag)
+			paths, err := hooks.Install(hosts)
 			if err != nil {
 				return ConfigError(err)
 			}
-			return render.Render(ctx.Stdout, AgentInstallReport{Operation: "workflow", Host: agentHostCodex, Paths: paths, Activation: "Run bash .codex/hooks/arclint-workflow-guard/start-codex.sh. Review and approve the displayed workflow hooks in Codex /hooks, then restart with the same launcher. " + WorkflowStatusLimits})
+			return render.Render(ctx.Stdout, AgentInstallReport{Operation: "workflow", Host: hostList(hosts), Paths: paths, Activation: WorkflowActivation})
 		}},
-		{Name: workflowStatusCommand, Short: "inspect independent workflow hook installation", Run: func(ctx Context) error {
+		{Name: "status", Short: "show which hosts list the workflow hooks", Run: func(ctx Context) error {
 			status, err := hooks.Status()
 			if err != nil {
 				return ConfigError(err)
 			}
 			return render.Render(ctx.Stdout, WorkflowStatusReport{Status: status})
 		}},
-		{Name: "event", Short: "translate a Codex event on stdin into advisory feedback", Run: func(ctx Context) error {
+		{Name: "event", Short: "answer one Claude Code or Codex hook event read from stdin", Run: func(ctx Context) error {
 			input, err := io.ReadAll(ctx.Stdin)
 			if err != nil {
 				return ConfigError(fmt.Errorf("read workflow event: %w", err))
 			}
-			output, err := events.Handle(context.Background(), input)
+			output, err := events.Handle(input)
 			if err != nil {
 				return ConfigError(err)
 			}
@@ -58,26 +63,12 @@ func NewWorkflowCommand(review application.ReviewWorkflow, hooks WorkflowHooks, 
 			}
 			return nil
 		}},
-		{Name: "review", Short: "assess supplied task evidence JSON on stdin", Run: func(ctx Context) error {
-			var evidence workflow.Evidence
-			decoder := json.NewDecoder(ctx.Stdin)
-			decoder.DisallowUnknownFields()
-			if err := decoder.Decode(&evidence); err != nil {
-				return ConfigError(fmt.Errorf("workflow evidence JSON: %w", err))
-			}
-			var trailing any
-			if err := decoder.Decode(&trailing); err != io.EOF {
-				return ConfigError(fmt.Errorf("workflow evidence must contain one JSON object"))
-			}
-			assessment, err := review.Execute(context.Background(), evidence)
-			if err != nil {
-				return ConfigError(err)
-			}
-			// Review JSON is a raw assessment protocol, like emitted schema products.
-			if err := json.NewEncoder(ctx.Stdout).Encode(assessment); err != nil {
-				return fmt.Errorf("write workflow assessment: %w", err)
-			}
-			return nil
-		}},
 	}}
+}
+
+func hostList(hosts []string) string {
+	if len(hosts) == 0 {
+		hosts = []string{agentHostClaude, agentHostCodex}
+	}
+	return strings.Join(hosts, ", ")
 }

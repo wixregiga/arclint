@@ -19,6 +19,7 @@ import (
 	"github.com/wixregiga/arclint/internal/delivery/cli/reportfactory"
 	"github.com/wixregiga/arclint/internal/domain/distribution"
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 	codexagents "github.com/wixregiga/arclint/internal/infrastructure/agents/codex"
 	markdownagents "github.com/wixregiga/arclint/internal/infrastructure/agents/markdown"
 	workflowagents "github.com/wixregiga/arclint/internal/infrastructure/agents/workflow"
@@ -231,31 +232,18 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	workflowEvaluator := workflowagents.NewEvaluator("codex", "")
-	workflowInstructions := filepath.Join(root, ".codex", "hooks", "arclint-workflow-guard", "instructions.md")
-	_, instructionsErr := os.Stat(workflowInstructions)
-	workflowEventInvocation := len(rest) >= 3 && rest[0] == "agents" && rest[1] == "workflow" && rest[2] == "event"
-	if workflowEventInvocation || instructionsErr == nil {
-		workflowEvaluator = workflowEvaluator.WithInstructionsFile(workflowInstructions)
-	}
-	workflowReview, err := application.NewReviewWorkflow(workflowEvaluator)
+	guideWorkflow, err := application.NewGuideWorkflow(workflowagents.NewProgressStore(root), repository)
 	if err != nil {
 		return configError(err)
 	}
-	workflowCollector, err := workflowagents.NewCollector(root)
+	// A Windows Agent Host reaches a WSL project through wsl.exe and
+	// reports its paths through the \\wsl.localhost share.
+	wslDistro := os.Getenv("WSL_DISTRO_NAME")
+	workflowEvents, err := workflowagents.NewEvents(root, vocab.UbiquitousLanguageFileName, wslDistro, guideWorkflow)
 	if err != nil {
 		return configError(err)
 	}
-	workflowCollector = workflowCollector.WithRulesPath(absRulesPath)
-	workflowEvents, err := workflowagents.NewEvents(root, workflowCollector, workflowReview)
-	if err != nil {
-		return configError(err)
-	}
-	workflowBinary, err := os.Executable()
-	if err != nil {
-		return configError(fmt.Errorf("workflow installer executable: %w", err))
-	}
-	workflowCommand := cli.NewWorkflowCommand(workflowReview, workflowagents.NewInstaller(root, workflowBinary, version).WithRulesPath(absRulesPath), workflowEvents, renderer)
+	workflowCommand := cli.NewWorkflowCommand(workflowagents.NewInstaller(root, wslDistro), workflowEvents, renderer)
 	rootCommand := cli.Root(buildVersion(version),
 		cli.NewCheckCommand(assess, listRules, renderer),
 		cli.NewInitCommand(initialize, renderer),
@@ -267,6 +255,9 @@ func run(args []string) int {
 		cli.NewPatternsCommand(patternCommands, renderer),
 		cli.NewSDKCommand(initializeSDK, renderer),
 	)
+	// Context, the full check and domain changes report themselves to the
+	// workflow hooks, which then need not guess from shell text.
+	rootCommand = cli.RecordWorkflowActivity(rootCommand, workflowagents.NewActivityLog(root, vocab.UbiquitousLanguageFileName))
 	adapter, err := clifactory.Select(cli.AdapterCobra)
 	if err != nil {
 		return configError(err)

@@ -1,233 +1,209 @@
 package workflow
 
 import (
-	"bufio"
-	"context"
-	"crypto/sha256"
-	"encoding/hex"
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/wixregiga/arclint/internal/application"
-	workflowdomain "github.com/wixregiga/arclint/internal/domain/workflow"
+	"github.com/wixregiga/arclint/internal/domain/workflow"
 )
 
-// Events adapts native events into independently reported workflow feedback.
+// Host event names and the user-facing message field shared by Codex and
+// Claude Code.
+const (
+	sessionStartEvent = "SessionStart"
+	postToolUseEvent  = "PostToolUse"
+	stopEvent         = "Stop"
+	systemMessage     = "systemMessage"
+)
+
+var patchHeaders = []string{"*** Add File: ", "*** Update File: ", "*** Delete File: ", "*** Move to: "}
+
+// hostEvent is the part of a Codex or Claude Code hook event the workflow
+// reads. Both hosts use these field names.
+type hostEvent struct {
+	HookEventName string `json:"hook_event_name"`
+	SessionID     string `json:"session_id"`
+	Cwd           string `json:"cwd"`
+	ToolName      string `json:"tool_name"`
+	ToolInput     struct {
+		Command      json.RawMessage `json:"command"`
+		FilePath     string          `json:"file_path"`
+		NotebookPath string          `json:"notebook_path"`
+	} `json:"tool_input"`
+}
+
+// patch is the text of a Codex apply_patch call; a shape other than a JSON
+// string carries no patch.
+func (event hostEvent) patch() string {
+	var text string
+	if json.Unmarshal(event.ToolInput.Command, &text) != nil {
+		return ""
+	}
+	return text
+}
+
+// Events answers Agent Host hook events with workflow Guidance in the
+// host's native output. It never blocks the agent.
 type Events struct {
-	root      string
-	collector *Collector
-	review    application.ReviewWorkflow
+	project   project
+	recording string
+	guide     application.GuideWorkflow
 }
 
-// NewEvents connects the native event boundary to task evidence and review.
-func NewEvents(root string, collector *Collector, review application.ReviewWorkflow) (*Events, error) {
-	if collector == nil {
-		return nil, fmt.Errorf("workflow events: missing evidence collector")
-	}
-	absolute, err := filepath.Abs(root)
+// NewEvents connects hook events for the project at root to guide.
+// recording is the domain recording's path relative to root; distro names
+// the WSL distribution this process runs in, empty outside WSL.
+func NewEvents(root, recording, distro string, guide application.GuideWorkflow) (*Events, error) {
+	p, err := newProject(root, distro)
 	if err != nil {
-		return nil, fmt.Errorf("workflow events root: %w", err)
+		return nil, err
 	}
-	resolved, err := filepath.EvalSymlinks(absolute)
-	if err != nil {
-		return nil, fmt.Errorf("workflow events root: %w", err)
-	}
-	return &Events{root: resolved, collector: collector, review: review}, nil
+	return &Events{project: p, recording: recording, guide: guide}, nil
 }
 
-// Handle never grants approval or blocks a tool. Unavailable review is feedback.
-func (events *Events) Handle(ctx context.Context, input []byte) ([]byte, error) {
-	var event CodexEvent
+// Handle answers one hook event read from the host. A session that cannot
+// keep its progress hears so once, when it starts; later events stay
+// silent rather than repeat the same message on every tool call.
+func (events *Events) Handle(input []byte) ([]byte, error) {
+	var event hostEvent
 	if err := json.Unmarshal(input, &event); err != nil {
-		return nativeOutput(map[string]string{"systemMessage": "ArcLint workflow review unavailable: invalid native event JSON."})
+		return nativeOutput(map[string]any{systemMessage: "ArcLint workflow guidance unavailable: the hook event is not valid JSON."})
 	}
-	event.Cwd = normalizeEventCwd(event.Cwd)
-	if !events.owns(event.Cwd) {
-		return []byte("{}\n"), nil
+	cwd := events.project.root
+	if event.Cwd != "" {
+		cwd = events.project.local(event.Cwd)
 	}
+	if _, inside := events.project.relative(events.project.root, cwd); !inside {
+		return nativeOutput(map[string]any{})
+	}
+	var observed []workflow.Activity
 	switch event.HookEventName {
-	case sessionStartEvent, userPromptSubmitEvent, preToolUseEvent, postToolUseEvent, stopEvent:
-	default:
-		return []byte("{}\n"), nil
-	}
-	evidence, err := events.collector.Collect(ctx, event)
-	if err == nil {
-		if history, historyErr := events.previousReports(event.SessionID); historyErr != nil {
-			evidence.Limits = append(evidence.Limits, "Previous workflow reports unavailable: "+historyErr.Error())
-		} else if history != "" {
-			evidence.Passages["previous-workflow-reports"] = boundedPassage(history, &evidence.Limits, "previous workflow reports")
-			evidence.Limits = append(evidence.Limits, "Up to five previous workflow reports are claims to reassess against current evidence, not proof that old defects persist or approval of current work.")
+	case sessionStartEvent:
+		output := map[string]any{"hookSpecificOutput": map[string]string{"hookEventName": sessionStartEvent, "additionalContext": events.orientation()}}
+		if _, err := events.guide.Execute(event.SessionID, nil); err != nil {
+			output[systemMessage] = "ArcLint workflow guidance unavailable for this session: " + err.Error()
 		}
-	}
-	assessment := workflowdomain.Assessment{Findings: []workflowdomain.Finding{}, Limits: append([]string{}, evidence.Limits...)}
-	var feedback string
-	switch {
-	case err != nil:
-		feedback = "ArcLint workflow review unavailable: " + err.Error()
-	case event.HookEventName == sessionStartEvent:
-		feedback = "ArcLint workflow evidence initialized; no review performed before a task or action."
-	case strings.TrimSpace(evidence.Task) == "":
-		feedback = "ArcLint workflow review not performed: no current task was supplied."
+		return nativeOutput(output)
+	case postToolUseEvent:
+		observed = events.toolActivities(cwd, event)
+	case stopEvent:
+		observed = []workflow.Activity{{Kind: workflow.TurnFinished}}
 	default:
-		assessment, err = events.review.Execute(ctx, evidence)
-		if err != nil {
-			feedback = "ArcLint workflow review unavailable: " + err.Error()
-		} else {
-			feedback = assessmentText(assessment)
-		}
+		return nativeOutput(map[string]any{})
 	}
-	if err := events.record(event, evidence.Task, assessment, feedback); err != nil {
-		feedback += "\nActivity record unavailable: " + err.Error()
+	guidance, err := events.guide.Execute(event.SessionID, observed)
+	if err != nil || len(guidance) == 0 {
+		return nativeOutput(map[string]any{})
 	}
+	text := events.advice(guidance)
 	if event.HookEventName == stopEvent {
-		return nativeOutput(map[string]string{"systemMessage": feedback})
+		return nativeOutput(map[string]any{systemMessage: text})
 	}
-	return nativeOutput(map[string]any{"hookSpecificOutput": map[string]string{"hookEventName": event.HookEventName, "additionalContext": feedback}})
+	return nativeOutput(map[string]any{"hookSpecificOutput": map[string]string{"hookEventName": postToolUseEvent, "additionalContext": text}})
 }
 
-func (events *Events) owns(cwd string) bool {
-	if cwd == "" {
-		return false
-	}
-	resolved, err := filepath.EvalSymlinks(cwd)
-	if err != nil {
-		return false
-	}
-	relative, err := filepath.Rel(events.root, resolved)
-	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
-}
-
-func assessmentText(assessment workflowdomain.Assessment) string {
-	var output strings.Builder
-	output.WriteString("ArcLint workflow review: advisory feedback on the current task.\n")
-	if len(assessment.Findings) == 0 {
-		output.WriteString("No supported workflow departure in the supplied evidence.\n")
-	}
-	for _, finding := range assessment.Findings {
-		_, _ = fmt.Fprintf(&output, "%s: %q\nDeparture: %s\nCorrection: %s\n", finding.Evidence, finding.Quote, finding.Departure, finding.Correction)
-	}
-	for _, limit := range assessment.Limits {
-		_, _ = fmt.Fprintf(&output, "Coverage: %s\n", limit)
-	}
-	return output.String()
-}
-
-func (events *Events) record(event CodexEvent, task string, assessment workflowdomain.Assessment, feedback string) error {
-	if event.SessionID == "" {
-		return nil
-	}
-	name := reportName(event.SessionID)
-	project, err := os.OpenRoot(events.root)
-	if err != nil {
-		return fmt.Errorf("workflow activity report: %w", err)
-	}
-	defer func() { _ = project.Close() }()
-	if err := project.MkdirAll(filepath.Dir(name), 0o700); err != nil {
-		return fmt.Errorf("workflow activity report: %w", err)
-	}
-	file, err := project.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
-	if err != nil {
-		return fmt.Errorf("workflow activity report: %w", err)
-	}
-	defer func() { _ = file.Close() }()
-	err = json.NewEncoder(file).Encode(struct {
-		Event      string                    `json:"event"`
-		Task       string                    `json:"task"`
-		Assessment workflowdomain.Assessment `json:"assessment"`
-		Feedback   string                    `json:"feedback"`
-	}{Event: event.HookEventName, Task: task, Assessment: assessment, Feedback: feedback})
-	if err != nil {
-		return fmt.Errorf("encode workflow activity report: %w", err)
+// toolActivities reads the files a finished edit tool changed.
+func (events *Events) toolActivities(cwd string, event hostEvent) []workflow.Activity {
+	input := event.ToolInput
+	switch event.ToolName {
+	case "apply_patch":
+		return events.changes(cwd, patchPaths(event.patch())...)
+	case "Edit", "Write", "MultiEdit":
+		return events.changes(cwd, input.FilePath)
+	case "NotebookEdit":
+		return events.changes(cwd, input.NotebookPath)
 	}
 	return nil
 }
 
-func reportName(session string) string {
-	sum := sha256.Sum256([]byte(session))
-	return filepath.Join(".arclint", "cache", "workflow-guard", "reports", hex.EncodeToString(sum[:])+".jsonl")
+// changes classifies changed files as the domain recording or other files.
+// Paths outside the project and tool metadata are not the agent's work.
+func (events *Events) changes(dir string, names ...string) []workflow.Activity {
+	var domain, files []string
+	for _, name := range names {
+		if strings.TrimSpace(name) == "" {
+			continue
+		}
+		relative, inside := events.project.relative(dir, name)
+		switch {
+		case !inside || relative == "." || relative == ".git" || strings.HasPrefix(relative, ".git/") || strings.HasPrefix(relative, ".arclint/cache/"):
+		case relative == events.recording:
+			domain = append(domain, relative)
+		default:
+			files = append(files, relative)
+		}
+	}
+	var activities []workflow.Activity
+	if len(domain) > 0 {
+		activities = append(activities, workflow.Activity{Kind: workflow.DomainChanged, Paths: domain})
+	}
+	if len(files) > 0 {
+		activities = append(activities, workflow.Activity{Kind: workflow.FilesChanged, Paths: files})
+	}
+	return activities
 }
 
-func (events *Events) previousReports(session string) (string, error) {
-	if session == "" {
-		return "", nil
-	}
-	project, err := os.OpenRoot(events.root)
-	if err != nil {
-		return "", fmt.Errorf("read workflow report history: %w", err)
-	}
-	defer func() { _ = project.Close() }()
-	file, err := project.Open(reportName(session))
-	if os.IsNotExist(err) {
-		return "", nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("read workflow report history: %w", err)
-	}
-	defer func() { _ = file.Close() }()
-	stat, err := file.Stat()
-	if err != nil {
-		return "", fmt.Errorf("read workflow report history: %w", err)
-	}
-	const historyLimit = 1024 * 1024
-	partial := stat.Size() > historyLimit
-	if partial {
-		if _, err := file.Seek(stat.Size()-historyLimit, 0); err != nil {
-			return "", fmt.Errorf("read workflow report history: %w", err)
+// patchPaths returns the files an apply_patch adds, updates, deletes or
+// moves to.
+func patchPaths(text string) []string {
+	var paths []string
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimRight(line, "\r")
+		for _, header := range patchHeaders {
+			if name, found := strings.CutPrefix(line, header); found && strings.TrimSpace(name) != "" {
+				paths = append(paths, strings.TrimSpace(name))
+			}
 		}
 	}
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 4096), historyLimit)
-	retained := []string{}
-	for scanner.Scan() {
-		if partial {
-			partial = false
-			continue
-		}
-		var record struct {
-			Task     string `json:"task"`
-			Feedback string `json:"feedback"`
-		}
-		if err := json.Unmarshal(scanner.Bytes(), &record); err != nil {
-			return "", fmt.Errorf("unreadable report: %w", err)
-		}
-		if record.Task == "" || record.Feedback == "" {
-			continue
-		}
-		retained = append(retained, record.Feedback)
-		if len(retained) > 5 {
-			retained = retained[1:]
+	return paths
+}
+
+func (events *Events) orientation() string {
+	return "ArcLint workflow hooks are installed in this project. Work in this order:\n" +
+		"1. Run `arclint context <paths>` before reading or changing files under those paths.\n" +
+		"2. When the work introduces or changes a meaning, record it in " + events.recording + " first, using the domain-librarian skill.\n" +
+		"3. Implement.\n" +
+		"4. Run `arclint check .` and the project's tests before finishing.\n" +
+		"The hooks advise when observed work skips a step. They never block a tool call."
+}
+
+func (events *Events) advice(guidance []workflow.Guidance) string {
+	lines := make([]string, 0, len(guidance))
+	for _, given := range guidance {
+		paths := strings.Join(given.Paths, ", ")
+		switch given.Step {
+		case workflow.ContextStep:
+			lines = append(lines, fmt.Sprintf("ArcLint workflow: %s changed before `arclint context` showed every Zone that owns it. Run `arclint context %s` to see those Zones, their contracts and the recorded domain that bind it.", paths, strings.Join(shellQuoted(given.Paths), " ")))
+		case workflow.DomainStep:
+			lines = append(lines, fmt.Sprintf("ArcLint workflow: %s changed before %s changed in this session. If this work introduces or changes a meaning, record it in %s first, using the domain-librarian skill. If it does not, continue.", paths, events.recording, events.recording))
+		case workflow.CheckStep:
+			lines = append(lines, fmt.Sprintf("ArcLint workflow: %s changed since the last `arclint check`. Run `arclint check .` and the project's tests before finishing.", paths))
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("read workflow report history: %w", err)
+	return strings.Join(lines, "\n")
+}
+
+// shellQuoted quotes the paths that a shell would otherwise split.
+func shellQuoted(paths []string) []string {
+	quoted := make([]string, len(paths))
+	for index, path := range paths {
+		if strings.ContainsAny(path, " \t'\"\\$`*?[]{}()<>|&;#~") {
+			path = "'" + strings.ReplaceAll(path, "'", `'\''`) + "'"
+		}
+		quoted[index] = path
 	}
-	return strings.Join(retained, "\n\n"), nil
+	return quoted
 }
 
 func nativeOutput(value any) ([]byte, error) {
-	output, err := json.Marshal(value)
-	if err != nil {
-		return nil, fmt.Errorf("encode native workflow feedback: %w", err)
+	var output bytes.Buffer
+	encoder := json.NewEncoder(&output)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(value); err != nil {
+		return nil, fmt.Errorf("encode workflow hook output: %w", err)
 	}
-	return output, nil
-}
-
-// normalizeEventCwd accepts only this process's actual WSL distribution namespace.
-// wsl.exe forwards JSON stdin unchanged, so a desktop UNC cwd needs translation.
-func normalizeEventCwd(cwd string) string {
-	distro := os.Getenv("WSL_DISTRO_NAME")
-	if distro == "" {
-		return cwd
-	}
-	normalized := strings.ReplaceAll(cwd, "\\", "/")
-	for _, host := range []string{"wsl.localhost", "wsl$"} {
-		prefix := "//" + host + "/" + distro + "/"
-		if strings.HasPrefix(normalized, prefix) {
-			return filepath.Clean("/" + strings.TrimPrefix(normalized, prefix))
-		}
-	}
-	return cwd
+	return output.Bytes(), nil
 }

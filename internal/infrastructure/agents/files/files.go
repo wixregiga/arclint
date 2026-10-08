@@ -16,8 +16,7 @@ import (
 func digest(content []byte) string { sum := sha256.Sum256(content); return hex.EncodeToString(sum[:]) }
 
 // Install preflights every path, preserves changed assets and records installed hashes.
-// Merge paths must have been validated and merged by their format-specific adapter.
-func Install(root string, files map[string][]byte, mergePaths ...string) ([]string, error) {
+func Install(root string, files map[string][]byte) ([]string, error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return nil, fmt.Errorf("agent setup: %w", err)
@@ -38,10 +37,6 @@ func Install(root string, files map[string][]byte, mergePaths ...string) ([]stri
 	} else if !os.IsNotExist(err) {
 		return nil, fmt.Errorf("agent setup: %w", err)
 	}
-	merge := map[string]bool{}
-	for _, p := range mergePaths {
-		merge[p] = true
-	}
 	previous := map[string][]byte{receiptPath: receiptBefore}
 	targets := make([]string, 0, len(files))
 	for target, content := range files {
@@ -55,7 +50,7 @@ func Install(root string, files map[string][]byte, mergePaths ...string) ([]stri
 			return nil, fmt.Errorf("agent setup: %w", err)
 		}
 		previous[target] = before
-		if err == nil && !bytes.Equal(before, content) && !merge[target] && receipt[rel] != digest(before) {
+		if err == nil && !bytes.Equal(before, content) && receipt[rel] != digest(before) {
 			return nil, fmt.Errorf("preserving existing different file: %s; review local edits before updating", target)
 		}
 		receipt[rel] = digest(content)
@@ -105,9 +100,7 @@ func Install(root string, files map[string][]byte, mergePaths ...string) ([]stri
 	return targets, nil
 }
 
-// CheckPath rejects escaping and symlinked managed output paths.
-func CheckPath(root, target string) error { return safePath(root, target) }
-
+// safePath rejects escaping and symlinked managed output paths.
 func safePath(root, target string) error {
 	rel, err := filepath.Rel(root, target)
 	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {

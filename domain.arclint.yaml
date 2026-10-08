@@ -7,54 +7,55 @@ description: >-
 contexts:
   workflow:
     definition: >-
-      Reviewing whether the current work follows the project's domain workflow.
-      The task, established meanings, affected work and supplied activity are
-      the basis for feedback. Missing evidence limits what a review can say.
-      Any project using ArcLint can request this review; ArcLint uses the same
-      feature for its own work.
+      The order a coding agent follows when it works in a project. It obtains
+      ArcLint context for the paths it will change, records a new or changed
+      meaning in the domain recording before implementing it, implements, and
+      runs the project's check before it finishes. Guidance names a step the
+      observed work skipped and the next action to take. Guidance advises the
+      agent and its user; it never blocks their work. Any project using ArcLint
+      can install it, and ArcLint uses it for its own development.
     value_objects:
-      Assessment:
+      Activity:
         definition: >-
-          Findings and coverage limits for supplied work. An assessment advises
-          its recipient; it carries no approval or authority to block work.
-      Evidence:
+          One observed action of the agent: obtaining context, which shows the
+          Zones that own the paths it names together with the Zones it names,
+          or every Zone when it names neither; changing the domain recording;
+          changing a file, with the Zones that own it; running the project's
+          check; or finishing a turn.
+      Guidance:
         definition: >-
-          The current task, named supplied passages and known coverage limits
-          used to assess the work.
-      Finding:
+          Advice naming the workflow step an Activity skipped and the paths it
+          concerns. Guidance carries no approval and no authority to block.
+      Progress:
         definition: >-
-          A specific departure from the workflow, supported by a quote from
-          named evidence and accompanied by a useful correction.
+          What one session has done in the workflow and the Guidance it has
+          already received: the Zones context has shown, whether the domain
+          recording changed, and the files changed since the last check.
     services:
-      WorkflowReview:
+      WorkflowGuide:
         definition: >-
-          Assesses the supplied work against its request and established domain.
-          It questions missing context before source inspection, unexplained or
-          unrecorded changes of meaning, missing enforcement, misplaced ownership
-          and unjustified duplication, and reassesses repairs and rebuttals.
-          Semantic evaluation identifies potential departures; Assess accepts
-          grounded findings and states coverage limits. Its feedback advises the
-          coding agent and user; it does not approve or block their work.
+          Compares an Activity with the session's Progress and returns the
+          Guidance the Activity calls for, together with the Progress that
+          includes it. A session receives each reminder once, so repeated
+          actions do not repeat it.
         assertions:
-          findings-grounded-in-evidence:
-            on: Assess
+          check-before-finish:
+            on: Advise
             statement: >-
-              WorkflowReview accepts a finding only when it identifies supplied
-              evidence with an exact quote.
-          findings-explain-departure:
-            on: Assess
+              WorkflowGuide advises running the project's check when a turn
+              finishes with changes no check has verified and no earlier
+              Guidance has named.
+          context-before-change:
+            on: Advise
             statement: >-
-              WorkflowReview accepts a finding only when it states a specific
-              departure and a correction.
-          task-required:
-            on: Assess
+              WorkflowGuide advises obtaining context, once for each path, when
+              a file changes before context has shown every Zone that owns it.
+          domain-before-change:
+            on: Advise
             statement: >-
-              WorkflowReview requires the current task before assessing work.
-          coverage-stated:
-            on: Assess
-            statement: >-
-              WorkflowReview preserves the coverage limits supplied with the
-              evidence and candidate assessment in the assessment it returns.
+              WorkflowGuide advises recording new or changed meaning first, once
+              in a session, when a file other than the domain recording changes
+              before the domain recording has changed.
   agent:
     definition: |
       The language of agents using ArcLint and of ArcLint's Domain Reviewer.
@@ -86,6 +87,11 @@ contexts:
       and useful corrections without deciding disputed meanings for the user
       or editing the reviewed files. Its response is activity evidence in the
       host conversation.
+
+      ArcLint's workflow hooks deliver the workflow context's Guidance to a
+      Coding Agent through its Agent Host's native hooks. Codex and Claude Code
+      receive the same hook command; installation writes each host's hook
+      configuration and does not grant the trust a host may require.
 
       The contributor explains justified meanings and records changed contracts
       before implementing them. The domain-librarian Skill supports that work;
@@ -591,3 +597,11 @@ relations:
       Installation keeps a VendoredPattern and resolves through
       PatternSources, so dependence flows adoption -> distribution and
       never back.
+  - from: rule
+    to: workflow
+    kind: conformist
+    description: >-
+      workflow names Zones exactly as the ruleset declares them: context
+      shows the Zones that own a path, and a change is covered once every
+      Zone that owns it has been shown, so dependence flows workflow ->
+      rule and never back.

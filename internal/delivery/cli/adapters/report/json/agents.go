@@ -31,18 +31,25 @@ func reviewerStatusDocOf(r cli.ReviewerStatusReport) reviewerStatusDoc {
 	return reviewerStatusDoc{Project: s.Project, Name: s.Name, Host: s.Host, Path: s.Path, InstalledVersion: s.InstalledVersion, AvailableVersion: s.AvailableVersion, Installed: s.Installed, Intact: s.Intact, Problems: append([]string{}, s.Problems...), Limits: cli.ReviewerStatusLimits}
 }
 
-type workflowStatusDoc struct {
-	Project   string   `json:"project"`
-	HooksPath string   `json:"hooksPath"`
-	Command   string   `json:"command"`
-	Version   string   `json:"version"`
+type workflowHostDoc struct {
+	Host      string   `json:"host"`
+	Path      string   `json:"path"`
 	Installed bool     `json:"installed"`
-	Intact    bool     `json:"intact"`
 	Problems  []string `json:"problems"`
-	Limits    string   `json:"limits"`
+}
+
+type workflowStatusDoc struct {
+	Project string            `json:"project"`
+	Command string            `json:"command"`
+	Hosts   []workflowHostDoc `json:"hosts"`
+	Limits  string            `json:"limits"`
 }
 
 func workflowStatusDocOf(r cli.WorkflowStatusReport) workflowStatusDoc {
 	s := r.Status
-	return workflowStatusDoc{Project: s.Project, HooksPath: s.HooksPath, Command: s.Command, Version: s.Version, Installed: s.Installed, Intact: s.Intact, Problems: append([]string{}, s.Problems...), Limits: cli.WorkflowStatusLimits}
+	hosts := make([]workflowHostDoc, 0, len(s.Hosts))
+	for _, host := range s.Hosts {
+		hosts = append(hosts, workflowHostDoc{Host: host.Host, Path: host.Path, Installed: host.Installed, Problems: append([]string{}, host.Problems...)})
+	}
+	return workflowStatusDoc{Project: s.Project, Command: s.Command, Hosts: hosts, Limits: cli.WorkflowStatusLimits}
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/delivery/cli"
 	"github.com/wixregiga/arclint/internal/delivery/cli/reportfactory"
 )
@@ -25,11 +26,11 @@ func TestAgentReportsPreserveFactsAcrossRenderers(t *testing.T) {
 	reviewer.Installation.Problems = []string{"edited reviewer"}
 	workflow := cli.WorkflowStatusReport{}
 	workflow.Status.Project = "/project"
-	workflow.Status.HooksPath = "workflow-hooks.json"
 	workflow.Status.Command = "arclint agents workflow event"
-	workflow.Status.Version = "1.2.0"
-	workflow.Status.Installed = true
-	workflow.Status.Problems = []string{"edited workflow instructions"}
+	workflow.Status.Hosts = []application.WorkflowHostStatus{
+		{Host: "claude", Path: "/project/.claude/settings.json", Installed: true},
+		{Host: "codex", Path: "/project/.codex/hooks.json", Problems: []string{"Missing or changed Stop hook."}},
+	}
 	cases := []struct {
 		name    string
 		report  cli.Report
@@ -37,7 +38,7 @@ func TestAgentReportsPreserveFactsAcrossRenderers(t *testing.T) {
 		jsonKey string
 	}{
 		{"install", cli.AgentInstallReport{Operation: "reviewer", Host: "codex", Paths: []string{"reviewer.toml"}, Activation: "Restart the host to discover instructions."}, []string{"reviewer.toml", "Restart the host"}, "paths"},
-		{"workflow status", workflow, []string{"/project", "workflow-hooks.json", "arclint agents workflow event", "1.2.0", "edited workflow instructions", "never approval"}, "hooksPath"},
+		{"workflow status", workflow, []string{"/project", "arclint agents workflow event", "claude: /project/.claude/settings.json (installed: true)", "codex: /project/.codex/hooks.json (installed: false)", "Missing or changed Stop hook.", "trust them in /hooks"}, "hosts"},
 		{"reviewer status", reviewer, []string{"/project", "arclint-domain-reviewer", "reviewer.toml", "1.0.0", "1.1.0", "edited reviewer", "do not prove"}, "problems"},
 	}
 	ansi := regexp.MustCompile(`\x1b\[[0-9;]*m`)

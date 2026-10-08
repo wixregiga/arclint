@@ -11,7 +11,7 @@ import (
 func TestAgentsPublicSurfaceRetiresRejectedGuardCommands(t *testing.T) {
 	root := t.TempDir()
 	rules := filepath.Join(root, "rules.arclint.yaml")
-	write(t, root, "rules.arclint.yaml", "languages: [go]\nzones: {}\nrules: []\n")
+	write(t, root, "rules.arclint.yaml", "runtime: [go]\nzones: {}\n")
 	guard := ".codex/hooks/arclint-domain-guard/guard.py"
 	preserved := "owner-installed guard remains separate\n"
 	write(t, root, guard, preserved)

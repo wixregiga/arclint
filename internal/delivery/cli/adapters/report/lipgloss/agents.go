@@ -23,9 +23,12 @@ func writeReviewerStatus(p *out.Printer, th Theme, r cli.ReviewerStatusReport) {
 
 func writeWorkflowStatus(p *out.Printer, th Theme, r cli.WorkflowStatusReport) {
 	s := r.Status
-	p.Printf("Project: %s\nHooks: %s\nCommand: %s\nRelease: %s\nInstalled: %t\nAsset integrity: %t\n", th.Path.Render(s.Project), th.Path.Render(s.HooksPath), s.Command, s.Version, s.Installed, s.Intact)
-	for _, problem := range s.Problems {
-		p.Println(th.Warning.Render(problem))
+	p.Printf("Project: %s\nCommand: %s\n", th.Path.Render(s.Project), s.Command)
+	for _, host := range s.Hosts {
+		p.Printf("%s: %s (installed: %t)\n", host.Host, th.Path.Render(host.Path), host.Installed)
+		for _, problem := range host.Problems {
+			p.Println("  " + th.Warning.Render(problem))
+		}
 	}
 	p.Println(th.Muted.Render(cli.WorkflowStatusLimits))
 }

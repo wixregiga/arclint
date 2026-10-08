@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	agentHostFlag  = "host"
-	agentHostCodex = "codex"
+	agentHostFlag       = "host"
+	agentHostCodex      = "codex"
+	agentInstallCommand = "install"
 )
 
 // NewAgentsCommand is the agents command group: md installs or prints the

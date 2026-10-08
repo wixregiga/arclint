@@ -13,7 +13,7 @@ import (
 // selectors. Presentation is closed over the injected Renderer.
 func NewCheckCommand(assess application.AssessConformance, list application.ListRules, render Renderer) Command {
 	return Command{
-		Name:  "check",
+		Name:  checkCommand,
 		Short: "evaluate the configured Rules against the repository",
 		// The optional path selects the repository; the composition root
 		// resolves it before any adapter exists. The path keeps the

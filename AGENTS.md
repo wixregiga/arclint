@@ -20,8 +20,8 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 - `arclint check .`: evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings
 - `arclint rules test`: run the rule fixtures under `.arclint/tests` after changing any rule
 - `arclint sdk init`: regenerate the extension SDK artifacts under `.arclint/extensions`
-- `arclint agents workflow install`: install project-local Codex workflow hooks and editable review instructions; preserves unrelated hooks; host activation requires its own trust review
-- `arclint agents workflow status`: inspect workflow assets and hook registrations; intact files do not prove host activation or successful review
+- `arclint agents workflow install`: write the workflow hooks into Claude Code and Codex project configuration; they advise when work skips context, domain recording or the check, and never block
+- `arclint agents workflow status`: show which hosts' configuration lists the workflow hooks; Codex runs them after you trust them in /hooks
 - `arclint agents md --write`: refresh this block after changing rules.arclint.yaml or the vocabulary
 - `arclint baseline`: manage the committed baseline of adopted findings
 - `arclint patterns`: list the Patterns that resolve offline (embedded, vendored, authored); `patterns install <pattern>` extends rules.arclint.yaml with one, `patterns vendor` copies one under `.arclint/patterns`
@@ -30,7 +30,7 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 
 7 contexts, 1 aggregates, 33 value objects, 37 invariants (domain.arclint.yaml).
 
-- **workflow**: value objects Assessment, Evidence, Finding; services WorkflowReview
+- **workflow**: value objects Activity, Guidance, Progress; services WorkflowGuide
 - **agent**
 - **vocabulary**
 - **rule**: aggregates Rule (Zone, Pattern); value objects RuleID, ZoneName, Rationale, Constraint, Scope, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec
@@ -38,7 +38,7 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 - **conformance**: value objects DependencyImport, Facts, Violation
 - **distribution**: value objects Catalog, Digest, Index, Manifest, PatternFile, PatternSource, Registry, Selection, VendoredPattern
 
-Relations: vocabulary → rule (conformist); vocabulary → conformance (conformist); rule → conformance (conformist); rule → adoption (conformist); rule → distribution (conformist); distribution → adoption (conformist). Full text: `arclint domain`.
+Relations: vocabulary → rule (conformist); vocabulary → conformance (conformist); rule → conformance (conformist); rule → adoption (conformist); rule → distribution (conformist); distribution → adoption (conformist); rule → workflow (conformist). Full text: `arclint domain`.
 
 ### Changing the language
 
@@ -116,7 +116,7 @@ Before changing responsibilities, dependencies, or domain behavior:
 - **rule**: The rule bounded context: the Rule aggregate's home. (paths internal/domain/rule/**)
 - **conformance**: The conformance bounded context, downstream conformist of rule. (paths internal/domain/conformance/**)
 - **distribution**: The distribution bounded context: Patterns travelling between repositories. (paths internal/domain/distribution/**)
-- **workflow**: Task-focused domain workflow assessment and evidence-grounded findings. (paths internal/domain/workflow/**)
+- **workflow**: The workflow bounded context: the order of a coding agent's work and the Guidance for skipped steps. (paths internal/domain/workflow/**)
 - **web**: Web frontend package, build configuration, and public assets. (paths web/**)
   - launch-surfaces-present (disabled: Web is not implemented yet; re-enable when its launch surfaces are added.): contains files matching ["web/package.json", "web/vite.config.ts", "web/index.html", "web/public/manifest.webmanifest", "web/src/app/entrypoints/start-web.ts", "web/src/app/entrypoints/mount-web.ts"] Rationale: Web has separate standalone startup and host-controlled mounting entrypoints, plus an authored web app manifest; presence alone proves no runtime behavior.
 - **web_source**: Browser-portable Web source, organized by FSD responsibility. (paths web/src/**)

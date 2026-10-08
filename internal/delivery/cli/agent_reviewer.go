@@ -8,7 +8,7 @@ import (
 
 func newAgentReviewerCommand(install application.InstallReviewer, status application.ReviewerStatus, render Renderer) Command {
 	return Command{Name: "reviewer", Short: "install or inspect the separate Codex domain reviewer", Subcommands: []Command{
-		{Name: "install", Short: "install arclint-domain-reviewer without installing hooks", Flags: []Flag{
+		{Name: agentInstallCommand, Short: "install arclint-domain-reviewer without installing hooks", Flags: []Flag{
 			{Name: agentHostFlag, Options: []string{agentHostCodex}, Doc: "required agent host (codex)"},
 		}, Run: func(ctx Context) error {
 			paths, err := install.Execute(ctx.String(agentHostFlag))

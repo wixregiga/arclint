@@ -271,11 +271,11 @@ otherwise it names the published copy, kept identical to
 
 ## Local agent setup
 
-For feedback on a coding agent's current task, run
+To keep a coding agent on the domain workflow, run
 `arclint agents workflow install` in your project. The
-[task-focused workflow hooks](../workflow-hooks/) report departures from the
-domain workflow with evidence and suggested corrections. The guide explains
-the installed Codex launcher, host trust, fresh-session activation and status.
-ArcLint uses this same public feature for its own development.
+[workflow hooks](../workflow-hooks/) advise Claude Code and Codex when observed
+work skips `arclint context`, the domain recording or `arclint check`. The
+guide explains host trust, WSL projects and what the hooks observe. ArcLint
+uses this same feature for its own development.
 
 `arclint init` remains ruleset-only.

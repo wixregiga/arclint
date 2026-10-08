@@ -96,7 +96,7 @@ zones:
     description: "The distribution bounded context: Patterns travelling between repositories."
   workflow:
     paths: "internal/domain/workflow/**"
-    description: "Task-focused domain workflow assessment and evidence-grounded findings."
+    description: "The workflow bounded context: the order of a coding agent's work and the Guidance for skipped steps."
 
   # Web is a browser application with its own composition boundary.
   # These are technical Zones, not new bounded contexts or classifications

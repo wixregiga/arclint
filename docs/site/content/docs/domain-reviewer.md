@@ -63,9 +63,9 @@ prove that the domain was discussed and recorded first. Tests and architecture
 checks provide their own evidence; the reviewer should state what they do and
 do not establish.
 
-The [task-focused workflow hooks](../workflow-hooks/) report during the coding
-agent's current work. They are separate from this explicitly invoked reviewer;
-installing either does not install the other.
+The [workflow hooks](../workflow-hooks/) advise on the order of the coding
+agent's work while it works; this explicitly invoked reviewer judges meaning.
+Installing either does not install the other.
 
 ## The shared language
 

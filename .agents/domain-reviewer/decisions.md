@@ -60,8 +60,9 @@ unchanged.
 Instructions implement reviewer behavior and require behavioral evaluation.
 Their existence or a matching method name does not prove correctness. The
 feature introduces no timers, automatic blocking, plugin packaging or agent
-lifecycle model. The workflow service and delivery boundaries are described in
-[workflow-design.md](workflow-design.md).
+lifecycle model. The workflow hooks are a separate feature: their meaning is
+the `workflow` context in `domain.arclint.yaml`, and their behavior is
+documented in docs/site/content/docs/workflow-hooks.md.
 
 ## Verification
 

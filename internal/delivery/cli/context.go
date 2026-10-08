@@ -15,7 +15,7 @@ import (
 // anchors into it, the whole domain behind --full.
 func NewContextCommand(context application.GetArchitecturalContext, render Renderer) Command {
 	return Command{
-		Name:    "context",
+		Name:    contextCommand,
 		Short:   "explain the architecture: the repository, or everything binding the given paths",
 		MaxArgs: -1,
 		Flags: []Flag{

@@ -39,12 +39,17 @@ func writeReviewerStatus(w io.Writer, r cli.ReviewerStatusReport) error {
 
 func writeWorkflowStatus(w io.Writer, r cli.WorkflowStatusReport) error {
 	s := r.Status
-	if _, err := fmt.Fprintf(w, "Project: %s\nHooks: %s\nCommand: %s\nRelease: %s\nInstalled: %t\nAsset integrity: %t\n", s.Project, s.HooksPath, s.Command, s.Version, s.Installed, s.Intact); err != nil {
+	if _, err := fmt.Fprintf(w, "Project: %s\nCommand: %s\n", s.Project, s.Command); err != nil {
 		return fmt.Errorf("write workflow status: %w", err)
 	}
-	for _, problem := range s.Problems {
-		if _, err := fmt.Fprintln(w, problem); err != nil {
+	for _, host := range s.Hosts {
+		if _, err := fmt.Fprintf(w, "%s: %s (installed: %t)\n", host.Host, host.Path, host.Installed); err != nil {
 			return fmt.Errorf("write workflow status: %w", err)
+		}
+		for _, problem := range host.Problems {
+			if _, err := fmt.Fprintf(w, "  %s\n", problem); err != nil {
+				return fmt.Errorf("write workflow status: %w", err)
+			}
 		}
 	}
 	if _, err := fmt.Fprintln(w, cli.WorkflowStatusLimits); err != nil {

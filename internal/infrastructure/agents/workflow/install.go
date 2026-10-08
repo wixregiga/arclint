@@ -2,227 +2,342 @@ package workflow
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
+	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/wixregiga/arclint/internal/application"
-	agentfiles "github.com/wixregiga/arclint/internal/infrastructure/agents/files"
 )
 
-const (
-	workflowDirectory = ".codex/hooks/arclint-workflow-guard"
-	workflowReceipt   = ".arclint/workflow-guard.json"
+// eventCommand is the hook command every host runs. It is the same in
+// every checkout, so a host that trusts hooks by their content trusts the
+// workflow hooks once for all worktrees.
+const eventCommand = "arclint agents workflow event"
+
+// handlerCommand is the hook handler field holding the shell command.
+const handlerCommand = "command"
+
+// hookHost is one Agent Host's project hook configuration.
+type hookHost struct {
+	name string
+	path string
+	// tools selects the PostToolUse calls that change files. ArcLint's own
+	// commands record context, the check and domain changes themselves.
+	tools string
+}
+
+var hookHosts = []hookHost{
+	{name: "claude", path: ".claude/settings.json", tools: "Edit|Write|MultiEdit|NotebookEdit"},
+	{name: "codex", path: ".codex/hooks.json", tools: "apply_patch"},
+}
+
+var (
+	hookEvents   = []string{sessionStartEvent, postToolUseEvent, stopEvent}
+	distroName   = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+	errNotObject = errors.New("expected a JSON object")
 )
 
-var workflowEvents = []string{"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"}
-
-type installation struct {
-	Version string         `json:"version"`
-	Command string         `json:"command"`
-	Handler map[string]any `json:"handler"`
+// HookHosts names the Agent Hosts the installer supports.
+func HookHosts() []string {
+	names := make([]string, len(hookHosts))
+	for index, host := range hookHosts {
+		names[index] = host.name
+	}
+	return names
 }
 
-// Installer installs an independent workflow hook without replacing existing hooks.
-type Installer struct{ root, binary, version, rulesPath string }
+// Installer writes the workflow hooks into each host's project
+// configuration, keeping every other setting and hook.
+type Installer struct{ root, distro string }
 
-// NewInstaller binds workflow delivery to one project and ArcLint release.
-func NewInstaller(root, binary, version string) *Installer {
-	return &Installer{root: root, binary: binary, version: version}
+// NewInstaller installs into the project at root. distro names the WSL
+// distribution this process runs in, empty outside WSL; a Windows host
+// then reaches arclint inside that distribution through wsl.exe.
+func NewInstaller(root, distro string) *Installer {
+	return &Installer{root: root, distro: distro}
 }
 
-// WithRulesPath preserves the ruleset selected by the CLI for installed events.
-func (i *Installer) WithRulesPath(path string) *Installer {
-	selected := *i
-	selected.rulesPath = path
-	return &selected
+// handler is the hook definition one host runs.
+func (installer *Installer) handler(host string) (map[string]any, error) {
+	handler := map[string]any{"type": "command", handlerCommand: eventCommand, "timeout": 30}
+	if installer.distro == "" {
+		return handler, nil
+	}
+	if !distroName.MatchString(installer.distro) {
+		return nil, fmt.Errorf("unsupported WSL distribution name %q", installer.distro)
+	}
+	windows := "wsl.exe -d " + installer.distro + ` -- bash -lc "exec ` + eventCommand + `"`
+	switch host {
+	case "codex":
+		handler["commandWindows"] = windows
+	case "claude":
+		// Claude Code runs a command through sh, or Git Bash on Windows,
+		// where arclint lives only inside the distribution.
+		handler[handlerCommand] = "if command -v arclint >/dev/null 2>&1; then exec " + eventCommand + "; else exec " + windows + "; fi"
+	}
+	return handler, nil
 }
 
-func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'" }
+// groups is the hook groups one host lists for each event.
+func (installer *Installer) groups(host hookHost) (map[string]any, error) {
+	handler, err := installer.handler(host.name)
+	if err != nil {
+		return nil, err
+	}
+	groups := map[string]any{}
+	for _, event := range hookEvents {
+		group := map[string]any{"hooks": []any{handler}}
+		if event == postToolUseEvent {
+			group["matcher"] = host.tools
+		}
+		groups[event] = group
+	}
+	return groups, nil
+}
 
-// Install preserves unrelated hooks and refuses to overwrite edited assets.
-func (i *Installer) Install() ([]string, error) {
-	root, err := filepath.Abs(i.root)
-	if err != nil {
-		return nil, fmt.Errorf("install workflow hooks: %w", err)
+func selectHosts(names []string) ([]hookHost, error) {
+	if len(names) == 0 {
+		return hookHosts, nil
 	}
-	contents, err := os.ReadFile(i.binary)
-	if err != nil {
-		return nil, fmt.Errorf("read ArcLint executable: %w", err)
-	}
-	rulesPath := i.rulesPath
-	if rulesPath == "" {
-		rulesPath = filepath.Join(root, "rules.arclint.yaml")
-	}
-	executable := filepath.Join(root, workflowDirectory, "arclint")
-	command := shellQuote(executable) + " --rules " + shellQuote(rulesPath) + " agents workflow event"
-	handler := map[string]any{"type": "command", "command": command, "timeout": 90, "statusMessage": "ArcLint workflow review"}
-	if distro := os.Getenv("WSL_DISTRO_NAME"); distro != "" {
-		if strings.ContainsAny(distro+executable+rulesPath, "\"\r\n") {
-			return nil, fmt.Errorf("unsupported character in Windows workflow hook path")
-		}
-		handler["commandWindows"] = "wsl.exe -d \"" + distro + "\" -- \"" + executable + "\" --rules \"" + rulesPath + "\" agents workflow event"
-	}
-	hooksPath := filepath.Join(root, ".codex/hooks.json")
-	if err := agentfiles.CheckPath(root, hooksPath); err != nil {
-		return nil, fmt.Errorf("workflow registration path: %w", err)
-	}
-	document := map[string]any{}
-	if data, readErr := os.ReadFile(hooksPath); readErr == nil {
-		if err := json.Unmarshal(data, &document); err != nil {
-			return nil, fmt.Errorf("preserving invalid hooks file: %w", err)
-		}
-	} else if !os.IsNotExist(readErr) {
-		return nil, fmt.Errorf("read workflow registration: %w", readErr)
-	}
-	if document == nil {
-		return nil, fmt.Errorf("preserving invalid hooks file: expected a JSON object")
-	}
-	hooks, ok := document[hooksField].(map[string]any)
-	if document[hooksField] != nil && !ok {
-		return nil, fmt.Errorf("preserving invalid hooks object")
-	}
-	if hooks == nil {
-		hooks = map[string]any{}
-		document[hooksField] = hooks
-	}
-	group := map[string]any{hooksField: []any{handler}}
-	encodedGroup, err := json.Marshal(group)
-	if err != nil {
-		return nil, fmt.Errorf("install workflow hooks: %w", err)
-	}
-	for _, event := range workflowEvents {
-		groups, valid := hooks[event].([]any)
-		if hooks[event] != nil && !valid {
-			return nil, fmt.Errorf("preserving invalid %s hook groups", event)
-		}
+	var selected []hookHost
+	for _, name := range names {
 		found := false
-		for _, existing := range groups {
-			data, marshalErr := json.Marshal(existing)
-			if marshalErr != nil {
-				return nil, fmt.Errorf("encode workflow hook: %w", marshalErr)
-			}
-			if bytes.Contains(data, []byte(executable)) {
-				if !bytes.Equal(data, encodedGroup) {
-					return nil, fmt.Errorf("preserving modified workflow hook: %s", event)
-				}
+		for _, host := range hookHosts {
+			if host.name == name {
+				selected = append(selected, host)
 				found = true
 			}
 		}
 		if !found {
-			hooks[event] = append(groups, group)
+			return nil, fmt.Errorf("unsupported agent host %q; use %s", name, strings.Join(HookHosts(), " or "))
 		}
 	}
-	registration, err := json.MarshalIndent(document, "", "  ")
+	return selected, nil
+}
+
+// Install writes the workflow hooks for the named hosts, or every
+// supported host when none is named, and returns the configuration paths.
+// It replaces an earlier workflow hook group and keeps all other content.
+func (installer *Installer) Install(hosts []string) (paths []string, returnErr error) {
+	selected, err := selectHosts(hosts)
+	if err != nil {
+		return nil, err
+	}
+	project, err := os.OpenRoot(installer.root)
 	if err != nil {
 		return nil, fmt.Errorf("install workflow hooks: %w", err)
 	}
-	metadata, err := json.MarshalIndent(installation{Version: i.version, Command: command, Handler: handler}, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("install workflow hooks: %w", err)
-	}
-	launcher, err := launchScript(root, handler)
-	if err != nil {
-		return nil, fmt.Errorf("prepare workflow launcher: %w", err)
-	}
-	assets := map[string][]byte{
-		executable: contents,
-		filepath.Join(root, workflowDirectory, "instructions.md"): []byte(Instructions()),
-		filepath.Join(root, workflowDirectory, "start-codex.sh"):  launcher,
-		filepath.Join(root, workflowReceipt):                      append(metadata, '\n'),
-		hooksPath:                                                 append(registration, '\n'),
-	}
-	paths, err := agentfiles.Install(root, assets, hooksPath)
-	if err != nil {
-		return nil, fmt.Errorf("install workflow hooks: %w", err)
-	}
-	// The installed hook must be executable; only its owner receives access.
-	if err := os.Chmod(executable, 0o700); err != nil { //nolint:gosec // Executable hook, owner-only access.
-		return nil, fmt.Errorf("make installed workflow executable runnable: %w", err)
+	defer func() { returnErr = errors.Join(returnErr, project.Close()) }()
+	for _, host := range selected {
+		document, mode, err := readConfiguration(project, host.path)
+		if err != nil {
+			return nil, fmt.Errorf("install workflow hooks: %s: %w", host.path, err)
+		}
+		before, err := encodeConfiguration(document)
+		if err != nil {
+			return nil, err
+		}
+		groups, err := installer.groups(host)
+		if err != nil {
+			return nil, fmt.Errorf("install workflow hooks: %w", err)
+		}
+		if err := placeGroups(document, groups); err != nil {
+			return nil, fmt.Errorf("install workflow hooks: %s: %w", host.path, err)
+		}
+		after, err := encodeConfiguration(document)
+		if err != nil {
+			return nil, err
+		}
+		if !bytes.Equal(before, after) {
+			if err := writeConfiguration(project, host.path, after, mode); err != nil {
+				return nil, fmt.Errorf("install workflow hooks: %s: %w", host.path, err)
+			}
+		}
+		paths = append(paths, filepath.Join(installer.root, host.path))
 	}
 	return paths, nil
 }
 
-func hash(content []byte) string { sum := sha256.Sum256(content); return hex.EncodeToString(sum[:]) }
-
-// Status observes receipt integrity and registrations without inferring activation.
-func (i *Installer) Status() (application.WorkflowHookStatus, error) {
-	root, err := filepath.Abs(i.root)
+// Status reports, for every supported host, whether its configuration
+// lists the workflow hooks. A hook written from another environment, such
+// as outside WSL, still counts as installed; the difference is reported,
+// because installing from here would rewrite it.
+func (installer *Installer) Status() (status application.WorkflowHookStatus, returnErr error) {
+	status = application.WorkflowHookStatus{Project: installer.root, Command: eventCommand}
+	project, err := os.OpenRoot(installer.root)
 	if err != nil {
-		return application.WorkflowHookStatus{}, fmt.Errorf("workflow status root: %w", err)
+		return status, fmt.Errorf("workflow hook status: %w", err)
 	}
-	s := application.WorkflowHookStatus{Project: root, HooksPath: filepath.Join(root, ".codex/hooks.json")}
-	for _, path := range []string{s.HooksPath, filepath.Join(root, workflowReceipt), filepath.Join(root, ".arclint/agent-assets.json")} {
-		if err := agentfiles.CheckPath(root, path); err != nil {
-			s.Problems = append(s.Problems, err.Error())
-			return s, nil
+	defer func() { returnErr = errors.Join(returnErr, project.Close()) }()
+	for _, host := range hookHosts {
+		hostStatus := application.WorkflowHostStatus{Host: host.name, Path: filepath.Join(installer.root, host.path)}
+		groups, err := installer.groups(host)
+		if err != nil {
+			return status, fmt.Errorf("workflow hook status: %w", err)
 		}
-	}
-	data, err := os.ReadFile(filepath.Join(root, workflowReceipt))
-	if os.IsNotExist(err) {
-		s.Problems = []string{"Workflow hooks are not installed."}
-		return s, nil
-	}
-	if err != nil {
-		return s, fmt.Errorf("read workflow installation: %w", err)
-	}
-	var meta installation
-	if err := json.Unmarshal(data, &meta); err != nil {
-		return s, fmt.Errorf("invalid workflow installation receipt: %w", err)
-	}
-	s.Installed = true
-	s.Command = meta.Command
-	s.Version = meta.Version
-	var receipt map[string]string
-	data, err = os.ReadFile(filepath.Join(root, ".arclint/agent-assets.json"))
-	if err != nil {
-		s.Problems = append(s.Problems, "Asset receipt is unavailable.")
-	} else if json.Unmarshal(data, &receipt) != nil {
-		s.Problems = append(s.Problems, "Asset receipt is invalid.")
-	}
-	for _, name := range []string{workflowDirectory + "/arclint", workflowDirectory + "/instructions.md", workflowDirectory + "/start-codex.sh", workflowReceipt} {
-		path := filepath.Join(root, name)
-		if err := agentfiles.CheckPath(root, path); err != nil {
-			s.Problems = append(s.Problems, err.Error())
-			continue
-		}
-		content, readErr := os.ReadFile(path)
-		if readErr != nil || receipt[name] == "" || receipt[name] != hash(content) {
-			s.Problems = append(s.Problems, "Missing or changed asset: "+name)
-		}
-	}
-	if info, err := os.Stat(filepath.Join(root, workflowDirectory, "arclint")); err == nil && info.Mode()&0o100 == 0 {
-		s.Problems = append(s.Problems, "Installed workflow command is not executable.")
-	}
-	var document struct {
-		Hooks map[string][]json.RawMessage `json:"hooks"`
-	}
-	data, err = os.ReadFile(s.HooksPath)
-	if err != nil || json.Unmarshal(data, &document) != nil {
-		s.Problems = append(s.Problems, "Hook registration is unavailable or invalid.")
-	} else {
-		expected, marshalErr := json.Marshal(map[string]any{hooksField: []any{meta.Handler}})
-		if marshalErr != nil {
-			return s, fmt.Errorf("encode expected workflow registration: %w", marshalErr)
-		}
-		for _, event := range workflowEvents {
-			found := false
-			for _, raw := range document.Hooks[event] {
-				var v any
-				if json.Unmarshal(raw, &v) == nil {
-					canonical, _ := json.Marshal(v)
-					found = found || bytes.Equal(canonical, expected)
+		document, _, err := readConfiguration(project, host.path)
+		hooks, _ := document["hooks"].(map[string]any)
+		switch {
+		case err != nil:
+			hostStatus.Problems = append(hostStatus.Problems, "Configuration is unreadable: "+err.Error())
+		case hooks == nil:
+			hostStatus.Problems = append(hostStatus.Problems, "Workflow hooks are not installed.")
+		default:
+			hostStatus.Installed = true
+			for _, event := range hookEvents {
+				listed, _ := hooks[event].([]any)
+				switch {
+				case listsGroup(listed, groups[event]):
+				case slices.ContainsFunc(listed, holdsWorkflowHandler):
+					hostStatus.Problems = append(hostStatus.Problems, "The "+event+" hook differs from the one install writes here; installing again replaces it.")
+				default:
+					hostStatus.Installed = false
+					hostStatus.Problems = append(hostStatus.Problems, "The "+event+" hook is missing.")
 				}
 			}
-			if !found {
-				s.Problems = append(s.Problems, "Missing or changed workflow hook: "+event)
+		}
+		status.Hosts = append(status.Hosts, hostStatus)
+	}
+	return status, nil
+}
+
+// placeGroups puts each event's workflow group where an earlier workflow
+// handler stood, or after the event's other groups. A group that also
+// holds other handlers keeps them and loses only the workflow handler.
+func placeGroups(document map[string]any, groups map[string]any) error {
+	if document["hooks"] == nil {
+		document["hooks"] = map[string]any{}
+	}
+	hooks, ok := document["hooks"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("hooks: %w", errNotObject)
+	}
+	for _, event := range hookEvents {
+		existing, ok := hooks[event].([]any)
+		if hooks[event] != nil && !ok {
+			return fmt.Errorf("hooks.%s: expected an array", event)
+		}
+		placed := false
+		kept := make([]any, 0, len(existing)+1)
+		for _, group := range existing {
+			if !holdsWorkflowHandler(group) {
+				kept = append(kept, group)
+				continue
+			}
+			if others := withoutWorkflowHandlers(group); others != nil {
+				kept = append(kept, others)
+			}
+			if !placed {
+				kept = append(kept, groups[event])
+				placed = true
 			}
 		}
+		if !placed {
+			kept = append(kept, groups[event])
+		}
+		hooks[event] = kept
 	}
-	s.Intact = len(s.Problems) == 0
-	return s, nil
+	return nil
+}
+
+func isWorkflowHandler(handler any) bool {
+	object, _ := handler.(map[string]any)
+	command, _ := object[handlerCommand].(string)
+	return strings.Contains(command, eventCommand)
+}
+
+func holdsWorkflowHandler(group any) bool {
+	object, _ := group.(map[string]any)
+	handlers, _ := object["hooks"].([]any)
+	return slices.ContainsFunc(handlers, isWorkflowHandler)
+}
+
+// withoutWorkflowHandlers returns group without its workflow handlers, or
+// nil when no other handler remains.
+func withoutWorkflowHandlers(group any) any {
+	object, _ := group.(map[string]any)
+	handlers, _ := object["hooks"].([]any)
+	others := slices.DeleteFunc(slices.Clone(handlers), isWorkflowHandler)
+	if len(others) == 0 {
+		return nil
+	}
+	copied := maps.Clone(object)
+	copied["hooks"] = others
+	return copied
+}
+
+func listsGroup(listed []any, want any) bool {
+	wanted, err := json.Marshal(want)
+	if err != nil {
+		return false
+	}
+	for _, group := range listed {
+		if encoded, err := json.Marshal(group); err == nil && bytes.Equal(encoded, wanted) {
+			return true
+		}
+	}
+	return false
+}
+
+// readConfiguration reads a host's JSON configuration, an empty object
+// when the file does not exist yet, and its permissions.
+func readConfiguration(project *os.Root, name string) (map[string]any, fs.FileMode, error) {
+	data, err := project.ReadFile(name)
+	if errors.Is(err, fs.ErrNotExist) {
+		return map[string]any{}, 0o644, nil
+	}
+	if err != nil {
+		return nil, 0, fmt.Errorf("read: %w", err)
+	}
+	info, err := project.Stat(name)
+	if err != nil {
+		return nil, 0, fmt.Errorf("read: %w", err)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	var document map[string]any
+	if err := decoder.Decode(&document); err != nil {
+		return nil, 0, fmt.Errorf("invalid JSON: %w", err)
+	}
+	if document == nil {
+		return nil, 0, errNotObject
+	}
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
+		return nil, 0, fmt.Errorf("invalid JSON: content follows the configuration object")
+	}
+	return document, info.Mode().Perm(), nil
+}
+
+func encodeConfiguration(document map[string]any) ([]byte, error) {
+	var output bytes.Buffer
+	encoder := json.NewEncoder(&output)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(document); err != nil {
+		return nil, fmt.Errorf("encode hook configuration: %w", err)
+	}
+	return output.Bytes(), nil
+}
+
+func writeConfiguration(project *os.Root, name string, content []byte, mode fs.FileMode) error {
+	if err := project.MkdirAll(filepath.Dir(name), 0o755); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+	temporary := name + ".tmp-" + rand.Text()
+	if err := project.WriteFile(temporary, content, mode); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+	if err := project.Rename(temporary, name); err != nil {
+		return errors.Join(fmt.Errorf("write: %w", err), project.Remove(temporary))
+	}
+	return nil
 }

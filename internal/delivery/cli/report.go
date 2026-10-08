@@ -233,12 +233,12 @@ const (
 	ReviewerStatusLimits = "Installation and integrity do not prove Codex discovery, activation or review quality. Activity records are in the Codex conversation; ArcLint does not manage their storage or retention."
 )
 
-// WorkflowStatusReport contains installation facts for task-focused reporting.
+// WorkflowStatusReport lists which hosts' configuration holds the workflow hooks.
 type WorkflowStatusReport struct {
 	Status application.WorkflowHookStatus
 }
 
 func (WorkflowStatusReport) report() {}
 
-// WorkflowStatusLimits separates delivered assets from host activation and review.
-const WorkflowStatusLimits = "Installation integrity does not prove host activation. Review these independent hooks in Codex /hooks; no trust is granted by installation. Workflow findings are advisory feedback, never approval or automatic blocking."
+// WorkflowStatusLimits separates written configuration from host activation.
+const WorkflowStatusLimits = "Status reads the configuration files only. Codex runs the hooks after you trust them in /hooks; check a host's own hook listing to see what it loaded."

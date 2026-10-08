@@ -1,111 +1,114 @@
 ---
-title: Task-focused workflow hooks
+title: Workflow hooks
 weight: 8
-description: Report domain workflow departures in the coding agent's current task.
+description: Advise Claude Code and Codex when observed work skips a step of the domain workflow.
 ---
 
-ArcLint's workflow hook helps a coding agent follow the project's domain
-workflow while it works. It reports departures with quoted evidence and a
-suggested correction: reading source before obtaining context, implementing
-changed meanings before explaining and recording them, missing enforcement,
-misplaced ownership or unjustified duplication. It also reassesses repairs and
-rebuttals.
+Coding agents often change code before they look up the architecture or
+record the meaning a change introduces. ArcLint's workflow hooks watch what
+the agent does and advise when it skips a step of the project's workflow:
 
-This is a public feature for any project using ArcLint. ArcLint uses the same
-feature for its own development.
+1. Run `arclint context <paths>` before reading or changing files under
+   those paths.
+2. When the work introduces or changes a meaning, record it in
+   `domain.arclint.yaml` first.
+3. Implement.
+4. Run `arclint check .` and the project's tests before finishing.
 
-## Install in your project
+The hooks advise; they never block a tool call. Each reminder is given once,
+so repeating an action does not repeat the reminder. Any project using
+ArcLint can install them, and ArcLint uses them for its own development.
 
-From the project root, run:
+## Install
+
+From the project root:
 
 ```sh
 arclint agents workflow install
-```
-
-The current host integration is Codex. Installation adds native hooks to
-`.codex/hooks.json`, preserving existing hooks, and installs the executable and
-editable review instructions under `.codex/hooks/arclint-workflow-guard/`.
-
-Start Codex with the installed launcher:
-
-```sh
-bash .codex/hooks/arclint-workflow-guard/start-codex.sh
-```
-
-For an ordinary checkout, it starts Codex in the project with normal
-configuration. Linked-worktree launchers supply an identical, sorted inventory
-of the exact workflow-hook definitions installed across sibling worktrees,
-alongside inherited hooks. Only the provider belonging to the current worktree
-reviews its events; the others do nothing. The shared definitions avoid
-conflicting trust records between worktree sessions. The launcher does not edit
-the main checkout's hooks.
-
-After adding or removing a sibling workflow installation, rerun
-`arclint agents workflow install` in previously installed worktrees to refresh
-their launchers. Changed definitions require Codex's normal trust review again.
-
-Installation and launching do not grant trust. In the launched session, inspect
-the definitions with `/hooks` and follow Codex's trust steps. Then exit and run
-the launcher again to start a fresh session. Verify the loaded definitions and
-actual review activity separately. Desktop hook settings are another way to
-inspect host trust, but opening an existing desktop session is not equivalent
-to starting this launcher.
-
-Check the installed files with:
-
-```sh
 arclint agents workflow status
 ```
 
-Status describes installation and integrity. It does not establish that Codex
-has activated or invoked the hook. Installation preserves unrelated hooks and
-does not replace independently installed tools.
+Installation writes the same hook command, `arclint agents workflow event`,
+into each host's project configuration:
+
+| Host | File | Events |
+|---|---|---|
+| Claude Code | `.claude/settings.json` | `SessionStart`; `PostToolUse` for Edit, Write, MultiEdit and NotebookEdit; `Stop` |
+| Codex | `.codex/hooks.json` | `SessionStart`; `PostToolUse` for apply_patch; `Stop` |
+
+`--host claude` or `--host codex` installs for one host. Installing again is
+safe: it replaces the workflow hook and keeps every other setting and hook.
+Status reports what each file lists; it cannot see whether a host loaded the
+hooks. A hook written from another environment, such as outside WSL, counts as
+installed, and status names the difference, because installing from here
+rewrites it and Codex then asks for trust again.
+
+- Claude Code reads project hooks when a session starts.
+- Codex runs project hooks only after you trust them. Open `/hooks` in Codex,
+  trust the ArcLint hooks, and start a new session. The command is identical
+  in every checkout, so the worktrees of one repository share that trust.
+
+The hooks run the `arclint` on the host's `PATH`.
+
+### WSL projects opened from Windows
+
+When you install from inside WSL, the hooks also work for the Windows desktop
+apps that open the project through `\\wsl.localhost`. Codex receives a
+`commandWindows` that runs
+`wsl.exe -d <distribution> -- bash -lc "exec arclint agents workflow event"`.
+Claude Code runs hook commands through Git Bash on Windows, so its command
+runs `arclint` when the shell finds it and otherwise the same `wsl.exe`
+command. That command needs Git Bash; Claude Code falls back to PowerShell
+only when Git Bash is missing. The hook maps `\\wsl.localhost\<distribution>\...` and
+`\\wsl$\<distribution>\...` paths to paths inside the distribution.
 
 ## What the agent receives
 
-The hook reports feedback through native events while the agent works and when
-it finishes. A finding identifies the supplied passage, quotes the relevant
-text, explains the departure and suggests a correction. Missing history or
-unavailable evidence appears as a coverage limit. Reports are advisories;
-they do not block tools or grant approval.
+| When | Guidance |
+|---|---|
+| A session starts | The workflow order above. |
+| A file changes before context showed every Zone that owns it | Run `arclint context <path>`. Each path is named once per session. Context shows the Zones that own the paths it names, the Zones named with `--zone`, or every Zone when it names neither. Context for a directory shows the Zones that own the directory, not narrower Zones nested inside it. A file no Zone owns needs no context. |
+| A file other than the domain recording changes before the recording changed in the session | Record a new or changed meaning first; otherwise continue. Given once per session. |
+| A turn finishes with changes no `arclint check` has verified | Run `arclint check .` and the tests. Given again only when a file no reminder has named changes. The user sees it as a system message. |
 
-Session reports are also recorded under
-`.arclint/cache/workflow-guard/reports/`. They show what was reported and include
-unavailable-review messages; a saved report alone does not prove a correct review.
+Guidance during work arrives as hook additional context, which the agent reads
+with the tool result. Domain decisions live in the recorded `WorkflowGuide`
+domain service; the hook adapter only reports what happened.
 
-Scope follows the current task and observed actions. The collector supplies
-available project guidance, task-mentioned files, paths in native file tools
-or patches, and changes observed since the task began. Existing unrelated
-changes are not automatically attributed to that task. Available nested
-`AGENTS.md` instructions accompany affected files. Source text is not restricted
-to Go or TypeScript, and the hook imposes no comment ban.
+## How the hooks observe work
 
-The evidence is bounded. Missing files, unreadable or binary content,
-truncation and unavailable earlier actions limit the review. A present-day
-snapshot cannot establish whether a decision preceded its implementation.
-Semantic judgment can be mistaken: review the quoted evidence and provide a
-repair or concrete rebuttal. An empty findings list is not certification of the
-whole repository.
+- ArcLint reports its own work. After `arclint context`, a full
+  `arclint check`, or `arclint domain define|remove|init` runs, it appends
+  the activity to `.arclint/cache/workflow/activity.jsonl`. It does so however
+  the command was started: from Bash or PowerShell, through `wsl.exe`, or
+  inside a script or make target. The hooks resolve the Zones that own the
+  named paths exactly as `arclint context` does. A failed command, `--help`,
+  a check narrowed by `--only` or `--exclude`, and a domain command that left
+  the recording unchanged record nothing. ArcLint records only where the hooks
+  created that directory, so projects without the hooks, and CI, gain no
+  files.
+- The hosts report edits. The file paths of Edit, Write, MultiEdit and
+  NotebookEdit, and the file headers of an apply_patch, are changes. A change
+  to `domain.arclint.yaml` changes the domain recording.
+- Each session keeps its progress in `.arclint/cache/workflow/`, keyed by the
+  host's session id. A session starts reading the activity log where it ends
+  when the session starts, so earlier work is not credited to it. Parallel tool
+  calls of one session update its progress one at a time. Records untouched
+  for 30 days are removed when a new session starts.
+- If a session cannot keep its progress, for example because `.arclint` is not
+  writable, it says so once when it starts and then stays silent.
 
-## Review supplied evidence directly
+## Limits
 
-Other integrations can send a task and named text passages to the same public
-review operation:
-
-```sh
-arclint agents workflow review <<'JSON'
-{
-  "task": "Review the proposed change to the booking workflow.",
-  "passages": {
-    "proposal": "Add a second booking policy without checking the existing policy."
-  },
-  "limits": ["The existing domain recording and source were not supplied."]
-}
-JSON
-```
-
-The result contains `Findings` and `Limits`. Each finding contains `Evidence`,
-`Quote`, `Departure` and `Correction`. The same domain operation validates the
-grounding of native-hook reports and direct reviews; model or malformed-response
-failures are reported as unavailable. Running semantic review requires the
-configured Codex review process to be available and authenticated.
+- Files a shell command changes, such as through `>`, `sed -i`, `cp` or a
+  script, are not observed; only the hosts' edit tools are.
+- While `rules.arclint.yaml` cannot be read, the hooks cannot tell which Zones
+  own a file and give no context reminder.
+- Everything that runs ArcLint in one checkout shares its activity log:
+  context or a check run in your terminal, a make target or another session
+  counts for every open session. Separate worktrees do not share it.
+- Paths outside the project, `.git/` and `.arclint/cache/` are ignored. Under
+  WSL, a Windows drive path such as `C:\Users` maps to `/mnt/c/Users`.
+- The hooks judge order, not meaning. The
+  [domain reviewer](../domain-reviewer/) questions meanings, enforcement,
+  ownership and duplication.
