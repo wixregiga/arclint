@@ -61,8 +61,26 @@ func AgentCommandSurface() []AgentCommandDoc {
 		{"agents workflow install", "agents workflow install", "write the workflow hooks into Claude Code and Codex project configuration; they advise when work skips context, domain recording or the check, and never block"},
 		{"agents workflow status", "agents workflow status", "show which hosts' configuration lists the workflow hooks; Codex runs them after you trust them in /hooks"},
 		{"agents md", "agents md --write", "refresh this block after changing " + rule.RulesetFileName + " or the vocabulary"},
+		{"agents skill", "agents skill", "write the " + vocab.SkillName + " skill to `" + vocab.SkillDirectory + "/` when your harness lacks it"},
 		{"baseline", "baseline", "manage the committed baseline of adopted findings"},
 		{"patterns", "patterns", "list the Patterns that resolve offline (embedded, vendored, authored); `patterns install <pattern>` extends " + rule.RulesetFileName + " with one, `patterns vendor` copies one under `.arclint/patterns`"},
+	}
+}
+
+// AgentWorkflow is the order a coding agent works in, one instruction for
+// each step. The generated block and the workflow hooks' session-start
+// orientation both state it from here, so the two cannot drift. recording
+// is the domain recording's path relative to the project root.
+func AgentWorkflow(recording string) []string {
+	return []string{
+		"Run `arclint context <paths>` on the files you will read or change, before opening them. " +
+			"It answers with the zones, contracts and recorded domain that bind them; " +
+			"do not learn the architecture by reading file after file or guessing from folder names.",
+		"Decide whether the work introduces or changes a meaning. If it does, record it in `" + recording +
+			"` first, using the " + vocab.SkillName + " skill. If it does not, say so in one sentence before editing.",
+		"Implement the change inside the zones `arclint context` reported.",
+		"Run `arclint check .` and the project's tests before finishing. " +
+			"Fix the findings in the code you changed, and report what you verified and what remains open.",
 	}
 }
 
@@ -142,12 +160,11 @@ func renderAgentsBlock(cfg rule.Configured, lang vocab.UbiquitousLanguage,
 		rule.RulesetFileName,
 		len(cfg.Rules), strings.Join(languages, ", "))
 	writeExtendedPatterns(&b, cfg)
-	writeAskFirst(&b)
+	writeWorkflow(&b)
+	writeCommands(&b)
 	if recorded && !lang.Empty() {
 		writeRecordedDomain(&b, lang)
 	}
-	writeChangingLanguage(&b)
-	writeChangeWorkflow(&b)
 	writeZoneRules(&b, cfg)
 	writeBuiltInRules(&b, cfg)
 	writeRepositoryRules(&b, cfg)
@@ -186,15 +203,22 @@ func writeExtendedPatterns(b *strings.Builder, cfg rule.Configured) {
 		strings.Join(parts, "; "))
 }
 
-// writeAskFirst is the fixed imperative opening (ask the tool, never
-// survey the tree) followed by the command surface with when-to-use
-// guidance.
-func writeAskFirst(b *strings.Builder) {
-	b.WriteString("### Ask arclint first\n\n")
-	b.WriteString("IMPORTANT: you MUST ask arclint before reading around. " +
-		"The architecture, the rules, and the recorded domain are queryable; " +
-		"run `arclint context` on the paths you expect to touch BEFORE opening source files, " +
-		"and do NOT learn the architecture by reading file after file or guessing from folder names.\n\n")
+// writeWorkflow states the order of every change. It is emitted
+// unconditionally: the order holds whether or not a domain is recorded or
+// the skill is installed, and it is how an unrecorded domain gets its
+// first entry.
+func writeWorkflow(b *strings.Builder) {
+	b.WriteString("### Workflow\n\n")
+	b.WriteString("IMPORTANT: work in this order on every change.\n\n")
+	for index, step := range AgentWorkflow(vocab.UbiquitousLanguageFileName) {
+		fmt.Fprintf(b, "%d. %s\n", index+1, step)
+	}
+	b.WriteString("\n")
+}
+
+// writeCommands lists the command surface with when-to-use guidance.
+func writeCommands(b *strings.Builder) {
+	b.WriteString("### Commands\n\n")
 	for _, c := range AgentCommandSurface() {
 		fmt.Fprintf(b, "- `arclint %s`: %s\n", c.Usage, c.Doc)
 	}
@@ -263,52 +287,6 @@ func writeRecordedDomain(b *strings.Builder, lang vocab.UbiquitousLanguage) {
 		return
 	}
 	b.WriteString("Full text: `arclint domain`.\n\n")
-}
-
-// writeChangingLanguage is the fixed obligation to evolve the recorded
-// vocabulary before the code, through the domain-librarian skill. It is
-// emitted unconditionally; the obligation stands whether or not the
-// skill files are installed, and it is how an unrecorded domain gets
-// its first entry.
-func writeChangingLanguage(b *strings.Builder) {
-	b.WriteString("### Changing the language\n\n")
-	fmt.Fprintf(b, "If your change speaks about something new, or changes what a recorded term means, "+
-		"record it in `%s` before writing code. Invoke the %s skill for that work: "+
-		"it decides how a concept is classified, what evidence a recording needs, "+
-		"and when an open question is recorded instead of a guess. "+
-		"If your harness does not have the skill, `arclint agents skill` writes it to `%s/`.\n\n",
-		vocab.UbiquitousLanguageFileName, vocab.SkillName, vocab.SkillDirectory)
-}
-
-// writeChangeWorkflow is the fixed change discipline for architectural
-// work: consult the recorded architecture first, explain the change,
-// implement one complete path, verify through the contracts, and gate
-// on arclint check plus the repository's tests. It is emitted
-// unconditionally; the discipline holds for every repository.
-func writeChangeWorkflow(b *strings.Builder) {
-	b.WriteString("### Architecture change workflow\n\n")
-	b.WriteString("Before changing responsibilities, dependencies, or domain behavior:\n\n")
-	b.WriteString("1. Run `arclint context` for the affected paths. Read the relevant code to\n" +
-		"   understand existing behavior. Use the recorded domain, architecture,\n" +
-		"   and approved decisions to determine the intended design.\n\n")
-	b.WriteString("2. Give a short explanation before editing:\n" +
-		"   - This change does ___.\n" +
-		"   - These decisions belong to ___.\n" +
-		"   - The caller uses ___.\n" +
-		"   - Existing behavior ___ must remain intact.\n\n" +
-		"   Use the project's language. Resolve contradictions with approved decisions\n" +
-		"   before proceeding. Ask only when an unresolved product decision requires\n" +
-		"   the user's input. This explanation is not an approval checkpoint.\n\n")
-	b.WriteString("3. Implement one complete behavior path through the intended boundaries.\n" +
-		"   Keep names and files understandable from their responsibilities.\n" +
-		"   Callers use contracts; implementations own their specific decisions.\n\n")
-	b.WriteString("4. Verify the changed behavior through those contracts. Test application\n" +
-		"   assembly through the real assembly code. Inspect unexpected lint findings\n" +
-		"   and their scope before moving code or changing enforcement.\n\n")
-	b.WriteString("5. Run `arclint check .` and the repository's tests as the finish gate.\n" +
-		"   Review baseline findings affecting the changed code as outstanding\n" +
-		"   repair work. Report the behavior verified, structural checks passed,\n" +
-		"   and remaining gaps separately.\n\n")
 }
 
 // writeZoneRules lists every declared Zone with its import

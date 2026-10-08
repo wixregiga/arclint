@@ -161,13 +161,16 @@ func patchPaths(text string) []string {
 	return paths
 }
 
+// orientation states the workflow the generated AGENTS.md block states,
+// from the same source.
 func (events *Events) orientation() string {
-	return "ArcLint workflow hooks are installed in this project. Work in this order:\n" +
-		"1. Run `arclint context <paths>` before reading or changing files under those paths.\n" +
-		"2. When the work introduces or changes a meaning, record it in " + events.recording + " first, using the domain-librarian skill.\n" +
-		"3. Implement.\n" +
-		"4. Run `arclint check .` and the project's tests before finishing.\n" +
-		"The hooks advise when observed work skips a step. They never block a tool call."
+	var text strings.Builder
+	text.WriteString("ArcLint workflow hooks are installed in this project. Work in this order:\n")
+	for index, step := range application.AgentWorkflow(events.recording) {
+		fmt.Fprintf(&text, "%d. %s\n", index+1, step)
+	}
+	text.WriteString("The hooks advise when observed work skips a step. They never block a tool call.")
+	return text.String()
 }
 
 func (events *Events) advice(guidance []workflow.Guidance) string {

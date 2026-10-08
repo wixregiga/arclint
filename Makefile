@@ -65,8 +65,8 @@ CHECK_LEAK ?= _leak
 CHECK_VERIFY ?= _quick-verify
 CHECK_SCHEMA ?= lint-schema
 
-# Canonical local check: auto-fixes lint errors, runs fast tests, lints the
-# committed schemas, and checks staged secrets.
+# Canonical local check: auto-fixes lint errors, runs fast tests and
+# arclint check, lints the committed schemas, and checks staged secrets.
 check: $(CHECK_LINT) $(CHECK_VERIFY) $(CHECK_SCHEMA) $(CHECK_LEAK)
 
 
@@ -75,7 +75,7 @@ check-fix: check
 
 # Read-only quick gate for review sessions and agents. Must not mutate the tree.
 check-ro:
-	$(MAKE) check CHECK_LINT=_lint-no-fix CHECK_VERIFY=_verify-ro CHECK_LEAK=_noop
+	$(MAKE) check CHECK_LINT=_lint-no-fix CHECK_VERIFY=_quick-verify CHECK_LEAK=_noop
 
 # CI gate: calls check but overrides steps to be CI-appropriate and full.
 ci:
@@ -94,11 +94,13 @@ release:
 # Hiding targets from shell auto-completion is done by defining them via variables
 # or prefixing with an underscore.
 
-.PHONY: _quick-verify _verify _verify-ro _examples-go _lint-no-fix _leak _leak-ci _leak-check _noop
+.PHONY: _quick-verify _verify _examples-go _lint-no-fix _leak _leak-ci _leak-check _noop
 
+# The workflow's finish gate: fast tests and arclint check over the repository.
 _quick-verify: _examples-go
 	$(GO) vet ./...
 	$(GO) test -short ./...
+	$(GO) run -tags "$(GRAMMARS)" ./cmd/arclint check .
 
 _verify: vet test _examples-go
 	$(MAKE) build
@@ -111,9 +113,6 @@ _verify: vet test _examples-go
 # check in _verify; the TypeScript one is parsed by arclint, not run.
 _examples-go:
 	cd docs/examples/go && $(GO) vet ./... && $(GO) test ./...
-
-_verify-ro: _quick-verify
-	$(GO) run -tags "$(GRAMMARS)" ./cmd/arclint check .
 
 _noop:
 	@true

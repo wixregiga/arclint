@@ -16,11 +16,18 @@ IMPORTANT: ask arclint before reading around. `make arclint` builds the arclint 
 <!-- arclint:agents:begin -->
 ## Architecture contracts (arclint)
 
-Enforced from rules.arclint.yaml: 53 rules over languages [go, typescript].
+Enforced from rules.arclint.yaml: 52 rules over languages [go, typescript].
 
-### Ask arclint first
+### Workflow
 
-IMPORTANT: you MUST ask arclint before reading around. The architecture, the rules, and the recorded domain are queryable; run `arclint context` on the paths you expect to touch BEFORE opening source files, and do NOT learn the architecture by reading file after file or guessing from folder names.
+IMPORTANT: work in this order on every change.
+
+1. Run `arclint context <paths>` on the files you will read or change, before opening them. It answers with the zones, contracts and recorded domain that bind them; do not learn the architecture by reading file after file or guessing from folder names.
+2. Decide whether the work introduces or changes a meaning. If it does, record it in `domain.arclint.yaml` first, using the domain-librarian skill. If it does not, say so in one sentence before editing.
+3. Implement the change inside the zones `arclint context` reported.
+4. Run `arclint check .` and the project's tests before finishing. Fix the findings in the code you changed, and report what you verified and what remains open.
+
+### Commands
 
 - `arclint context [paths...]`: run before editing under any path: the owning zones, their import contracts, and the recorded domain in one answer (`--zone <names>`, `--format json`)
 - `arclint domain`: the ubiquitous language: contexts, aggregates, value objects, invariants, relations
@@ -28,7 +35,10 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 - `arclint check .`: evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings
 - `arclint rules test`: run the rule fixtures under `.arclint/tests` after changing any rule
 - `arclint sdk init`: regenerate the extension SDK artifacts under `.arclint/extensions`
+- `arclint agents workflow install`: write the workflow hooks into Claude Code and Codex project configuration; they advise when work skips context, domain recording or the check, and never block
+- `arclint agents workflow status`: show which hosts' configuration lists the workflow hooks; Codex runs them after you trust them in /hooks
 - `arclint agents md --write`: refresh this block after changing rules.arclint.yaml or the vocabulary
+- `arclint agents skill`: write the domain-librarian skill to `.agents/skills/domain-librarian/` when your harness lacks it
 - `arclint baseline`: manage the committed baseline of adopted findings
 - `arclint patterns`: list the Patterns that resolve offline (embedded, vendored, authored); `patterns install <pattern>` extends rules.arclint.yaml with one, `patterns vendor` copies one under `.arclint/patterns`
 
@@ -41,41 +51,6 @@ IMPORTANT: you MUST ask arclint before reading around. The architecture, the rul
 - **capacity**: aggregates Capacity; value objects Hold
 
 Relations: catalog → ordering (conformist); catalog → capacity (conformist); capacity → ordering (customer_supplier). Full text: `arclint domain`.
-
-### Changing the language
-
-If your change speaks about something new, or changes what a recorded term means, record it in `domain.arclint.yaml` before writing code. Invoke the domain-librarian skill for that work: it decides how a concept is classified, what evidence a recording needs, and when an open question is recorded instead of a guess. If your harness does not have the skill, `arclint agents skill` writes it to `.agents/skills/domain-librarian/`.
-
-### Architecture change workflow
-
-Before changing responsibilities, dependencies, or domain behavior:
-
-1. Run `arclint context` for the affected paths. Read the relevant code to
-   understand existing behavior. Use the recorded domain, architecture,
-   and approved decisions to determine the intended design.
-
-2. Give a short explanation before editing:
-   - This change does ___.
-   - These decisions belong to ___.
-   - The caller uses ___.
-   - Existing behavior ___ must remain intact.
-
-   Use the project's language. Resolve contradictions with approved decisions
-   before proceeding. Ask only when an unresolved product decision requires
-   the user's input. This explanation is not an approval checkpoint.
-
-3. Implement one complete behavior path through the intended boundaries.
-   Keep names and files understandable from their responsibilities.
-   Callers use contracts; implementations own their specific decisions.
-
-4. Verify the changed behavior through those contracts. Test application
-   assembly through the real assembly code. Inspect unexpected lint findings
-   and their scope before moving code or changing enforcement.
-
-5. Run `arclint check .` and the repository's tests as the finish gate.
-   Review baseline findings affecting the changed code as outstanding
-   repair work. Report the behavior verified, structural checks passed,
-   and remaining gaps separately.
 
 ### Zones and their rules
 
@@ -123,7 +98,7 @@ Before changing responsibilities, dependencies, or domain behavior:
 
 ### Built-in rules
 
-21 rules built in from the DDD meta-model judge the recorded domain against the code; no Pattern distributes them. Change one through an Override under its id in rules.arclint.yaml (severity, or disable with a reason).
+20 rules built in from the DDD meta-model judge the recorded domain against the code; no Pattern distributes them. Change one through an Override under its id in rules.arclint.yaml (severity, or disable with a reason).
 
 - ubiquitous_language/terms-declared-in-code: Every recorded member entity, value object, and identity names one type declaration in the context's code, spelled with the recorded name in the language's type case (in Go, a name the package's own name completes, so rule.ID spells RuleID); a name no declaration spells, or one that two declarations spell with nothing to choose between them, is a finding. Aggregates, events, services, specifications, repositories, and factories state the same for themselves.
 - bounded_context/code-held-by-one-context: A file of a bounded context's code belongs to no other context; two contexts hold the same code only under a recorded shared_kernel relation between them, because a boundary two models straddle is not a boundary.
@@ -133,7 +108,7 @@ Before changing responsibilities, dependencies, or domain behavior:
 - value_object/constructed-through-one-door: A value object with a recorded invariant declares a constructor: a function of its module that returns it, or a constructor or __init__ of its class, or a factory method on it named create, from, of, parse, new, or build; the invariant is enforced there, so a value that violates it never exists.
 - value_object/no-setters: A value object declares no method whose name begins with set; nothing changes a value after construction.
 - invariant/enforced-at-every-mutation: Every constructor and every command of the root calls the ensure method of the aggregate's invariant, so the invariant is evaluated at the completion of every state-mutating operation and a violation fails the operation; a root with no constructor has no door at which to enforce it.
-- assertion/checked-by-its-operation: For an assertion of an aggregate, the root declares both the operation and the checking method (assert followed by the key in the language's method case), and the operation calls the checking method.
+- assertion/checked-by-its-operation: The owner of an assertion, the aggregate's root or the domain service, declares both the operation the assertion names and the checking method (assert followed by the key in the language's method case), and the operation calls the checking method.
 - specification/satisfaction-method: A specification is a declared type carrying a satisfaction method (SatisfiedBy, satisfiedBy, or satisfied_by).
 - aggregate/protects-an-invariant (warning): An aggregate records at least one invariant; a boundary drawn around nothing that must stay consistent is not yet justified, and the finding asks whether the entry is an aggregate or a value.
 - aggregate/root-declared: The root is one declared type spelled with the aggregate's name in the language's type case, found in the context's code; a type that can carry behaviour (a struct or named type in Go, a class in TypeScript and Python) is the root ahead of an interface or alias of the same name, two such declarations with nothing to choose between them are a finding, and none is a finding at the recording.
@@ -143,7 +118,6 @@ Before changing responsibilities, dependencies, or domain behavior:
 - domain_event/declared: A recorded event is a declared type spelled with the event's name in the language's type case.
 - domain_event/no-setters: An event declares no method whose name begins with set; a record of the past is not edited.
 - domain_service/declared: A recorded service is a declared type spelled with the service's name in the language's type case.
-- domain_service/contract-checked-by-its-operation: For every assertion of the service, the service type declares both the operation the assertion names and the checking method (assert followed by the key in the language's method case), and the operation calls the checking method.
 - repository/declared: A recorded repository is a declared type (interface, or class in a language without interfaces) spelled with the recorded name in the language's type case, declared in the context's code.
 - factory/declared: A recorded factory is a declared type or function spelled with the recorded name in the language's case, declared in the context's code.
 
