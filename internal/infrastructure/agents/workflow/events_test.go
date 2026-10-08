@@ -101,10 +101,13 @@ func TestSessionStartStatesTheWorkflowOrder(t *testing.T) {
 	if output.HookSpecificOutput.HookEventName != "SessionStart" || output.SystemMessage != "" {
 		t.Fatalf("wrong output: %+v", output)
 	}
-	for _, step := range []string{"arclint context <paths>", "record it in domain.arclint.yaml first", "arclint check .", "never block"} {
-		if !strings.Contains(text, step) {
-			t.Fatalf("orientation lacks %q:\n%s", step, text)
+	for index, step := range application.AgentWorkflow(recording) {
+		if !strings.Contains(text, fmt.Sprintf("%d. %s\n", index+1, step)) {
+			t.Fatalf("orientation lacks workflow step %d %q:\n%s", index+1, step, text)
 		}
+	}
+	if !strings.Contains(text, "They never block a tool call.") {
+		t.Fatalf("orientation does not say the hooks never block:\n%s", text)
 	}
 }
 

@@ -113,22 +113,18 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 	for _, want := range []string{
 		application.AgentsBegin, application.AgentsEnd,
 		"5 rules over languages [go]",
-		"### Ask arclint first",
-		"IMPORTANT: you MUST ask arclint before reading around.",
-		"BEFORE opening source files",
-		"do NOT learn the architecture by reading file after file",
+		"### Workflow",
+		"IMPORTANT: work in this order on every change.",
+		"1. Run `arclint context <paths>` on the files you will read or change, before opening them.",
+		"do not learn the architecture by reading file after file",
+		"2. Decide whether the work introduces or changes a meaning. If it does, record it in `domain.arclint.yaml` first, using the domain-librarian skill.",
+		"### Commands",
+		"- `arclint agents skill`: write the domain-librarian skill to `.agents/skills/domain-librarian/` when your harness lacks it",
 		"### The recorded domain",
 		"2 contexts, 2 aggregates, 1 value objects, 1 invariants (domain.arclint.yaml).",
 		"- **catalog**: aggregates Event (Organizer); value objects Price; events EventPublished",
 		"- **ordering**: aggregates Order",
 		"Relations: catalog → ordering (conformist). Full text: `arclint domain`.",
-		"### Changing the language",
-		"If your change speaks about something new, or changes what a recorded term means, " +
-			"record it in `domain.arclint.yaml` before writing code. " +
-			"Invoke the domain-librarian skill for that work: it decides how a concept is classified, " +
-			"what evidence a recording needs, and when an open question is recorded instead of a guess. " +
-			"If your harness does not have the skill, `arclint agents skill` writes it to " +
-			"`.agents/skills/domain-librarian/`.",
 		"### Zones and their rules",
 		"- **m**: test zone (paths m/**)",
 		"  - imports no other zone; external imports forbidden",
@@ -145,29 +141,34 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 			t.Errorf("block lacks %q:\n%s", want, block)
 		}
 	}
-	// The changing-the-language section and then the change workflow sit
-	// between the recorded domain and the zone rules.
+	// The workflow comes first, then the commands, then what the
+	// repository records and enforces.
+	workflowAt := strings.Index(block, "### Workflow")
+	commandsAt := strings.Index(block, "### Commands")
 	domainAt := strings.Index(block, "### The recorded domain")
-	changingAt := strings.Index(block, "### Changing the language")
-	workflowAt := strings.Index(block, "### Architecture change workflow")
 	zonesAt := strings.Index(block, "### Zones and their rules")
-	if !(domainAt >= 0 && domainAt < changingAt && changingAt < workflowAt && workflowAt < zonesAt) {
-		t.Fatalf("section order wrong: recorded domain at %d, changing the language at %d, "+
-			"change workflow at %d, zones at %d:\n%s",
-			domainAt, changingAt, workflowAt, zonesAt, block)
+	if !(workflowAt >= 0 && workflowAt < commandsAt && commandsAt < domainAt && domainAt < zonesAt) {
+		t.Fatalf("section order wrong: workflow at %d, commands at %d, recorded domain at %d, zones at %d:\n%s",
+			workflowAt, commandsAt, domainAt, zonesAt, block)
 	}
-	// The workflow names only commands the surface documents, so an agent
-	// following it never runs a command arclint does not ship.
-	workflow := block[workflowAt:zonesAt]
+	// The workflow is AgentWorkflow, step for step, and names only commands
+	// the surface documents, so an agent following it never runs a command
+	// arclint does not ship.
+	workflow := block[workflowAt:commandsAt]
+	for index, step := range application.AgentWorkflow("domain.arclint.yaml") {
+		if !strings.Contains(workflow, fmt.Sprintf("%d. %s\n", index+1, step)) {
+			t.Errorf("workflow lacks step %d %q:\n%s", index+1, step, workflow)
+		}
+	}
 	for _, named := range regexp.MustCompile("`arclint ([a-z ]+?)[ .`]").FindAllStringSubmatch(workflow, -1) {
 		if !slices.ContainsFunc(application.AgentCommandSurface(), func(c application.AgentCommandDoc) bool {
 			return c.Command == named[1]
 		}) {
-			t.Errorf("change workflow names `arclint %s`, which the command surface does not document", named[1])
+			t.Errorf("workflow names `arclint %s`, which the command surface does not document", named[1])
 		}
 	}
-	if !strings.Contains(workflow, "`arclint context`") || !strings.Contains(workflow, "`arclint check .`") {
-		t.Errorf("change workflow must start from `arclint context` and gate on `arclint check .`:\n%s", workflow)
+	if !strings.Contains(workflow, "`arclint context <paths>`") || !strings.Contains(workflow, "`arclint check .`") {
+		t.Errorf("workflow must start from `arclint context` and gate on `arclint check .`:\n%s", workflow)
 	}
 	// The command surface renders every entry as an invocable bullet.
 	for _, c := range application.AgentCommandSurface() {
@@ -209,12 +210,10 @@ func TestPublishAgentsContextOmitsAbsentSections(t *testing.T) {
 			t.Errorf("block must omit %q without its data:\n%s", reject, block)
 		}
 	}
-	// Changing the language and the change workflow are unconditional:
-	// they render even without a recorded domain, and never gate on
-	// installed skill files.
+	// The workflow and the commands are unconditional: they render even
+	// without a recorded domain, and never gate on installed skill files.
 	for _, want := range []string{
-		"### Ask arclint first", "### Changing the language",
-		"### Architecture change workflow",
+		"### Workflow", "### Commands",
 		"### Zones and their rules", "- **m**",
 	} {
 		if !strings.Contains(block, want) {

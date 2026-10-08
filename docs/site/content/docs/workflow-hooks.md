@@ -8,12 +8,16 @@ Coding agents often change code before they look up the architecture or
 record the meaning a change introduces. ArcLint's workflow hooks watch what
 the agent does and advise when it skips a step of the project's workflow:
 
-1. Run `arclint context <paths>` before reading or changing files under
-   those paths.
-2. When the work introduces or changes a meaning, record it in
-   `domain.arclint.yaml` first.
-3. Implement.
+1. Run `arclint context <paths>` on the files you will read or change,
+   before opening them.
+2. Decide whether the work introduces or changes a meaning. If it does,
+   record it in `domain.arclint.yaml` first, using the domain-librarian
+   skill. If it does not, say so in one sentence before editing.
+3. Implement the change inside the zones `arclint context` reported.
 4. Run `arclint check .` and the project's tests before finishing.
+
+The same four steps open the generated `AGENTS.md` block, and the hooks
+repeat them when a session starts; both come from one source in ArcLint.
 
 The hooks advise; they never block a tool call. Each reminder is given once,
 so repeating an action does not repeat the reminder. Any project using

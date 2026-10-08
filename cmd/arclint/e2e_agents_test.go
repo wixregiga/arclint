@@ -59,7 +59,7 @@ func TestAgentsCommandSurfaceMatchesCLI(t *testing.T) {
 // TestAgentsBlockForBoxoffice generates the block for the boxoffice
 // proving ground and verifies it as a superset of the hand-modeled
 // spec: every section heading of the hand block, the imperative
-// ask-first prohibition, every zone, and every non-consumes rule, with
+// workflow, every zone, and every non-consumes rule, with
 // expectations derived from the binary's own query commands, never
 // frozen fixtures.
 func TestAgentsBlockForBoxoffice(t *testing.T) {
@@ -85,9 +85,9 @@ func TestAgentsBlockForBoxoffice(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"IMPORTANT: you MUST ask arclint before reading around.",
-		"BEFORE opening source files",
-		"do NOT learn the architecture by reading file after file",
+		"IMPORTANT: work in this order on every change.",
+		"1. Run `arclint context <paths>` on the files you will read or change, before opening them.",
+		"do not learn the architecture by reading file after file",
 		".arclint/extensions/boxoffice.ts",
 	} {
 		if !strings.Contains(block, want) {
