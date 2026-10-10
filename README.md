@@ -274,22 +274,19 @@ undetermined, never proof of conformance.
 Install the workflow hooks for Claude Code and Codex in a project using ArcLint:
 
 ```sh
-arclint agents workflow install
-arclint agents workflow status
+arclint agents hooks install
+arclint agents hooks status
 ```
 
 The hooks advise the agent when observed work skips a step of the workflow:
 `arclint context` before changing files, recording a new or changed meaning in
 `domain.arclint.yaml` before implementing it, and `arclint check .` before
 finishing. Each reminder is given once, and the hooks never block a tool call.
-Installation writes one command into `.claude/settings.json` and
-`.codex/hooks.json` and keeps every other setting; Codex runs it after you trust
-it in `/hooks`. See [workflow hooks](docs/site/content/docs/workflow-hooks.md).
-
-The independently invoked `arclint-domain-reviewer` questions meanings,
-enforcement, ownership and duplication; install it with
-`arclint agents reviewer install --host codex` and check it with
-`arclint agents reviewer status`.
+Installation writes one command, which runs the installing `arclint` by its
+path, into the Claude Code and Codex user configuration, so the hooks run in
+every project and worktree, and keeps every other setting. Codex runs it after
+you trust it in `/hooks`. See
+[agent hooks](docs/site/content/docs/agent-hooks.md).
 
 Three commands do the agent-facing work:
 
@@ -351,8 +348,7 @@ rules schema        print the JSON Schema for rules.arclint.yaml; --write puts i
 rules test [name]   run the rule tests under .arclint/tests; failures exit 1
 context [paths...]  the architecture, or everything binding the given paths (--zone)
 domain              inspect and maintain the project's ubiquitous language (init/overview/list/show/explain/define/remove/schema)
-agents workflow     install/status the Claude Code and Codex workflow hooks; event answers a host
-agents reviewer     install/status the separately named domain reviewer
+agents hooks        install/status the Claude Code and Codex workflow hooks; event answers a host
 agents md           architecture block; --write installs it in AGENTS.md
 agents skill        domain-librarian SKILL.md, vocabulary and schema
 baseline capture    adopt current findings   ·  baseline refresh: drop stale entries

@@ -1,55 +1,51 @@
 package jsonreport
 
-import "github.com/wixregiga/arclint/internal/delivery/cli"
+import (
+	"time"
+
+	"github.com/wixregiga/arclint/internal/delivery/cli"
+)
 
 type agentInstallDoc struct {
-	Operation  string   `json:"operation"`
-	Host       string   `json:"host"`
-	Paths      []string `json:"paths"`
-	Activation string   `json:"activation"`
+	Operation   string   `json:"operation"`
+	Host        string   `json:"host"`
+	Paths       []string `json:"paths"`
+	Removed     []string `json:"removed"`
+	Orientation string   `json:"orientation,omitempty"`
+	Activation  string   `json:"activation"`
 }
 
 func agentInstallDocOf(r cli.AgentInstallReport) agentInstallDoc {
-	return agentInstallDoc{Operation: r.Operation, Host: r.Host, Paths: append([]string{}, r.Paths...), Activation: r.Activation}
+	return agentInstallDoc{Operation: r.Operation, Host: r.Host, Paths: append([]string{}, r.Paths...), Removed: append([]string{}, r.Removed...), Orientation: r.Orientation, Activation: r.Activation}
 }
 
-type reviewerStatusDoc struct {
-	Project          string   `json:"project"`
-	Name             string   `json:"name"`
-	Host             string   `json:"host"`
-	Path             string   `json:"path"`
-	InstalledVersion string   `json:"installedVersion"`
-	AvailableVersion string   `json:"availableVersion"`
-	Installed        bool     `json:"installed"`
-	Intact           bool     `json:"intact"`
-	Problems         []string `json:"problems"`
-	Limits           string   `json:"limits"`
-}
-
-func reviewerStatusDocOf(r cli.ReviewerStatusReport) reviewerStatusDoc {
-	s := r.Installation
-	return reviewerStatusDoc{Project: s.Project, Name: s.Name, Host: s.Host, Path: s.Path, InstalledVersion: s.InstalledVersion, AvailableVersion: s.AvailableVersion, Installed: s.Installed, Intact: s.Intact, Problems: append([]string{}, s.Problems...), Limits: cli.ReviewerStatusLimits}
-}
-
-type workflowHostDoc struct {
+type hookFileDoc struct {
 	Host      string   `json:"host"`
+	Scope     string   `json:"scope"`
+	Windows   bool     `json:"windows"`
 	Path      string   `json:"path"`
 	Installed bool     `json:"installed"`
 	Problems  []string `json:"problems"`
 }
 
-type workflowStatusDoc struct {
-	Project string            `json:"project"`
-	Command string            `json:"command"`
-	Hosts   []workflowHostDoc `json:"hosts"`
-	Limits  string            `json:"limits"`
+type hooksStatusDoc struct {
+	Project string        `json:"project"`
+	Binary  string        `json:"binary"`
+	Files   []hookFileDoc `json:"files"`
+	// LastEvent is RFC 3339, empty when no hook event reached the project.
+	LastEvent string `json:"lastEvent"`
+	Limits    string `json:"limits"`
 }
 
-func workflowStatusDocOf(r cli.WorkflowStatusReport) workflowStatusDoc {
+func hooksStatusDocOf(r cli.HooksStatusReport) hooksStatusDoc {
 	s := r.Status
-	hosts := make([]workflowHostDoc, 0, len(s.Hosts))
-	for _, host := range s.Hosts {
-		hosts = append(hosts, workflowHostDoc{Host: host.Host, Path: host.Path, Installed: host.Installed, Problems: append([]string{}, host.Problems...)})
+	files := make([]hookFileDoc, 0, len(s.Files))
+	for _, host := range s.Files {
+		files = append(files, hookFileDoc{Host: host.Host, Scope: host.Scope, Windows: host.Windows, Path: host.Path, Installed: host.Installed, Problems: append([]string{}, host.Problems...)})
 	}
-	return workflowStatusDoc{Project: s.Project, Command: s.Command, Hosts: hosts, Limits: cli.WorkflowStatusLimits}
+	last := ""
+	if !s.LastEvent.IsZero() {
+		last = s.LastEvent.Format(time.RFC3339)
+	}
+	return hooksStatusDoc{Project: s.Project, Binary: s.Binary, Files: files, LastEvent: last, Limits: cli.HooksStatusLimits}
 }

@@ -21,14 +21,41 @@ $ arclint domain define bounded_context ordering --definition "Where an Attendee
 $ arclint domain define aggregate Order --context ordering --definition "One purchase an Attendee places." --identity OrderID
 Defined aggregate Order in context ordering.
 $ arclint check .
-domain.arclint.yaml:8: [error] aggregate/root-declared aggregate Order of context ordering names no declared root; nothing in the repository spells Order
 domain.arclint.yaml:8: [warning] aggregate/protects-an-invariant aggregate Order of context ordering records no invariant; a boundary drawn around nothing that must stay consistent is not yet justified
-2 active finding(s) · 0 suppressed · 0 baselined · 36 rule(s) applied
+coverage: rule aggregate/commands-named-for-behavior: 1 subject(s) could not be evaluated (unsupported)
+coverage: rule aggregate/invariants-enforced-by-root: 1 subject(s) could not be evaluated (unsupported): declaration matching does not evaluate the invariant's implementation
+...
+contracts: ordering: 0 invariant(s), 0 assertion(s); 0 structurally checked
+  no named contracts to check; coverage is not established
+contracts: structural checks do not verify that check bodies enforce the recorded statements
+1 active finding(s) · 0 suppressed · 0 baselined · 36 rule(s) applied
 ```
 
 The Pattern brought sixteen rules; recording one context with one
 aggregate brought the other twenty. An empty model (`contexts: {}`)
-brings none.
+brings none. With no Go code yet, every rule that reads declarations or
+calls has nothing to read: each reports its subject as unsupported (one
+coverage line per rule, shortened above), and the warning about an
+aggregate with no invariant is the only finding. Once code declares
+`Order`, those rules judge it.
+
+## Recording gaps and enforcement coverage
+
+`arclint check` reports what it checked for each recorded invariant and
+assertion. Human output summarizes each context and lists gaps. JSON keeps
+its diagnostic array and adds `kind: "coverage"` entries with a `contract`
+object: context, owner, kind, key, statement, status, checks, and reasons for
+unperformed checks. Each check retains its rule, outcome, assurance, evidence
+method, and limitations.
+
+`structurally_checked` means the required declarations or calls were found.
+An empty `Assert…` method can satisfy those checks. ArcLint does not yet
+verify the method body, propagated errors, or runtime execution paths against
+the statement. Missing rule selection or disablement produces `unchecked`;
+unavailable analysis produces `unsupported`; unresolved ownership or partial
+analysis produces `undetermined`; parse failure produces `failed`. Findings
+remain findings even when suppressed or baselined. A context with no named
+invariants or assertions explicitly reports that no coverage is established.
 
 ## What the file looks like
 

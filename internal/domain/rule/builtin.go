@@ -133,6 +133,10 @@ func builtInEnforcement(inv vocab.BlockInvariant) (Enforcement, error) {
 	var limitations []string
 	if hasFact(facts, FactCalls) {
 		limitations = append(limitations, "calls are matched by callee name and never resolved to a declaration")
+		limitations = append(limitations, "check bodies, error propagation, and execution paths are not evaluated")
+	}
+	if inv.ID == "value_object/constructed-through-one-door" || inv.ID == "aggregate/invariants-enforced-by-root" {
+		limitations = append(limitations, "declaration matching does not evaluate the invariant's implementation")
 	}
 	limitations = append(limitations, inv.Enforcement.Limitations...)
 	return NewEnforcement(languages, facts, builtInEvidence(facts), AssuranceExact, limitations, true)

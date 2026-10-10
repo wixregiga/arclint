@@ -58,8 +58,8 @@ func AgentCommandSurface() []AgentCommandDoc {
 		{"check", "check .", "evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings"},
 		{"rules test", "rules test", "run the rule fixtures under `.arclint/tests` after changing any rule"},
 		{"sdk init", "sdk init", "regenerate the extension SDK artifacts under `.arclint/extensions`"},
-		{"agents workflow install", "agents workflow install", "write the workflow hooks into Claude Code and Codex project configuration; they advise when work skips context, domain recording or the check, and never block"},
-		{"agents workflow status", "agents workflow status", "show which hosts' configuration lists the workflow hooks; Codex runs them after you trust them in /hooks"},
+		{"agents hooks install", "agents hooks install", "write the workflow hooks into Claude Code and Codex user configuration, for every project and worktree (`--project` for this project only); they advise when work skips context, domain recording or the check, and never block"},
+		{"agents hooks status", "agents hooks status", "show which configuration files list the workflow hooks and when a hook event last reached this project; Codex runs them after you trust them in /hooks"},
 		{"agents md", "agents md --write", "refresh this block after changing " + rule.RulesetFileName + " or the vocabulary"},
 		{"agents skill", "agents skill", "write the " + vocab.SkillName + " skill to `" + vocab.SkillDirectory + "/` when your harness lacks it"},
 		{"baseline", "baseline", "manage the committed baseline of adopted findings"},
@@ -221,12 +221,34 @@ func writeExtendedPatterns(b *strings.Builder, cfg rule.Configured) {
 // the skill is installed, and it is how an unrecorded domain gets its
 // first entry.
 func writeWorkflow(b *strings.Builder) {
+	b.WriteString(AgentWorkflowSection())
+}
+
+// AgentWorkflowSection is the Workflow section of the generated AGENTS.md
+// block. The workflow hooks compare it with the committed block to notice
+// when the arclint they run states a different workflow.
+func AgentWorkflowSection() string {
+	var b strings.Builder
 	b.WriteString("### Workflow\n\n")
 	b.WriteString("IMPORTANT: work in this order on every change.\n\n")
 	for index, step := range AgentWorkflow(vocab.UbiquitousLanguageFileName) {
-		fmt.Fprintf(b, "%d. %s\n", index+1, step)
+		fmt.Fprintf(&b, "%d. %s\n", index+1, step)
 	}
 	b.WriteString("\n")
+	return b.String()
+}
+
+// WorkflowOrientation is the workflow the hooks state when a session starts
+// and install prints for the session that installed them: the AGENTS.md
+// steps, from the same source.
+func WorkflowOrientation(recording string) string {
+	var text strings.Builder
+	text.WriteString("Work in this order:\n")
+	for index, step := range AgentWorkflow(recording) {
+		fmt.Fprintf(&text, "%d. %s\n", index+1, step)
+	}
+	text.WriteString("The hooks advise when observed work skips a step. They never block a tool call.")
+	return text.String()
 }
 
 // writeCommands lists the command surface with when-to-use guidance.

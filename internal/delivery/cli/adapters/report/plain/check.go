@@ -27,6 +27,7 @@ func writeCheck(w io.Writer, a conformance.Assessment) error {
 			// Violations are rendered from ActiveViolations above.
 		}
 	}
+	out.ContractCoverage(p, a)
 	p.Printf("%d active finding(s) · %d suppressed · %d baselined · %d rule(s) applied\n",
 		len(a.ActiveViolations()), len(a.SuppressedViolations()),
 		len(a.BaselinedViolations()), len(a.AppliedRules()))

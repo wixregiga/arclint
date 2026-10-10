@@ -5,17 +5,17 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/wixregiga/arclint/internal/domain/agent"
 	"github.com/wixregiga/arclint/internal/domain/rule"
-	"github.com/wixregiga/arclint/internal/domain/workflow"
 )
 
 type memoryProgress struct {
-	sessions map[string]workflow.Progress
-	recorded []workflow.Activity
+	sessions map[string]agent.Progress
+	recorded []agent.Activity
 	err      error
 }
 
-func (m *memoryProgress) Update(session string, change func(workflow.Progress, []workflow.Activity) workflow.Progress) error {
+func (m *memoryProgress) Update(session string, change func(agent.Progress, []agent.Activity) agent.Progress) error {
 	if m.err != nil {
 		return m.err
 	}
@@ -37,7 +37,7 @@ func (d declaredZones) ConfiguredRules() (rule.Configured, error) {
 func nestedZones(t *testing.T) declaredZones {
 	t.Helper()
 	var zones []rule.Zone
-	for name, pattern := range map[string]string{"domain": "internal/domain/**", "workflow": "internal/domain/workflow/**"} {
+	for name, pattern := range map[string]string{"domain": "internal/domain/**", "agent": "internal/domain/agent/**"} {
 		zoneName, err := rule.NewZoneName(name)
 		if err != nil {
 			t.Fatal(err)
@@ -65,11 +65,11 @@ func newGuide(t *testing.T, store *memoryProgress, zones declaredZones) GuideWor
 }
 
 func TestGuideWorkflowKeepsEachSessionsProgress(t *testing.T) {
-	guide := newGuide(t, &memoryProgress{sessions: map[string]workflow.Progress{}}, nestedZones(t))
-	change := []workflow.Activity{{Kind: workflow.FilesChanged, Paths: []string{"internal/domain/a.go"}}}
-	want := []workflow.Guidance{
-		{Step: workflow.ContextStep, Paths: []string{"internal/domain/a.go"}},
-		{Step: workflow.DomainStep, Paths: []string{"internal/domain/a.go"}},
+	guide := newGuide(t, &memoryProgress{sessions: map[string]agent.Progress{}}, nestedZones(t))
+	change := []agent.Activity{{Kind: agent.FilesChanged, Paths: []string{"internal/domain/a.go"}}}
+	want := []agent.Guidance{
+		{Step: agent.ContextStep, Paths: []string{"internal/domain/a.go"}},
+		{Step: agent.DomainStep, Paths: []string{"internal/domain/a.go"}},
 	}
 	if first, err := guide.Execute("one", change); err != nil || !reflect.DeepEqual(first, want) {
 		t.Fatalf("first change received %+v, %v", first, err)
@@ -86,15 +86,15 @@ func TestGuideWorkflowKeepsEachSessionsProgress(t *testing.T) {
 // directory, but not the workflow Zone nested inside it.
 func TestGuideWorkflowCreditsTheZonesContextShowed(t *testing.T) {
 	store := &memoryProgress{
-		sessions: map[string]workflow.Progress{},
-		recorded: []workflow.Activity{
-			{Kind: workflow.ContextObtained, Paths: []string{"internal/domain"}},
-			{Kind: workflow.DomainChanged, Paths: []string{"domain.arclint.yaml"}},
+		sessions: map[string]agent.Progress{},
+		recorded: []agent.Activity{
+			{Kind: agent.ContextObtained, Paths: []string{"internal/domain"}},
+			{Kind: agent.DomainChanged, Paths: []string{"domain.arclint.yaml"}},
 		},
 	}
 	guide := newGuide(t, store, nestedZones(t))
-	given, err := guide.Execute("s", []workflow.Activity{{Kind: workflow.FilesChanged, Paths: []string{"internal/domain/rule.go", "internal/domain/workflow/guide.go", "README.md"}}})
-	want := []workflow.Guidance{{Step: workflow.ContextStep, Paths: []string{"internal/domain/workflow/guide.go"}}}
+	given, err := guide.Execute("s", []agent.Activity{{Kind: agent.FilesChanged, Paths: []string{"internal/domain/rule.go", "internal/domain/agent/guide.go", "README.md"}}})
+	want := []agent.Guidance{{Step: agent.ContextStep, Paths: []string{"internal/domain/agent/guide.go"}}}
 	if err != nil || !reflect.DeepEqual(given, want) {
 		t.Fatalf("received %+v, %v; want %+v", given, err, want)
 	}
@@ -102,22 +102,22 @@ func TestGuideWorkflowCreditsTheZonesContextShowed(t *testing.T) {
 
 func TestGuideWorkflowCreditsNamedZones(t *testing.T) {
 	store := &memoryProgress{
-		sessions: map[string]workflow.Progress{},
-		recorded: []workflow.Activity{
-			{Kind: workflow.ContextObtained, Zones: []string{"workflow", "domain"}},
-			{Kind: workflow.DomainChanged, Paths: []string{"domain.arclint.yaml"}},
+		sessions: map[string]agent.Progress{},
+		recorded: []agent.Activity{
+			{Kind: agent.ContextObtained, Zones: []string{"agent", "domain"}},
+			{Kind: agent.DomainChanged, Paths: []string{"domain.arclint.yaml"}},
 		},
 	}
-	given, err := newGuide(t, store, nestedZones(t)).Execute("s", []workflow.Activity{{Kind: workflow.FilesChanged, Paths: []string{"internal/domain/workflow/guide.go"}}})
+	given, err := newGuide(t, store, nestedZones(t)).Execute("s", []agent.Activity{{Kind: agent.FilesChanged, Paths: []string{"internal/domain/agent/guide.go"}}})
 	if err != nil || len(given) != 0 {
 		t.Fatalf("context named by Zone was not credited: %+v, %v", given, err)
 	}
 }
 
 func TestGuideWorkflowWithoutARulesetGivesNoContextReminder(t *testing.T) {
-	guide := newGuide(t, &memoryProgress{sessions: map[string]workflow.Progress{}}, declaredZones{err: errors.New("rules.arclint.yaml: invalid")})
-	given, err := guide.Execute("s", []workflow.Activity{{Kind: workflow.FilesChanged, Paths: []string{"internal/domain/a.go"}}})
-	want := []workflow.Guidance{{Step: workflow.DomainStep, Paths: []string{"internal/domain/a.go"}}}
+	guide := newGuide(t, &memoryProgress{sessions: map[string]agent.Progress{}}, declaredZones{err: errors.New("rules.arclint.yaml: invalid")})
+	given, err := guide.Execute("s", []agent.Activity{{Kind: agent.FilesChanged, Paths: []string{"internal/domain/a.go"}}})
+	want := []agent.Guidance{{Step: agent.DomainStep, Paths: []string{"internal/domain/a.go"}}}
 	if err != nil || !reflect.DeepEqual(given, want) {
 		t.Fatalf("received %+v, %v", given, err)
 	}
@@ -125,7 +125,7 @@ func TestGuideWorkflowWithoutARulesetGivesNoContextReminder(t *testing.T) {
 
 func TestGuideWorkflowReportsUnavailableProgress(t *testing.T) {
 	guide := newGuide(t, &memoryProgress{err: errors.New("locked")}, nestedZones(t))
-	if _, err := guide.Execute("s", []workflow.Activity{{Kind: workflow.TurnFinished}}); err == nil {
+	if _, err := guide.Execute("s", []agent.Activity{{Kind: agent.TurnFinished}}); err == nil {
 		t.Fatal("unavailable progress was not reported")
 	}
 	if _, err := NewGuideWorkflow(nil, nestedZones(t)); err == nil {

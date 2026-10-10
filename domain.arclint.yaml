@@ -5,15 +5,15 @@ description: >-
   ArcLint records domain meanings, checks architectural Rules, distributes
   Patterns, and supplies guidance and domain review to coding agents.
 contexts:
-  workflow:
+  agent:
     definition: >-
-      The order a coding agent follows when it works in a project. It obtains
-      ArcLint context for the paths it will change, records a new or changed
-      meaning in the domain recording before implementing it, implements, and
-      runs the project's check before it finishes. Guidance names a step the
-      observed work skipped and the next action to take. Guidance advises the
-      agent and its user; it never blocks their work. Any project using ArcLint
-      can install it, and ArcLint uses it for its own development.
+      The language of agents using ArcLint and the order a coding agent
+      follows when it works in a project. It obtains ArcLint context for the
+      paths it will change, records a new or changed meaning in the domain
+      recording before implementing it, implements, and runs the project's
+      check before it finishes. Guidance names a step the observed work
+      skipped and the next action to take. Guidance advises the agent and its
+      user; it never blocks their work.
     value_objects:
       Activity:
         definition: >-
@@ -56,57 +56,6 @@ contexts:
               WorkflowGuide advises recording new or changed meaning first, once
               in a session, when a file other than the domain recording changes
               before the domain recording has changed.
-  agent:
-    definition: |
-      The language of agents using ArcLint and of ArcLint's Domain Reviewer.
-      These roles and instruction formats do not imply tactical domain objects.
-
-      An Agent is a software system that pursues a task by choosing and carrying
-      out actions. A Coding Agent is an Agent that performs software development
-      tasks. An LLM is a language model used for interpretation and generation;
-      it is a component of an LLM-based Agent, not the entire Agent.
-
-      An Agent Host provides the runtime, tools and configuration through which
-      an Agent operates. A Client provides the user-facing interaction with an
-      Agent. A product may provide both roles. Client does not mean any software
-      that calls ArcLint, nor does it mean the protocol client inside an MCP host.
-
-      Agent Instructions guide an Agent's responsibilities and behavior.
-      AGENTS.md is a Markdown convention for supplying repository instructions
-      and context to coding agents. A Skill packages reusable task instructions
-      in SKILL.md with optional scripts and resources. A Plugin is an installable
-      package of capabilities for a host; its manifest and supported contents
-      depend on the host's specification. Instructions, skills and plugins are
-      not running agents. A Codex custom-agent TOML file configures spawned
-      sessions; it does not contain the runtime or its conversation history.
-
-      ArcLint Domain Reviewer is the Coding Agent named arclint-domain-reviewer.
-      When invoked, it questions unsupported meanings before and during work,
-      examines enforcement, ownership and unjustified duplication afterward,
-      and reassesses repairs and rebuttals. It explains evidence, uncertainty
-      and useful corrections without deciding disputed meanings for the user
-      or editing the reviewed files. Its response is activity evidence in the
-      host conversation.
-
-      ArcLint's workflow hooks deliver the workflow context's Guidance to a
-      Coding Agent through its Agent Host's native hooks. Codex and Claude Code
-      receive the same hook command; installation writes each host's hook
-      configuration and does not grant the trust a host may require.
-
-      The contributor explains justified meanings and records changed contracts
-      before implementing them. The domain-librarian Skill supports that work;
-      the reviewer assesses its evidence. The installer delivers editable
-      instructions with ArcLint's release and reports installed files and their
-      integrity. The host controls discovery, execution, permissions and history
-      retention. Installation proves neither activation nor a completed review.
-    questions:
-      external-request-reference: >-
-        A future external work-item integration needs a reference and history
-        contract. The current reviewer accepts supplied material without
-        inventing an external identity.
-      plugin-delivery: >-
-        A later Plugin delivery needs a selected host specification and route;
-        this delivery installs a Codex custom-agent configuration directly.
   vocabulary:
     definition: >-
       The recorded Ubiquitous Language of a project and the meta-model
@@ -376,6 +325,20 @@ contexts:
       Judging code against Rules: every assessment derives its
       Violations fresh from the observed repository.
     value_objects:
+      ContractCoverage:
+        definition: >-
+          The checks performed for one recorded invariant or assertion,
+          together with checks not performed and their reasons.
+        invariants:
+          unchecked-without-evaluation: >-
+            ContractCoverage reports a recorded contract as unchecked
+            when none of its applicable Rules was evaluated.
+          retains-check-limitations: >-
+            ContractCoverage retains the outcome and limitations of
+            every check.
+          structural-checks-are-not-proof: >-
+            ContractCoverage never presents structural matching as
+            proof of the recorded invariant or assertion.
       DependencyImport:
         definition: >-
           One parsed import with its source file, source location,
@@ -597,11 +560,20 @@ relations:
       Installation keeps a VendoredPattern and resolves through
       PatternSources, so dependence flows adoption -> distribution and
       never back.
-  - from: rule
-    to: workflow
+  - from: adoption
+    to: conformance
     kind: conformist
     description: >-
-      workflow names Zones exactly as the ruleset declares them: context
-      shows the Zones that own a path, and a change is covered once every
-      Zone that owns it has been shown, so dependence flows workflow ->
-      rule and never back.
+      conformance applies adoption's decisions as adoption records
+      them: a Disablement stops a Rule's evaluation, an Exclusion
+      removes subjects from what a Rule judges, and a Suppression keeps
+      a finding reported without its gate effect, so dependence flows
+      conformance -> adoption and never back.
+  - from: rule
+    to: agent
+    kind: conformist
+    description: >-
+      agent names Zones exactly as the ruleset declares them: context shows
+      the Zones that own a path, and a change is covered once every Zone that
+      owns it has been shown, so dependence flows agent -> rule and never
+      back.

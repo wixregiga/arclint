@@ -20,9 +20,8 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/distribution"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
-	codexagents "github.com/wixregiga/arclint/internal/infrastructure/agents/codex"
+	agenthooks "github.com/wixregiga/arclint/internal/infrastructure/agents/hooks"
 	markdownagents "github.com/wixregiga/arclint/internal/infrastructure/agents/markdown"
-	workflowagents "github.com/wixregiga/arclint/internal/infrastructure/agents/workflow"
 	artifactfs "github.com/wixregiga/arclint/internal/infrastructure/artifact"
 	jsonbaseline "github.com/wixregiga/arclint/internal/infrastructure/baseline/json"
 	sobekextension "github.com/wixregiga/arclint/internal/infrastructure/extension/sobek"
@@ -223,41 +222,40 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	reviewer := codexagents.NewReviewer(root, version)
-	installReviewer, err := application.NewInstallReviewer(reviewer)
-	if err != nil {
-		return configError(err)
-	}
-	reviewerStatus, err := application.NewReviewerStatus(reviewer)
-	if err != nil {
-		return configError(err)
-	}
-	guideWorkflow, err := application.NewGuideWorkflow(workflowagents.NewProgressStore(root), repository)
+	progressStore := agenthooks.NewProgressStore(root)
+	guideWorkflow, err := application.NewGuideWorkflow(progressStore, repository)
 	if err != nil {
 		return configError(err)
 	}
 	// A Windows Agent Host reaches a WSL project through wsl.exe and
 	// reports its paths through the \\wsl.localhost share.
 	wslDistro := os.Getenv("WSL_DISTRO_NAME")
-	workflowEvents, err := workflowagents.NewEvents(root, vocab.UbiquitousLanguageFileName, wslDistro, guideWorkflow)
+	// The hooks run this binary by its path; one that cannot be located
+	// fails install and status with the reason, not every other command.
+	binary, err := agenthooks.InvokedBinary(os.Args[0])
+	if err != nil {
+		binary = ""
+	}
+	hookEvents, err := agenthooks.NewEvents(root, absRulesPath, vocab.UbiquitousLanguageFileName, wslDistro, binary, guideWorkflow, progressStore)
 	if err != nil {
 		return configError(err)
 	}
-	workflowCommand := cli.NewWorkflowCommand(workflowagents.NewInstaller(root, wslDistro), workflowEvents, renderer)
+	installer := agenthooks.NewInstaller(root, wslDistro, binary, agenthooks.UserConfigurations(wslDistro))
+	hooksCommand := cli.NewHooksCommand(installer, hookEvents, renderer)
 	rootCommand := cli.Root(buildVersion(version),
 		cli.NewCheckCommand(assess, listRules, renderer),
 		cli.NewInitCommand(initialize, renderer),
 		cli.NewRulesCommand(listRules, showRule, ruleTests, publishRuleSchema, renderer),
 		cli.NewContextCommand(getContext, renderer),
 		cli.NewDomainCommand(initDomain, getDomainOverview, listDomainDefinitions, showDomainDefinition, defineDomainDefinition, removeDomainDefinition, publishDomainSchema, renderer),
-		cli.NewAgentsCommand(publishAgents, publishSkillProtocol, publishSkillVocabulary, publishDomainSchema, renderer, installReviewer, reviewerStatus, workflowCommand),
+		cli.NewAgentsCommand(publishAgents, publishSkillProtocol, publishSkillVocabulary, publishDomainSchema, renderer, hooksCommand),
 		cli.NewBaselineCommand(capture, refresh, renderer),
 		cli.NewPatternsCommand(patternCommands, renderer),
 		cli.NewSDKCommand(initializeSDK, renderer),
 	)
 	// Context, the full check and domain changes report themselves to the
 	// workflow hooks, which then need not guess from shell text.
-	rootCommand = cli.RecordWorkflowActivity(rootCommand, workflowagents.NewActivityLog(root, vocab.UbiquitousLanguageFileName))
+	rootCommand = cli.RecordHookActivity(rootCommand, agenthooks.NewActivityLog(root, vocab.UbiquitousLanguageFileName))
 	adapter, err := clifactory.Select(cli.AdapterCobra)
 	if err != nil {
 		return configError(err)
@@ -433,7 +431,7 @@ func resolveRulesPath(args []string) (string, []string, error) {
 		// none exists, so they compose against the working directory.
 		if fp := firstPositional(rest); fp == "" || fp == "help" || fp == "completion" ||
 			fp == "__complete" || fp == "__completeNoDesc" || fp == "patterns" ||
-			(len(rest) >= 2 && rest[0] == "agents" && (rest[1] == "reviewer" || rest[1] == "workflow")) {
+			(len(rest) >= 2 && rest[0] == "agents" && rest[1] == "hooks") {
 			fallback, absErr := filepath.Abs(rule.RulesetFileName)
 			if absErr != nil {
 				return "", nil, fmt.Errorf("rules path: %w", absErr)
