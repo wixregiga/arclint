@@ -1040,6 +1040,9 @@ func testDomainBuiltInRules(t *testing.T) {
 	}
 	rules := map[string]bool{}
 	for _, d := range diagnostics {
+		if d.Kind != "violation" {
+			continue
+		}
 		rules[d.RuleID] = true
 		if d.Path != "domain.arclint.yaml" {
 			t.Errorf("a finding about a term with no declaration anchors in the domain file, got %+v", d)
@@ -1137,7 +1140,7 @@ type OrderCancelled struct{ ID OrderID }
 	if code != 0 {
 		t.Fatalf("check with the model implemented must be clean: exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
 	}
-	if !strings.HasPrefix(stdout, "0 active finding(s)") {
+	if !strings.Contains(stdout, "0 active finding(s)") || !strings.Contains(stdout, "2 structurally checked") {
 		t.Fatalf("clean check summary:\n%s", stdout)
 	}
 
@@ -1174,9 +1177,17 @@ type OrderCancelled struct{ ID OrderID }
 	if code != 1 {
 		t.Fatalf("check with an unenforced invariant: exit %d\n%s", code, stdout)
 	}
+	diagnostics = nil // JSON may omit fields present in a previous result.
 	if err := json.Unmarshal([]byte(stdout), &diagnostics); err != nil {
 		t.Fatalf("check json: %v\n%s", err, stdout)
 	}
+	var violations []diagnosticDoc
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Kind == "violation" {
+			violations = append(violations, diagnostic)
+		}
+	}
+	diagnostics = violations
 	if len(diagnostics) != 1 || diagnostics[0].RuleID != "invariant/enforced-at-every-mutation" ||
 		diagnostics[0].Path != "src/order/order.go" || !strings.Contains(diagnostics[0].Message, "total-never-negative") {
 		t.Fatalf("unenforced invariant finding: %+v", diagnostics)
@@ -1403,7 +1414,13 @@ func testDomainServiceContract(t *testing.T) {
 		if err := json.Unmarshal([]byte(stdout), &diagnostics); err != nil {
 			t.Fatalf("check json: %v\n%s", err, stdout)
 		}
-		return diagnostics
+		var findings []diagnosticDoc
+		for _, diagnostic := range diagnostics {
+			if diagnostic.Kind == "violation" {
+				findings = append(findings, diagnostic)
+			}
+		}
+		return findings
 	}
 
 	// An undeclared service is one finding at the recording; its

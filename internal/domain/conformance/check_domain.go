@@ -165,13 +165,15 @@ type contextCode struct {
 	scope    []string
 	scopeIdx contractIndex
 	// scopeImportFiles counts the scope files yielding the imports fact.
-	scopeImportFiles int
-	aggregates       map[string]aggregateCode
-	terms            map[string]termLocation
-	files            []string
-	idx              contractIndex
-	imports          []fileImport
-	importFiles      int
+	scopeImportFiles   int
+	scopeAnalysisFiles int
+	scopeParseFailures int
+	aggregates         map[string]aggregateCode
+	terms              map[string]termLocation
+	files              []string
+	idx                contractIndex
+	imports            []fileImport
+	importFiles        int
 }
 
 // aggregateCode is one aggregate's root as located: exactly one
@@ -179,6 +181,7 @@ type contextCode struct {
 // when nothing tells which is the model's. A located aggregate has a
 // unit (the directory of the root) and the facts of that unit.
 type aggregateCode struct {
+	recorded   vocab.Aggregate
 	candidates []locDecl
 	unit       string
 	idx        contractIndex
@@ -245,6 +248,14 @@ func resolveContext(ctx vocab.BoundedContext, facts Facts) (contextCode, error) 
 	cc.zone, cc.scope = zone, scope
 	cc.scopeIdx = buildContractIndex(scope, facts)
 	cc.scopeImportFiles = importSupport(scope, facts)
+	for _, file := range scope {
+		if supplied, ok := facts.FactsFor(file); ok && supplied.Language != "" {
+			cc.scopeAnalysisFiles++
+			if supplied.ParseFailure != "" {
+				cc.scopeParseFailures++
+			}
+		}
+	}
 	seen := map[string]bool{}
 	add := func(f string) {
 		if !seen[f] {
@@ -259,6 +270,7 @@ func resolveContext(ctx vocab.BoundedContext, facts Facts) (contextCode, error) 
 	}
 	for _, agg := range ctx.Aggregates {
 		ac := cc.locateRoot(agg)
+		ac.recorded = agg
 		cc.aggregates[agg.Name] = ac
 		if !ac.located() {
 			continue
@@ -416,7 +428,7 @@ func (cc contextCode) undecidable(facts []string) (Outcome, bool) {
 	for _, f := range facts {
 		switch rule.Fact(f) {
 		case rule.FactDeclarations, rule.FactCalls:
-			if len(cc.scopeIdx.files) == 0 {
+			if cc.scopeIdx.available(rule.Fact(f)) == 0 {
 				return OutcomeUnsupported, true
 			}
 		case rule.FactImports:
@@ -647,11 +659,12 @@ func recordAnchor(line int) (string, int) {
 // fileFacts is one parsed file of a context: its language, package,
 // declarations, and calls.
 type fileFacts struct {
-	path  string
-	lang  rule.Language
-	pkg   string
-	decls []Declaration
-	calls []Call
+	path                                  string
+	lang                                  rule.Language
+	pkg                                   string
+	decls                                 []Declaration
+	calls                                 []Call
+	declarationsAvailable, callsAvailable bool
 }
 
 // contractIndex is the parsed facts of a set of files.
@@ -670,14 +683,26 @@ func buildContractIndex(paths []string, supplied Facts) contractIndex {
 			continue
 		}
 		files = append(files, fileFacts{
-			path:  p,
-			lang:  facts.Language,
-			pkg:   facts.Package,
-			decls: facts.Declarations,
-			calls: facts.Calls,
+			path:                  p,
+			lang:                  facts.Language,
+			pkg:                   facts.Package,
+			decls:                 facts.Declarations,
+			calls:                 facts.Calls,
+			declarationsAvailable: facts.DeclarationsAvailable,
+			callsAvailable:        facts.CallsAvailable,
 		})
 	}
 	return contractIndex{files: files}
+}
+
+func (idx contractIndex) available(fact rule.Fact) int {
+	n := 0
+	for _, f := range idx.files {
+		if (fact == rule.FactDeclarations && f.declarationsAvailable) || (fact == rule.FactCalls && f.callsAvailable) {
+			n++
+		}
+	}
+	return n
 }
 
 // within narrows the index to the files of one directory: a Go package,
@@ -1240,7 +1265,7 @@ func checkInvariantEnforcedAtMutation(r rule.Rule, subject rule.Subject, cc cont
 		}
 		root := ac.root()
 		ctors := ac.idx.constructors(root.decl.Name)
-		cmds := ac.idx.commands(agg, root.decl.Name)
+		cmds := ac.idx.commands(ac.recorded, root.decl.Name)
 		for _, inv := range agg.Invariants {
 			key := ensureKey(inv.Key)
 			if _, declared, err := ac.idx.methodNamed(root.decl.Name, key); err != nil {

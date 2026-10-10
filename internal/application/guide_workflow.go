@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/wixregiga/arclint/internal/domain/agent"
 	"github.com/wixregiga/arclint/internal/domain/rule"
-	"github.com/wixregiga/arclint/internal/domain/workflow"
 )
 
 // SessionProgress keeps each session's workflow Progress between the
@@ -15,7 +15,7 @@ type SessionProgress interface {
 	// also receives the activities ArcLint's own commands recorded since
 	// the session last read them, in the order they ran. Updates of one
 	// session apply one at a time.
-	Update(session string, change func(progress workflow.Progress, recorded []workflow.Activity) workflow.Progress) error
+	Update(session string, change func(progress agent.Progress, recorded []agent.Activity) agent.Progress) error
 }
 
 // GuideWorkflow advises a session on what ran in it.
@@ -37,14 +37,14 @@ func NewGuideWorkflow(progress SessionProgress, rules rule.Repository) (GuideWor
 // last update, then on the activities the host observed, and keeps the
 // session's Progress so the same reminder is not given twice. Executing
 // with no observed activities starts or resumes the session.
-func (uc GuideWorkflow) Execute(session string, observed []workflow.Activity) ([]workflow.Guidance, error) {
+func (uc GuideWorkflow) Execute(session string, observed []agent.Activity) ([]agent.Guidance, error) {
 	zones := uc.zones()
-	var given []workflow.Guidance
-	err := uc.progress.Update(session, func(progress workflow.Progress, recorded []workflow.Activity) workflow.Progress {
+	var given []agent.Guidance
+	err := uc.progress.Update(session, func(progress agent.Progress, recorded []agent.Activity) agent.Progress {
 		given = nil
 		for _, activity := range owned(append(slices.Clone(recorded), observed...), zones) {
-			var advice []workflow.Guidance
-			progress, advice = workflow.Guide{}.Advise(progress, activity)
+			var advice []agent.Guidance
+			progress, advice = agent.WorkflowGuide{}.Advise(progress, activity)
 			given = append(given, advice...)
 		}
 		return progress
@@ -75,20 +75,20 @@ func (uc GuideWorkflow) zones() func() []rule.Zone {
 // owned gives each activity the Zones it concerns: context shows the Zones
 // that own the paths it named besides the Zones it named, and a change is
 // split into one Activity for each file, carrying the Zones that own it.
-func owned(activities []workflow.Activity, zones func() []rule.Zone) []workflow.Activity {
-	var result []workflow.Activity
+func owned(activities []agent.Activity, zones func() []rule.Zone) []agent.Activity {
+	var result []agent.Activity
 	for _, activity := range activities {
 		switch activity.Kind {
-		case workflow.ContextObtained:
+		case agent.ContextObtained:
 			shown := slices.Clone(activity.Zones)
 			for _, path := range activity.Paths {
 				shown = append(shown, owners(zones(), path)...)
 			}
 			slices.Sort(shown)
-			result = append(result, workflow.Activity{Kind: activity.Kind, Paths: activity.Paths, Zones: slices.Compact(shown)})
-		case workflow.FilesChanged:
+			result = append(result, agent.Activity{Kind: activity.Kind, Paths: activity.Paths, Zones: slices.Compact(shown)})
+		case agent.FilesChanged:
 			for _, path := range activity.Paths {
-				result = append(result, workflow.Activity{Kind: workflow.FilesChanged, Paths: []string{path}, Zones: owners(zones(), path)})
+				result = append(result, agent.Activity{Kind: agent.FilesChanged, Paths: []string{path}, Zones: owners(zones(), path)})
 			}
 		default:
 			result = append(result, activity)

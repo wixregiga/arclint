@@ -49,7 +49,17 @@
     "specification/satisfaction-method",
     "ubiquitous_language/terms-declared-in-code",
     "value_object/constructed-through-one-door",
-    "value_object/no-setters"
+    "value_object/no-setters",
+    "web/browser-dependencies",
+    "web/explicit-public-exports",
+    "web/files-speak-their-purpose",
+    "web/layers-point-downward",
+    "web/public-interfaces",
+    "web/pwa-lifecycle-is-opt-in",
+    "web/slices-are-independent",
+    "web/source-layout",
+    "web/standalone-is-an-entrypoint",
+    "web/typescript-source"
   ],
   "findings": [
     {
@@ -95,46 +105,10 @@
       "count": 1
     },
     {
-      "ruleId": "bounded_context/isolated",
-      "subject": "conformance",
-      "message": "context conformance imports context adoption (github.com/wixregiga/arclint/internal/domain/rule), and the context map records no relation between them",
-      "count": 15
-    },
-    {
       "ruleId": "context_relation/imports-follow-influence",
       "subject": "distribution",
       "message": "context distribution imports context adoption (github.com/wixregiga/arclint/internal/domain/rule) against the recorded conformist relation: distribution is upstream of adoption, and only the downstream imports the upstream",
       "count": 6
-    },
-    {
-      "ruleId": "ubiquitous_language/terms-declared-in-code",
-      "subject": "adoption",
-      "message": "value object Override of context adoption names no type declaration in the repository",
-      "count": 1
-    },
-    {
-      "ruleId": "ubiquitous_language/terms-declared-in-code",
-      "subject": "distribution",
-      "message": "value object PatternSource of context distribution names no type declaration in Zone \"distribution\"",
-      "count": 1
-    },
-    {
-      "ruleId": "ubiquitous_language/terms-declared-in-code",
-      "subject": "distribution",
-      "message": "value object Selection of context distribution names no type declaration in Zone \"distribution\"",
-      "count": 1
-    },
-    {
-      "ruleId": "ubiquitous_language/terms-declared-in-code",
-      "subject": "rule",
-      "message": "value object Assertion of context rule names no type declaration in Zone \"rule\"",
-      "count": 1
-    },
-    {
-      "ruleId": "ubiquitous_language/terms-declared-in-code",
-      "subject": "rule",
-      "message": "value object TermCase of context rule names no type declaration in Zone \"rule\"",
-      "count": 1
     }
   ]
 }

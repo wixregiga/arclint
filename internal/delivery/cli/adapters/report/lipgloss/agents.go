@@ -9,26 +9,23 @@ func writeAgentInstall(p *out.Printer, th Theme, r cli.AgentInstallReport) {
 	for _, path := range r.Paths {
 		p.Println(th.Path.Render(path))
 	}
+	for _, path := range r.Removed {
+		p.Println("removed the duplicate hooks from " + th.Path.Render(path))
+	}
+	if r.Orientation != "" {
+		p.Println(r.Orientation)
+	}
 	p.Println(th.Info.Render(r.Activation))
 }
 
-func writeReviewerStatus(p *out.Printer, th Theme, r cli.ReviewerStatusReport) {
-	s := r.Installation
-	p.Printf("Project: %s\nAgent: %s\nHost: %s\nPath: %s\nInstalled: %t\nInstalled ArcLint release: %s\nAvailable ArcLint release: %s\nAsset integrity: %t\n", th.Path.Render(s.Project), s.Name, s.Host, th.Path.Render(s.Path), s.Installed, s.InstalledVersion, s.AvailableVersion, s.Intact)
-	for _, problem := range s.Problems {
-		p.Println(th.Warning.Render(problem))
-	}
-	p.Println(th.Muted.Render(cli.ReviewerStatusLimits))
-}
-
-func writeWorkflowStatus(p *out.Printer, th Theme, r cli.WorkflowStatusReport) {
+func writeHooksStatus(p *out.Printer, th Theme, r cli.HooksStatusReport) {
 	s := r.Status
-	p.Printf("Project: %s\nCommand: %s\n", th.Path.Render(s.Project), s.Command)
-	for _, host := range s.Hosts {
-		p.Printf("%s: %s (installed: %t)\n", host.Host, th.Path.Render(host.Path), host.Installed)
+	p.Printf("Project: %s\nBinary: %s\nLast event: %s\n", th.Path.Render(s.Project), th.Path.Render(s.Binary), out.LastHookEvent(s.LastEvent))
+	for _, host := range s.Files {
+		p.Printf("%s %s: %s (installed: %t)\n", host.Host, out.HookScope(host), th.Path.Render(host.Path), host.Installed)
 		for _, problem := range host.Problems {
 			p.Println("  " + th.Warning.Render(problem))
 		}
 	}
-	p.Println(th.Muted.Render(cli.WorkflowStatusLimits))
+	p.Println(th.Muted.Render(cli.HooksStatusLimits))
 }

@@ -87,10 +87,8 @@ func (renderer) Render(w io.Writer, r cli.Report) error {
 		doc = patternExportDocOf(x.Result)
 	case cli.AgentInstallReport:
 		doc = agentInstallDocOf(x)
-	case cli.WorkflowStatusReport:
-		doc = workflowStatusDocOf(x)
-	case cli.ReviewerStatusReport:
-		doc = reviewerStatusDocOf(x)
+	case cli.HooksStatusReport:
+		doc = hooksStatusDocOf(x)
 	case cli.SDKInitReport:
 		doc = sdkInitDoc{Paths: x.Paths}
 	default:
@@ -114,17 +112,21 @@ func writeJSON(w io.Writer, v any) error {
 // diagnosticDoc is the stable JSON shape of one Diagnostic in the
 // target engine's output.
 type diagnosticDoc struct {
-	Kind        string `json:"kind"`
-	RuleID      string `json:"ruleId,omitempty"`
-	Pattern     string `json:"pattern,omitempty"`
-	Path        string `json:"path,omitempty"`
-	Line        int    `json:"line,omitempty"`
-	Severity    string `json:"severity,omitempty"`
-	Status      string `json:"status,omitempty"`
-	Message     string `json:"message"`
-	Remediation string `json:"remediation,omitempty"`
+	Kind        string       `json:"kind"`
+	RuleID      string       `json:"ruleId,omitempty"`
+	Pattern     string       `json:"pattern,omitempty"`
+	Path        string       `json:"path,omitempty"`
+	Line        int          `json:"line,omitempty"`
+	Severity    string       `json:"severity,omitempty"`
+	Status      string       `json:"status,omitempty"`
+	Message     string       `json:"message"`
+	Remediation string       `json:"remediation,omitempty"`
+	Contract    *contractDoc `json:"contract,omitempty"`
 }
 
+// checkDocs keeps the diagnostic array and adds one coverage entry for
+// each recorded invariant and assertion, plus one for each recorded
+// context that names none.
 func checkDocs(a conformance.Assessment) []diagnosticDoc {
 	diags := a.Diagnostics()
 	docs := make([]diagnosticDoc, 0, len(diags))
@@ -141,7 +143,56 @@ func checkDocs(a conformance.Assessment) []diagnosticDoc {
 			Remediation: d.Remediation(),
 		})
 	}
+	named := map[string]bool{}
+	for _, c := range a.Contracts() {
+		named[c.Context()] = true
+		checks := make([]checkDoc, 0, len(c.Checks()))
+		for _, e := range c.Checks() {
+			checks = append(checks, checkDoc{
+				RuleID: e.Rule().Qualified(), Subject: e.Subject().String(), Outcome: string(e.Outcome()),
+				Assurance: string(e.Assurance()), Evidence: string(e.Evidence()), Limitations: e.Limitations(),
+			})
+		}
+		docs = append(docs, diagnosticDoc{
+			Kind: string(conformance.DiagnosticCoverage), Path: vocab.UbiquitousLanguageFileName, Line: c.Line(),
+			Message: "structural checking does not establish statement correctness",
+			Contract: &contractDoc{
+				Context: c.Context(), Owner: c.Owner(), Kind: string(c.Kind()), Key: c.Key(),
+				Statement: c.Statement(), Status: c.Status(), Checks: checks, Unperformed: c.Unperformed(),
+			},
+		})
+	}
+	for _, context := range a.ContractContexts() {
+		if !named[context] {
+			docs = append(docs, diagnosticDoc{
+				Kind:    string(conformance.DiagnosticCoverage),
+				Message: "context " + context + ": no named invariants or assertions; coverage is not established",
+			})
+		}
+	}
 	return docs
+}
+
+// contractDoc is the coverage of one recorded invariant or assertion.
+type contractDoc struct {
+	Context     string     `json:"context"`
+	Owner       string     `json:"owner"`
+	Kind        string     `json:"kind"`
+	Key         string     `json:"key"`
+	Statement   string     `json:"statement"`
+	Status      string     `json:"status"`
+	Checks      []checkDoc `json:"checks"`
+	Unperformed []string   `json:"unperformed,omitempty"`
+}
+
+// checkDoc is one structural check of a contract with its limitations.
+type checkDoc struct {
+	RuleID      string   `json:"ruleId"`
+	Subject     string   `json:"subject"`
+	Outcome     string   `json:"outcome"`
+	Assurance   string   `json:"assurance"`
+	Evidence    string   `json:"evidence"`
+	Limitations []string `json:"limitations"`
 }
 
 // --- newly JSON-enabled simple result reports (lowerCamel) ---

@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/delivery/cli"
@@ -15,21 +16,14 @@ import (
 )
 
 func TestAgentReportsPreserveFactsAcrossRenderers(t *testing.T) {
-	reviewer := cli.ReviewerStatusReport{}
-	reviewer.Installation.Project = "/project"
-	reviewer.Installation.Name = "arclint-domain-reviewer"
-	reviewer.Installation.Host = "codex"
-	reviewer.Installation.Path = "reviewer.toml"
-	reviewer.Installation.Installed = true
-	reviewer.Installation.InstalledVersion = "1.0.0"
-	reviewer.Installation.AvailableVersion = "1.1.0"
-	reviewer.Installation.Problems = []string{"edited reviewer"}
-	workflow := cli.WorkflowStatusReport{}
+	workflow := cli.HooksStatusReport{}
 	workflow.Status.Project = "/project"
-	workflow.Status.Command = "arclint agents workflow event"
-	workflow.Status.Hosts = []application.WorkflowHostStatus{
-		{Host: "claude", Path: "/project/.claude/settings.json", Installed: true},
-		{Host: "codex", Path: "/project/.codex/hooks.json", Problems: []string{"Missing or changed Stop hook."}},
+	workflow.Status.Binary = "/home/me/.local/bin/arclint"
+	workflow.Status.LastEvent = time.Date(2026, 10, 9, 20, 15, 3, 0, time.UTC)
+	workflow.Status.Files = []application.HookFileStatus{
+		{Host: "claude", Scope: "user", Path: "/home/me/.claude/settings.json", Installed: true},
+		{Host: "claude", Scope: "user", Windows: true, Path: "/mnt/c/Users/me/.claude/settings.json", Installed: true},
+		{Host: "codex", Scope: "project", Path: "/project/.codex/hooks.json", Problems: []string{"Missing or changed Stop hook."}},
 	}
 	cases := []struct {
 		name    string
@@ -37,9 +31,8 @@ func TestAgentReportsPreserveFactsAcrossRenderers(t *testing.T) {
 		facts   []string
 		jsonKey string
 	}{
-		{"install", cli.AgentInstallReport{Operation: "reviewer", Host: "codex", Paths: []string{"reviewer.toml"}, Activation: "Restart the host to discover instructions."}, []string{"reviewer.toml", "Restart the host"}, "paths"},
-		{"workflow status", workflow, []string{"/project", "arclint agents workflow event", "claude: /project/.claude/settings.json (installed: true)", "codex: /project/.codex/hooks.json (installed: false)", "Missing or changed Stop hook.", "trust them in /hooks"}, "hosts"},
-		{"reviewer status", reviewer, []string{"/project", "arclint-domain-reviewer", "reviewer.toml", "1.0.0", "1.1.0", "edited reviewer", "do not prove"}, "problems"},
+		{"workflow install", cli.AgentInstallReport{Operation: "hooks", Host: "claude", Paths: []string{"/home/me/.claude/settings.json"}, Removed: []string{"/project/.claude/settings.local.json"}, Orientation: "Work in this order:\n1. Run context.", Activation: "Start a new session."}, []string{"/home/me/.claude/settings.json", "removed the duplicate hooks from /project/.claude/settings.local.json", "Work in this order:\n1. Run context.", "Start a new session."}, "orientation"},
+		{"workflow status", workflow, []string{"/project", "Binary: /home/me/.local/bin/arclint", "Last event: 2026-10-09 20:15:03 +0000", "claude user: /home/me/.claude/settings.json (installed: true)", "claude user (Windows): /mnt/c/Users/me/.claude/settings.json (installed: true)", "codex project: /project/.codex/hooks.json (installed: false)", "Missing or changed Stop hook.", "trust them in /hooks"}, "lastEvent"},
 	}
 	ansi := regexp.MustCompile(`\x1b\[[0-9;]*m`)
 	for _, tc := range cases {

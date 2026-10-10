@@ -19,15 +19,15 @@ func TestAgentsPublicSurfaceRetiresRejectedGuardCommands(t *testing.T) {
 	if code != 0 || stderr != "" {
 		t.Fatalf("agents help: %d %s", code, stderr)
 	}
-	for _, retained := range []string{"reviewer", "workflow", "md", "skill"} {
+	for _, retained := range []string{"hooks", "md", "skill"} {
 		if !strings.Contains(stdout, retained) {
 			t.Fatalf("retained command %s missing: %s", retained, stdout)
 		}
 	}
-	if regexp.MustCompile(`(?m)^\s+(hooks|setup|status)\s+`).MatchString(stdout) {
+	if regexp.MustCompile(`(?m)^\s+(setup|status)\s+`).MatchString(stdout) {
 		t.Fatalf("retired command remains in the public surface: %s", stdout)
 	}
-	for _, retired := range []string{"hooks", "setup", "status"} {
+	for _, retired := range []string{"setup", "status"} {
 		retiredOutput, retiredError, retiredCode := runBin(t, root, nil, "--rules", rules, "agents", retired)
 		// Pure command groups may print help for unknown arguments. That is not an installation route.
 		if retiredCode == 0 && !strings.Contains(retiredOutput, "Available Commands:") {

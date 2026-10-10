@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +19,10 @@ import (
 )
 
 var binPath string
+
+// repoCopy is the copy of this repository's working tree the tests run the
+// binary against.
+var repoCopy string
 
 // vcsStamped reports whether the e2e binary carries VCS stamping; some
 // environments (hook runners, bare-config worktrees) have a git that
@@ -41,6 +46,10 @@ func TestMain(m *testing.M) {
 	}
 	if err != nil {
 		panic("build: " + err.Error() + "\n" + string(out))
+	}
+	repoCopy = filepath.Join(dir, "repository")
+	if err := copyWorkingTree(filepath.Join("..", ".."), repoCopy); err != nil {
+		panic("copy the repository: " + err.Error())
 	}
 	code := m.Run()
 	os.RemoveAll(dir)
@@ -85,13 +94,57 @@ func runBinStdin(t *testing.T, dir string, env []string, stdin string, args ...s
 	return stdout.String(), stderr.String(), code
 }
 
+// repoRoot is the copy of this repository's working tree that the tests
+// run the binary against. Context and the full check record workflow
+// activity and caches in the repository they run in; run against the
+// checkout itself, the suite would credit an open agent session there with
+// context and checks it never ran.
 func repoRoot(t *testing.T) string {
 	t.Helper()
-	root, err := filepath.Abs(filepath.Join("..", ".."))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return root
+	return repoCopy
+}
+
+// copyWorkingTree copies the repository's files, links and modes, leaving
+// out version control metadata and the caches arclint writes.
+func copyWorkingTree(source, target string) error {
+	return filepath.WalkDir(source, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		inArclint := filepath.Base(filepath.Dir(path)) == ".arclint"
+		if entry.Name() == ".git" || (inArclint && (entry.Name() == "cache" || entry.Name() == "cache.json")) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		relative, err := filepath.Rel(source, path)
+		if err != nil {
+			return err
+		}
+		destination := filepath.Join(target, relative)
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		switch {
+		case entry.Type()&fs.ModeSymlink != 0:
+			link, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(link, destination)
+		case entry.IsDir():
+			return os.MkdirAll(destination, info.Mode().Perm())
+		case entry.Type().IsRegular():
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			return os.WriteFile(destination, content, info.Mode().Perm())
+		}
+		return nil
+	})
 }
 
 func write(t *testing.T, root, rel, content string) {

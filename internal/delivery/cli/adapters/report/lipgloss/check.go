@@ -32,6 +32,7 @@ func writeCheck(p *out.Printer, th Theme, a conformance.Assessment) {
 			// Violations are rendered from ActiveViolations above.
 		}
 	}
+	out.ContractCoverage(p, a)
 	active := len(a.ActiveViolations())
 	suppressed := len(a.SuppressedViolations())
 	baselined := len(a.BaselinedViolations())

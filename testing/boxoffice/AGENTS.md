@@ -42,8 +42,8 @@ IMPORTANT: work in this order on every change.
 - `arclint check .`: evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings
 - `arclint rules test`: run the rule fixtures under `.arclint/tests` after changing any rule
 - `arclint sdk init`: regenerate the extension SDK artifacts under `.arclint/extensions`
-- `arclint agents workflow install`: write the workflow hooks into Claude Code and Codex project configuration; they advise when work skips context, domain recording or the check, and never block
-- `arclint agents workflow status`: show which hosts' configuration lists the workflow hooks; Codex runs them after you trust them in /hooks
+- `arclint agents hooks install`: write the workflow hooks into Claude Code and Codex user configuration, for every project and worktree (`--project` for this project only); they advise when work skips context, domain recording or the check, and never block
+- `arclint agents hooks status`: show which configuration files list the workflow hooks and when a hook event last reached this project; Codex runs them after you trust them in /hooks
 - `arclint agents md --write`: refresh this block after changing rules.arclint.yaml or the vocabulary
 - `arclint agents skill`: write the domain-librarian skill to `.agents/skills/domain-librarian/` when your harness lacks it
 - `arclint baseline`: manage the committed baseline of adopted findings

@@ -113,7 +113,23 @@ func Run(req Request) (Assessment, error) {
 		return Assessment{}, err
 	}
 	diags = append(diags, summaries...)
-	return NewAssessment(evals, diags, applied)
+	a, err := NewAssessment(evals, diags, applied)
+	if err != nil {
+		return Assessment{}, err
+	}
+	prepared := make(map[string]Facts, len(rules))
+	for _, r := range rules {
+		prepared[r.ID().Qualified()] = source.forRule(r)
+	}
+	a.contracts, err = assessContractCoverage(req, prepared)
+	if err != nil {
+		return Assessment{}, err
+	}
+	for _, ctx := range req.Knowledge.Contexts {
+		a.contractContexts = append(a.contractContexts, ctx.Name)
+	}
+	sort.Strings(a.contractContexts)
+	return a, nil
 }
 
 // validRules re-proves every Rule, rejects duplicate identities, and

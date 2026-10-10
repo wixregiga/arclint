@@ -272,8 +272,8 @@ otherwise it names the published copy, kept identical to
 ## Local agent setup
 
 To keep a coding agent on the domain workflow, run
-`arclint agents workflow install` in your project. The
-[workflow hooks](../workflow-hooks/) advise Claude Code and Codex when observed
+`arclint agents hooks install` in your project. The
+[agent hooks](../agent-hooks/) advise Claude Code and Codex when observed
 work skips `arclint context`, the domain recording or `arclint check`. The
 guide explains host trust, WSL projects and what the hooks observe. ArcLint
 uses this same feature for its own development.

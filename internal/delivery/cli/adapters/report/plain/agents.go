@@ -5,11 +5,22 @@ import (
 	"io"
 
 	"github.com/wixregiga/arclint/internal/delivery/cli"
+	"github.com/wixregiga/arclint/internal/delivery/cli/adapters/report/internal/out"
 )
 
 func writeAgentInstall(w io.Writer, r cli.AgentInstallReport) error {
 	for _, path := range r.Paths {
 		if _, err := fmt.Fprintln(w, path); err != nil {
+			return fmt.Errorf("write agent report: %w", err)
+		}
+	}
+	for _, path := range r.Removed {
+		if _, err := fmt.Fprintf(w, "removed the duplicate hooks from %s\n", path); err != nil {
+			return fmt.Errorf("write agent report: %w", err)
+		}
+	}
+	if r.Orientation != "" {
+		if _, err := fmt.Fprintln(w, r.Orientation); err != nil {
 			return fmt.Errorf("write agent report: %w", err)
 		}
 	}
@@ -20,30 +31,13 @@ func writeAgentInstall(w io.Writer, r cli.AgentInstallReport) error {
 	return nil
 }
 
-func writeReviewerStatus(w io.Writer, r cli.ReviewerStatusReport) error {
-	s := r.Installation
-	if _, err := fmt.Fprintf(w, "Project: %s\nAgent: %s\nHost: %s\nPath: %s\nInstalled: %t\nInstalled ArcLint release: %s\nAvailable ArcLint release: %s\nAsset integrity: %t\n", s.Project, s.Name, s.Host, s.Path, s.Installed, s.InstalledVersion, s.AvailableVersion, s.Intact); err != nil {
-		return fmt.Errorf("write agent report: %w", err)
-	}
-	for _, problem := range s.Problems {
-		if _, err := fmt.Fprintln(w, problem); err != nil {
-			return fmt.Errorf("write agent report: %w", err)
-		}
-	}
-	_, err := fmt.Fprintln(w, cli.ReviewerStatusLimits)
-	if err != nil {
-		return fmt.Errorf("write agent report: %w", err)
-	}
-	return nil
-}
-
-func writeWorkflowStatus(w io.Writer, r cli.WorkflowStatusReport) error {
+func writeHooksStatus(w io.Writer, r cli.HooksStatusReport) error {
 	s := r.Status
-	if _, err := fmt.Fprintf(w, "Project: %s\nCommand: %s\n", s.Project, s.Command); err != nil {
+	if _, err := fmt.Fprintf(w, "Project: %s\nBinary: %s\nLast event: %s\n", s.Project, s.Binary, out.LastHookEvent(s.LastEvent)); err != nil {
 		return fmt.Errorf("write workflow status: %w", err)
 	}
-	for _, host := range s.Hosts {
-		if _, err := fmt.Fprintf(w, "%s: %s (installed: %t)\n", host.Host, host.Path, host.Installed); err != nil {
+	for _, host := range s.Files {
+		if _, err := fmt.Fprintf(w, "%s %s: %s (installed: %t)\n", host.Host, out.HookScope(host), host.Path, host.Installed); err != nil {
 			return fmt.Errorf("write workflow status: %w", err)
 		}
 		for _, problem := range host.Problems {
@@ -52,7 +46,7 @@ func writeWorkflowStatus(w io.Writer, r cli.WorkflowStatusReport) error {
 			}
 		}
 	}
-	if _, err := fmt.Fprintln(w, cli.WorkflowStatusLimits); err != nil {
+	if _, err := fmt.Fprintln(w, cli.HooksStatusLimits); err != nil {
 		return fmt.Errorf("write workflow status: %w", err)
 	}
 	return nil

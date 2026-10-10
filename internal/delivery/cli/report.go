@@ -216,29 +216,23 @@ func NewDomainDefineReport(result application.DomainDefineResult, req applicatio
 type AgentInstallReport struct {
 	Operation, Host string
 	Paths           []string
-	Activation      string
+	// Removed names files the install took the same hooks out of, where
+	// they would have run each event twice.
+	Removed []string
+	// Orientation is what the installed hooks tell a session, printed so
+	// the session that installed them can follow it at once.
+	Orientation string
+	Activation  string
 }
 
 func (AgentInstallReport) report() {}
 
-// ReviewerStatusReport carries observed separate reviewer installation facts.
-type ReviewerStatusReport struct {
-	Installation application.ReviewerInstallation
+// HooksStatusReport lists which hosts' configuration holds the workflow hooks.
+type HooksStatusReport struct {
+	Status application.HooksStatus
 }
 
-func (ReviewerStatusReport) report() {}
+func (HooksStatusReport) report() {}
 
-// Installation limits accompany facts without claiming host activation or approval.
-const (
-	ReviewerStatusLimits = "Installation and integrity do not prove Codex discovery, activation or review quality. Activity records are in the Codex conversation; ArcLint does not manage their storage or retention."
-)
-
-// WorkflowStatusReport lists which hosts' configuration holds the workflow hooks.
-type WorkflowStatusReport struct {
-	Status application.WorkflowHookStatus
-}
-
-func (WorkflowStatusReport) report() {}
-
-// WorkflowStatusLimits separates written configuration from host activation.
-const WorkflowStatusLimits = "Status reads the configuration files only. Codex runs the hooks after you trust them in /hooks; check a host's own hook listing to see what it loaded."
+// HooksStatusLimits separates written configuration from host activation.
+const HooksStatusLimits = "The files show what each host is configured to run; the last event shows that a host ran the hooks in this project. Codex runs them only after you trust them in /hooks."

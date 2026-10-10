@@ -11,9 +11,11 @@ import (
 // evaluations are preserved; passing the gate does not imply every
 // Rule conformed. Ordering is deterministic.
 type Assessment struct {
-	evaluations  []Evaluation
-	diagnostics  []Diagnostic // operational and coverage; violations live in evaluations
-	appliedRules []string     // qualified Rule identities, sorted unique
+	evaluations      []Evaluation
+	diagnostics      []Diagnostic // operational and coverage; violations live in evaluations
+	appliedRules     []string     // qualified Rule identities, sorted unique
+	contracts        []ContractCoverage
+	contractContexts []string
 }
 
 // NewAssessment validates and orders the complete result.
@@ -76,6 +78,16 @@ func sortDiagnostics(ds []Diagnostic) {
 // Evaluations returns every Rule Evaluation in deterministic order.
 func (a Assessment) Evaluations() []Evaluation {
 	return append([]Evaluation(nil), a.evaluations...)
+}
+
+// Contracts reports checks and gaps for every recorded invariant and assertion.
+func (a Assessment) Contracts() []ContractCoverage {
+	return append([]ContractCoverage(nil), a.contracts...)
+}
+
+// ContractContexts includes recorded contexts with no named contracts.
+func (a Assessment) ContractContexts() []string {
+	return append([]string(nil), a.contractContexts...)
 }
 
 // AppliedRules returns the qualified identities of the Rules that were
@@ -192,6 +204,30 @@ func (a Assessment) RelabelViolations(label func(Violation) (Status, string, boo
 	}
 	out := a
 	out.evaluations = evals
+	out.contracts = append([]ContractCoverage(nil), a.contracts...)
+	type findingLocation struct {
+		fingerprint, path string
+		line              int
+	}
+	statuses := map[findingLocation]Violation{}
+	for _, e := range evals {
+		for _, v := range e.Violations() {
+			statuses[findingLocation{v.Fingerprint(), v.Path(), v.Line()}] = v
+		}
+	}
+	for i, c := range out.contracts {
+		checks := c.Checks()
+		for j, e := range checks {
+			vs := e.Violations()
+			for k, v := range vs {
+				if labeled, ok := statuses[findingLocation{v.Fingerprint(), v.Path(), v.Line()}]; ok {
+					vs[k] = labeled
+				}
+			}
+			checks[j] = e.withViolations(vs)
+		}
+		out.contracts[i].checks = checks
+	}
 	return out, nil
 }
 

@@ -126,13 +126,13 @@ func TestNewExpansionRejectsInvalidDeclarations(t *testing.T) {
 		source  string
 		require []string
 	}{
-		"unknown source":       {"domain.everything", []string{"x/{name:flatcase}.go"}},
-		"unknown case":         {"domain.aggregates", []string{"x/{name:SCREAMING}.go"}},
-		"stray brace":          {"domain.aggregates", []string{"x/{aggregate}.go"}},
-		"no globs":             {"domain.aggregates", nil},
-		"invalid after subst":  {"domain.aggregates", []string{"//{name:flatcase}"}},
-		"nested brace garbage": {"domain.aggregates", []string{"x/{name:flatcase}}.go"}},
-		"glob listed twice":    {"domain.aggregates", []string{"x/{name:flatcase}.go", "x/{name:flatcase}.go"}},
+		"unknown source":           {"domain.everything", []string{"x/{name:flatcase}.go"}},
+		"unknown case":             {"domain.aggregates", []string{"x/{name:SCREAMING}.go"}},
+		"stray brace":              {"domain.aggregates", []string{"x/{aggregate}.go"}},
+		"no globs":                 {"domain.aggregates", nil},
+		"invalid after subst":      {"domain.aggregates", []string{"//{name:flatcase}"}},
+		"unbalanced closing brace": {"domain.aggregates", []string{"x/{name:flatcase}}.go"}},
+		"glob listed twice":        {"domain.aggregates", []string{"x/{name:flatcase}.go", "x/{name:flatcase}.go"}},
 	}
 	for name, c := range cases {
 		if _, err := rule.NewExpansion(c.source, c.require, nil); err == nil {
