@@ -91,15 +91,20 @@ What a Zone may import: other Zones, third-party, stdlib.
 
 `internal` names declared Zones this Zone may import; absent means
 unrestricted internal imports, and `[]` means no other declared Zone.
-The owning Zone is always permitted implicitly. `stdlib` is `allow`
-(default) or `forbid`. `external` is `allow` (default), `forbid`, or a
-list of the third-party import paths the Zone may use. A listed path
-is matched exactly as the code spells it: a Go package path, a
-TypeScript specifier, or a Python dotted module. So `[effect]` allows
-`import { Effect } from "effect"` and not `"effect/http"`, and
-`[sqlalchemy.orm]` allows `from sqlalchemy.orm import Session` and not
-`import sqlalchemy`. An empty list is refused; `forbid` is how a Zone
-says none.
+The owning Zone is always permitted implicitly. `external` and
+`stdlib` are `allow` (default) or `forbid`.
+
+A Zone has at most one `imports` Rule that is not disabled: that one
+Rule states the Zone's whole import policy, its Zones together with
+its `external` and `stdlib` policies. To change an extended Pattern's
+`imports` Rule, disable it with a reason and write your own complete
+`imports` Rule for the Zone under a new ID (see
+[Overrides](/docs/patterns/#overrides)). To allow only some
+third-party packages, keep `external: allow` and add an extension Rule
+that filters them, as the `arclint/hexagonal` Pattern does for its
+application. arclint does not reject a second enabled `imports` Rule
+yet; until it does, `arclint context` and the AGENTS.md block show only
+the first one.
 
 ```yaml
 rules:
@@ -109,11 +114,6 @@ rules:
     imports:
       internal: []
       external: forbid
-  application/effect-only:
-    rationale: "The application uses the Effect core and no other third-party package."
-    on: application
-    imports:
-      external: [effect]
 ```
 
 ## structure

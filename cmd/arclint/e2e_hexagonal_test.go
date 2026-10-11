@@ -163,7 +163,8 @@ func main() {
 
 // TestHexagonalInitExtendsThePattern proves init --pattern hexagonal
 // writes an adopting ruleset that binds all six zones and lists the
-// seven rules the pattern distributes.
+// six rules the pattern distributes: one imports rule per zone it
+// constrains, and the application's package filter.
 func TestHexagonalInitExtendsThePattern(t *testing.T) {
 	root := t.TempDir()
 	stdout, stderr, code := runBin(t, root, os.Environ(), "init", "--pattern", "hexagonal")
@@ -187,8 +188,8 @@ func TestHexagonalInitExtendsThePattern(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("rules exit %d\nstderr: %s", code, stderr)
 	}
-	if lines := strings.Split(strings.TrimSpace(stdout), "\n"); len(lines) != 7 {
-		t.Errorf("rules listed = %d, want the 7 the pattern distributes\n%s", len(lines), stdout)
+	if lines := strings.Split(strings.TrimSpace(stdout), "\n"); len(lines) != 6 {
+		t.Errorf("rules listed = %d, want the 6 the pattern distributes\n%s", len(lines), stdout)
 	}
 }
 
@@ -236,7 +237,7 @@ import _ "example.com/orders/internal/domain"
 	want := []string{
 		"arclint/hexagonal:application/through-ports internal/application/leak.go",
 		"arclint/hexagonal:domain/depends-on-nothing-outside internal/domain/leak.go",
-		"arclint/hexagonal:domain/standard-library-only internal/domain/uuid.go",
+		"arclint/hexagonal:domain/depends-on-nothing-outside internal/domain/uuid.go",
 		"arclint/hexagonal:driven/implements-ports internal/adapters/driven/memory/leak.go",
 		"arclint/hexagonal:driving/calls-the-application internal/adapters/driving/http/leak.go",
 		"arclint/hexagonal:shared/product-free internal/shared/errs/leak.go",
@@ -347,8 +348,8 @@ export const layer = PgOrderRepository
 	want := []string{
 		"arclint/hexagonal:application/core-libraries-only src/application/fetch_rates.ts",
 		"arclint/hexagonal:application/core-libraries-only src/application/orders_db.ts",
-		"arclint/hexagonal:domain/standard-library-only src/domain/schema.ts",
-		"arclint/hexagonal:domain/standard-library-only src/domain/sql.ts",
+		"arclint/hexagonal:domain/depends-on-nothing-outside src/domain/schema.ts",
+		"arclint/hexagonal:domain/depends-on-nothing-outside src/domain/sql.ts",
 		"arclint/hexagonal:driving/calls-the-application src/routes/orders/leak.ts",
 		"arclint/hexagonal:driving/calls-the-application src/routes/orders/leak_alias.ts",
 	}
@@ -359,8 +360,9 @@ export const layer = PgOrderRepository
 
 // TestHexagonalPythonMatchesDottedPathsAsWritten checks a Python
 // service: the application may use no third-party package, a dotted
-// module is judged as written, and a project that allows one writes its
-// own imports rule under its own id after disabling the Pattern's.
+// module is judged as written, and a project that allows one disables
+// the Pattern's package filter and writes its own under its own id with
+// the same extension, leaving the zone's imports rule untouched.
 func TestHexagonalPythonMatchesDottedPathsAsWritten(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "pyproject.toml", `[project]
@@ -408,10 +410,11 @@ def place(session: Session, order: Order) -> None:
   arclint/hexagonal:application/core-libraries-only:
     disable: "Our unit of work uses SQLAlchemy sessions; orders/sessions replaces this rule."
   orders/sessions:
-    rationale: "The application may use SQLAlchemy's ORM session and nothing else outside."
+    rationale: "The application uses SQLAlchemy's ORM session and no other third-party package."
     on: application
-    imports:
-      external: [sqlalchemy.orm]
+    uses: hexagonal/allowed-packages
+    with:
+      packages: [sqlalchemy.orm]
 `)
 	if code, found := activeViolations(t, root); code != 0 || len(found) != 0 {
 		t.Errorf("own rule listing sqlalchemy.orm: exit %d, findings %v", code, found)

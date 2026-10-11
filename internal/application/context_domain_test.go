@@ -18,7 +18,7 @@ import (
 // is declared, here inside Zone m. Every anchor outcome and every
 // scoping route (a file, a folder, a Zone named for a context, a Zone
 // that is not) has one term exercising it.
-func domainFixture(t *testing.T) (rule.Configured, *fakeKnowledge, *fakeObservations) {
+func domainFixture(t *testing.T) (rule.Ruleset, *fakeKnowledge, *fakeObservations) {
 	t.Helper()
 	cfg := contextFixture(t)
 	glob, err := rule.NewGlob("catalog/**")
@@ -29,7 +29,7 @@ func domainFixture(t *testing.T) (rule.Configured, *fakeKnowledge, *fakeObservat
 	if err != nil {
 		t.Fatalf("NewZone: %v", err)
 	}
-	cfg.Zones = append(cfg.Zones, catalog)
+	cfg = edited(t, cfg, func(s *rule.RulesetSpec) { s.Zones = append(s.Zones, catalog) })
 	lang, err := vocab.NewUbiquitousLanguage("boxoffice", "", []vocab.BoundedContext{
 		{
 			Name:       "catalog",

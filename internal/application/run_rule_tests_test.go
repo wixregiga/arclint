@@ -14,7 +14,7 @@ import (
 // ruleTestConfig builds one configured repository for Rule Test runs:
 // zone "m" with a snake_case naming Rule and one Suppression
 // covering m/BadTwo.go.
-func ruleTestConfig(t *testing.T) rule.Configured {
+func ruleTestConfig(t *testing.T) rule.Ruleset {
 	t.Helper()
 	glob, err := rule.NewGlob("m/**")
 	if err != nil {
@@ -49,18 +49,18 @@ func ruleTestConfig(t *testing.T) rule.Configured {
 	if err != nil {
 		t.Fatalf("NewSuppression: %v", err)
 	}
-	return rule.Configured{
+	return ruleset(t, rule.RulesetSpec{
 		Rules:     []rule.Rule{r.Suppress(suppression)},
 		Zones:     []rule.Zone{zone},
 		Languages: []rule.Language{rule.LanguageGo},
-	}
+	})
 }
 
 type ruleTestRepository struct {
-	cfg rule.Configured
+	cfg rule.Ruleset
 }
 
-func (f ruleTestRepository) ConfiguredRules() (rule.Configured, error) { return f.cfg, nil }
+func (f ruleTestRepository) ConfiguredRules() (rule.Ruleset, error) { return f.cfg, nil }
 
 type fakeRuleTestSource struct {
 	tests []rule.Test
@@ -226,7 +226,7 @@ func TestRunRuleTestsContainsConformanceErrorAndContinues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("extension rule.New: %v", err)
 	}
-	cfg.Rules = append(cfg.Rules, extRule)
+	cfg = edited(t, cfg, func(s *rule.RulesetSpec) { s.Rules = append(s.Rules, extRule) })
 
 	files := []rule.TestFile{{Path: "m/all_good.go"}}
 	source := fakeRuleTestSource{tests: []rule.Test{
@@ -298,7 +298,7 @@ func TestRunRuleTestsFeedsFixtureVocabularyToExtensions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("extension rule.New: %v", err)
 	}
-	cfg.Rules = append(cfg.Rules, extRule)
+	cfg = edited(t, cfg, func(s *rule.RulesetSpec) { s.Rules = append(s.Rules, extRule) })
 
 	const authored = "version: 2\nproject: shop\ncontexts:\n  ordering:\n    definition: Orders.\n    aggregates:\n      Order:\n        definition: A deal.\n        identity: OrderID\n"
 	recorded := vocab.UbiquitousLanguage{Project: "shop", Contexts: []vocab.BoundedContext{{

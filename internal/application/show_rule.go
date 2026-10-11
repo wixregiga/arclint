@@ -96,7 +96,7 @@ func findRule(rules rule.Repository, id string) (rule.Rule, error) {
 	if err != nil {
 		return rule.Rule{}, fmt.Errorf("load configured rules: %w", err)
 	}
-	for _, r := range cfg.Rules {
+	for _, r := range cfg.Rules() {
 		if r.ID().Qualified() == id {
 			return r, nil
 		}

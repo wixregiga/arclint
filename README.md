@@ -176,7 +176,7 @@ extend it. The constraint key a rule carries decides its type:
 
 | constraint key | type | constraint shape |
 |---|---|---|
-| `imports` | consumes | what a zone may import: internal allow-list, external policy or allow-list of import paths, stdlib policy |
+| `imports` | consumes | what a zone may import, one rule per zone: internal allow-list, external and stdlib policy |
 | `structure` | structure | files a zone must contain or must not contain (globs; `each:` expands them per recorded domain term) |
 | `naming` | naming | file-name case vocabulary (`snake_case`, `kebab-case`, `camelCase`, `PascalCase`, `regex:`) |
 | `content` | content | no line of the selected files matches a regular expression |

@@ -81,13 +81,13 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 	if err != nil {
 		return conformance.Assessment{}, fmt.Errorf("load configured rules: %w", err)
 	}
-	rules := cfg.Rules
+	rules := cfg.Rules()
 	if len(req.Only) > 0 || len(req.Exclude) > 0 {
 		if rules, err = selectRules(rules, req.Only, req.Exclude); err != nil {
 			return conformance.Assessment{}, err
 		}
 	}
-	observations, err := uc.observations.Observe(cfg.Languages, cfg.Scan, requiredFacts(rules))
+	observations, err := uc.observations.Observe(cfg.Languages(), cfg.Scan(), requiredFacts(rules))
 	if err != nil {
 		return conformance.Assessment{}, fmt.Errorf("observe repository: %w", err)
 	}
@@ -103,9 +103,9 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 	}
 	assessment, err := conformance.Run(conformance.Request{
 		Rules:          rules,
-		Zones:          cfg.Zones,
+		Zones:          cfg.Zones(),
 		Observations:   observations,
-		UnknownImports: cfg.Scan.UnknownImports,
+		UnknownImports: cfg.Scan().UnknownImports,
 		Extensions:     uc.extensions,
 		Knowledge:      knowledge,
 	})

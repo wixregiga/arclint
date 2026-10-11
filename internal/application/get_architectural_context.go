@@ -46,14 +46,9 @@ type ZonePolicy struct {
 	// unrestricted, empty when the Zone may import no other Zone.
 	Internal           []string
 	InternalRestricted bool
-	External           string // allow, forbid, or only (ExternalPaths)
-	ExternalPaths      []string
+	External           string // allow or forbid
 	Stdlib             string // allow or forbid
 }
-
-// ExternalOnly is ZonePolicy.External when the Zone may use only the
-// import paths in ExternalPaths.
-const ExternalOnly = "only"
 
 // AppliedRule pairs one Rule with the reason it applies to the scope.
 type AppliedRule struct {
@@ -236,8 +231,8 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 	if req.Dependencies && (len(req.Paths) > 0 || len(req.Zones) > 0) {
 		return ArchitecturalContext{}, fmt.Errorf("observed dependencies require repository scope; omit paths and --zone")
 	}
-	out := ArchitecturalContext{Scope: "repository", RuleCount: len(cfg.Rules)}
-	for _, l := range cfg.Languages {
+	out := ArchitecturalContext{Scope: "repository", RuleCount: len(cfg.Rules())}
+	for _, l := range cfg.Languages() {
 		out.Languages = append(out.Languages, string(l))
 	}
 	carriers, err := uc.inspectContext(&out, cfg, req.Dependencies)
@@ -245,17 +240,17 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 		return ArchitecturalContext{}, err
 	}
 	if len(req.Paths) == 0 && len(req.Zones) == 0 {
-		for _, m := range cfg.Zones {
-			out.Zones = append(out.Zones, zonePolicy(m, cfg.Rules))
+		for _, m := range cfg.Zones() {
+			out.Zones = append(out.Zones, zonePolicy(m, cfg.Rules()))
 		}
-		out.Kinds = kindsInUse(cfg.Rules)
-		policy := cfg.Scan.UnknownImports
+		out.Kinds = kindsInUse(cfg.Rules())
+		policy := cfg.Scan().UnknownImports
 		if policy == "" {
 			policy = rule.UnknownImportsWarn
 		}
 		out.UnknownImports = string(policy)
 		if out.Domain != nil {
-			out.Domain.Unanchored = unanchoredContracts(out.Domain, cfg.Languages)
+			out.Domain.Unanchored = unanchoredContracts(out.Domain, cfg.Languages())
 		}
 		return out, nil
 	}
@@ -267,14 +262,14 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 		if !req.Full {
 			out.Domain = scopeDomainKnowledge(out.Domain, carriers, worksiteScope(cfg, req))
 		}
-		out.Domain.Unanchored = unanchoredContracts(out.Domain, cfg.Languages)
+		out.Domain.Unanchored = unanchoredContracts(out.Domain, cfg.Languages())
 	}
 	return out, nil
 }
 
 // inspectContext collects the union of this request's fact requirements once.
 // Recorded contracts and dependency reporting consume the same prepared Facts.
-func (uc GetArchitecturalContext) inspectContext(out *ArchitecturalContext, cfg rule.Configured, dependencies bool) (conformance.Carriers, error) {
+func (uc GetArchitecturalContext) inspectContext(out *ArchitecturalContext, cfg rule.Ruleset, dependencies bool) (conformance.Carriers, error) {
 	lang, found, err := uc.knowledge.RecordedLanguage()
 	if err != nil {
 		return conformance.Carriers{}, fmt.Errorf("load domain model: %w", err)
@@ -298,11 +293,11 @@ func (uc GetArchitecturalContext) inspectContext(out *ArchitecturalContext, cfg 
 	if len(required) == 0 {
 		return conformance.Carriers{}, nil
 	}
-	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, required)
+	obs, err := uc.observations.Observe(cfg.Languages(), cfg.Scan(), required)
 	if err != nil {
 		return conformance.Carriers{}, fmt.Errorf("observe context: %w", err)
 	}
-	facts, err := conformance.NewInspectionFacts(cfg.Zones, obs, append([]rule.Fact{rule.FactFileTree}, required...)...)
+	facts, err := conformance.NewInspectionFacts(cfg.Zones(), obs, append([]rule.Fact{rule.FactFileTree}, required...)...)
 	if err != nil {
 		return conformance.Carriers{}, fmt.Errorf("prepare context facts: %w", err)
 	}
@@ -325,16 +320,16 @@ func (uc GetArchitecturalContext) inspectContext(out *ArchitecturalContext, cfg 
 // worksite assembles the scoped view: per-path Zone bindings, each
 // involved Zone once, and the union of governing Rules with the
 // scope parts that pulled each in.
-func worksite(out ArchitecturalContext, cfg rule.Configured, req ContextRequest) (ArchitecturalContext, error) {
+func worksite(out ArchitecturalContext, cfg rule.Ruleset, req ContextRequest) (ArchitecturalContext, error) {
 	declared := map[rule.ZoneName]rule.Zone{}
-	for _, m := range cfg.Zones {
+	for _, m := range cfg.Zones() {
 		declared[m.Name()] = m
 	}
 	seenCard := map[rule.ZoneName]bool{}
 	addCard := func(name rule.ZoneName) {
 		if !seenCard[name] {
 			seenCard[name] = true
-			out.Zones = append(out.Zones, zonePolicy(declared[name], cfg.Rules))
+			out.Zones = append(out.Zones, zonePolicy(declared[name], cfg.Rules()))
 		}
 	}
 	ruleIndex := map[string]int{}
@@ -352,7 +347,7 @@ func worksite(out ArchitecturalContext, cfg rule.Configured, req ContextRequest)
 	for _, p := range req.Paths {
 		binding := PathBinding{Path: p}
 		var owning []rule.ZoneName
-		for _, m := range cfg.Zones {
+		for _, m := range cfg.Zones() {
 			if m.Contains(p) {
 				owning = append(owning, m.Name())
 				binding.Zones = append(binding.Zones, string(m.Name()))
@@ -361,7 +356,7 @@ func worksite(out ArchitecturalContext, cfg rule.Configured, req ContextRequest)
 		}
 		out.Paths = append(out.Paths, binding)
 		scopeParts = append(scopeParts, p)
-		for _, r := range cfg.Rules {
+		for _, r := range cfg.Rules() {
 			if reason, applies := appliesToScope(r, p, owning); applies {
 				addRule(r, reason, p)
 			}
@@ -371,12 +366,12 @@ func worksite(out ArchitecturalContext, cfg rule.Configured, req ContextRequest)
 		mn := rule.ZoneName(name)
 		if _, ok := declared[mn]; !ok {
 			return ArchitecturalContext{}, fmt.Errorf(
-				"zone %q is not declared; declared zones: %s", name, declaredNames(cfg.Zones))
+				"zone %q is not declared; declared zones: %s", name, declaredNames(cfg.Zones()))
 		}
 		addCard(mn)
 		part := "zone " + name
 		scopeParts = append(scopeParts, part)
-		for _, r := range cfg.Rules {
+		for _, r := range cfg.Rules() {
 			if reason, applies := appliesToZone(r, mn); applies {
 				addRule(r, reason, part)
 			}
@@ -424,77 +419,39 @@ func declaredNames(zones []rule.Zone) string {
 	return strings.Join(names, ", ")
 }
 
-// zonePolicy derives one Zone's dependency policy from every enabled
-// consumes Rule bound to it. Each Rule must hold, so the policy is
-// their conjunction: the Zones every restricting Rule allows, forbid
-// when any Rule forbids, and the external paths every listing Rule
-// allows (none left reads as forbid).
+// zonePolicy derives one Zone's dependency policy from the
+// consumes Rule bound to it, when any.
 func zonePolicy(m rule.Zone, rules []rule.Rule) ZonePolicy {
 	p := ZonePolicy{
 		Name:        string(m.Name()),
 		Description: m.Description(),
-		External:    rule.ImportAllow.String(),
-		Stdlib:      rule.ImportAllow.String(),
+		External:    string(rule.ImportAllow),
+		Stdlib:      string(rule.ImportAllow),
 	}
 	for _, g := range m.Paths() {
 		p.Paths = append(p.Paths, g.String())
 	}
-	externalForbidden := false
-	var externalPaths []string
-	externalListed := false
 	for _, r := range rules {
 		params, ok := r.Params().(rule.ConsumesParams)
-		if !ok || r.Disabled() || !r.Scope().WouldSelectZone(m.Name()) {
+		if !ok || !r.Scope().WouldSelectZone(m.Name()) {
 			continue
 		}
 		if params.Internal != nil {
-			var names []string
-			for _, name := range params.Internal.Zones() {
-				names = append(names, string(name))
-			}
-			if p.InternalRestricted {
-				names = intersect(p.Internal, names)
-			}
 			p.InternalRestricted = true
-			p.Internal = append([]string{}, names...)
-		}
-		switch {
-		case params.External.Forbids():
-			externalForbidden = true
-		case params.External.Lists():
-			if externalListed {
-				externalPaths = intersect(externalPaths, params.External.Paths())
-			} else {
-				externalPaths = params.External.Paths()
+			p.Internal = []string{}
+			for _, name := range params.Internal.Zones() {
+				p.Internal = append(p.Internal, string(name))
 			}
-			externalListed = true
+		}
+		if params.External.Forbids() {
+			p.External = string(rule.ImportForbid)
 		}
 		if params.Stdlib.Forbids() {
-			p.Stdlib = rule.ImportForbid.String()
+			p.Stdlib = string(rule.ImportForbid)
 		}
-	}
-	switch {
-	case externalForbidden || (externalListed && len(externalPaths) == 0):
-		p.External = rule.ImportForbid.String()
-	case externalListed:
-		p.External = ExternalOnly
-		p.ExternalPaths = externalPaths
+		break
 	}
 	return p
-}
-
-// intersect keeps the entries of a that b also holds, in a's order.
-func intersect(a, b []string) []string {
-	out := []string{}
-	for _, v := range a {
-		for _, w := range b {
-			if v == w {
-				out = append(out, v)
-				break
-			}
-		}
-	}
-	return out
 }
 
 // appliesToScope decides whether one Rule binds a path and states the

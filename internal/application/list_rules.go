@@ -64,8 +64,8 @@ func (uc ListRules) Execute() ([]RuleSummary, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load configured rules: %w", err)
 	}
-	out := make([]RuleSummary, 0, len(cfg.Rules))
-	for _, r := range cfg.Rules {
+	out := make([]RuleSummary, 0, len(cfg.Rules()))
+	for _, r := range cfg.Rules() {
 		out = append(out, summarize(r))
 	}
 	return out, nil
@@ -80,11 +80,11 @@ func (uc ListRules) Select(selector string) ([]RuleSummary, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load configured rules: %w", err)
 	}
-	byID := make(map[string]rule.Rule, len(cfg.Rules))
-	for _, r := range cfg.Rules {
+	byID := make(map[string]rule.Rule, len(cfg.Rules()))
+	for _, r := range cfg.Rules() {
 		byID[r.ID().Qualified()] = r
 	}
-	hits, err := selectorHits(selector, cfg.Rules)
+	hits, err := selectorHits(selector, cfg.Rules())
 	if err != nil {
 		return nil, err
 	}

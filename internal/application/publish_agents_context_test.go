@@ -15,7 +15,7 @@ import (
 // agentsFixture extends contextFixture with an extension Rule bound to
 // zone "m" and a repository-scoped extension Rule, so every block
 // section has material.
-func agentsFixture(t *testing.T) rule.Configured {
+func agentsFixture(t *testing.T) rule.Ruleset {
 	t.Helper()
 	cfg := contextFixture(t)
 	scope, err := rule.ZoneScope([]rule.ZoneName{"m"})
@@ -46,7 +46,7 @@ func agentsFixture(t *testing.T) rule.Configured {
 	if err != nil {
 		t.Fatalf("rule.New: %v", err)
 	}
-	cfg.Rules = append(cfg.Rules, bound, isolation)
+	cfg = edited(t, cfg, func(s *rule.RulesetSpec) { s.Rules = append(s.Rules, bound, isolation) })
 	return cfg
 }
 
@@ -262,7 +262,7 @@ func TestPublishAgentsContextSpellsPatternRulesQualified(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rule.New: %v", err)
 	}
-	cfg.Rules = append(cfg.Rules, bound, wide)
+	cfg = edited(t, cfg, func(s *rule.RulesetSpec) { s.Rules = append(s.Rules, bound, wide) })
 	publish, err := application.NewPublishAgentsContext(
 		fakeRepository{cfg}, emptyKnowledge(), fakeExtensionInventory{}, &fakePublisher{})
 	if err != nil {
@@ -303,7 +303,7 @@ func TestPublishAgentsContextSectionsTheBuiltInRules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("BuiltIn: %v", err)
 	}
-	cfg.Rules = append(cfg.Rules, builtIn...)
+	cfg = edited(t, cfg, func(s *rule.RulesetSpec) { s.Rules = append(s.Rules, builtIn...) })
 	publish, err := application.NewPublishAgentsContext(
 		fakeRepository{cfg}, recordedKnowledge(t), fakeExtensionInventory{}, &fakePublisher{})
 	if err != nil {

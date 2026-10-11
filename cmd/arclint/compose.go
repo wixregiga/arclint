@@ -98,7 +98,7 @@ func run(args []string) int {
 		if err != nil {
 			return nil, fmt.Errorf("pattern extensions: %w", err)
 		}
-		return cfg.Extensions, nil
+		return cfg.Extensions(), nil
 	})
 	if err != nil {
 		return configError(err)

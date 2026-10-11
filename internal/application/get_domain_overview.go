@@ -67,12 +67,12 @@ func (uc GetDomainOverview) Execute() (DomainOverview, error) {
 	if err != nil {
 		return DomainOverview{}, fmt.Errorf("load configured rules: %w", err)
 	}
-	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, []rule.Fact{rule.FactDeclarations})
+	obs, err := uc.observations.Observe(cfg.Languages(), cfg.Scan(), []rule.Fact{rule.FactDeclarations})
 	if err != nil {
 		return DomainOverview{}, fmt.Errorf("observe contracts: %w", err)
 	}
 	matrix := domainKnowledgeOf(lang)
-	facts, err := conformance.NewInspectionFacts(cfg.Zones, obs, rule.FactDeclarations)
+	facts, err := conformance.NewInspectionFacts(cfg.Zones(), obs, rule.FactDeclarations)
 	if err != nil {
 		return DomainOverview{}, fmt.Errorf("prepare domain facts: %w", err)
 	}
@@ -83,7 +83,7 @@ func (uc GetDomainOverview) Execute() (DomainOverview, error) {
 	if err := locateDomainContracts(matrix, carriers); err != nil {
 		return DomainOverview{}, fmt.Errorf("locate contracts: %w", err)
 	}
-	matrix.Unanchored = unanchoredContracts(matrix, cfg.Languages)
+	matrix.Unanchored = unanchoredContracts(matrix, cfg.Languages())
 	out.Matrix = matrix
 	return out, nil
 }

@@ -399,7 +399,6 @@ type zonePolicyJSON struct {
 	Internal           []string `json:"Internal"`
 	InternalRestricted bool     `json:"InternalRestricted"`
 	External           string   `json:"External"`
-	ExternalPaths      []string `json:"ExternalPaths,omitempty"`
 	Stdlib             string   `json:"Stdlib"`
 }
 
@@ -511,7 +510,6 @@ func contextDoc(c application.ArchitecturalContext) contextJSON {
 			Internal:           append([]string(nil), m.Internal...),
 			InternalRestricted: m.InternalRestricted,
 			External:           m.External,
-			ExternalPaths:      m.ExternalPaths,
 			Stdlib:             m.Stdlib,
 		})
 	}

@@ -49,8 +49,8 @@ arclint patterns
 ```
 
 ```
-arclint/hexagonal@0.1.0  embedded            7 rule(s)  0 extension(s)  coverage [go, ts, py]  34df4fc3267a
-arclint/vertical@0.1.0   embedded, vendored 16 rule(s)  5 extension(s)  coverage [go]          fc01898bee8f
+arclint/hexagonal@0.1.0  embedded            6 rule(s)  1 extension(s)  coverage [go, ts, py]  cea59c71c72d
+arclint/vertical@0.1.0   embedded, vendored 16 rule(s)  5 extension(s)  coverage [go]          ddf0767e51f9
 acme/layers@1.0.0        authored            1 rule(s)  0 extension(s)  coverage [go]          3fb2cbda1af6
 ```
 
@@ -88,14 +88,18 @@ ask for, and composition wires them together.
 | `shared` | errors, logging, generated contracts | no other zone |
 | `composition` | entry points and the module that wires the adapters | any zone |
 
-Every rule is a built-in [`imports` rule](/docs/rules/#imports). The
-domain is plain code: it uses no third-party package. The application
-may use `effect`, the root module of Effect v4, which declares a port
-on TypeScript (`Context.Service`) and nothing else outside. Every
-`effect/<module>` path, such as `effect/http` or `effect/sql`, is
-technology Effect marks unstable, so it belongs in an adapter. A listed
-package is matched exactly as written, so `effect/Effect` is not
-`effect`; import from `"effect"`. A package counts as third-party when
+Each zone it constrains has one built-in [`imports` rule](/docs/rules/#imports):
+which zones it may import, with `external: forbid` for the domain and
+`external: allow` everywhere else. The domain is plain code: it uses no
+third-party package. The application's packages are filtered by one
+more rule, `application/core-libraries-only`, which uses the Pattern's
+extension `hexagonal/allowed-packages` with `packages: [effect]`: the
+application may use `effect`, the root module of Effect v4, which
+declares a port on TypeScript (`Context.Service`), and nothing else
+outside. Every `effect/<module>` path, such as `effect/http` or
+`effect/sql`, is technology Effect marks unstable, so it belongs in an
+adapter. A listed package is matched exactly as written, so
+`effect/Effect` is not `effect`; import from `"effect"`. A package counts as third-party when
 the project declares it: in `go.mod`, `package.json`, or
 `pyproject.toml`. A Go module path starts with a domain name, so no Go
 package is spelled `effect` and a Go application is standard library
@@ -136,21 +140,25 @@ other.
 Imports written with a tsconfig alias such as `@/domain/order` are
 judged like relative ones (see [Import classes](/docs/concepts/#import-classes)).
 
-The library rules are separate from the zone rules, so a project
-can change what its core may use without touching the boundaries:
-disable the Pattern's library rule with a reason and add your own
-`imports` rule with your list.
+To let the application use other packages, disable the Pattern's
+package filter with a reason and add your own rule that uses the same
+extension with your list; the zone's `imports` rule stays as it is.
 
 ```yaml
 rules:
   arclint/hexagonal:application/core-libraries-only:
-    disable: "We allow pkg/errors in the application; core/libraries replaces this rule."
-  core/libraries:
-    rationale: "The application uses the standard library and pkg/errors only."
+    disable: "We allow pkg/errors in the application; core/application-packages replaces this rule."
+  core/application-packages:
+    rationale: "The application uses pkg/errors and no other third-party package."
     on: application
-    imports:
-      external: [github.com/pkg/errors]
+    uses: hexagonal/allowed-packages
+    with:
+      packages: [github.com/pkg/errors]
 ```
+
+To change which zones a zone may import, disable its `imports` rule and
+write your own, complete, under a new ID: a zone has at most one
+`imports` rule that is not disabled.
 
 ### arclint/vertical
 
@@ -299,7 +307,9 @@ An Override changes at least one of:
 An Override never carries `rationale`, `on`, `files`, `with`, or a
 constraint: a Pattern Rule keeps its own Rationale, Zones, and Constraint.
 To require something different, disable the Pattern Rule with a reason
-and add a local Rule under a new ID. Writing a local Rule under a
+and add a local Rule under a new ID. For an `imports` Rule the local
+Rule states the Zone's whole import policy, because a Zone has at most
+one `imports` Rule that is not disabled (see [imports](/docs/rules/#imports)). Writing a local Rule under a
 Pattern Rule's ID is rejected for the same reason, and an Override
 whose ID no extended Pattern distributes is rejected with the list of
 constraint keys a new Rule may carry.

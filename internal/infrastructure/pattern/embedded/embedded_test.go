@@ -1,6 +1,7 @@
 package embeddedpattern_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -198,7 +199,6 @@ func TestHexagonalPatternLoads(t *testing.T) {
 	}
 	want := map[string]bool{
 		"arclint/hexagonal:domain/depends-on-nothing-outside": true,
-		"arclint/hexagonal:domain/standard-library-only":      true,
 		"arclint/hexagonal:application/through-ports":         true,
 		"arclint/hexagonal:application/core-libraries-only":   true,
 		"arclint/hexagonal:driving/calls-the-application":     true,
@@ -208,6 +208,7 @@ func TestHexagonalPatternLoads(t *testing.T) {
 	if len(p.Rules()) != len(want) {
 		t.Errorf("rules = %d, want %d", len(p.Rules()), len(want))
 	}
+	importRules := map[string]int{}
 	for _, r := range p.Rules() {
 		id := r.ID().Qualified()
 		if !want[id] {
@@ -229,30 +230,47 @@ func TestHexagonalPatternLoads(t *testing.T) {
 		if r.Scope().ExcludedFile("internal/domain/order.go") {
 			t.Errorf("%s must judge production files", id)
 		}
+		if id == "arclint/hexagonal:application/core-libraries-only" {
+			params, ok := r.Params().(rule.ExtensionParams)
+			if r.Type() != rule.TypeExtension || !ok {
+				t.Errorf("%s = %q, want an extension rule", id, r.Type())
+				continue
+			}
+			if params.Uses != "hexagonal/allowed-packages" || fmt.Sprint(params.With["packages"]) != "[effect]" {
+				t.Errorf("%s uses %q with %v, want hexagonal/allowed-packages with packages [effect]", id, params.Uses, params.With)
+			}
+			continue
+		}
 		params, ok := r.Params().(rule.ConsumesParams)
 		if r.Type() != rule.TypeConsumes || !ok {
 			t.Errorf("%s = %q, want a built-in imports rule", id, r.Type())
 			continue
 		}
-		switch id {
-		case "arclint/hexagonal:domain/standard-library-only":
-			if !params.External.Forbids() || params.Internal != nil {
-				t.Errorf("%s external = %s, want forbid alone", id, params.External)
-			}
-		case "arclint/hexagonal:application/core-libraries-only":
-			if got := params.External.Paths(); len(got) != 1 || got[0] != "effect" || params.Internal != nil {
-				t.Errorf("%s external = %s, want [effect] alone", id, params.External)
-			}
-		default:
-			if params.Internal == nil || params.External.Restricts() {
-				t.Errorf("%s must restrict internal imports only", id)
-			}
+		for _, z := range r.Scope().Zones() {
+			importRules[z.String()]++
+		}
+		if params.Internal == nil {
+			t.Errorf("%s must restrict internal imports", id)
+		}
+		wantExternal := rule.ImportAllow
+		if id == "arclint/hexagonal:domain/depends-on-nothing-outside" {
+			wantExternal = rule.ImportForbid
+		}
+		if params.External != wantExternal {
+			t.Errorf("%s external = %q, want %q", id, params.External, wantExternal)
+		}
+	}
+	// one-import-rule-per-zone: every zone a rule constrains has one imports rule.
+	for zone, n := range importRules {
+		if n != 1 {
+			t.Errorf("zone %s carries %d imports rules, want 1", zone, n)
 		}
 	}
 	if len(want) != 0 {
 		t.Errorf("missing rules: %v", want)
 	}
-	if exts := p.Extensions(); len(exts) != 0 {
-		t.Errorf("hexagonal speaks only built-in imports rules; extensions = %v", exts)
+	exts := p.Extensions()
+	if len(exts) != 1 || exts[0].FileName() != "hexagonal_allowed_packages.ts" {
+		t.Errorf("extensions = %v, want hexagonal_allowed_packages.ts", exts)
 	}
 }

@@ -39,11 +39,7 @@ func writeContext(p *out.Printer, th Theme, c application.ArchitecturalContext) 
 			}
 			p.Printf("  internal imports: %s\n", policy)
 		}
-		switch m.External {
-		case "allow":
-		case "only":
-			p.Printf("  external imports: only %s\n", strings.Join(m.ExternalPaths, ", "))
-		default:
+		if m.External != "allow" {
 			p.Printf("  external imports: %s\n", m.External)
 		}
 		if m.Stdlib != "allow" {

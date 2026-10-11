@@ -59,112 +59,34 @@ func (l AllowList) Permits(m ZoneName) bool {
 	return false
 }
 
-// ImportPolicy states what an imports Constraint lets a Zone do with
-// one class of imports: allow them, forbid them, or, for imports from
-// outside the repository, allow only the import paths it lists, each
-// matched exactly as the code spells it. The zero value resolves to
-// allow, the declared default.
-type ImportPolicy struct {
-	mode  string
-	paths []string
-}
+// ImportPolicy allows or forbids one class of imports. The zero value
+// resolves to allow, the declared default.
+type ImportPolicy string
 
-// The policy modes; a listed policy is spelled as its paths, never as
-// a mode word.
+// The two import policies.
 const (
-	importModeAllow  = "allow"
-	importModeForbid = "forbid"
-	importModeOnly   = "only"
-)
-
-// The two policies spelled with one word.
-var (
-	ImportAllow  = ImportPolicy{mode: importModeAllow}
-	ImportForbid = ImportPolicy{mode: importModeForbid}
+	ImportAllow  ImportPolicy = "allow"
+	ImportForbid ImportPolicy = "forbid"
 )
 
 // ParseImportPolicy accepts allow or forbid; the empty string resolves
 // to the declared default, allow.
 func ParseImportPolicy(s string) (ImportPolicy, error) {
-	switch s {
-	case importModeAllow, "":
+	switch ImportPolicy(s) {
+	case ImportAllow, ImportForbid:
+		return ImportPolicy(s), nil
+	}
+	if s == "" {
 		return ImportAllow, nil
-	case importModeForbid:
-		return ImportForbid, nil
 	}
-	return ImportPolicy{}, fmt.Errorf("import policy %q: not allow, forbid, or a list of import paths", s)
+	return "", fmt.Errorf("import policy %q: not allow or forbid", s)
 }
 
-// NewImportPathList returns the policy that allows only the listed
-// import paths. It enforces ImportPolicy's invariant: the list holds at
-// least one path, because forbid is how a Zone says it may import none;
-// a blank or repeated path is rejected as well.
-func NewImportPathList(paths []string) (ImportPolicy, error) {
-	if len(paths) == 0 {
-		return ImportPolicy{}, fmt.Errorf("import policy lists no import path; write forbid to allow none")
-	}
-	seen := map[string]bool{}
-	for _, p := range paths {
-		if strings.TrimSpace(p) == "" || p != strings.TrimSpace(p) {
-			return ImportPolicy{}, fmt.Errorf("import policy lists the blank or padded path %q", p)
-		}
-		if seen[p] {
-			return ImportPolicy{}, fmt.Errorf("import policy lists %q twice", p)
-		}
-		seen[p] = true
-	}
-	return ImportPolicy{mode: importModeOnly, paths: append([]string(nil), paths...)}, nil
-}
-
-// Forbids reports whether the policy forbids its whole import class.
-func (p ImportPolicy) Forbids() bool { return p.mode == importModeForbid }
-
-// Lists reports whether the policy allows only listed import paths.
-func (p ImportPolicy) Lists() bool { return p.mode == importModeOnly }
-
-// Paths returns the listed import paths, in the order written.
-func (p ImportPolicy) Paths() []string { return append([]string(nil), p.paths...) }
-
-// Permits reports whether an import spelled path is allowed: every path
-// under allow, none under forbid, and under a list only a path written
-// exactly as listed.
-func (p ImportPolicy) Permits(path string) bool {
-	switch p.mode {
-	case importModeForbid:
-		return false
-	case importModeOnly:
-		for _, listed := range p.paths {
-			if listed == path {
-				return true
-			}
-		}
-		return false
-	}
-	return true
-}
-
-// Restricts reports whether the policy narrows its import class.
-func (p ImportPolicy) Restricts() bool { return p.Forbids() || p.Lists() }
-
-// String renders the policy as written: allow, forbid, or its paths.
-func (p ImportPolicy) String() string {
-	switch p.mode {
-	case importModeForbid:
-		return importModeForbid
-	case importModeOnly:
-		return "[" + strings.Join(p.paths, ", ") + "]"
-	}
-	return importModeAllow
-}
+// Forbids reports whether the policy forbids its import class.
+func (p ImportPolicy) Forbids() bool { return p == ImportForbid }
 
 func (p ImportPolicy) valid() bool {
-	switch p.mode {
-	case "", importModeAllow, importModeForbid:
-		return len(p.paths) == 0
-	case importModeOnly:
-		return len(p.paths) > 0
-	}
-	return false
+	return p == "" || p == ImportAllow || p == ImportForbid
 }
 
 // ConsumesConstraint state what the Rule's Zone may import. Internal nil
@@ -190,15 +112,12 @@ func (p ConsumesConstraint) AcceptsFiles() bool { return false }
 // Validate rejects an invalid constraint configuration.
 func (p ConsumesConstraint) Validate() error {
 	if !p.External.valid() {
-		return fmt.Errorf("consumes: external policy %s invalid", p.External)
+		return fmt.Errorf("consumes: external policy %q invalid", p.External)
 	}
 	if !p.Stdlib.valid() {
-		return fmt.Errorf("consumes: stdlib policy %s invalid", p.Stdlib)
+		return fmt.Errorf("consumes: stdlib policy %q invalid", p.Stdlib)
 	}
-	if p.Stdlib.Lists() {
-		return fmt.Errorf("consumes: stdlib takes allow or forbid; only external imports take a list of import paths")
-	}
-	if p.Internal == nil && !p.External.Restricts() && !p.Stdlib.Forbids() {
+	if p.Internal == nil && !p.External.Forbids() && !p.Stdlib.Forbids() {
 		return fmt.Errorf("consumes: no restriction declared; the Rule would state no proposition")
 	}
 	return nil
@@ -214,11 +133,8 @@ func (p ConsumesConstraint) Proposition() string {
 			parts = append(parts, fmt.Sprintf("imports only the declared Zones %s", zoneList(p.Internal.zones)))
 		}
 	}
-	switch {
-	case p.External.Forbids():
+	if p.External.Forbids() {
 		parts = append(parts, "uses no external imports")
-	case p.External.Lists():
-		parts = append(parts, fmt.Sprintf("uses only the external imports %s", p.External))
 	}
 	if p.Stdlib.Forbids() {
 		parts = append(parts, "uses no standard-library imports")

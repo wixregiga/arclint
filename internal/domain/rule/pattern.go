@@ -229,6 +229,9 @@ func NewPattern(spec PatternSpec) (Pattern, error) {
 		r.provenance = &ref
 		stamped = append(stamped, r)
 	}
+	if err := patternImportsRuleConflicts(ref, stamped); err != nil {
+		return Pattern{}, err
+	}
 	seenExt := map[string]bool{}
 	copiedExt := make([]PatternExtension, 0, len(spec.Extensions))
 	for _, e := range spec.Extensions {

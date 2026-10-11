@@ -160,18 +160,18 @@ func (uc PublishAgentsContext) Execute() (changed bool, path string, err error) 
 	return changed, path, nil
 }
 
-func renderAgentsBlock(cfg rule.Configured, lang vocab.UbiquitousLanguage,
+func renderAgentsBlock(cfg rule.Ruleset, lang vocab.UbiquitousLanguage,
 	recorded bool, registered []RegisteredExtensionRule,
 ) string {
 	var b strings.Builder
 	b.WriteString("## Architecture contracts (arclint)\n\n")
-	languages := make([]string, 0, len(cfg.Languages))
-	for _, l := range cfg.Languages {
+	languages := make([]string, 0, len(cfg.Languages()))
+	for _, l := range cfg.Languages() {
 		languages = append(languages, string(l))
 	}
 	fmt.Fprintf(&b, "Enforced from %s: %d rules over languages [%s].\n\n",
 		rule.RulesetFileName,
-		len(cfg.Rules), strings.Join(languages, ", "))
+		len(cfg.Rules()), strings.Join(languages, ", "))
 	writeExtendedPatterns(&b, cfg)
 	writeWorkflow(&b)
 	writeCommands(&b)
@@ -190,10 +190,10 @@ func renderAgentsBlock(cfg rule.Configured, lang vocab.UbiquitousLanguage,
 // Rule ID below knows which Pattern owns it and that the Rule is
 // changed through an Override in rules.arclint.yaml, never by editing the
 // Pattern.
-func writeExtendedPatterns(b *strings.Builder, cfg rule.Configured) {
+func writeExtendedPatterns(b *strings.Builder, cfg rule.Ruleset) {
 	var refs []rule.PatternReference
 	counts := map[string]int{}
-	for _, r := range cfg.Rules {
+	for _, r := range cfg.Rules() {
 		ref, ok := r.Provenance()
 		if !ok {
 			continue
@@ -327,13 +327,13 @@ func writeRecordedDomain(b *strings.Builder, lang vocab.UbiquitousLanguage) {
 // writeZoneRules lists every declared Zone with its import
 // contract and the Rules bound to it, propositions included; the consumes
 // Rule is folded into the imports line rather than repeated.
-func writeZoneRules(b *strings.Builder, cfg rule.Configured) {
-	if len(cfg.Zones) == 0 {
+func writeZoneRules(b *strings.Builder, cfg rule.Ruleset) {
+	if len(cfg.Zones()) == 0 {
 		return
 	}
 	b.WriteString("### Zones and their rules\n\n")
-	for _, m := range cfg.Zones {
-		p := zonePolicy(m, cfg.Rules)
+	for _, m := range cfg.Zones() {
+		p := zonePolicy(m, cfg.Rules())
 		line := "- **" + p.Name + "**"
 		if p.Description != "" {
 			line += ": " + p.Description
@@ -342,7 +342,7 @@ func writeZoneRules(b *strings.Builder, cfg rule.Configured) {
 		if imports := importsLine(p); imports != "" {
 			b.WriteString("  - " + imports + "\n")
 		}
-		for _, r := range cfg.Rules {
+		for _, r := range cfg.Rules() {
 			if r.Type() == rule.TypeConsumes || !nameIn(r.Scope().Zones(), m.Name()) {
 				continue
 			}
@@ -364,13 +364,10 @@ func importsLine(p ZonePolicy) string {
 			parts = append(parts, "imports only: "+strings.Join(p.Internal, ", "))
 		}
 	}
-	switch p.External {
-	case rule.ImportForbid.String():
+	if p.External == string(rule.ImportForbid) {
 		parts = append(parts, "external imports forbidden")
-	case ExternalOnly:
-		parts = append(parts, "external imports only: "+strings.Join(p.ExternalPaths, ", "))
 	}
-	if p.Stdlib == rule.ImportForbid.String() {
+	if p.Stdlib == string(rule.ImportForbid) {
 		parts = append(parts, "stdlib imports forbidden")
 	}
 	return strings.Join(parts, "; ")
@@ -380,9 +377,9 @@ func importsLine(p ZonePolicy) string {
 // meta-model once a domain is recorded: they judge the recorded domain
 // against the code without any Pattern, and a ruleset adopts one the
 // way it adopts a distributed Rule, with an Override under its id.
-func writeBuiltInRules(b *strings.Builder, cfg rule.Configured) {
+func writeBuiltInRules(b *strings.Builder, cfg rule.Ruleset) {
 	var lines []string
-	for _, r := range cfg.Rules {
+	for _, r := range cfg.Rules() {
 		if !r.BuiltIn() {
 			continue
 		}
@@ -404,9 +401,9 @@ func writeBuiltInRules(b *strings.Builder, cfg rule.Configured) {
 // writeRepositoryRules lists the Rules that range over the repository
 // rather than one Zone: layers, protections, cycles, and
 // repository-scoped extension rules.
-func writeRepositoryRules(b *strings.Builder, cfg rule.Configured) {
+func writeRepositoryRules(b *strings.Builder, cfg rule.Ruleset) {
 	var lines []string
-	for _, r := range cfg.Rules {
+	for _, r := range cfg.Rules() {
 		if r.Type() == rule.TypeConsumes || r.BuiltIn() || len(r.Scope().Zones()) > 0 {
 			continue
 		}

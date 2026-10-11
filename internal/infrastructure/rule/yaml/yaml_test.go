@@ -39,28 +39,28 @@ func TestLoadTargetRuleset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ConfiguredRules: %v", err)
 	}
-	if len(cfg.Zones) != 28 {
-		t.Errorf("zones = %d, want 28", len(cfg.Zones))
+	if len(cfg.Zones()) != 28 {
+		t.Errorf("zones = %d, want 28", len(cfg.Zones()))
 	}
 	builtIn, err := rule.BuiltIn()
 	if err != nil {
 		t.Fatalf("BuiltIn: %v", err)
 	}
 	const local = 40
-	if len(cfg.Rules) != local+len(builtIn) {
-		t.Errorf("rules = %d, want %d local + %d built-in", len(cfg.Rules), local, len(builtIn))
+	if len(cfg.Rules()) != local+len(builtIn) {
+		t.Errorf("rules = %d, want %d local + %d built-in", len(cfg.Rules()), local, len(builtIn))
 	}
-	if len(cfg.Languages) != 2 || cfg.Languages[0] != rule.LanguageGo || cfg.Languages[1] != rule.LanguageTypeScript {
-		t.Errorf("languages = %v, want [go typescript]", cfg.Languages)
+	if len(cfg.Languages()) != 2 || cfg.Languages()[0] != rule.LanguageGo || cfg.Languages()[1] != rule.LanguageTypeScript {
+		t.Errorf("languages = %v, want [go typescript]", cfg.Languages())
 	}
-	if cfg.Scan.UnknownImports != rule.UnknownImportsError {
-		t.Errorf("unknown imports policy = %q, want error", cfg.Scan.UnknownImports)
+	if cfg.Scan().UnknownImports != rule.UnknownImportsError {
+		t.Errorf("unknown imports policy = %q, want error", cfg.Scan().UnknownImports)
 	}
-	if len(cfg.Extensions) != 0 {
-		t.Errorf("the repository extends no Pattern; got %d Pattern-supplied extensions", len(cfg.Extensions))
+	if len(cfg.Extensions()) != 0 {
+		t.Errorf("the repository extends no Pattern; got %d Pattern-supplied extensions", len(cfg.Extensions()))
 	}
 	byID := map[string]rule.Rule{}
-	for _, r := range cfg.Rules {
+	for _, r := range cfg.Rules() {
 		byID[r.ID().Qualified()] = r
 		if r.Proposition() == "" {
 			t.Errorf("%s: every Rule states its Constraint", r.ID().Qualified())
@@ -151,18 +151,18 @@ func loadString(t *testing.T, content string, available ...rule.Pattern) (yamlru
 	return yamlrule.Load([]byte(content), "test.yaml", vocab.UbiquitousLanguage{}, available)
 }
 
-func mustLoad(t *testing.T, content string, available ...rule.Pattern) rule.Configured {
+func mustLoad(t *testing.T, content string, available ...rule.Pattern) rule.Ruleset {
 	t.Helper()
 	doc, err := loadString(t, content, available...)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	return doc.Configured
+	return doc.Ruleset
 }
 
-func ruleByID(t *testing.T, cfg rule.Configured, id string) rule.Rule {
+func ruleByID(t *testing.T, cfg rule.Ruleset, id string) rule.Rule {
 	t.Helper()
-	for _, r := range cfg.Rules {
+	for _, r := range cfg.Rules() {
 		if r.ID().Qualified() == id {
 			return r
 		}
@@ -171,9 +171,9 @@ func ruleByID(t *testing.T, cfg rule.Configured, id string) rule.Rule {
 	return rule.Rule{}
 }
 
-func ruleIDs(cfg rule.Configured) []string {
-	out := make([]string, 0, len(cfg.Rules))
-	for _, r := range cfg.Rules {
+func ruleIDs(cfg rule.Ruleset) []string {
+	out := make([]string, 0, len(cfg.Rules()))
+	for _, r := range cfg.Rules() {
 		out = append(out, r.ID().Qualified())
 	}
 	return out
@@ -260,23 +260,23 @@ rules:
       paths: ["internal/legacy/**"]
       reason: "adopted debt tracked in the baseline"
 `)
-	if len(cfg.Languages) != 2 || cfg.Languages[1] != rule.LanguageTypeScript {
-		t.Errorf("languages = %v", cfg.Languages)
+	if len(cfg.Languages()) != 2 || cfg.Languages()[1] != rule.LanguageTypeScript {
+		t.Errorf("languages = %v", cfg.Languages())
 	}
-	if cfg.Scan.UnknownImports != rule.UnknownImportsIgnore || !cfg.Scan.IncludeTestdata || len(cfg.Scan.Exclude) != 1 {
-		t.Errorf("scan = %+v", cfg.Scan)
+	if cfg.Scan().UnknownImports != rule.UnknownImportsIgnore || !cfg.Scan().IncludeTestdata || len(cfg.Scan().Exclude) != 1 {
+		t.Errorf("scan = %+v", cfg.Scan())
 	}
-	if len(cfg.Zones) != 4 {
-		t.Fatalf("zones = %d, want 4", len(cfg.Zones))
+	if len(cfg.Zones()) != 4 {
+		t.Fatalf("zones = %d, want 4", len(cfg.Zones()))
 	}
-	if paths := cfg.Zones[0].Paths(); len(paths) != 1 || paths[0].String() != "internal/domain/**" {
+	if paths := cfg.Zones()[0].Paths(); len(paths) != 1 || paths[0].String() != "internal/domain/**" {
 		t.Errorf("string zone paths = %v", paths)
 	}
-	if paths := cfg.Zones[1].Paths(); len(paths) != 2 {
+	if paths := cfg.Zones()[1].Paths(); len(paths) != 2 {
 		t.Errorf("list zone paths = %v", paths)
 	}
-	if cfg.Zones[2].Description() != "Outbound adapters." {
-		t.Errorf("object zone description = %q", cfg.Zones[2].Description())
+	if cfg.Zones()[2].Description() != "Outbound adapters." {
+		t.Errorf("object zone description = %q", cfg.Zones()[2].Description())
 	}
 	want := map[string]rule.Type{
 		"domain/stdlib-only":         rule.TypeConsumes,
@@ -295,7 +295,7 @@ rules:
 		"domain/checked":             rule.TypeExtension,
 		"repo/checked":               rule.TypeExtension,
 	}
-	if len(cfg.Rules) != len(want) {
+	if len(cfg.Rules()) != len(want) {
 		t.Fatalf("rules = %v, want %d", ruleIDs(cfg), len(want))
 	}
 	for id, typ := range want {
@@ -306,7 +306,7 @@ rules:
 	if r := ruleByID(t, cfg, "domain/stdlib-only"); r.Rationale().String() != "The domain imports nothing else." {
 		t.Errorf("rationale must preserve the authored reason, got %q", r.Rationale())
 	}
-	if p := ruleByID(t, cfg, "application/imports-domain").Params().(rule.ConsumesParams); p.Internal == nil || len(p.Internal.Zones()) != 1 || p.External.Restricts() {
+	if p := ruleByID(t, cfg, "application/imports-domain").Params().(rule.ConsumesParams); p.Internal == nil || len(p.Internal.Zones()) != 1 || p.External != rule.ImportAllow {
 		t.Errorf("imports params = %+v", p)
 	}
 	if r := ruleByID(t, cfg, "domain/each-aggregate"); r.Severity() != rule.SeverityWarning {
@@ -833,18 +833,18 @@ rules:
     imports:
       internal: [core]
 `, p)
-	if len(cfg.Zones) != 4 {
-		t.Fatalf("zones = %d, want 3 bound + 1 local", len(cfg.Zones))
+	if len(cfg.Zones()) != 4 {
+		t.Fatalf("zones = %d, want 3 bound + 1 local", len(cfg.Zones()))
 	}
-	core := cfg.Zones[0]
+	core := cfg.Zones()[0]
 	if core.Name() != "core" || core.Description() != "The domain core." || !core.Contains("internal/core/x.go") {
 		t.Errorf("bound core = %+v", core)
 	}
-	if ports := cfg.Zones[1]; len(ports.Paths()) != 2 {
+	if ports := cfg.Zones()[1]; len(ports.Paths()) != 2 {
 		t.Errorf("bound ports paths = %v", ports.Paths())
 	}
-	if cfg.Zones[3].Name() != "shared" {
-		t.Errorf("local zone must follow the bound ones, got %s", cfg.Zones[3].Name())
+	if cfg.Zones()[3].Name() != "shared" {
+		t.Errorf("local zone must follow the bound ones, got %s", cfg.Zones()[3].Name())
 	}
 	ids := ruleIDs(cfg)
 	if len(ids) != 7 || ids[0] != "acme/hexagonal:core/stdlib-only" || ids[6] != "shared/imports" {
@@ -868,9 +868,9 @@ rules:
 	if untouched := ruleByID(t, cfg, "acme/hexagonal:adapters/core-only"); untouched.Severity() != rule.SeverityError {
 		t.Errorf("an unoverridden pattern rule keeps its severity")
 	}
-	if len(cfg.Extensions) != 1 || cfg.Extensions[0].Pattern.String() != "acme/hexagonal@1.0.0" ||
-		cfg.Extensions[0].Extension.FileName() != "acme_check.ts" {
-		t.Errorf("extensions = %+v", cfg.Extensions)
+	if len(cfg.Extensions()) != 1 || cfg.Extensions()[0].Pattern.String() != "acme/hexagonal@1.0.0" ||
+		cfg.Extensions()[0].Extension.FileName() != "acme_check.ts" {
+		t.Errorf("extensions = %+v", cfg.Extensions())
 	}
 }
 
@@ -1143,8 +1143,8 @@ extends:
 	if source.calls != 1 {
 		t.Errorf("pattern sources consulted %d times, want once", source.calls)
 	}
-	if len(cfg.Rules) != 6 || len(cfg.Zones) != 3 {
-		t.Errorf("adopted %d rules and %d zones", len(cfg.Rules), len(cfg.Zones))
+	if len(cfg.Rules()) != 6 || len(cfg.Zones()) != 3 {
+		t.Errorf("adopted %d rules and %d zones", len(cfg.Rules()), len(cfg.Zones()))
 	}
 
 	bare := filepath.Join(dir, "bare.yaml")
@@ -1193,41 +1193,5 @@ func TestDiscoverPath(t *testing.T) {
 	}
 	if _, err := yamlrule.DiscoverPath(t.TempDir(), "rules.arclint.yaml"); err == nil {
 		t.Errorf("expected discovery failure in an empty tree")
-	}
-}
-
-// TestImportsExternalTakesAListOfImportPaths covers the spelling of an
-// external import list: accepted under external, refused under stdlib,
-// and refused when empty, since forbid already says none.
-func TestImportsExternalTakesAListOfImportPaths(t *testing.T) {
-	cfg := mustLoad(t, `runtime: [ts]
-zones:
-  application: {paths: src/application/**}
-rules:
-  application/core:
-    on: application
-    imports:
-      external: [effect]
-`)
-	p := ruleByID(t, cfg, "application/core").Params().(rule.ConsumesParams)
-	if got := p.External.Paths(); len(got) != 1 || got[0] != "effect" || !p.External.Permits("effect") || p.External.Permits("effect/http") {
-		t.Errorf("external = %s", p.External)
-	}
-	for name, body := range map[string]string{
-		"stdlib list": "      stdlib: [os]\n",
-		"empty list":  "      external: []\n",
-		"twice":       "      external: [effect, effect]\n",
-	} {
-		_, err := loadString(t, `runtime: [ts]
-zones:
-  application: {paths: src/application/**}
-rules:
-  application/core:
-    on: application
-    imports:
-`+body)
-		if err == nil {
-			t.Errorf("%s: accepted", name)
-		}
 	}
 }

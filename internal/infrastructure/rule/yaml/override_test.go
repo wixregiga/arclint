@@ -27,7 +27,7 @@ rules:
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := ruleByID(t, doc.Configured, "value_object/no-setters")
+	r := ruleByID(t, doc.Ruleset, "value_object/no-setters")
 	if !r.BuiltIn() || r.Severity() != rule.SeverityInfo || !r.Disabled() {
 		t.Fatal("built-in adoption decisions missing")
 	}

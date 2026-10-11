@@ -45,9 +45,11 @@ func TestDependencyInspectionDistinguishesUnobservedAndUnzonedTargets(t *testing
 	}, "m/source.go", "unowned/known.go")
 	// Use no Zones so observation status cannot be inferred from membership.
 	cfg, _ := fixture(t)
-	cfg.Zones = nil
-	cfg.Rules = nil
-	cfg.Languages = []rule.Language{rule.LanguageGo}
+	cfg = edited(t, cfg, func(s *rule.RulesetSpec) {
+		s.Zones = nil
+		s.Rules = nil
+		s.Languages = []rule.Language{rule.LanguageGo}
+	})
 	uc, err := application.NewGetArchitecturalContext(fakeRepository{cfg}, emptyKnowledge())
 	if err != nil {
 		t.Fatal(err)
@@ -76,7 +78,7 @@ func TestDependencyInspectionDistinguishesUnobservedAndUnzonedTargets(t *testing
 func dependencyContext(t *testing.T, facts map[string]conformance.LanguageFacts, paths ...string) (application.GetArchitecturalContext, *fakeObservations) {
 	t.Helper()
 	cfg, _ := fixture(t)
-	cfg.Languages = []rule.Language{rule.LanguageGo, rule.LanguageTypeScript}
+	cfg = edited(t, cfg, func(s *rule.RulesetSpec) { s.Languages = []rule.Language{rule.LanguageGo, rule.LanguageTypeScript} })
 	for name, pattern := range map[string]string{"all": "**", "target": "target/**", "precise": "target/one.ts"} {
 		glob, err := rule.NewGlob(pattern)
 		if err != nil {
@@ -86,7 +88,7 @@ func dependencyContext(t *testing.T, facts map[string]conformance.LanguageFacts,
 		if err != nil {
 			t.Fatal(err)
 		}
-		cfg.Zones = append(cfg.Zones, zone)
+		cfg = edited(t, cfg, func(s *rule.RulesetSpec) { s.Zones = append(s.Zones, zone) })
 	}
 	files := []conformance.ObservedFile{}
 	for _, p := range paths {

@@ -189,7 +189,7 @@ func TestContextWorksiteScopesDomain(t *testing.T) {
 	if !d.Scoped || !d.Located {
 		t.Fatalf("scoped=%v located=%v", d.Scoped, d.Located)
 	}
-	if d.Counts.Contexts != 6 || d.Shown.Contexts != 1 || d.Shown.Invariants != 6 {
+	if d.Counts.Contexts != 6 || d.Shown.Contexts != 1 || d.Shown.Invariants != 7 {
 		t.Fatalf("counts %+v shown %+v", d.Counts, d.Shown)
 	}
 	if len(d.Contexts) != 1 || d.Contexts[0].Name != "rule" {
@@ -274,7 +274,7 @@ func TestContextZoneNamedForContextKeepsItWhole(t *testing.T) {
 	if len(ruleCtx.Aggregates) != 1 || ruleCtx.Aggregates[0].Name != "Rule" || ruleCtx.Aggregates[0].Identity != "RuleID" || len(ruleCtx.Aggregates[0].Entities) != 2 {
 		t.Fatalf("context rule is not whole: %+v", *ruleCtx)
 	}
-	if len(ruleCtx.ValueObjects) != 13 || len(ruleCtx.Invariants) != 11 {
+	if len(ruleCtx.ValueObjects) != 12 || len(ruleCtx.Invariants) != 11 {
 		t.Fatalf("context rule is not whole: %d value objects, %d invariants in %+v", len(ruleCtx.ValueObjects), len(ruleCtx.Invariants), *ruleCtx)
 	}
 }

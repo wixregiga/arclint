@@ -29,8 +29,11 @@ type declaredZones struct {
 	err   error
 }
 
-func (d declaredZones) ConfiguredRules() (rule.Configured, error) {
-	return rule.Configured{Zones: d.zones}, d.err
+func (d declaredZones) ConfiguredRules() (rule.Ruleset, error) {
+	if d.err != nil {
+		return rule.Ruleset{}, d.err
+	}
+	return rule.NewRuleset(rule.RulesetSpec{Zones: d.zones})
 }
 
 // nestedZones declares domain over internal/domain and workflow nested in it.

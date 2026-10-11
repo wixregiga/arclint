@@ -115,11 +115,6 @@ contexts:
             A Rule carries exactly one Constraint; a Rule written with
             two constraint keys, or with none and no Override target, is
             rejected at load.
-          unique-qualified-id: >-
-            Two Rules with the same qualified RuleID cannot both exist
-            in one repository; a repository Rule spelled with the
-            RuleID of a Rule an extended Pattern distributes is
-            rejected at load.
           zone-has-a-path: >-
             A Zone in a repository ruleset has at least one path; a
             Zone written with no paths is legal only in a Pattern
@@ -164,20 +159,25 @@ contexts:
           imported_by, independent, acyclic, content, or uses. The key
           alone decides how the Rule is evaluated; a Rule never carries
           two.
-      ImportPolicy:
+      Ruleset:
         definition: >-
-          What an imports Constraint lets a Zone do with one class of
-          imports: allow them, forbid them, or, for imports from
-          outside the repository, allow only the import paths it
-          lists. A listed path is matched exactly as the code spells
-          it, a Go package path, a TypeScript specifier, or a Python
-          dotted module, so listing effect allows effect and not
-          effect/http. Two policies with the same mode and the same
-          paths are interchangeable.
+          Everything one repository has configured, assembled in load
+          order: the built-in Rules, every extended Pattern's Rules with
+          its Zones bound, and the repository's own Zones and Rules, with
+          every Override applied. A Ruleset answers which enabled imports
+          Rule constrains a Zone and which disabled ones once did.
         invariants:
-          never-an-empty-list: >-
-            An ImportPolicy that lists import paths lists at least
-            one; forbid is how a Zone says it may import none.
+          unique-qualified-id: >-
+            Two Rules with the same qualified RuleID cannot both exist in
+            one Ruleset; a repository Rule spelled with the RuleID of a
+            Rule an extended Pattern distributes is rejected at
+            construction.
+          one-import-rule-per-zone: >-
+            A Zone is constrained by at most one enabled imports Rule:
+            no two Rules with an imports Constraint that are not disabled
+            select the same Zone after their Exclusions. A Ruleset or a
+            Pattern that would hold two is rejected at construction,
+            naming the Zone and both RuleIDs.
       Scope:
         definition: >-
           Which code a Rule applies to: the repository or selected

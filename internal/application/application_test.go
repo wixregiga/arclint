@@ -14,7 +14,7 @@ import (
 
 // fixture builds one configured repository: zone "m" with a
 // snake_case naming Rule, observed with the given file paths.
-func fixture(t *testing.T, paths ...string) (rule.Configured, conformance.Observations) {
+func fixture(t *testing.T, paths ...string) (rule.Ruleset, conformance.Observations) {
 	t.Helper()
 	glob, err := rule.NewGlob("m/**")
 	if err != nil {
@@ -49,19 +49,44 @@ func fixture(t *testing.T, paths ...string) (rule.Configured, conformance.Observ
 	if err != nil {
 		t.Fatalf("NewObservations: %v", err)
 	}
-	cfg := rule.Configured{
+	cfg := ruleset(t, rule.RulesetSpec{
 		Rules:     []rule.Rule{r},
 		Zones:     []rule.Zone{zone},
 		Languages: []rule.Language{rule.LanguageGo},
-	}
+	})
 	return cfg, obs
 }
 
-type fakeRepository struct {
-	cfg rule.Configured
+// ruleset builds a Ruleset for a test through its one door, failing the
+// test when the spec breaks an invariant.
+func ruleset(t *testing.T, spec rule.RulesetSpec) rule.Ruleset {
+	t.Helper()
+	s, err := rule.NewRuleset(spec)
+	if err != nil {
+		t.Fatalf("NewRuleset: %v", err)
+	}
+	return s
 }
 
-func (f fakeRepository) ConfiguredRules() (rule.Configured, error) { return f.cfg, nil }
+// edited rebuilds cfg with change applied to its spec.
+func edited(t *testing.T, cfg rule.Ruleset, change func(*rule.RulesetSpec)) rule.Ruleset {
+	t.Helper()
+	spec := rule.RulesetSpec{
+		Rules:      cfg.Rules(),
+		Zones:      cfg.Zones(),
+		Languages:  cfg.Languages(),
+		Scan:       cfg.Scan(),
+		Extensions: cfg.Extensions(),
+	}
+	change(&spec)
+	return ruleset(t, spec)
+}
+
+type fakeRepository struct {
+	cfg rule.Ruleset
+}
+
+func (f fakeRepository) ConfiguredRules() (rule.Ruleset, error) { return f.cfg, nil }
 
 type fakeObservations struct {
 	calls     int
@@ -123,7 +148,7 @@ func (f *fakeKnowledge) Record(lang vocab.UbiquitousLanguage) error {
 
 func emptyKnowledge() *fakeKnowledge { return &fakeKnowledge{} }
 
-func newAssess(t *testing.T, cfg rule.Configured, obs conformance.Observations,
+func newAssess(t *testing.T, cfg rule.Ruleset, obs conformance.Observations,
 	baselines *fakeBaselineSource,
 ) application.AssessConformance {
 	t.Helper()
@@ -157,7 +182,7 @@ func TestListRulesSummarizes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDisablement: %v", err)
 	}
-	cfg.Rules[0] = cfg.Rules[0].Disable(disablement)
+	cfg = edited(t, cfg, func(s *rule.RulesetSpec) { s.Rules[0] = s.Rules[0].Disable(disablement) })
 	uc, err := application.NewListRules(fakeRepository{cfg})
 	if err != nil {
 		t.Fatalf("NewListRules: %v", err)
@@ -280,10 +305,11 @@ func TestShowRule(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewExclusion: %v", err)
 	}
-	cfg.Rules[0], err = cfg.Rules[0].Exclude(exclusion)
+	excluded, err := cfg.Rules()[0].Exclude(exclusion)
 	if err != nil {
 		t.Fatal(err)
 	}
+	cfg = edited(t, cfg, func(s *rule.RulesetSpec) { s.Rules[0] = excluded })
 
 	show, err := application.NewShowRule(fakeRepository{cfg})
 	if err != nil {
@@ -296,7 +322,7 @@ func TestShowRule(t *testing.T) {
 	if detail.Summary.ID != "t/p:m/snake" || len(detail.Zones) != 1 || detail.Zones[0] != "m" {
 		t.Errorf("detail = %+v", detail)
 	}
-	if detail.Summary.Proposition != cfg.Rules[0].Proposition() || !strings.Contains(detail.Summary.Proposition, "snake_case") {
+	if detail.Summary.Proposition != cfg.Rules()[0].Proposition() || !strings.Contains(detail.Summary.Proposition, "snake_case") {
 		t.Errorf("proposition = %q", detail.Summary.Proposition)
 	}
 	if len(detail.Exclusions) != 1 || detail.Exclusions[0].Reason != "adopted as-is" {
@@ -312,7 +338,7 @@ func TestShowRule(t *testing.T) {
 
 func TestShowRuleSeparatesRationaleFromProposition(t *testing.T) {
 	cfg, _ := fixture(t, "m/ok.go")
-	prior := cfg.Rules[0]
+	prior := cfg.Rules()[0]
 	r, err := rule.New(rule.Spec{
 		ID: prior.ID().Qualified(), Constraint: prior.Constraint(),
 		Scope:     prior.Scope(),
@@ -321,7 +347,7 @@ func TestShowRuleSeparatesRationaleFromProposition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.Rules[0] = r
+	cfg = edited(t, cfg, func(s *rule.RulesetSpec) { s.Rules[0] = r })
 	show, err := application.NewShowRule(fakeRepository{cfg})
 	if err != nil {
 		t.Fatal(err)

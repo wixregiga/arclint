@@ -56,7 +56,7 @@ type DependencyDiagnostic struct {
 	Message string `json:"message"`
 }
 
-func dependenciesOf(facts conformance.Facts, cfg rule.Configured) *ObservedDependencies {
+func dependenciesOf(facts conformance.Facts, cfg rule.Ruleset) *ObservedDependencies {
 	d := &ObservedDependencies{
 		Files: []DependencyFile{}, Edges: []DependencyImport{}, Diagnostics: []DependencyDiagnostic{},
 		Coverage: DependencyCoverage{Scope: "repository", Languages: []string{}, Complete: true},
@@ -71,17 +71,17 @@ func dependenciesOf(facts conformance.Facts, cfg rule.Configured) *ObservedDepen
 		d.Diagnostics = append(d.Diagnostics, DependencyDiagnostic{Path: file, Code: code, Message: message})
 	}
 	enabled := map[rule.Language]bool{}
-	for _, language := range cfg.Languages {
+	for _, language := range cfg.Languages() {
 		enabled[language] = true
 		d.Coverage.Languages = append(d.Coverage.Languages, string(language))
 	}
 	if len(enabled) == 0 {
 		diagnostic("", "NO_LANGUAGES", "No source languages are configured for import observation.")
 	}
-	if !cfg.Scan.IncludeTestdata {
+	if !cfg.Scan().IncludeTestdata {
 		d.Limitations = append(d.Limitations, "The scan excludes testdata directories.")
 	}
-	for _, excluded := range cfg.Scan.Exclude {
+	for _, excluded := range cfg.Scan().Exclude {
 		d.Limitations = append(d.Limitations, "Scan exclusion: "+excluded.String())
 	}
 	files := facts.Files()

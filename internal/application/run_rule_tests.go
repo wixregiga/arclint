@@ -102,8 +102,8 @@ func (uc RunRuleTests) Execute() ([]RuleTestResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load rule tests: %w", err)
 	}
-	byID := make(map[string]rule.Rule, len(cfg.Rules))
-	for _, r := range cfg.Rules {
+	byID := make(map[string]rule.Rule, len(cfg.Rules()))
+	for _, r := range cfg.Rules() {
 		byID[r.ID().Qualified()] = r
 	}
 	results := make([]RuleTestResult, 0, len(tests))
@@ -115,7 +115,7 @@ func (uc RunRuleTests) Execute() ([]RuleTestResult, error) {
 			results = append(results, result)
 			continue
 		}
-		observations, err := uc.fixtures.Observe(t.Files(), cfg.Languages, cfg.Scan, r.Enforcement().Facts())
+		observations, err := uc.fixtures.Observe(t.Files(), cfg.Languages(), cfg.Scan(), r.Enforcement().Facts())
 		if err != nil {
 			return nil, fmt.Errorf("rule test %q: observe fixture: %w", t.Name(), err)
 		}
@@ -140,9 +140,9 @@ func (uc RunRuleTests) Execute() ([]RuleTestResult, error) {
 		}
 		assessment, err := conformance.Run(conformance.Request{
 			Rules:          []rule.Rule{r},
-			Zones:          cfg.Zones,
+			Zones:          cfg.Zones(),
 			Observations:   observations,
-			UnknownImports: cfg.Scan.UnknownImports,
+			UnknownImports: cfg.Scan().UnknownImports,
 			Extensions:     uc.extensions,
 			Knowledge:      knowledge,
 		})

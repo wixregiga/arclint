@@ -19,13 +19,13 @@ type domainScope struct {
 	zones []rule.Zone
 }
 
-func worksiteScope(cfg rule.Configured, req ContextRequest) domainScope {
+func worksiteScope(cfg rule.Ruleset, req ContextRequest) domainScope {
 	scope := domainScope{}
 	for _, p := range req.Paths {
 		scope.paths = append(scope.paths, strings.TrimSuffix(p, "/"))
 	}
 	for _, name := range req.Zones {
-		for _, m := range cfg.Zones {
+		for _, m := range cfg.Zones() {
 			if string(m.Name()) == name {
 				scope.zones = append(scope.zones, m)
 			}

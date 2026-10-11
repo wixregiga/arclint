@@ -37,14 +37,14 @@ func TestStarterRulesetRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the starter ruleset must load through the strict loader: %v", err)
 	}
-	if len(cfg.Zones) != 1 || string(cfg.Zones[0].Name()) != "source" {
-		t.Errorf("zones = %+v, want the source zone", cfg.Zones)
+	if len(cfg.Zones()) != 1 || string(cfg.Zones()[0].Name()) != "source" {
+		t.Errorf("zones = %+v, want the source zone", cfg.Zones())
 	}
-	if len(cfg.Rules) != 1 || cfg.Rules[0].ID().Qualified() != "source/dependencies" {
-		t.Errorf("rules = %d, want the starter consumes rule", len(cfg.Rules))
+	if len(cfg.Rules()) != 1 || cfg.Rules()[0].ID().Qualified() != "source/dependencies" {
+		t.Errorf("rules = %d, want the starter consumes rule", len(cfg.Rules()))
 	}
-	if len(cfg.Languages) != 2 {
-		t.Errorf("languages = %v, want go and typescript", cfg.Languages)
+	if len(cfg.Languages()) != 2 {
+		t.Errorf("languages = %v, want go and typescript", cfg.Languages())
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".arclint", "extensions")); !os.IsNotExist(err) {
 		t.Errorf("bare init must not write .arclint/extensions, stat err = %v", err)
@@ -89,11 +89,11 @@ func TestVerticalRulesetRoundTrips(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, ".arclint", "extensions")); !os.IsNotExist(err) {
 		t.Errorf("adopting a pattern must not copy its extensions into the repository, stat err = %v", err)
 	}
-	if len(cfg.Extensions) != 5 {
-		t.Errorf("configured extensions = %d, want the five the pattern distributes", len(cfg.Extensions))
+	if len(cfg.Extensions()) != 5 {
+		t.Errorf("configured extensions = %d, want the five the pattern distributes", len(cfg.Extensions()))
 	}
 	got := map[string]bool{}
-	for _, m := range cfg.Zones {
+	for _, m := range cfg.Zones() {
 		got[string(m.Name())] = true
 	}
 	for _, name := range []string{"domain", "application", "infra", "app", "shared", "composition"} {
@@ -101,14 +101,14 @@ func TestVerticalRulesetRoundTrips(t *testing.T) {
 			t.Errorf("missing zone %q", name)
 		}
 	}
-	if len(cfg.Zones) != 6 {
-		t.Errorf("zones = %d, want 6", len(cfg.Zones))
+	if len(cfg.Zones()) != 6 {
+		t.Errorf("zones = %d, want 6", len(cfg.Zones()))
 	}
-	if len(cfg.Rules) != 16 {
-		t.Errorf("rules = %d, want 16", len(cfg.Rules))
+	if len(cfg.Rules()) != 16 {
+		t.Errorf("rules = %d, want 16", len(cfg.Rules()))
 	}
 	var sawIndependence bool
-	for _, r := range cfg.Rules {
+	for _, r := range cfg.Rules() {
 		if r.ID().Qualified() == "arclint/vertical:features/independent" {
 			sawIndependence = true
 			if r.Type() != "independence" {
@@ -119,8 +119,8 @@ func TestVerticalRulesetRoundTrips(t *testing.T) {
 	if !sawIndependence {
 		t.Errorf("missing arclint/vertical:features/independent")
 	}
-	if len(cfg.Languages) != 2 {
-		t.Errorf("languages = %v, want go and typescript", cfg.Languages)
+	if len(cfg.Languages()) != 2 {
+		t.Errorf("languages = %v, want go and typescript", cfg.Languages())
 	}
 }
 

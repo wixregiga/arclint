@@ -43,7 +43,7 @@ func TestRuleRationaleSchemaAndLoader(t *testing.T) {
 				}
 				return
 			}
-			r := ruleByID(t, doc.Configured, "no-cycles")
+			r := ruleByID(t, doc.Ruleset, "no-cycles")
 			if got := r.Rationale().String(); got != tc.reason {
 				t.Fatalf("rationale=%q, want %q", got, tc.reason)
 			}
@@ -101,7 +101,7 @@ rules:
 	if err := validateAgainstSchema(t, schema, source); err != nil {
 		t.Fatal(err)
 	}
-	if got := doc.Configured.Zones[0].Description(); got != "Core domain code." {
+	if got := doc.Ruleset.Zones()[0].Description(); got != "Core domain code." {
 		t.Fatalf("zone description=%q", got)
 	}
 	bad := []byte(strings.Replace(string(source), "description: Core domain code.", "rationale: Core domain code.", 1))

@@ -31,7 +31,7 @@ type hostOutput struct {
 // appZone is a ruleset declaring the Zone app over internal/**.
 type appZone struct{ t *testing.T }
 
-func (z appZone) ConfiguredRules() (rule.Configured, error) {
+func (z appZone) ConfiguredRules() (rule.Ruleset, error) {
 	name, err := rule.NewZoneName("app")
 	if err != nil {
 		z.t.Fatal(err)
@@ -44,7 +44,7 @@ func (z appZone) ConfiguredRules() (rule.Configured, error) {
 	if err != nil {
 		z.t.Fatal(err)
 	}
-	return rule.Configured{Zones: []rule.Zone{zone}}, nil
+	return rule.NewRuleset(rule.RulesetSpec{Zones: []rule.Zone{zone}})
 }
 
 func newTestEvents(t *testing.T, distro string) (*Events, string) {

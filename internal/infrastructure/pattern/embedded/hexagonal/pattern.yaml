@@ -61,21 +61,13 @@ zones:
 
 rules:
   domain/depends-on-nothing-outside:
-    rationale: "The domain imports no other zone except shared code."
+    rationale: "The domain imports no other zone except shared code, and no third-party package: only the language's standard library."
     on: domain
     exclude:
       paths: ["**/*_test.go", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py"]
       reason: "Tests wire fakes and adapters across zones."
     imports:
       internal: [shared]
-
-  domain/standard-library-only:
-    rationale: "The domain uses no third-party package, only the language's standard library."
-    on: domain
-    exclude:
-      paths: ["**/*_test.go", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py"]
-      reason: "Tests wire fakes and adapters across zones."
-    imports:
       external: forbid
 
   application/through-ports:
@@ -86,6 +78,7 @@ rules:
       reason: "Tests wire fakes and adapters across zones."
     imports:
       internal: [domain, shared]
+      external: allow
 
   application/core-libraries-only:
     rationale: "The application uses no third-party package except the Effect core, effect, whose Context.Service declares its ports on TypeScript; every effect/<module> path is technology and belongs in an adapter."
@@ -93,8 +86,9 @@ rules:
     exclude:
       paths: ["**/*_test.go", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py"]
       reason: "Tests wire fakes and adapters across zones."
-    imports:
-      external: [effect]
+    uses: hexagonal/allowed-packages
+    with:
+      packages: [effect]
 
   driving/calls-the-application:
     rationale: "Driving adapters import the application, the domain, shared code, and composition, never a driven adapter."
@@ -104,6 +98,7 @@ rules:
       reason: "Tests wire fakes and adapters across zones."
     imports:
       internal: [application, domain, shared, composition]
+      external: allow
 
   driven/implements-ports:
     rationale: "Driven adapters import the application's ports, the domain, and shared code, never a driving adapter."
@@ -113,6 +108,7 @@ rules:
       reason: "Tests wire fakes and adapters across zones."
     imports:
       internal: [application, domain, shared]
+      external: allow
 
   shared/product-free:
     rationale: "Shared code imports no other zone."
@@ -122,3 +118,4 @@ rules:
       reason: "Tests wire fakes and adapters across zones."
     imports:
       internal: []
+      external: allow

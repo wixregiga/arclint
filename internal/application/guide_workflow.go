@@ -65,7 +65,7 @@ func (uc GuideWorkflow) zones() func() []rule.Zone {
 		if !read {
 			read = true
 			if configured, err := uc.rules.ConfiguredRules(); err == nil {
-				declared = configured.Zones
+				declared = configured.Zones()
 			}
 		}
 		return declared

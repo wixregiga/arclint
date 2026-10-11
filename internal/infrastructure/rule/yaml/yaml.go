@@ -48,7 +48,7 @@ type Repository struct {
 	patterns  []PatternSource
 
 	once       sync.Once
-	configured rule.Configured
+	configured rule.Ruleset
 	err        error
 }
 
@@ -82,21 +82,21 @@ func (r *Repository) Root() string { return filepath.Dir(r.path) }
 // complete Rule aggregates: its own Rules plus those of every extended
 // Pattern with the repository's Overrides applied, expanded Rules
 // resolved against the recorded Ubiquitous Language.
-func (r *Repository) ConfiguredRules() (rule.Configured, error) {
+func (r *Repository) ConfiguredRules() (rule.Ruleset, error) {
 	r.once.Do(func() { r.configured, r.err = r.load() })
 	return r.configured, r.err
 }
 
-func (r *Repository) load() (rule.Configured, error) {
+func (r *Repository) load() (rule.Ruleset, error) {
 	data, err := os.ReadFile(r.path)
 	if err != nil {
-		return rule.Configured{}, fmt.Errorf("read ruleset: %w", err)
+		return rule.Ruleset{}, fmt.Errorf("read ruleset: %w", err)
 	}
 	lang := vocab.UbiquitousLanguage{}
 	if r.knowledge != nil {
 		recorded, found, err := r.knowledge.RecordedLanguage()
 		if err != nil {
-			return rule.Configured{}, fmt.Errorf("load domain model: %w", err)
+			return rule.Ruleset{}, fmt.Errorf("load domain model: %w", err)
 		}
 		if found {
 			lang = recorded
@@ -104,17 +104,17 @@ func (r *Repository) load() (rule.Configured, error) {
 	}
 	parsed, err := parse(data, r.path)
 	if err != nil {
-		return rule.Configured{}, err
+		return rule.Ruleset{}, err
 	}
 	if parsed.pattern != nil {
-		return rule.Configured{}, fmt.Errorf("%s: a pattern distribution file is not a repository ruleset", r.path)
+		return rule.Ruleset{}, fmt.Errorf("%s: a pattern distribution file is not a repository ruleset", r.path)
 	}
 	var available []rule.Pattern
 	if len(parsed.extends) > 0 {
 		for _, source := range r.patterns {
 			ps, err := source.Patterns()
 			if err != nil {
-				return rule.Configured{}, fmt.Errorf("%s: load patterns: %w", r.path, err)
+				return rule.Ruleset{}, fmt.Errorf("%s: load patterns: %w", r.path, err)
 			}
 			available = append(available, ps...)
 		}
@@ -123,10 +123,10 @@ func (r *Repository) load() (rule.Configured, error) {
 }
 
 // Document is one parsed and translated ruleset file: exactly one of
-// Configured (a repository ruleset) or Pattern (a distribution file)
-// is meaningful.
+// Ruleset (a repository ruleset) or Pattern (a distribution file) is
+// meaningful.
 type Document struct {
-	Configured rule.Configured
+	Ruleset rule.Ruleset
 	// Pattern is non-nil for Pattern distribution files.
 	Pattern *rule.Pattern
 }
@@ -152,7 +152,7 @@ func Load(data []byte, source string, lang vocab.UbiquitousLanguage, available [
 	if err != nil {
 		return Document{}, err
 	}
-	return Document{Configured: cfg}, nil
+	return Document{Ruleset: cfg}, nil
 }
 
 // LoadPattern parses one Pattern distribution file and attaches the
@@ -871,9 +871,9 @@ func (d *document) distribution(extensions []rule.PatternExtension) (rule.Patter
 // repository translates a repository ruleset: extended Patterns are
 // resolved and bound, their Rules re-expanded against the recorded
 // language, Overrides applied, and local Rules added.
-func (d *document) repository(lang vocab.UbiquitousLanguage, available []rule.Pattern) (rule.Configured, error) {
-	fail := func(format string, args ...any) (rule.Configured, error) {
-		return rule.Configured{}, fmt.Errorf("%s: %s", d.source, fmt.Sprintf(format, args...))
+func (d *document) repository(lang vocab.UbiquitousLanguage, available []rule.Pattern) (rule.Ruleset, error) {
+	fail := func(format string, args ...any) (rule.Ruleset, error) {
+		return rule.Ruleset{}, fmt.Errorf("%s: %s", d.source, fmt.Sprintf(format, args...))
 	}
 	byRef := map[string]rule.Pattern{}
 	for _, p := range available {
@@ -896,6 +896,9 @@ func (d *document) repository(lang vocab.UbiquitousLanguage, available []rule.Pa
 
 	var rules []rule.Rule
 	distributed := map[string]int{}
+	// where records, per qualified RuleID, the entry that brought the
+	// Rule in, so a Ruleset conflict names where to fix it.
+	where := map[string]string{}
 	if !lang.Empty() {
 		native, err := rule.BuiltIn()
 		if err != nil {
@@ -927,6 +930,7 @@ func (d *document) repository(lang vocab.UbiquitousLanguage, available []rule.Pa
 				return fail("%s: %v", ext.where, err)
 			}
 			distributed[r.ID().Qualified()] = len(rules)
+			where[r.ID().Qualified()] = fmt.Sprintf("%s (%s)", ext.where, p.Reference())
 			rules = append(rules, r)
 		}
 		for _, e := range p.Extensions() {
@@ -994,15 +998,29 @@ func (d *document) repository(lang vocab.UbiquitousLanguage, available []rule.Pa
 		if err != nil {
 			return fail("%v", err)
 		}
+		where[q] = e.where
 		rules = append(rules, r)
 	}
-	return rule.Configured{
+	set, err := rule.NewRuleset(rule.RulesetSpec{
 		Rules:      rules,
 		Zones:      zones,
 		Languages:  d.runtime,
 		Scan:       d.scan,
 		Extensions: extensions,
-	}, nil
+	})
+	var conflict rule.ImportsRuleConflictError
+	if errors.As(err, &conflict) {
+		lines := make([]string, 0, len(conflict.Conflicts))
+		for _, c := range conflict.Conflicts {
+			later := c.Rules[len(c.Rules)-1].ID().Qualified()
+			lines = append(lines, fmt.Sprintf("%s: %s", where[later], c.Sentence()))
+		}
+		return fail("%s", strings.Join(lines, "\n"+d.source+": "))
+	}
+	if err != nil {
+		return fail("%v", err)
+	}
+	return set, nil
 }
 
 func knownPatterns(available []rule.Pattern) string {
@@ -1247,38 +1265,24 @@ func parseImports(n *yaml.Node, where string) (rule.Constraint, error) {
 		}
 		params.Internal = &allow
 	}
-	// external takes allow, forbid, or a list of import paths; stdlib
-	// takes allow or forbid.
-	policy := func(key string, listAllowed bool) (rule.ImportPolicy, error) {
-		v := m.get(key)
-		if v != nil && listAllowed && v.Kind == yaml.SequenceNode {
-			paths, err := stringList(v, where+"."+key)
-			if err != nil {
-				return rule.ImportPolicy{}, err
-			}
-			p, err := rule.NewImportPathList(paths)
-			if err != nil {
-				return rule.ImportPolicy{}, fmt.Errorf("%s.%s: %v", where, key, err)
-			}
-			return p, nil
-		}
+	policy := func(key string) (rule.ImportPolicy, error) {
 		s := ""
-		if v != nil {
+		if v := m.get(key); v != nil {
 			var err error
 			if s, err = scalarString(v, where+"."+key); err != nil {
-				return rule.ImportPolicy{}, err
+				return "", err
 			}
 		}
 		p, err := rule.ParseImportPolicy(s)
 		if err != nil {
-			return rule.ImportPolicy{}, fmt.Errorf("%s.%s: %v", where, key, err)
+			return "", fmt.Errorf("%s.%s: %v", where, key, err)
 		}
 		return p, nil
 	}
-	if params.External, err = policy(keyExternal, true); err != nil {
+	if params.External, err = policy(keyExternal); err != nil {
 		return nil, err
 	}
-	if params.Stdlib, err = policy(keyStdlib, false); err != nil {
+	if params.Stdlib, err = policy(keyStdlib); err != nil {
 		return nil, err
 	}
 	return params, nil

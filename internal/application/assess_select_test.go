@@ -13,7 +13,7 @@ import (
 // Pattern t/shared distributes, so selection has something to narrow:
 // the local naming rule t/p:m/snake plus the structure rules
 // t/shared:m/keep and t/shared:m/keep2 requiring m/ok.go.
-func selectionFixture(t *testing.T) (rule.Configured, conformance.Observations) {
+func selectionFixture(t *testing.T) (rule.Ruleset, conformance.Observations) {
 	t.Helper()
 	cfg, obs := fixture(t, "m/ok.go")
 	keep, err := rule.NewGlob("m/ok.go")
@@ -39,7 +39,7 @@ func selectionFixture(t *testing.T) (rule.Configured, conformance.Observations) 
 		if err != nil {
 			t.Fatalf("rule.New: %v", err)
 		}
-		cfg.Rules = append(cfg.Rules, r)
+		cfg = edited(t, cfg, func(s *rule.RulesetSpec) { s.Rules = append(s.Rules, r) })
 	}
 	return cfg, obs
 }

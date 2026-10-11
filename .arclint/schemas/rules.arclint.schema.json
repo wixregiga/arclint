@@ -110,20 +110,6 @@
             },
             {
               "properties": {
-                "external": {
-                  "description": "Only the listed external import paths are allowed.",
-                  "minItems": 1,
-                  "type": "array",
-                  "uniqueItems": true
-                }
-              },
-              "required": [
-                "external"
-              ],
-              "type": "object"
-            },
-            {
-              "properties": {
                 "stdlib": {
                   "const": "forbid",
                   "description": "The standard-library import class is forbidden.",
@@ -136,11 +122,11 @@
               "type": "object"
             }
           ],
-          "description": "What the Zone may import. At least one restriction must be declared: an internal allow-list, external: forbid or a list of import paths, or stdlib: forbid.",
+          "description": "What the Zone may import. At least one restriction must be declared: an internal allow-list, external: forbid, or stdlib: forbid.",
           "properties": {
             "external": {
-              "$ref": "#/$defs/externalImportPolicy",
-              "description": "Policy for imports from outside the repository: allow, forbid, or a list of the import paths allowed."
+              "$ref": "#/$defs/importPolicy",
+              "description": "Policy for one import class."
             },
             "internal": {
               "description": "Declared Zones this Zone may import; absent means unrestricted, empty means none. The owning Zone is always permitted implicitly.",
@@ -373,25 +359,6 @@
         "uses"
       ],
       "type": "object"
-    },
-    "externalImportPolicy": {
-      "description": "Policy for imports from outside the repository: allow, forbid, or a list of the import paths allowed.",
-      "oneOf": [
-        {
-          "$ref": "#/$defs/importPolicy",
-          "description": "Policy for one import class."
-        },
-        {
-          "description": "Only these import paths, each matched exactly as the code spells it: a Go package path, a TypeScript specifier, or a Python dotted module.",
-          "items": {
-            "minLength": 1,
-            "type": "string"
-          },
-          "minItems": 1,
-          "type": "array",
-          "uniqueItems": true
-        }
-      ]
     },
     "glob": {
       "description": "Repo-relative path pattern: * and ? never cross /, a ** segment matches any number of segments, [...] matches one character. Brace alternation is rejected.",

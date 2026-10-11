@@ -82,13 +82,13 @@ func (t Type) Schema() TypeSchema {
 				Doc: "declared Zones this Zone may import; absent = unrestricted, empty = none",
 			},
 			{
-				Name: "external", Kind: "policy", Default: importModeAllow,
-				Enum: []string{importModeAllow, importModeForbid},
-				Doc:  "third-party import policy: allow, forbid, or a list of the import paths allowed, each matched exactly as written",
+				Name: "external", Kind: "policy", Default: string(ImportAllow),
+				Enum: []string{string(ImportAllow), string(ImportForbid)},
+				Doc:  "third-party import policy",
 			},
 			{
-				Name: "stdlib", Kind: "policy", Default: importModeAllow,
-				Enum: []string{importModeAllow, importModeForbid},
+				Name: "stdlib", Kind: "policy", Default: string(ImportAllow),
+				Enum: []string{string(ImportAllow), string(ImportForbid)},
 				Doc:  "standard-library import policy",
 			},
 		}
@@ -340,7 +340,6 @@ func defDescriptions() map[string]string {
 		"patternReference":        "Exact reference to one published Pattern version: namespace/name@version.",
 		"severity":                "Gate importance of a Violation.",
 		"importPolicy":            "Policy for one import class.",
-		"externalImportPolicy":    "Policy for imports from outside the repository: allow, forbid, or a list of the import paths allowed.",
 		"glob":                    "Repo-relative path pattern: * and ? never cross /, a ** segment matches any number of segments, [...] matches one character. Brace alternation is rejected.",
 		"caseSpec":                "File-name case vocabulary: one or more alternatives of kebab-case, snake_case, camelCase, PascalCase, or regex:PATTERN, combined with | (any-of); applies to the file stem, extension excluded.",
 		"expansionSource":         "Recorded Ubiquitous Language collection an expanded structure Rule derives its globs from.",
@@ -408,21 +407,8 @@ func schemaDefs() map[string]any {
 		"importPolicy": map[string]any{
 			"description": defDescription("importPolicy"),
 			"type":        "string",
-			"enum":        []string{importModeAllow, importModeForbid},
-			"default":     importModeAllow,
-		},
-		"externalImportPolicy": map[string]any{
-			"description": defDescription("externalImportPolicy"),
-			"oneOf": []any{
-				schemaRef("importPolicy"),
-				map[string]any{
-					"description": "Only these import paths, each matched exactly as the code spells it: a Go package path, a TypeScript specifier, or a Python dotted module.",
-					"type":        "array",
-					"minItems":    1,
-					"uniqueItems": true,
-					"items":       map[string]any{"type": "string", "minLength": 1},
-				},
-			},
+			"enum":        []string{string(ImportAllow), string(ImportForbid)},
+			"default":     string(ImportAllow),
 		},
 		"glob": map[string]any{
 			"description": defDescription("glob"),
@@ -691,7 +677,7 @@ func constraintRuleSchema(t Type) map[string]any {
 	switch t {
 	case TypeConsumes:
 		imports := strictObjectSchema(
-			"What the Zone may import. At least one restriction must be declared: an internal allow-list, external: forbid or a list of import paths, or stdlib: forbid.",
+			"What the Zone may import. At least one restriction must be declared: an internal allow-list, external: forbid, or stdlib: forbid.",
 			map[string]any{
 				"internal": map[string]any{
 					"description": "Declared Zones this Zone may import; absent means unrestricted, empty means none. The owning Zone is always permitted implicitly.",
@@ -699,7 +685,7 @@ func constraintRuleSchema(t Type) map[string]any {
 					"uniqueItems": true,
 					"items":       schemaRef("zoneName"),
 				},
-				"external": schemaRef("externalImportPolicy"),
+				"external": schemaRef("importPolicy"),
 				"stdlib":   schemaRef("importPolicy"),
 			},
 		)
@@ -708,17 +694,12 @@ func constraintRuleSchema(t Type) map[string]any {
 			map[string]any{
 				"type":       "object",
 				"required":   []string{"external"},
-				"properties": map[string]any{"external": map[string]any{"description": "The external import class is forbidden.", "type": "string", "const": importModeForbid}},
-			},
-			map[string]any{
-				"type":       "object",
-				"required":   []string{"external"},
-				"properties": map[string]any{"external": map[string]any{"description": "Only the listed external import paths are allowed.", "type": "array", "minItems": 1, "uniqueItems": true}},
+				"properties": map[string]any{"external": map[string]any{"description": "The external import class is forbidden.", "type": "string", "const": string(ImportForbid)}},
 			},
 			map[string]any{
 				"type":       "object",
 				"required":   []string{"stdlib"},
-				"properties": map[string]any{"stdlib": map[string]any{"description": "The standard-library import class is forbidden.", "type": "string", "const": importModeForbid}},
+				"properties": map[string]any{"stdlib": map[string]any{"description": "The standard-library import class is forbidden.", "type": "string", "const": string(ImportForbid)}},
 			},
 		}
 		props[key] = imports
