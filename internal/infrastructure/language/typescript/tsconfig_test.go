@@ -73,6 +73,32 @@ import { g } from "@/missing/thing";
 	expectTarget(t, importOf(t, facts, "src/main.ts", "@/missing/thing"), conformance.ImportUnknown, "", "")
 }
 
+// TestPathsKeepTheOrderWritten covers two patterns whose prefixes match
+// equally long: TypeScript keeps the one written first (checked against
+// ts.resolveModuleName with both orders). Each order runs many times,
+// because an unordered reading picks either pattern by chance.
+func TestPathsKeepTheOrderWritten(t *testing.T) {
+	for _, tc := range []struct {
+		paths, want string
+	}{
+		{`{"@/*": ["./a/*"], "@/*/test": ["./b/*"]}`, "a/x/test.ts"},
+		{`{"@/*/test": ["./b/*"], "@/*": ["./a/*"]}`, "b/x.ts"},
+	} {
+		root, files := writeFiles(t, map[string]string{
+			"tsconfig.json": `{"compilerOptions": {"paths": ` + tc.paths + `}}`,
+			"src/main.ts":   `import { a } from "@/x/test";` + "\n",
+			"a/x/test.ts":   "export const a = 1;\n",
+			"b/x.ts":        "export const b = 1;\n",
+		})
+		for range 64 {
+			got := importOf(t, produce(t, root, files), "src/main.ts", "@/x/test")
+			if got.TargetFile != tc.want {
+				t.Fatalf("paths %s: @/x/test reaches %q, want %q", tc.paths, got.TargetFile, tc.want)
+			}
+		}
+	}
+}
+
 // TestBaseURLAndExtendsChain covers baseUrl (bare specifiers resolve
 // from it, and paths resolve from it when set), extends written without
 // .json, the array form applied in order, and ${configDir} naming the

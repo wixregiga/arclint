@@ -1,7 +1,10 @@
 package typescript
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -49,6 +52,48 @@ type project struct {
 	disableSolutionSearching bool
 }
 
+// orderedPaths is compilerOptions.paths in the order the file writes
+// it. TypeScript keeps the first of two patterns whose prefixes match
+// equally long, so the order decides which file an import reaches.
+type orderedPaths []pathsEntry
+
+type pathsEntry struct {
+	pattern string
+	targets []string
+}
+
+// UnmarshalJSON reads the paths object property by property. A repeated
+// pattern keeps its first position and takes the last substitutions,
+// as a JavaScript object does.
+func (o *orderedPaths) UnmarshalJSON(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
+		return errors.New("paths is not an object")
+	}
+	position := map[string]int{}
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return fmt.Errorf("paths: %w", err)
+		}
+		pattern, _ := tok.(string)
+		var targets []string
+		if err := dec.Decode(&targets); err != nil {
+			return fmt.Errorf("paths %q: %w", pattern, err)
+		}
+		if i, seen := position[pattern]; seen {
+			(*o)[i].targets = targets
+			continue
+		}
+		position[pattern] = len(*o)
+		*o = append(*o, pathsEntry{pattern: pattern, targets: targets})
+	}
+	if _, err := dec.Token(); err != nil {
+		return fmt.Errorf("paths: %w", err)
+	}
+	return nil
+}
+
 // setting is one option value with the directory of the config that
 // declared it, since tsconfig paths resolve from their declaring file.
 type setting[T any] struct {
@@ -61,7 +106,7 @@ type setting[T any] struct {
 // resolved against the leaf config's directory.
 type merged struct {
 	baseURL                  setting[string]
-	paths                    setting[map[string][]string]
+	paths                    setting[orderedPaths]
 	files                    setting[[]string]
 	include                  setting[[]string]
 	exclude                  setting[[]string]
@@ -71,9 +116,9 @@ type merged struct {
 type rawConfig struct {
 	Extends         json.RawMessage `json:"extends"`
 	CompilerOptions struct {
-		BaseURL                  *string              `json:"baseUrl"`
-		Paths                    *map[string][]string `json:"paths"`
-		DisableSolutionSearching *bool                `json:"disableSolutionSearching"`
+		BaseURL                  *string       `json:"baseUrl"`
+		Paths                    *orderedPaths `json:"paths"`
+		DisableSolutionSearching *bool         `json:"disableSolutionSearching"`
 	} `json:"compilerOptions"`
 	Files      *[]string `json:"files"`
 	Include    *[]string `json:"include"`
@@ -176,7 +221,7 @@ func (l *configLoader) merge(file string) *merged {
 		m.baseURL = setting[string]{*c.CompilerOptions.BaseURL, dir, true}
 	}
 	if c.CompilerOptions.Paths != nil {
-		m.paths = setting[map[string][]string]{*c.CompilerOptions.Paths, dir, true}
+		m.paths = setting[orderedPaths]{*c.CompilerOptions.Paths, dir, true}
 	}
 	if c.Files != nil {
 		m.files = setting[[]string]{*c.Files, dir, true}
@@ -294,13 +339,14 @@ func (l *configLoader) build(file string) *project {
 	return p
 }
 
-// aliasesFrom resolves a paths map: each substitution from the given
-// directory, or from the leaf config for ${configDir}. TypeScript
-// rejects a pattern or substitution with two wildcards, so they are
-// dropped.
-func aliasesFrom(paths map[string][]string, from, leafDir string) []pathAlias {
+// aliasesFrom resolves paths in the order written, each substitution
+// from the given directory, or from the leaf config for ${configDir}.
+// TypeScript rejects a pattern or substitution with two wildcards, so
+// they are dropped.
+func aliasesFrom(paths orderedPaths, from, leafDir string) []pathAlias {
 	var out []pathAlias
-	for pattern, targets := range paths {
+	for _, entry := range paths {
+		pattern, targets := entry.pattern, entry.targets
 		if strings.Count(pattern, "*") > 1 {
 			continue
 		}
