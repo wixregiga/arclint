@@ -60,7 +60,7 @@ comments:
 
 ```bash
 arclint patterns                      # what resolves offline
-arclint patterns install vertical     # extend rules.arclint.yaml with the embedded Pattern
+arclint patterns install vertical     # extend rules.arclint.yaml with an embedded Pattern
 arclint patterns install acme/layers  # fetched from the Registry, vendored, then extended
 ```
 

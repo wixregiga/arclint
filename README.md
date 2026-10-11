@@ -142,9 +142,12 @@ A Rule's `rationale` records the author's reason for the Constraint.
 ArcLint derives the checkable proposition from the Constraint and its
 scope. When no Rationale is supplied, none is invented.
 
-Or adopt a pattern by reference and bind its zones to your tree
-(`arclint patterns install vertical` writes this for you); its rules
-load under its namespace, and you override them in place:
+Or adopt a pattern by reference and bind its zones to your tree. Two
+are built in: `arclint/hexagonal`, ports and adapters for Go,
+TypeScript on Effect v4, and Python, and `arclint/vertical`, feature
+slices for Go. `arclint patterns install vertical` writes this for
+you; its rules load under its namespace, and you override them in
+place:
 
 ```yaml
 runtime: [go]
@@ -173,7 +176,7 @@ extend it. The constraint key a rule carries decides its type:
 
 | constraint key | type | constraint shape |
 |---|---|---|
-| `imports` | consumes | what a zone may import: internal allow-list, external and stdlib policy |
+| `imports` | consumes | what a zone may import: internal allow-list, external policy or allow-list of import paths, stdlib policy |
 | `structure` | structure | files a zone must contain or must not contain (globs; `each:` expands them per recorded domain term) |
 | `naming` | naming | file-name case vocabulary (`snake_case`, `kebab-case`, `camelCase`, `PascalCase`, `regex:`) |
 | `content` | content | no line of the selected files matches a regular expression |
@@ -186,9 +189,11 @@ extend it. The constraint key a rule carries decides its type:
 
 Import analysis is exact, never heuristic: Go classification follows
 the toolchain (embedded `go list std` table, module-path ownership,
-replace directives, go.work), TypeScript and Python follow their
-manifests, and each shipped language adapter embeds a generated stdlib
-table, an obligation the ruleset itself enforces.
+replace directives, go.work), TypeScript follows its manifests and the
+`paths` and `baseUrl` aliases of the `tsconfig.json` or `jsconfig.json`
+that owns each file, chosen the way the TypeScript editor chooses it,
+Python follows its manifests, and each shipped language adapter embeds
+a generated stdlib table, an obligation the ruleset itself enforces.
 
 ## Authoring rules
 
