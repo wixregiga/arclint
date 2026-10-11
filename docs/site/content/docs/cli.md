@@ -6,8 +6,8 @@ weight = 6
 
 | command | does |
 |---|---|
-| `arclint init` | draft a starter `rules.arclint.yaml`; `--pattern bare` (default) or a Pattern to extend by exact reference or name (`arclint/vertical@0.1.0`, `vertical`), which drafts the `extends` block with the Pattern's suggested bindings; `--languages go,ts,py` selects runtime targets and `--force` permits replacing an existing file |
-| `arclint patterns` | list the Patterns that resolve offline: the one embedded in the binary (`arclint/vertical@0.1.0`), then vendored and authored packages under `.arclint/patterns/<namespace>/<name>/`; `--remote` lists what the Registry publishes instead (`--registry <url>` or `ARCLINT_REGISTRY` names one; `file://` trees work) |
+| `arclint init` | draft a starter `rules.arclint.yaml`; `--pattern bare` (default) or a Pattern to extend by exact reference or name (`arclint/hexagonal@0.1.0`, `hexagonal`, `vertical`), which drafts the `extends` block with the Pattern's suggested bindings; `--languages go,ts,py` selects runtime targets and `--force` permits replacing an existing file |
+| `arclint patterns` | list the Patterns that resolve offline: the ones embedded in the binary (`arclint/hexagonal@0.1.0`, `arclint/vertical@0.1.0`), then vendored and authored packages under `.arclint/patterns/<namespace>/<name>/`; `--remote` lists what the Registry publishes instead (`--registry <url>` or `ARCLINT_REGISTRY` names one; `file://` trees work) |
 | `arclint patterns install <pattern>` | extend `rules.arclint.yaml` with one Pattern named by reference, `namespace/name`, or bare name, binding every Zone it lists; vendors it first when it came from the Registry; drafts `rules.arclint.yaml` when none exists (`--languages`) |
 | `arclint patterns vendor <pattern>` | copy one Pattern under `.arclint/patterns/<namespace>/<name>/` with its `manifest.json`, so every load verifies it and the Registry is never needed again |
 | `arclint patterns export <pattern> --dir <tree>` | publish one offline Pattern into a Registry tree on disk: `<tree>/<namespace>/<name>/<version>/` plus `<tree>/index.json` |
