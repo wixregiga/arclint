@@ -52,6 +52,19 @@ semantics. TypeScript and Python are lexer-grade with documented
 limits: computed specifiers like `import(x)` or
 `importlib.import_module(name)` are invisible by design.
 
+TypeScript follows the project's `tsconfig.json` the way the compiler
+does: an import written with a `compilerOptions.paths` alias
+(`@/domain/order`) or relative to `baseUrl` resolves to the file it
+names, through `extends` chains and project references. Each file's
+aliases come from the configuration that owns it, chosen the way the
+TypeScript editor chooses. The nearest `tsconfig.json` or
+`jsconfig.json` owns the file when it includes the file or a file it
+includes imports it; else the first of its project references that
+includes the file; else the next configuration up, as far as the
+repository root. A file no configuration owns has no aliases. A workspace
+package imported by name and not through a tsconfig alias resolves to
+the whole package folder, so bind each workspace package to one Zone.
+
 ## Rules and constraints
 
 `rules:` is one map keyed by Rule ID. Every Rule carries one Constraint:

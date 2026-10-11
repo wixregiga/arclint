@@ -1,0 +1,43 @@
+# Violating case through tsconfig aliases: both files import a sibling
+# slice as "@/features/pick-tickets". web/src/tsconfig.json owns the app
+# file; it excludes tests, so the test file's alias resolves through
+# web/src/tsconfig.test.json, which the solution config one folder up
+# references, the way the TypeScript editor finds it.
+rule: "fsd/slice-isolation"
+files:
+  go.mod: |
+    module boxoffice
+
+    go 1.26.4
+  web/tsconfig.json: |
+    {
+      "files": [],
+      "references": [{ "path": "./src/tsconfig.json" }, { "path": "./src/tsconfig.test.json" }]
+    }
+  web/src/tsconfig.json: |
+    {
+      "compilerOptions": { "composite": true, "paths": { "@/*": ["./*"] } },
+      "exclude": ["**/*.test.ts"]
+    }
+  web/src/tsconfig.test.json: |
+    {
+      "compilerOptions": { "composite": true, "paths": { "@/*": ["./*"] } },
+      "include": ["**/*.test.ts"]
+    }
+  web/src/features/place-order/index.ts: |
+    import { pickTickets } from '@/features/pick-tickets';
+    export const placeOrder = () => pickTickets();
+  web/src/features/place-order/place-order.test.ts: |
+    import { pickTickets } from '@/features/pick-tickets';
+    export const picked = pickTickets();
+  web/src/features/pick-tickets/index.ts: |
+    export const pickTickets = () => [];
+expect:
+  - kind: violation
+    path: web/src/features/place-order/index.ts
+    line: 1
+    message: 'FSD slice isolation: web/src/features slice "place-order" imports sibling slice "pick-tickets"'
+  - kind: violation
+    path: web/src/features/place-order/place-order.test.ts
+    line: 1
+    message: 'FSD slice isolation: web/src/features slice "place-order" imports sibling slice "pick-tickets"'

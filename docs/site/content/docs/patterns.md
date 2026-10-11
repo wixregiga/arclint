@@ -22,9 +22,10 @@ exactly what the adopter runs.
 
 A Pattern resolves from three places, always in this order:
 
-1. **Embedded**: the Pattern built into the `arclint` binary
-   (`arclint/vertical`). It needs no files in the repository and no
-   network.
+1. **Embedded**: the Patterns built into the `arclint` binary
+   (`arclint/hexagonal` and `arclint/vertical`, described under
+   [Built-in Patterns](#built-in-patterns)). They need no files in the
+   repository and no network.
 2. **Local**: `.arclint/patterns/<namespace>/<name>/`. A directory with
    a `manifest.json` is a **vendored** copy of a published version,
    verified byte for byte on every load. A directory without one is
@@ -48,8 +49,9 @@ arclint patterns
 ```
 
 ```
-arclint/vertical@0.1.0  embedded, vendored 16 rule(s)  5 extension(s)  coverage [go]  fc01898bee8f
-acme/layers@1.0.0       authored            1 rule(s)  0 extension(s)  coverage [go]  3fb2cbda1af6
+arclint/hexagonal@0.1.0  embedded            6 rule(s)  1 extension(s)  coverage [go, ts, py]  cea59c71c72d
+arclint/vertical@0.1.0   embedded, vendored 16 rule(s)  5 extension(s)  coverage [go]          ddf0767e51f9
+acme/layers@1.0.0        authored            1 rule(s)  0 extension(s)  coverage [go]          3fb2cbda1af6
 ```
 
 The second column says where a Pattern resolves from and what the
@@ -66,6 +68,103 @@ arclint patterns --remote --registry file:///srv/patterns
 
 lists what a Registry publishes instead, from its index alone; nothing
 is fetched.
+
+## Built-in Patterns
+
+### arclint/hexagonal
+
+Ports and adapters around an isolated core (Alistair Cockburn's
+hexagonal architecture), for Go, TypeScript, and Python. The core is
+the domain and the application. Adapters sit around it: driving
+adapters call the application, driven adapters do the work its ports
+ask for, and composition wires them together.
+
+| Zone | Holds | May import |
+|---|---|---|
+| `domain` | the business model: entities, value objects, domain services | `shared` and the standard library; no third-party package |
+| `application` | use cases and the ports they call | `domain`, `shared`, the standard library, and `effect` |
+| `driving` | HTTP handlers, CLI commands, route files, consumers | `application`, `domain`, `shared`, `composition` |
+| `driven` | databases, clients, brokers that implement the ports | `application`, `domain`, `shared` |
+| `shared` | errors, logging, generated contracts | no other zone |
+| `composition` | entry points and the module that wires the adapters | any zone |
+
+Each zone it constrains has one built-in [`imports` rule](/docs/rules/#imports):
+which zones it may import, with `external: forbid` for the domain and
+`external: allow` everywhere else. The domain is plain code: it uses no
+third-party package. The application's packages are filtered by one
+more rule, `application/core-libraries-only`, which uses the Pattern's
+extension `hexagonal/allowed-packages` with `packages: [effect]`: the
+application may use `effect`, the root module of Effect v4, which
+declares a port on TypeScript (`Context.Service`), and nothing else
+outside. Every `effect/<module>` path, such as `effect/http` or
+`effect/sql`, is technology Effect marks unstable, so it belongs in an
+adapter. A listed package is matched exactly as written, so
+`effect/Effect` is not `effect`; import from `"effect"`. A package counts as third-party when
+the project declares it: in `go.mod`, `package.json`, or
+`pyproject.toml`. A Go module path starts with a domain name, so no Go
+package is spelled `effect` and a Go application is standard library
+only. Python has an unrelated PyPI package named `effect`; a Python
+project that declares it may use it in the application. Every rule skips test
+files (`*_test.go`, `*.test.ts`, `*.spec.ts`, `test_*.py`, `*_test.py`),
+because tests wire fakes and adapters across zones.
+
+`arclint init --pattern hexagonal` binds a Go layout: `internal/domain`,
+`internal/application`, `internal/adapters/driving`,
+`internal/adapters/driven`, `internal/shared`, and `cmd`. A zone bound to
+a folder that does not exist yet passes;
+`arclint context --dependencies --format json` lists the files each zone
+holds. For a
+TypeScript app on Effect v4 with a file-based router, bind the router's
+folder as `driving` and the runtime module as `composition`:
+
+```yaml
+runtime: [ts]
+extends:
+  - pattern: arclint/hexagonal@0.1.0
+    bind:
+      domain: src/domain/**
+      application: src/application/**
+      driving: src/routes/**
+      driven: src/adapters/**
+      shared: src/shared/**
+      composition: src/app/**
+```
+
+A port is a `Context.Service` in the application, an adapter is a
+`Layer` in `driven`, and composition merges the Layers into a
+`ManagedRuntime`. The router loads each route file itself, and the
+route runs its use case through that runtime; that is why `driving` may
+import `composition`. Driving and driven adapters never import each
+other.
+
+Imports written with a tsconfig alias such as `@/domain/order` are
+judged like relative ones (see [Import classes](/docs/concepts/#import-classes)).
+
+To let the application use other packages, disable the Pattern's
+package filter with a reason and add your own rule that uses the same
+extension with your list; the zone's `imports` rule stays as it is.
+
+```yaml
+rules:
+  arclint/hexagonal:application/core-libraries-only:
+    disable: "We allow pkg/errors in the application; core/application-packages replaces this rule."
+  core/application-packages:
+    rationale: "The application uses pkg/errors and no other third-party package."
+    on: application
+    uses: hexagonal/allowed-packages
+    with:
+      packages: [github.com/pkg/errors]
+```
+
+To change which zones a zone may import, disable its `imports` rule
+with a reason and write your own, complete, under a new ID.
+
+### arclint/vertical
+
+Vertical slices for Go: each feature folder under `internal/` owns its
+domain, application, and infra packages, features never import each
+other, `internal/app` holds transports and wiring, and `internal/shared`
+holds cross-cutting mechanisms.
 
 ## Installing a Pattern
 

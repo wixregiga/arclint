@@ -44,7 +44,7 @@ arclint init --languages go,ts
 Adopt a Pattern instead of starting bare:
 
 ```bash
-arclint init --pattern arclint/vertical@0.1.0   # or --pattern vertical
+arclint init --pattern arclint/hexagonal@0.1.0   # or --pattern hexagonal, or --pattern vertical
 ```
 
 That writes a `rules.arclint.yaml` whose `extends` block pins the Pattern by
@@ -60,7 +60,7 @@ comments:
 
 ```bash
 arclint patterns                      # what resolves offline
-arclint patterns install vertical     # extend rules.arclint.yaml with the embedded Pattern
+arclint patterns install vertical     # extend rules.arclint.yaml with an embedded Pattern
 arclint patterns install acme/layers  # fetched from the Registry, vendored, then extended
 ```
 
