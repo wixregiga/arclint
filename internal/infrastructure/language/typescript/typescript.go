@@ -17,7 +17,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
@@ -36,8 +39,10 @@ func (Producer) Language() rule.Language { return rule.LanguageTypeScript }
 // Facts analyzes every analyzable .ts/.tsx file among the observed
 // files, producing the requested fact classes: imports always,
 // declarations (pinned tree-sitter grammar, deterministic) only when
-// asked for. Files are analyzed in parallel: the resolver is read-only
-// once built and every parse owns a fresh tree-sitter parser.
+// asked for. Files are read and parsed in parallel, every parse owning
+// a fresh tree-sitter parser; imports are classified afterwards,
+// because which configuration owns a file depends on what the other
+// files import.
 func (Producer) Facts(root string, files []conformance.ObservedFile, requested []rule.Fact) (map[string]conformance.LanguageFacts, error) {
 	wantDeclarations := false
 	wantCalls := false
@@ -49,13 +54,49 @@ func (Producer) Facts(root string, files []conformance.ObservedFile, requested [
 			wantCalls = true
 		}
 	}
-	res := newResolver(root, files)
-	return fanout.Analyze(files, analyzable, func() fanout.Analyzer {
+	facts := fanout.Analyze(files, analyzable, func() fanout.Analyzer {
 		ps := newParsers()
 		return func(rel string) conformance.LanguageFacts {
-			return analyzeFile(ps, res, root, rel, wantDeclarations, wantCalls)
+			return analyzeFile(ps, root, rel, wantDeclarations, wantCalls)
 		}
-	}), nil
+	})
+	newResolver(root, files).classifyImports(facts)
+	return facts, nil
+}
+
+// classifyImports classifies every extracted import through the
+// configuration that owns its file. Ownership is decided first, in one
+// pass; the resolver is read-only afterwards, so files are classified
+// in parallel.
+func (r *resolver) classifyImports(facts map[string]conformance.LanguageFacts) {
+	specs := make(map[string][]string, len(facts))
+	rels := make([]string, 0, len(facts))
+	for rel, fa := range facts {
+		s := make([]string, len(fa.Imports))
+		for i, imp := range fa.Imports {
+			s[i] = imp.Path
+		}
+		specs[rel] = s
+		rels = append(rels, rel)
+	}
+	r.own(specs)
+	var next atomic.Int64
+	var wg sync.WaitGroup
+	for range min(runtime.GOMAXPROCS(0), len(rels)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := int(next.Add(1)) - 1; i < len(rels); i = int(next.Add(1)) - 1 {
+				rel := rels[i]
+				p, dir, imports := r.owners[rel], path.Dir(rel), facts[rel].Imports
+				for j := range imports {
+					imp := &imports[j]
+					imp.Class, imp.TargetDir, imp.TargetFile = r.classify(p, dir, imp.Path)
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 // analyzable selects the files this producer owns: the target
@@ -69,19 +110,17 @@ func analyzable(rel string) bool {
 	return rule.LanguageOf(rel) == rule.LanguageTypeScript
 }
 
-func analyzeFile(ps *parsers, res *resolver, root, rel string, wantDeclarations, wantCalls bool) conformance.LanguageFacts {
+// analyzeFile reads one file's imports, still unclassified, and the
+// declarations and calls asked for.
+func analyzeFile(ps *parsers, root, rel string, wantDeclarations, wantCalls bool) conformance.LanguageFacts {
 	facts := conformance.LanguageFacts{Language: rule.LanguageTypeScript, ImportsAvailable: true}
 	src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
 	if err != nil {
 		facts.ParseFailure = fmt.Sprintf("read: %v", err)
 		return facts
 	}
-	dir := path.Dir(rel)
-	proj := res.projectFor(rel)
 	for _, ri := range extract(string(src)) {
-		imp := conformance.Import{Path: ri.spec, Line: ri.line}
-		imp.Class, imp.TargetDir, imp.TargetFile = res.classify(proj, dir, ri.spec)
-		facts.Imports = append(facts.Imports, imp)
+		facts.Imports = append(facts.Imports, conformance.Import{Path: ri.spec, Line: ri.line})
 	}
 	if !wantDeclarations && !wantCalls {
 		return facts

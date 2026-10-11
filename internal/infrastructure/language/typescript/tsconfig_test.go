@@ -79,8 +79,8 @@ import { g } from "@/missing/thing";
 // extending config's directory.
 func TestBaseURLAndExtendsChain(t *testing.T) {
 	root, files := writeFiles(t, map[string]string{
-		"tsconfig.base.json": `{"compilerOptions": {"paths": {"~/*": ["${configDir}/src/*"]}}}`,
-		"configs/strict.json": `{"compilerOptions": {"baseUrl": "../wrong"}}`,
+		"tsconfig.base.json":    `{"compilerOptions": {"paths": {"~/*": ["${configDir}/src/*"]}}}`,
+		"configs/strict.json":   `{"compilerOptions": {"baseUrl": "../wrong"}}`,
 		"configs/base-url.json": `{"compilerOptions": {"baseUrl": "../apps/api/lib"}}`,
 		"apps/api/tsconfig.json": `{"extends": ["../../tsconfig.base", "../../configs/strict.json", "../../configs/base-url.json"],
   "compilerOptions": {"paths": {"#db/*": ["db/*"]}}}`,
@@ -130,17 +130,44 @@ func TestSolutionConfigDelegatesToReferences(t *testing.T) {
 // classifies exactly as before, and an invalid tsconfig is skipped.
 func TestNoConfigKeepsClassification(t *testing.T) {
 	root, files := writeFiles(t, map[string]string{
-		"package.json":        `{"dependencies": {"effect": "4"}}`,
-		"pkg/tsconfig.json":   `{ not json`,
-		"src/main.ts":         `import { a } from "@/x";` + "\n" + `import { b } from "effect";` + "\n",
-		"pkg/src/main.ts":     `import { a } from "@/x";` + "\n",
-		"src/x.ts":            "export const a = 1;\n",
-		"pkg/src/x/index.ts":  "export const a = 1;\n",
+		"package.json":       `{"dependencies": {"effect": "4"}}`,
+		"pkg/tsconfig.json":  `{ not json`,
+		"src/main.ts":        `import { a } from "@/x";` + "\n" + `import { b } from "effect";` + "\n",
+		"pkg/src/main.ts":    `import { a } from "@/x";` + "\n",
+		"src/x.ts":           "export const a = 1;\n",
+		"pkg/src/x/index.ts": "export const a = 1;\n",
 	})
 	facts := produce(t, root, files)
 	expectTarget(t, importOf(t, facts, "src/main.ts", "@/x"), conformance.ImportUnknown, "", "")
 	expectTarget(t, importOf(t, facts, "src/main.ts", "effect"), conformance.ImportExternal, "", "")
 	expectTarget(t, importOf(t, facts, "pkg/src/main.ts", "@/x"), conformance.ImportUnknown, "", "")
+}
+
+// TestSegmentMatchKnowsOnlyStarAndQuestionMark pins TypeScript's
+// wildcards: "*" and "?" match, every other character is itself.
+func TestSegmentMatchKnowsOnlyStarAndQuestionMark(t *testing.T) {
+	for _, tc := range []struct {
+		pattern, name string
+		want          bool
+	}{
+		{"*.ts", "order.ts", true},
+		{"*.ts", "order.tsx", false},
+		{"*", "", true},
+		{"a*b*c", "aXXbYc", true},
+		{"a*b*c", "aXXbY", false},
+		{"?x.ts", "ax.ts", true},
+		{"?x.ts", "x.ts", false},
+		{"[ab].ts", "[ab].ts", true},
+		{"[ab].ts", "a.ts", false},
+		{"[id]", "[id]", true},
+		{`a\b`, `a\b`, true},
+		{"*.test.ts", "order.test.ts", true},
+		{"é?", "éa", true},
+	} {
+		if got := segmentMatch(tc.pattern, tc.name); got != tc.want {
+			t.Errorf("segmentMatch(%q, %q) = %v, want %v", tc.pattern, tc.name, got, tc.want)
+		}
+	}
 }
 
 func TestStripJSONC(t *testing.T) {

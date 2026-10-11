@@ -9,13 +9,11 @@ import (
 )
 
 // The compiler options that change where a non-relative import points
-// are compilerOptions.paths and compilerOptions.baseUrl. Which tsconfig
-// governs a file follows the TypeScript language service: the nearest
-// tsconfig.json up the tree when it includes the file, else the first
-// of its project references that does; a file no configuration
-// includes gets no aliases. Sources: TSConfig Reference
-// (https://www.typescriptlang.org/tsconfig: extends, files, include,
-// exclude, references, baseUrl, paths) and the Modules Reference
+// are compilerOptions.paths and compilerOptions.baseUrl; which
+// configuration owns a file is decided in ownership.go. Sources: TSConfig
+// Reference (https://www.typescriptlang.org/tsconfig: extends, files,
+// include, exclude, references, baseUrl, paths,
+// disableSolutionSearching) and the Modules Reference
 // (https://www.typescriptlang.org/docs/handbook/modules/reference.html:
 // "paths", "baseUrl").
 
@@ -31,21 +29,24 @@ type pathAlias struct {
 	targets []string // repo-relative, may carry one "*"
 }
 
-// project is the effective configuration of one tsconfig file after
-// its extends chain, with every path repo-relative.
+// project is the effective configuration of one tsconfig or jsconfig
+// file after its extends chain, with every path repo-relative.
 type project struct {
 	file       string
 	dir        string
 	baseURL    string
 	hasBaseURL bool
 	paths      []pathAlias
-	files      []string
-	include    []string
-	exclude    []string
-	hasFiles   bool
-	hasInclude bool
-	hasExclude bool
+	// listed, include and exclude select the files the program starts
+	// from: the files option, then include patterns split into
+	// segments, minus exclude patterns split the same way.
+	listed     map[string]bool
+	include    []globPattern
+	exclude    []globPattern
 	references []string // repo-relative config files
+	// disableSolutionSearching stops the ownership search at this
+	// configuration instead of climbing to the ones above it.
+	disableSolutionSearching bool
 }
 
 // setting is one option value with the directory of the config that
@@ -59,18 +60,20 @@ type setting[T any] struct {
 // merged is a configuration's options after extends, before paths are
 // resolved against the leaf config's directory.
 type merged struct {
-	baseURL setting[string]
-	paths   setting[map[string][]string]
-	files   setting[[]string]
-	include setting[[]string]
-	exclude setting[[]string]
+	baseURL                  setting[string]
+	paths                    setting[map[string][]string]
+	files                    setting[[]string]
+	include                  setting[[]string]
+	exclude                  setting[[]string]
+	disableSolutionSearching setting[bool]
 }
 
 type rawConfig struct {
 	Extends         json.RawMessage `json:"extends"`
 	CompilerOptions struct {
-		BaseURL *string              `json:"baseUrl"`
-		Paths   *map[string][]string `json:"paths"`
+		BaseURL                  *string              `json:"baseUrl"`
+		Paths                    *map[string][]string `json:"paths"`
+		DisableSolutionSearching *bool                `json:"disableSolutionSearching"`
 	} `json:"compilerOptions"`
 	Files      *[]string `json:"files"`
 	Include    *[]string `json:"include"`
@@ -80,21 +83,21 @@ type rawConfig struct {
 	} `json:"references"`
 }
 
-// isConfigName reports the file names TypeScript tooling treats as
-// project configurations: tsconfig.json and tsconfig.<name>.json.
-func isConfigName(base string) bool {
-	return base == "tsconfig.json" || (strings.HasPrefix(base, "tsconfig.") && strings.HasSuffix(base, ".json"))
+// configLoader reads observed configuration files once, whatever their
+// name, and memoizes their merged options and effective configuration;
+// an unreadable or invalid config is skipped rather than fatal, like an
+// invalid package.json.
+type configLoader struct {
+	root     string
+	files    map[string]bool
+	raw      map[string]*rawConfig
+	merged   map[string]*merged
+	projects map[string]*project
+	loading  map[string]bool
 }
 
-// configLoader reads observed configuration files once and memoizes
-// their merged options; an unreadable or invalid config is skipped
-// rather than fatal, like an invalid package.json.
-type configLoader struct {
-	root    string
-	files   map[string]bool
-	raw     map[string]*rawConfig
-	merged  map[string]*merged
-	loading map[string]bool
+func newConfigLoader(root string, files map[string]bool) *configLoader {
+	return &configLoader{root: root, files: files, raw: map[string]*rawConfig{}, merged: map[string]*merged{}, projects: map[string]*project{}, loading: map[string]bool{}}
 }
 
 func (l *configLoader) read(file string) *rawConfig {
@@ -184,6 +187,9 @@ func (l *configLoader) merge(file string) *merged {
 	if c.Exclude != nil {
 		m.exclude = setting[[]string]{*c.Exclude, dir, true}
 	}
+	if c.CompilerOptions.DisableSolutionSearching != nil {
+		m.disableSolutionSearching = setting[bool]{*c.CompilerOptions.DisableSolutionSearching, dir, true}
+	}
 	delete(l.loading, file)
 	l.merged[file] = m
 	return m
@@ -205,6 +211,9 @@ func (m *merged) overlay(b *merged) {
 	if b.exclude.set {
 		m.exclude = b.exclude
 	}
+	if b.disableSolutionSearching.set {
+		m.disableSolutionSearching = b.disableSolutionSearching
+	}
 }
 
 // resolveFrom turns one config value into a repo-relative path: from
@@ -217,15 +226,25 @@ func resolveFrom(value, declaringDir, leafDir string) string {
 	return path.Join(declaringDir, value)
 }
 
-// project finalizes the effective configuration of one config file.
+// project returns the effective configuration of one config file, nil
+// when it is not observed or does not parse.
 func (l *configLoader) project(file string) *project {
+	if p, ok := l.projects[file]; ok {
+		return p
+	}
+	p := l.build(file)
+	l.projects[file] = p
+	return p
+}
+
+func (l *configLoader) build(file string) *project {
 	m := l.merge(file)
 	if m == nil {
 		return nil
 	}
 	c := l.read(file)
 	dir := path.Dir(file)
-	p := &project{file: file, dir: dir}
+	p := &project{file: file, dir: dir, disableSolutionSearching: m.disableSolutionSearching.value}
 	if m.baseURL.set {
 		p.baseURL, p.hasBaseURL = resolveFrom(m.baseURL.value, m.baseURL.dir, dir), true
 	}
@@ -238,16 +257,33 @@ func (l *configLoader) project(file string) *project {
 		}
 		p.paths = aliasesFrom(m.paths.value, from, dir)
 	}
+	p.listed = map[string]bool{}
 	for _, f := range m.files.value {
-		p.files = append(p.files, resolveFrom(f, m.files.dir, dir))
+		p.listed[resolveFrom(f, m.files.dir, dir)] = true
 	}
-	for _, f := range m.include.value {
-		p.include = append(p.include, resolveFrom(f, m.include.dir, dir))
+	// Without include, files means only those files and neither means
+	// every file under the config's directory.
+	switch {
+	case m.include.set:
+		for _, f := range m.include.value {
+			if g, ok := includePattern(resolveFrom(f, m.include.dir, dir)); ok {
+				p.include = append(p.include, g)
+			}
+		}
+	case !m.files.set:
+		g, _ := includePattern(path.Join(dir, "**/*"))
+		p.include = []globPattern{g}
 	}
-	for _, f := range m.exclude.value {
-		p.exclude = append(p.exclude, resolveFrom(f, m.exclude.dir, dir))
+	excludes := []string{path.Join(dir, "node_modules"), path.Join(dir, "bower_components"), path.Join(dir, "jspm_packages")}
+	if m.exclude.set {
+		excludes = nil
+		for _, f := range m.exclude.value {
+			excludes = append(excludes, resolveFrom(f, m.exclude.dir, dir))
+		}
 	}
-	p.hasFiles, p.hasInclude, p.hasExclude = m.files.set, m.include.set, m.exclude.set
+	for _, e := range excludes {
+		p.exclude = append(p.exclude, newGlobPattern(e))
+	}
 	for _, ref := range c.References {
 		target := path.Join(dir, ref.Path)
 		if !strings.HasSuffix(target, ".json") {
@@ -279,95 +315,99 @@ func aliasesFrom(paths map[string][]string, from, leafDir string) []pathAlias {
 	return out
 }
 
-// loadProjects builds the effective configuration of every observed
-// tsconfig file, keyed by its repo-relative path.
-func loadProjects(root string, files map[string]bool) map[string]*project {
-	l := &configLoader{root: root, files: files, raw: map[string]*rawConfig{}, merged: map[string]*merged{}, loading: map[string]bool{}}
-	out := map[string]*project{}
-	for f := range files {
-		if isConfigName(path.Base(f)) {
-			if p := l.project(f); p != nil {
-				out[f] = p
-			}
-		}
-	}
-	return out
-}
-
-// includes reports whether the configuration's program contains file:
-// a listed file, or an include match not removed by exclude. Without
-// include, files means only those files and neither means every file
-// under the config's directory.
+// includes reports whether the configuration selects file: a listed
+// file, or an include match not removed by exclude.
 func (p *project) includes(file string) bool {
-	for _, f := range p.files {
-		if f == file {
-			return true
+	if p.listed[file] {
+		return true
+	}
+	var segs []string
+	for _, g := range p.include {
+		if !strings.HasPrefix(file, g.prefix) {
+			continue
 		}
-	}
-	patterns := p.include
-	if !p.hasInclude {
-		if p.hasFiles {
-			return false
+		if segs == nil {
+			segs = strings.Split(file, "/")
 		}
-		patterns = []string{path.Join(p.dir, "**/*")}
-	}
-	matched := false
-	for _, pattern := range patterns {
-		if includeMatches(pattern, file) {
-			matched = true
-			break
-		}
-	}
-	if !matched {
-		return false
-	}
-	excludes := p.exclude
-	if !p.hasExclude {
-		excludes = []string{path.Join(p.dir, "node_modules"), path.Join(p.dir, "bower_components"), path.Join(p.dir, "jspm_packages")}
-	}
-	for _, pattern := range excludes {
-		if excludeMatches(pattern, file) {
-			return false
-		}
-	}
-	return true
-}
-
-// includeMatches matches an include pattern; a final segment with no
-// wildcard and no extension names a directory and includes everything
-// under it.
-func includeMatches(pattern, file string) bool {
-	last := path.Base(pattern)
-	if !strings.ContainsAny(last, "*?") && path.Ext(last) == "" {
-		pattern = path.Join(pattern, "**/*")
-	}
-	return globMatch(strings.Split(pattern, "/"), strings.Split(file, "/"))
-}
-
-// excludeMatches matches an exclude pattern against the file or any
-// directory containing it, since excluding a directory excludes its
-// contents.
-func excludeMatches(pattern, file string) bool {
-	parts := strings.Split(pattern, "/")
-	segs := strings.Split(file, "/")
-	for n := len(segs); n > 0; n-- {
-		if globMatch(parts, segs[:n]) {
-			return true
+		if globMatch(g.segs, segs, true) {
+			return !p.excludes(file, segs)
 		}
 	}
 	return false
 }
 
+// excludes matches every exclude pattern against the file or any
+// directory containing it, since excluding a directory excludes its
+// contents.
+func (p *project) excludes(file string, segs []string) bool {
+	for _, g := range p.exclude {
+		if !strings.HasPrefix(file, g.prefix) {
+			continue
+		}
+		for n := len(segs); n > 0; n-- {
+			if globMatch(g.segs, segs[:n], false) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// globPattern is one include or exclude pattern split into segments,
+// with the literal text every path it matches starts with.
+type globPattern struct {
+	prefix string
+	segs   []string
+}
+
+func newGlobPattern(pattern string) globPattern {
+	g := globPattern{segs: strings.Split(pattern, "/"), prefix: pattern}
+	for i, seg := range g.segs {
+		if strings.ContainsAny(seg, "*?") {
+			g.prefix = strings.Join(g.segs[:i], "/")
+			if i > 0 {
+				g.prefix += "/"
+			}
+			break
+		}
+	}
+	return g
+}
+
+// includePattern reads an include pattern the way TypeScript does
+// (getSubPatternFromSpec with the files matcher): a final segment with
+// no wildcard and no extension names a directory and includes
+// everything under it, and a pattern ending in "**" includes nothing.
+func includePattern(pattern string) (globPattern, bool) {
+	last := path.Base(pattern)
+	if last == "**" {
+		return globPattern{}, false
+	}
+	if !strings.ContainsAny(last, "*?") && path.Ext(last) == "" {
+		pattern = path.Join(pattern, "**/*")
+	}
+	return newGlobPattern(pattern), true
+}
+
+// packageFolders are the folders an include wildcard never enters.
+var packageFolders = map[string]bool{"node_modules": true, "bower_components": true, "jspm_packages": true}
+
 // globMatch matches path segments: "**" spans any number of segments,
-// "*" and "?" stay within one segment.
-func globMatch(pattern, segs []string) bool {
+// "*" and "?" stay within one segment. In an include pattern a wildcard
+// never matches a package folder, "**" never enters a directory whose
+// name starts with a dot, and a segment pattern that starts with a
+// wildcard never matches a name that does.
+func globMatch(pattern, segs []string, include bool) bool {
 	if len(pattern) == 0 {
 		return len(segs) == 0
 	}
 	if pattern[0] == "**" {
 		for i := 0; i <= len(segs); i++ {
-			if globMatch(pattern[1:], segs[i:]) {
+			if globMatch(pattern[1:], segs[i:], include) {
 				return true
+			}
+			if i < len(segs) && include && (strings.HasPrefix(segs[i], ".") || packageFolders[segs[i]]) {
+				return false
 			}
 		}
 		return false
@@ -375,33 +415,44 @@ func globMatch(pattern, segs []string) bool {
 	if len(segs) == 0 {
 		return false
 	}
-	if ok, err := path.Match(pattern[0], segs[0]); err != nil || !ok {
+	if include && strings.ContainsAny(pattern[0], "*?") {
+		if packageFolders[segs[0]] || (strings.ContainsAny(pattern[0][:1], "*?") && strings.HasPrefix(segs[0], ".")) {
+			return false
+		}
+	}
+	if !segmentMatch(pattern[0], segs[0]) {
 		return false
 	}
-	return globMatch(pattern[1:], segs[1:])
+	return globMatch(pattern[1:], segs[1:], include)
 }
 
-// projectFor returns the configuration that governs file, or nil.
-func (r *resolver) projectFor(file string) *project {
-	dir := path.Dir(file)
-	for {
-		cfg := path.Join(dir, "tsconfig.json")
-		if p, ok := r.projects[cfg]; ok {
-			if p.includes(file) {
-				return p
-			}
-			for _, ref := range p.references {
-				if rp, ok := r.projects[ref]; ok && rp.includes(file) {
-					return rp
-				}
-			}
-			return nil
+// segmentMatch matches one path segment against a pattern in which only
+// "*" (any run of characters) and "?" (one character) are wildcards;
+// every other character, "[" included, stands for itself, as in
+// TypeScript's include and exclude patterns.
+func segmentMatch(pattern, name string) bool {
+	pat, str := []rune(pattern), []rune(name)
+	p, n, star, mark := 0, 0, -1, 0
+	for n < len(str) {
+		switch {
+		case p < len(pat) && pat[p] == '*':
+			star, mark = p, n
+			p++
+		case p < len(pat) && (pat[p] == '?' || pat[p] == str[n]):
+			p++
+			n++
+		case star >= 0:
+			p = star + 1
+			mark++
+			n = mark
+		default:
+			return false
 		}
-		if dir == "." {
-			return nil
-		}
-		dir = path.Dir(dir)
 	}
+	for p < len(pat) && pat[p] == '*' {
+		p++
+	}
+	return p == len(pat)
 }
 
 // resolveAlias resolves a non-relative specifier through paths, then
