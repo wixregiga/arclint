@@ -318,3 +318,62 @@ func TestArchitecturalContextRepositoryTeaches(t *testing.T) {
 		t.Errorf("repository scope must carry no bindings or rule union: %+v", ctx)
 	}
 }
+
+// TestZonePolicyCombinesEveryEnabledImportsRule proves a Zone judged by
+// several imports Rules reports their conjunction: the internal list of
+// the boundary Rule and the external list of the library Rule, while a
+// disabled Rule contributes nothing.
+func TestZonePolicyCombinesEveryEnabledImportsRule(t *testing.T) {
+	cfg, _ := fixture(t, "m/ok.go")
+	scope, err := rule.ZoneScope([]rule.ZoneName{"m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	none, err := rule.NewAllowList()
+	if err != nil {
+		t.Fatal(err)
+	}
+	effect, err := rule.NewImportPathList([]string{"effect", "github.com/pkg/errors"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	errorsOnly, err := rule.NewImportPathList([]string{"github.com/pkg/errors"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	newRule := func(id string, params rule.ConsumesParams) rule.Rule {
+		r, err := rule.New(rule.Spec{ID: id, Type: rule.TypeConsumes, Params: params, Scope: scope})
+		if err != nil {
+			t.Fatalf("rule.New %s: %v", id, err)
+		}
+		return r
+	}
+	disablement, err := rule.NewDisablement("replaced by m/libraries")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Rules = append(cfg.Rules,
+		newRule("m/boundary", rule.ConsumesParams{Internal: &none}),
+		newRule("m/libraries", rule.ConsumesParams{External: effect}),
+		newRule("m/narrower", rule.ConsumesParams{External: errorsOnly}),
+		newRule("m/retired", rule.ConsumesParams{External: rule.ImportForbid}).Disable(disablement),
+	)
+	uc, err := application.NewGetArchitecturalContext(fakeRepository{cfg}, emptyKnowledge())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, err := uc.Execute(application.ContextRequest{Paths: []string{"m/ok.go"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ctx.Zones) != 1 {
+		t.Fatalf("zones = %+v", ctx.Zones)
+	}
+	p := ctx.Zones[0]
+	if !p.InternalRestricted || len(p.Internal) != 0 {
+		t.Errorf("internal = %v restricted %v, want no other zone", p.Internal, p.InternalRestricted)
+	}
+	if p.External != application.ExternalOnly || strings.Join(p.ExternalPaths, ",") != "github.com/pkg/errors" {
+		t.Errorf("external = %s %v, want only the path both lists allow, the disabled forbid ignored", p.External, p.ExternalPaths)
+	}
+}

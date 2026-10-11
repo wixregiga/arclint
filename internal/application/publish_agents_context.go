@@ -364,10 +364,13 @@ func importsLine(p ZonePolicy) string {
 			parts = append(parts, "imports only: "+strings.Join(p.Internal, ", "))
 		}
 	}
-	if p.External == string(rule.ImportForbid) {
+	switch p.External {
+	case rule.ImportForbid.String():
 		parts = append(parts, "external imports forbidden")
+	case ExternalOnly:
+		parts = append(parts, "external imports only: "+strings.Join(p.ExternalPaths, ", "))
 	}
-	if p.Stdlib == string(rule.ImportForbid) {
+	if p.Stdlib == rule.ImportForbid.String() {
 		parts = append(parts, "stdlib imports forbidden")
 	}
 	return strings.Join(parts, "; ")

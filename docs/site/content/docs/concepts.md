@@ -46,11 +46,19 @@ Rules run. The class names appear throughout the Rule surface:
 | `unknown` | none of the above; governed by `scan.unknown_imports: warn/error/ignore` |
 
 So in an `imports` Rule, `internal: [app]` means "may import the app
-Zone and nothing else internal", and `external: forbid` means "no
-third-party libraries here at all". Go classification follows toolchain
+Zone and nothing else internal", `external: forbid` means "no
+third-party libraries here at all", and `external: [effect]` means
+"only the import spelled `effect`". Go classification follows toolchain
 semantics. TypeScript and Python are lexer-grade with documented
 limits: computed specifiers like `import(x)` or
 `importlib.import_module(name)` are invisible by design.
+
+TypeScript follows the project's `tsconfig.json` the way the compiler
+does: an import written with a `compilerOptions.paths` alias
+(`@/domain/order`) or relative to `baseUrl` resolves to the file it
+names, through `extends` chains and project references. A workspace
+package imported by name and not through a tsconfig alias resolves to
+the whole package folder, so bind each workspace package to one Zone.
 
 ## Rules and constraints
 

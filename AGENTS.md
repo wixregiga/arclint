@@ -43,11 +43,11 @@ IMPORTANT: work in this order on every change.
 
 ### The recorded domain
 
-6 contexts, 1 aggregates, 34 value objects, 40 invariants (domain.arclint.yaml).
+6 contexts, 1 aggregates, 35 value objects, 41 invariants (domain.arclint.yaml).
 
 - **agent**: value objects Activity, Guidance, Progress; services WorkflowGuide
 - **vocabulary**
-- **rule**: aggregates Rule (Zone, Pattern); value objects RuleID, ZoneName, Rationale, Constraint, Scope, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec
+- **rule**: aggregates Rule (Zone, Pattern); value objects RuleID, ZoneName, Rationale, Constraint, ImportPolicy, Scope, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec
 - **adoption**: value objects Binding, Override, Disablement, Exclusion, Suppression, Installation
 - **conformance**: value objects ContractCoverage, DependencyImport, Facts, Violation
 - **distribution**: value objects Catalog, Digest, Index, Manifest, PatternFile, PatternSource, Registry, Selection, VendoredPattern

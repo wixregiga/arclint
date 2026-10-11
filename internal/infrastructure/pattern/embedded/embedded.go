@@ -19,7 +19,7 @@ import (
 	patternfiles "github.com/wixregiga/arclint/internal/infrastructure/pattern/files"
 )
 
-//go:embed vertical
+//go:embed hexagonal vertical
 var assets embed.FS
 
 // Namespace every built-in Pattern must declare.

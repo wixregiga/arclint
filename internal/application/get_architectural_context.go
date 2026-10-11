@@ -46,9 +46,14 @@ type ZonePolicy struct {
 	// unrestricted, empty when the Zone may import no other Zone.
 	Internal           []string
 	InternalRestricted bool
-	External           string // allow or forbid
+	External           string // allow, forbid, or only (ExternalPaths)
+	ExternalPaths      []string
 	Stdlib             string // allow or forbid
 }
+
+// ExternalOnly is ZonePolicy.External when the Zone may use only the
+// import paths in ExternalPaths.
+const ExternalOnly = "only"
 
 // AppliedRule pairs one Rule with the reason it applies to the scope.
 type AppliedRule struct {
@@ -419,39 +424,77 @@ func declaredNames(zones []rule.Zone) string {
 	return strings.Join(names, ", ")
 }
 
-// zonePolicy derives one Zone's dependency policy from the
-// consumes Rule bound to it, when any.
+// zonePolicy derives one Zone's dependency policy from every enabled
+// consumes Rule bound to it. Each Rule must hold, so the policy is
+// their conjunction: the Zones every restricting Rule allows, forbid
+// when any Rule forbids, and the external paths every listing Rule
+// allows (none left reads as forbid).
 func zonePolicy(m rule.Zone, rules []rule.Rule) ZonePolicy {
 	p := ZonePolicy{
 		Name:        string(m.Name()),
 		Description: m.Description(),
-		External:    string(rule.ImportAllow),
-		Stdlib:      string(rule.ImportAllow),
+		External:    rule.ImportAllow.String(),
+		Stdlib:      rule.ImportAllow.String(),
 	}
 	for _, g := range m.Paths() {
 		p.Paths = append(p.Paths, g.String())
 	}
+	externalForbidden := false
+	var externalPaths []string
+	externalListed := false
 	for _, r := range rules {
 		params, ok := r.Params().(rule.ConsumesParams)
-		if !ok || !r.Scope().WouldSelectZone(m.Name()) {
+		if !ok || r.Disabled() || !r.Scope().WouldSelectZone(m.Name()) {
 			continue
 		}
 		if params.Internal != nil {
-			p.InternalRestricted = true
-			p.Internal = []string{}
+			var names []string
 			for _, name := range params.Internal.Zones() {
-				p.Internal = append(p.Internal, string(name))
+				names = append(names, string(name))
 			}
+			if p.InternalRestricted {
+				names = intersect(p.Internal, names)
+			}
+			p.InternalRestricted = true
+			p.Internal = append([]string{}, names...)
 		}
-		if params.External.Forbids() {
-			p.External = string(rule.ImportForbid)
+		switch {
+		case params.External.Forbids():
+			externalForbidden = true
+		case params.External.Lists():
+			if externalListed {
+				externalPaths = intersect(externalPaths, params.External.Paths())
+			} else {
+				externalPaths = params.External.Paths()
+			}
+			externalListed = true
 		}
 		if params.Stdlib.Forbids() {
-			p.Stdlib = string(rule.ImportForbid)
+			p.Stdlib = rule.ImportForbid.String()
 		}
-		break
+	}
+	switch {
+	case externalForbidden || (externalListed && len(externalPaths) == 0):
+		p.External = rule.ImportForbid.String()
+	case externalListed:
+		p.External = ExternalOnly
+		p.ExternalPaths = externalPaths
 	}
 	return p
+}
+
+// intersect keeps the entries of a that b also holds, in a's order.
+func intersect(a, b []string) []string {
+	out := []string{}
+	for _, v := range a {
+		for _, w := range b {
+			if v == w {
+				out = append(out, v)
+				break
+			}
+		}
+	}
+	return out
 }
 
 // appliesToScope decides whether one Rule binds a path and states the

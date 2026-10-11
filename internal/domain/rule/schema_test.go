@@ -45,8 +45,12 @@ func TestSchemaPublishesDomainEnums(t *testing.T) {
 	if got := dig(t, doc, "$defs", "severity", "default"); got != string(rule.DefaultSeverity) {
 		t.Errorf("severity default = %v, want %q", got, rule.DefaultSeverity)
 	}
-	wantPolicies := []string{string(rule.ImportAllow), string(rule.ImportForbid)}
+	wantPolicies := []string{rule.ImportAllow.String(), rule.ImportForbid.String()}
 	assertStrings(t, "import policy enum", dig(t, doc, "$defs", "importPolicy", "enum"), wantPolicies)
+	// external alone also takes a non-empty list of exact import paths.
+	if got := dig(t, doc, "$defs", "externalImportPolicy", "oneOf"); got == nil {
+		t.Errorf("externalImportPolicy must offer a policy word or a list of import paths")
+	}
 	wantUnknown := []string{
 		string(rule.UnknownImportsError), string(rule.UnknownImportsWarn), string(rule.UnknownImportsIgnore),
 	}

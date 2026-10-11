@@ -164,6 +164,20 @@ contexts:
           imported_by, independent, acyclic, content, or uses. The key
           alone decides how the Rule is evaluated; a Rule never carries
           two.
+      ImportPolicy:
+        definition: >-
+          What an imports Constraint lets a Zone do with one class of
+          imports: allow them, forbid them, or, for imports from
+          outside the repository, allow only the import paths it
+          lists. A listed path is matched exactly as the code spells
+          it, a Go package path, a TypeScript specifier, or a Python
+          dotted module, so listing effect allows effect and not
+          effect/http. Two policies with the same mode and the same
+          paths are interchangeable.
+        invariants:
+          never-an-empty-list: >-
+            An ImportPolicy that lists import paths lists at least
+            one; forbid is how a Zone says it may import none.
       Scope:
         definition: >-
           Which code a Rule applies to: the repository or selected

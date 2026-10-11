@@ -70,7 +70,7 @@ func TestPatternsListsEmbeddedAndLocalCopies(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("patterns: exit %d\nstderr: %s", code, stderr)
 	}
-	for _, want := range []string{"arclint/vertical@0.1.0", "acme/layers@1.0.0", "authored", "embedded"} {
+	for _, want := range []string{"arclint/hexagonal@0.1.0", "arclint/vertical@0.1.0", "acme/layers@1.0.0", "authored", "embedded"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("patterns listing misses %q:\n%s", want, stdout)
 		}
@@ -96,16 +96,18 @@ func TestPatternsListsEmbeddedAndLocalCopies(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &doc); err != nil {
 		t.Fatalf("patterns json: %v\n%s", err, stdout)
 	}
-	if len(doc.Patterns) != 2 {
+	if len(doc.Patterns) != 3 {
 		t.Fatalf("patterns = %+v", doc.Patterns)
 	}
-	acme := doc.Patterns[1]
+	acme := doc.Patterns[2]
 	if acme.Reference != "acme/layers@1.0.0" || acme.Source != "local" || !acme.Authored || acme.Vendored ||
 		!strings.HasPrefix(acme.Digest, "sha256:") || acme.Rules != 1 {
 		t.Errorf("authored pattern row = %+v", acme)
 	}
-	if doc.Patterns[0].Source != "embedded" || doc.Patterns[0].Vendored {
-		t.Errorf("embedded row = %+v", doc.Patterns[0])
+	for _, row := range doc.Patterns[:2] {
+		if row.Source != "embedded" || row.Vendored {
+			t.Errorf("embedded row = %+v", row)
+		}
 	}
 }
 

@@ -306,7 +306,7 @@ rules:
 	if r := ruleByID(t, cfg, "domain/stdlib-only"); r.Rationale().String() != "The domain imports nothing else." {
 		t.Errorf("rationale must preserve the authored reason, got %q", r.Rationale())
 	}
-	if p := ruleByID(t, cfg, "application/imports-domain").Params().(rule.ConsumesParams); p.Internal == nil || len(p.Internal.Zones()) != 1 || p.External != rule.ImportAllow {
+	if p := ruleByID(t, cfg, "application/imports-domain").Params().(rule.ConsumesParams); p.Internal == nil || len(p.Internal.Zones()) != 1 || p.External.Restricts() {
 		t.Errorf("imports params = %+v", p)
 	}
 	if r := ruleByID(t, cfg, "domain/each-aggregate"); r.Severity() != rule.SeverityWarning {
@@ -1193,5 +1193,41 @@ func TestDiscoverPath(t *testing.T) {
 	}
 	if _, err := yamlrule.DiscoverPath(t.TempDir(), "rules.arclint.yaml"); err == nil {
 		t.Errorf("expected discovery failure in an empty tree")
+	}
+}
+
+// TestImportsExternalTakesAListOfImportPaths covers the spelling of an
+// external import list: accepted under external, refused under stdlib,
+// and refused when empty, since forbid already says none.
+func TestImportsExternalTakesAListOfImportPaths(t *testing.T) {
+	cfg := mustLoad(t, `runtime: [ts]
+zones:
+  application: {paths: src/application/**}
+rules:
+  application/core:
+    on: application
+    imports:
+      external: [effect]
+`)
+	p := ruleByID(t, cfg, "application/core").Params().(rule.ConsumesParams)
+	if got := p.External.Paths(); len(got) != 1 || got[0] != "effect" || !p.External.Permits("effect") || p.External.Permits("effect/http") {
+		t.Errorf("external = %s", p.External)
+	}
+	for name, body := range map[string]string{
+		"stdlib list": "      stdlib: [os]\n",
+		"empty list":  "      external: []\n",
+		"twice":       "      external: [effect, effect]\n",
+	} {
+		_, err := loadString(t, `runtime: [ts]
+zones:
+  application: {paths: src/application/**}
+rules:
+  application/core:
+    on: application
+    imports:
+`+body)
+		if err == nil {
+			t.Errorf("%s: accepted", name)
+		}
 	}
 }

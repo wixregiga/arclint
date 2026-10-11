@@ -107,10 +107,17 @@ func consumesViolations(r rule.Rule, p rule.ConsumesParams, self rule.ZoneName,
 				}
 			}
 		case ImportExternal:
-			if p.External.Forbids() {
+			switch {
+			case p.External.Forbids():
 				if err := add(imp.Line,
 					fmt.Sprintf("external import %q is forbidden for Zone %q", imp.Path, self),
 					"remove the import or allow external imports for the Zone"); err != nil {
+					return nil, err
+				}
+			case !p.External.Permits(imp.Path):
+				if err := add(imp.Line,
+					fmt.Sprintf("external import %q is not one of the import paths Zone %q allows %s", imp.Path, self, p.External),
+					"remove the import, move it to a Zone that may use it, or add its exact path to the Zone's external list"); err != nil {
 					return nil, err
 				}
 			}

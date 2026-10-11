@@ -1,7 +1,8 @@
 // Package typescript produces normalized Language Facts for
 // TypeScript: lexer-grade import extraction with documented
-// false-negative classes, an embedded Node builtin table, and
-// manifest-based (package.json) external classification. The
+// false-negative classes, an embedded Node builtin table,
+// manifest-based (package.json) external classification, and the
+// project's tsconfig paths and baseUrl aliases. The
 // extraction and resolution mechanics are the proven legacy jsts
 // analyzer's; the producer claims only the files the target
 // vocabulary assigns TypeScript (.ts, .tsx, minus .d.ts
@@ -76,9 +77,10 @@ func analyzeFile(ps *parsers, res *resolver, root, rel string, wantDeclarations,
 		return facts
 	}
 	dir := path.Dir(rel)
+	proj := res.projectFor(rel)
 	for _, ri := range extract(string(src)) {
 		imp := conformance.Import{Path: ri.spec, Line: ri.line}
-		imp.Class, imp.TargetDir, imp.TargetFile = res.classify(dir, ri.spec)
+		imp.Class, imp.TargetDir, imp.TargetFile = res.classify(proj, dir, ri.spec)
 		facts.Imports = append(facts.Imports, imp)
 	}
 	if !wantDeclarations && !wantCalls {

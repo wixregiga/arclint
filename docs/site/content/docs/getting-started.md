@@ -44,7 +44,7 @@ arclint init --languages go,ts
 Adopt a Pattern instead of starting bare:
 
 ```bash
-arclint init --pattern arclint/vertical@0.1.0   # or --pattern vertical
+arclint init --pattern arclint/hexagonal@0.1.0   # or --pattern hexagonal, or --pattern vertical
 ```
 
 That writes a `rules.arclint.yaml` whose `extends` block pins the Pattern by

@@ -1247,24 +1247,38 @@ func parseImports(n *yaml.Node, where string) (rule.Constraint, error) {
 		}
 		params.Internal = &allow
 	}
-	policy := func(key string) (rule.ImportPolicy, error) {
+	// external takes allow, forbid, or a list of import paths; stdlib
+	// takes allow or forbid.
+	policy := func(key string, listAllowed bool) (rule.ImportPolicy, error) {
+		v := m.get(key)
+		if v != nil && listAllowed && v.Kind == yaml.SequenceNode {
+			paths, err := stringList(v, where+"."+key)
+			if err != nil {
+				return rule.ImportPolicy{}, err
+			}
+			p, err := rule.NewImportPathList(paths)
+			if err != nil {
+				return rule.ImportPolicy{}, fmt.Errorf("%s.%s: %v", where, key, err)
+			}
+			return p, nil
+		}
 		s := ""
-		if v := m.get(key); v != nil {
+		if v != nil {
 			var err error
 			if s, err = scalarString(v, where+"."+key); err != nil {
-				return "", err
+				return rule.ImportPolicy{}, err
 			}
 		}
 		p, err := rule.ParseImportPolicy(s)
 		if err != nil {
-			return "", fmt.Errorf("%s.%s: %v", where, key, err)
+			return rule.ImportPolicy{}, fmt.Errorf("%s.%s: %v", where, key, err)
 		}
 		return p, nil
 	}
-	if params.External, err = policy(keyExternal); err != nil {
+	if params.External, err = policy(keyExternal, true); err != nil {
 		return nil, err
 	}
-	if params.Stdlib, err = policy(keyStdlib); err != nil {
+	if params.Stdlib, err = policy(keyStdlib, false); err != nil {
 		return nil, err
 	}
 	return params, nil
