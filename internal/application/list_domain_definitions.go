@@ -40,7 +40,7 @@ func NewListDomainDefinitions(knowledge vocab.Repository) (ListDomainDefinitions
 // bounded context. A missing file behaves as an empty model.
 func (uc ListDomainDefinitions) Execute(listing, context string) (DomainListing, error) {
 	out := DomainListing{
-		Source:  vocab.UbiquitousLanguageFileName,
+		Source:  uc.knowledge.Recording().Path(),
 		Context: strings.TrimSpace(context),
 	}
 	if listing != "" {

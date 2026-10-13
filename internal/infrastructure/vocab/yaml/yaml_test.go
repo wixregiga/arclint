@@ -128,6 +128,10 @@ func ticketing(t *testing.T) vocab.UbiquitousLanguage {
 	if err != nil {
 		t.Fatalf("NewUbiquitousLanguage: %v", err)
 	}
+	// The language as the adapter returns it from the default
+	// DomainRecording, which every repository these tests bind uses
+	// unless a test names another.
+	lang.Recording = mustDefaultRecording(t)
 	return lang
 }
 
@@ -182,17 +186,37 @@ func withoutLines(l vocab.UbiquitousLanguage) vocab.UbiquitousLanguage {
 // or over an empty dir when content is "".
 func repository(t *testing.T, content string) (yamlvocab.Repository, string) {
 	t.Helper()
+	return repositoryRecordedIn(t, mustDefaultRecording(t), content)
+}
+
+// repositoryRecordedIn binds a fresh repository over a temp dir whose
+// Recording holds content, or over an empty dir when content is "".
+func repositoryRecordedIn(t *testing.T, recording vocab.DomainRecording, content string) (yamlvocab.Repository, string) {
+	t.Helper()
 	dir := t.TempDir()
 	if content != "" {
-		if err := os.WriteFile(filepath.Join(dir, vocab.UbiquitousLanguageFileName), []byte(content), 0o600); err != nil {
+		path := filepath.Join(dir, filepath.FromSlash(recording.Path()))
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 			t.Fatalf("WriteFile: %v", err)
 		}
 	}
-	repo, err := yamlvocab.NewRepository(dir)
+	repo, err := yamlvocab.NewRepository(dir, recording)
 	if err != nil {
 		t.Fatalf("NewRepository: %v", err)
 	}
 	return repo, dir
+}
+
+func recordingOf(t *testing.T, file string) vocab.DomainRecording {
+	t.Helper()
+	recording, err := vocab.NewDomainRecording(file)
+	if err != nil {
+		t.Fatalf("NewDomainRecording(%q): %v", file, err)
+	}
+	return recording
 }
 
 func load(t *testing.T, content string) vocab.UbiquitousLanguage {
@@ -222,12 +246,96 @@ func loadError(t *testing.T, content string) string {
 }
 
 func TestNewRepositoryBindsTheDomainFile(t *testing.T) {
-	if _, err := yamlvocab.NewRepository(""); err == nil {
+	if _, err := yamlvocab.NewRepository("", mustDefaultRecording(t)); err == nil {
 		t.Error("NewRepository(\"\") accepted an empty root")
 	}
 	repo, dir := repository(t, "")
-	if got, want := repo.Path(), filepath.Join(dir, vocab.UbiquitousLanguageFileName); got != want {
+	if got, want := repo.Path(), filepath.Join(dir, "domain.arclint.yaml"); got != want {
 		t.Errorf("Path() = %q, want %q", got, want)
+	}
+	if repo.Recording() != mustDefaultRecording(t) {
+		t.Errorf("Recording() = %+v, want the default", repo.Recording())
+	}
+}
+
+func TestNewRepositoryBindsTheProjectsRecording(t *testing.T) {
+	recording := recordingOf(t, "docs/model.arclint.yml")
+	repo, dir := repositoryRecordedIn(t, recording, "")
+	if got, want := repo.Path(), filepath.Join(dir, "docs", "model.arclint.yml"); got != want {
+		t.Errorf("Path() = %q, want %q", got, want)
+	}
+	if repo.Recording() != recording {
+		t.Errorf("Recording() = %+v, want %+v", repo.Recording(), recording)
+	}
+}
+
+func TestNewRepositoryRefusesARecordingItDoesNotRead(t *testing.T) {
+	for _, recording := range []vocab.DomainRecording{recordingOf(t, "docs/model.cml"), {}} {
+		if _, err := yamlvocab.NewRepository(t.TempDir(), recording); err == nil {
+			t.Errorf("NewRepository accepted the %q recording %q", recording.Format(), recording.Path())
+		}
+		if _, err := yamlvocab.Parse([]byte("version: 1\n"), recording); err == nil {
+			t.Errorf("Parse accepted the %q recording %q", recording.Format(), recording.Path())
+		}
+	}
+}
+
+// A language carries the Recording it was read from; a missing file is an
+// empty language carrying the Recording it would be written to, so a
+// caller that names the file never has to guess it.
+func TestLoadedLanguageCarriesItsRecording(t *testing.T) {
+	recording := recordingOf(t, "docs/model.arclint.yaml")
+	repo, _ := repositoryRecordedIn(t, recording, ticketingYAML)
+	lang, found, err := repo.RecordedLanguage()
+	if err != nil || !found {
+		t.Fatalf("RecordedLanguage: found=%v err=%v", found, err)
+	}
+	if lang.Recording != recording {
+		t.Errorf("read language carries %+v, want %+v", lang.Recording, recording)
+	}
+	missing, _ := repositoryRecordedIn(t, recording, "")
+	empty, found, err := missing.RecordedLanguage()
+	if err != nil || found || !empty.Empty() {
+		t.Fatalf("missing file: lang=%+v found=%v err=%v", empty, found, err)
+	}
+	if empty.Recording != recording {
+		t.Errorf("missing-file language carries %+v, want %+v", empty.Recording, recording)
+	}
+}
+
+// The domain file lives where the ruleset names it: written under a new
+// directory, named in every message, and beside no temp residue, with an
+// editor modeline that reaches the schema from the file's own directory.
+func TestRecordWritesTheNestedRecording(t *testing.T) {
+	recording := recordingOf(t, "docs/domain/model.arclint.yaml")
+	repo, dir := repositoryRecordedIn(t, recording, "")
+	schema := filepath.Join(dir, filepath.FromSlash(vocab.SchemaPath))
+	if err := os.MkdirAll(filepath.Dir(schema), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(schema, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Record(ticketing(t)); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	written, err := os.ReadFile(filepath.Join(dir, "docs", "domain", "model.arclint.yaml"))
+	if err != nil {
+		t.Fatalf("the recording was not written where the ruleset names it: %v", err)
+	}
+	if !strings.HasPrefix(string(written), "# yaml-language-server: $schema=../../"+vocab.SchemaPath+"\n") {
+		t.Errorf("modeline does not reach the schema from the file's directory:\n%s", written)
+	}
+	if _, err := os.Stat(filepath.Join(dir, vocab.DefaultDomainRecordingPath)); !os.IsNotExist(err) {
+		t.Errorf("the default file was written although the project records elsewhere: %v", err)
+	}
+	entries, err := os.ReadDir(filepath.Join(dir, "docs", "domain"))
+	if err != nil || len(entries) != 1 || entries[0].Name() != "model.arclint.yaml" {
+		t.Errorf("directory after Record = %v, %v; want only model.arclint.yaml", entries, err)
+	}
+	lang, found, err := repo.RecordedLanguage()
+	if err != nil || !found || lang.Project != "ticketing" {
+		t.Fatalf("round trip: project=%q found=%v err=%v", lang.Project, found, err)
 	}
 }
 
@@ -282,7 +390,7 @@ func TestLoadCarriesLines(t *testing.T) {
 
 func TestLoadRejectsMalformedYAML(t *testing.T) {
 	msg := loadError(t, "version: 1\nproject: [\n")
-	if !strings.Contains(msg, vocab.UbiquitousLanguageFileName) {
+	if !strings.Contains(msg, "domain.arclint.yaml") {
 		t.Errorf("error does not name the file: %s", msg)
 	}
 }
@@ -407,12 +515,17 @@ func TestLoadNamesTheFileAndLineOnDomainErrors(t *testing.T) {
 	if !strings.HasPrefix(msg, repo.Path()+": aggregate/identity-recorded: line 7: ") {
 		t.Errorf("error = %q", msg)
 	}
-	if _, err := yamlvocab.Parse([]byte("version: 1\nproject: x\ncontexts:\n  sales: {}\n")); err == nil ||
-		!strings.HasPrefix(err.Error(), vocab.UbiquitousLanguageFileName+": ubiquitous_language/terms-carry-definitions: line 4: ") {
+	recording := recordingOf(t, "docs/model.arclint.yaml")
+	if _, err := yamlvocab.Parse([]byte("version: 1\nproject: x\ncontexts:\n  sales: {}\n"), recording); err == nil ||
+		!strings.HasPrefix(err.Error(), "docs/model.arclint.yaml: ubiquitous_language/terms-carry-definitions: line 4: ") {
 		t.Errorf("Parse error = %v", err)
 	}
-	if _, err := (yamlvocab.Parser{}).ParseUbiquitousLanguage([]byte("version: 1\n")); err == nil {
+	if _, err := (yamlvocab.Parser{}).ParseUbiquitousLanguage([]byte("version: 1\n"), recording); err == nil {
 		t.Error("Parser accepted a file without project and contexts")
+	}
+	lang, err := yamlvocab.Parse([]byte("version: 1\nproject: x\ncontexts: {}\n"), recording)
+	if err != nil || lang.Recording != recording {
+		t.Errorf("Parse = %+v, %v; want the language to carry %+v", lang, err, recording)
 	}
 }
 
@@ -471,22 +584,23 @@ func TestLoadRejectsAKeyWithoutAValue(t *testing.T) {
 	}
 }
 
-// The proving ground's recorded domain is the real oracle: it loads,
-// and it round-trips through a fresh Record byte-for-content.
-func TestLoadsAndRoundTripsTheBoxofficeDomain(t *testing.T) {
-	path := filepath.Join(repoRoot(t), "testing", "boxoffice", vocab.UbiquitousLanguageFileName)
+// The worked example's recorded domain, the YAML file the Go and
+// TypeScript examples share, is the real oracle: it loads, and it
+// round-trips through a fresh Record byte-for-content.
+func TestLoadsAndRoundTripsTheWorkedExampleDomain(t *testing.T) {
+	path := filepath.Join(repoRoot(t), "docs", "examples", "go", vocab.DefaultDomainRecordingPath)
 	content, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}
-	lang, err := yamlvocab.Parse(content)
+	lang, err := yamlvocab.Parse(content, mustDefaultRecording(t))
 	if err != nil {
-		t.Fatalf("Parse boxoffice: %v", err)
+		t.Fatalf("Parse the worked example: %v", err)
 	}
 	counts := lang.Counts()
-	if counts.Contexts != 3 || counts.Aggregates != 3 || counts.ValueObjects != 6 || counts.Invariants != 16 ||
-		counts.Assertions != 1 || counts.Events != 0 || counts.Questions != 5 || counts.Relations != 3 {
-		t.Errorf("boxoffice counts = %+v", counts)
+	if counts.Contexts != 1 || counts.Aggregates != 3 || counts.Entities != 1 || counts.ValueObjects != 13 || counts.Invariants != 13 ||
+		counts.Assertions != 6 || counts.Events != 8 || counts.Services != 3 || counts.Questions != 1 || counts.Relations != 0 {
+		t.Errorf("worked example counts = %+v", counts)
 	}
 	repo, _ := repository(t, "")
 	if err := repo.Record(lang); err != nil {
@@ -497,7 +611,7 @@ func TestLoadsAndRoundTripsTheBoxofficeDomain(t *testing.T) {
 		t.Fatalf("reload: %v", err)
 	}
 	if !reflect.DeepEqual(withoutLines(again), withoutLines(lang)) {
-		t.Errorf("boxoffice domain changed across Record\n got: %+v\nwant: %+v", withoutLines(again), withoutLines(lang))
+		t.Errorf("the worked example's domain changed across Record\n got: %+v\nwant: %+v", withoutLines(again), withoutLines(lang))
 	}
 }
 
@@ -677,6 +791,7 @@ func TestRecordPreservesAuthoringAroundAnEdit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("edit: %v", err)
 	}
+	edited.Recording = lang.Recording
 	if err := repo.Record(edited); err != nil {
 		t.Fatalf("Record: %v", err)
 	}
@@ -782,7 +897,7 @@ func TestRecordLeavesNoTempFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, e := range entries {
-		if e.Name() != vocab.UbiquitousLanguageFileName {
+		if e.Name() != vocab.DefaultDomainRecordingPath {
 			t.Errorf("unexpected file %q after Record", e.Name())
 		}
 	}
@@ -808,4 +923,13 @@ func TestRecordReportsUnreadableFiles(t *testing.T) {
 	if _, _, err := repo.RecordedLanguage(); err == nil {
 		t.Error("RecordedLanguage over a directory succeeded")
 	}
+}
+
+func mustDefaultRecording(t *testing.T) vocab.DomainRecording {
+	t.Helper()
+	recording, err := vocab.DefaultDomainRecording()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return recording
 }

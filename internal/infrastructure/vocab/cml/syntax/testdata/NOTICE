@@ -1,0 +1,13 @@
+CML corpus: Apache License 2.0 (LICENSE-APACHE-2.0 in this directory).
+ContextMapper/context-mapper-examples, commit 3c28b419e965e74aa3bfe616467cf5ebfff261a8.
+ContextMapper/context-mapper-dsl, commit 995f486a9cdecb6946257d5c7b6d98ada2978124.
+Copyright The Context Mapper Project Team.
+
+Reference pages (docs/): ContextMapper/contextmapper.github.io, _docs/language-reference,
+commit b49c14b180e936e24c3de7edd9062c6d0ffc12fc, MIT License (docs/LICENSE-MIT).
+
+Context Mapper 6.12.0 verdicts (context_mapper_6_12_verdicts.json.gz): recorded by an external run of
+Context Mapper's parser and validators on inputs generated for these tests.
+
+Xtext and ANTLR sources are cited by pinned URL in xtext_sources.md and are not copied here.
+No Java, ANTLR or Xtext tooling is executed by this package or its tests.

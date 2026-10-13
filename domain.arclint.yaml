@@ -7,19 +7,26 @@ description: >-
 contexts:
   agent:
     definition: >-
-      The language of agents using ArcLint and the order a coding agent
-      follows when it works in a project. It obtains ArcLint context for the
-      paths it will change, records a new or changed meaning in the domain
-      recording before implementing it, implements, and runs the project's
-      check before it finishes. Guidance names a step the observed work
-      skipped and the next action to take. Guidance advises the agent and its
-      user; it never blocks their work.
+      The language of agents using ArcLint and the order a coding agent follows
+      when it works in a project. It obtains ArcLint context for the paths it
+      will change, records a new or changed meaning in the domain recording
+      before implementing it, implements, and runs the project's check before it
+      finishes. Guidance names a step the observed work skipped and the next
+      action to take. Guidance advises the agent and its user; it never blocks
+      their work. The instructions ArcLint gives an agent (the domain-librarian
+      skill, the AGENTS.md workflow block and the hooks' text) are the same
+      whatever format the domain recording is written in: the agent learns which
+      file it is from arclint context and arclint domain, and records through
+      arclint domain define and arclint domain remove, so ArcLint writes the
+      format. The AGENTS.md block also carries a snapshot of the Rules and the
+      recorded domain, and the project's check reports the block when that
+      snapshot is stale.
     value_objects:
       Activity:
         definition: >-
           One observed action of the agent: obtaining context, which shows the
-          Zones that own the paths it names together with the Zones it names,
-          or every Zone when it names neither; changing the domain recording;
+          Zones that own the paths it names together with the Zones it names, or
+          every Zone when it names neither; changing the domain recording;
           changing a file, with the Zones that own it; running the project's
           check; or finishing a turn.
       Guidance:
@@ -58,522 +65,536 @@ contexts:
               before the domain recording has changed.
   vocabulary:
     definition: >-
-      The recorded Ubiquitous Language of a project and the meta-model
-      it is checked against: the building blocks a domain file may
-      record, the invariants each block carries, and the sources those
-      invariants cite. The rule context reads it to expand a Rule, and
-      the conformance context reads it to judge code against the
-      block invariants.
+      The recorded Ubiquitous Language of a project and the meta-model it is
+      checked against: the building blocks a domain file may record, the
+      invariants each block carries, and the sources those invariants cite. The
+      rule context reads it to expand a Rule, and the conformance context reads
+      it to judge code against the block invariants. A project writes its
+      language down in one DomainRecording, in YAML or in CML, and the same
+      language translates between the two formats without changing, because
+      where a language is written down is no part of it.
+    value_objects:
+      DomainRecording:
+        definition: >-
+          The file a project writes its Ubiquitous Language down in: the file's
+          path from the directory that holds the ruleset, and the format the
+          file is written in. The ruleset may name the file under domain.file;
+          when it names none, the DomainRecording is the first of
+          domain.arclint.yaml, domain.arclint.yml and domain.arclint.cml that
+          exists, YAML first because YAML is the preferred format, and
+          domain.arclint.yaml when none does. A default-named file that is not
+          the DomainRecording is ignored. When discovery chose, the files it
+          passed over are reported; a file the ruleset names is the project's
+          own choice, and nothing is reported about the files beside it. A
+          DomainRecording may hold more than the language, as a CML model does,
+          and what it holds beyond the language is left as it is. Every command,
+          hook, finding and report that names the project's domain file names
+          its DomainRecording.
+        invariants:
+          format-named-by-extension: >-
+            A DomainRecording is written in the format its file's extension
+            names, YAML for .yaml or .yml and CML for .cml, so a file whose
+            extension names neither is never a DomainRecording.
+          inside-the-repository: >-
+            A DomainRecording's file, followed through any link, lies inside the
+            repository, the directory that holds the ruleset.
   rule:
     definition: >-
-      The rule bounded context: the Rule aggregate's home, holding
-      everything a Rule is made of and everything it names.
+      The rule bounded context: the Rule aggregate's home, holding everything a
+      Rule is made of and everything it names. The ruleset is
+      rules.arclint.yaml; it may name the project's domain file under
+      domain.file.
     aggregates:
       Rule:
         definition: >-
           One enforceable architecture constraint configured in
           rules.arclint.yaml. A Rule keeps its RuleID while everything
-          human-facing about it can be renamed. Aggregate evidence,
-          from the rules.arclint.yaml header: "Rule is the sole
-          aggregate". A Rule's identity, its Rationale, its Scope, and its
-          Severity change together in one edit of rules.arclint.yaml.
+          human-facing about it can be renamed. Aggregate evidence, from the
+          rules.arclint.yaml header: "Rule is the sole aggregate". A Rule's
+          identity, its Rationale, its Scope, and its Severity change together
+          in one edit of rules.arclint.yaml.
         identity: RuleID
         entities:
           Zone:
             definition: >-
-              A named group of folders and files an architecture speaks
-              about, such as domain or delivery. A Zone keeps its
-              ZoneName while the paths that belong to it change: a
-              Rule says "on: domain" and never repeats a folder. A
-              Pattern lists its Zones with descriptions and no paths;
-              a repository ruleset gives every Zone its paths, either
-              directly or through a Binding. Recorded inside the Rule
-              aggregate because rules.arclint.yaml makes Rule the sole
-              aggregate and Zone lives in its home.
+              A named group of folders and files an architecture speaks about,
+              such as domain or delivery. A Zone keeps its ZoneName while the
+              paths that belong to it change: a Rule says "on: domain" and never
+              repeats a folder. A Pattern lists its Zones with descriptions and
+              no paths; a repository ruleset gives every Zone its paths, either
+              directly or through a Binding. Recorded inside the Rule aggregate
+              because rules.arclint.yaml makes Rule the sole aggregate and Zone
+              lives in its home.
             identity: ZoneName
           Pattern:
             definition: >-
-              A named, namespaced collection of Rules and Zones
-              published for other repositories to extend, with a
-              documentation link and the Languages it covers. A Pattern
-              keeps its namespace and name across versions; a
+              A named, namespaced collection of Rules and Zones published for
+              other repositories to extend, with a documentation link and the
+              Languages it covers. A Pattern carries no repository policy: the
+              runtime a repository targets, what it scans, what it extends and
+              where it records its domain stay the adopting repository's own
+              choices. A Pattern keeps its namespace and name across versions; a
               repository always extends one exact version through a
-              PatternReference. Every Rule a Pattern distributes carries
-              the Pattern's namespace in its RuleID. Recorded inside the
-              Rule aggregate because rules.arclint.yaml makes Rule the
-              sole aggregate and Pattern lives in its home.
+              PatternReference. Every Rule a Pattern distributes carries the
+              Pattern's namespace in its RuleID. Recorded inside the Rule
+              aggregate because rules.arclint.yaml makes Rule the sole aggregate
+              and Pattern lives in its home.
             identity: PatternReference
         invariants:
           constraint-accepts-scope: >-
             A Rule's Constraint must accept its Scope.
           expansion-only-as-structure: >-
-            A Rule may carry an Expansion only as a structure Rule, and
-            its parameters must be exactly the Expansion's resolution
-            against the recorded language. When nothing is recorded the
-            parameters are empty and the generated proposition says so.
+            A Rule may carry an Expansion only as a structure Rule, and its
+            parameters must be exactly the Expansion's resolution against the
+            recorded language. When nothing is recorded the parameters are empty
+            and the generated proposition says so.
           exactly-one-constraint: >-
-            A Rule carries exactly one Constraint; a Rule written with
-            two constraint keys, or with none and no Override target, is
-            rejected at load.
+            A Rule carries exactly one Constraint; a Rule written with two
+            constraint keys, or with none and no Override target, is rejected at
+            load.
           unique-qualified-id: >-
-            Two Rules with the same qualified RuleID cannot both exist
-            in one repository; a repository Rule spelled with the
-            RuleID of a Rule an extended Pattern distributes is
-            rejected at load.
+            Two Rules with the same qualified RuleID cannot both exist in one
+            repository; a repository Rule spelled with the RuleID of a Rule an
+            extended Pattern distributes is rejected at load.
           zone-has-a-path: >-
-            A Zone in a repository ruleset has at least one path; a
-            Zone written with no paths is legal only in a Pattern
-            file, where a Binding supplies them later.
+            A Zone in a repository ruleset has at least one path; a Zone written
+            with no paths is legal only in a Pattern file, where a Binding
+            supplies them later.
           pattern-lists-zones-without-paths: >-
-            A Pattern lists its Zones without paths, and every Rule
-            the Pattern distributes names only Zones the Pattern
-            lists.
+            A Pattern lists its Zones without paths, and every Rule the Pattern
+            distributes names only Zones the Pattern lists.
     value_objects:
       RuleID:
         definition: >-
           The stable identity of a Rule, spelled explicitly in
-          rules.arclint.yaml. A repository Rule's RuleID is local; a
-          Rule a Pattern distributes is qualified by that Pattern's
-          namespace/name, spelled namespace/name:local, so two Patterns
-          may distribute the same local identity and both apply under
-          distinct RuleIDs. Every record arclint keeps about a Rule
-          over time keys on it, so it outlives renames of anything else
-          about the Rule, and it never carries a version.
+          rules.arclint.yaml. A repository Rule's RuleID is local; a Rule a
+          Pattern distributes is qualified by that Pattern's namespace/name,
+          spelled namespace/name:local, so two Patterns may distribute the same
+          local identity and both apply under distinct RuleIDs. Every record
+          arclint keeps about a Rule over time keys on it, so it outlives
+          renames of anything else about the Rule, and it never carries a
+          version.
         invariants:
           qualified-by-full-pattern-name: >-
-            A distributed Rule's RuleID is qualified by the full
-            namespace/name of its Pattern, never by the namespace
-            alone, so Patterns that share a namespace may distribute
-            the same local identity without colliding.
+            A distributed Rule's RuleID is qualified by the full namespace/name
+            of its Pattern, never by the namespace alone, so Patterns that share
+            a namespace may distribute the same local identity without
+            colliding.
       ZoneName:
         definition: >-
-          The lowercase name a ruleset spells for a Zone, the only
-          way a Rule, a Binding, or an Exclusion refers to one.
+          The lowercase name a ruleset spells for a Zone, the only way a Rule, a
+          Binding, or an Exclusion refers to one.
       Rationale:
         definition: >-
-          The author's explanation of why a Rule's Constraint is
-          needed. It is optional: a Rule with no supplied explanation
-          has no Rationale. An Expansion changes the resolved
-          Constraint, never the author's Rationale. The explanation
-          is never generated from the Constraint.
+          The author's explanation of why a Rule's Constraint is needed. It is
+          optional: a Rule with no supplied explanation has no Rationale. An
+          Expansion changes the resolved Constraint, never the author's
+          Rationale. The explanation is never generated from the Constraint.
       Constraint:
         definition: >-
           The one checkable proposition a Rule carries, written in
-          rules.arclint.yaml as exactly one constraint key with its
-          parameters: imports, structure, naming, invariants, layers,
-          imported_by, independent, acyclic, content, or uses. The key
-          alone decides how the Rule is evaluated; a Rule never carries
-          two.
+          rules.arclint.yaml as exactly one constraint key with its parameters:
+          imports, structure, naming, invariants, layers, imported_by,
+          independent, acyclic, content, or uses. The key alone decides how the
+          Rule is evaluated; a Rule never carries two.
       Scope:
         definition: >-
-          Which code a Rule applies to: the repository or selected
-          Zones, optionally narrowed by file paths, with Exclusions
-          removing selected code from evaluation. A Scope is carried
-          by its Rule and has no independent identity.
+          Which code a Rule applies to: the repository or selected Zones,
+          optionally narrowed by file paths, with Exclusions removing selected
+          code from evaluation. A Scope is carried by its Rule and has no
+          independent identity.
       Severity:
         definition: >-
-          Gate importance of a finding: error, warning, or info.
-          Described entirely by its value and validated at
-          construction. Two equal spellings are interchangeable.
+          Gate importance of a finding: error, warning, or info. Described
+          entirely by its value and validated at construction. Two equal
+          spellings are interchangeable.
         invariants:
           closed-set: >-
-            A Severity must be one of error, warning, or info; any
-            other spelling is rejected at construction, never stored.
+            A Severity must be one of error, warning, or info; any other
+            spelling is rejected at construction, never stored.
       Language:
         definition: >-
-          A source language arclint recognizes and can analyze: go,
-          typescript, or python. A repository ruleset states which
-          Languages it runs under runtime, and a Pattern states which
-          Languages it covers. Recognition does not promise that every
-          Rule covers the Language.
+          A source language arclint recognizes and can analyze: go, typescript,
+          or python. A repository ruleset states which Languages it runs under
+          runtime, and a Pattern states which Languages it covers. Recognition
+          does not promise that every Rule covers the Language.
       PatternReference:
         definition: >-
-          The exact spelling namespace/name@version by which a
-          repository extends one published version of a Pattern. A
-          Rule a Pattern distributes carries the PatternReference as
-          its provenance, and two references with the same spelling
-          resolve to the same Pattern version.
+          The exact spelling namespace/name@version by which a repository
+          extends one published version of a Pattern. A Rule a Pattern
+          distributes carries the PatternReference as its provenance, and two
+          references with the same spelling resolve to the same Pattern version.
       Expansion:
         definition: >-
-          How a structure Rule's globs derive from one recorded
-          vocabulary collection: an ExpansionSource plus authored
-          globs whose {name:<case>} placeholders resolve once per
-          recorded term. It is pure substitution, with no predicates,
-          filters, or joins. Logic beyond substitution belongs in an
-          extension. The Rule stays the sole aggregate: an expanded
-          Rule is one Rule stating one universally quantified proposition.
+          How a structure Rule's globs derive from one recorded vocabulary
+          collection: an ExpansionSource plus authored globs whose {name:<case>}
+          placeholders resolve once per recorded term. It is pure substitution,
+          with no predicates, filters, or joins. Logic beyond substitution
+          belongs in an extension. The Rule stays the sole aggregate: an
+          expanded Rule is one Rule stating one universally quantified
+          proposition.
         invariants:
           well-formed: >-
-            An Expansion must name a published ExpansionSource, declare
-            at least one require or forbid glob, and use braces only as
-            {name:<case>} placeholders with a published TermCase.
-            Anything else is rejected at construction, never loaded.
+            An Expansion must name a published ExpansionSource, declare at least
+            one require or forbid glob, and use braces only as {name:<case>}
+            placeholders with a published TermCase. Anything else is rejected at
+            construction, never loaded.
       ExpansionSource:
         definition: >-
-          The recorded collection an Expansion derives from, one of
-          the closed set domain.aggregates, domain.entities,
-          domain.value_objects, domain.events, domain.contexts,
-          domain.invariants, domain.assertions,
-          domain.specifications. A new source is a deliberate design
-          act, never a syntax feature.
+          The recorded collection an Expansion derives from, one of the closed
+          set domain.aggregates, domain.entities, domain.value_objects,
+          domain.events, domain.contexts, domain.invariants, domain.assertions,
+          domain.specifications. A new source is a deliberate design act, never
+          a syntax feature.
       TermCase:
         definition: >-
-          One published rendering of a recorded term as a path or
-          identifier segment: flatcase, snake_case, kebab-case,
-          camelCase, or PascalCase. One producing implementation
-          serves both surfaces, the rules.arclint.yaml {name:<case>}
-          placeholders and the extension SDK's ctx.caseTerm, so
-          whatever the ruleset grammar expresses an extension can
-          see. A CaseSpec checks names; a TermCase produces them.
+          One published rendering of a recorded term as a path or identifier
+          segment: flatcase, snake_case, kebab-case, camelCase, or PascalCase.
+          One producing implementation serves both surfaces, the
+          rules.arclint.yaml {name:<case>} placeholders and the extension SDK's
+          ctx.caseTerm, so whatever the ruleset grammar expresses an extension
+          can see. A CaseSpec checks names; a TermCase produces them.
         invariants:
           never-empty-segment: >-
-            A TermCase never renders an empty segment: a term without
-            letters or digits is rejected at resolution.
+            A TermCase never renders an empty segment: a term without letters or
+            digits is rejected at resolution.
       CaseSpec:
         definition: >-
-          The finite case vocabulary a naming Rule matches file stems
-          against in rules.arclint.yaml: kebab-case, snake_case,
-          camelCase, PascalCase, or a regex, combined as alternatives.
+          The finite case vocabulary a naming Rule matches file stems against in
+          rules.arclint.yaml: kebab-case, snake_case, camelCase, PascalCase, or
+          a regex, combined as alternatives.
+      DomainFile:
+        definition: >-
+          The project's domain file as the ruleset knows it: the DomainRecording
+          rules.arclint.yaml names under domain.file, that init writes there, or
+          that a translation moves the language into. A path a person writes
+          becomes the project's DomainRecording only as a DomainFile, because
+          only the ruleset says which file holds the project's language. A
+          default-named file that discovery finds is held to the same rule, so
+          no command ever reads or writes the ruleset as a language.
+        invariants:
+          never-the-ruleset: >-
+            A project's domain file is never rules.arclint.yaml, not even
+            through a link.
     questions:
       pattern-holds-rules: >-
-        In code a Pattern carries the Rules it distributes, which reads
-        like a boundary of its own, while rules.arclint.yaml keeps Rule
-        the sole aggregate and forbids a pattern home. Is Pattern a
-        member of the Rule aggregate, as recorded here, or an aggregate
-        whose members are Rules?
+        In code a Pattern carries the Rules it distributes, which reads like a
+        boundary of its own, while rules.arclint.yaml keeps Rule the sole
+        aggregate and forbids a pattern home. Is Pattern a member of the Rule
+        aggregate, as recorded here, or an aggregate whose members are Rules?
   adoption:
     definition: >-
-      How one repository takes on Rules a Pattern distributes: binding
-      the Pattern's Zones to paths and deciding, per Rule, what to
-      disable, exclude, or suppress.
+      How one repository takes on Rules a Pattern distributes: binding the
+      Pattern's Zones to paths and deciding, per Rule, what to disable, exclude,
+      or suppress.
     value_objects:
       Binding:
         definition: >-
-          The paths an adopting repository gives to one Zone of a
-          Pattern it extends, spelled under bind as one glob or a list
-          of globs. A Binding is the only place a Pattern Zone's
-          paths live; the Pattern's Rules never change when the folders
-          do.
+          The paths an adopting repository gives to one Zone of a Pattern it
+          extends, spelled under bind as one glob or a list of globs. A Binding
+          is the only place a Pattern Zone's paths live; the Pattern's Rules
+          never change when the folders do.
         invariants:
           names-a-listed-zone: >-
-            A Binding names a Zone the extended Pattern lists and
-            gives it at least one path; a Binding for a Zone the
-            Pattern does not list is rejected at load.
-          every-zone-bound: >-
-            Every Zone an extended Pattern lists has a Binding before
-            the Pattern's Rules evaluate; a Zone left unbound is
+            A Binding names a Zone the extended Pattern lists and gives it at
+            least one path; a Binding for a Zone the Pattern does not list is
             rejected at load.
+          every-zone-bound: >-
+            Every Zone an extended Pattern lists has a Binding before the
+            Pattern's Rules evaluate; a Zone left unbound is rejected at load.
       Override:
         definition: >-
-          One adopting repository's decision applied onto a Rule an
-          extended Pattern distributes or a built-in Rule, keyed by
-          the Rule's RuleID. An Override is not a second Rule: it only
-          disables the Rule, changes its Severity, excludes subjects from it, or
-          suppresses its findings.
+          One adopting repository's decision applied onto a Rule an extended
+          Pattern distributes or a built-in Rule, keyed by the Rule's RuleID. An
+          Override is not a second Rule: it only disables the Rule, changes its
+          Severity, excludes subjects from it, or suppresses its findings.
         invariants:
           names-a-distributed-rule: >-
-            An Override names a distributed or built-in Rule; an
-            Override whose RuleID matches neither is rejected at load.
+            An Override names a distributed or built-in Rule; an Override whose
+            RuleID matches neither is rejected at load.
           carries-no-assertion: >-
-            An Override carries no Constraint and no Rationale; adding
-            either is rejected at load with the advice to add a new
-            local Rule under a new RuleID.
+            An Override carries no Constraint and no Rationale; adding either is
+            rejected at load with the advice to add a new local Rule under a new
+            RuleID.
       Disablement:
         definition: >-
-          The decision to stop evaluating one Rule for the repository,
-          with a reason. The Rule and its provenance stay inspectable
-          and the reason is reported wherever the Rule is listed.
+          The decision to stop evaluating one Rule for the repository, with a
+          reason. The Rule and its provenance stay inspectable and the reason is
+          reported wherever the Rule is listed.
         invariants:
           carries-a-reason: >-
-            A Disablement carries a reason; disabling without one is
-            rejected at load.
+            A Disablement carries a reason; disabling without one is rejected at
+            load.
       Exclusion:
         definition: >-
-          The decision removing selected paths or Zones from what one
-          Rule judges, with a reason. Excluded subjects are reported as
-          not applicable, never silently dropped.
+          The decision removing selected paths or Zones from what one Rule
+          judges, with a reason. Excluded subjects are reported as not
+          applicable, never silently dropped.
         invariants:
           names-a-subject-with-a-reason: >-
-            An Exclusion names at least one path or Zone and carries
-            a reason; an Exclusion without either is rejected at load.
+            An Exclusion names at least one path or Zone and carries a reason;
+            an Exclusion without either is rejected at load.
       Suppression:
         definition: >-
-          The decision keeping a finding one Rule produced at selected
-          paths while removing its gate effect, with a reason. The
-          finding is still reported as suppressed.
+          The decision keeping a finding one Rule produced at selected paths
+          while removing its gate effect, with a reason. The finding is still
+          reported as suppressed.
         invariants:
           names-a-path-with-a-reason: >-
-            A Suppression names at least one path and carries a
-            reason; a Suppression without either is rejected at load.
+            A Suppression names at least one path and carries a reason; a
+            Suppression without either is rejected at load.
       Installation:
         definition: >-
-          The decision to extend one Pattern, recorded in
-          rules.arclint.yaml as one extends entry that names the
-          PatternReference and carries a Binding for every Zone the
-          Pattern lists, drafted from the paths the Pattern suggests.
-          Installing a Pattern the binary does not embed keeps a
-          VendoredPattern first, so the repository resolves the
+          The decision to extend one Pattern, recorded in rules.arclint.yaml as
+          one extends entry that names the PatternReference and carries a
+          Binding for every Zone the Pattern lists, drafted from the paths the
+          Pattern suggests. Installing a Pattern the binary does not embed keeps
+          a VendoredPattern first, so the repository resolves the
           PatternReference offline.
         invariants:
           one-extends-per-pattern: >-
-            An Installation of a Pattern whose namespace and name the
-            repository already extends replaces the extended version
-            and keeps every Binding; it never records a second extends
-            entry for one namespace and name.
+            An Installation of a Pattern whose namespace and name the repository
+            already extends replaces the extended version and keeps every
+            Binding; it never records a second extends entry for one namespace
+            and name.
   conformance:
     definition: >-
-      Judging code against Rules: every assessment derives its
-      Violations fresh from the observed repository.
+      Judging code against Rules: every assessment derives its Violations fresh
+      from the observed repository.
     value_objects:
       ContractCoverage:
         definition: >-
-          The checks performed for one recorded invariant or assertion,
-          together with checks not performed and their reasons.
+          The checks performed for one recorded invariant or assertion, together
+          with checks not performed and their reasons.
         invariants:
           unchecked-without-evaluation: >-
-            ContractCoverage reports a recorded contract as unchecked
-            when none of its applicable Rules was evaluated.
+            ContractCoverage reports a recorded contract as unchecked when none
+            of its applicable Rules was evaluated.
           retains-check-limitations: >-
-            ContractCoverage retains the outcome and limitations of
-            every check.
+            ContractCoverage retains the outcome and limitations of every check.
           structural-checks-are-not-proof: >-
-            ContractCoverage never presents structural matching as
-            proof of the recorded invariant or assertion.
+            ContractCoverage never presents structural matching as proof of the
+            recorded invariant or assertion.
       DependencyImport:
         definition: >-
           One parsed import with its source file, source location,
           classification, resolved target, and source and target Zone
-          memberships, including whether the target was observed.
-          Incoming and outgoing are views of the same
-          supplied value; equal attributes are interchangeable.
+          memberships, including whether the target was observed. Incoming and
+          outgoing are views of the same supplied value; equal attributes are
+          interchangeable.
         invariants:
           preserves-target-precision: >-
-            DependencyImport never presents a resolved package directory
-            as an exact target file.
+            DependencyImport never presents a resolved package directory as an
+            exact target file.
           blank-import-is-a-dependency: >-
-            DependencyImport retains a Go blank import as dependency
-            evidence rather than treating it as an empty or failed result.
+            DependencyImport retains a Go blank import as dependency evidence
+            rather than treating it as an empty or failed result.
           unobserved-is-not-unzoned: >-
-            DependencyImport distinguishes an unobserved target from
-            an observed target that belongs to no declared Zone.
+            DependencyImport distinguishes an unobserved target from an observed
+            target that belongs to no declared Zone.
       Facts:
         definition: >-
-          The collected information supplied to a consumer, with one
-          meaning regardless of how a Rule is evaluated. For a Rule,
-          the available information is determined by its required fact
-          classes, Scope, Exclusions, and the evidence its Constraint
-          needs. Selected subjects and evidence locations are distinct:
-          an incoming dependency may originate outside the selected
-          code without granting access to that file. Facts have no
-          independent identity; equal supplied information and access
-          are interchangeable. Repository inspection requests its own
-          fact classes without inventing a Rule; its information uses
-          the same observation and dependency meanings.
+          The collected information supplied to a consumer, with one meaning
+          regardless of how a Rule is evaluated. For a Rule, the available
+          information is determined by its required fact classes, Scope,
+          Exclusions, and the evidence its Constraint needs. Selected subjects
+          and evidence locations are distinct: an incoming dependency may
+          originate outside the selected code without granting access to that
+          file. Facts have no independent identity; equal supplied information
+          and access are interchangeable. Repository inspection requests its own
+          fact classes without inventing a Rule; its information uses the same
+          observation and dependency meanings.
         invariants:
           observed-evidence-only: >-
-            Facts contains only evidence present in the supplied
-            observations, never inferred runtime relationships.
+            Facts contains only evidence present in the supplied observations,
+            never inferred runtime relationships.
           one-meaning-for-every-consumer: >-
-            Facts preserves the same import attributes and Zone
-            memberships for native evaluation, extension evaluation,
-            and repository inspection.
+            Facts preserves the same import attributes and Zone memberships for
+            native evaluation, extension evaluation, and repository inspection.
           empty-is-not-unavailable: >-
-            Facts distinguishes an observed empty result from
-            unavailable observations and from a parse failure.
+            Facts distinguishes an observed empty result from unavailable
+            observations and from a parse failure.
           only-required-facts: >-
-            Facts supplied to a Rule contains no fact class that its
-            enforcement does not require.
+            Facts supplied to a Rule contains no fact class that its enforcement
+            does not require.
           scope-bounds-file-access: >-
-            Facts supplied to a Rule exposes content and declarations
-            only for files selected by its Scope after file Exclusions.
+            Facts supplied to a Rule exposes content and declarations only for
+            files selected by its Scope after file Exclusions.
           evidence-follows-the-constraint: >-
             Facts supplies dependency evidence according to the Rule's
-            Constraint, retaining incoming and outgoing evidence when
-            the Constraint needs it. Excluding a file from evaluation
-            does not erase the existence of its Folder as dependency
-            evidence. An unsupported evidence query is not an observed
-            empty result.
+            Constraint, retaining incoming and outgoing evidence when the
+            Constraint needs it. Excluding a file from evaluation does not erase
+            the existence of its Folder as dependency evidence. An unsupported
+            evidence query is not an observed empty result.
           imports-grant-no-access: >-
-            Facts never grants file access merely because a
-            DependencyImport references that file.
+            Facts never grants file access merely because a DependencyImport
+            references that file.
           findings-use-supplied-evidence: >-
-            Facts permits an extension finding outside its selected
-            subject only at the source location of supplied dependency
-            evidence involving that subject.
+            Facts permits an extension finding outside its selected subject only
+            at the source location of supplied dependency evidence involving
+            that subject.
       Violation:
         definition: >-
-          One suspected breach of a Rule, anchored at a file and line
-          and carrying the PatternReference of the Pattern that
-          distributed the Rule when one did. It has no lifecycle: every
-          assessment derives its Violations fresh, and two Violations
-          with the same values are the same finding.
+          One suspected breach of a Rule, anchored at a file and line and
+          carrying the PatternReference of the Pattern that distributed the Rule
+          when one did. It has no lifecycle: every assessment derives its
+          Violations fresh, and two Violations with the same values are the same
+          finding.
   distribution:
     definition: >-
-      Moving published Patterns between repositories without changing
-      them: what a Registry publishes, what a repository vendors, and
-      how a version proves it is the one that was published.
+      Moving published Patterns between repositories without changing them: what
+      a Registry publishes, what a repository vendors, and how a version proves
+      it is the one that was published.
     value_objects:
       Catalog:
         definition: >-
-          Every Pattern the resolving PatternSources carry, one entry
-          per PatternReference in source order, with the agreeing
-          copies of one reference kept beside the first. A listing
-          reads the Catalog to say where a Pattern resolves from and
-          what the repository carries of it; a check resolves the
-          PatternReferences it extends through the Catalog.
+          Every Pattern the resolving PatternSources carry, one entry per
+          PatternReference in source order, with the agreeing copies of one
+          reference kept beside the first. A listing reads the Catalog to say
+          where a Pattern resolves from and what the repository carries of it; a
+          check resolves the PatternReferences it extends through the Catalog.
       Digest:
         definition: >-
-          The sha256 content hash, spelled sha256:<hex>, that
-          identifies the exact bytes of one PatternFile, or of a whole
-          Pattern through the sorted list of its PatternFile paths and
-          their Digests. Two copies of one published version share one
-          Digest.
+          The sha256 content hash, spelled sha256:<hex>, that identifies the
+          exact bytes of one PatternFile, or of a whole Pattern through the
+          sorted list of its PatternFile paths and their Digests. Two copies of
+          one published version share one Digest.
         invariants:
           deterministic: >-
-            A Digest computed twice over the same PatternFiles is the
-            same Digest; file order, platform, and time never enter it.
+            A Digest computed twice over the same PatternFiles is the same
+            Digest; file order, platform, and time never enter it.
       Index:
         definition: >-
-          A Registry's complete listing of the Pattern versions it
-          publishes, one entry per PatternReference carrying the
-          version's Digest and documentation, ordered by namespace,
-          name, then version. The Index is read before any Manifest or
-          PatternFile, so a Registry is listed and a Selection resolved
-          without fetching a Pattern.
+          A Registry's complete listing of the Pattern versions it publishes,
+          one entry per PatternReference carrying the version's Digest and
+          documentation, ordered by namespace, name, then version. The Index is
+          read before any Manifest or PatternFile, so a Registry is listed and a
+          Selection resolved without fetching a Pattern.
         invariants:
           one-entry-per-reference: >-
-            An Index lists one PatternReference at most once; a listing
-            that repeats a reference is rejected at construction,
-            because a published version is immutable.
+            An Index lists one PatternReference at most once; a listing that
+            repeats a reference is rejected at construction, because a published
+            version is immutable.
           fetched-digest-agrees: >-
-            A Pattern fetched from a Registry must carry the Digest its
-            Index records; a fetched version whose Digest disagrees
-            with the Index is rejected, never vendored.
+            A Pattern fetched from a Registry must carry the Digest its Index
+            records; a fetched version whose Digest disagrees with the Index is
+            rejected, never vendored.
       Manifest:
         definition: >-
           The record a published Pattern version travels with: its
-          PatternReference, its Digest, and the path and Digest of
-          every PatternFile it ships. A Manifest is written beside a
-          VendoredPattern and read from a Registry before any
-          PatternFile is fetched.
+          PatternReference, its Digest, and the path and Digest of every
+          PatternFile it ships. A Manifest is written beside a VendoredPattern
+          and read from a Registry before any PatternFile is fetched.
         invariants:
           lists-every-file-inside-the-pattern: >-
-            A Manifest lists every PatternFile of the Pattern and none
-            outside the Pattern's directory; a path that is absolute,
-            escapes the directory, or appears twice is rejected at
-            construction.
+            A Manifest lists every PatternFile of the Pattern and none outside
+            the Pattern's directory; a path that is absolute, escapes the
+            directory, or appears twice is rejected at construction.
       PatternFile:
         definition: >-
-          One file a Pattern ships: a forward-slash path relative to
-          the Pattern's own directory and the file's bytes. The
-          pattern.yaml file is always one of them, and every Extension
-          the Pattern distributes lives under extensions/.
+          One file a Pattern ships: a forward-slash path relative to the
+          Pattern's own directory and the file's bytes. The pattern.yaml file is
+          always one of them, and every Extension the Pattern distributes lives
+          under extensions/.
       PatternSource:
         definition: >-
-          One place arclint resolves a PatternReference from: the
-          Patterns embedded in the binary, the Patterns kept under
-          .arclint/patterns in the repository, or a Registry. A check
-          resolves through the first two only; a Registry is read when
-          a command asks to vendor or install a Pattern.
+          One place arclint resolves a PatternReference from: the Patterns
+          embedded in the binary, the Patterns kept under .arclint/patterns in
+          the repository, or a Registry. A check resolves through the first two
+          only; a Registry is read when a command asks to vendor or install a
+          Pattern.
         invariants:
           sources-agree-on-a-digest: >-
-            Two PatternSources that carry one PatternReference must
-            agree on its Digest; a disagreement is rejected at load,
-            because a published version is immutable.
+            Two PatternSources that carry one PatternReference must agree on its
+            Digest; a disagreement is rejected at load, because a published
+            version is immutable.
       Registry:
         definition: >-
           A location, reachable by URL, that publishes Patterns by
-          PatternReference: an index of every published reference and,
-          per version, a Manifest beside the Pattern's files. The
-          default Registry is arclint's own; a command may name
-          another.
+          PatternReference: an index of every published reference and, per
+          version, a Manifest beside the Pattern's files. The default Registry
+          is arclint's own; a command may name another.
         invariants:
           never-read-during-a-check: >-
-            A Registry is never read while a check runs; a check
-            resolves only embedded and vendored Patterns.
+            A Registry is never read while a check runs; a check resolves only
+            embedded and vendored Patterns.
       Selection:
         definition: >-
           The spelling a command accepts to name one Pattern among the
-          PatternReferences a source carries: an exact
-          namespace/name@version, a namespace/name meaning its highest
-          version, or a bare name meaning the highest version of the
-          one namespace/name that carries it.
+          PatternReferences a source carries: an exact namespace/name@version, a
+          namespace/name meaning its highest version, or a bare name meaning the
+          highest version of the one namespace/name that carries it.
         invariants:
           bare-name-never-ambiguous: >-
-            A bare-name Selection carried by more than one
-            namespace/name is rejected as ambiguous, with every
-            matching reference spelled out; nothing is chosen on the
-            caller's behalf.
+            A bare-name Selection carried by more than one namespace/name is
+            rejected as ambiguous, with every matching reference spelled out;
+            nothing is chosen on the caller's behalf.
       VendoredPattern:
         definition: >-
           An exact copy of one published Pattern version kept under
-          .arclint/patterns/<namespace>/<name>/ together with its
-          Manifest, so the repository resolves the PatternReference
-          offline. One name in one namespace has one vendored version.
+          .arclint/patterns/<namespace>/<name>/ together with its Manifest, so
+          the repository resolves the PatternReference offline. One name in one
+          namespace has one vendored version.
         invariants:
           matches-its-manifest: >-
-            A VendoredPattern whose PatternFiles no longer match its
-            Manifest is rejected at load, never used silently.
+            A VendoredPattern whose PatternFiles no longer match its Manifest is
+            rejected at load, never used silently.
 relations:
   - from: vocabulary
     to: rule
     kind: conformist
     description: >-
-      rule reads the recorded language as vocabulary spells it: an
-      Expansion resolves against the UbiquitousLanguage without
-      redefining a term, so dependence flows rule -> vocabulary and
-      never back.
+      rule reads the recorded language as vocabulary spells it: an Expansion
+      resolves against the UbiquitousLanguage without redefining a term, so
+      dependence flows rule -> vocabulary and never back.
   - from: vocabulary
     to: conformance
     kind: conformist
     description: >-
-      conformance judges code against the block invariants exactly as
-      vocabulary records them, so dependence flows conformance ->
-      vocabulary and never back.
+      conformance judges code against the block invariants exactly as vocabulary
+      records them, so dependence flows conformance -> vocabulary and never
+      back.
   - from: rule
     to: conformance
     kind: conformist
     description: >-
-      conformance adopts the rule context's model as-is: assessments
-      consume Rule, Severity, and the rest of the rule model directly,
-      so dependence flows conformance -> rule and never back.
+      conformance adopts the rule context's model as-is: assessments consume
+      Rule, Severity, and the rest of the rule model directly, so dependence
+      flows conformance -> rule and never back.
   - from: rule
     to: adoption
     kind: conformist
     description: >-
-      adoption speaks the rule context's model unchanged: a Binding
-      names a Zone, an Override names a Rule, and neither redefines
-      them, so dependence flows adoption -> rule and never back.
+      adoption speaks the rule context's model unchanged: a Binding names a
+      Zone, an Override names a Rule, and neither redefines them, so dependence
+      flows adoption -> rule and never back.
   - from: rule
     to: distribution
     kind: conformist
     description: >-
-      distribution moves Patterns around without redefining them: a
-      Manifest names a PatternReference and a VendoredPattern carries a
-      Pattern as the rule context spells it, so dependence flows
-      distribution -> rule and never back.
+      distribution moves Patterns around without redefining them: a Manifest
+      names a PatternReference and a VendoredPattern carries a Pattern as the
+      rule context spells it, so dependence flows distribution -> rule and never
+      back.
   - from: distribution
     to: adoption
     kind: conformist
     description: >-
-      adoption consumes the distribution model unchanged: an
-      Installation keeps a VendoredPattern and resolves through
-      PatternSources, so dependence flows adoption -> distribution and
-      never back.
+      adoption consumes the distribution model unchanged: an Installation keeps
+      a VendoredPattern and resolves through PatternSources, so dependence flows
+      adoption -> distribution and never back.
   - from: adoption
     to: conformance
     kind: conformist
     description: >-
-      conformance applies adoption's decisions as adoption records
-      them: a Disablement stops a Rule's evaluation, an Exclusion
-      removes subjects from what a Rule judges, and a Suppression keeps
-      a finding reported without its gate effect, so dependence flows
-      conformance -> adoption and never back.
+      conformance applies adoption's decisions as adoption records them: a
+      Disablement stops a Rule's evaluation, an Exclusion removes subjects from
+      what a Rule judges, and a Suppression keeps a finding reported without its
+      gate effect, so dependence flows conformance -> adoption and never back.
   - from: rule
     to: agent
     kind: conformist
     description: >-
-      agent names Zones exactly as the ruleset declares them: context shows
-      the Zones that own a path, and a change is covered once every Zone that
-      owns it has been shown, so dependence flows agent -> rule and never
-      back.
+      agent names Zones exactly as the ruleset declares them: context shows the
+      Zones that own a path, and a change is covered once every Zone that owns
+      it has been shown, so dependence flows agent -> rule and never back.

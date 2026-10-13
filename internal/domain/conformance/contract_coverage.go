@@ -13,6 +13,7 @@ import (
 type ContractCoverage struct {
 	context, owner, key, statement string
 	kind                           vocab.Concept
+	path                           string
 	line                           int
 	checks                         []Evaluation
 	unperformed                    []string
@@ -22,15 +23,17 @@ type ContractCoverage struct {
 type ContractCoverageSpec struct {
 	Context, Owner, Key, Statement string
 	Kind                           vocab.Concept
-	Line                           int
-	Checks                         []Evaluation
-	Unperformed                    []string
+	// Path is the domain file the contract is recorded in; Line is where.
+	Path        string
+	Line        int
+	Checks      []Evaluation
+	Unperformed []string
 }
 
 // NewContractCoverage validates the recording and preserves each check unchanged.
 func NewContractCoverage(s ContractCoverageSpec) (ContractCoverage, error) {
-	if strings.TrimSpace(s.Owner) == "" || strings.TrimSpace(s.Key) == "" || strings.TrimSpace(s.Statement) == "" || s.Line < 0 {
-		return ContractCoverage{}, fmt.Errorf("contract coverage: owner, key, statement, and nonnegative line are required")
+	if strings.TrimSpace(s.Owner) == "" || strings.TrimSpace(s.Key) == "" || strings.TrimSpace(s.Statement) == "" || strings.TrimSpace(s.Path) == "" || s.Line < 0 {
+		return ContractCoverage{}, fmt.Errorf("contract coverage: owner, key, statement, path, and nonnegative line are required")
 	}
 	subject, err := rule.ContextSubject(s.Context)
 	if err != nil {
@@ -51,7 +54,7 @@ func NewContractCoverage(s ContractCoverageSpec) (ContractCoverage, error) {
 	}
 	return ContractCoverage{
 		context: s.Context, owner: s.Owner, key: s.Key, statement: s.Statement,
-		kind: s.Kind, line: s.Line, checks: append([]Evaluation(nil), s.Checks...),
+		kind: s.Kind, path: s.Path, line: s.Line, checks: append([]Evaluation(nil), s.Checks...),
 		unperformed: append([]string(nil), s.Unperformed...),
 	}, nil
 }
@@ -71,7 +74,10 @@ func (c ContractCoverage) Statement() string { return c.statement }
 // Kind distinguishes an invariant from an assertion.
 func (c ContractCoverage) Kind() vocab.Concept { return c.kind }
 
-// Line anchors the contract in the domain recording.
+// Path is the domain file the contract is recorded in.
+func (c ContractCoverage) Path() string { return c.path }
+
+// Line anchors the contract in its domain file.
 func (c ContractCoverage) Line() int { return c.line }
 
 // Checks returns detached evaluations of the applicable structural rules.

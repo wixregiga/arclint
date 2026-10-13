@@ -50,7 +50,11 @@ func render(repo fs.FS) ([]byte, error) {
 	if string(data) != string(tsData) {
 		return nil, fmt.Errorf("domain.arclint.yaml differs between %s and %s; the two examples record one domain", goExample, tsExample)
 	}
-	lang, err := vocabyaml.Parse(data)
+	recording, err := vocab.DefaultDomainRecording()
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", exampleDomain, err)
+	}
+	lang, err := vocabyaml.Parse(data, recording)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", exampleDomain, err)
 	}

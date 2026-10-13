@@ -12,10 +12,7 @@
 package yamlrule
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -56,7 +53,7 @@ type Repository struct {
 // recorded-vocabulary port expanded Rules resolve against, and the
 // Pattern sources extends resolves through. A nil knowledge port means
 // no recorded vocabulary: expanded Rules then resolve empty, exactly as
-// with an absent domain.arclint.yaml. No Pattern source means a
+// with an absent domain file. No Pattern source means a
 // ruleset that extends anything fails to load.
 func NewRepository(path string, knowledge vocab.Repository, patterns ...PatternSource) (*Repository, error) {
 	abs, err := filepath.Abs(path)
@@ -92,8 +89,13 @@ func (r *Repository) load() (rule.Configured, error) {
 	if err != nil {
 		return rule.Configured{}, fmt.Errorf("read ruleset: %w", err)
 	}
+	parsed, err := parse(data, r.path)
+	if err != nil {
+		return rule.Configured{}, err
+	}
 	lang := vocab.UbiquitousLanguage{}
 	if r.knowledge != nil {
+		lang.Recording = r.knowledge.Recording()
 		recorded, found, err := r.knowledge.RecordedLanguage()
 		if err != nil {
 			return rule.Configured{}, fmt.Errorf("load domain model: %w", err)
@@ -101,10 +103,6 @@ func (r *Repository) load() (rule.Configured, error) {
 		if found {
 			lang = recorded
 		}
-	}
-	parsed, err := parse(data, r.path)
-	if err != nil {
-		return rule.Configured{}, err
 	}
 	if parsed.pattern != nil {
 		return rule.Configured{}, fmt.Errorf("%s: a pattern distribution file is not a repository ruleset", r.path)
@@ -171,6 +169,7 @@ func LoadPattern(data []byte, source string, extensions []rule.PatternExtension)
 // Top-level and nested keys of the grammar.
 const (
 	keyPattern       = "pattern"
+	keyDomain        = "domain"
 	keyRuntime       = "runtime"
 	keyScan          = "scan"
 	keyExtends       = "extends"
@@ -208,11 +207,14 @@ const (
 type document struct {
 	source  string
 	pattern *patternHeader
-	runtime []rule.Language
-	scan    rule.Scan
-	extends []extension
-	zones   []zoneEntry
-	rules   []ruleEntry
+	// recording is the DomainRecording the ruleset names under
+	// domain.file, the zero DomainRecording when it names none.
+	recording vocab.DomainRecording
+	runtime   []rule.Language
+	scan      rule.Scan
+	extends   []extension
+	zones     []zoneEntry
+	rules     []ruleEntry
 }
 
 type patternHeader struct {
@@ -272,29 +274,21 @@ type suppressionEntry struct {
 // parse reads the document strictly: unknown keys anywhere, wrong
 // value shapes, and keys the file kind does not accept are errors.
 func parse(data []byte, source string) (*document, error) {
-	var root yaml.Node
-	if err := yaml.NewDecoder(bytes.NewReader(data)).Decode(&root); err != nil {
-		if errors.Is(err, io.EOF) {
-			return nil, fmt.Errorf("%s: empty document", source)
-		}
-		return nil, fmt.Errorf("%s: %v", source, err)
-	}
-	body := &root
-	if body.Kind == yaml.DocumentNode {
-		if len(body.Content) == 0 {
-			return nil, fmt.Errorf("%s: empty document", source)
-		}
-		body = body.Content[0]
-	}
-	top, err := asMapping(body, "document")
+	top, empty, err := topLevel(data, source)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %v", source, err)
+		return nil, err
+	}
+	if empty {
+		return nil, fmt.Errorf("%s: empty document", source)
 	}
 	doc := &document{source: source}
 	fail := func(format string, args ...any) (*document, error) {
 		return nil, fmt.Errorf("%s: %s", source, fmt.Sprintf(format, args...))
 	}
-	if err := top.allow(keyPattern, keyRuntime, keyScan, keyExtends, keyZones, keyRules); err != nil {
+	if err := top.allow(keyPattern, keyDomain, keyRuntime, keyScan, keyExtends, keyZones, keyRules); err != nil {
+		return fail("%v", err)
+	}
+	if doc.recording, err = parseDomain(top); err != nil {
 		return fail("%v", err)
 	}
 	if n := top.get(keyPattern); n != nil {
@@ -868,6 +862,22 @@ func (d *document) distribution(extensions []rule.PatternExtension) (rule.Patter
 	return p, nil
 }
 
+// projectRecording is the DomainRecording the project records its
+// domain in, for a message that tells the author where to record it:
+// the file this ruleset names, else the file the language was read from
+// or would be written in, else the file a project with no domain file
+// yet records in.
+func (d *document) projectRecording(lang vocab.UbiquitousLanguage) string {
+	switch {
+	case !d.recording.IsZero():
+		return d.recording.Path()
+	case !lang.Recording.IsZero():
+		return lang.Recording.Path()
+	default:
+		return vocab.DefaultDomainRecordingPath
+	}
+}
+
 // repository translates a repository ruleset: extended Patterns are
 // resolved and bound, their Rules re-expanded against the recorded
 // language, Overrides applied, and local Rules added.
@@ -961,7 +971,7 @@ func (d *document) repository(lang vocab.UbiquitousLanguage, available []rule.Pa
 			i, ok := distributed[q]
 			if !ok && rule.BuiltInID(id) {
 				return fail("%s: rule %s is built in, and exists once a domain is recorded; record the domain in %s or remove the override",
-					e.where, q, vocab.UbiquitousLanguageFileName)
+					e.where, q, d.projectRecording(lang))
 			}
 			if !ok {
 				return fail("%s: carries no constraint, so it is an override, but no extended pattern or built-in rule distributes rule %s; give a new Rule one constraint key (%s)",
@@ -1480,13 +1490,15 @@ type mapping struct {
 	where string
 	order []string
 	nodes map[string]*yaml.Node
+	// lines holds the line each key is written on.
+	lines map[string]int
 }
 
 func asMapping(n *yaml.Node, where string) (mapping, error) {
 	if n == nil || n.Kind != yaml.MappingNode {
 		return mapping{}, fmt.Errorf("%s: expected an object", where)
 	}
-	m := mapping{where: where, nodes: map[string]*yaml.Node{}}
+	m := mapping{where: where, nodes: map[string]*yaml.Node{}, lines: map[string]int{}}
 	for i := 0; i+1 < len(n.Content); i += 2 {
 		k := n.Content[i]
 		if k.Kind != yaml.ScalarNode {
@@ -1497,6 +1509,7 @@ func asMapping(n *yaml.Node, where string) (mapping, error) {
 		}
 		m.order = append(m.order, k.Value)
 		m.nodes[k.Value] = n.Content[i+1]
+		m.lines[k.Value] = k.Line
 	}
 	return m, nil
 }

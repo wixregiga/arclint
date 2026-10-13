@@ -48,7 +48,7 @@ func (r renderer) Render(w io.Writer, rep cli.Report) error {
 
 	switch x := rep.(type) {
 	case cli.AssessmentReport:
-		writeCheck(p, th, x.Assessment)
+		writeCheck(p, th, x.Assessment, x.AgentsContext)
 	case cli.RuleListReport:
 		writeRuleRows(p, th, x.Rules)
 	case cli.RuleDetailReport:
@@ -61,17 +61,21 @@ func (r renderer) Render(w io.Writer, rep cli.Report) error {
 		writeContext(p, th, x.Context)
 	case cli.DomainInitReport:
 		writeDomainInit(p, th, x.Result)
+	case cli.DomainExportReport:
+		writeDomainExport(p, th, x.Result)
+	case cli.DomainConvertReport:
+		writeDomainConvert(p, th, x.Result)
 	case cli.DomainMissingReport:
-		writeDomainMissing(p, th)
+		writeDomainMissing(p, th, x.Source)
 	case cli.DomainOverviewReport:
 		if !x.Overview.Found {
-			writeDomainMissing(p, th)
+			writeDomainMissing(p, th, x.Overview.Source)
 		} else {
 			writeDomainOverview(p, th, x.Overview)
 		}
 	case cli.DomainListReport:
 		if x.Listing.Language.Empty() {
-			writeDomainMissing(p, th)
+			writeDomainMissing(p, th, x.Listing.Source)
 		} else {
 			writeDomainList(p, th, x.Listing)
 		}

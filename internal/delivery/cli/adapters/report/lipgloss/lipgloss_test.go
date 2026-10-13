@@ -209,3 +209,20 @@ func TestLipglossDomainExplainPrintsSources(t *testing.T) {
 		}
 	}
 }
+
+func TestLipglossDomainMissingNamesTheProjectsDomainFile(t *testing.T) {
+	for name, report := range map[string]cli.Report{
+		"missing report":  cli.DomainMissingReport{Source: "docs/model.cml"},
+		"empty listing":   cli.DomainListReport{Listing: application.DomainListing{Source: "docs/model.cml"}},
+		"missing summary": cli.DomainOverviewReport{Overview: application.DomainOverview{Source: "docs/model.cml"}},
+	} {
+		var buf bytes.Buffer
+		if err := ansiRenderer().Render(&buf, report); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		out := stripANSI(buf.String())
+		if !strings.Contains(out, "No recorded Ubiquitous Language found at docs/model.cml.\n") {
+			t.Errorf("%s: guidance does not name the project's domain file: %q", name, out)
+		}
+	}
+}

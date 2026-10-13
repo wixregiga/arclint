@@ -99,7 +99,7 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 		return conformance.Assessment{}, fmt.Errorf("load domain model: %w", err)
 	}
 	if !found {
-		knowledge = vocab.UbiquitousLanguage{}
+		knowledge = vocab.UbiquitousLanguage{Recording: uc.knowledge.Recording()}
 	}
 	assessment, err := conformance.Run(conformance.Request{
 		Rules:          rules,

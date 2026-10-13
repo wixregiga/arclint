@@ -1,0 +1,11 @@
+BoundedContext NewTestBC // BC already existing
+
+Domain InsuranceDomain {
+	Subdomain CustomerDomain {
+		Entity Customer
+		
+		Service CustomerService {
+			createCustomer
+		}
+	}
+}

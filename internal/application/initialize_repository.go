@@ -2,6 +2,7 @@ package application
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/wixregiga/arclint/internal/domain/distribution"
@@ -28,6 +29,13 @@ type InitializeRepositoryRequest struct {
 	// namespace/name at its highest available version, or by name when
 	// only one available Pattern carries it. Empty means BarePattern.
 	Pattern string
+	// Domain is the file the project writes its Ubiquitous Language in,
+	// as a path from the repository root. Empty leaves the ruleset
+	// without a domain key, so discovery chooses the file; any file named
+	// is written under domain.file, because naming it is an explicit
+	// choice that discovery must not overrule once another default-named
+	// file appears.
+	Domain string
 	// Force overwrites an existing ruleset.
 	Force bool
 }
@@ -93,7 +101,11 @@ func (uc InitializeRepository) Execute(req InitializeRepositoryRequest) (string,
 			return "", fmt.Errorf("initialize repository: language %q is not one of %s", l, strings.Join(supportedLanguages, ", "))
 		}
 	}
-	content, err := uc.rulesetContent(req.Pattern, languages)
+	domain, err := domainBlock(req.Domain)
+	if err != nil {
+		return "", fmt.Errorf("initialize repository: %w", err)
+	}
+	content, err := uc.rulesetContent(req.Pattern, languages, domain)
 	if err != nil {
 		return "", err
 	}
@@ -104,9 +116,9 @@ func (uc InitializeRepository) Execute(req InitializeRepositoryRequest) (string,
 	return path, nil
 }
 
-func (uc InitializeRepository) rulesetContent(selection string, languages []string) (string, error) {
+func (uc InitializeRepository) rulesetContent(selection string, languages []string, domain string) (string, error) {
 	if selection == "" || selection == BarePattern {
-		return starterRuleset(languages), nil
+		return starterRuleset(languages, domain), nil
 	}
 	catalog, err := loadCatalog(uc.patterns)
 	if err != nil {
@@ -120,7 +132,7 @@ func (uc InitializeRepository) rulesetContent(selection string, languages []stri
 	if err != nil {
 		return "", fmt.Errorf("initialize repository: %w", err)
 	}
-	return adoptingRuleset(p, inst, languages), nil
+	return adoptingRuleset(p, inst, languages, domain), nil
 }
 
 // selectPattern resolves a selection against the offline catalog:
@@ -147,6 +159,35 @@ func runtimeLine(languages []string) string {
 	return fmt.Sprintf("runtime: [%s]\n\n", strings.Join(languages, ", "))
 }
 
+// domainBlock renders the domain mapping that names the project's
+// DomainRecording: nothing when no file is named, else domain.file with
+// the cleaned path the DomainRecording holds. A file that cannot be a
+// DomainRecording is refused with the invariant it breaks.
+func domainBlock(file string) (string, error) {
+	if file == "" {
+		return "", nil
+	}
+	named, err := rule.NewDomainFile(file)
+	if err != nil {
+		return "", fmt.Errorf("domain file: %w", err)
+	}
+	return "domain:\n" +
+		"  # The file this repository writes its Ubiquitous Language in, YAML (.yaml, .yml) or CML (.cml).\n" +
+		"  file: " + yamlScalar(named.Recording().Path()) + "\n\n", nil
+}
+
+// yamlScalar spells a path as a YAML string: plain when it uses only
+// characters no YAML syntax reads, double-quoted otherwise.
+func yamlScalar(s string) string {
+	for _, r := range s {
+		plain := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || strings.ContainsRune("_./-", r)
+		if !plain {
+			return yamlQuote(s)
+		}
+	}
+	return s
+}
+
 func scanBlock() string {
 	return "scan:\n" +
 		"  # error | warn | ignore for imports that classify neither stdlib,\n" +
@@ -157,7 +198,7 @@ func scanBlock() string {
 // starterRuleset renders the commented draft. It declares one Zone
 // covering the repository and one vacuously-satisfied imports Rule so
 // the owner sees the shape to grow: real Zones, real allow-lists.
-func starterRuleset(languages []string) string {
+func starterRuleset(languages []string, domain string) string {
 	var b strings.Builder
 	b.WriteString("# ArcLint architecture contracts.\n")
 	b.WriteString("# Grow this file zone by zone: declare real Zones under `zones`,\n")
@@ -165,6 +206,7 @@ func starterRuleset(languages []string) string {
 	b.WriteString("# Query commands: arclint rules [selector] · arclint context <path>\n\n")
 	b.WriteString(runtimeLine(languages))
 	b.WriteString(scanBlock())
+	b.WriteString(domain)
 	b.WriteString("zones:\n")
 	b.WriteString("  # A Zone is a name and the paths it owns: one glob, a list of globs,\n")
 	b.WriteString("  # or {paths, description}. Split into real Zones as the architecture\n")
@@ -189,7 +231,7 @@ func starterRuleset(languages []string) string {
 // drafted Installation. A Zone the Installation leaves unbound is
 // written as a commented bind entry: the loader then names it unbound,
 // so the owner binds it before the first check.
-func adoptingRuleset(p rule.Pattern, inst rule.Installation, languages []string) string {
+func adoptingRuleset(p rule.Pattern, inst rule.Installation, languages []string, domain string) string {
 	ref := p.Reference().String()
 	var b strings.Builder
 	fmt.Fprintf(&b, "# ArcLint architecture contracts: this repository adopts %s.\n", ref)
@@ -201,6 +243,7 @@ func adoptingRuleset(p rule.Pattern, inst rule.Installation, languages []string)
 	b.WriteString("# Query commands: arclint rules [selector] · arclint context <path>\n\n")
 	b.WriteString(runtimeLine(languages))
 	b.WriteString(scanBlock())
+	b.WriteString(domain)
 	b.WriteString("extends:\n")
 	b.WriteString(extendsEntry(inst, "  "))
 	b.WriteString("\n")
@@ -259,5 +302,8 @@ func bindPaths(paths []rule.Glob) string {
 // yamlQuote spells a glob as a double-quoted YAML scalar so `*` and
 // `{` never read as YAML syntax.
 func yamlQuote(s string) string {
-	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
+	// strconv.Quote escapes a backslash, a quote and every control
+	// character with escapes a YAML double-quoted scalar reads the same
+	// way, so a name with a line break or a tab stays one value.
+	return strconv.Quote(s)
 }

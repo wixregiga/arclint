@@ -32,8 +32,16 @@ func writeDomainInit(p *out.Printer, th Theme, result application.InitDomainResu
 	domaintext.Init(p, th.domainStyle(), result)
 }
 
-func writeDomainMissing(p *out.Printer, th Theme) {
-	domaintext.Missing(p, th.domainStyle())
+func writeDomainExport(p *out.Printer, th Theme, result application.ExportDomainRecordingResult) {
+	domaintext.Export(p, th.domainStyle(), result)
+}
+
+func writeDomainConvert(p *out.Printer, th Theme, result application.ConvertDomainRecordingResult) {
+	domaintext.Convert(p, th.domainStyle(), result)
+}
+
+func writeDomainMissing(p *out.Printer, th Theme, source string) {
+	domaintext.Missing(p, th.domainStyle(), source)
 }
 
 func writeDomainOverview(p *out.Printer, th Theme, result application.DomainOverview) {

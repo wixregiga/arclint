@@ -20,9 +20,21 @@ func writeDomainInit(w io.Writer, r cli.DomainInitReport) error {
 	return p.Err
 }
 
-func writeMissingDomainGuidance(w io.Writer) error {
+func writeDomainExport(w io.Writer, r cli.DomainExportReport) error {
 	p := &out.Printer{W: w}
-	domaintext.Missing(p, domaintext.Plain())
+	domaintext.Export(p, domaintext.Plain(), r.Result)
+	return p.Err
+}
+
+func writeDomainConvert(w io.Writer, r cli.DomainConvertReport) error {
+	p := &out.Printer{W: w}
+	domaintext.Convert(p, domaintext.Plain(), r.Result)
+	return p.Err
+}
+
+func writeMissingDomainGuidance(w io.Writer, source string) error {
+	p := &out.Printer{W: w}
+	domaintext.Missing(p, domaintext.Plain(), source)
 	return p.Err
 }
 

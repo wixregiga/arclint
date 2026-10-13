@@ -31,6 +31,11 @@ func TestContractCoverageSeparatesOwnersAndReportsLimits(t *testing.T) {
 	if byOwner["Selection"].Status() != "structurally_checked" || byOwner["Removal"].Status() != "violates" {
 		t.Fatalf("coverage borrowed another owner's result: %#v", byOwner)
 	}
+	for owner, c := range byOwner {
+		if c.Path() != testRecording {
+			t.Errorf("contract %s is anchored in %q, want the project's domain file %q", owner, c.Path(), testRecording)
+		}
+	}
 	checks := byOwner["Selection"].Checks()
 	if len(checks) != 1 || !strings.Contains(strings.Join(checks[0].Limitations(), " "), "check bodies") {
 		t.Fatal("check-body limitation lost")
@@ -106,5 +111,44 @@ func TestContractCoverageReportsUnperformedAndUnavailableChecks(t *testing.T) {
 				t.Fatal("unavailable calls interpreted as missing calls")
 			}
 		})
+	}
+}
+
+// A Rule that excludes the project's domain file judges nothing recorded
+// in it, so the coverage of that Rule's contract is not applicable. The
+// file excluded is the DomainRecording, not a file named by default.
+func TestContractCoverageHonorsAnExclusionOfTheRecordingFile(t *testing.T) {
+	ctx := vocab.BoundedContext{Name: "catalog", Definition: "d", Services: []vocab.DomainService{
+		{Name: "Selection", Definition: "d", Assertions: []vocab.Assertion{{Key: "accompanying-included", On: "Select", Statement: "Accompanying commands are included.", Line: 8}}},
+	}}
+	knowledge := oneContext(t, ctx)
+	facts := goDecls("catalog", []conformance.Declaration{
+		{Kind: "struct", Name: "Selection", StartLine: 1},
+		{Kind: "method", Owner: "Selection", Name: "Select", StartLine: 2},
+	}, conformance.Call{Callee: "Other", Enclosing: "Select", Line: 2})
+	for _, tc := range []struct {
+		exclude string
+		want    string
+	}{
+		{testRecording, "not_applicable"},
+		{vocab.DefaultDomainRecordingPath, "violates"},
+	} {
+		glob, err := rule.NewGlob(tc.exclude)
+		if err != nil {
+			t.Fatal(err)
+		}
+		exclusion, err := rule.NewExclusion([]rule.Glob{glob}, nil, "the recorded file is not judged")
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, err := builtInRule(t, "assertion/checked-by-its-operation").Exclude(exclusion)
+		if err != nil {
+			t.Fatal(err)
+		}
+		a := runOne(t, r, nil, observed("catalog.go"), map[string]conformance.LanguageFacts{"catalog.go": facts}, knowledge)
+		cs := a.Contracts()
+		if len(cs) != 1 || cs[0].Status() != tc.want {
+			t.Errorf("excluding %s: coverage = %#v, want %s", tc.exclude, cs, tc.want)
+		}
 	}
 }

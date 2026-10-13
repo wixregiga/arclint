@@ -124,7 +124,7 @@ type ViolationInput struct {
 // DomainInvariantInfo is one recorded invariant as exposed through
 // ctx.domain(): the key that names the method enforcing it (an
 // aggregate's) or the constructor that enforces it (a value object's),
-// and the statement. Line is where it is written in domain.arclint.yaml;
+// and the statement. Line is where it is written in the project's domain file;
 // 0 when the vocabulary was not read from a file.
 type DomainInvariantInfo struct {
 	Key       string `json:"key"`
@@ -217,7 +217,7 @@ type DomainQuestionInfo struct {
 
 // DomainContextInfo is one bounded context and its recorded terms as
 // exposed through ctx.domain(). Line is where the context is written
-// in domain.arclint.yaml.
+// in the project's domain file.
 type DomainContextInfo struct {
 	Name           string                  `json:"name"`
 	Definition     string                  `json:"definition"`
@@ -231,8 +231,8 @@ type DomainContextInfo struct {
 }
 
 // DomainRelationInfo is one context-map edge as exposed through
-// ctx.domain(). Line is where the relation is written in
-// domain.arclint.yaml.
+// ctx.domain(). Line is where the relation is written in the
+// project's domain file.
 type DomainRelationInfo struct {
 	From        string `json:"from"`
 	To          string `json:"to"`

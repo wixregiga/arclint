@@ -53,7 +53,7 @@ func (uc GetDomainOverview) Execute() (DomainOverview, error) {
 	}
 	out := DomainOverview{
 		Found:  found,
-		Source: vocab.UbiquitousLanguageFileName,
+		Source: uc.knowledge.Recording().Path(),
 	}
 	if !found {
 		return out, nil

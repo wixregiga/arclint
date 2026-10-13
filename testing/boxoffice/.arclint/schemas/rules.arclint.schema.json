@@ -1082,6 +1082,32 @@
     ]
   },
   "properties": {
+    "domain": {
+      "additionalProperties": false,
+      "description": "The project's domain file: where its Ubiquitous Language is written down. Repository rulesets only.",
+      "properties": {
+        "file": {
+          "description": "The file the Ubiquitous Language is written in, a slash-separated path from the directory that holds the ruleset, inside it. The extension names the format: .yaml or .yml for YAML, .cml for CML. Absent means the first of domain.arclint.yaml, domain.arclint.yml and domain.arclint.cml that exists, and domain.arclint.yaml when none does. A default-named file that is not the domain file is ignored.",
+          "not": {
+            "anyOf": [
+              {
+                "pattern": "^(/|[A-Za-z]:|\\.\\./)|\\\\"
+              },
+              {
+                "pattern": "^(\\./)*[rR][uU][lL][eE][sS]\\.[aA][rR][cC][lL][iI][nN][tT]\\.[yY][aA][mM][lL]$"
+              }
+            ],
+            "type": "string"
+          },
+          "pattern": "(^|/)[^/]+\\.(cml|yaml|yml)$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file"
+      ],
+      "type": "object"
+    },
     "extends": {
       "description": "Patterns this repository adopts. Each entry pins one exact version and binds every Zone the Pattern lists to repository paths. Repository rulesets only.",
       "items": {
@@ -1228,8 +1254,9 @@
     }
   },
   "then": {
-    "description": "A Pattern distribution file: no runtime, no scan, no extends, because those are repository policy; Zones carry descriptions and suggested paths only.",
+    "description": "A Pattern distribution file: no domain, no runtime, no scan, no extends, because those are repository policy; Zones carry descriptions and suggested paths only.",
     "properties": {
+      "domain": false,
       "extends": false,
       "rules": {
         "additionalProperties": {

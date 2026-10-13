@@ -18,6 +18,7 @@ type DomainRemoveResult struct {
 	Owner   string
 	Name    string
 	Also    []string
+	Target  string
 }
 
 // RemoveDomainDefinition takes one recorded entry out of the project's
@@ -55,7 +56,7 @@ func (uc RemoveDomainDefinition) Execute(concept, context, owner, name string) (
 	}
 	if !found {
 		return DomainRemoveResult{}, fmt.Errorf("no %s named %q is recorded: %s is missing: %w",
-			c, name, vocab.UbiquitousLanguageFileName, vocab.ErrDefinitionNotFound)
+			c, name, uc.knowledge.Recording().Path(), vocab.ErrDefinitionNotFound)
 	}
 	entry, err := locateEntry(lang, c, context, owner, name)
 	if err != nil {

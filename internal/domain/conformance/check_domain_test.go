@@ -11,6 +11,25 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
+// testRecording is the DomainRecording the conformance tests record in.
+// It is deliberately not the default, so a finding or remedy that names
+// the default file instead of the project's fails.
+const testRecording = "docs/model.arclint.yaml"
+
+// newRecordedLanguage builds a language the way an adapter returns one
+// that it read from testRecording.
+func newRecordedLanguage(project, description string, contexts []vocab.BoundedContext, relations []vocab.ContextRelation) (vocab.UbiquitousLanguage, error) {
+	lang, err := vocab.NewUbiquitousLanguage(project, description, contexts, relations)
+	if err != nil {
+		return vocab.UbiquitousLanguage{}, err
+	}
+	lang.Recording, err = vocab.NewDomainRecording(testRecording)
+	if err != nil {
+		return vocab.UbiquitousLanguage{}, err
+	}
+	return lang, nil
+}
+
 // domainScenario is a miniature of the boxoffice proving ground: three
 // recorded contexts, two of them with Zones named for them and one
 // with no Zone at all, a non-context Zone the ordering model reaches
@@ -89,7 +108,7 @@ func domainScenario(t *testing.T) conformance.Request {
 	if err != nil {
 		t.Fatalf("NewObservations: %v", err)
 	}
-	knowledge, err := vocab.NewUbiquitousLanguage("boxoffice", "tickets for events", []vocab.BoundedContext{
+	knowledge, err := newRecordedLanguage("boxoffice", "tickets for events", []vocab.BoundedContext{
 		{
 			Name: "catalog", Definition: "what is on sale", Line: 2,
 			Aggregates: []vocab.Aggregate{{
@@ -115,7 +134,7 @@ func domainScenario(t *testing.T) conformance.Request {
 		{From: "catalog", To: "ordering", Kind: vocab.RelationConformist, Line: 33},
 	})
 	if err != nil {
-		t.Fatalf("NewUbiquitousLanguage: %v", err)
+		t.Fatalf("newRecordedLanguage: %v", err)
 	}
 	rules, err := rule.BuiltIn()
 	if err != nil {
@@ -183,14 +202,14 @@ func TestBuiltInRulesJudgeEveryContextOfTheRecordedDomain(t *testing.T) {
 	}
 
 	want := map[string][]string{
-		"ubiquitous_language/terms-declared-in-code":            {"domain.arclint.yaml:25"},
+		"ubiquitous_language/terms-declared-in-code":            {"docs/model.arclint.yaml:25"},
 		"context_relation/imports-follow-influence":             {"internal/event/event.go:5"},
 		"domain_isolation/model-imports-nothing-outside-itself": {"internal/order/order.go:5"},
 		"invariant/enforced-at-every-mutation":                  {"internal/event/event.go:65"},
-		"specification/satisfaction-method":                     {"domain.arclint.yaml:15"},
-		"aggregate/protects-an-invariant":                       {"domain.arclint.yaml:20"},
+		"specification/satisfaction-method":                     {"docs/model.arclint.yaml:15"},
+		"aggregate/protects-an-invariant":                       {"docs/model.arclint.yaml:20"},
 		"aggregate/commands-named-for-behavior":                 {"internal/event/event.go:60", "internal/order/order.go:20"},
-		"domain_event/declared":                                 {"domain.arclint.yaml:28"},
+		"domain_event/declared":                                 {"docs/model.arclint.yaml:28"},
 	}
 	for id, wantAnchors := range want {
 		if got := anchors[id]; strings.Join(got, ",") != strings.Join(wantAnchors, ",") {
@@ -242,10 +261,10 @@ func TestDomainViolationsSpeakTheRecordedLanguage(t *testing.T) {
 		"invariant/enforced-at-every-mutation@internal/event/event.go":                  "aggregate Event: command Cancel does not call EnsurePublishedOnly, so invariant published-only is not enforced when it completes",
 		"context_relation/imports-follow-influence@internal/event/event.go":             "context catalog imports context ordering (example.com/mod/internal/order) against the recorded conformist relation: catalog is upstream of ordering, and only the downstream imports the upstream",
 		"domain_isolation/model-imports-nothing-outside-itself@internal/order/order.go": "context ordering imports example.com/mod/internal/app, code of Zone(s) [\"app\"] that no context holds; dependencies run toward the model and never out of it",
-		"ubiquitous_language/terms-declared-in-code@domain.arclint.yaml":                "value object OrderLine of context ordering names no type declaration in Zone \"ordering\"",
+		"ubiquitous_language/terms-declared-in-code@docs/model.arclint.yaml":            "value object OrderLine of context ordering names no type declaration in Zone \"ordering\"",
 		"aggregate/commands-named-for-behavior@internal/order/order.go":                 "aggregate root Order declares setter SetStatus; a change of state is a command named for what it does",
-		"aggregate/protects-an-invariant@domain.arclint.yaml":                           "aggregate Order of context ordering records no invariant; a boundary drawn around nothing that must stay consistent is not yet justified",
-		"specification/satisfaction-method@domain.arclint.yaml":                         "specification Sellable of context catalog names no type declaration in Zone \"catalog\"",
+		"aggregate/protects-an-invariant@docs/model.arclint.yaml":                       "aggregate Order of context ordering records no invariant; a boundary drawn around nothing that must stay consistent is not yet justified",
+		"specification/satisfaction-method@docs/model.arclint.yaml":                     "specification Sellable of context catalog names no type declaration in Zone \"catalog\"",
 	}
 	for key, wantMessage := range want {
 		if got := messages[key]; got != wantMessage {
@@ -274,9 +293,9 @@ func builtInRule(t *testing.T, id string) rule.Rule {
 // objects.
 func oneContext(t *testing.T, ctx vocab.BoundedContext) vocab.UbiquitousLanguage {
 	t.Helper()
-	knowledge, err := vocab.NewUbiquitousLanguage("p", "", []vocab.BoundedContext{ctx}, nil)
+	knowledge, err := newRecordedLanguage("p", "", []vocab.BoundedContext{ctx}, nil)
 	if err != nil {
-		t.Fatalf("NewUbiquitousLanguage: %v", err)
+		t.Fatalf("newRecordedLanguage: %v", err)
 	}
 	return knowledge
 }
@@ -369,7 +388,7 @@ func TestAggregateRootIsLocatedByDeclaration(t *testing.T) {
 		{
 			name:        "nothing spells it",
 			facts:       map[string]conformance.LanguageFacts{"src/tiers.ts": {Language: rule.LanguageTypeScript, DeclarationsAvailable: true, Declarations: []conformance.Declaration{{Kind: "class", Name: "Tier", StartLine: 3}}}},
-			wantAnchors: []string{"domain.arclint.yaml:2"},
+			wantAnchors: []string{"docs/model.arclint.yaml:2"},
 			wantMessage: "aggregate TicketTier of context ticket_catalog has no root: no type TicketTier is declared in the repository",
 			wantRemedy:  "declare the root type TicketTier (a struct in Go, a class in TypeScript or Python)",
 		},
@@ -379,7 +398,7 @@ func TestAggregateRootIsLocatedByDeclaration(t *testing.T) {
 				"internal/a/tier.go": goDecls("a", tier("struct")),
 				"internal/b/tier.go": goDecls("b", tier("struct")),
 			},
-			wantAnchors: []string{"domain.arclint.yaml:2"},
+			wantAnchors: []string{"docs/model.arclint.yaml:2"},
 			wantMessage: "aggregate TicketTier of context ticket_catalog has 2 candidate roots in the repository (internal/a/tier.go:3, internal/b/tier.go:3), and nothing tells which is the model's",
 			wantRemedy:  "declare a Zone \"ticket_catalog\" over the context's code in rules.arclint.yaml, or exclude the twin under scan.exclude",
 		},
@@ -405,7 +424,7 @@ func TestAggregateRootIsLocatedByDeclaration(t *testing.T) {
 				"internal/a/pricing.go": goDecls("a", []conformance.Declaration{{Kind: "struct", Name: "Pricing", StartLine: 3}}),
 				"internal/b/tier.go":    goDecls("b", tier("struct")),
 			},
-			wantAnchors: []string{"domain.arclint.yaml:2"},
+			wantAnchors: []string{"docs/model.arclint.yaml:2"},
 			wantMessage: "aggregate TicketTier of context ticket_catalog has no root: no type TicketTier is declared in Zone \"ticket_catalog\"",
 		},
 	}
@@ -585,12 +604,12 @@ func TestReferencesByIdentity(t *testing.T) {
 }
 
 func TestContextIsolationRequiresARecordedRelation(t *testing.T) {
-	knowledge, err := vocab.NewUbiquitousLanguage("p", "", []vocab.BoundedContext{
+	knowledge, err := newRecordedLanguage("p", "", []vocab.BoundedContext{
 		{Name: "catalog", Definition: "d", Line: 1},
 		{Name: "ordering", Definition: "d", Line: 2},
 	}, nil)
 	if err != nil {
-		t.Fatalf("NewUbiquitousLanguage: %v", err)
+		t.Fatalf("newRecordedLanguage: %v", err)
 	}
 	zones := []rule.Zone{mustZone(t, "catalog", "internal/event/**"), mustZone(t, "ordering", "internal/order/**")}
 	files := observed("internal/event/event.go", "internal/order/order.go")
@@ -616,12 +635,12 @@ func TestContextIsolationRequiresARecordedRelation(t *testing.T) {
 // An import from that code into another context's code is judged; a
 // file declaring nothing recorded is nobody's code.
 func TestContextCodeIsLocatedFromItsTermsWithoutAZone(t *testing.T) {
-	knowledge, err := vocab.NewUbiquitousLanguage("p", "", []vocab.BoundedContext{
+	knowledge, err := newRecordedLanguage("p", "", []vocab.BoundedContext{
 		{Name: "catalog", Definition: "d", Line: 1, Aggregates: []vocab.Aggregate{{Name: "Event", Definition: "d", Identity: "EventID", Line: 2}}},
 		{Name: "ordering", Definition: "d", Line: 3, ValueObjects: []vocab.ValueObject{{Name: "OrderLine", Definition: "d", Line: 4}}},
 	}, nil)
 	if err != nil {
-		t.Fatalf("NewUbiquitousLanguage: %v", err)
+		t.Fatalf("newRecordedLanguage: %v", err)
 	}
 	eventImport := conformance.Import{Path: "example.com/mod/internal/event", Line: 4, Class: conformance.ImportInternal, TargetDir: "internal/event"}
 	files := observed("internal/event/event.go", "internal/event/notes.go", "internal/order/line.go", "internal/glue/glue.go")
@@ -939,27 +958,27 @@ func TestTwoContextsHoldingOneCodeIsNotABoundary(t *testing.T) {
 	}
 	r := builtInRule(t, "bounded_context/code-held-by-one-context")
 
-	knowledge, err := vocab.NewUbiquitousLanguage("p", "", contexts, nil)
+	knowledge, err := newRecordedLanguage("p", "", contexts, nil)
 	if err != nil {
-		t.Fatalf("NewUbiquitousLanguage: %v", err)
+		t.Fatalf("newRecordedLanguage: %v", err)
 	}
 	a := runOne(t, r, zones, files, facts, knowledge)
-	if got := anchorsOf(a)[r.ID().Qualified()]; strings.Join(got, ",") != "domain.arclint.yaml:1,domain.arclint.yaml:2" {
+	if got := anchorsOf(a)[r.ID().Qualified()]; strings.Join(got, ",") != "docs/model.arclint.yaml:1,docs/model.arclint.yaml:2" {
 		t.Errorf("violations at %v, want one per context at its record", got)
 	}
 	vs := a.Violations()
 	if len(vs) != 2 || vs[0].Message() != "context rule holds 1 file(s) that context adoption holds too (internal/rule/binding.go), and the context map records no shared_kernel between them; a boundary two models straddle is not a boundary" {
 		t.Errorf("message = %v", vs)
 	}
-	if len(vs) == 2 && vs[1].Remediation() != "narrow adoption and rule with a Zone named for each in rules.arclint.yaml, or record a shared_kernel relation between them under relations in domain.arclint.yaml" {
+	if len(vs) == 2 && vs[1].Remediation() != "narrow adoption and rule with a Zone named for each in rules.arclint.yaml, or record a shared_kernel relation between them under relations in docs/model.arclint.yaml" {
 		t.Errorf("remediation = %q", vs[1].Remediation())
 	}
 
-	knowledge, err = vocab.NewUbiquitousLanguage("p", "", contexts, []vocab.ContextRelation{
+	knowledge, err = newRecordedLanguage("p", "", contexts, []vocab.ContextRelation{
 		{From: "rule", To: "adoption", Kind: vocab.RelationSharedKernel, Line: 4},
 	})
 	if err != nil {
-		t.Fatalf("NewUbiquitousLanguage: %v", err)
+		t.Fatalf("newRecordedLanguage: %v", err)
 	}
 	a = runOne(t, r, zones, files, facts, knowledge)
 	if got := anchorsOf(a)[r.ID().Qualified()]; len(got) != 0 {
@@ -992,7 +1011,7 @@ func TestModelImportsOutsideJudgeTheImportedFile(t *testing.T) {
 	if len(vs) != 1 || vs[0].Message() != `context ordering imports example.com/mod/internal/clock, code of Zone(s) ["source"] that no context holds; dependencies run toward the model and never out of it` {
 		t.Errorf("message = %v", vs)
 	}
-	if len(vs) == 1 && vs[0].Remediation() != "invert the dependency so that example.com/mod/internal/clock depends on the model, or make it the model's code by recording the terms it declares in domain.arclint.yaml" {
+	if len(vs) == 1 && vs[0].Remediation() != "invert the dependency so that example.com/mod/internal/clock depends on the model, or make it the model's code by recording the terms it declares in docs/model.arclint.yaml" {
 		t.Errorf("remediation = %q", vs[0].Remediation())
 	}
 
@@ -1022,7 +1041,7 @@ func TestGoPackageCompletesADeclaredName(t *testing.T) {
 	r := builtInRule(t, "ubiquitous_language/terms-declared-in-code")
 	a := runOne(t, r, zones, files, facts, knowledge)
 	got := anchorsOf(a)[r.ID().Qualified()]
-	if strings.Join(got, ",") != "domain.arclint.yaml:4" {
+	if strings.Join(got, ",") != "docs/model.arclint.yaml:4" {
 		t.Errorf("violations at %v, want Money alone: order.ID spells OrderID and order.Line spells OrderLine, and lowercase money is not type case", got)
 	}
 	vs := a.Violations()

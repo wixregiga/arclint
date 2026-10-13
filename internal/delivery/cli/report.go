@@ -38,7 +38,8 @@ type Renderer interface {
 
 // AssessmentReport is the semantic product of `arclint check`.
 type AssessmentReport struct {
-	Assessment conformance.Assessment
+	Assessment    conformance.Assessment
+	AgentsContext string
 }
 
 func (AssessmentReport) report() {}
@@ -85,8 +86,25 @@ type DomainInitReport struct {
 
 func (DomainInitReport) report() {}
 
-// DomainMissingReport guides the user when no Ubiquitous Language is recorded.
-type DomainMissingReport struct{}
+// DomainExportReport is the product of `arclint domain export`.
+type DomainExportReport struct {
+	Result application.ExportDomainRecordingResult
+}
+
+func (DomainExportReport) report() {}
+
+// DomainConvertReport is the product of `arclint domain convert`.
+type DomainConvertReport struct {
+	Result application.ConvertDomainRecordingResult
+}
+
+func (DomainConvertReport) report() {}
+
+// DomainMissingReport guides the user when no Ubiquitous Language is
+// recorded. Source is the domain file the language would be recorded in.
+type DomainMissingReport struct {
+	Source string
+}
 
 func (DomainMissingReport) report() {}
 

@@ -10,6 +10,8 @@ import (
 
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
+	vocabfs "github.com/wixregiga/arclint/internal/infrastructure/vocab"
 )
 
 // Writer implements the application's RulesetScaffold port over one
@@ -33,6 +35,19 @@ func NewWriter(dir string) (Writer, error) {
 // when it exists under the directory, else the published $id.
 func (w Writer) Write(content string, force bool) (string, error) {
 	target := filepath.Join(w.dir, rule.RulesetFileName)
+	recording, err := yamlrule.ParseRecording([]byte(content), target)
+	if err != nil {
+		return "", fmt.Errorf("drafted domain file: %w", err)
+	}
+	if !recording.IsZero() {
+		location, err := vocabfs.ResolveRecording(w.dir, recording)
+		if err != nil {
+			return "", fmt.Errorf("drafted domain file: %w", err)
+		}
+		if err := yamlrule.CheckDomainFileLocation(target, recording, location); err != nil {
+			return "", fmt.Errorf("drafted domain file: %w", err)
+		}
+	}
 	if !force {
 		if _, err := os.Stat(target); err == nil {
 			return "", fmt.Errorf("%s already exists; pass --force to overwrite", target)

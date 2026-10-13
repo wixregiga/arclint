@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/wixregiga/arclint/internal/application"
-	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 const (
@@ -48,7 +47,7 @@ func NewHooksCommand(hooks Hooks, events HookEvents, render Renderer) Command {
 			if err != nil {
 				return ConfigError(err)
 			}
-			return render.Render(ctx.Stdout, AgentInstallReport{Operation: "hooks", Host: hostList(hosts), Paths: installation.Written, Removed: installation.Removed, Orientation: application.WorkflowOrientation(vocab.UbiquitousLanguageFileName), Activation: HooksActivation})
+			return render.Render(ctx.Stdout, AgentInstallReport{Operation: "hooks", Host: hostList(hosts), Paths: installation.Written, Removed: installation.Removed, Orientation: application.WorkflowOrientation(), Activation: HooksActivation})
 		}},
 		{Name: "status", Short: "show which configuration files list the workflow hooks and when an event last reached this project", Run: func(ctx Context) error {
 			status, err := hooks.Status()

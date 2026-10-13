@@ -19,7 +19,30 @@ import (
 // test must load it exactly as production composition does.
 func repoVocabulary(t *testing.T) vocab.Repository {
 	t.Helper()
-	repo, err := yamlvocab.NewRepository("../../../..")
+	const root = "../../../.."
+	named, err := yamlrule.ReadRecording(root + "/rules.arclint.yaml")
+	if err != nil {
+		t.Fatalf("domain file: %v", err)
+	}
+	if named.Path() != vocab.DefaultDomainRecordingPath {
+		t.Fatalf("this repository names domain.arclint.yaml under domain.file, rules.arclint.yaml names %q", named.Path())
+	}
+	recording, ignored, err := vocab.ResolveDomainRecording(named, func(r vocab.DomainRecording) (bool, error) {
+		info, err := os.Stat(filepath.Join(root, filepath.FromSlash(r.Path())))
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return err == nil && !info.IsDir(), err
+	})
+	if err != nil {
+		t.Fatalf("resolve the domain file: %v", err)
+	}
+	// The ruleset names the YAML file, so the CML copy beside it is not
+	// passed over by discovery and is not reported.
+	if recording != named || recording.Format() != vocab.DomainRecordingYAML || len(ignored) != 0 {
+		t.Fatalf("this repository records its domain in the domain.arclint.yaml it names, found %s and ignored %v", recording.Path(), ignored)
+	}
+	repo, err := yamlvocab.NewRepository(root, recording)
 	if err != nil {
 		t.Fatalf("vocabulary repository: %v", err)
 	}

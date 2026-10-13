@@ -30,10 +30,13 @@ scan:
 
 # The vocabulary rules are not written here: they are the built-in
 # rules every recorded building block carries, exactly as any adopter
-# receives them the moment domain.arclint.yaml records a term. Each is
+# receives them the moment the domain file records a term. Each is
 # listed under the invariant's id (aggregate/root-declared,
 # context_relation/imports-follow-influence, ...) and adjusted, when
 # it must be, through an Override under that id.
+
+domain:
+  file: "domain.arclint.yaml"
 
 zones:
   domain:
@@ -76,7 +79,7 @@ zones:
     paths: "internal/**"
     description: "Common source invariants for internal packages."
   # Context-named zones: a bounded context recorded in
-  # domain.arclint.yaml locates its code from the declarations that
+  # domain.arclint.cml locates its code from the declarations that
   # spell its recorded terms, searched across the whole repository. A
   # Zone spelled with the context's name narrows that search to its
   # paths; these give the built-in context rules the full extent

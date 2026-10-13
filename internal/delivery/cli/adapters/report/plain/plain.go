@@ -39,7 +39,7 @@ func (Renderer) Render(w io.Writer, r cli.Report) error {
 	w = fullWriter{Writer: w}
 	switch v := r.(type) {
 	case cli.AssessmentReport:
-		return writeCheck(w, v.Assessment)
+		return writeCheck(w, v.Assessment, v.AgentsContext)
 	case cli.RuleListReport:
 		return writeRuleRows(w, v.Rules)
 	case cli.RuleDetailReport:
@@ -52,16 +52,20 @@ func (Renderer) Render(w io.Writer, r cli.Report) error {
 		return writeContext(w, v.Context)
 	case cli.DomainInitReport:
 		return writeDomainInit(w, v)
+	case cli.DomainExportReport:
+		return writeDomainExport(w, v)
+	case cli.DomainConvertReport:
+		return writeDomainConvert(w, v)
 	case cli.DomainMissingReport:
-		return writeMissingDomainGuidance(w)
+		return writeMissingDomainGuidance(w, v.Source)
 	case cli.DomainOverviewReport:
 		if !v.Overview.Found {
-			return writeMissingDomainGuidance(w)
+			return writeMissingDomainGuidance(w, v.Overview.Source)
 		}
 		return writeOverviewText(w, v.Overview)
 	case cli.DomainListReport:
 		if v.Listing.Language.Empty() {
-			return writeMissingDomainGuidance(w)
+			return writeMissingDomainGuidance(w, v.Listing.Source)
 		}
 		return writeListText(w, v.Listing)
 	case cli.DomainShowReport:

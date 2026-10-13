@@ -13,8 +13,8 @@ the agent does and advise when it skips a step of the project's workflow:
 2. Before editing, state what the change does, who owns its decisions,
    what the caller uses and which existing behavior must remain intact.
 3. If the change introduces or changes a meaning, record it in
-   `domain.arclint.yaml` before writing code, using the domain-librarian
-   skill. If it does not, say so.
+   the project's domain recording through `arclint domain define` before
+   writing code, using the domain-librarian skill. If it does not, say so.
 4. Implement one complete behavior path through the zones
    `arclint context` reported, keeping existing behavior intact.
 5. Verify the changed behavior, then run `arclint check .` and the
@@ -24,7 +24,11 @@ the agent does and advise when it skips a step of the project's workflow:
 
 The generated `AGENTS.md` block opens with these steps in full, and the
 hooks repeat them when a session starts; both come from one source in
-ArcLint.
+ArcLint. The instructions do not name a domain file or format: agents learn
+the recording path from `arclint context` and `arclint domain`. The librarian
+records through `arclint domain define` and `arclint domain remove`, so ArcLint
+validates each write and writes the format. Switching formats leaves the
+instructions current.
 
 The hooks advise; they never block a tool call. Each reminder is given once,
 so repeating an action does not repeat the reminder. Any project using
@@ -129,7 +133,9 @@ domain service; the hook adapter only reports what happened.
   files.
 - The hosts report edits. The file paths of Edit, Write, MultiEdit and
   NotebookEdit, and the file headers of an apply_patch, are changes. A change
-  to `domain.arclint.yaml` changes the domain recording.
+  to the project's domain file (the file `rules.arclint.yaml` names under
+  `domain.file`, else the first of `domain.arclint.yaml`, `domain.arclint.yml`
+  and `domain.arclint.cml` that exists) changes the domain recording.
 - Each session keeps its progress in `.arclint/cache/hooks/`, keyed by the
   host's session id. A session starts reading the activity log where it ends
   when the session starts, so earlier work is not credited to it. Parallel tool

@@ -6,7 +6,7 @@ weight = 6
 
 | command | does |
 |---|---|
-| `arclint init` | draft a starter `rules.arclint.yaml`; `--pattern bare` (default) or a Pattern to extend by exact reference or name (`arclint/hexagonal@0.1.0`, `hexagonal`, `vertical`), which drafts the `extends` block with the Pattern's suggested bindings; `--languages go,ts,py` selects runtime targets and `--force` permits replacing an existing file |
+| `arclint init` | draft a starter `rules.arclint.yaml`; `--pattern bare` (default) or a Pattern to extend by exact reference or name (`arclint/hexagonal@0.1.0`, `hexagonal`, `vertical`), which drafts the `extends` block with the Pattern's suggested bindings; `--languages go,ts,py` selects runtime targets, `--domain <file>` records the project's domain file under `domain.file` unless it is `domain.arclint.yaml`, which a new project finds without it, and `--force` permits replacing an existing file |
 | `arclint patterns` | list the Patterns that resolve offline: the ones embedded in the binary (`arclint/hexagonal@0.1.0`, `arclint/vertical@0.1.0`), then vendored and authored packages under `.arclint/patterns/<namespace>/<name>/`; `--remote` lists what the Registry publishes instead (`--registry <url>` or `ARCLINT_REGISTRY` names one; `file://` trees work) |
 | `arclint patterns install <pattern>` | extend `rules.arclint.yaml` with one Pattern named by reference, `namespace/name`, or bare name, binding every Zone it lists; vendors it first when it came from the Registry; drafts `rules.arclint.yaml` when none exists (`--languages`) |
 | `arclint patterns vendor <pattern>` | copy one Pattern under `.arclint/patterns/<namespace>/<name>/` with its `manifest.json`, so every load verifies it and the Registry is never needed again |
@@ -16,17 +16,19 @@ weight = 6
 | `arclint baseline refresh` | reassess and replace the Baseline, dropping stale entries |
 | `arclint context [paths...]` | explain the repository or everything binding the selected paths; `--zone` adds named Zones, `--full` lists the whole recorded domain instead of the part anchored into the scope; `--dependencies` adds observed imports at repository scope |
 | `arclint domain` | shorthand for `arclint domain overview`; inspect and maintain the project's ubiquitous language |
-| `arclint domain init` | create an empty, schema-hinted `domain.arclint.yaml` beside the resolved `rules.arclint.yaml`; leave an existing file unchanged |
+| `arclint domain init` | create an empty, schema-hinted domain file (the file `rules.arclint.yaml` names under `domain.file`, else the first of `domain.arclint.yaml`, `domain.arclint.yml` and `domain.arclint.cml` that exists, else `domain.arclint.yaml`); leave an existing file unchanged |
 | `arclint domain overview` | summarize the project's ubiquitous language for understanding |
 | `arclint domain list [type]` | list domain definitions, optionally filtered to `contexts`, `aggregates`, `entities`, `value_objects`, `invariants`, `assertions`, `specifications`, `events`, `services`, or `questions`; `--context` narrows to one context |
 | `arclint domain show <type> <name>` | show one domain definition by singular type and canonical name |
 | `arclint domain explain [type]` | explain ArcLint's supported domain concepts |
-| `arclint domain define <type> <name>` | create or update a domain definition inside a bounded context; existing names complete from the recorded vocabulary and new names remain valid; `--guided` starts interactive authoring |
-| `arclint domain remove <type> <name>` | remove a domain definition (`rm` alias); never touches source files |
-| `arclint domain schema` | print the JSON Schema accepted for `domain.arclint.yaml`; `--write` puts it at `.arclint/schemas/domain.arclint.schema.json` (or under `--dir`) so the file's modeline can name a local copy |
+| `arclint domain define <type> <name>` | create or update a domain definition; `define relation --from --to --kind` records a context pair and `define description --description` records the project description, both without a name argument; `--guided` starts interactive authoring |
+| `arclint domain remove <type> <name>` | remove a domain definition (`rm` alias), or a relation with `remove relation --from --to`; never touches source files |
+| `arclint domain schema` | print the JSON Schema accepted for a YAML domain file; `--write` puts it at `.arclint/schemas/domain.arclint.schema.json` (or under `--dir`) so the file's modeline can name a local copy |
+| `arclint domain export <file>` | translate the project's domain into another file, YAML (`.yaml`, `.yml`) or CML (`.cml`) by its extension; read it back and fail unless it records the same language; leave the project's domain file and `rules.arclint.yaml` alone; edit a target that already records a language in place, keeping what arclint does not model |
+| `arclint domain convert <file>` | translate and prove the same way, then settle `domain.file` in `rules.arclint.yaml` (removing the setting when the project finds the new file by its name, naming it otherwise) and remove the previous file, so the project records its domain in one file |
 | `arclint agents` | command group for agent-facing artifacts |
 | `arclint agents md` | print the generated `AGENTS.md` architecture block (`markdown`, `agentsmd` aliases); `--write` installs or refreshes it between markers without changing surrounding text |
-| `arclint agents skill` | write generated `SKILL.md` and `VOCAB.yaml` to `--dir` (default `.agents/skills/domain-librarian/`), and the domain schema they point at to `.arclint/schemas/domain.arclint.schema.json` |
+| `arclint agents skill` | write generated `SKILL.md` and `VOCAB.yaml` to `--dir` (default `.agents/skills/domain-librarian/`), and the domain schema for human YAML editors to `.arclint/schemas/domain.arclint.schema.json`; the skill describes the model independently of the recording's format |
 | `arclint agents hooks install` | write the workflow hooks into the Claude Code and Codex user configuration, for every project (`--project` for this project's personal files only, `--host claude\|codex` for one host); keeps every other setting and hook |
 | `arclint agents hooks status` | report every configuration file that can list the workflow hooks, what is wrong in each, and when a hook event last reached the project |
 | `arclint agents hooks event` | answer one Claude Code or Codex hook event read from stdin with the host's native JSON; the installed hooks run it |
@@ -63,10 +65,9 @@ constraint:  dependencies among ["core", "ports", "adapters"] contain no cycle
 applies to:  the entire repository
 ```
 
-Commands that use repository configuration accept `--rules <path>` or
-`--rules=<path>` to select `rules.arclint.yaml` explicitly. Otherwise ArcLint
-discovers it upward from the working directory. `check [path]` starts
-discovery from the optional path. The directory containing `rules.arclint.yaml`
+Commands that use repository configuration discover `rules.arclint.yaml`
+upward from the working directory. `check [path]` starts discovery from the
+optional path. The directory containing `rules.arclint.yaml`
 is the repository root and Extension root. `patterns` commands compose
 against the working directory instead, so `patterns install` can draft
 a `rules.arclint.yaml` where none exists yet.
@@ -200,7 +201,7 @@ result. A file path, a directory, or a declared zone name all
 resolve; an exact zone name wins when both match. `--format json`
 emits the machine shape for coding agents.
 
-When `domain.arclint.yaml` is present, `context` also carries the
+When the domain file is present, `context` also carries the
 recorded domain, disclosed progressively. A worksite lists only what
 anchors into it: a term whose type declaration lies under a selected
 path or inside a selected Zone, an invariant or assertion whose
@@ -268,7 +269,12 @@ the local extension inventory. Agents see the architecture before
 writing code. The block sits between markers; hand-written content
 around it survives regeneration, and the block never carries
 timestamps, so regeneration is idempotent for an unchanged ruleset and
-vocabulary.
+vocabulary. `arclint check` compares an existing marked block with what
+`arclint agents md --write` would write now. When the snapshot is stale it
+prints an `agents:` line naming the stale block and the refresh command. This report does not create a rule finding
+or change the exit code. A project without a marked block reports nothing.
+JSON emits this advice as a coverage entry with path `AGENTS.md` and the
+refresh command as its remediation.
 
 ## Shell completion
 
@@ -326,8 +332,11 @@ appear as active findings.
 `arclint rules schema` and `arclint domain schema` always emit indented
 JSON. Every configuration file and schema follows one naming pattern:
 configuration is `<name>.arclint.yaml` at the project root
-(`rules.arclint.yaml`, `domain.arclint.yaml`), and its schema is
-`<name>.arclint.schema.json`. `--write` puts the schema under
+(`rules.arclint.yaml`, and the domain file `domain.arclint.yaml`,
+`domain.arclint.yml` or `domain.arclint.cml` unless the ruleset names
+another), and its schema is `<name>.arclint.schema.json`. The
+domain schema describes YAML domain files only; a CML domain file has no
+JSON Schema. `--write` puts a schema under
 `.arclint/schemas/` (or the directory named by `--dir`) and reports
 whether the copy changed, so a project can keep a local copy for its
 editor modelines:
@@ -350,11 +359,16 @@ byte-for-byte identical.
 `arclint domain` inspects and maintains the project's Ubiquitous Language:
 the shared language used by developers, domain experts, documentation,
 tests, and code. ArcLint records that language as a structured Project
-Domain Model in a committed `domain.arclint.yaml` beside the
-resolved `rules.arclint.yaml`. ArcLint does not search for the model
-independently; `--rules <path>` moves both files' project root together.
+Domain Model in a committed domain file beside the resolved
+`rules.arclint.yaml`: the file that ruleset names under `domain.file`, else
+the first of `domain.arclint.yaml`, `domain.arclint.yml` and
+`domain.arclint.cml` that exists, else `domain.arclint.yaml`, written in YAML
+or CML. A default-named file that is not the domain file is ignored; when
+the ruleset names no file, every command says so on stderr, and a file the
+ruleset names silences it. ArcLint does not search for the model
+anywhere else.
 
-The file is organized by bounded context, names as keys:
+In YAML the file is organized by bounded context, names as keys:
 
 ```yaml
 version: 1
@@ -409,19 +423,72 @@ context's name narrows that search when the repository declares a
 recorded term more than once. Recording a context turns on the
 [built-in rules](/docs/contracts/).
 
-Fresh files get a YAML language-server modeline pointing at
+Record a context-map relation and the project's top-level description through
+the same validated commands:
+
+```sh
+arclint domain define relation --from catalog --to billing --kind conformist \
+  --description "Billing uses the catalog language."
+arclint domain define description --description "Issuing and paying invoices."
+arclint domain remove relation --from catalog --to billing
+```
+
+Relations have no name argument: `--from` and `--to` identify the context
+pair. `--kind` is required on first recording and takes one of the published
+context-relation kinds. An existing pair can change its direction, kind, or
+optional `--description`; omitted properties stay recorded, and passing an
+empty description clears it. Removal accepts either direction. The language
+constructors reject missing contexts, self-relations, and unpublished kinds
+with usage errors naming the rule. `define description --description <text>`
+sets the project description, and an empty text clears it. Shell completion
+suggests `relation` and `description`, recorded contexts for `--from` and
+`--to`, and published kinds for `--kind`.
+
+Fresh YAML files get a YAML language-server modeline pointing at
 `.arclint/schemas/domain.arclint.schema.json` when that path exists
 under the project root, otherwise the schema's `$id`, the raw GitHub URL
-of `docs/schemas/domain.arclint.schema.json` on `main`.
+of `docs/schemas/domain.arclint.schema.json` on `main`. A CML file has no
+modeline and no JSON Schema.
+
+The same language can be written in CML, the Context Mapper language.
+`arclint domain export <file>` translates the project's domain into
+another file, YAML or CML as its extension says, and reads the result back:
+if it does not record the same language, the command fails and says where
+the two part ways. It leaves the project's domain file and
+`rules.arclint.yaml` alone, and a target that already records a language is
+edited in place, keeping what arclint does not model. `arclint domain
+convert <file>` translates and proves the same way, then settles `domain.file`
+in `rules.arclint.yaml` (removing the setting when the project finds the new
+file by its name, naming it otherwise) and removes the previous file.
+Both are all or nothing: every file is worked out and checked in memory
+first, and if a write fails, the writes already made are put back, so an
+error means nothing changed.
+Both take a path from the directory that holds `rules.arclint.yaml`; a path
+that is `rules.arclint.yaml` itself, even through a link, that is the file
+the project already records in, or whose extension is not `.yaml`, `.yml` or
+`.cml`, is a usage error.
+
+```
+$ arclint domain export docs/context-map.cml
+Translated the domain from domain.arclint.yaml into docs/context-map.cml (CML): 2 contexts · 1 aggregate · 1 value object · 2 invariants · 2 assertions · 1 service · 1 question · 1 relation.
+Read back, it records the same language.
+```
+
+`--format json` reports the source and target paths, the target's format,
+whether the read-back recorded the same language, a count for each
+concept, and whether the command converted. [Domain files in CML](/docs/cml/)
+shows how each concept is written in CML, what arclint keeps in a CML file
+it did not write, and how `define` and `remove` edit one.
 
 Running `arclint domain` with no subcommand is the same as
 `arclint domain overview`. Subcommands cover file initialization
 (`init`), summary (`overview`), inventory (`list`), one definition
 (`show`), ArcLint-owned concept meanings (`explain`), create-or-update
-(`define`, including `--guided`), removal (`remove` / `rm`), and the
-published schema (`schema`). `domain init` is idempotent: it creates a
-versioned, schema-hinted empty file when none exists and never replaces
-an existing model.
+(`define`, including `--guided`), removal (`remove` / `rm`), the published
+schema (`schema`), and translation into another file (`export`,
+`convert`). `domain init` is idempotent: it creates a versioned,
+schema-hinted empty file when none exists and never replaces an existing
+model.
 
 The process-level `--format human|json` option applies to domain reports
 as well as the other semantic command outputs. JSON is the stable machine
@@ -436,8 +503,8 @@ Domain command exit codes:
 | code | meaning |
 |---|---|
 | `0` | operation succeeded, including an unchanged `define` |
-| `1` | operation could not be completed (missing definition, malformed model, write failure) |
-| `2` | invalid command usage (unknown type, missing name, mutually exclusive flags, bad `--format`) |
+| `1` | operation could not be completed (missing definition, malformed model, write failure, a translation that does not read back as the same language) |
+| `2` | invalid command usage (unknown type, missing name, mutually exclusive flags, bad `--format`, a translation target that is the project's domain file or whose extension is not `.yaml`, `.yml` or `.cml`) |
 
 Declaring knowledge never creates a Diagnostic by itself. Domain quality
 findings remain the responsibility of enabled Rules under
@@ -451,9 +518,11 @@ declaration, `missing`, or `unanchorable` with the reason.
 
 `arclint agents skill` materializes the domain-librarian skill bundle the
 binary owns: `SKILL.md` and `VOCAB.yaml` under `--dir` (default
-`.agents/skills/domain-librarian/`), plus the domain schema the
-vocabulary points at, which always lands at
+`.agents/skills/domain-librarian/`), plus the domain schema for human YAML editors, which always lands at
 `.arclint/schemas/domain.arclint.schema.json` under the project root.
+The skill describes the recorded model fields, independent of the recording's
+format. The librarian records through `arclint domain define` and
+`arclint domain remove`; ArcLint validates every write and writes the format.
 Those committed files are generated outputs (and litmus fixtures the
 generator must reproduce).
 `arclint agents md` (aliases `markdown`, `agentsmd`) prints or installs

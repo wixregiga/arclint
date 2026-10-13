@@ -1,10 +1,11 @@
 # boxoffice: build, test, lint, and architecture gates.
-# The arclint binary is built once from the parent repository;
-# `make clean` refreshes it.
+# The arclint binary is rebuilt from the parent repository every time a
+# target uses it, so it never lags the source; Go's build cache keeps an
+# unchanged rebuild quick.
 
 ARCLINT := .bin/arclint
 
-.PHONY: build web build-full run test vet lint arclint rules-test check clean
+.PHONY: build web build-full run test vet lint arclint rules-test check clean $(ARCLINT)
 
 build:
 	go build -o .bin/boxoffice ./cmd/boxoffice

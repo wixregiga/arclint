@@ -232,8 +232,10 @@ arclint context path/to/file.go --full   # the whole recorded domain too
 ```
 
 `context` reports scope, languages, configured Rule count, each Zone's
-paths and import allow-list, and the Rules that apply. With a
-`domain.arclint.yaml` present it also lists the part of the recorded
+paths and import allow-list, and the Rules that apply. With a domain
+file present (the one `rules.arclint.yaml` names under `domain.file`, else
+the first of `domain.arclint.yaml`, `domain.arclint.yml` and
+`domain.arclint.cml` that exists) it also lists the part of the recorded
 domain that anchors into the scope, each contract ending with the
 declaration that carries it or the word `missing` or `unanchorable`,
 and closes with the unanchored contracts grouped by owner and cause;
@@ -267,7 +269,10 @@ otherwise it names the published copy, kept identical to
 # yaml-language-server: $schema=https://raw.githubusercontent.com/wixregiga/arclint/main/docs/schemas/rules.arclint.schema.json
 ```
 
-`arclint domain schema --write` does the same for `domain.arclint.yaml`.
+`arclint domain schema --write` does the same for a YAML domain file
+(`domain.arclint.yaml` by default). The schema applies to YAML domain files
+only; a domain file can also be written in CML, the Context Mapper language,
+which has no JSON Schema (see [Domain files in CML](/docs/cml/)).
 
 ## Local agent setup
 

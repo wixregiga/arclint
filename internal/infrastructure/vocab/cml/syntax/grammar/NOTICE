@@ -1,0 +1,6 @@
+Pinned Context Mapper CML grammars: Apache License 2.0 (LICENSE-APACHE-2.0 in this directory).
+ContextMapper/context-mapper-dsl, commit 995f486a9cdecb6946257d5c7b6d98ada2978124, the grammar of
+Context Mapper 6.12.0. ContextMappingDSL.xtext and TacticDDDLanguage.xtext are unmodified upstream source.
+Copyright 2018 The Context Mapper Project Team.
+TacticDDDLanguage.xtext: Copyright 2013 The Sculptor Project Team, including the original author or
+authors; modifications Copyright 2018 The Context Mapper Project Team.

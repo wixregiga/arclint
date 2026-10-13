@@ -603,6 +603,9 @@ func defineJSONDoc(r cli.DomainDefineReport) map[string]any {
 		jsonKeyType: string(result.Concept),
 		jsonKeyName: result.Name,
 	}
+	if result.Target != "" {
+		doc[jsonKeyType] = result.Target
+	}
 	if result.Context != "" {
 		doc[jsonKeyContext] = result.Context
 	}
@@ -613,7 +616,11 @@ func defineJSONDoc(r cli.DomainDefineReport) map[string]any {
 		doc["changed"] = result.Changed
 		values := map[string]any{}
 		for _, property := range result.Changed {
-			values[property] = changedValue(property, r.Change)
+			if value, ok := result.Values[property]; ok {
+				values[property] = value
+			} else {
+				values[property] = changedValue(property, r.Change)
+			}
 		}
 		doc["values"] = values
 	}
@@ -660,6 +667,9 @@ func removeJSONDoc(result application.DomainRemoveResult) map[string]any {
 		jsonKeyName:          result.Name,
 		"result":             "removed",
 		"sourceFilesChanged": false,
+	}
+	if result.Target != "" {
+		doc[jsonKeyType] = result.Target
 	}
 	if result.Context != "" {
 		doc[jsonKeyContext] = result.Context

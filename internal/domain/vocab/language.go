@@ -6,11 +6,6 @@ import (
 	"strings"
 )
 
-// UbiquitousLanguageFileName is the committed filename of the project's
-// recorded Ubiquitous Language, resolved beside the ruleset root: the
-// whole of the project's domain, one file per repository.
-const UbiquitousLanguageFileName = "domain.arclint.yaml"
-
 // UbiquitousLanguageVersion is the only document version this package
 // accepts.
 const UbiquitousLanguageVersion = 1
@@ -23,11 +18,18 @@ const UbiquitousLanguageVersion = 1
 // enforces never becomes a value; every constructor failure names the
 // invariant it applies, so a project that records its language hears
 // the meta-model at once.
+//
+// Recording is where the language is written down: the adapter that
+// read it sets the DomainRecording of the file it read, or of the file the
+// language would be written in when that file does not exist yet.
+// Constructors leave it zero, the DomainRecording of a language that was not
+// read from a file.
 type UbiquitousLanguage struct {
 	Project     string
 	Description string
 	Contexts    []BoundedContext
 	Relations   []ContextRelation
+	Recording   DomainRecording
 }
 
 // ErrDefinitionNotFound is returned by lookups and mutations that name
@@ -52,7 +54,8 @@ func NewUbiquitousLanguage(project, description string, contexts []BoundedContex
 }
 
 // Empty reports a language that records nothing: no contexts and no
-// relations. A project name alone is not a recorded domain.
+// relations. A project name alone is not a recorded domain, and neither
+// is the DomainRecording a language would be written in.
 func (l UbiquitousLanguage) Empty() bool {
 	return len(l.Contexts) == 0 && len(l.Relations) == 0
 }

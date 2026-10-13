@@ -1,0 +1,556 @@
+/*
+ * Copyright 2018 The Context Mapper Project Team
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+grammar org.contextmapper.dsl.ContextMappingDSL with org.contextmapper.tactic.dsl.TacticDDDLanguage
+
+import "http://contextmapper.org/tactic/dsl/tacticdsl" as tacticdsl
+
+generate contextMappingDSL "http://www.contextmapper.org/dsl/ContextMappingDSL"
+
+ContextMappingModel:
+	(
+		(topComment=SL_COMMENT | topComment=ML_COMMENT)? &
+		(imports+=Import)* &
+		(map = ContextMap)? &
+		(boundedContexts += BoundedContext)* &
+		(domains += Domain)* &
+		(userRequirements += UserRequirement)* &
+		(stakeholders += Stakeholders)* &
+		(valueRegisters += ValueRegister)*
+	)
+;
+
+Import :
+'import' importURI=STRING;
+
+ContextMap:
+	{ContextMap} // make sure there is always a context map
+	'ContextMap' (name=ID)?
+	OPEN
+		(('type' ('=')? type=ContextMapType)? &
+		('state' ('=')? state=ContextMapState)?)
+		('contains' boundedContexts += [BoundedContext] ("," boundedContexts += [BoundedContext])*)*
+		relationships += Relationship*
+	CLOSE
+;
+
+BoundedContext:
+	(comment=ML_COMMENT | comment=SL_COMMENT)?
+	'BoundedContext' name=ID (('implements' (implementedDomainParts+=[DomainPart]) ("," implementedDomainParts+=[DomainPart])*)? &
+		                      ('realizes' (realizedBoundedContexts+=[BoundedContext]) ("," realizedBoundedContexts+=[BoundedContext])*)? &
+		                      ('refines' refinedBoundedContext=[BoundedContext])?
+	)
+	(
+		OPEN
+			(('domainVisionStatement' ('=')? domainVisionStatement=STRING)? &
+			('type' ('=')? type=BoundedContextType)? &
+			(('responsibilities' ('=')? responsibilities+=STRING) ("," responsibilities+=STRING)*)? &
+			('implementationTechnology' ('=')? implementationTechnology=STRING)? &
+			('knowledgeLevel' ('=')? knowledgeLevel=KnowledgeLevel)?)
+			('businessModel' ('=')? businessModel=STRING)? &
+            ('evolution' ('=')? evolution=Evolution)? &
+			((application = Application)? &
+			(modules += SculptorModule)* &
+			(aggregates += Aggregate)* &
+			(domainServices += Service)*)
+		CLOSE
+	)?
+;
+
+DomainPart:
+	Domain | Subdomain
+;
+
+Domain:
+	'Domain' name=ID
+	(
+		OPEN
+			(('domainVisionStatement' ('=')? domainVisionStatement=STRING)? &
+			(subdomains += Subdomain)*)
+		CLOSE
+	)?
+;
+
+Subdomain:
+	'Subdomain' name=ID ('supports' (supportedFeatures+=[UserRequirement]) ("," supportedFeatures+=[UserRequirement])*)?
+	(
+		OPEN
+			(('type' ('=')? type=SubDomainType)? &
+			('domainVisionStatement' ('=')? domainVisionStatement=STRING)?)
+			entities += Entity*
+			services += Service*
+		CLOSE
+	)?
+;
+
+Relationship:
+	SymmetricRelationship | UpstreamDownstreamRelationship
+;
+
+SymmetricRelationship:
+	Partnership | SharedKernel
+;
+
+Partnership:
+	(
+		(participant1 = [BoundedContext] '[''P'']' '<->' '[''P'']' participant2 = [BoundedContext]) |
+		('[''P'']' participant1 = [BoundedContext] '<->' '[''P'']' participant2 = [BoundedContext]) |
+		(participant1 = [BoundedContext] '[''P'']' '<->' participant2 = [BoundedContext] '[''P'']') |
+		('[''P'']' participant1 = [BoundedContext] '<->' participant2 = [BoundedContext] '[''P'']') |
+		(participant1 = [BoundedContext] 'Partnership' participant2 = [BoundedContext])
+	)
+	(':' name=ID)?
+	(OPEN
+		('implementationTechnology' ('=')? implementationTechnology=STRING)?
+	CLOSE)?
+;
+
+SharedKernel:
+	(
+		(participant1 = [BoundedContext] '[''SK'']' '<->' '[''SK'']' participant2 = [BoundedContext]) |
+		('[''SK'']' participant1 = [BoundedContext] '<->' '[''SK'']' participant2 = [BoundedContext]) |
+		(participant1 = [BoundedContext] '[''SK'']' '<->' participant2 = [BoundedContext] '[''SK'']') |
+		('[''SK'']' participant1 = [BoundedContext] '<->' participant2 = [BoundedContext] '[''SK'']') |
+		(participant1 = [BoundedContext] 'Shared-Kernel' participant2 = [BoundedContext]) |
+		(participant1 = [BoundedContext] '<->' participant2 = [BoundedContext])
+	)
+	(':' name=ID)?
+	(OPEN
+		('implementationTechnology' ('=')? implementationTechnology=STRING)?
+	CLOSE)?
+;
+
+UpstreamDownstreamRelationship:
+	CustomerSupplierRelationship |
+	(
+		(
+			(upstream = [BoundedContext] (('[''U'']') | ('['('U'',')?(upstreamRoles+=UpstreamRole) ("," upstreamRoles+=UpstreamRole)*)']')? '->' (('[''D'']') | ('['('D'',')?(downstreamRoles+=DownstreamRole) ("," downstreamRoles+=DownstreamRole)*)']')? downstream = [BoundedContext]) |
+			(downstream = [BoundedContext] (('[''D'']') | ('['('D'',')?(downstreamRoles+=DownstreamRole) ("," downstreamRoles+=DownstreamRole)*)']')? '<-' (('[''U'']') | ('['('U'',')?(upstreamRoles+=UpstreamRole) ("," upstreamRoles+=UpstreamRole)*)']')? upstream = [BoundedContext]) |
+			(upstream = [BoundedContext] ('['((upstreamRoles+=UpstreamRole) ("," upstreamRoles+=UpstreamRole)*)?']')?'Upstream-Downstream'('['((downstreamRoles+=DownstreamRole) ("," downstreamRoles+=DownstreamRole)*)?']')? downstream = [BoundedContext]) |
+			(downstream = [BoundedContext] ('['((downstreamRoles+=DownstreamRole) ("," downstreamRoles+=DownstreamRole)*)?']')?'Downstream-Upstream'('['((upstreamRoles+=UpstreamRole) ("," upstreamRoles+=UpstreamRole)*)?']')? upstream = [BoundedContext])
+		)
+		(':' name=ID)?
+		(OPEN (
+			('implementationTechnology' ('=')? implementationTechnology=STRING)? &
+			(('exposedAggregates' ('=')? upstreamExposedAggregates += [Aggregate]) ("," upstreamExposedAggregates += [Aggregate])* (exposedAggregatesComment=SL_COMMENT)?)? &
+			('downstreamRights' ('=')? downstreamGovernanceRights=DownstreamGovernanceRights)?
+		)
+		CLOSE)?
+	)
+;
+
+CustomerSupplierRelationship:
+	(
+		(
+			(upstream = [BoundedContext] '['('U'',')?'S'(','(upstreamRoles+=UpstreamRole) ("," upstreamRoles+=UpstreamRole)*)?']' '->' '['('D'',')?'C'(','(downstreamRoles+=DownstreamRole) ("," downstreamRoles+=DownstreamRole)*)?']' downstream = [BoundedContext]) |
+			(downstream = [BoundedContext] '['('D'',')?'C'(','(downstreamRoles+=DownstreamRole) ("," downstreamRoles+=DownstreamRole)*)?']' '<-' '['('U'',')?'S'(','(upstreamRoles+=UpstreamRole) ("," upstreamRoles+=UpstreamRole)*)?']' upstream = [BoundedContext]) |
+			(downstream = [BoundedContext] ('['((downstreamRoles+=DownstreamRole) ("," downstreamRoles+=DownstreamRole)*)?']')?'Customer-Supplier'('['((upstreamRoles+=UpstreamRole) ("," upstreamRoles+=UpstreamRole)*)?']')? upstream = [BoundedContext]) |
+			(upstream = [BoundedContext] ('['((upstreamRoles+=UpstreamRole) ("," upstreamRoles+=UpstreamRole)*)?']')?'Supplier-Customer'('['((downstreamRoles+=DownstreamRole) ("," downstreamRoles+=DownstreamRole)*)?']')? downstream = [BoundedContext])
+		)
+		(':' name=ID)?
+		(OPEN (
+			('implementationTechnology' ('=')? implementationTechnology=STRING)? &
+			(('exposedAggregates' ('=')? upstreamExposedAggregates += [Aggregate]) ("," upstreamExposedAggregates += [Aggregate])* (exposedAggregatesComment=SL_COMMENT)?)? &
+			('downstreamRights' ('=')? downstreamGovernanceRights=DownstreamGovernanceRights)?
+		)
+		CLOSE)?
+	)
+;
+
+Aggregate :
+  (comment=ML_COMMENT)?
+  (doc=STRING)?
+  "Aggregate" name=ID (OPEN
+    (
+    	(('responsibilities' ('=')? responsibilities+=STRING) ("," responsibilities+=STRING)*)? &
+    	(
+    		(('useCases' ('=')? userRequirements += [UseCase]) ("," userRequirements += [UseCase])*) |
+    		(('userStories' ('=')? userRequirements += [UserStory]) ("," userRequirements += [UserStory])*) |
+    		((('features' | 'userRequirements') ('=')? userRequirements += [UserRequirement]) ("," userRequirements += [UserRequirement])*)
+    	)? &
+    	('owner' ('=')? owner=[BoundedContext])? &
+    	('knowledgeLevel' ('=')? knowledgeLevel=KnowledgeLevel)? &
+    	(('likelihoodForChange' | 'structuralVolatility') ('=')? likelihoodForChange=Volatility)? &
+    	('contentVolatility' ('=')? contentVolatility=Volatility)? &
+    	('availabilityCriticality' ('=')? availabilityCriticality=Criticality)? &
+    	('consistencyCriticality' ('=')? consistencyCriticality=Criticality)? &
+    	('storageSimilarity' ('=')? storageSimilarity=Similarity)? &
+    	('securityCriticality' ('=')? securityCriticality=Criticality)? &
+    	('securityZone' ('=')? securityZone=STRING)? &
+    	('securityAccessGroup' ('=')? securityAccessGroup=STRING)?
+    )
+    ((services+=Service) |
+     (resources+=Resource) |
+     (consumers+=Consumer) |
+     (domainObjects+=SimpleDomainObject))*
+  CLOSE)?
+;
+
+Application:
+	"Application" (name=ID)? (OPEN
+		((commands+=CommandEvent)* &
+		(events+=DomainEvent)* &
+		(services+=Service)* &
+		(flows+=Flow)* &
+		(coordinations+=Coordination)*)
+CLOSE)?
+;
+
+Coordination:
+	"Coordination" name=ID (OPEN
+		(coordinationSteps+=CoordinationStep)*
+	CLOSE)?
+;
+
+CoordinationStep:
+	boundedContext=[BoundedContext] '::' service=[tacticdsl::Service] '::' operation=[tacticdsl::ServiceOperation] ';'
+;
+
+Flow:
+	"Flow" name=ID (OPEN
+		(steps+=FlowStep)*
+	CLOSE)?
+;
+
+FlowStep:
+	DomainEventProductionStep | CommandInvokationStep
+;
+
+DomainEventProductionStep:
+	action=EitherCommandOrOperation ('delegates to' aggregate=[Aggregate] ('[' stateTransition=StateTransition ']')?)? 'emits event' eventProduction=EventProduction
+;
+
+CommandInvokationStep:
+	'event' events+=[tacticdsl::DomainEvent] ('+' events+=[tacticdsl::DomainEvent])* 'triggers' action=EitherCommandOrOperationInvokation
+;
+
+EitherCommandOrOperation:
+	('command' command=[tacticdsl::CommandEvent] | 'operation' operation=[tacticdsl::ServiceOperation]) ('[' 'initiated by' actor=STRING ']')?
+;
+
+EitherCommandOrOperationInvokation:
+	CommandInvokation | OperationInvokation
+;
+
+CommandInvokation:
+	'command' (SingleCommandInvokation | ConcurrentCommandInvokation | ExclusiveAlternativeCommandInvokation | InclusiveAlternativeCommandInvokation)
+;
+
+SingleCommandInvokation:
+	commands+=[tacticdsl::CommandEvent]
+;
+
+ConcurrentCommandInvokation:
+	commands+=[tacticdsl::CommandEvent] ('+' commands+=[tacticdsl::CommandEvent])+
+;
+
+ExclusiveAlternativeCommandInvokation:
+	commands+=[tacticdsl::CommandEvent] (('X' | 'x') commands+=[tacticdsl::CommandEvent])+
+;
+
+InclusiveAlternativeCommandInvokation:
+	commands+=[tacticdsl::CommandEvent] (('O' | 'o') commands+=[tacticdsl::CommandEvent])+
+;
+
+OperationInvokation:
+	'operation' (SingleOperationInvokation | ConcurrentOperationInvokation | ExclusiveAlternativeOperationInvokation | InclusiveAlternativeOperationInvokation)
+;
+
+SingleOperationInvokation:
+	operations+=[tacticdsl::ServiceOperation]
+;
+
+ConcurrentOperationInvokation:
+	operations+=[tacticdsl::ServiceOperation] ('+' operations+=[tacticdsl::ServiceOperation])+
+;
+
+ExclusiveAlternativeOperationInvokation:
+	operations+=[tacticdsl::ServiceOperation] (('X' | 'x') operations+=[tacticdsl::ServiceOperation])+
+;
+
+InclusiveAlternativeOperationInvokation:
+	operations+=[tacticdsl::ServiceOperation] (('O' | 'o') operations+=[tacticdsl::ServiceOperation])+
+;
+
+EventProduction:
+	SingleEventProduction | MultipleEventProduction | ExclusiveAlternativeEventProduction | InclusiveAlternativeEventProduction
+;
+
+SingleEventProduction:
+	events+=[tacticdsl::DomainEvent]
+;
+
+MultipleEventProduction:
+	events+=[tacticdsl::DomainEvent] ('+' events+=[tacticdsl::DomainEvent])+
+;
+
+ExclusiveAlternativeEventProduction:
+	events+=[tacticdsl::DomainEvent] (('X' | 'x') events+=[tacticdsl::DomainEvent])+
+;
+
+InclusiveAlternativeEventProduction:
+	events+=[tacticdsl::DomainEvent] (('O' | 'o') events+=[tacticdsl::DomainEvent])+
+;
+
+UserRequirement:
+	UseCase | UserStory
+;
+
+UseCase:
+	'UseCase' name=ID (OPEN
+		(('actor' ('=')? role=STRING)? &
+		('secondaryActors' ('=')? secondaryActors+=STRING ("," secondaryActors+=STRING)*)? &
+		('interactions' ('=')? features+=Feature ("," features+=Feature)*)? &
+		('benefit' ('=')? benefit=STRING)? &
+		('scope' ('=')? scope=STRING)? &
+		('level' ('=')? level=STRING)?)
+	CLOSE)?
+;
+
+UserStory:
+	'UserStory' name=ID ('split by' splittingStory=[UserStory])? (OPEN
+		(('As a' | 'As an') role=STRING (features+=Feature)+ 'so that' benefit=STRING (valuation=StoryValuation)?)?
+	CLOSE)?
+;
+
+Feature:
+	NormalFeature | StoryFeature
+;
+
+NormalFeature:
+	verb=(UserActivityDefaultVerb | STRING) (entityArticle='a' | entityArticle='an' | entityArticle='the')? entity=STRING ((entityAttributesPreposition='with its' | entityAttributesPreposition='with their') entityAttributes+=STRING ("," entityAttributes+=STRING)*)? ((containerEntityPreposition='in' | containerEntityPreposition='for' | containerEntityPreposition='to')(containerEntityArticle='a' | containerEntityArticle='an')? containerEntity=STRING)?
+;
+
+StoryFeature:
+	'I want to' verb=(UserActivityDefaultVerb | STRING) (entityArticle='a' | entityArticle='an' | entityArticle='the')? entity=STRING ((entityAttributesPreposition='with its' | entityAttributesPreposition='with their') entityAttributes+=STRING ("," entityAttributes+=STRING)*)? ((containerEntityPreposition='in' | containerEntityPreposition='for' | containerEntityPreposition='to')(containerEntityArticle='a' | containerEntityArticle='an')? containerEntity=STRING)?
+;
+
+StoryValuation:
+	'and that' promotedValues+=STRING (',' promotedValues+=STRING)* ('is' | 'are') 'promoted' (',')?
+	'accepting that' harmedValues+=STRING (',' harmedValues+=STRING)* ('is' | 'are') ('reduced' | 'harmed')
+;
+
+UserActivityDefaultVerb:
+	'create' | 'read' | 'update' | 'delete'
+;
+
+SculptorModule :
+  (doc=STRING)?
+  'Module' name=ID (OPEN
+    (external?='external')?
+    ('basePackage' '=' basePackage=JavaIdentifier )?
+    ('hint' '=' hint=STRING)?
+    ((services+=Service) |
+     (resources+=Resource) |
+     (consumers+=Consumer) |
+     (domainObjects+=SimpleDomainObject) |
+     (aggregates+=Aggregate))*
+  CLOSE)?
+;
+
+
+Stakeholders:
+	{Stakeholders} 'Stakeholders' ('of' (contexts+=[BoundedContext]) (',' contexts+=[BoundedContext])*)? (OPEN
+		(
+			(stakeholders += AbstractStakeholder)*	
+		)
+	CLOSE)?
+;
+
+AbstractStakeholder:
+	StakeholderGroup | Stakeholder
+;
+
+StakeholderGroup:
+	'StakeholderGroup' name=ID (OPEN
+		(
+			(stakeholders += Stakeholder)*	
+		)
+	CLOSE)?
+;
+
+Stakeholder:
+	'Stakeholder' name=ID (OPEN
+		(
+			('influence' ('=')? influence=INFLUENCE)? &
+			('interest' ('=')? interest=INTEREST)? &
+			('description' ('=')? description=STRING)?
+		)
+	CLOSE)?
+;
+
+ValueRegister:
+	'ValueRegister' name=ID ('for' context=[BoundedContext])? (OPEN
+		(
+			(valueClusters += ValueCluster)* &
+			(values += Value)* &
+			(valueEpics += ValueEpic)* &
+			(valueNarratives += ValueNarrative)* &
+			(valueWeightings += ValueWeigthing)*	
+		)
+	CLOSE)?
+;
+
+ValueCluster:
+	'ValueCluster' name=ID (OPEN
+		(
+			(('core' ('=')? coreValue7000 = CoreValue) | ('core' ('=')? coreValue = STRING)) &
+			('demonstrator' ('=')? demonstrators += STRING)* &
+			('relatedValue' ('=')? relatedValues += STRING)* &
+			('opposingValue' ('=')? opposingValues += STRING)* &
+			(values += Value)* &
+			(elicitations += ValueElicitation)*	
+		)
+	CLOSE)?
+;
+
+Value:
+	'Value' name=ID (OPEN
+		(
+			(coreValue ?= 'isCore')? &
+			('demonstrator' ('=')? demonstrators += STRING)* &
+			('relatedValue' ('=')? relatedValues += STRING)* &
+			('opposingValue' ('=')? opposingValues += STRING)* &
+			(elicitations += ValueElicitation)*	
+		)
+	CLOSE)?
+;
+
+// Q: table B.1  abbilden? if, how?
+
+ValueElicitation:
+	('Stakeholder'|'Stakeholders') stakeholder=[AbstractStakeholder] (OPEN
+		(
+			('priority' ('=')? priority = PRIORITY)? &
+			('impact' ('=')? impact = IMPACT)? &
+			('consequences' (consequences += Consequence)+)?	
+		)
+	CLOSE)?
+;
+
+
+ValueEpic: 
+	'ValueEpic' name=ID (OPEN
+    	(
+    		'As a' stakeholder=[AbstractStakeholder] 'I value' value=STRING 'as demonstrated in' 
+    		(('realization of' realizedValues+=STRING)+ & 
+    		('reduction of' reducedValues+=STRING)+)	
+    	)
+	CLOSE)?
+;
+
+ValueNarrative: 
+	'ValueNarrative' name=ID (OPEN
+		(
+			'When the SOI executes' feature=STRING ','
+	    	'stakeholders expect it to promote, protect or create' promotedValues=STRING ','
+	    	'possibly degrading or prohibiting' harmedValues=STRING 
+	    	'with the following externally observable and/or internally auditable behavior:' preAndPostConditions=STRING	
+		)
+	CLOSE)
+;
+
+ValueWeigthing: 
+	'ValueWeigthing' name=ID (OPEN
+		(
+			'In the context of the SOI,' 
+    		'stakeholder' stakeholder=[AbstractStakeholder] 'values' value1=STRING 'more than' value2=STRING
+    		'expecting benefits such as' benefits=STRING 
+    		'running the risk of harms such as' harms=STRING	
+		)
+	CLOSE)
+;
+
+Consequence:
+	(type='good'|type='bad'|type='neutral') consequence=STRING action=Action?
+;
+
+Action:
+	'action' action=STRING type=('ACT'|'MONITOR'|STRING) 	
+;
+
+
+enum UpstreamRole:
+	PUBLISHED_LANGUAGE = 'PL' | OPEN_HOST_SERVICE = 'OHS'
+;
+
+enum DownstreamRole:
+	ANTICORRUPTION_LAYER = 'ACL' | CONFORMIST = 'CF'
+;
+
+enum ContextMapState:
+	UNDEFINED | AS_IS | TO_BE
+;
+
+enum ContextMapType:
+	UNDEFINED | SYSTEM_LANDSCAPE | ORGANIZATIONAL
+;
+
+enum BoundedContextType:
+	UNDEFINED | FEATURE | APPLICATION | SYSTEM | TEAM
+;
+
+enum SubDomainType:
+	UNDEFINED | CORE_DOMAIN | SUPPORTING_DOMAIN | GENERIC_SUBDOMAIN
+;
+
+enum DownstreamGovernanceRights:
+	INFLUENCER | OPINION_LEADER | VETO_RIGHT | DECISION_MAKER | MONOPOLIST
+;
+
+enum KnowledgeLevel :
+  META="META" | CONCRETE="CONCRETE"
+;
+
+enum Volatility :
+	UNDEFINED | NORMAL | RARELY | OFTEN
+;
+
+enum Criticality :
+	UNDEFINED | NORMAL | HIGH | LOW
+;
+
+enum Similarity :
+	UNDEFINED | NORMAL | HUGE | TINY
+;
+
+enum Evolution :
+     UNDEFINED | GENESIS | CUSTOM_BUILT | PRODUCT | COMMODITY
+;
+
+enum INFLUENCE :
+     UNDEFINED | HIGH | MEDIUM | LOW
+;
+
+enum INTEREST :
+     UNDEFINED | HIGH | MEDIUM | LOW
+;
+
+enum PRIORITY:
+	UNDEFINED | HIGH | MEDIUM | LOW 
+;
+
+enum IMPACT:
+	UNDEFINED | HIGH | MEDIUM | LOW 
+;
+
+enum CoreValue:
+	UNDEFINED | AUTONOMY | CARE | CONTROL | FAIRNESS | INCLUSIVENESS | INNOVATION | PERFECTION | PRIVACY | RESPECT | SUSTAINABILITY | TRANSPARENCY | TRUST
+;
+
+// define terminals
+terminal OPEN: '{';
+terminal CLOSE: '}';

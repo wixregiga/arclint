@@ -2,6 +2,7 @@ package application
 
 import (
 	"fmt"
+	"path"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
@@ -23,11 +24,20 @@ type FixtureObserver interface {
 }
 
 // VocabularySource is the port through which the use case turns a
-// fixture's authored domain.arclint.yaml content into the
-// recorded vocabulary that extension rules under test observe through
-// ctx.domain().
+// fixture's authored domain file content into the recorded vocabulary
+// that extension rules under test observe through ctx.domain(). The
+// DomainRecording names the file the content is the content of, and so
+// the format it is written in.
 type VocabularySource interface {
-	ParseUbiquitousLanguage(content []byte) (vocab.UbiquitousLanguage, error)
+	ParseUbiquitousLanguage(content []byte, recording vocab.DomainRecording) (vocab.UbiquitousLanguage, error)
+}
+
+// RulesetRecordingSource is the port through which the use case reads
+// the DomainRecording a fixture's own ruleset names under domain.file,
+// the way a repository's ruleset names its own: the zero DomainRecording
+// when it names none.
+type RulesetRecordingSource interface {
+	ParseRulesetRecording(content []byte) (vocab.DomainRecording, error)
 }
 
 // RuleTestResult is the outcome of one Rule Test: the comparison of
@@ -60,15 +70,16 @@ type RunRuleTests struct {
 	fixtures   FixtureObserver
 	extensions conformance.ExtensionEvaluator
 	vocabulary VocabularySource
+	recordings RulesetRecordingSource
 }
 
 // NewRunRuleTests requires the repository, test source, fixture
-// observer, and vocabulary source ports. The Extension mechanism may
-// be nil: extension Rules then evaluate unsupported, honestly, rather
-// than being skipped.
+// observer, vocabulary source, and ruleset recording source ports. The
+// Extension mechanism may be nil: extension Rules then evaluate
+// unsupported, honestly, rather than being skipped.
 func NewRunRuleTests(rules rule.Repository, tests RuleTestSource,
 	fixtures FixtureObserver, extensions conformance.ExtensionEvaluator,
-	vocabulary VocabularySource,
+	vocabulary VocabularySource, recordings RulesetRecordingSource,
 ) (RunRuleTests, error) {
 	if rules == nil {
 		return RunRuleTests{}, fmt.Errorf("run rule tests: missing rule repository")
@@ -82,10 +93,13 @@ func NewRunRuleTests(rules rule.Repository, tests RuleTestSource,
 	if vocabulary == nil {
 		return RunRuleTests{}, fmt.Errorf("run rule tests: missing vocabulary source")
 	}
+	if recordings == nil {
+		return RunRuleTests{}, fmt.Errorf("run rule tests: missing ruleset recording source")
+	}
 	return RunRuleTests{
 		rules: rules, tests: tests,
 		fixtures: fixtures, extensions: extensions,
-		vocabulary: vocabulary,
+		vocabulary: vocabulary, recordings: recordings,
 	}, nil
 }
 
@@ -119,9 +133,10 @@ func (uc RunRuleTests) Execute() ([]RuleTestResult, error) {
 		if err != nil {
 			return nil, fmt.Errorf("rule test %q: observe fixture: %w", t.Name(), err)
 		}
-		// A fixture authors its recorded vocabulary as
-		// domain.arclint.yaml at the tree root; extension rules
-		// under test observe it through ctx.domain().
+		// A fixture authors its recorded vocabulary in the domain file
+		// its own ruleset names, else in the first default-named file
+		// it carries; extension rules under test observe it through
+		// ctx.domain().
 		knowledge, err := uc.fixtureVocabulary(t.Files())
 		if err != nil {
 			result.Err = fmt.Sprintf("fixture vocabulary: %v", err)
@@ -161,13 +176,41 @@ func (uc RunRuleTests) Execute() ([]RuleTestResult, error) {
 	return results, nil
 }
 
-// fixtureVocabulary parses the vocabulary a fixture authors as
-// domain.arclint.yaml at its tree root; fixtures without one see
-// an empty vocabulary.
+// fixtureVocabulary parses the vocabulary a fixture authors in its
+// domain file. The file is resolved like a repository's: the
+// DomainRecording the fixture's own rules.arclint.yaml names under
+// domain.file, else the first of the default names the fixture carries,
+// else domain.arclint.yaml, at the tree root. A fixture without the
+// file sees an empty vocabulary that carries the DomainRecording it
+// would be written in.
 func (uc RunRuleTests) fixtureVocabulary(files []rule.TestFile) (vocab.UbiquitousLanguage, error) {
+	var named vocab.DomainRecording
 	for _, f := range files {
-		if f.Path == vocab.UbiquitousLanguageFileName {
-			lang, err := uc.vocabulary.ParseUbiquitousLanguage([]byte(f.Content))
+		if path.Clean(f.Path) == rule.RulesetFileName {
+			recording, err := uc.recordings.ParseRulesetRecording([]byte(f.Content))
+			if err != nil {
+				return vocab.UbiquitousLanguage{}, fmt.Errorf("%w", err)
+			}
+			named = recording
+		}
+	}
+	// A fixture names its files as written; a recording holds its path
+	// cleaned, so the two are compared cleaned.
+	carries := func(candidate vocab.DomainRecording) (bool, error) {
+		for _, f := range files {
+			if path.Clean(f.Path) == candidate.Path() {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+	recording, _, err := vocab.ResolveDomainRecording(named, carries)
+	if err != nil {
+		return vocab.UbiquitousLanguage{}, fmt.Errorf("%w", err)
+	}
+	for _, f := range files {
+		if path.Clean(f.Path) == recording.Path() {
+			lang, err := uc.vocabulary.ParseUbiquitousLanguage([]byte(f.Content), recording)
 			if err != nil {
 				// No prefix: the parser's message already names
 				// the vocabulary file; Execute adds the
@@ -177,7 +220,7 @@ func (uc RunRuleTests) fixtureVocabulary(files []rule.TestFile) (vocab.Ubiquitou
 			return lang, nil
 		}
 	}
-	return vocab.UbiquitousLanguage{}, nil
+	return vocab.UbiquitousLanguage{Recording: recording}, nil
 }
 
 // assessmentFindings maps one Assessment to the neutral findings a

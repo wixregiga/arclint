@@ -1,0 +1,10 @@
+Domain InsuranceDomain {
+	Subdomain CustomerDomain {
+		Entity Customer
+		
+		Service CustomerService {
+			createCustomer;
+			testMethod;
+		}
+	}
+}

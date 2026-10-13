@@ -194,7 +194,7 @@ func patchPaths(text string) []string {
 // orientation states the workflow the generated AGENTS.md block states,
 // from the same source, and notes when the committed block states another.
 func (events *Events) orientation() string {
-	text := "ArcLint workflow hooks run in this project. " + application.WorkflowOrientation(events.recording)
+	text := "ArcLint workflow hooks run in this project. " + application.WorkflowOrientation()
 	if note := events.skew(); note != "" {
 		text += "\n" + note
 	}
@@ -240,7 +240,7 @@ func (events *Events) advice(guidance []agent.Guidance) string {
 		case agent.ContextStep:
 			lines = append(lines, fmt.Sprintf("ArcLint workflow: %s changed before `arclint context` showed every Zone that owns it. Run `arclint context %s` to see those Zones, their contracts and the recorded domain that bind it.", paths, strings.Join(shellQuoted(given.Paths), " ")))
 		case agent.DomainStep:
-			lines = append(lines, fmt.Sprintf("ArcLint workflow: %s changed before %s changed in this session. If this work introduces or changes a meaning, record it in %s first, using the domain-librarian skill. If it does not, continue.", paths, events.recording, events.recording))
+			lines = append(lines, fmt.Sprintf("ArcLint workflow: %s changed before the project's domain recording changed in this session. If this work introduces or changes a meaning, record it through `arclint domain define` first, using the domain-librarian skill. If it does not, continue.", paths))
 		case agent.CheckStep:
 			lines = append(lines, fmt.Sprintf("ArcLint workflow: %s changed since the last `arclint check`. Run `arclint check .` and the project's tests before finishing.", paths))
 		}

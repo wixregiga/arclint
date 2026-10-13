@@ -65,7 +65,7 @@ func newAgentsMDCommand(publish application.PublishAgentsContext, render Rendere
 
 // newAgentsSkillCommand writes SKILL.md and VOCAB.yaml into --dir
 // (default DomainLibrarianSkillDir) and the Ubiquitous Language schema
-// the skill points at into the project's schema directory.
+// for human YAML editors into the project's schema directory.
 func newAgentsSkillCommand(
 	protocol application.PublishSkillProtocol,
 	vocabulary application.PublishSkillVocabulary,
@@ -74,7 +74,7 @@ func newAgentsSkillCommand(
 ) Command {
 	return Command{
 		Name:  "skill",
-		Short: "write domain-librarian skill artifacts (SKILL.md, VOCAB.yaml) and the domain schema they point at",
+		Short: "write domain-librarian skill artifacts (SKILL.md, VOCAB.yaml) and the domain schema for human YAML editors",
 		Flags: []Flag{
 			{
 				Name:    "dir",

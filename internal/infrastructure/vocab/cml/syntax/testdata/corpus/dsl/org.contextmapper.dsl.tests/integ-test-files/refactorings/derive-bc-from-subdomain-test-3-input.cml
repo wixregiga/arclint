@@ -1,0 +1,13 @@
+BoundedContext NewTestBC {
+	Aggregate CustomerDomainAggregate // Aggregate already existing
+}
+
+Domain InsuranceDomain {
+	Subdomain CustomerDomain {
+		Entity Customer
+		
+		Service CustomerService {
+			createCustomer
+		}
+	}
+}

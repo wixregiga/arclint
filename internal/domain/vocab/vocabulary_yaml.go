@@ -5,8 +5,8 @@ import (
 	"strings"
 )
 
-// VocabularyYAML returns the domain-librarian VOCAB.yaml content
-// byte-exact to the litmus vocabulary file. The vocabulary is the
+// VocabularyYAML returns the domain-librarian VOCAB.yaml content for a
+// project, byte-exact to the litmus vocabulary file. The vocabulary is the
 // meta-model's building blocks, one term per block in meta-model order
 // with a comment naming each phase, followed by the context relation
 // kinds. Hand-assembled so comments and flow-style lines match;
@@ -86,16 +86,6 @@ func VocabularyYAML() string {
 	b.WriteString("library_file:\n")
 	b.WriteString("  purpose: ")
 	b.WriteString(lib.Purpose)
-	b.WriteString("\n")
-	b.WriteString("  json_schema: ")
-	b.WriteString(lib.JSONSchema)
-	b.WriteString("  # ")
-	b.WriteString(lib.JSONSchemaComment)
-	b.WriteString("\n")
-	b.WriteString("  header: ")
-	b.WriteString(yamlDoubleQuoted(lib.Header))
-	b.WriteString("  # ")
-	b.WriteString(lib.HeaderComment)
 	b.WriteString("\n")
 	b.WriteString("  shape: |  # ")
 	b.WriteString(lib.ShapeComment)

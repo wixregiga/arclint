@@ -5,11 +5,14 @@ weight = 50
 
 # Domain contracts: the built-in rules
 
-Recording a term in `domain.arclint.yaml` is a claim about the code, and
-arclint evaluates it. A recorded aggregate must have a root, spelled with
-its name wherever the repository declares it; a recorded invariant must
-be a method the root calls at every mutation; a recorded value object
-with an invariant must be built through one constructor. Nothing is
+Recording a term in the domain file (the file `rules.arclint.yaml` names
+under `domain.file`, else the first of `domain.arclint.yaml`,
+`domain.arclint.yml` and `domain.arclint.cml` that exists, written in YAML or
+[CML](/docs/cml/)) is a claim about the code, and arclint evaluates it.
+A recorded aggregate must have a root, spelled with its name wherever
+the repository declares it; a recorded invariant must be a method the
+root calls at every mutation; a recorded value object with an invariant
+must be built through one constructor. Nothing is
 installed to get this: the rules are built into the binary, composed
 from the DDD meta-model that defines each building block, and they
 apply the moment the recorded language is non-empty.
@@ -62,7 +65,9 @@ invariants or assertions explicitly reports that no coverage is established.
 Names are keys. Each context holds its aggregates, value objects,
 events, services, specifications, relations, and open questions; each
 aggregate holds its identity, its invariants, and its assertions; a
-domain service holds the assertions of its own operations.
+domain service holds the assertions of its own operations. This is the
+YAML shape. The same language can be written in CML, as
+[Domain files in CML](/docs/cml/) shows.
 
 ```yaml
 version: 1
@@ -89,7 +94,8 @@ contexts:
 
 `arclint domain define <concept> <name>` writes an entry; `arclint
 domain` prints the model; `arclint domain schema --write` puts the JSON
-Schema under `.arclint/schemas/` for editor completion.
+Schema for YAML domain files under `.arclint/schemas/` for editor
+completion.
 
 ## What each recording demands
 
@@ -222,7 +228,8 @@ command:
 internal/ordering/domain/order/order.go:26: [error] invariant/enforced-at-every-mutation aggregate Order: command Place does not call EnsureLinesFrozen, so invariant lines-frozen is not enforced when it completes
 ```
 
-Findings anchor where the fix goes: at the domain file when the
+Findings anchor where the fix goes: at the domain file (whichever file
+the project records in; `domain.arclint.yaml` in these examples) when the
 recording has no code, at the declaration when the code falls short.
 `arclint context <path>` shows which recorded contracts anchor into a
 path and at which line.

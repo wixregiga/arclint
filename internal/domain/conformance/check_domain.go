@@ -160,10 +160,14 @@ type aggregateRoot struct {
 // a context says the Zone is that context; otherwise it is the scope
 // files of its units plus the file of every term located outside them.
 type contextCode struct {
-	ctx      vocab.BoundedContext
-	zone     rule.ZoneName
-	scope    []string
-	scopeIdx contractIndex
+	ctx vocab.BoundedContext
+	// recording is the path of the domain file the context is recorded
+	// in: where a finding about a recorded instance is anchored and what
+	// a remedy names.
+	recording string
+	zone      rule.ZoneName
+	scope     []string
+	scopeIdx  contractIndex
 	// scopeImportFiles counts the scope files yielding the imports fact.
 	scopeImportFiles   int
 	scopeAnalysisFiles int
@@ -218,7 +222,7 @@ type fileImport struct {
 func resolveDomain(facts Facts, knowledge vocab.UbiquitousLanguage) (domainCode, error) {
 	code := domainCode{knowledge: knowledge, holders: map[string][]string{}}
 	for _, ctx := range knowledge.Contexts {
-		cc, err := resolveContext(ctx, facts)
+		cc, err := resolveContext(ctx, knowledge.Recording.Path(), facts)
 		if err != nil {
 			return domainCode{}, err
 		}
@@ -239,8 +243,8 @@ func resolveDomain(facts Facts, knowledge vocab.UbiquitousLanguage) (domainCode,
 	return code, nil
 }
 
-func resolveContext(ctx vocab.BoundedContext, facts Facts) (contextCode, error) {
-	cc := contextCode{ctx: ctx, aggregates: map[string]aggregateCode{}, terms: map[string]termLocation{}}
+func resolveContext(ctx vocab.BoundedContext, recording string, facts Facts) (contextCode, error) {
+	cc := contextCode{ctx: ctx, recording: recording, aggregates: map[string]aggregateCode{}, terms: map[string]termLocation{}}
 	zone, scope, err := facts.contextScope(ctx.Name)
 	if err != nil {
 		return contextCode{}, err
@@ -453,9 +457,9 @@ func (cc contextCode) searched() string {
 // narrowRemedy says how to leave one declaration for a name two spell.
 func (cc contextCode) narrowRemedy() string {
 	if cc.zone != "" {
-		return fmt.Sprintf("narrow Zone %q to the context's code, or exclude the twin under scan.exclude in rules.arclint.yaml", cc.zone)
+		return fmt.Sprintf("narrow Zone %q to the context's code, or exclude the twin under scan.exclude in %s", cc.zone, rule.RulesetFileName)
 	}
-	return fmt.Sprintf("declare a Zone %q over the context's code in rules.arclint.yaml, or exclude the twin under scan.exclude", cc.ctx.Name)
+	return fmt.Sprintf("declare a Zone %q over the context's code in %s, or exclude the twin under scan.exclude", cc.ctx.Name, rule.RulesetFileName)
 }
 
 // locationViolations reports a recorded name that nothing declares, or
@@ -465,7 +469,7 @@ func (cc contextCode) locationViolations(r rule.Rule, subject rule.Subject, what
 	if loc.located() {
 		return nil, nil
 	}
-	file, anchor := recordAnchor(line)
+	file, anchor := cc.recordAnchor(line)
 	if loc.ambiguous() {
 		v, err := newViolation(r, subject, file, anchor,
 			fmt.Sprintf("%s %s of context %s is declared %d times in %s (%s), and nothing tells which is the model's", what, name, cc.ctx.Name, len(loc.candidates), cc.searched(), candidateList(loc.candidates)),
@@ -651,9 +655,9 @@ func methodSpellings(idx contractIndex, term string) string {
 }
 
 // recordAnchor anchors a finding about a recorded instance at its line
-// in the domain file.
-func recordAnchor(line int) (string, int) {
-	return vocab.UbiquitousLanguageFileName, line
+// in the domain file the context is recorded in.
+func (cc contextCode) recordAnchor(line int) (string, int) {
+	return cc.recording, line
 }
 
 // fileFacts is one parsed file of a context: its language, package,
@@ -1094,10 +1098,10 @@ func checkCodeHeldByOneContext(r rule.Rule, subject rule.Subject, cc contextCode
 			continue
 		}
 		files := shared[other]
-		file, line := recordAnchor(cc.ctx.Line)
+		file, line := cc.recordAnchor(cc.ctx.Line)
 		v, err := newViolation(r, subject, file, line,
 			fmt.Sprintf("context %s holds %d file(s) that context %s holds too (%s), and the context map records no shared_kernel between them; a boundary two models straddle is not a boundary", self, len(files), other, exampleFiles(files)),
-			fmt.Sprintf("narrow %s and %s with a Zone named for each in rules.arclint.yaml, or record a shared_kernel relation between them under relations in %s", self, other, vocab.UbiquitousLanguageFileName))
+			fmt.Sprintf("narrow %s and %s with a Zone named for each in %s, or record a shared_kernel relation between them under relations in %s", self, other, rule.RulesetFileName, cc.recording))
 		if err != nil {
 			return nil, err
 		}
@@ -1129,7 +1133,7 @@ func checkContextIsolated(r rule.Rule, subject rule.Subject, cc contextCode, cod
 			}
 			v, err := newViolation(r, subject, fi.path, fi.imp.Line,
 				fmt.Sprintf("context %s imports context %s (%s), and the context map records no relation between them", self, other, fi.imp.Path),
-				fmt.Sprintf("record the relation between %s and %s under relations in %s, or remove the import", self, other, vocab.UbiquitousLanguageFileName))
+				fmt.Sprintf("record the relation between %s and %s under relations in %s, or remove the import", self, other, cc.recording))
 			if err != nil {
 				return nil, err
 			}
@@ -1181,7 +1185,7 @@ func checkModelImportsNothingOutside(r rule.Rule, subject rule.Subject, cc conte
 		zones := sortedZones(fi.targets)
 		v, err := newViolation(r, subject, fi.path, fi.imp.Line,
 			fmt.Sprintf("context %s imports %s, code of Zone(s) %s that no context holds; dependencies run toward the model and never out of it", cc.ctx.Name, fi.imp.Path, quotedZones(zones)),
-			fmt.Sprintf("invert the dependency so that %s depends on the model, or make it the model's code by recording the terms it declares in %s", fi.imp.Path, vocab.UbiquitousLanguageFileName))
+			fmt.Sprintf("invert the dependency so that %s depends on the model, or make it the model's code by recording the terms it declares in %s", fi.imp.Path, cc.recording))
 		if err != nil {
 			return nil, err
 		}
@@ -1458,7 +1462,7 @@ func checkAggregateProtectsInvariant(r rule.Rule, subject rule.Subject, cc conte
 		if len(agg.Invariants) > 0 {
 			continue
 		}
-		file, line := recordAnchor(agg.Line)
+		file, line := cc.recordAnchor(agg.Line)
 		v, err := newViolation(r, subject, file, line,
 			fmt.Sprintf("aggregate %s of context %s records no invariant; a boundary drawn around nothing that must stay consistent is not yet justified", agg.Name, cc.ctx.Name),
 			fmt.Sprintf("record what %s keeps consistent under invariants, or record it as a value object", agg.Name))
@@ -1477,7 +1481,7 @@ func checkAggregateRootDeclared(r rule.Rule, subject rule.Subject, cc contextCod
 		if ac.located() {
 			continue
 		}
-		file, line := recordAnchor(agg.Line)
+		file, line := cc.recordAnchor(agg.Line)
 		if len(ac.candidates) > 1 {
 			v, err := newViolation(r, subject, file, line,
 				fmt.Sprintf("aggregate %s of context %s has %d candidate roots in %s (%s), and nothing tells which is the model's", agg.Name, cc.ctx.Name, len(ac.candidates), cc.searched(), candidateList(ac.candidates)),

@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	recording   = "domain.arclint.yaml"
+	recording   = "docs/model.arclint.yaml"
 	testArclint = "/usr/local/bin/arclint"
 )
 
@@ -140,7 +140,7 @@ func TestSessionStartStatesTheWorkflowOrder(t *testing.T) {
 	if output.HookSpecificOutput.HookEventName != "SessionStart" || output.SystemMessage != "" {
 		t.Fatalf("wrong output: %+v", output)
 	}
-	for index, step := range application.AgentWorkflow(recording) {
+	for index, step := range application.AgentWorkflow() {
 		if !strings.Contains(text, fmt.Sprintf("%d. %s\n", index+1, step)) {
 			t.Fatalf("orientation lacks workflow step %d %q:\n%s", index+1, step, text)
 		}
@@ -155,7 +155,7 @@ func TestClaudeCodeEditBeforeContextAndDomain(t *testing.T) {
 	handle(t, events, sessionStart("s", root))
 	edit := toolEvent("s", root, "Edit", map[string]any{"file_path": filepath.Join(root, "internal/a.go"), "old_string": "x", "new_string": "y"})
 	text := handle(t, events, edit).HookSpecificOutput.AdditionalContext
-	for _, want := range []string{"internal/a.go changed before `arclint context` showed every Zone that owns it", "Run `arclint context internal/a.go`", "changed before domain.arclint.yaml changed in this session"} {
+	for _, want := range []string{"internal/a.go changed before `arclint context` showed every Zone that owns it", "Run `arclint context internal/a.go`", "changed before the project's domain recording changed in this session"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("guidance lacks %q:\n%s", want, text)
 		}
@@ -170,7 +170,7 @@ func TestCodexWorkflowInOrderReceivesNoGuidance(t *testing.T) {
 	handle(t, events, sessionStart("s", root))
 	record(t, root, agent.Activity{Kind: agent.ContextObtained, Paths: []string{"internal"}})
 	for index, event := range []map[string]any{
-		toolEvent("s", root, "apply_patch", map[string]any{"command": "*** Begin Patch\n*** Update File: domain.arclint.yaml\n*** End Patch\n"}),
+		toolEvent("s", root, "apply_patch", map[string]any{"command": "*** Begin Patch\n*** Update File: docs/model.arclint.yaml\n*** End Patch\n"}),
 		toolEvent("s", root, "apply_patch", map[string]any{"command": "*** Begin Patch\n*** Add File: internal/a.go\n+package a\n*** End Patch\n"}),
 	} {
 		if output := handle(t, events, event); output != (hostOutput{}) {
@@ -190,7 +190,7 @@ func TestActivityBeforeASessionStartsIsNotCredited(t *testing.T) {
 	record(t, root, agent.Activity{Kind: agent.DomainChanged, Paths: []string{recording}})
 	handle(t, events, sessionStart("later", root))
 	text := handle(t, events, toolEvent("later", root, "Write", map[string]any{"file_path": filepath.Join(root, "internal/a.go")})).HookSpecificOutput.AdditionalContext
-	if !strings.Contains(text, "internal/a.go changed before `arclint context` showed every Zone that owns it") || !strings.Contains(text, "before domain.arclint.yaml changed") {
+	if !strings.Contains(text, "internal/a.go changed before `arclint context` showed every Zone that owns it") || !strings.Contains(text, "before the project's domain recording changed") {
 		t.Fatalf("the later session was credited with earlier activity:\n%s", text)
 	}
 	if output := handle(t, events, toolEvent("earlier", root, "Write", map[string]any{"file_path": filepath.Join(root, "internal/a.go")})); output != (hostOutput{}) {
@@ -253,7 +253,7 @@ func TestStopAdvisesTheCheckOnceForTheSameChanges(t *testing.T) {
 	record(t, root, agent.Activity{Kind: agent.ContextObtained})
 	handle(t, events, toolEvent("s", root, "Write", map[string]any{"file_path": filepath.Join(root, recording), "content": "x"}))
 	output := handle(t, events, stop("s", root))
-	if !strings.Contains(output.SystemMessage, "domain.arclint.yaml changed since the last `arclint check`") || output.HookSpecificOutput.AdditionalContext != "" {
+	if !strings.Contains(output.SystemMessage, recording+" changed since the last `arclint check`") || output.HookSpecificOutput.AdditionalContext != "" {
 		t.Fatalf("stop advice missing: %+v", output)
 	}
 	if again := handle(t, events, stop("s", root)); again != (hostOutput{}) {

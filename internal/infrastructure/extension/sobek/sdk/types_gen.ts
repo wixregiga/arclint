@@ -175,7 +175,7 @@ export interface ViolationInput {
  * DomainInvariantInfo is one recorded invariant as exposed through
  * ctx.domain(): the key that names the method enforcing it (an
  * aggregate's) or the constructor that enforces it (a value object's),
- * and the statement. Line is where it is written in domain.arclint.yaml;
+ * and the statement. Line is where it is written in the project's domain file;
  * 0 when the vocabulary was not read from a file.
  */
 export interface DomainInvariantInfo {
@@ -277,7 +277,7 @@ export interface DomainQuestionInfo {
 /**
  * DomainContextInfo is one bounded context and its recorded terms as
  * exposed through ctx.domain(). Line is where the context is written
- * in domain.arclint.yaml.
+ * in the project's domain file.
  */
 export interface DomainContextInfo {
   name: string;
@@ -292,8 +292,8 @@ export interface DomainContextInfo {
 }
 /**
  * DomainRelationInfo is one context-map edge as exposed through
- * ctx.domain(). Line is where the relation is written in
- * domain.arclint.yaml.
+ * ctx.domain(). Line is where the relation is written in the
+ * project's domain file.
  */
 export interface DomainRelationInfo {
   from: string;

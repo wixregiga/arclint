@@ -128,7 +128,7 @@ rules:
 ```
 
 `each` derives the globs from a recorded vocabulary collection in
-`domain.arclint.yaml`, resolving `{name:<case>}` once per recorded
+the domain file, resolving `{name:<case>}` once per recorded
 term. The published sources are `domain.aggregates`, `domain.entities`,
 `domain.value_objects`, `domain.events`, `domain.contexts`,
 `domain.invariants`, `domain.assertions`, and `domain.specifications`;
@@ -212,7 +212,7 @@ Composed from the recorded domain, never spelled.
 - Assurance: `exact`
 - `on`: none; the recorded contexts and their aggregates locate the code, narrowed by a Zone only when the ruleset declares one spelled with the context's name
 
-When `domain.arclint.yaml` records at least one context, the built-in
+When the domain file records at least one context, the built-in
 rules apply on their own: the aggregate has a root, the root declares
 and calls an `Ensure` method per invariant key and an `Assert` method
 per assertion key, a value object with an invariant has one
@@ -393,6 +393,45 @@ this block from the languages you select.
 
 ```yaml
 runtime: [go, ts]
+```
+
+## domain
+
+Which file records the project's Ubiquitous Language.
+
+- where: top-level `domain:`, repository rulesets only
+
+`file` is the path of the domain file from the directory that holds
+`rules.arclint.yaml`, written with slashes and staying inside that
+directory. Its extension names the format it is written in: `.yaml` or
+`.yml` for YAML, `.cml` for CML. It is never `rules.arclint.yaml` itself,
+not even through a link.
+
+A ruleset that names no file records in the first of `domain.arclint.yaml`,
+`domain.arclint.yml` and `domain.arclint.cml` that exists, and in
+`domain.arclint.yaml` when none does. YAML comes first because YAML is the
+preferred format. A default-named file that is not the domain file is
+ignored, and every command says so on stderr: it names the ignored file and
+the domain file, and asks you to name the one to use under `domain.file`,
+or to remove the other. A ruleset that names a file uses it: the file is
+the project's own choice, so every default-named file beside it is ignored
+without a word.
+
+Every command, hook, finding and report that names the domain file names
+the one the project records in. `arclint init --domain <file>` writes the
+key for every file it is given, `domain.arclint.yaml` included, because
+naming the file is an explicit choice. `arclint domain convert <file>` moves a recorded domain to
+another file and settles the key: it removes the key when the project finds
+the new file by its name, and writes it otherwise. A
+`.cml` file is read and edited as described in
+[Domain files in CML](/docs/cml/); the JSON Schema for the domain file
+applies to YAML domain files only. A Pattern never chooses a
+repository's domain file, so a Pattern distribution file does not accept
+`domain`.
+
+```yaml
+domain:
+  file: docs/model.arclint.yaml
 ```
 
 ## extends

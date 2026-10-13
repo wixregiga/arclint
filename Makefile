@@ -9,13 +9,19 @@ GRAMMARS := grammar_subset grammar_subset_typescript grammar_subset_tsx grammar_
 # Core SDLC Workflow
 # These are the primary commands for daily development and CI.
 # ==============================================================================
-.PHONY: build test vet fmt lint generate schemas lint-schema check check-fix check-ro ci release clean
+.PHONY: build test test-exhaustive vet fmt lint generate schemas lint-schema check check-fix check-ro ci release clean
 
 build:
 	CGO_ENABLED=0 $(GO) build -tags "$(GRAMMARS)" -trimpath -ldflags "-s -w" -o $(BIN) ./cmd/arclint
 
 test:
 	$(GO) test -race -timeout 30m -coverprofile=coverage.out -covermode=atomic ./...
+
+# The long CML property sweeps in full: every generated domain, every
+# Context Mapper verdict, every corpus file and edit. make test runs a
+# fixed sample of each; the nightly Exhaustive workflow runs this.
+test-exhaustive:
+	ARCLINT_EXHAUSTIVE=1 $(GO) test -timeout 60m ./internal/infrastructure/vocab/cml/...
 
 vet:
 	$(GO) vet ./...

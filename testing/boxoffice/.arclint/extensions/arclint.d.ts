@@ -179,7 +179,7 @@ declare module "arclint" {
    * DomainInvariantInfo is one recorded invariant as exposed through
    * ctx.domain(): the key that names the method enforcing it (an
    * aggregate's) or the constructor that enforces it (a value object's),
-   * and the statement. Line is where it is written in domain.arclint.yaml;
+   * and the statement. Line is where it is written in the project's domain file;
    * 0 when the vocabulary was not read from a file.
    */
   export interface DomainInvariantInfo {
@@ -281,7 +281,7 @@ declare module "arclint" {
   /**
    * DomainContextInfo is one bounded context and its recorded terms as
    * exposed through ctx.domain(). Line is where the context is written
-   * in domain.arclint.yaml.
+   * in the project's domain file.
    */
   export interface DomainContextInfo {
     name: string;
@@ -296,8 +296,8 @@ declare module "arclint" {
   }
   /**
    * DomainRelationInfo is one context-map edge as exposed through
-   * ctx.domain(). Line is where the relation is written in
-   * domain.arclint.yaml.
+   * ctx.domain(). Line is where the relation is written in the
+   * project's domain file.
    */
   export interface DomainRelationInfo {
     from: string;
@@ -352,8 +352,10 @@ declare module "arclint" {
     facts(path: string): FactsInfo | null;
     /** The sorted zone names a file belongs to. */
     zoneOf(path: string): string[];
-    /** The project's recorded domain model (domain.arclint.yaml);
-     * empty collections when the project records none. Read-only:
+    /** The project's recorded domain model, read from the domain file
+     * named by domain.file in rules.arclint.yaml, else the first of
+     * domain.arclint.yaml, domain.arclint.yml and domain.arclint.cml that
+     * exists; empty collections when the project records none. Read-only:
      * declaring knowledge never creates a diagnostic by itself. */
     domain(): DomainInfo;
     /** Render a recorded term in one published TermCase, the host's

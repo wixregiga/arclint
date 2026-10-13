@@ -30,14 +30,16 @@ IMPORTANT: work in this order on every change.
    - Existing behavior ___ must remain intact.
 
    Resolve contradictions with the recorded domain and the user's instructions before proceeding. Ask only when an unresolved product decision needs the user's input. This statement is not an approval checkpoint.
-3. If the change introduces or changes a meaning, record it in `domain.arclint.yaml` before writing code, using the domain-librarian skill. If it does not, say so.
+3. If the change introduces or changes a meaning, record it in the project's domain recording through `arclint domain define` before writing code, using the domain-librarian skill. If it does not, say so.
 4. Implement one complete behavior path through the zones `arclint context` reported, keeping existing behavior intact unless the task changes it. Keep names and files understandable from their responsibilities: callers use contracts, and implementations own their specific decisions.
 5. Verify the changed behavior through those contracts, then run `arclint check .` and the project's tests before finishing. Fix the findings in the code you changed, including baseline findings there; never weaken rules, baselines or exclusions to clear a finding. Report the behavior verified, the checks passed and what remains open, separately.
 
 ### Commands
 
 - `arclint context [paths...]`: run before editing under any path: the owning zones, their import contracts, and the recorded domain in one answer (`--zone <names>`, `--format json`)
-- `arclint domain`: the ubiquitous language: contexts, aggregates, value objects, invariants, relations
+- `arclint domain`: the ubiquitous language and its recording path: contexts, aggregates, value objects, invariants, relations
+- `arclint domain define`: record a meaning through validated commands; ArcLint writes the recording's format
+- `arclint domain remove`: remove an entry through validated commands
 - `arclint rules [selector]`: every configured rule with its constraint and rationale; one match prints the complete rule
 - `arclint check .`: evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings
 - `arclint rules test`: run the rule fixtures under `.arclint/tests` after changing any rule
@@ -51,7 +53,7 @@ IMPORTANT: work in this order on every change.
 
 ### The recorded domain
 
-3 contexts, 3 aggregates, 6 value objects, 16 invariants (domain.arclint.yaml).
+3 contexts, 3 aggregates, 6 value objects, 16 invariants.
 
 - **catalog**: aggregates Event; value objects TicketTier, Price
 - **ordering**: aggregates Order; value objects OrderLine, Attendee, Refund
@@ -99,7 +101,7 @@ Relations: catalog → ordering (conformist); catalog → capacity (conformist);
 - **web_shared**: FSD shared layer: the api client, per-aggregate api files, and the ui kit. (paths web/src/shared/**)
   - imports no other zone
   - aggregates-speak-through-api (warning): contains files matching ["web/src/shared/api/event.ts", "web/src/shared/api/order.ts", "web/src/shared/api/capacity.ts"] (derived from each recorded domain.aggregates) Rationale: Every recorded aggregate owns one api file in the web shared layer.
-- **vocabulary**: The recorded Ubiquitous Language of the box office. (paths domain.arclint.yaml)
+- **vocabulary**: The recorded Ubiquitous Language of the box office. (paths domain.arclint.cml)
 - **toolchain**: The build and lint surfaces the repo promises to keep. (paths Makefile .golangci.yml go.mod web/package.json)
   - gates-present: contains files matching ["Makefile", ".golangci.yml", "go.mod", "web/package.json"] Rationale: The build and lint gates the repo promises are present.
 

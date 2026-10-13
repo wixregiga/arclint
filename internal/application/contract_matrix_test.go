@@ -49,7 +49,7 @@ func TestLocateDomainContractsReportsAnUnspellableKey(t *testing.T) {
 // then each value object's invariants.
 func TestDomainKnowledgeOfProjectsEveryContract(t *testing.T) {
 	dk := domainKnowledgeOf(catalogLanguage(t))
-	if dk.Located || dk.Source != vocab.UbiquitousLanguageFileName {
+	if dk.Located || dk.Source != "docs/model.arclint.yaml" {
 		t.Fatalf("projection = %+v", dk)
 	}
 	if len(dk.Contexts) != 1 || dk.Contexts[0].Name != "catalog" {
@@ -251,6 +251,10 @@ func catalogLanguage(t *testing.T) vocab.UbiquitousLanguage {
 	}}, nil)
 	if err != nil {
 		t.Fatalf("NewUbiquitousLanguage: %v", err)
+	}
+	lang.Recording, err = vocab.NewDomainRecording("docs/model.arclint.yaml")
+	if err != nil {
+		t.Fatalf("NewDomainRecording: %v", err)
 	}
 	return lang
 }

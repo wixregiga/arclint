@@ -6,7 +6,11 @@ import (
 
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
+
+// domainFlag names the file the project writes its ubiquitous language in.
+const domainFlag = "domain"
 
 // NewInitCommand adapts the repository-initialization use case: draft
 // a commented starter ruleset from explicit choices.
@@ -17,6 +21,7 @@ func NewInitCommand(initialize application.InitializeRepository, render Renderer
 		Flags: []Flag{
 			{Name: "languages", Default: "go", Doc: "comma-separated runtime targets: go, ts, py", Complete: completeLanguages},
 			{Name: "pattern", Default: "bare", Doc: "starter ruleset: bare, or a Pattern to extend by reference or name (arclint patterns lists them)", Complete: completePatterns(initialize)},
+			{Name: domainFlag, Doc: "file the project writes its ubiquitous language in, YAML (.yaml, .yml) or CML (.cml), as a path from the repository root; written under domain.file, " + vocab.DefaultDomainRecordingPath + " included, because naming it is an explicit choice"},
 			{Name: "force", Bool: true, Doc: "overwrite an existing " + rule.RulesetFileName},
 		},
 		Run: func(ctx Context) error {
@@ -29,6 +34,7 @@ func NewInitCommand(initialize application.InitializeRepository, render Renderer
 			path, err := initialize.Execute(application.InitializeRepositoryRequest{
 				Languages: languages,
 				Pattern:   ctx.String("pattern"),
+				Domain:    ctx.String(domainFlag),
 				Force:     ctx.Bool("force"),
 			})
 			if err != nil {
