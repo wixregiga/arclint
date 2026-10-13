@@ -52,7 +52,7 @@ zones:
     paths: "web/src/shared/**"
     description: "FSD shared layer: the api client, per-aggregate api files, and the ui kit."
   vocabulary:
-    paths: "domain.arclint.yaml"
+    paths: "domain.arclint.cml"
     description: "The recorded Ubiquitous Language of the box office."
   toolchain:
     paths: ["Makefile", ".golangci.yml", "go.mod", "web/package.json"]

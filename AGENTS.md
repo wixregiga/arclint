@@ -22,14 +22,16 @@ IMPORTANT: work in this order on every change.
    - Existing behavior ___ must remain intact.
 
    Resolve contradictions with the recorded domain and the user's instructions before proceeding. Ask only when an unresolved product decision needs the user's input. This statement is not an approval checkpoint.
-3. If the change introduces or changes a meaning, record it in `domain.arclint.yaml` before writing code, using the domain-librarian skill. If it does not, say so.
+3. If the change introduces or changes a meaning, record it in the project's domain recording through `arclint domain define` before writing code, using the domain-librarian skill. If it does not, say so.
 4. Implement one complete behavior path through the zones `arclint context` reported, keeping existing behavior intact unless the task changes it. Keep names and files understandable from their responsibilities: callers use contracts, and implementations own their specific decisions.
 5. Verify the changed behavior through those contracts, then run `arclint check .` and the project's tests before finishing. Fix the findings in the code you changed, including baseline findings there; never weaken rules, baselines or exclusions to clear a finding. Report the behavior verified, the checks passed and what remains open, separately.
 
 ### Commands
 
 - `arclint context [paths...]`: run before editing under any path: the owning zones, their import contracts, and the recorded domain in one answer (`--zone <names>`, `--format json`)
-- `arclint domain`: the ubiquitous language: contexts, aggregates, value objects, invariants, relations
+- `arclint domain`: the ubiquitous language and its recording path: contexts, aggregates, value objects, invariants, relations
+- `arclint domain define`: record a meaning through validated commands; ArcLint writes the recording's format
+- `arclint domain remove`: remove an entry through validated commands
 - `arclint rules [selector]`: every configured rule with its constraint and rationale; one match prints the complete rule
 - `arclint check .`: evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings
 - `arclint rules test`: run the rule fixtures under `.arclint/tests` after changing any rule
@@ -43,11 +45,11 @@ IMPORTANT: work in this order on every change.
 
 ### The recorded domain
 
-6 contexts, 1 aggregates, 34 value objects, 40 invariants (domain.arclint.yaml).
+6 contexts, 1 aggregates, 36 value objects, 43 invariants.
 
 - **agent**: value objects Activity, Guidance, Progress; services WorkflowGuide
-- **vocabulary**
-- **rule**: aggregates Rule (Zone, Pattern); value objects RuleID, ZoneName, Rationale, Constraint, Scope, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec
+- **vocabulary**: value objects DomainRecording
+- **rule**: aggregates Rule (Zone, Pattern); value objects RuleID, ZoneName, Rationale, Constraint, Scope, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec, DomainFile
 - **adoption**: value objects Binding, Override, Disablement, Exclusion, Suppression, Installation
 - **conformance**: value objects ContractCoverage, DependencyImport, Facts, Violation
 - **distribution**: value objects Catalog, Digest, Index, Manifest, PatternFile, PatternSource, Registry, Selection, VendoredPattern
@@ -178,3 +180,13 @@ the tree), the gate is the non-mutating, network-free variant:
 ```bash
 make check-ro
 ```
+
+## Before a pull request
+
+Before you open a pull request, or push more commits to one, run the
+domain-sweep skill (`/domain-sweep`) over the branch against `main`. It
+lists every statement the change adds about what must or never happen
+and places each through the domain-librarian. Record every entry it
+places, through `arclint domain define`, before the pull request is
+opened or updated, and answer each question it raises in the pull
+request.

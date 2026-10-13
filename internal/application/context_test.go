@@ -139,6 +139,74 @@ func TestInitializeRepositoryDraftsStarter(t *testing.T) {
 	}
 }
 
+func TestInitializeRepositoryNamesANonDefaultDomainFile(t *testing.T) {
+	p := patternFixture(t, "1.2.3")
+	for _, tc := range []struct {
+		name    string
+		pattern string
+	}{{"starter", ""}, {"adopting", "ddd-flat"}} {
+		scaffold := &recordingScaffold{}
+		uc, err := application.NewInitializeRepository(scaffold, fakePatternSource{patterns: []rule.Pattern{p}})
+		if err != nil {
+			t.Fatalf("NewInitializeRepository: %v", err)
+		}
+		if _, err := uc.Execute(application.InitializeRepositoryRequest{Pattern: tc.pattern, Domain: "./docs/model.arclint.yaml"}); err != nil {
+			t.Fatalf("%s: Execute: %v", tc.name, err)
+		}
+		const want = "domain:\n  # The file this repository writes its Ubiquitous Language in, YAML (.yaml, .yml) or CML (.cml).\n  file: docs/model.arclint.yaml\n\n"
+		if !strings.Contains(scaffold.content, want) {
+			t.Errorf("%s ruleset lacks the cleaned domain file:\n%s", tc.name, scaffold.content)
+		}
+	}
+}
+
+// An unnamed domain file leaves the choice to discovery; a named one,
+// the default included, is an explicit choice written under domain.file.
+func TestInitializeRepositoryNamesOnlyAnExplicitDomainFile(t *testing.T) {
+	for domain, want := range map[string]string{
+		"":                      "",
+		"domain.arclint.yaml":   "  file: domain.arclint.yaml\n",
+		"./domain.arclint.yaml": "  file: domain.arclint.yaml\n",
+		"domain.arclint.cml":    "  file: domain.arclint.cml\n",
+	} {
+		scaffold := &recordingScaffold{}
+		uc, err := application.NewInitializeRepository(scaffold, fakePatternSource{})
+		if err != nil {
+			t.Fatalf("NewInitializeRepository: %v", err)
+		}
+		if _, err := uc.Execute(application.InitializeRepositoryRequest{Domain: domain}); err != nil {
+			t.Fatalf("Domain %q: Execute: %v", domain, err)
+		}
+		switch {
+		case want == "" && strings.Contains(scaffold.content, "domain:"):
+			t.Errorf("Domain %q wrote a domain key although no file was named:\n%s", domain, scaffold.content)
+		case want != "" && (!strings.Contains(scaffold.content, "domain:\n") || !strings.Contains(scaffold.content, want)):
+			t.Errorf("Domain %q is not written under domain.file:\n%s", domain, scaffold.content)
+		}
+	}
+}
+
+func TestInitializeRepositoryRefusesADomainFileThatIsNotARecording(t *testing.T) {
+	for domain, invariant := range map[string]string{
+		"notes.txt":       "format-named-by-extension",
+		"/abs/model.yaml": "inside-the-repository",
+		"../model.yaml":   "inside-the-repository",
+	} {
+		scaffold := &recordingScaffold{}
+		uc, err := application.NewInitializeRepository(scaffold, fakePatternSource{})
+		if err != nil {
+			t.Fatalf("NewInitializeRepository: %v", err)
+		}
+		_, err = uc.Execute(application.InitializeRepositoryRequest{Domain: domain})
+		if err == nil || !strings.Contains(err.Error(), invariant) {
+			t.Errorf("Domain %q: error = %v, want one naming %s", domain, err, invariant)
+		}
+		if scaffold.content != "" {
+			t.Errorf("Domain %q: a ruleset was written despite the refusal", domain)
+		}
+	}
+}
+
 func TestInitializeRepositoryAdoptsPattern(t *testing.T) {
 	p := patternFixture(t, "1.2.3")
 	scaffold := &recordingScaffold{}
@@ -316,5 +384,26 @@ func TestArchitecturalContextRepositoryTeaches(t *testing.T) {
 	}
 	if len(ctx.Paths) != 0 || len(ctx.Rules) != 0 {
 		t.Errorf("repository scope must carry no bindings or rule union: %+v", ctx)
+	}
+}
+
+// A domain file name with a control character is written as an escaped
+// YAML scalar, so the ruleset holds the same name and stays one value.
+func TestInitializeRepositoryEscapesAControlCharacterInTheDomainFile(t *testing.T) {
+	for domain, want := range map[string]string{
+		"docs/a\nb.yaml": `  file: "docs/a\nb.yaml"` + "\n",
+		"docs/a\tb.cml":  `  file: "docs/a\tb.cml"` + "\n",
+	} {
+		scaffold := &recordingScaffold{}
+		uc, err := application.NewInitializeRepository(scaffold, fakePatternSource{})
+		if err != nil {
+			t.Fatalf("NewInitializeRepository: %v", err)
+		}
+		if _, err := uc.Execute(application.InitializeRepositoryRequest{Domain: domain}); err != nil {
+			t.Fatalf("Domain %q: Execute: %v", domain, err)
+		}
+		if !strings.Contains(scaffold.content, want) {
+			t.Errorf("Domain %q is not written as an escaped scalar:\n%s", domain, scaffold.content)
+		}
 	}
 }

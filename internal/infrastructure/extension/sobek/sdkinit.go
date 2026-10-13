@@ -51,8 +51,10 @@ export interface Ctx {
   facts(path: string): FactsInfo | null;
   /** The sorted zone names a file belongs to. */
   zoneOf(path: string): string[];
-  /** The project's recorded domain model (domain.arclint.yaml);
-   * empty collections when the project records none. Read-only:
+  /** The project's recorded domain model, read from the domain file
+   * named by domain.file in rules.arclint.yaml, else the first of
+   * domain.arclint.yaml, domain.arclint.yml and domain.arclint.cml that
+   * exists; empty collections when the project records none. Read-only:
    * declaring knowledge never creates a diagnostic by itself. */
   domain(): DomainInfo;
   /** Render a recorded term in one published TermCase, the host's

@@ -119,10 +119,10 @@ func TestResolvePresentation(t *testing.T) {
 		},
 		{
 			name:     "strips mixed process flags among command args",
-			args:     []string{"--rules", "r.yaml", "check", "--format", "human", "--no-color", "pkg"},
+			args:     []string{"check", "--format", "human", "--no-color", "pkg"},
 			tty:      true,
 			wantName: cli.RendererPlain,
-			wantArgs: []string{"--rules", "r.yaml", "check", "pkg"},
+			wantArgs: []string{"check", "pkg"},
 		},
 		{
 			name:    "missing format value is config error",
@@ -203,8 +203,7 @@ func TestFirstPositionalSkipsProcessFlags(t *testing.T) {
 		want string
 	}{
 		{[]string{"--format", "json", "--no-color", "check", "."}, "check"},
-		{[]string{"--rules", "r.yaml", "init"}, "init"},
-		{[]string{"--format=human", "--rules=r.yaml", "domain", "list"}, "domain"},
+		{[]string{"--format=human", "domain", "list"}, "domain"},
 		{[]string{"--", "check"}, "check"},
 		{[]string{"--format", "json", "--"}, ""},
 		{[]string{"__complete", "check", "--format", ""}, "__complete"},

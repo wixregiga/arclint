@@ -10,12 +10,11 @@ import (
 
 func TestAgentsPublicSurfaceRetiresRejectedGuardCommands(t *testing.T) {
 	root := t.TempDir()
-	rules := filepath.Join(root, "rules.arclint.yaml")
 	write(t, root, "rules.arclint.yaml", "runtime: [go]\nzones: {}\n")
 	guard := ".codex/hooks/arclint-domain-guard/guard.py"
 	preserved := "owner-installed guard remains separate\n"
 	write(t, root, guard, preserved)
-	stdout, stderr, code := runBin(t, root, nil, "--rules", rules, "agents", "--help")
+	stdout, stderr, code := runBin(t, root, nil, "agents", "--help")
 	if code != 0 || stderr != "" {
 		t.Fatalf("agents help: %d %s", code, stderr)
 	}
@@ -28,7 +27,7 @@ func TestAgentsPublicSurfaceRetiresRejectedGuardCommands(t *testing.T) {
 		t.Fatalf("retired command remains in the public surface: %s", stdout)
 	}
 	for _, retired := range []string{"setup", "status"} {
-		retiredOutput, retiredError, retiredCode := runBin(t, root, nil, "--rules", rules, "agents", retired)
+		retiredOutput, retiredError, retiredCode := runBin(t, root, nil, "agents", retired)
 		// Pure command groups may print help for unknown arguments. That is not an installation route.
 		if retiredCode == 0 && !strings.Contains(retiredOutput, "Available Commands:") {
 			t.Fatalf("retired command %s executed instead of showing group help: %s", retired, retiredOutput)

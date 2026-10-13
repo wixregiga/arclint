@@ -34,6 +34,9 @@ type DomainDefineResult struct {
 	Owner   string
 	Name    string
 	Changed []string
+	// Target and Values describe edits to the context map or project description.
+	Target string
+	Values map[string]string
 }
 
 // DefineDomainDefinition records or updates one entry of the project's

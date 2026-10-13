@@ -3,8 +3,12 @@ package rule
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
+	"unicode"
+
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 // FieldSchema describes one accepted Rule field: its kind, whether it
@@ -272,6 +276,7 @@ func schemaDocument() map[string]any {
 		"additionalProperties": false,
 		"properties": map[string]any{
 			"pattern": patternHeaderSchema(),
+			"domain":  domainSchema(),
 			"runtime": map[string]any{
 				"description": "Language targets whose code facts observation produces. Repository rulesets only.",
 				"type":        "array",
@@ -291,8 +296,9 @@ func schemaDocument() map[string]any {
 		},
 		"if": map[string]any{"required": []string{"pattern"}},
 		"then": map[string]any{
-			"description": "A Pattern distribution file: no runtime, no scan, no extends, because those are repository policy; Zones carry descriptions and suggested paths only.",
+			"description": "A Pattern distribution file: no domain, no runtime, no scan, no extends, because those are repository policy; Zones carry descriptions and suggested paths only.",
 			"properties": map[string]any{
+				"domain":  false,
 				"runtime": false,
 				"scan":    false,
 				"extends": false,
@@ -539,6 +545,76 @@ func scanSchema() map[string]any {
 				"default":     false,
 			},
 		},
+	)
+}
+
+// domainFileExtensionJSONPattern mirrors the DomainRecording invariant
+// format-named-by-extension: a final name of a non-empty stem and one of
+// the published extensions.
+func domainFileExtensionJSONPattern() string {
+	extensions := vocab.DomainRecordingExtensions()
+	for i, extension := range extensions {
+		extensions[i] = regexp.QuoteMeta(strings.TrimPrefix(extension, "."))
+	}
+	return `(^|/)[^/]+\.(` + strings.Join(extensions, "|") + `)$`
+}
+
+// domainFileOutsideJSONPattern matches what the DomainRecording invariant
+// inside-the-repository refuses by shape alone: an absolute path, a
+// drive letter, a leading "../", and any backslash. A path that climbs
+// out only after cleaning, such as a/../../b.yaml, remains a runtime
+// check.
+const domainFileOutsideJSONPattern = `^(/|[A-Za-z]:|\.\./)|\\`
+
+// domainFileRulesetJSONPattern matches what the DomainFile invariant
+// never-the-ruleset refuses by shape alone: rules.arclint.yaml in any
+// letter case, behind any number of "./". A path that reaches the
+// ruleset only after cleaning, such as docs/../rules.arclint.yaml,
+// remains a runtime check.
+func domainFileRulesetJSONPattern() string {
+	var b strings.Builder
+	b.WriteString(`^(\./)*`)
+	for _, r := range RulesetFileName {
+		lower, upper := unicode.ToLower(r), unicode.ToUpper(r)
+		if lower != upper {
+			b.WriteString("[" + string(lower) + string(upper) + "]")
+			continue
+		}
+		b.WriteString(regexp.QuoteMeta(string(r)))
+	}
+	b.WriteString("$")
+	return b.String()
+}
+
+// defaultDomainFileNames spells the default domain file names in the
+// order discovery prefers them: "a, b and c".
+func defaultDomainFileNames() string {
+	recordings := vocab.DefaultDomainRecordings()
+	names := make([]string, 0, len(recordings))
+	for _, recording := range recordings {
+		names = append(names, recording.Path())
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+}
+
+func domainSchema() map[string]any {
+	return strictObjectSchema(
+		"The project's domain file: where its Ubiquitous Language is written down. Repository rulesets only.",
+		map[string]any{
+			"file": map[string]any{
+				"description": "The file the Ubiquitous Language is written in, a slash-separated path from the directory that holds the ruleset, inside it. The extension names the format: .yaml or .yml for YAML, .cml for CML. Absent means the first of " + defaultDomainFileNames() + " that exists, and " + vocab.DefaultDomainRecordingPath + " when none does. A default-named file that is not the domain file is ignored.",
+				"type":        "string",
+				"pattern":     domainFileExtensionJSONPattern(),
+				"not": map[string]any{
+					"type": "string",
+					"anyOf": []any{
+						map[string]any{"pattern": domainFileOutsideJSONPattern},
+						map[string]any{"pattern": domainFileRulesetJSONPattern()},
+					},
+				},
+			},
+		},
+		"file",
 	)
 }
 

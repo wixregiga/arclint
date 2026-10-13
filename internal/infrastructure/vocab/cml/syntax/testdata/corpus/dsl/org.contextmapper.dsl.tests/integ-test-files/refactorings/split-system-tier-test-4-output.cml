@@ -1,0 +1,22 @@
+ContextMap {
+	contains TestBackendLogic
+	contains TestBackendDatabase
+
+	TestBackendLogic [ PL ] -> [ CF ] TestBackendDatabase {
+		implementationTechnology ""
+		exposedAggregates TestAggregate
+	}
+}
+
+BoundedContext TestBackendLogic {
+	type SYSTEM
+	Aggregate TestAggregate {
+		Entity TestEntity
+	}
+}
+
+BoundedContext TestBackendDatabase {
+	type SYSTEM
+	implementationTechnology ""
+}
+

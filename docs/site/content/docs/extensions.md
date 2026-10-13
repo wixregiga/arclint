@@ -16,9 +16,8 @@ pattern is a `content` Rule, not an Extension.
 
 The directory that contains `rules.arclint.yaml` is the repository root and the
 Extension root. Extensions load from `<root>/.arclint/extensions/`.
-`--rules path/to/rules.arclint.yaml` moves the root and that directory together.
-Without `--rules`, ArcLint discovers `rules.arclint.yaml` upward from the working
-directory (`check [path]` starts discovery from the optional path).
+ArcLint discovers `rules.arclint.yaml` upward from the working directory
+(`check [path]` starts discovery from the optional path).
 
 Discovery is top-level only: every `*.ts` or `*.js` directly under
 `.arclint/extensions/` is one entry (dotfiles and `*.d.ts` are ignored).
@@ -214,12 +213,14 @@ Collections are always arrays (empty when the project records none or
 the file is absent). Each term lives inside a named bounded context;
 entities, invariants, and assertions live under the aggregate that
 owns them, a domain service carries the assertions of its operations,
-and a value object carries its own invariants. `source` is
-the repository-relative path of the domain file (`domain.arclint.yaml`),
-and every entry carries the `line` it is written on there, so a finding
-about a context, term, invariant, or relation anchors at the entry
-instead of at the top of the file, without the Extension spelling the
-file name:
+and a value object carries its own invariants. `source` is the
+repository-relative path of the project's domain file
+(the file `domain.file` names, else the first of `domain.arclint.yaml`,
+`domain.arclint.yml` and `domain.arclint.cml` that exists, written in YAML
+or [CML](/docs/cml/)), and every entry carries the `line` it is written on
+there, so a finding about a context, term, invariant, or relation anchors
+at the entry instead of at the top of the file, without the Extension
+spelling the file name:
 
 ```ts
 const domain = ctx.domain();
@@ -243,8 +244,10 @@ project wants beyond them, and surfaces findings only when its `check`
 calls `ctx.report`.
 
 Rule Tests exercise `ctx.domain()` the same way they exercise files: a
-fixture that authors `domain.arclint.yaml` at its tree root is
-parsed with the production loader, and the extension under test
+fixture that authors the domain file at its tree root is parsed with
+the production loader (the file its own `rules.arclint.yaml` names under
+`domain.file`, else the first default-named file it carries, else
+`domain.arclint.yaml`), and the extension under test
 observes that vocabulary through `ctx.domain()`. Fixtures without one
 see an empty model. See `vocabulary/terms-carry-definitions` in this
 repository's `rules.arclint.yaml` and its cases under `.arclint/tests/` for a

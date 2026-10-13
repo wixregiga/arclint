@@ -11,7 +11,7 @@ import (
 // NewCheckCommand adapts the conformance use case into the check
 // command; the listing use case exists only to complete rule
 // selectors. Presentation is closed over the injected Renderer.
-func NewCheckCommand(assess application.AssessConformance, list application.ListRules, render Renderer) Command {
+func NewCheckCommand(assess application.AssessConformance, list application.ListRules, inspectAgents application.InspectAgentsContext, render Renderer) Command {
 	return Command{
 		Name:  checkCommand,
 		Short: "evaluate the configured Rules against the repository",
@@ -41,7 +41,11 @@ func NewCheckCommand(assess application.AssessConformance, list application.List
 			if err != nil {
 				return ConfigError(err)
 			}
-			if err := render.Render(ctx.Stdout, AssessmentReport{Assessment: assessment}); err != nil {
+			agentsContext, err := inspectAgents.Execute()
+			if err != nil {
+				return ConfigError(err)
+			}
+			if err := render.Render(ctx.Stdout, AssessmentReport{Assessment: assessment, AgentsContext: agentsContext}); err != nil {
 				return fmt.Errorf("write output: %w", err)
 			}
 			if assessment.HasErrors() {

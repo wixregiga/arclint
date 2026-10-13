@@ -67,3 +67,26 @@ func (p Publisher) Install(block string) (bool, string, error) {
 	}
 	return true, target, nil
 }
+
+// GeneratedBlock reads the managed range the publisher would replace,
+// excluding surrounding guidance and the newline after the end marker.
+func (p Publisher) GeneratedBlock() (string, bool, error) {
+	target := filepath.Join(p.root, "AGENTS.md")
+	content, err := os.ReadFile(target)
+	if os.IsNotExist(err) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("read %s: %w", target, err)
+	}
+	text := string(content)
+	begin := strings.Index(text, application.AgentsBegin)
+	end := strings.Index(text, application.AgentsEnd)
+	if begin < 0 && end < 0 {
+		return "", false, nil
+	}
+	if begin < 0 || end <= begin {
+		return "", false, fmt.Errorf("%s: found one arclint marker without the other; repair or delete the block", target)
+	}
+	return text[begin : end+len(application.AgentsEnd)], true, nil
+}

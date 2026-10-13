@@ -16,8 +16,10 @@ import (
 // NewDomainCommand adapts the project domain-model use cases into the
 // domain command family: init, overview (also the bare `domain`
 // default), list, show, explain, define (including --guided),
-// remove/rm, and schema. Presentation is closed over the injected
-// Renderer; raw schema bytes bypass it.
+// remove/rm, and schema. recording is the path of the project's domain
+// recording, which the guided session names when it asks to write.
+// Presentation is closed over the injected Renderer; raw schema bytes
+// bypass it.
 func NewDomainCommand(
 	initialize application.InitDomain,
 	overview application.GetDomainOverview,
@@ -26,11 +28,14 @@ func NewDomainCommand(
 	define application.DefineDomainDefinition,
 	remove application.RemoveDomainDefinition,
 	publishSchema application.PublishDomainSchema,
+	export application.ExportDomainRecording,
+	convert application.ConvertDomainRecording,
+	recording string,
 	render Renderer,
 ) Command {
 	runOverview := overviewRunner(overview, render)
 	return Command{
-		Name:    "domain",
+		Name:    domainCommand,
 		Short:   "inspect and maintain the project's ubiquitous language",
 		Long:    domainGroupLong,
 		MaxArgs: -1,
@@ -93,9 +98,9 @@ func NewDomainCommand(
 				Long:         defineLong,
 				Example:      defineExample,
 				MaxArgs:      2,
-				Flags:        defineFlags(),
-				CompleteArgs: completeShowArgs(list),
-				Run:          defineRunner(define, render),
+				Flags:        defineFlags(list),
+				CompleteArgs: completeEditArgs(list, true),
+				Run:          defineRunner(define, recording, render),
 			},
 			{
 				Name:         "remove",
@@ -104,12 +109,28 @@ func NewDomainCommand(
 				Example:      removeExample,
 				Aliases:      []string{"rm"},
 				MaxArgs:      2,
-				Flags:        []Flag{contextFlag(), ownerFlag()},
-				CompleteArgs: completeShowArgs(list),
+				Flags:        append([]Flag{contextFlag(), ownerFlag()}, relationEndpointFlags(list)...),
+				CompleteArgs: completeEditArgs(list, false),
 				Run:          removeRunner(remove, render),
 			},
+			{
+				Name:    "export",
+				Short:   "translate the project's domain into another file, YAML or CML",
+				Long:    exportLong,
+				Example: exportExample,
+				MaxArgs: 1,
+				Run:     exportRunner(export, render),
+			},
+			{
+				Name:    "convert",
+				Short:   "move the project's domain into another file, YAML or CML",
+				Long:    convertLong,
+				Example: convertExample,
+				MaxArgs: 1,
+				Run:     convertRunner(convert, render),
+			},
 			newSchemaCommand(
-				"print or write the JSON Schema accepted for "+vocab.UbiquitousLanguageFileName,
+				"print or write the JSON Schema accepted for the project's domain file",
 				schemaLong,
 				schemaExample,
 				publishSchema,
@@ -134,6 +155,38 @@ func initDomainRunner(initialize application.InitDomain, render Renderer) func(C
 			return domainError(err)
 		}
 		if err := render.Render(ctx.Stdout, DomainInitReport{Result: result}); err != nil {
+			return fmt.Errorf("write output: %w", err)
+		}
+		return nil
+	}
+}
+
+func exportRunner(export application.ExportDomainRecording, render Renderer) func(Context) error {
+	return func(ctx Context) error {
+		if len(ctx.Args) != 1 {
+			return ConfigError(errors.New("export requires <file>"))
+		}
+		result, err := export.Execute(ctx.Args[0])
+		if err != nil {
+			return domainError(err)
+		}
+		if err := render.Render(ctx.Stdout, DomainExportReport{Result: result}); err != nil {
+			return fmt.Errorf("write output: %w", err)
+		}
+		return nil
+	}
+}
+
+func convertRunner(convert application.ConvertDomainRecording, render Renderer) func(Context) error {
+	return func(ctx Context) error {
+		if len(ctx.Args) != 1 {
+			return ConfigError(errors.New("convert requires <file>"))
+		}
+		result, err := convert.Execute(ctx.Args[0])
+		if err != nil {
+			return domainError(err)
+		}
+		if err := render.Render(ctx.Stdout, DomainConvertReport{Result: result}); err != nil {
 			return fmt.Errorf("write output: %w", err)
 		}
 		return nil
@@ -224,6 +277,11 @@ func explainRunner(render Renderer) func(Context) error {
 // one recorded property of the meta-model; the concept named on the
 // command line decides which of them it takes.
 const (
+	domainRelation   = "relation"
+	flagDescription  = "description"
+	flagFrom         = "from"
+	flagTo           = "to"
+	flagKind         = "kind"
 	flagDefinition   = "definition"
 	flagStatement    = "statement"
 	flagOn           = "on"
@@ -236,8 +294,8 @@ const (
 	flagRaisedBy     = "raised-by"
 )
 
-func defineFlags() []Flag {
-	return []Flag{
+func defineFlags(list application.ListDomainDefinitions) []Flag {
+	flags := []Flag{
 		contextFlag(),
 		ownerFlag(),
 		{Name: flagDefinition, Doc: "what the term means in this project (bounded_context, aggregate, entity, value_object, domain_event, domain_service, specification)"},
@@ -252,6 +310,12 @@ func defineFlags() []Flag {
 		{Name: flagRaisedBy, Doc: "the aggregate that raises a domain event; an empty value records none"},
 		{Name: "guided", Bool: true, Doc: "start an interactive authoring session"},
 	}
+	flags = append(flags, relationEndpointFlags(list)...)
+	kinds := make([]string, 0, len(vocab.RelationKinds()))
+	for _, kind := range vocab.RelationKinds() {
+		kinds = append(kinds, string(kind))
+	}
+	return append(flags, Flag{Name: flagKind, Options: kinds, Doc: "published context_relation kind"}, Flag{Name: flagDescription, Doc: "relation description or the project description; an empty value clears it"})
 }
 
 // propertyFlags lists the flags a plain define reads into the change;
@@ -260,6 +324,7 @@ var propertyFlags = []string{
 	flagDefinition, flagStatement, flagOn, flagText, flagIdentity,
 	flagAlias, flagClearAliases,
 	flagRepository, flagFactory, flagRaisedBy,
+	flagFrom, flagTo, flagKind, flagDescription,
 }
 
 // changeFromFlags reads the recording decision off the command line:
@@ -303,7 +368,7 @@ func changeFromFlags(ctx Context) (vocab.Change, error) {
 	return ch, nil
 }
 
-func defineRunner(define application.DefineDomainDefinition, render Renderer) func(Context) error {
+func defineRunner(define application.DefineDomainDefinition, recording string, render Renderer) func(Context) error {
 	return func(ctx Context) error {
 		if ctx.Bool("guided") {
 			combined := len(ctx.Args) > 0 || ctx.Changed("context") || ctx.Changed("owner")
@@ -313,7 +378,13 @@ func defineRunner(define application.DefineDomainDefinition, render Renderer) fu
 			if combined {
 				return ConfigError(fmt.Errorf("--guided cannot be combined with a concept, a name, or property flags"))
 			}
-			return runGuidedDefine(ctx, define, render)
+			return runGuidedDefine(ctx, define, recording, render)
+		}
+		if len(ctx.Args) == 1 && (ctx.Args[0] == domainRelation || ctx.Args[0] == flagDescription) {
+			return defineRecordingRunner(ctx, define, render)
+		}
+		if err := rejectFlags(ctx, flagFrom, flagTo, flagKind, flagDescription); err != nil {
+			return err
 		}
 		if len(ctx.Args) != 2 {
 			return ConfigError(fmt.Errorf("define requires <concept> <name>, or --guided"))
@@ -342,6 +413,22 @@ func defineRunner(define application.DefineDomainDefinition, render Renderer) fu
 
 func removeRunner(remove application.RemoveDomainDefinition, render Renderer) func(Context) error {
 	return func(ctx Context) error {
+		if len(ctx.Args) == 1 && ctx.Args[0] == domainRelation {
+			if err := rejectFlags(ctx, "context", "owner"); err != nil {
+				return err
+			}
+			result, err := remove.ExecuteRelation(ctx.String(flagFrom), ctx.String(flagTo))
+			if err != nil {
+				return domainError(err)
+			}
+			if err := render.Render(ctx.Stdout, DomainRemoveReport{Result: result}); err != nil {
+				return fmt.Errorf("write output: %w", err)
+			}
+			return nil
+		}
+		if err := rejectFlags(ctx, flagFrom, flagTo); err != nil {
+			return err
+		}
 		if len(ctx.Args) != 2 {
 			return ConfigError(fmt.Errorf("remove requires <concept> <name>"))
 		}
@@ -354,6 +441,56 @@ func removeRunner(remove application.RemoveDomainDefinition, render Renderer) fu
 		}
 		return nil
 	}
+}
+
+func relationEndpointFlags(list application.ListDomainDefinitions) []Flag {
+	complete := func(toComplete string) []AutoCompleteCandidate {
+		return definitionNameCandidates(list, string(vocab.ConceptBoundedContext), toComplete)
+	}
+	return []Flag{
+		{Name: flagFrom, Doc: "upstream context of a relation", Complete: complete},
+		{Name: flagTo, Doc: "downstream context of a relation", Complete: complete},
+	}
+}
+
+func rejectFlags(ctx Context, flags ...string) error {
+	for _, flag := range flags {
+		if ctx.Changed(flag) {
+			return ConfigError(fmt.Errorf("--%s does not apply to this recording", flag))
+		}
+	}
+	return nil
+}
+
+func defineRecordingRunner(ctx Context, define application.DefineDomainDefinition, render Renderer) error {
+	flags := []string{"context", "owner", flagDefinition, flagStatement, flagOn, flagText, flagIdentity, flagAlias, flagClearAliases, flagRepository, flagFactory, flagRaisedBy}
+	if err := rejectFlags(ctx, flags...); err != nil {
+		return err
+	}
+	var result application.DomainDefineResult
+	var err error
+	if ctx.Args[0] == domainRelation {
+		result, err = define.ExecuteRelation(application.DefineRelationRequest{
+			From: ctx.String(flagFrom), To: ctx.String(flagTo),
+			SetKind: ctx.Changed(flagKind), Kind: ctx.String(flagKind),
+			SetDescription: ctx.Changed(flagDescription), Description: ctx.String(flagDescription),
+		})
+	} else {
+		if err := rejectFlags(ctx, flagFrom, flagTo, flagKind); err != nil {
+			return err
+		}
+		if !ctx.Changed(flagDescription) {
+			return ConfigError(errors.New("define description requires --description <text>"))
+		}
+		result, err = define.ExecuteDescription(ctx.String(flagDescription))
+	}
+	if err != nil {
+		return domainError(err)
+	}
+	if err := render.Render(ctx.Stdout, DomainDefineReport{Result: result}); err != nil {
+		return fmt.Errorf("write output: %w", err)
+	}
+	return nil
 }
 
 // --- guided authoring -----------------------------------------------------
@@ -436,7 +573,7 @@ func (s *guidedSession) askOptional(question string) (string, error) {
 	return line, nil
 }
 
-func runGuidedDefine(ctx Context, define application.DefineDomainDefinition, render Renderer) error {
+func runGuidedDefine(ctx Context, define application.DefineDomainDefinition, recording string, render Renderer) error {
 	in := ctx.Stdin
 	if in == nil {
 		in = strings.NewReader("")
@@ -587,7 +724,7 @@ func runGuidedDefine(ctx Context, define application.DefineDomainDefinition, ren
 	if err := s.prompt(""); err != nil {
 		return err
 	}
-	if err := s.prompt("Write this definition to " + vocab.UbiquitousLanguageFileName + "? [y/N]"); err != nil {
+	if err := s.prompt("Write this definition to " + recording + "? [y/N]"); err != nil {
 		return err
 	}
 	confirm, err := s.readLine()
@@ -689,6 +826,19 @@ func completeShowArgs(list application.ListDomainDefinitions) func(args []string
 	}
 }
 
+func completeEditArgs(list application.ListDomainDefinitions, define bool) func([]string, string) []AutoCompleteCandidate {
+	return func(args []string, toComplete string) []AutoCompleteCandidate {
+		if len(args) == 0 {
+			values := []string{domainRelation}
+			if define {
+				values = append(values, flagDescription)
+			}
+			return append(conceptSingularCandidates(toComplete), filterCandidates(toComplete, values)...)
+		}
+		return completeShowArgs(list)(args, toComplete)
+	}
+}
+
 func conceptSingularCandidates(toComplete string) []AutoCompleteCandidate {
 	values := make([]string, 0, len(vocab.Concepts()))
 	for _, c := range vocab.Concepts() {
@@ -776,12 +926,31 @@ func filterCandidates(toComplete string, values []string) []AutoCompleteCandidat
 
 // --- help text ------------------------------------------------------------
 
-const domainGroupLong = `Inspect and maintain the project's ubiquitous language and domain model.
+// defaultDomainFiles spells the default domain file names for help text,
+// in the order discovery prefers them: "a, b and c".
+var defaultDomainFiles = spellDefaultDomainFiles()
+
+func spellDefaultDomainFiles() string {
+	recordings := vocab.DefaultDomainRecordings()
+	names := make([]string, 0, len(recordings))
+	for _, recording := range recordings {
+		names = append(names, recording.Path())
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+}
+
+var domainGroupLong = `Inspect and maintain the project's ubiquitous language and domain model.
 
 A project's Ubiquitous Language is the shared language used by its developers,
 domain experts, documentation, tests, and code.
 
-ArcLint records that language in ` + vocab.UbiquitousLanguageFileName + ` as bounded contexts,
+ArcLint records that language in the project's domain file: the file ` + rule.RulesetFileName + `
+names under domain.file; when it names none, the first of
+` + defaultDomainFiles + ` that exists; and
+` + vocab.DefaultDomainRecordingPath + ` when none does. A default-named file that is not the domain
+file is ignored; when the ruleset names no file, every command says so on
+stderr, and a file the ruleset names silences it. The domain file is written
+in YAML or CML, as bounded contexts,
 each holding its aggregates (with their entities, invariants, and assertions),
 value objects (with their invariants), domain events, domain services,
 specifications, and open questions, plus the context map's relations.
@@ -794,16 +963,22 @@ like, with nothing added to ` + rule.RulesetFileName + `.
 ArcLint makes this knowledge available to context, rules, patterns,
 extensions, and agent integrations.
 
+The same language translates between YAML and CML, the Context Mapper language:
+export writes a copy in either format, and convert moves the project to it.
+
 Running arclint domain without a subcommand is the same as:
   arclint domain overview`
 
-const initDomainLong = `Initialize the project's ubiquitous language file, ` + vocab.UbiquitousLanguageFileName + `.
+var initDomainLong = `Initialize the project's ubiquitous language file: the file ` + rule.RulesetFileName + ` names
+under domain.file, or when it names none the first of
+` + defaultDomainFiles + ` that exists, or
+` + vocab.DefaultDomainRecordingPath + ` when none does.
 
-The file is created beside the resolved ` + rule.RulesetFileName + ` with the current
-document version, an editor schema hint, and the project's name: the name of the
-software whose domain it records, the repository directory's name unless
---project says otherwise. If the file already exists, ArcLint leaves it
-unchanged.`
+The file is created at its path from the directory holding the resolved
+` + rule.RulesetFileName + ` with the current document version, an editor schema hint,
+and the project's name: the name of the software whose domain it records, the
+repository directory's name unless --project says otherwise. If the file
+already exists, ArcLint leaves it unchanged.`
 
 const initDomainExample = `  arclint domain init
   arclint domain init --project boxoffice`
@@ -891,6 +1066,14 @@ required ones when first recorded:
   specification    --definition
   question         --text
 
+The context map and project description have no name argument:
+  relation         --from <context> --to <context> --kind <published kind>; optional --description
+  description      --description <text>
+
+A relation is identified by its context pair, in either direction. Updating it
+may change its kind or direction; omitted properties stay recorded. Every write
+is validated by the vocabulary constructors; a rejected relation names the rule.
+
 The name of an invariant, assertion, or question is its key: short and
 kebab-case, since the method that enforces an aggregate's invariant, or the
 method an aggregate or domain service declares to check an assertion, is named
@@ -926,6 +1109,11 @@ const defineExample = `  arclint domain define bounded_context ordering \
 
   arclint domain define question resale --text "Can an Order be resold?"
 
+  arclint domain define relation --from catalog --to ordering --kind conformist \
+    --description "Ordering uses the catalog language."
+
+  arclint domain define description --description "Taking and fulfilling purchases."
+
   arclint domain define --guided`
 
 const removeLong = `Remove a domain definition.
@@ -936,18 +1124,59 @@ source files.
 Removing an aggregate removes its entities, invariants, and assertions with it,
 and a domain event it raised no longer names what raises it. Removing a bounded
 context removes the relations that name it. The command says what went with the
-entry.`
+entry. Remove a relation with --from and --to, without a name argument;
+either direction identifies the pair.`
 
 const removeExample = `  arclint domain remove aggregate Order
   arclint domain remove entity OrderLine --owner Order
   arclint domain remove value_object LegacyOrderID
   arclint domain remove invariant has-lines --owner Order
   arclint domain rm domain_event OrderShipped
+  arclint domain remove relation --from catalog --to ordering
   arclint domain remove value_object LegacyOrderID --format json`
 
-const schemaLong = `Print the JSON Schema accepted for ` + vocab.UbiquitousLanguageFileName + `, or write
-it under the project's schema directory with --write so the file's modeline
-can name a local copy.
+const exportLong = `Translate the project's recorded domain into another file, in the format the
+file's extension names: .yaml or .yml for YAML, .cml for CML, the Context Mapper
+language. The file is named relative to the directory that holds ` + rule.RulesetFileName + `.
+
+The translation is worked out and read back in memory first, and must record the
+same language, or the command fails, says where the two part ways, and writes
+nothing. A file that already records a language
+is edited in place, so everything its format holds beyond ArcLint's language
+survives: in CML, attributes, operations, use cases, stakeholders, comments and
+the rest of the Context Mapper model. A file that cannot be read is never
+overwritten.
+
+export leaves the project's domain file and ` + rule.RulesetFileName + ` unchanged; convert moves
+the project to the new file. A copy written to a default-named file beside the
+project's domain file is ignored, and while the ruleset names no file every
+command says so; write a copy that stays to another path.`
+
+const exportExample = `  arclint domain export docs/context-map.cml
+  arclint domain export docs/model.yml
+  arclint domain export docs/context-map.cml --format json`
+
+var convertLong = `Move the project's recorded domain into another file, in the format the file's
+extension names: .yaml or .yml for YAML, .cml for CML, the Context Mapper
+language. The file is named relative to the directory that holds ` + rule.RulesetFileName + `.
+
+convert translates the language exactly as export does and proves the
+translation, then settles domain.file in ` + rule.RulesetFileName + `: it removes
+the setting when the project finds the new file by its name (the first of
+` + defaultDomainFiles + ` that exists once the
+previous file is gone), and names the new file under domain.file otherwise. It
+then removes the file the language was recorded in before, so the project
+records its domain in one file. convert is all or nothing: it works out the new
+file, the edit to ` + rule.RulesetFileName + ` and the removal in memory first, then writes
+them, and if a write fails it puts back the writes already made, so an error
+means nothing changed.`
+
+const convertExample = `  arclint domain convert domain.arclint.cml
+  arclint domain convert domain.arclint.yaml`
+
+const schemaLong = `Print the JSON Schema accepted for a domain file written in YAML, the project's
+own or any other, or write it under the project's schema directory with --write
+so the file's modeline can name a local copy.
 
 The schema is the machine-readable contract for direct YAML authoring and
 editor completion.`

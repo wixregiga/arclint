@@ -563,7 +563,7 @@ func joinNames(names []rule.ZoneName) string {
 // context map.
 func domainKnowledgeOf(lang vocab.UbiquitousLanguage) *DomainKnowledge {
 	dk := &DomainKnowledge{
-		Source: vocab.UbiquitousLanguageFileName,
+		Source: lang.Recording.Path(),
 		Counts: lang.Counts(),
 		Shown:  lang.Counts(),
 	}

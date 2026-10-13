@@ -12,7 +12,6 @@ import (
 	"github.com/wixregiga/arclint/internal/delivery/cli"
 	"github.com/wixregiga/arclint/internal/delivery/cli/adapters/report/internal/out"
 	"github.com/wixregiga/arclint/internal/domain/conformance"
-	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 // renderer is the sealed JSON report adapter.
@@ -26,7 +25,11 @@ func (renderer) Render(w io.Writer, r cli.Report) error {
 	var doc any
 	switch x := r.(type) {
 	case cli.AssessmentReport:
-		doc = checkDocs(x.Assessment)
+		docs := checkDocs(x.Assessment)
+		if x.AgentsContext != "" {
+			docs = append(docs, diagnosticDoc{Kind: string(conformance.DiagnosticCoverage), Path: "AGENTS.md", Message: x.AgentsContext, Remediation: application.AgentsContextRefreshCommand})
+		}
+		doc = docs
 	case cli.RuleListReport:
 		doc = ruleSummaryDocs(x.Rules)
 	case cli.RuleDetailReport:
@@ -39,10 +42,14 @@ func (renderer) Render(w io.Writer, r cli.Report) error {
 		doc = contextDoc(x.Context)
 	case cli.DomainInitReport:
 		doc = domainInitDoc{Source: x.Result.Source, Project: x.Result.Project, Created: x.Result.Created}
+	case cli.DomainExportReport:
+		doc = domainTranslationDoc(x.Result, false, false)
+	case cli.DomainConvertReport:
+		doc = domainTranslationDoc(x.Result.ExportDomainRecordingResult, true, x.Result.RulesetChanged)
 	case cli.DomainMissingReport:
 		doc = map[string]any{
 			"found":  false,
-			"source": vocab.UbiquitousLanguageFileName,
+			"source": x.Source,
 		}
 	case cli.DomainOverviewReport:
 		doc = overviewJSONDoc(x.Overview)
@@ -154,7 +161,7 @@ func checkDocs(a conformance.Assessment) []diagnosticDoc {
 			})
 		}
 		docs = append(docs, diagnosticDoc{
-			Kind: string(conformance.DiagnosticCoverage), Path: vocab.UbiquitousLanguageFileName, Line: c.Line(),
+			Kind: string(conformance.DiagnosticCoverage), Path: c.Path(), Line: c.Line(),
 			Message: "structural checking does not establish statement correctness",
 			Contract: &contractDoc{
 				Context: c.Context(), Owner: c.Owner(), Kind: string(c.Kind()), Key: c.Key(),
@@ -205,6 +212,33 @@ type domainInitDoc struct {
 	Source  string `json:"source"`
 	Project string `json:"project"`
 	Created bool   `json:"created"`
+}
+
+type domainTranslationJSON struct {
+	Source         string           `json:"source"`
+	Target         string           `json:"target"`
+	Format         string           `json:"format"`
+	Updated        bool             `json:"updated"`
+	Same           bool             `json:"same_language"`
+	Counts         domainCountsJSON `json:"counts"`
+	Converted      bool             `json:"converted"`
+	RulesetChanged bool             `json:"ruleset_changed,omitempty"`
+	Removed        string           `json:"removed,omitempty"`
+}
+
+// domainTranslationDoc is the JSON of export and convert; a convert
+// also names the ruleset change and the file it removed.
+func domainTranslationDoc(r application.ExportDomainRecordingResult, converted, rulesetChanged bool) domainTranslationJSON {
+	doc := domainTranslationJSON{
+		Source: r.Source.Path(), Target: r.Target.Path(), Format: string(r.Target.Format()),
+		Updated: r.Updated, Same: true, Converted: converted,
+		Counts: countsDoc(r.Counts),
+	}
+	if converted {
+		doc.RulesetChanged = rulesetChanged
+		doc.Removed = r.Source.Path()
+	}
+	return doc
 }
 
 type artifactWriteDoc struct {

@@ -250,18 +250,6 @@ func testDomainResolution(t *testing.T) {
 		"--identity", "OrderID",
 		"--definition", "A customer's request to purchase products.",
 	)
-
-	other := t.TempDir()
-	stdout, stderr, code = runBin(t, other, os.Environ(),
-		"--rules", filepath.Join(root, "rules.arclint.yaml"),
-		"domain", "show", "aggregate", "Order",
-	)
-	if code != 0 {
-		t.Fatalf("--rules domain show: exit %d\nstderr: %s", code, stderr)
-	}
-	if !strings.Contains(stdout, "Aggregate: Order\n") || !strings.Contains(stdout, "Context: ordering\n") {
-		t.Fatalf("--rules show missed Order:\n%s", stdout)
-	}
 }
 
 func testDomainFullFlow(t *testing.T) {

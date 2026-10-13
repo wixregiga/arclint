@@ -20,6 +20,8 @@ func (r *activityRecorder) Record(activity agent.Activity) error {
 	return errors.New("cache unavailable")
 }
 
+func (r *activityRecorder) Recording() string { return "docs/model.arclint.yaml" }
+
 func (r *activityRecorder) RecordingState() string { return r.state }
 
 func commandTree(recorder *activityRecorder, outcome error, changesRecording bool) Command {
@@ -34,7 +36,7 @@ func commandTree(recorder *activityRecorder, outcome error, changesRecording boo
 		{Name: "context", Run: run},
 		{Name: "check", Run: run},
 		{Name: "rules", Run: run},
-		{Name: "domain", Subcommands: []Command{{Name: "define", Run: define}, {Name: "show", Run: run}}},
+		{Name: "domain", Subcommands: []Command{{Name: "define", Run: define}, {Name: "convert", Run: define}, {Name: "show", Run: run}}},
 	}}
 }
 
@@ -69,6 +71,7 @@ func TestRecordHookActivityReportsWhatRan(t *testing.T) {
 		{[]string{"check"}, Context{Flags: map[string]string{"only": "domain/no-panic"}}},
 		{[]string{"rules"}, Context{}},
 		{[]string{"domain", "define"}, Context{}},
+		{[]string{"domain", "convert"}, Context{Args: []string{"./docs/model.cml"}}},
 		{[]string{"domain", "show"}, Context{}},
 	}
 	for _, step := range steps {
@@ -88,7 +91,8 @@ func TestRecordHookActivityReportsWhatRan(t *testing.T) {
 		{Kind: agent.ContextObtained},
 		{Kind: agent.ContextObtained, Zones: []string{"domain", "agent"}},
 		{Kind: agent.CheckRan},
-		{Kind: agent.DomainChanged, Paths: []string{"domain.arclint.yaml"}},
+		{Kind: agent.DomainChanged, Paths: []string{"docs/model.arclint.yaml"}},
+		{Kind: agent.DomainChanged, Paths: []string{"docs/model.arclint.yaml", "docs/model.cml", "rules.arclint.yaml"}},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("recorded %+v\nwant %+v", got, want)

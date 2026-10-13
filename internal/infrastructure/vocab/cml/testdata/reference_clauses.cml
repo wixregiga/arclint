@@ -1,0 +1,31 @@
+Domain ReferenceProject
+ContextMap { contains first, second }
+BoundedContext first refines second {
+ domainVisionStatement "First."
+ Module ReferenceModule {
+  Trait Tracked { String tag }
+  Entity Root with @Tracked { aggregateRoot RootId id key Repository RootRepository { inject @Worker @Root find(); } }
+  Entity Member { belongsTo @Root - @Root root opposite roots }
+  Entity Other { - @Member roots }
+  ValueObject BaseValue
+  ValueObject PriceValue extends @BaseValue with @Tracked { belongsTo @Root }
+  DomainEvent BaseEvent
+  DomainEvent Changed extends @BaseEvent with @Tracked { belongsTo @Root }
+  CommandEvent IssueCommand with @Tracked { belongsTo @Root }
+  DataTransferObject BaseDTO
+  DataTransferObject ChildDTO extends @BaseDTO { - @PriceValue value }
+  BasicType Label with @Tracked
+  Service Worker { void work(); }
+  Service Caller { inject @Worker void call() => @Worker.work; @PriceValue get() publish @Changed to changes; Map<@PriceValue,@Root> lookup(); }
+  Resource Endpoint { inject @Worker call() => @Worker.work; }
+  Consumer Input { unmarshall to @Root }
+ }
+}
+BoundedContext second { domainVisionStatement "Second." }
+UserStory Parent
+UserStory Child split by Parent
+Stakeholders { Stakeholder Customer }
+ValueRegister Values {
+ ValueEpic Convenience { As a Customer I value "convenience" as demonstrated in realization of "ease" reduction of "work" }
+ ValueWeigthing Choice { In the context of the SOI, stakeholder Customer values "ease" more than "cost" expecting benefits such as "speed" running the risk of harms such as "expense" }
+}

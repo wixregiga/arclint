@@ -97,7 +97,7 @@ rules:
 	if out := event(map[string]any{"hook_event_name": "SessionStart", "source": "startup"}); !strings.Contains(out, `"additionalContext":"ArcLint workflow hooks run in this project. Work in this order:`) {
 		t.Fatalf("session start: %s", out)
 	}
-	if out := event(edit("internal/app/app.go")); !strings.Contains(out, "internal/app/app.go changed before `arclint context` showed every Zone that owns it") || !strings.Contains(out, "changed before domain.arclint.yaml changed") {
+	if out := event(edit("internal/app/app.go")); !strings.Contains(out, "internal/app/app.go changed before `arclint context` showed every Zone that owns it") || !strings.Contains(out, "changed before the project's domain recording changed") {
 		t.Fatalf("first edit: %s", out)
 	}
 	if out := event(edit("internal/app/app.go")); out != "{}" {
@@ -148,7 +148,7 @@ rules:
 	arclint("domain", "init")
 	arclint("context", ".")
 	out := payload("second", edit("internal/app/app.go"))
-	if !strings.Contains(out, "internal/app/app.go changed before `arclint context` showed every Zone that owns it") || !strings.Contains(out, "changed before domain.arclint.yaml changed") {
+	if !strings.Contains(out, "internal/app/app.go changed before `arclint context` showed every Zone that owns it") || !strings.Contains(out, "changed before the project's domain recording changed") {
 		t.Fatalf("a no-op domain init or context of . was credited: %s", out)
 	}
 }

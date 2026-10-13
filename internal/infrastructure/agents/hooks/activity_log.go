@@ -10,8 +10,11 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path/filepath"
 
 	"github.com/wixregiga/arclint/internal/domain/agent"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
+	vocabfs "github.com/wixregiga/arclint/internal/infrastructure/vocab"
 )
 
 const activityLog = progressDirectory + "/activity.jsonl"
@@ -64,15 +67,38 @@ func (log *ActivityLog) Record(activity agent.Activity) (returnErr error) {
 	return nil
 }
 
+// Recording is the root-relative path of the project's domain recording.
+func (log *ActivityLog) Recording() string { return log.recording }
+
 // RecordingState is a digest of the domain recording's content, "absent"
 // when it does not exist, or the reason it cannot be read.
 func (log *ActivityLog) RecordingState() string {
+	recording, err := vocab.NewDomainRecording(log.recording)
+	if err != nil {
+		return "unreadable: " + err.Error()
+	}
+	location, err := vocabfs.ResolveRecording(log.root, recording)
+	if err != nil {
+		return "unreadable: " + err.Error()
+	}
+	root, err := filepath.EvalSymlinks(log.root)
+	if err != nil {
+		return "unreadable: " + err.Error()
+	}
+	root, err = filepath.Abs(root)
+	if err != nil {
+		return "unreadable: " + err.Error()
+	}
+	relative, err := filepath.Rel(root, location)
+	if err != nil {
+		return "unreadable: " + err.Error()
+	}
 	project, err := os.OpenRoot(log.root)
 	if err != nil {
 		return "unreadable: " + err.Error()
 	}
 	defer func() { _ = project.Close() }()
-	content, err := project.ReadFile(log.recording)
+	content, err := project.ReadFile(relative)
 	if errors.Is(err, fs.ErrNotExist) {
 		return "absent"
 	}

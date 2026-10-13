@@ -691,3 +691,50 @@ func TestCaseTermRejectsUnknownCaseInRuntime(t *testing.T) {
 		t.Error("unknown term case accepted by ctx.caseTerm")
 	}
 }
+
+const domainSourceProbeRule = `
+import { defineRule } from "arclint";
+
+export default defineRule({
+  type: "domain-source-probe",
+  check(ctx) {
+    ctx.report({ path: "domain", message: "recorded in " + ctx.domain().source });
+  },
+});
+`
+
+// ctx.domain().source is the project's domain file, whether or not the
+// project has recorded anything in it yet, so an extension anchors a
+// finding about a recorded term in the file the project actually uses.
+func TestEvaluatorDomainSourceIsTheProjectsRecording(t *testing.T) {
+	root := writeExtensions(t, map[string]string{"source.ts": domainSourceProbeRule})
+	eval, err := sobekextension.NewEvaluator(root)
+	if err != nil {
+		t.Fatalf("NewEvaluator: %v", err)
+	}
+	obs, err := conformance.NewObservations([]conformance.ObservedFile{{Path: "m/a.go", Size: 1}}, nil)
+	if err != nil {
+		t.Fatalf("NewObservations: %v", err)
+	}
+	recording, err := vocab.NewDomainRecording("docs/model.cml")
+	if err != nil {
+		t.Fatalf("NewDomainRecording: %v", err)
+	}
+	recorded, err := vocab.NewUbiquitousLanguage("shop", "", []vocab.BoundedContext{{Name: "ordering", Definition: "Taking orders."}}, nil)
+	if err != nil {
+		t.Fatalf("NewUbiquitousLanguage: %v", err)
+	}
+	recorded.Recording = recording
+	for name, lang := range map[string]vocab.UbiquitousLanguage{
+		"a recorded language":        recorded,
+		"a language not yet written": {Recording: recording},
+	} {
+		findings, err := eval.Evaluate("domain-source-probe", nil, extensionFacts(t, []string{"m/a.go"}, obs), lang)
+		if err != nil {
+			t.Fatalf("%s: Evaluate: %v", name, err)
+		}
+		if len(findings) != 1 || findings[0].Message != "recorded in docs/model.cml" {
+			t.Errorf("%s: findings = %+v, want one naming docs/model.cml", name, findings)
+		}
+	}
+}

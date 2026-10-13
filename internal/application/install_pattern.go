@@ -143,7 +143,7 @@ func (uc InstallPattern) Execute(req InstallPatternRequest) (InstallPatternResul
 	if len(languages) == 0 {
 		languages = []string{"go"}
 	}
-	path, err := uc.scaffold.Write(adoptingRuleset(a.Pattern, inst, languages), false)
+	path, err := uc.scaffold.Write(adoptingRuleset(a.Pattern, inst, languages, ""), false)
 	if err != nil {
 		return InstallPatternResult{}, fmt.Errorf("install pattern %s: write ruleset: %w", a.Reference(), err)
 	}

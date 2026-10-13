@@ -88,33 +88,23 @@ clarification_questions:
   policy: Ask the single question that unblocks; batch only when several concepts block at once; never ask what the input already answers.
 
 library_file:
-  purpose: One YAML file per project, sole custody of the librarian; humans review and edit, the librarian writes.
-  json_schema: .arclint/schemas/domain.arclint.schema.json  # written by arclint domain schema --write; gives human editors descriptions and validation
-  header: "# yaml-language-server: $schema=<relative path to .arclint/schemas/domain.arclint.schema.json, or its canonical $id URL when the schema file is not nearby>"  # first line of every written library file
-  shape: |  # human-readable summary; domain.arclint.schema.json is authoritative; on any divergence, the schema wins
-    version: 1
-    project: <name>
-    description: <the domain in a few sentences>?
-    contexts:
-      <context>:
-        definition: <what the context is responsible for>
-        aggregates:
-          <Aggregate>:
-            definition: <text>
-            identity: <ValueObject>
-            aliases: [<name>]?
-            entities: {<Entity>: {definition, identity?, aliases?}}?
-            invariants: {<key>: <statement>}?    # key names the root method that enforces it
-            assertions: {<key>: {on: <Operation>, statement}}?
-            repository: <Name>?
-            factory: <Name>?
-        value_objects: {<ValueObject>: {definition, aliases?, invariants: {<key>: <statement>}?}}
-        events: {<Event>: {definition, raised_by: <Aggregate>?}}
-        services: {<Service>: {definition, assertions: {<key>: {on: <Operation>, statement}}?}}
-        specifications: {<Specification>: {definition}}
-        questions: {<key>: <text>}
-    relations: [{from, to, kind, description?}]   # kind = one context_relation key; omit when single context
+  purpose: The project's shared domain language. Learn its recording from arclint context and arclint domain; record through arclint domain define and arclint domain remove, which validate each write and let ArcLint write the format.
+  shape: |  # model fields, not file syntax; optional fields marked ?
+    project: name and description?
+    contexts: named responsibilities, each with a definition
+      aggregates: definition, identity, aliases?, repository?, factory?
+        entities: definition, identity?, aliases?
+        invariants: keyed statements enforced by the root
+        assertions: keyed guarantees with on naming the operation and statement
+      value_objects: definition, aliases?, keyed invariants?
+      events: definition, raised_by aggregate?
+      services: definition, keyed assertions with on and statement?
+      specifications: definition
+      questions: keyed unresolved decisions
+    relations: from context, to context, kind, description?
+      kind: one published context_relation_kinds key
   rules:
+    - Record every entry through arclint domain define and remove entries through arclint domain remove; never hand-write the domain file.
     - Every term carries a definition; no definition, no entry.
     - A term lives in exactly one context; same word elsewhere is a second term.
     - Aliases point at the canonical term; never duplicate definitions.

@@ -35,7 +35,7 @@ func TestJSONInitShape(t *testing.T) {
 func TestJSONDomainOverviewMissing(t *testing.T) {
 	var buf bytes.Buffer
 	err := New().Render(&buf, cli.DomainOverviewReport{
-		Overview: application.DomainOverview{Found: false, Source: vocab.UbiquitousLanguageFileName},
+		Overview: application.DomainOverview{Found: false, Source: "docs/model.arclint.yaml"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +47,7 @@ func TestJSONDomainOverviewMissing(t *testing.T) {
 	if doc["found"] != false {
 		t.Fatalf("found = %v", doc["found"])
 	}
-	if doc["source"] != vocab.UbiquitousLanguageFileName {
+	if doc["source"] != "docs/model.arclint.yaml" {
 		t.Fatalf("source = %v", doc["source"])
 	}
 	counts, ok := doc["counts"].(map[string]any)
@@ -790,5 +790,19 @@ func TestJSONContextIncludesOnlyRequestedObservedDependencies(t *testing.T) {
 				t.Fatalf("native precision or coverage lost: %v", view)
 			}
 		}
+	}
+}
+
+func TestJSONDomainMissingReportNamesTheProjectsDomainFile(t *testing.T) {
+	var buf bytes.Buffer
+	if err := New().Render(&buf, cli.DomainMissingReport{Source: "docs/model.cml"}); err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc["found"] != false || doc["source"] != "docs/model.cml" {
+		t.Fatalf("document = %v, want found=false and the project's domain file", doc)
 	}
 }

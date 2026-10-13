@@ -5,7 +5,9 @@
 # building block below is one term of the canonical language, defined
 # with its sources. What a project may record about an instance of a
 # building block is the block's `records` shape, and together those
-# shapes are the shape of domain.arclint.yaml. Every structural rule
+# shapes are the shape of the YAML domain file, domain.arclint.yaml;
+# a domain file written in CML carries the same instances in the
+# constructs of the Context Mapper language. Every structural rule
 # arclint applies to a recorded instance is an invariant of its building
 # block, cited to the source that states it and classified by how it is
 # enforced. Everything that is advice rather than a checkable
@@ -279,8 +281,8 @@ phases:
         not cited, because arclint is their source; they are not part of
         Domain-Driven Design and never appear in a project's domain file.
 
-# `records` is how a project records an instance of the block in
-# domain.arclint.yaml: the section the instance is written under, and
+# `records` is how a project records an instance of the block in its
+# YAML domain file: the section the instance is written under, and
 # its properties. Wherever a section is a map, the instance's name is
 # its key; the YAML parser rejects a name recorded twice in one section
 # and names the line. `invariants` are the structural rules arclint
@@ -331,7 +333,7 @@ building_blocks:
         - {work: evans2015, page: vi, section: Definitions}
     records:
       section: top
-      note: A project's domain is the whole of its domain.arclint.yaml; the file names it once at the top.
+      note: A project's domain is the whole of its domain file, the one rules.arclint.yaml names under domain.file or, when it names none, the first of domain.arclint.yaml, domain.arclint.yml and domain.arclint.cml that exists; the file names it once at the top.
       properties:
         - {name: project, required: true, definition: The name of the software whose domain the file records.}
         - {name: description, required: false, definition: "The domain in a few sentences, as the people in it would tell a newcomer."}
@@ -371,7 +373,7 @@ building_blocks:
         - {work: evans2003, chapter: 2, page: 24}
     records:
       section: none
-      note: A project's Ubiquitous Language is the whole of domain.arclint.yaml, one file per repository, one section per bounded context.
+      note: A project's Ubiquitous Language is the whole of its domain file, one file per repository, written in YAML or in CML, one section per bounded context.
     invariants:
       - id: ubiquitous_language/terms-carry-definitions
         statement: Every recorded term carries a non-empty definition; an identity an aggregate or entity names is the one term recorded without an entry of its own.

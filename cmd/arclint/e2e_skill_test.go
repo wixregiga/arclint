@@ -16,8 +16,8 @@ var skillArtifactNames = []string{
 
 const (
 	skillLitmusDir = ".agents/skills/domain-librarian"
-	// domainSchemaProjectPath is where agents skill lands the schema the
-	// skill vocabulary points at, relative to the project root; the
+	// domainSchemaProjectPath is where agents skill lands the schema for
+	// human YAML editors, relative to the project root; the
 	// litmus is the release copy under docs/schemas.
 	domainSchemaProjectPath = ".arclint/schemas/domain.arclint.schema.json"
 	domainSchemaLitmus      = "docs/schemas/domain.arclint.schema.json"
@@ -57,9 +57,18 @@ func assertSkillArtifacts(t *testing.T, root, project, dir string) {
 // from a fixture project and byte-compares each produced file with the
 // committed litmus; the schema lands under the fixture's .arclint/schemas
 // regardless of --dir.
+// skillFixture is a project used to compare the published skill bundle.
+func skillFixture(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	write(t, root, "rules.arclint.yaml", "runtime: [go]\ndomain:\n  file: domain.arclint.yaml\nzones:\n  src:\n    paths: [\"src/**\"]\n")
+	write(t, root, "src/ok.go", "package src\n")
+	return root
+}
+
 func TestAgentsSkillWritesLitmusFiles(t *testing.T) {
 	root := repoRoot(t)
-	work := domainFixture(t)
+	work := skillFixture(t)
 	dir := t.TempDir()
 	stdout, stderr, code := runBin(t, work, os.Environ(), "agents", "skill", "--dir", dir)
 	if code != 0 {
@@ -73,7 +82,7 @@ func TestAgentsSkillWritesLitmusFiles(t *testing.T) {
 // relative to the resolved repository root.
 func TestAgentsSkillDefaultDirWritesLitmus(t *testing.T) {
 	root := repoRoot(t)
-	work := domainFixture(t)
+	work := skillFixture(t)
 	stdout, stderr, code := runBin(t, work, os.Environ(), "agents", "skill")
 	if code != 0 {
 		t.Fatalf("agents skill exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
@@ -87,7 +96,7 @@ func TestAgentsSkillDefaultDirWritesLitmus(t *testing.T) {
 // skill`; never hand-edit the fixtures.
 func TestAgentsSkillArtifactsCurrent(t *testing.T) {
 	root := repoRoot(t)
-	work := domainFixture(t)
+	work := skillFixture(t)
 	stdout, stderr, code := runBin(t, work, os.Environ(), "agents", "skill")
 	if code != 0 {
 		t.Fatalf("agents skill exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
@@ -103,5 +112,20 @@ func TestAgentsSkillArtifactsCurrent(t *testing.T) {
 	}
 	if !bytes.Equal(got, want) {
 		t.Errorf("%s is stale; run make schemas", domainSchemaProjectPath)
+	}
+}
+
+func TestAgentsSkillIsIndependentOfRecordingFormat(t *testing.T) {
+	for _, format := range []string{"yaml", "cml"} {
+		t.Run(format, func(t *testing.T) {
+			work := t.TempDir()
+			write(t, work, "rules.arclint.yaml", "runtime: [go]\ndomain:\n  file: language."+format+"\nzones:\n  src:\n    paths: [\"src/**\"]\n")
+			write(t, work, "src/ok.go", "package src\n")
+			stdout, stderr, code := runBin(t, work, os.Environ(), "agents", "skill")
+			if code != 0 {
+				t.Fatalf("agents skill exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+			}
+			assertSkillArtifacts(t, repoRoot(t), work, filepath.Join(work, filepath.FromSlash(skillLitmusDir)))
+		})
 	}
 }

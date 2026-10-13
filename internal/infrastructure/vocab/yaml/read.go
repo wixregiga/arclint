@@ -59,14 +59,16 @@ var (
 
 // source reads one domain file as a node tree, so every entry keeps
 // the line it is written on and every key is held to what its
-// building block records. label names the file in messages.
+// building block records. label names the file in messages; recording
+// is the DomainRecording the language read carries.
 type source struct {
-	label string
+	label     string
+	recording vocab.DomainRecording
 }
 
 // parse decodes and validates domain file content.
-func parse(data []byte, label string) (vocab.UbiquitousLanguage, error) {
-	s := source{label: label}
+func parse(data []byte, label string, recording vocab.DomainRecording) (vocab.UbiquitousLanguage, error) {
+	s := source{label: label, recording: recording}
 	var root yaml.Node
 	if err := yaml.Unmarshal(data, &root); err != nil {
 		return vocab.UbiquitousLanguage{}, fmt.Errorf("%s: %v", label, err)
@@ -322,6 +324,7 @@ func (s source) language(body *yaml.Node) (vocab.UbiquitousLanguage, error) {
 	if err != nil {
 		return vocab.UbiquitousLanguage{}, fmt.Errorf("%s: %w", s.label, err)
 	}
+	lang.Recording = s.recording
 	return lang, nil
 }
 

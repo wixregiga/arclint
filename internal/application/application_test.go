@@ -97,6 +97,19 @@ func (f *fakeBaselineOutput) Write(s baseline.Snapshot) error {
 	return nil
 }
 
+// testRecording is the DomainRecording the application tests use. It is
+// deliberately not the default, so a use case that names the default
+// file instead of the project's fails.
+var testRecording = mustRecording("docs/model.arclint.yaml")
+
+func mustRecording(file string) vocab.DomainRecording {
+	recording, err := vocab.NewDomainRecording(file)
+	if err != nil {
+		panic(err)
+	}
+	return recording
+}
+
 // fakeKnowledge is an in-memory vocab.Repository for application tests.
 type fakeKnowledge struct {
 	lang  vocab.UbiquitousLanguage
@@ -106,11 +119,15 @@ type fakeKnowledge struct {
 	last  vocab.UbiquitousLanguage
 }
 
+func (f *fakeKnowledge) Recording() vocab.DomainRecording { return testRecording }
+
 func (f *fakeKnowledge) RecordedLanguage() (vocab.UbiquitousLanguage, bool, error) {
 	if f.err != nil {
 		return vocab.UbiquitousLanguage{}, false, f.err
 	}
-	return f.lang, f.found, nil
+	lang := f.lang
+	lang.Recording = testRecording
+	return lang, f.found, nil
 }
 
 func (f *fakeKnowledge) Record(lang vocab.UbiquitousLanguage) error {

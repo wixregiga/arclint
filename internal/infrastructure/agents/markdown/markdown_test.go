@@ -64,3 +64,35 @@ func TestInstallLifecycle(t *testing.T) {
 		t.Errorf("a lone marker must be a corruption error")
 	}
 }
+
+func TestGeneratedBlockReadsTheRangeInstallReplaces(t *testing.T) {
+	for _, tc := range []struct {
+		name, content, want string
+		found, invalid      bool
+	}{
+		{name: "missing"},
+		{name: "hand-written", content: "# Guide\nOnly hand-written guidance.\n"},
+		{name: "marked", content: "before\n" + block("snapshot") + "after\n", want: strings.TrimSuffix(block("snapshot"), "\n"), found: true},
+		{name: "CRLF", content: strings.ReplaceAll(block("snapshot"), "\n", "\r\n"), want: strings.TrimSuffix(strings.ReplaceAll(block("snapshot"), "\n", "\r\n"), "\r\n"), found: true},
+		{name: "begin only", content: application.AgentsBegin, invalid: true},
+		{name: "end only", content: application.AgentsEnd, invalid: true},
+		{name: "reversed", content: application.AgentsEnd + application.AgentsBegin, invalid: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			publisher, err := markdownagents.NewPublisher(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.content != "" {
+				if err := os.WriteFile(filepath.Join(root, "AGENTS.md"), []byte(tc.content), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, found, err := publisher.GeneratedBlock()
+			if (err != nil) != tc.invalid || found != tc.found || got != tc.want {
+				t.Fatalf("GeneratedBlock = (%q, %v, %v)", got, found, err)
+			}
+		})
+	}
+}

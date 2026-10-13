@@ -2,6 +2,7 @@ package application_test
 
 import (
 	"errors"
+	"path"
 	"strings"
 	"testing"
 
@@ -68,8 +69,9 @@ type fakeRuleTestSource struct {
 
 func (f fakeRuleTestSource) Tests() ([]rule.Test, error) { return f.tests, nil }
 
-// fakeFixtureObserver turns each fixture file into one observed file,
-// recording what the use case requested.
+// fakeFixtureObserver turns each fixture file into one observed file at
+// its cleaned path, where the real observer materializes it, recording
+// what the use case requested.
 type fakeFixtureObserver struct {
 	languages []rule.Language
 	facts     []rule.Fact
@@ -82,7 +84,7 @@ func (f *fakeFixtureObserver) Observe(files []rule.TestFile, languages []rule.La
 	f.facts = facts
 	observed := make([]conformance.ObservedFile, 0, len(files))
 	for _, file := range files {
-		observed = append(observed, conformance.ObservedFile{Path: file.Path})
+		observed = append(observed, conformance.ObservedFile{Path: path.Clean(file.Path)})
 	}
 	return conformance.NewObservations(observed, nil)
 }
@@ -101,14 +103,31 @@ func mustRuleTest(t *testing.T, name, ruleID string, files []rule.TestFile,
 // fakeVocabularySource returns a configured vocabulary and records the
 // content it was asked to parse.
 type fakeVocabularySource struct {
-	lang    vocab.UbiquitousLanguage
-	err     error
-	content []byte
+	lang      vocab.UbiquitousLanguage
+	err       error
+	content   []byte
+	recording vocab.DomainRecording
+	parsed    bool
 }
 
-func (f *fakeVocabularySource) ParseUbiquitousLanguage(content []byte) (vocab.UbiquitousLanguage, error) {
+func (f *fakeVocabularySource) ParseUbiquitousLanguage(content []byte, recording vocab.DomainRecording) (vocab.UbiquitousLanguage, error) {
 	f.content = content
+	f.recording = recording
+	f.parsed = true
 	return f.lang, f.err
+}
+
+// fakeRecordingSource names the DomainRecording of whatever ruleset
+// content it is given, and keeps that content.
+type fakeRecordingSource struct {
+	recording vocab.DomainRecording
+	err       error
+	content   []byte
+}
+
+func (f *fakeRecordingSource) ParseRulesetRecording(content []byte) (vocab.DomainRecording, error) {
+	f.content = content
+	return f.recording, f.err
 }
 
 func TestNewRunRuleTestsRejectsMissingPorts(t *testing.T) {
@@ -116,17 +135,21 @@ func TestNewRunRuleTestsRejectsMissingPorts(t *testing.T) {
 	source := fakeRuleTestSource{}
 	observer := &fakeFixtureObserver{}
 	vocabulary := &fakeVocabularySource{}
-	if _, err := application.NewRunRuleTests(nil, source, observer, nil, vocabulary); err == nil {
+	recordings := &fakeRecordingSource{}
+	if _, err := application.NewRunRuleTests(nil, source, observer, nil, vocabulary, recordings); err == nil {
 		t.Errorf("nil repository accepted")
 	}
-	if _, err := application.NewRunRuleTests(repo, nil, observer, nil, vocabulary); err == nil {
+	if _, err := application.NewRunRuleTests(repo, nil, observer, nil, vocabulary, recordings); err == nil {
 		t.Errorf("nil test source accepted")
 	}
-	if _, err := application.NewRunRuleTests(repo, source, nil, nil, vocabulary); err == nil {
+	if _, err := application.NewRunRuleTests(repo, source, nil, nil, vocabulary, recordings); err == nil {
 		t.Errorf("nil fixture observer accepted")
 	}
-	if _, err := application.NewRunRuleTests(repo, source, observer, nil, nil); err == nil {
+	if _, err := application.NewRunRuleTests(repo, source, observer, nil, nil, recordings); err == nil {
 		t.Errorf("nil vocabulary source accepted")
+	}
+	if _, err := application.NewRunRuleTests(repo, source, observer, nil, vocabulary, nil); err == nil {
+		t.Errorf("nil ruleset recording source accepted")
 	}
 }
 
@@ -146,7 +169,7 @@ func TestRunRuleTestsMapsAssessmentToFindings(t *testing.T) {
 			[]rule.TestFile{{Path: "m/all_good.go"}}, nil),
 	}}
 	observer := &fakeFixtureObserver{}
-	uc, err := application.NewRunRuleTests(ruleTestRepository{cfg}, source, observer, nil, &fakeVocabularySource{})
+	uc, err := application.NewRunRuleTests(ruleTestRepository{cfg}, source, observer, nil, &fakeVocabularySource{}, &fakeRecordingSource{})
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
@@ -239,6 +262,7 @@ func TestRunRuleTestsContainsConformanceErrorAndContinues(t *testing.T) {
 		&fakeFixtureObserver{},
 		failingExtensions{err: errors.New("extension blew up")},
 		&fakeVocabularySource{},
+		&fakeRecordingSource{},
 	)
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
@@ -308,7 +332,7 @@ func TestRunRuleTestsFeedsFixtureVocabularyToExtensions(t *testing.T) {
 	}}}
 	files := []rule.TestFile{
 		{Path: "m/all_good.go"},
-		{Path: vocab.UbiquitousLanguageFileName, Content: authored},
+		{Path: vocab.DefaultDomainRecordingPath, Content: authored},
 	}
 	source := fakeRuleTestSource{tests: []rule.Test{
 		mustRuleTest(t, "sees-vocabulary", "t/p:m/ext", files, nil),
@@ -316,7 +340,7 @@ func TestRunRuleTestsFeedsFixtureVocabularyToExtensions(t *testing.T) {
 	vocabulary := &fakeVocabularySource{lang: recorded}
 	recorder := &recordingExtensions{}
 	uc, err := application.NewRunRuleTests(
-		ruleTestRepository{cfg}, source, &fakeFixtureObserver{}, recorder, vocabulary)
+		ruleTestRepository{cfg}, source, &fakeFixtureObserver{}, recorder, vocabulary, &fakeRecordingSource{})
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
@@ -330,6 +354,9 @@ func TestRunRuleTestsFeedsFixtureVocabularyToExtensions(t *testing.T) {
 	if string(vocabulary.content) != authored {
 		t.Errorf("parsed content = %q, want the authored fixture bytes", vocabulary.content)
 	}
+	if vocabulary.recording != mustDefaultRecording(t) {
+		t.Errorf("parsed as %+v, want the default DomainRecording for a fixture without a ruleset", vocabulary.recording)
+	}
 	if len(recorder.knowledge.Contexts) != 1 ||
 		len(recorder.knowledge.Contexts[0].Aggregates) != 1 ||
 		recorder.knowledge.Contexts[0].Aggregates[0].Name != "Order" {
@@ -341,7 +368,7 @@ func TestRunRuleTestsContainsFixtureVocabularyError(t *testing.T) {
 	cfg := ruleTestConfig(t)
 	files := []rule.TestFile{
 		{Path: "m/all_good.go"},
-		{Path: vocab.UbiquitousLanguageFileName, Content: "version: 2\n"},
+		{Path: vocab.DefaultDomainRecordingPath, Content: "version: 2\n"},
 	}
 	source := fakeRuleTestSource{tests: []rule.Test{
 		mustRuleTest(t, "broken-vocabulary", "t/p:m/snake", files, nil),
@@ -349,7 +376,7 @@ func TestRunRuleTestsContainsFixtureVocabularyError(t *testing.T) {
 	}}
 	vocabulary := &fakeVocabularySource{err: errors.New("unsupported version 2")}
 	uc, err := application.NewRunRuleTests(
-		ruleTestRepository{cfg}, source, &fakeFixtureObserver{}, nil, vocabulary)
+		ruleTestRepository{cfg}, source, &fakeFixtureObserver{}, nil, vocabulary, &fakeRecordingSource{})
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
@@ -365,5 +392,245 @@ func TestRunRuleTestsContainsFixtureVocabularyError(t *testing.T) {
 	}
 	if !results[1].Passed() {
 		t.Errorf("second = %+v, want a pass after the contained failure", results[1])
+	}
+}
+
+// extensionCase builds the configured repository and test source for one
+// extension rule probing a fixture of the given files.
+func extensionCase(t *testing.T, files []rule.TestFile) (ruleTestRepository, fakeRuleTestSource) {
+	t.Helper()
+	cfg := ruleTestConfig(t)
+	scope, err := rule.ZoneScope([]rule.ZoneName{"m"})
+	if err != nil {
+		t.Fatalf("ZoneScope: %v", err)
+	}
+	extRule, err := rule.New(rule.Spec{
+		ID:     "t/p:m/ext",
+		Type:   rule.TypeExtension,
+		Params: rule.ExtensionParams{Uses: "domain-probe"},
+		Scope:  scope,
+	})
+	if err != nil {
+		t.Fatalf("extension rule.New: %v", err)
+	}
+	cfg.Rules = append(cfg.Rules, extRule)
+	return ruleTestRepository{cfg}, fakeRuleTestSource{tests: []rule.Test{
+		mustRuleTest(t, "probe", "t/p:m/ext", files, nil),
+	}}
+}
+
+func TestRunRuleTestsResolvesTheFixtureDomainFileFromTheFixtureRuleset(t *testing.T) {
+	const ruleset = "domain:\n  file: docs/model.arclint.yaml\n"
+	const authored = "version: 1\nproject: shop\n"
+	const ignored = "version: 1\nproject: ignored\n"
+	recording, err := vocab.NewDomainRecording("docs/model.arclint.yaml")
+	if err != nil {
+		t.Fatalf("NewDomainRecording: %v", err)
+	}
+	repo, source := extensionCase(t, []rule.TestFile{
+		{Path: "m/all_good.go"},
+		{Path: rule.RulesetFileName, Content: ruleset},
+		{Path: "docs/model.arclint.yaml", Content: authored},
+		{Path: vocab.DefaultDomainRecordingPath, Content: ignored},
+	})
+	vocabulary := &fakeVocabularySource{lang: vocab.UbiquitousLanguage{Project: "shop", Recording: recording}}
+	recordings := &fakeRecordingSource{recording: recording}
+	recorder := &recordingExtensions{}
+	uc, err := application.NewRunRuleTests(repo, source, &fakeFixtureObserver{}, recorder, vocabulary, recordings)
+	if err != nil {
+		t.Fatalf("NewRunRuleTests: %v", err)
+	}
+	results, err := uc.Execute()
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(results) != 1 || !results[0].Passed() {
+		t.Fatalf("results = %+v, want one pass", results)
+	}
+	if string(recordings.content) != ruleset {
+		t.Errorf("recording source read %q, want the fixture ruleset", recordings.content)
+	}
+	if string(vocabulary.content) != authored || vocabulary.recording != recording {
+		t.Errorf("vocabulary parsed %q as %+v, want the file the fixture ruleset names", vocabulary.content, vocabulary.recording)
+	}
+	if recorder.knowledge.Recording != recording {
+		t.Errorf("evaluator knowledge recording = %+v, want %+v", recorder.knowledge.Recording, recording)
+	}
+}
+
+func TestRunRuleTestsGivesAFixtureWithoutADomainFileTheRecordingItWouldUse(t *testing.T) {
+	recording, err := vocab.NewDomainRecording("docs/model.arclint.yaml")
+	if err != nil {
+		t.Fatalf("NewDomainRecording: %v", err)
+	}
+	repo, source := extensionCase(t, []rule.TestFile{
+		{Path: "m/all_good.go"},
+		{Path: rule.RulesetFileName, Content: "domain:\n  file: docs/model.arclint.yaml\n"},
+		{Path: vocab.DefaultDomainRecordingPath, Content: "version: 1\nproject: ignored\n"},
+	})
+	vocabulary := &fakeVocabularySource{}
+	recorder := &recordingExtensions{}
+	uc, err := application.NewRunRuleTests(repo, source, &fakeFixtureObserver{}, recorder, vocabulary, &fakeRecordingSource{recording: recording})
+	if err != nil {
+		t.Fatalf("NewRunRuleTests: %v", err)
+	}
+	results, err := uc.Execute()
+	if err != nil || len(results) != 1 || !results[0].Passed() {
+		t.Fatalf("Execute = %+v, %v; want one pass", results, err)
+	}
+	if vocabulary.parsed {
+		t.Errorf("the default domain file was parsed although the fixture ruleset names another")
+	}
+	if !recorder.knowledge.Empty() || recorder.knowledge.Recording != recording {
+		t.Errorf("evaluator knowledge = %+v, want an empty language carrying %+v", recorder.knowledge, recording)
+	}
+}
+
+func TestRunRuleTestsContainsAFixtureRulesetRecordingError(t *testing.T) {
+	repo, source := extensionCase(t, []rule.TestFile{
+		{Path: "m/all_good.go"},
+		{Path: rule.RulesetFileName, Content: "domain:\n  file: notes.txt\n"},
+	})
+	recordings := &fakeRecordingSource{err: errors.New("rules.arclint.yaml: domain.file: line 2: DomainRecording format-named-by-extension")}
+	uc, err := application.NewRunRuleTests(repo, source, &fakeFixtureObserver{}, &recordingExtensions{}, &fakeVocabularySource{}, recordings)
+	if err != nil {
+		t.Fatalf("NewRunRuleTests: %v", err)
+	}
+	results, err := uc.Execute()
+	if err != nil {
+		t.Fatalf("Execute must contain a fixture ruleset failure: %v", err)
+	}
+	if len(results) != 1 || results[0].Passed() || !strings.Contains(results[0].Err, "format-named-by-extension") {
+		t.Errorf("results = %+v, want a contained fixture error naming the broken invariant", results)
+	}
+}
+
+func TestRunRuleTestsDiscoversTheFixtureDomainFileAmongTheDefaultNames(t *testing.T) {
+	const yaml, yml, cml = "domain.arclint.yaml", "domain.arclint.yml", "domain.arclint.cml"
+	for _, tc := range []struct {
+		name  string
+		carry []string
+		want  string
+	}{
+		{"only the CML file", []string{cml}, cml},
+		{"only the .yml file", []string{yml}, yml},
+		{"the YAML file beside the CML file", []string{cml, yaml}, yaml},
+		{"the .yml file beside the CML file", []string{cml, yml}, yml},
+		{"all three", []string{cml, yml, yaml}, yaml},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			files := []rule.TestFile{{Path: "m/all_good.go"}}
+			for _, name := range tc.carry {
+				files = append(files, rule.TestFile{Path: name, Content: "authored in " + name})
+			}
+			repo, source := extensionCase(t, files)
+			vocabulary := &fakeVocabularySource{}
+			recorder := &recordingExtensions{}
+			uc, err := application.NewRunRuleTests(repo, source, &fakeFixtureObserver{}, recorder, vocabulary, &fakeRecordingSource{})
+			if err != nil {
+				t.Fatalf("NewRunRuleTests: %v", err)
+			}
+			results, err := uc.Execute()
+			if err != nil || len(results) != 1 || !results[0].Passed() {
+				t.Fatalf("Execute = %+v, %v; want one pass", results, err)
+			}
+			if vocabulary.recording.Path() != tc.want || string(vocabulary.content) != "authored in "+tc.want {
+				t.Errorf("parsed %q as %q, want the file %s", vocabulary.content, vocabulary.recording.Path(), tc.want)
+			}
+		})
+	}
+}
+
+func TestRunRuleTestsFixtureWithOnlyANamedFileIgnoresTheDefaultNames(t *testing.T) {
+	recording, err := vocab.NewDomainRecording("docs/model.cml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, source := extensionCase(t, []rule.TestFile{
+		{Path: "m/all_good.go"},
+		{Path: rule.RulesetFileName, Content: "domain:\n  file: docs/model.cml\n"},
+		{Path: "domain.arclint.yaml", Content: "ignored"},
+		{Path: "domain.arclint.cml", Content: "ignored"},
+	})
+	vocabulary := &fakeVocabularySource{}
+	recorder := &recordingExtensions{}
+	uc, err := application.NewRunRuleTests(repo, source, &fakeFixtureObserver{}, recorder, vocabulary, &fakeRecordingSource{recording: recording})
+	if err != nil {
+		t.Fatalf("NewRunRuleTests: %v", err)
+	}
+	results, err := uc.Execute()
+	if err != nil || len(results) != 1 || !results[0].Passed() {
+		t.Fatalf("Execute = %+v, %v; want one pass", results, err)
+	}
+	if vocabulary.parsed {
+		t.Errorf("a default-named file was parsed although the fixture ruleset names docs/model.cml, which the fixture does not carry")
+	}
+	if !recorder.knowledge.Empty() || recorder.knowledge.Recording != recording {
+		t.Errorf("evaluator knowledge = %+v, want an empty language carrying %+v", recorder.knowledge, recording)
+	}
+}
+
+func mustDefaultRecording(t *testing.T) vocab.DomainRecording {
+	t.Helper()
+	recording, err := vocab.DefaultDomainRecording()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return recording
+}
+
+// A fixture may spell its domain file the way its ruleset does, before
+// the path is cleaned; the file is still found under its cleaned path.
+func TestRunRuleTestsFindsAFixtureDomainFileSpelledUncleaned(t *testing.T) {
+	const ruleset = "domain:\n  file: docs/../model.yaml\n"
+	const authored = "version: 1\nproject: shop\n"
+	recording, err := vocab.NewDomainRecording("model.yaml")
+	if err != nil {
+		t.Fatalf("NewDomainRecording: %v", err)
+	}
+	repo, source := extensionCase(t, []rule.TestFile{
+		{Path: "m/all_good.go"},
+		{Path: rule.RulesetFileName, Content: ruleset},
+		{Path: "docs/../model.yaml", Content: authored},
+	})
+	vocabulary := &fakeVocabularySource{lang: vocab.UbiquitousLanguage{Project: "shop", Recording: recording}}
+	recordings := &fakeRecordingSource{recording: recording}
+	uc, err := application.NewRunRuleTests(repo, source, &fakeFixtureObserver{}, &recordingExtensions{}, vocabulary, recordings)
+	if err != nil {
+		t.Fatalf("NewRunRuleTests: %v", err)
+	}
+	if _, err := uc.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if string(vocabulary.content) != authored || vocabulary.recording != recording {
+		t.Errorf("vocabulary parsed %q as %+v, want the fixture's model.yaml", vocabulary.content, vocabulary.recording)
+	}
+}
+
+// A fixture may spell its ruleset with a leading "./"; its domain.file
+// setting still decides the recording.
+func TestRunRuleTestsReadsAFixtureRulesetSpelledUncleaned(t *testing.T) {
+	const ruleset = "domain:\n  file: docs/model.arclint.yaml\n"
+	const authored = "version: 1\nproject: shop\n"
+	recording, err := vocab.NewDomainRecording("docs/model.arclint.yaml")
+	if err != nil {
+		t.Fatalf("NewDomainRecording: %v", err)
+	}
+	repo, source := extensionCase(t, []rule.TestFile{
+		{Path: "m/all_good.go"},
+		{Path: "./" + rule.RulesetFileName, Content: ruleset},
+		{Path: "docs/model.arclint.yaml", Content: authored},
+	})
+	vocabulary := &fakeVocabularySource{lang: vocab.UbiquitousLanguage{Project: "shop", Recording: recording}}
+	recordings := &fakeRecordingSource{recording: recording}
+	uc, err := application.NewRunRuleTests(repo, source, &fakeFixtureObserver{}, &recordingExtensions{}, vocabulary, recordings)
+	if err != nil {
+		t.Fatalf("NewRunRuleTests: %v", err)
+	}
+	if _, err := uc.Execute(); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if string(recordings.content) != ruleset || string(vocabulary.content) != authored {
+		t.Errorf("read ruleset %q and vocabulary %q, want the fixture's ruleset and the file it names", recordings.content, vocabulary.content)
 	}
 }

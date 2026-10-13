@@ -42,7 +42,7 @@ func NewInitDomain(knowledge vocab.Repository, project string) (InitDomain, erro
 // execution leaves the existing model unchanged and reports the
 // project it records.
 func (uc InitDomain) Execute(project string) (InitDomainResult, error) {
-	result := InitDomainResult{Source: vocab.UbiquitousLanguageFileName}
+	result := InitDomainResult{Source: uc.knowledge.Recording().Path()}
 	lang, found, err := uc.knowledge.RecordedLanguage()
 	if err != nil {
 		return InitDomainResult{}, fmt.Errorf("load domain model: %w", err)

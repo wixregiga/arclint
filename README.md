@@ -30,9 +30,10 @@ Use arclint for that check. Or not. It's up to you.
   sandboxes it.
 - Want to know which rules govern a file or directory? Tubular. Run
   `arclint context <path>`.
-- DDD crazy? Rad. Keep your terms in a committed
-  `domain.arclint.yaml`. The moment you record a bounded context, the
-  built-in rules judge the code against it: every aggregate has a
+- DDD crazy? Rad. Keep your terms in a committed domain file
+  (`domain.arclint.yaml` by default; `domain.arclint.cml` works too). The moment you
+  record a bounded context, the built-in rules judge the code against
+  it: every aggregate has a
   root, every invariant is a method the root calls at every
   mutation, contexts import each other only along the relations you
   recorded. No pattern to install. See [Domain Contracts](docs/site/content/docs/contracts.md).
@@ -285,7 +286,7 @@ arclint agents hooks status
 
 The hooks advise the agent when observed work skips a step of the workflow:
 `arclint context` before changing files, recording a new or changed meaning in
-`domain.arclint.yaml` before implementing it, and `arclint check .` before
+the domain file before implementing it, and `arclint check .` before
 finishing. Each reminder is given once, and the hooks never block a tool call.
 Installation writes one command, which runs the installing `arclint` by its
 path, into the Claude Code and Codex user configuration, so the hooks run in
@@ -312,9 +313,19 @@ Three commands do the agent-facing work:
   way), so the agent-facing context cannot drift from the enforced
   contract. `arclint agents skill` emits a skill bundle.
 - `arclint domain`: inspects and maintains the project's ubiquitous
-  language in a committed `domain.arclint.yaml`: bounded contexts,
+  language in a committed domain file: bounded contexts,
   entities, aggregates, value objects, invariants, and events, with a
-  published JSON Schema (`arclint domain schema`).
+  published JSON Schema for YAML domain files (`arclint domain schema`).
+
+The domain file is the one `rules.arclint.yaml` names under `domain.file`;
+when it names none, it is the first of `domain.arclint.yaml`,
+`domain.arclint.yml` and `domain.arclint.cml` that exists, and
+`domain.arclint.yaml` when none does. It can be written in YAML or in CML, the
+language of [Context Mapper](https://contextmapper.org/), so Context
+Mapper's tools read the same model. arclint parses CML itself, with no Java
+or Context Mapper installation. `arclint domain convert domain.arclint.cml`
+moves a project to CML, and `arclint domain export` writes a copy. See
+[Domain files in CML](docs/site/content/docs/cml.md).
 
 ## Outcomes and exit codes
 

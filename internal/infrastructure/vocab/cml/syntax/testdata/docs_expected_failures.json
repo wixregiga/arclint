@@ -1,0 +1,3 @@
+{
+  "application-and-process-layer.md:0": "The complete reference example declares String description at line 16. ContextMappingDSL.xtext:390 reserves description for Stakeholder; TacticDDDLanguage.xtext:374 requires ID for Attribute.name. The identifier must be escaped as ^description. This expected documentation failure was explicitly approved by the task owner."
+}

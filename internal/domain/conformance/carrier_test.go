@@ -59,9 +59,9 @@ func carriersOf(t *testing.T, contexts []vocab.BoundedContext, zones []rule.Zone
 	if err != nil {
 		t.Fatalf("NewObservations: %v", err)
 	}
-	knowledge, err := vocab.NewUbiquitousLanguage("p", "", contexts, nil)
+	knowledge, err := newRecordedLanguage("p", "", contexts, nil)
 	if err != nil {
-		t.Fatalf("NewUbiquitousLanguage: %v", err)
+		t.Fatalf("newRecordedLanguage: %v", err)
 	}
 	facts, err := conformance.NewInspectionFacts(zones, obs, rule.FactDeclarations)
 	if err != nil {
@@ -597,9 +597,9 @@ func TestCarriersRefuseTwoZonesSpellingOneContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewObservations: %v", err)
 	}
-	knowledge, err := vocab.NewUbiquitousLanguage("p", "", []vocab.BoundedContext{contextOf("event_catalog", nil, nil, nil)}, nil)
+	knowledge, err := newRecordedLanguage("p", "", []vocab.BoundedContext{contextOf("event_catalog", nil, nil, nil)}, nil)
 	if err != nil {
-		t.Fatalf("NewUbiquitousLanguage: %v", err)
+		t.Fatalf("newRecordedLanguage: %v", err)
 	}
 	zones := []rule.Zone{
 		mustZone(t, "event-catalog", "internal/event/**"),

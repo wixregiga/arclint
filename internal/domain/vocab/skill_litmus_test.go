@@ -26,6 +26,7 @@ func TestSkillMarkdownMatchesLitmus(t *testing.T) {
 	}
 }
 
+// TestVocabularyYAMLMatchesLitmus pins the single published vocabulary.
 func TestVocabularyYAMLMatchesLitmus(t *testing.T) {
 	wantPath := filepath.Join(repoRoot(t), ".agents", "skills", "domain-librarian", "VOCAB.yaml")
 	want, err := os.ReadFile(wantPath)

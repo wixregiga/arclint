@@ -19,11 +19,15 @@ type memoryKnowledge struct {
 	save  error
 }
 
+func (m *memoryKnowledge) Recording() vocab.DomainRecording { return testRecording }
+
 func (m *memoryKnowledge) RecordedLanguage() (vocab.UbiquitousLanguage, bool, error) {
 	if m.err != nil {
 		return vocab.UbiquitousLanguage{}, false, m.err
 	}
-	return m.lang, m.found, nil
+	lang := m.lang
+	lang.Recording = testRecording
+	return lang, m.found, nil
 }
 
 func (m *memoryKnowledge) Record(lang vocab.UbiquitousLanguage) error {
@@ -90,7 +94,7 @@ func TestInitDomainCreatesMissingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
-	if !out.Created || out.Source != vocab.UbiquitousLanguageFileName || out.Project != testProject {
+	if !out.Created || out.Source != testRecording.Path() || out.Project != testProject {
 		t.Fatalf("result = %+v", out)
 	}
 	if repo.saves != 1 || !repo.found || !repo.lang.Empty() || repo.lang.Project != testProject {
@@ -170,8 +174,8 @@ func TestGetDomainOverviewMissingFile(t *testing.T) {
 	if out.Found {
 		t.Fatal("expected Found=false for missing file")
 	}
-	if out.Source != vocab.UbiquitousLanguageFileName {
-		t.Fatalf("Source = %q, want %q", out.Source, vocab.UbiquitousLanguageFileName)
+	if out.Source != testRecording.Path() {
+		t.Fatalf("Source = %q, want %q", out.Source, testRecording.Path())
 	}
 	if out.Counts != (vocab.Counts{}) {
 		t.Fatalf("Counts = %+v, want zero", out.Counts)
@@ -225,6 +229,9 @@ func TestListDomainDefinitionsMissingFile(t *testing.T) {
 	if out.Filtered {
 		t.Fatal("empty listing must not be Filtered")
 	}
+	if out.Source != testRecording.Path() {
+		t.Fatalf("Source = %q, want %q", out.Source, testRecording.Path())
+	}
 }
 
 func TestListDomainDefinitionsFiltered(t *testing.T) {
@@ -271,6 +278,9 @@ func TestShowDomainDefinitionUsageAndNotFound(t *testing.T) {
 	_, err = uc.Execute("entity", "", "", "Order")
 	if !errors.Is(err, vocab.ErrDefinitionNotFound) {
 		t.Fatalf("missing: %v", err)
+	}
+	if !strings.Contains(err.Error(), testRecording.Path()+" is missing") {
+		t.Fatalf("missing: %v, want the project's domain file named", err)
 	}
 }
 
@@ -650,6 +660,9 @@ func TestRemoveDomainDefinitionMissingNoSave(t *testing.T) {
 	_, err = uc.Execute("entity", testContext, "", "Order")
 	if !errors.Is(err, vocab.ErrDefinitionNotFound) {
 		t.Fatalf("error = %v, want ErrDefinitionNotFound", err)
+	}
+	if !strings.Contains(err.Error(), testRecording.Path()+" is missing") {
+		t.Fatalf("error = %v, want the project's domain file named", err)
 	}
 	repo = recorded(t, orderContext(orderAggregate())...)
 	uc, err = application.NewRemoveDomainDefinition(repo)

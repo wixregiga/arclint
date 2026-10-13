@@ -1,6 +1,7 @@
 // Package vocab holds the project's recorded Ubiquitous Language
-// vocabulary: the domain definitions a project declares in
-// domain.arclint.yaml, the Domain-Driven Design meta-model that defines
+// vocabulary: the domain definitions a project declares in its
+// DomainRecording (the file the ruleset names, else the first of the
+// default names that exists), the Domain-Driven Design meta-model that defines
 // every concept arclint speaks about, the mutation semantics for
 // maintaining the vocabulary, its published JSON Schema, the
 // domain-librarian skill taxonomy, and the Repository port that persists

@@ -10,6 +10,7 @@ import (
 
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/delivery/cli/adapters/report/internal/out"
+	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
@@ -40,9 +41,43 @@ func Init(p *out.Printer, st Style, r application.InitDomainResult) {
 	p.Printf("%s already exists (project %s); left unchanged.\n", r.Source, r.Project)
 }
 
-// Missing is the guidance printed when no domain file is recorded.
-func Missing(p *out.Printer, st Style) {
-	p.Println(st.Bold("No recorded Ubiquitous Language found at " + vocab.UbiquitousLanguageFileName + "."))
+// Export reports a translation of the project's recorded language into
+// another file.
+func Export(p *out.Printer, st Style, r application.ExportDomainRecordingResult) {
+	p.Printf("%s the domain from %s into %s (%s): %s.\n",
+		st.OK("Translated"), r.Source.Path(), st.Bold(r.Target.Path()), strings.ToUpper(string(r.Target.Format())), CountsLine(r.Counts))
+	p.Println("Read back, it records the same language.")
+	if r.Updated {
+		p.Printf("%s already recorded a language; it was edited in place and keeps everything else it holds.\n", r.Target.Path())
+	}
+}
+
+// Convert reports the project moving its recorded language into another
+// file.
+func Convert(p *out.Printer, st Style, r application.ConvertDomainRecordingResult) {
+	p.Printf("%s the domain from %s into %s (%s): %s.\n",
+		st.OK("Moved"), r.Source.Path(), st.Bold(r.Target.Path()), strings.ToUpper(string(r.Target.Format())), CountsLine(r.Counts))
+	p.Println("Read back, it records the same language.")
+	if r.Updated {
+		p.Printf("%s already recorded a language; it was edited in place and keeps everything else it holds.\n", r.Target.Path())
+	}
+	switch {
+	case r.Named.IsZero() && r.RulesetChanged:
+		p.Printf("%s no longer names a domain file: %s is found by its name.\n", rule.RulesetFileName, r.Target.Path())
+	case r.Named.IsZero():
+		p.Printf("%s names no domain file: %s is found by its name.\n", rule.RulesetFileName, r.Target.Path())
+	case r.RulesetChanged:
+		p.Printf("%s now names %s under domain.file.\n", rule.RulesetFileName, r.Target.Path())
+	default:
+		p.Printf("%s already named %s.\n", rule.RulesetFileName, r.Target.Path())
+	}
+	p.Printf("Removed %s.\n", r.Source.Path())
+}
+
+// Missing is the guidance printed when no domain file is recorded at
+// source.
+func Missing(p *out.Printer, st Style, source string) {
+	p.Println(st.Bold("No recorded Ubiquitous Language found at " + source + "."))
 	p.Println()
 	p.Println("Initialize an empty model:")
 	p.Println("  arclint domain init")
@@ -562,6 +597,9 @@ func Explain(p *out.Printer, st Style, docs []vocab.ConceptDoc) {
 // left as it was, and for an update each property that changed.
 func Define(p *out.Printer, st Style, result application.DomainDefineResult, change vocab.Change) {
 	subject := Subject(result.Concept, result.Name)
+	if result.Target != "" {
+		subject = result.Target + " " + result.Name
+	}
 	where := ""
 	if result.Owner != "" {
 		where += " under " + result.Owner
@@ -575,11 +613,21 @@ func Define(p *out.Printer, st Style, result application.DomainDefineResult, cha
 	case vocab.OutcomeUpdated:
 		p.Printf("%s %s%s.\n", st.OK("Updated"), subject, where)
 		for _, property := range result.Changed {
-			p.Printf("  %s %s\n", st.Muted(property+":"), changedValue(property, change))
+			p.Printf("  %s %s\n", st.Muted(property+":"), defineValue(property, result, change))
 		}
 	default:
 		p.Printf("Unchanged %s%s.\n", subject, where)
 	}
+}
+
+func defineValue(property string, result application.DomainDefineResult, change vocab.Change) string {
+	if value, ok := result.Values[property]; ok {
+		if property == "description" {
+			return proseValue(value)
+		}
+		return shortValue(value)
+	}
+	return changedValue(property, change)
 }
 
 // changedValue spells what a changed property now holds: the value for
@@ -636,7 +684,11 @@ func listValue(v []string) string {
 // Remove reports what a remove took out of the model, and what went
 // with it.
 func Remove(p *out.Printer, st Style, r application.DomainRemoveResult) {
-	p.Printf("%s %s from the project domain model.\n", st.OK("Removed"), Subject(r.Concept, r.Name))
+	subject := Subject(r.Concept, r.Name)
+	if r.Target != "" {
+		subject = r.Target + " " + r.Name
+	}
+	p.Printf("%s %s from the project domain model.\n", st.OK("Removed"), subject)
 	for _, also := range r.Also {
 		p.Printf("  %s\n", also)
 	}

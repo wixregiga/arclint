@@ -332,7 +332,7 @@ func (rt *RuleType) checkWithHost(host Host, params map[string]any) ([]Violation
 	})
 	mustSet("domain", func(_ sobek.FunctionCall) sobek.Value {
 		if host.Domain == nil {
-			return vm.ToValue(emptyDomainInfo())
+			return vm.ToValue(emptyDomainInfo(""))
 		}
 		return vm.ToValue(host.Domain())
 	})

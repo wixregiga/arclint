@@ -290,7 +290,7 @@ func ddd() MetaModel {
 				},
 				Records: Recording{
 					Section: SectionTop,
-					Note:    "A project's domain is the whole of its domain.arclint.yaml; the file names it once at the top.",
+					Note:    "A project's domain is the whole of its domain file, the one rules.arclint.yaml names under domain.file or, when it names none, the first of domain.arclint.yaml, domain.arclint.yml and domain.arclint.cml that exists; the file names it once at the top.",
 					Properties: []Property{
 						{Name: "project", Required: true, Definition: "The name of the software whose domain the file records."},
 						{Name: "description", Required: false, Definition: "The domain in a few sentences, as the people in it would tell a newcomer."},
@@ -330,7 +330,7 @@ func ddd() MetaModel {
 				},
 				Records: Recording{
 					Section: SectionNone,
-					Note:    "A project's Ubiquitous Language is the whole of domain.arclint.yaml, one file per repository, one section per bounded context.",
+					Note:    "A project's Ubiquitous Language is the whole of its domain file, one file per repository, written in YAML or in CML, one section per bounded context.",
 				},
 				Invariants: []BlockInvariant{
 					{

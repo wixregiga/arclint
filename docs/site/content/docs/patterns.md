@@ -425,7 +425,10 @@ repository can serve a team's Patterns.
 
 The rules that judge a repository's recorded Ubiquitous Language
 against its code are built into the binary and apply as soon as
-`domain.arclint.yaml` records a context; nothing is installed for them.
+the domain file (the one `rules.arclint.yaml` names under `domain.file`, else
+the first of `domain.arclint.yaml`, `domain.arclint.yml` and
+`domain.arclint.cml` that exists) records a context; nothing is installed for
+them.
 arclint locates a context's code from its recorded terms, the
 declarations that spell them, wherever they are in the repository;
 name a Zone after the context (`billing: internal/billing/**`) only

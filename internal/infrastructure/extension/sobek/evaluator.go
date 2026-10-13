@@ -248,11 +248,12 @@ func (e *Evaluator) host(supplied conformance.Facts, knowledge vocab.UbiquitousL
 	}
 }
 
-// emptyDomainInfo returns a DomainInfo whose collections are non-nil
-// empty slices so JavaScript sees arrays rather than null.
-func emptyDomainInfo() DomainInfo {
+// emptyDomainInfo returns a DomainInfo for the domain file at source
+// whose collections are non-nil empty slices so JavaScript sees arrays
+// rather than null.
+func emptyDomainInfo(source string) DomainInfo {
 	return DomainInfo{
-		Source:    vocab.UbiquitousLanguageFileName,
+		Source:    source,
 		Contexts:  []DomainContextInfo{},
 		Relations: []DomainRelationInfo{},
 	}
@@ -261,7 +262,7 @@ func emptyDomainInfo() DomainInfo {
 // domainInfoFrom translates the recorded Language into the SDK wire
 // shape, guaranteeing non-nil slices (never null in JS).
 func domainInfoFrom(lang vocab.UbiquitousLanguage) DomainInfo {
-	info := emptyDomainInfo()
+	info := emptyDomainInfo(lang.Recording.Path())
 	info.Project = lang.Project
 	if len(lang.Contexts) > 0 {
 		info.Contexts = make([]DomainContextInfo, len(lang.Contexts))

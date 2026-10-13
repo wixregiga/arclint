@@ -213,6 +213,7 @@ func (l UbiquitousLanguage) Define(c Concept, at Locator, ch Change) (Ubiquitous
 	if err != nil {
 		return UbiquitousLanguage{}, DefineResult{}, err
 	}
+	validated.Recording = l.Recording
 	res.Concept = c
 	return validated, res, nil
 }
@@ -254,6 +255,7 @@ func (l UbiquitousLanguage) Remove(c Concept, at Locator) (UbiquitousLanguage, R
 	if err != nil {
 		return UbiquitousLanguage{}, RemoveResult{}, err
 	}
+	validated.Recording = l.Recording
 	return validated, res, nil
 }
 
@@ -306,6 +308,7 @@ func (l UbiquitousLanguage) clone() UbiquitousLanguage {
 		Description: l.Description,
 		Contexts:    cloneContexts(l.Contexts),
 		Relations:   cloneRelations(l.Relations),
+		Recording:   l.Recording,
 	}
 }
 

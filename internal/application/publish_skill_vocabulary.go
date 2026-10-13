@@ -7,9 +7,7 @@ import (
 )
 
 // PublishSkillVocabulary renders and writes the domain-librarian
-// VOCAB.yaml from domain-owned taxonomy data. Emission is hand-assembled
-// in the domain so comments and flow-style lines match the litmus file;
-// yaml.Marshal is never used.
+// VOCAB.yaml from domain-owned taxonomy data.
 type PublishSkillVocabulary struct {
 	writer ArtifactWriter
 }
@@ -22,7 +20,7 @@ func NewPublishSkillVocabulary(writer ArtifactWriter) (PublishSkillVocabulary, e
 	return PublishSkillVocabulary{writer: writer}, nil
 }
 
-// Render returns the VOCAB.yaml content byte-exact to the litmus file.
+// Render returns the format-independent VOCAB.yaml content.
 func (uc PublishSkillVocabulary) Render() string {
 	return vocab.VocabularyYAML()
 }

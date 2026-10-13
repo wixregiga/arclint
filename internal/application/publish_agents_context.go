@@ -53,7 +53,9 @@ type AgentCommandDoc struct {
 func AgentCommandSurface() []AgentCommandDoc {
 	return []AgentCommandDoc{
 		{"context", "context [paths...]", "run before editing under any path: the owning zones, their import contracts, and the recorded domain in one answer (`--zone <names>`, `--format json`)"},
-		{"domain", "domain", "the ubiquitous language: contexts, aggregates, value objects, invariants, relations"},
+		{"domain", "domain", "the ubiquitous language and its recording path: contexts, aggregates, value objects, invariants, relations"},
+		{"domain define", "domain define", "record a meaning through validated commands; ArcLint writes the recording's format"},
+		{"domain remove", "domain remove", "remove an entry through validated commands"},
 		{"rules", "rules [selector]", "every configured rule with its constraint and rationale; one match prints the complete rule"},
 		{"check", "check .", "evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings"},
 		{"rules test", "rules test", "run the rule fixtures under `.arclint/tests` after changing any rule"},
@@ -69,9 +71,8 @@ func AgentCommandSurface() []AgentCommandDoc {
 
 // AgentWorkflow is the order a coding agent works in, one action for each
 // step. The generated block and the workflow hooks' session-start
-// orientation both state it from here, so the two cannot drift. recording
-// is the domain recording's path relative to the project root.
-func AgentWorkflow(recording string) []string {
+// orientation both state it from here, so the two cannot drift.
+func AgentWorkflow() []string {
 	return []string{
 		"Run `arclint context <paths>` on the files you will read or change, before opening them. " +
 			"It answers with the zones, contracts and recorded domain that bind them; " +
@@ -84,7 +85,7 @@ func AgentWorkflow(recording string) []string {
 			"   Resolve contradictions with the recorded domain and the user's instructions before proceeding. " +
 			"Ask only when an unresolved product decision needs the user's input. " +
 			"This statement is not an approval checkpoint.",
-		"If the change introduces or changes a meaning, record it in `" + recording + "` before writing code, " +
+		"If the change introduces or changes a meaning, record it in the project's domain recording through `arclint domain define` before writing code, " +
 			"using the " + vocab.SkillName + " skill. If it does not, say so.",
 		"Implement one complete behavior path through the zones `arclint context` reported, " +
 			"keeping existing behavior intact unless the task changes it. " +
@@ -225,13 +226,13 @@ func writeWorkflow(b *strings.Builder) {
 }
 
 // AgentWorkflowSection is the Workflow section of the generated AGENTS.md
-// block. The workflow hooks compare it with the committed block to notice
-// when the arclint they run states a different workflow.
+// block. The workflow hooks compare it with the committed block to
+// notice when the arclint they run states a different workflow.
 func AgentWorkflowSection() string {
 	var b strings.Builder
 	b.WriteString("### Workflow\n\n")
 	b.WriteString("IMPORTANT: work in this order on every change.\n\n")
-	for index, step := range AgentWorkflow(vocab.UbiquitousLanguageFileName) {
+	for index, step := range AgentWorkflow() {
 		fmt.Fprintf(&b, "%d. %s\n", index+1, step)
 	}
 	b.WriteString("\n")
@@ -241,10 +242,10 @@ func AgentWorkflowSection() string {
 // WorkflowOrientation is the workflow the hooks state when a session starts
 // and install prints for the session that installed them: the AGENTS.md
 // steps, from the same source.
-func WorkflowOrientation(recording string) string {
+func WorkflowOrientation() string {
 	var text strings.Builder
 	text.WriteString("Work in this order:\n")
-	for index, step := range AgentWorkflow(recording) {
+	for index, step := range AgentWorkflow() {
 		fmt.Fprintf(&text, "%d. %s\n", index+1, step)
 	}
 	text.WriteString("The hooks advise when observed work skips a step. They never block a tool call.")
@@ -266,8 +267,8 @@ func writeCommands(b *strings.Builder) {
 func writeRecordedDomain(b *strings.Builder, lang vocab.UbiquitousLanguage) {
 	b.WriteString("### The recorded domain\n\n")
 	counts := lang.Counts()
-	fmt.Fprintf(b, "%d contexts, %d aggregates, %d value objects, %d invariants (%s).\n\n",
-		counts.Contexts, counts.Aggregates, counts.ValueObjects, counts.Invariants, vocab.UbiquitousLanguageFileName)
+	fmt.Fprintf(b, "%d contexts, %d aggregates, %d value objects, %d invariants.\n\n",
+		counts.Contexts, counts.Aggregates, counts.ValueObjects, counts.Invariants)
 	for _, ctx := range lang.Contexts {
 		var parts []string
 		if len(ctx.Aggregates) > 0 {

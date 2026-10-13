@@ -23,7 +23,7 @@ func recordedContracts(knowledge vocab.UbiquitousLanguage) []recordedContract {
 				ownerConcept: inv.OwnerConcept, invariant: inv.Invariant,
 				spec: ContractCoverageSpec{
 					Context: ctx.Name, Owner: inv.Owner, Kind: vocab.ConceptInvariant,
-					Key: inv.Invariant.Key, Statement: inv.Invariant.Statement, Line: inv.Invariant.Line,
+					Key: inv.Invariant.Key, Statement: inv.Invariant.Statement, Path: knowledge.Recording.Path(), Line: inv.Invariant.Line,
 				},
 			})
 		}
@@ -32,7 +32,7 @@ func recordedContracts(knowledge vocab.UbiquitousLanguage) []recordedContract {
 				ownerConcept: as.OwnerConcept, assertion: as.Assertion,
 				spec: ContractCoverageSpec{
 					Context: ctx.Name, Owner: as.Owner, Kind: vocab.ConceptAssertion,
-					Key: as.Assertion.Key, Statement: as.Assertion.Statement, Line: as.Assertion.Line,
+					Key: as.Assertion.Key, Statement: as.Assertion.Statement, Path: knowledge.Recording.Path(), Line: as.Assertion.Line,
 				},
 			})
 		}
@@ -156,7 +156,7 @@ func evaluateRecordedContract(r rule.Rule, contract recordedContract, cc context
 	if err != nil {
 		return Evaluation{}, fmt.Errorf("contract coverage: %w", err)
 	}
-	if r.Scope().ExcludedFile(vocab.UbiquitousLanguageFileName) {
+	if r.Scope().ExcludedFile(cc.recording) {
 		return simpleEvaluation(r, subject, OutcomeNotApplicable)
 	}
 	if cc.scopeParseFailures > 0 {

@@ -118,12 +118,12 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 		"1. Run `arclint context <paths>` on the files you will read or change, before opening them.",
 		"do not learn the architecture by reading file after file",
 		"2. Before editing, state in the project's language:\n   - This change does ___.\n   - These decisions belong to ___.\n   - The caller uses ___.\n   - Existing behavior ___ must remain intact.",
-		"3. If the change introduces or changes a meaning, record it in `domain.arclint.yaml` before writing code, using the domain-librarian skill.",
+		"3. If the change introduces or changes a meaning, record it in the project's domain recording through `arclint domain define` before writing code, using the domain-librarian skill.",
 		"4. Implement one complete behavior path through the zones `arclint context` reported",
 		"### Commands",
 		"- `arclint agents skill`: write the domain-librarian skill to `.agents/skills/domain-librarian/` when your harness lacks it",
 		"### The recorded domain",
-		"2 contexts, 2 aggregates, 1 value objects, 1 invariants (domain.arclint.yaml).",
+		"2 contexts, 2 aggregates, 1 value objects, 1 invariants.",
 		"- **catalog**: aggregates Event (Organizer); value objects Price; events EventPublished",
 		"- **ordering**: aggregates Order",
 		"Relations: catalog → ordering (conformist). Full text: `arclint domain`.",
@@ -143,6 +143,10 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 			t.Errorf("block lacks %q:\n%s", want, block)
 		}
 	}
+	// Instructions never name the recording.
+	if strings.Contains(block, vocab.DefaultDomainRecordingPath) || strings.Contains(block, testRecording.Path()) {
+		t.Errorf("block names %s although the project records in %s:\n%s", vocab.DefaultDomainRecordingPath, testRecording.Path(), block)
+	}
 	// The workflow comes first, then the commands, then what the
 	// repository records and enforces.
 	workflowAt := strings.Index(block, "### Workflow")
@@ -157,7 +161,7 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 	// the surface documents, so an agent following it never runs a command
 	// arclint does not ship.
 	workflow := block[workflowAt:commandsAt]
-	for index, step := range application.AgentWorkflow("domain.arclint.yaml") {
+	for index, step := range application.AgentWorkflow() {
 		if !strings.Contains(workflow, fmt.Sprintf("%d. %s\n", index+1, step)) {
 			t.Errorf("workflow lacks step %d %q:\n%s", index+1, step, workflow)
 		}

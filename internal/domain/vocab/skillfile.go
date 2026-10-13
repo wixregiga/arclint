@@ -55,61 +55,40 @@ func SkillProtocolRules() []string {
 		"**Invariant gate.** A recorded invariant must forbid something a naive implementation could do, and it is one violation, one complete sentence in the domain's own voice, with the owning term as its subject. First establish domain consistency and a capable owner; must/never wording alone is insufficient. Contributor duties, host guarantees and delivery validation do not automatically pass this gate. A justified domain rule holding at all observable times goes under its owner's `invariants`, keyed; a justified guarantee of one named domain operation goes under its owner's `assertions` (the aggregate's, or the domain service's) with `on` naming the operation and the statement in the expert's words; a predicate experts pass around as a thing goes under `specifications`, never as a flag on a value object. Value integrity is an invariant under a value object (constructor only); a cluster invariant is under an aggregate and its key names the root method that enforces it. Never record a programming-only guard. Would you say this to an expert who never saw the language? An \"and\" joining independently violable clauses is several entries; the narrative that connects them belongs in the owning term's definition. Restating a definition is not an invariant, and \"the system shall\" is not the domain speaking.",
 		"**Behavior.** Every operation the source names gets one home, and the librarian says which: a command of one root when it changes that aggregate's state and returns no domain information; a query when it answers a question and changes nothing; a `domain_service` when it makes a business decision that no one aggregate can make alone, because it spans aggregates or needs knowledge no aggregate holds; an `application_service` when its steps are loading, invoking, committing, publishing, notifying, or translating. Try the thing first: a behavior that fits one aggregate goes there, and only what no entity or value naturally owns becomes a service. A domain service is recorded under `services` with its contract: one assertion per guarantee under `assertions`, keyed, with `on` naming the operation. Commands, queries, and application services are not recorded; a business rule found inside an application service is placed under its owner and reported as a finding. The bare word service is never an answer: write `domain_service` or `application_service`. When the text cannot decide, ask \"Is <X> a result the business names, or a step the software takes to deliver one?\", or record it under `questions`.",
 		"**Completeness sweep.** Re-scan the source text and account for each obligation: what contributors must do to implement it, what the host and installer provide, and what a justified domain rule requires. State where each is implemented and how it is verified. Assign an invariant or assertion only after the invariant gate and owner evidence hold; contributor workflow and delivery validation do not automatically become domain invariants. Report missing enforcement and missing evidence separately.",
-		"**Output.** ALWAYS emit or write the complete library file per VOCAB's `library_file.shape`; a summary of it is a failure. Preserve unrelated entries byte-identical; edits surgical, additions alphabetized. Record business_rule inputs as invariants or assertions under an owner, as a specification when experts pass the predicate around as a thing, or as no entry when they are a programming guard or a promise about delivery; cite the rule id that decided each placement.",
+		"**Output.** ALWAYS record every justified entry through `arclint domain define` and remove rejected entries through `arclint domain remove`; a summary of them is a failure. These commands validate each write on the spot and ArcLint writes the recording's format. Never hand-write the domain file. Preserve unrelated entries; edits surgical. Record business_rule inputs as invariants or assertions under an owner, as a specification when experts pass the predicate around as a thing, or as no entry when they are a programming guard or a promise about delivery; cite the rule id that decided each placement.",
 		"**Description style.** Definitions read like a document their humans own: plain sentences, no em dashes. A definition may explain established vocabulary without inventing tactical entries for every noun. Record a tactical entry only when its classification is justified. A term that lines up with a code object uses the code's exact spelling (TermCase, RuleID), never a prose-spaced variant.",
 	}
 }
 
 // LibraryFile holds the library_file section of VOCAB.yaml.
 type LibraryFile struct {
-	Purpose    string
-	JSONSchema string
-	// JSONSchemaComment is the inline comment on the json_schema line.
-	JSONSchemaComment string
-	Header            string
-	// HeaderComment is the inline comment on the header line.
-	HeaderComment string
-	// Shape is the human-readable shape block (without trailing newline
-	// on the last content line beyond what the litmus stores).
-	Shape string
-	// ShapeComment is the inline comment on the shape: | line.
+	Purpose      string
+	Shape        string
 	ShapeComment string
 	Rules        []string
 }
 
-// LibraryFileSpec returns the library_file section data char-exact to VOCAB.yaml.
+// LibraryFileSpec describes the recorded model, independent of its format.
 func LibraryFileSpec() LibraryFile {
 	return LibraryFile{
-		Purpose:           "One YAML file per project, sole custody of the librarian; humans review and edit, the librarian writes.",
-		JSONSchema:        SchemaPath,
-		JSONSchemaComment: "written by arclint domain schema --write; gives human editors descriptions and validation",
-		Header:            `# yaml-language-server: $schema=<relative path to ` + SchemaPath + `, or its canonical $id URL when the schema file is not nearby>`,
-		HeaderComment:     "first line of every written library file",
-		ShapeComment:      "human-readable summary; " + SchemaFileName + " is authoritative; on any divergence, the schema wins",
-		Shape: `    version: 1
-    project: <name>
-    description: <the domain in a few sentences>?
-    contexts:
-      <context>:
-        definition: <what the context is responsible for>
-        aggregates:
-          <Aggregate>:
-            definition: <text>
-            identity: <ValueObject>
-            aliases: [<name>]?
-            entities: {<Entity>: {definition, identity?, aliases?}}?
-            invariants: {<key>: <statement>}?    # key names the root method that enforces it
-            assertions: {<key>: {on: <Operation>, statement}}?
-            repository: <Name>?
-            factory: <Name>?
-        value_objects: {<ValueObject>: {definition, aliases?, invariants: {<key>: <statement>}?}}
-        events: {<Event>: {definition, raised_by: <Aggregate>?}}
-        services: {<Service>: {definition, assertions: {<key>: {on: <Operation>, statement}}?}}
-        specifications: {<Specification>: {definition}}
-        questions: {<key>: <text>}
-    relations: [{from, to, kind, description?}]   # kind = one context_relation key; omit when single context
+		Purpose:      "The project's shared domain language. Learn its recording from arclint context and arclint domain; record through arclint domain define and arclint domain remove, which validate each write and let ArcLint write the format.",
+		ShapeComment: "model fields, not file syntax; optional fields marked ?",
+		Shape: `    project: name and description?
+    contexts: named responsibilities, each with a definition
+      aggregates: definition, identity, aliases?, repository?, factory?
+        entities: definition, identity?, aliases?
+        invariants: keyed statements enforced by the root
+        assertions: keyed guarantees with on naming the operation and statement
+      value_objects: definition, aliases?, keyed invariants?
+      events: definition, raised_by aggregate?
+      services: definition, keyed assertions with on and statement?
+      specifications: definition
+      questions: keyed unresolved decisions
+    relations: from context, to context, kind, description?
+      kind: one published context_relation_kinds key
 `,
 		Rules: []string{
+			"Record every entry through arclint domain define and remove entries through arclint domain remove; never hand-write the domain file.",
 			"Every term carries a definition; no definition, no entry.",
 			"A term lives in exactly one context; same word elsewhere is a second term.",
 			"Aliases point at the canonical term; never duplicate definitions.",

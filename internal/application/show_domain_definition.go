@@ -67,7 +67,7 @@ func (uc ShowDomainDefinition) Execute(concept, context, owner, name string) (Do
 	}
 	if !found {
 		return DomainEntryView{}, fmt.Errorf("no %s named %q is recorded: %s is missing: %w",
-			c, name, vocab.UbiquitousLanguageFileName, vocab.ErrDefinitionNotFound)
+			c, name, uc.knowledge.Recording().Path(), vocab.ErrDefinitionNotFound)
 	}
 	return locateEntry(lang, c, context, owner, name)
 }

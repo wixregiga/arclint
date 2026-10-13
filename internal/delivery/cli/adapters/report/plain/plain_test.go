@@ -121,13 +121,13 @@ func TestPlainAgentsStatusBytes(t *testing.T) {
 func TestPlainDomainMissingBytes(t *testing.T) {
 	var buf bytes.Buffer
 	err := New().Render(&buf, cli.DomainOverviewReport{
-		Overview: application.DomainOverview{Found: false, Source: vocab.UbiquitousLanguageFileName},
+		Overview: application.DomainOverview{Found: false, Source: "docs/model.arclint.yaml"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "No recorded Ubiquitous Language found") {
+	if !strings.Contains(out, "No recorded Ubiquitous Language found at docs/model.arclint.yaml.") {
 		t.Fatalf("missing guidance absent: %q", out)
 	}
 	if !strings.Contains(out, "arclint domain init") {
@@ -184,6 +184,67 @@ func TestPlainDomainExplainPrintsSources(t *testing.T) {
 	for _, s := range doc.Sources {
 		if !strings.Contains(out, "  "+s.String()+"\n") {
 			t.Fatalf("missing source %q:\n%s", s, out)
+		}
+	}
+}
+
+func TestPlainDomainMissingNamesTheProjectsDomainFile(t *testing.T) {
+	for name, report := range map[string]cli.Report{
+		"missing report":  cli.DomainMissingReport{Source: "docs/model.cml"},
+		"empty listing":   cli.DomainListReport{Listing: application.DomainListing{Source: "docs/model.cml"}},
+		"missing summary": cli.DomainOverviewReport{Overview: application.DomainOverview{Source: "docs/model.cml"}},
+	} {
+		var buf bytes.Buffer
+		if err := New().Render(&buf, report); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if !strings.Contains(buf.String(), "No recorded Ubiquitous Language found at docs/model.cml.\n") {
+			t.Errorf("%s: guidance does not name the project's domain file: %q", name, buf.String())
+		}
+		if strings.Contains(buf.String(), vocab.DefaultDomainRecordingPath) {
+			t.Errorf("%s: guidance names the default file: %q", name, buf.String())
+		}
+	}
+}
+
+// A conversion says what happened to domain.file: the setting removed
+// because the project finds the new file by its name, absent already,
+// written, or already there.
+func TestPlainDomainConvertSaysWhatBecameOfDomainFile(t *testing.T) {
+	recording := func(file string) vocab.DomainRecording {
+		t.Helper()
+		if file == "" {
+			return vocab.DomainRecording{}
+		}
+		r, err := vocab.NewDomainRecording(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	for _, tc := range []struct {
+		name    string
+		target  string
+		named   string
+		changed bool
+		want    string
+	}{
+		{"setting removed", "domain.arclint.cml", "", true, "rules.arclint.yaml no longer names a domain file: domain.arclint.cml is found by its name.\n"},
+		{"setting absent already", "domain.arclint.cml", "", false, "rules.arclint.yaml names no domain file: domain.arclint.cml is found by its name.\n"},
+		{"setting written", "docs/model.cml", "docs/model.cml", true, "rules.arclint.yaml now names docs/model.cml under domain.file.\n"},
+		{"setting there already", "docs/model.cml", "docs/model.cml", false, "rules.arclint.yaml already named docs/model.cml.\n"},
+	} {
+		result := application.ConvertDomainRecordingResult{
+			ExportDomainRecordingResult: application.ExportDomainRecordingResult{Source: recording("domain.arclint.yaml"), Target: recording(tc.target)},
+			Named:                       recording(tc.named),
+			RulesetChanged:              tc.changed,
+		}
+		var buf bytes.Buffer
+		if err := New().Render(&buf, cli.DomainConvertReport{Result: result}); err != nil {
+			t.Fatalf("%s: %v", tc.name, err)
+		}
+		if !strings.Contains(buf.String(), tc.want) {
+			t.Errorf("%s: report:\n%swant a line %q", tc.name, buf.String(), tc.want)
 		}
 	}
 }

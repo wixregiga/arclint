@@ -81,7 +81,7 @@ func TestRunRuleTestsEndToEnd(t *testing.T) {
 		t.Fatalf("NewRepository: %v", err)
 	}
 	uc, err := application.NewRunRuleTests(repo, ruletest.NewSource(root),
-		ruletest.NewObserver(golang.NewProducer()), nil, yamlvocab.Parser{})
+		ruletest.NewObserver(golang.NewProducer()), nil, yamlvocab.Parser{}, yamlrule.RecordingParser{})
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
@@ -208,7 +208,7 @@ func TestRuleTestExtensionReadsFixtureContent(t *testing.T) {
 		t.Fatalf("NewEvaluator: %v", err)
 	}
 	uc, err := application.NewRunRuleTests(repo, ruletest.NewSource(root),
-		ruletest.NewObserver(golang.NewProducer()), extensions, yamlvocab.Parser{})
+		ruletest.NewObserver(golang.NewProducer()), extensions, yamlvocab.Parser{}, yamlrule.RecordingParser{})
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
@@ -227,11 +227,11 @@ func TestRuleTestExtensionReadsFixtureContent(t *testing.T) {
 
 const vocabularyRuleset = `runtime: [go]
 zones:
-  vocabulary: domain.arclint.yaml
+  vocabulary: [domain.arclint.yaml, docs/model.arclint.yaml]
 rules:
   vocabulary/events-name-their-raiser:
     on: vocabulary
-    files: "domain.arclint.yaml"
+    files: [domain.arclint.yaml, docs/model.arclint.yaml]
     uses: require-raised-by
 `
 
@@ -260,7 +260,8 @@ contexts:
 `
 
 // requireRaisedByExtension anchors each finding at the line the event
-// is written on, which is what ctx.domain() lines are for.
+// is written on, in the domain file the project records in, which is
+// what ctx.domain() lines and source are for.
 const requireRaisedByExtension = `import { defineRule } from "arclint";
 
 export default defineRule({
@@ -271,7 +272,7 @@ export default defineRule({
       for (const event of bound.events) {
         if (!event.raisedBy) {
           ctx.report({
-            path: "domain.arclint.yaml",
+            path: ctx.domain().source,
             line: event.line,
             message: 'event "' + event.name + '" names nothing that raises it',
           });
@@ -286,19 +287,10 @@ export default defineRule({
 // reporting path (fixture vocabulary bytes, the production parser,
 // the extension host, the conformance run, the authored expectation)
 // puts the finding on the line the term is written on rather than at
-// the top of the file.
+// the top of the file, in the domain file the fixture records in: the
+// default one, or the one the fixture's own ruleset names under
+// domain.file.
 func TestVocabularyFindingAnchorsAtTheRecordedTerm(t *testing.T) {
-	root := t.TempDir()
-	write := func(rel, content string) {
-		t.Helper()
-		target := filepath.Join(root, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
-			t.Fatalf("MkdirAll %s: %v", rel, err)
-		}
-		if err := os.WriteFile(target, []byte(content), 0o600); err != nil {
-			t.Fatalf("WriteFile %s: %v", rel, err)
-		}
-	}
 	wantLine := 0
 	for i, line := range strings.Split(fixtureVocabulary, "\n") {
 		if strings.TrimSpace(line) == "EventPublished:" {
@@ -308,39 +300,66 @@ func TestVocabularyFindingAnchorsAtTheRecordedTerm(t *testing.T) {
 	if wantLine < 2 {
 		t.Fatalf("fixture writes EventPublished on line %d; it must sit below line 1 to prove anything", wantLine)
 	}
+	for name, tc := range map[string]struct {
+		files string
+		path  string
+	}{
+		"the default domain file": {
+			files: "  domain.arclint.yaml: |\n" + nestFixture(fixtureVocabulary),
+			path:  "domain.arclint.yaml",
+		},
+		"the domain file the fixture ruleset names": {
+			files: "  rules.arclint.yaml: |\n    domain:\n      file: docs/model.arclint.yaml\n" +
+				"  docs/model.arclint.yaml: |\n" + nestFixture(fixtureVocabulary) +
+				"  domain.arclint.yaml: |\n    version: 1\n    project: ignored\n    contexts: {}\n",
+			path: "docs/model.arclint.yaml",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			write := func(rel, content string) {
+				t.Helper()
+				target := filepath.Join(root, filepath.FromSlash(rel))
+				if err := os.MkdirAll(filepath.Dir(target), 0o750); err != nil {
+					t.Fatalf("MkdirAll %s: %v", rel, err)
+				}
+				if err := os.WriteFile(target, []byte(content), 0o600); err != nil {
+					t.Fatalf("WriteFile %s: %v", rel, err)
+				}
+			}
+			write("rules.arclint.yaml", vocabularyRuleset)
+			write(".arclint/extensions/require_raised_by.ts", requireRaisedByExtension)
+			write(".arclint/tests/vocabulary_event_anchor.yaml",
+				"rule: \"vocabulary/events-name-their-raiser\"\nfiles:\n"+tc.files+
+					"expect:\n  - path: "+tc.path+"\n"+
+					fmt.Sprintf("    line: %d\n", wantLine)+
+					"    message: 'event \"EventPublished\" names nothing that raises it'\n")
 
-	write("rules.arclint.yaml", vocabularyRuleset)
-	write(".arclint/extensions/require_raised_by.ts", requireRaisedByExtension)
-	write(".arclint/tests/vocabulary_event_anchor.yaml",
-		"rule: \"vocabulary/events-name-their-raiser\"\nfiles:\n"+
-			"  domain.arclint.yaml: |\n"+nestFixture(fixtureVocabulary)+
-			"expect:\n  - path: domain.arclint.yaml\n"+
-			fmt.Sprintf("    line: %d\n", wantLine)+
-			"    message: 'event \"EventPublished\" names nothing that raises it'\n")
-
-	repo, err := yamlrule.NewRepository(filepath.Join(root, "rules.arclint.yaml"), nil)
-	if err != nil {
-		t.Fatalf("NewRepository: %v", err)
-	}
-	extensions, err := sobekextension.NewEvaluator(root)
-	if err != nil {
-		t.Fatalf("NewEvaluator: %v", err)
-	}
-	uc, err := application.NewRunRuleTests(repo, ruletest.NewSource(root),
-		ruletest.NewObserver(golang.NewProducer()), extensions, yamlvocab.Parser{})
-	if err != nil {
-		t.Fatalf("NewRunRuleTests: %v", err)
-	}
-	results, err := uc.Execute()
-	if err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	if len(results) != 1 {
-		t.Fatalf("results = %d, want 1", len(results))
-	}
-	if got := results[0]; !got.Passed() {
-		t.Fatalf("result = %+v, want the finding anchored at line %d, where EventPublished is written",
-			got, wantLine)
+			repo, err := yamlrule.NewRepository(filepath.Join(root, "rules.arclint.yaml"), nil)
+			if err != nil {
+				t.Fatalf("NewRepository: %v", err)
+			}
+			extensions, err := sobekextension.NewEvaluator(root)
+			if err != nil {
+				t.Fatalf("NewEvaluator: %v", err)
+			}
+			uc, err := application.NewRunRuleTests(repo, ruletest.NewSource(root),
+				ruletest.NewObserver(golang.NewProducer()), extensions, yamlvocab.Parser{}, yamlrule.RecordingParser{})
+			if err != nil {
+				t.Fatalf("NewRunRuleTests: %v", err)
+			}
+			results, err := uc.Execute()
+			if err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+			if len(results) != 1 {
+				t.Fatalf("results = %d, want 1", len(results))
+			}
+			if got := results[0]; !got.Passed() {
+				t.Fatalf("result = %+v, want the finding anchored at %s:%d, where EventPublished is written",
+					got, tc.path, wantLine)
+			}
+		})
 	}
 }
 
