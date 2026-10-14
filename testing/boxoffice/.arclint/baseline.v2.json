@@ -6,6 +6,7 @@
     "aggregate/protects-an-invariant",
     "aggregate/references-by-identity",
     "aggregate/root-declared",
+    "aggregate/root-only-references",
     "app/surface-tested",
     "app/wires-the-sides",
     "assertion/checked-by-its-operation",
@@ -21,6 +22,7 @@
     "domain_event/no-setters",
     "domain_isolation/model-imports-nothing-outside-itself",
     "domain_service/declared",
+    "domain_service/not-held-by-aggregates",
     "entities/aggregate-slices",
     "entities/aggregates-encapsulate",
     "entities/deterministic",
@@ -29,6 +31,7 @@
     "entities/no-panic",
     "entities/no-store-machinery",
     "entities/technology-free",
+    "entity/identity",
     "factory/declared",
     "features/deterministic",
     "features/orchestrate-entities-only",
@@ -37,6 +40,7 @@
     "fsd/slice-isolation",
     "invariant/enforced-at-every-mutation",
     "repository/declared",
+    "repository/not-called-from-aggregates",
     "shared/kit-stands-alone",
     "source/slog-only",
     "source/snake-case",
@@ -107,6 +111,24 @@
       "ruleId": "aggregate/invariants-enforced-by-root",
       "subject": "ordering",
       "message": "aggregate Order: invariant published-tiers-only is not enforced by a method of the root; expected EnsurePublishedTiersOnly (go)",
+      "count": 1
+    },
+    {
+      "ruleId": "entity/identity",
+      "subject": "capacity",
+      "message": "aggregate Capacity: Capacity declares no field holding its identity CapacityID; no type in the code spells CapacityID",
+      "count": 1
+    },
+    {
+      "ruleId": "entity/identity",
+      "subject": "catalog",
+      "message": "aggregate Event: Event declares no field holding its identity EventID; no type in the code spells EventID",
+      "count": 1
+    },
+    {
+      "ruleId": "entity/identity",
+      "subject": "ordering",
+      "message": "aggregate Order: Order declares no field holding its identity OrderID; no type in the code spells OrderID",
       "count": 1
     },
     {

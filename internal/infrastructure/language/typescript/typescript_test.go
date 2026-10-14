@@ -226,7 +226,8 @@ func TestFactsDeclarationsAcrossManyFiles(t *testing.T) {
 	sources := map[string]string{}
 	for i := range 4 * runtime.GOMAXPROCS(0) {
 		sources[fmt.Sprintf("src/m%03d.ts", i)] = fmt.Sprintf(
-			"export class Thing%d {}\nexport function make%d(): Thing%d { return new Thing%d(); }\n", i, i, i, i)
+			"export class Thing%d {}\nexport function make%d(): Thing%d { return new Thing%d(); }\n", i, i, i, i,
+		)
 	}
 	root, files := writeFiles(t, sources)
 	facts, err := NewProducer().Facts(root, files, []rule.Fact{rule.FactDeclarations, rule.FactCalls})

@@ -12,3 +12,6 @@ GNUmakefile
 coverage.out
 coverage.html
 .codex/config.toml
+
+# Python resolution oracle environment (tools/pythonoracle)
+.venv-oracle/

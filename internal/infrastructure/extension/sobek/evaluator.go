@@ -204,7 +204,19 @@ func (e *Evaluator) host(supplied conformance.Facts, knowledge vocab.UbiquitousL
 				ImportsAvailable: facts.Supports(rule.FactImports), Imports: imports(path),
 				DeclarationsAvailable: facts.Supports(rule.FactDeclarations),
 				Decls:                 []DeclInfo{}, ParseError: facts.ParseFailure,
-				Dependencies: []DependencyInfo{},
+				Dependencies:           []DependencyInfo{},
+				FieldTypesAvailable:    facts.Supports(rule.FactFieldTypes),
+				CallsAvailable:         facts.Supports(rule.FactCalls),
+				Calls:                  []CallInfo{},
+				ResolvedCallsAvailable: facts.Supports(rule.FactResolvedCalls),
+			}
+			for _, c := range facts.Calls {
+				call := CallInfo{Callee: c.Callee, Line: c.Line, Enclosing: c.Enclosing, EnclosingOwner: c.EnclosingOwner}
+				if info.ResolvedCallsAvailable {
+					call.Target = referenceInfo(c.Target)
+					call.Receiver = referenceInfo(c.Receiver)
+				}
+				info.Calls = append(info.Calls, call)
 			}
 			for _, d := range supplied.DependenciesFor(path) {
 				kind, target := d.Target()
@@ -223,6 +235,10 @@ func (e *Evaluator) host(supplied conformance.Facts, knowledge vocab.UbiquitousL
 					Exported: d.Exported, StartLine: d.StartLine, EndLine: d.EndLine,
 					Results: append([]string(nil), d.Results...),
 				}
+				for _, ref := range d.Holds {
+					decl.Holds = append(decl.Holds, *referenceInfo(ref))
+				}
+				decl.Type = referenceInfo(d.Type)
 				for _, param := range d.Params {
 					decl.Params = append(decl.Params, ParamInfo{
 						Name: param.Name, Type: param.Type,
@@ -423,4 +439,16 @@ func NewSDKWriter(root string) (SDKWriter, error) {
 // .arclint/extensions.
 func (w SDKWriter) Write() ([]string, error) {
 	return SDKInit(w.root)
+}
+
+// referenceInfo is the SDK view of one resolved reference, nil for the
+// absent one: a call that is not a method call has no receiver.
+func referenceInfo(r conformance.Reference) *ReferenceInfo {
+	if r.IsZero() {
+		return nil
+	}
+	return &ReferenceInfo{
+		Resolution: string(r.Resolution), File: r.File, Package: r.Package,
+		Owner: r.Owner, Name: r.Name, Reason: r.Reason,
+	}
 }

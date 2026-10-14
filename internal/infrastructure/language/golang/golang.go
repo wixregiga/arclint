@@ -9,6 +9,7 @@ package golang
 
 import (
 	"fmt"
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
@@ -37,23 +38,45 @@ func (Producer) Language() rule.Language { return rule.LanguageGo }
 // declares. Files are analyzed in parallel; the resolver is read-only
 // once built, and each worker parses into its own token.FileSet.
 func (Producer) Facts(root string, files []conformance.ObservedFile, requested []rule.Fact) (map[string]conformance.LanguageFacts, error) {
+	return produce(root, files, requested, newTypeCheck)
+}
+
+// produce analyzes the files with the type check typeChecker builds.
+func produce(root string, files []conformance.ObservedFile, requested []rule.Fact, typeChecker func(string, []conformance.ObservedFile, *resolver) *typeCheck) (map[string]conformance.LanguageFacts, error) {
 	res := newResolver(root, files)
-	wantDeclarations := false
-	wantCalls := false
+	want := wanted{}
 	for _, f := range requested {
-		if f == rule.FactDeclarations {
-			wantDeclarations = true
+		switch f {
+		case rule.FactDeclarations:
+			want.declarations = true
+		case rule.FactCalls:
+			want.calls = true
+		case rule.FactResolvedCalls:
+			want.resolvedCalls = true
+		case rule.FactFieldTypes:
+			want.fieldTypes = true
+		case rule.FactFileTree, rule.FactImports:
+			// Imports are always produced; the file tree is the walk's.
 		}
-		if f == rule.FactCalls {
-			wantCalls = true
-		}
+	}
+	want.resolvedCalls = want.resolvedCalls && want.calls
+	want.fieldTypes = want.fieldTypes && want.declarations
+	var tc *typeCheck
+	if want.resolvedCalls || want.fieldTypes {
+		tc = typeChecker(root, files, res)
 	}
 	return fanout.Analyze(files, analyzable, func() fanout.Analyzer {
 		fset := token.NewFileSet()
 		return func(rel string) conformance.LanguageFacts {
-			return analyzeFile(fset, res, root, rel, wantDeclarations, wantCalls)
+			return analyzeFile(fset, res, tc, root, rel, want)
 		}
 	}), nil
+}
+
+// wanted is the fact classes one observation asks for; a resolved
+// class is honored only together with the view it resolves.
+type wanted struct {
+	declarations, calls, resolvedCalls, fieldTypes bool
 }
 
 // analyzable reports whether the go tool would ever consider the file:
@@ -70,30 +93,31 @@ func analyzable(rel string) bool {
 	return true
 }
 
-func analyzeFile(fset *token.FileSet, res *resolver, root, rel string, wantDeclarations, wantCalls bool) conformance.LanguageFacts {
+func analyzeFile(fset *token.FileSet, res *resolver, tc *typeCheck, root, rel string, want wanted) conformance.LanguageFacts {
 	facts := conformance.LanguageFacts{Language: rule.LanguageGo, ImportsAvailable: true}
-	src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
-	if err != nil {
-		facts.ParseFailure = fmt.Sprintf("read: %v", err)
-		return facts
-	}
-	mode := parser.ImportsOnly
-	if wantDeclarations || wantCalls {
-		mode = parser.SkipObjectResolution
-	}
-	parsed, err := parser.ParseFile(fset, rel, src, mode)
-	if err != nil {
-		facts.ParseFailure = fmt.Sprintf("parse: %v", err)
+	parsed, fset, resolved, failure := parseFile(fset, tc, root, rel, want)
+	if failure != "" {
+		facts.ParseFailure = failure
 		return facts
 	}
 	facts.Package = parsed.Name.Name
-	if wantDeclarations {
+	if want.declarations {
 		facts.DeclarationsAvailable = true
-		facts.Declarations = extractDeclarations(fset, parsed)
+		var holds resolution
+		if want.fieldTypes {
+			facts.FieldTypesAvailable = true
+			holds = resolved
+		}
+		facts.Declarations = extractDeclarations(fset, parsed, holds)
 	}
-	if wantCalls {
+	if want.calls {
 		facts.CallsAvailable = true
-		facts.Calls = extractCalls(fset, parsed)
+		var calls resolution
+		if want.resolvedCalls {
+			facts.ResolvedCallsAvailable = true
+			calls = resolved
+		}
+		facts.Calls = extractCalls(fset, parsed, calls)
 	}
 	owner := res.ownerOf(path.Dir(rel))
 	for _, spec := range parsed.Imports {
@@ -106,4 +130,34 @@ func analyzeFile(fset *token.FileSet, res *resolver, root, rel string, wantDecla
 		facts.Imports = append(facts.Imports, imp)
 	}
 	return facts
+}
+
+// parseFile returns the file's syntax with the file set that positions
+// it and, when resolution was asked for, what resolves its references:
+// the toolchain's syntax and type information for a file it
+// type-checked, otherwise the worker's own parse with every reference
+// undetermined and the reason.
+func parseFile(fset *token.FileSet, tc *typeCheck, root, rel string, want wanted) (*ast.File, *token.FileSet, resolution, string) {
+	if tc != nil {
+		if tf, ok := tc.files[rel]; ok {
+			return tf.file, tf.fset, newTypedResolution(tc, tf), ""
+		}
+	}
+	src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+	if err != nil {
+		return nil, nil, nil, fmt.Sprintf("read: %v", err)
+	}
+	mode := parser.ImportsOnly
+	if want.declarations || want.calls {
+		mode = parser.SkipObjectResolution
+	}
+	parsed, err := parser.ParseFile(fset, rel, src, mode)
+	if err != nil {
+		return nil, nil, nil, fmt.Sprintf("parse: %v", err)
+	}
+	var resolved resolution
+	if tc != nil {
+		resolved = unresolvedFile{reason: tc.unresolvedReason(rel)}
+	}
+	return parsed, fset, resolved, ""
 }

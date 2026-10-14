@@ -207,6 +207,25 @@ func completeEvaluation(r rule.Rule, subject rule.Subject, vs []Violation) (Eval
 	return NewEvaluation(r.ID(), subject, outcome, r.Enforcement(), vs)
 }
 
+// judgedEvaluation completes the evaluation of a check that follows
+// references: a proven violation decides it, and without one any
+// reference it could not follow leaves it undetermined, with the
+// reasons, instead of conforming.
+func judgedEvaluation(r rule.Rule, subject rule.Subject, vs []Violation, unresolved []string) (Evaluation, error) {
+	if len(unresolved) == 0 {
+		return completeEvaluation(r, subject, vs)
+	}
+	e, err := completeEvaluation(r, subject, vs)
+	if err != nil || e.Outcome() != OutcomeConforms {
+		return e, err
+	}
+	e, err = NewEvaluation(r.ID(), subject, OutcomeUndetermined, r.Enforcement(), nil)
+	if err != nil {
+		return Evaluation{}, err
+	}
+	return e.withUnresolved(unresolved)
+}
+
 // simpleEvaluation builds a violation-less Evaluation with an explicit
 // outcome (unsupported, not_applicable, failed).
 func simpleEvaluation(r rule.Rule, subject rule.Subject, outcome Outcome) (Evaluation, error) {
@@ -287,6 +306,8 @@ func coverageSummaries(evals []Evaluation) ([]Diagnostic, error) {
 	type tally struct {
 		unsupported, failed int
 		limitations         []string
+		undetermined        int
+		unresolved          []string
 	}
 	byRule := map[string]*tally{}
 	var order []string
@@ -306,8 +327,12 @@ func coverageSummaries(evals []Evaluation) ([]Diagnostic, error) {
 			}
 		case OutcomeFailed:
 			t.failed++
-		case OutcomeConforms, OutcomeViolates, OutcomeSuspectedViolation,
-			OutcomeUndetermined, OutcomeNotApplicable:
+		case OutcomeUndetermined:
+			if reasons := e.Unresolved(); len(reasons) > 0 {
+				t.undetermined++
+				t.unresolved = append(t.unresolved, reasons...)
+			}
+		case OutcomeConforms, OutcomeViolates, OutcomeSuspectedViolation, OutcomeNotApplicable:
 			// Coverage summarizes only the evaluation gaps.
 		}
 	}
@@ -326,6 +351,13 @@ func coverageSummaries(evals []Evaluation) ([]Diagnostic, error) {
 			}
 			out = append(out, d)
 		}
+		if t.undetermined > 0 {
+			d, err := NewCoverage(q, undeterminedSummary(q, t.undetermined, t.unresolved))
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, d)
+		}
 		if t.failed > 0 {
 			d, err := NewCoverage(q,
 				fmt.Sprintf("rule %s: %d subject(s) failed evaluation; see operational diagnostics", q, t.failed))
@@ -336,6 +368,25 @@ func coverageSummaries(evals []Evaluation) ([]Diagnostic, error) {
 		}
 	}
 	return out, nil
+}
+
+// unresolvedShown is how many unresolved references a coverage
+// summary names before it counts the rest.
+const unresolvedShown = 3
+
+// undeterminedSummary says which subjects a Rule could not decide and
+// the first references it could not follow.
+func undeterminedSummary(rule string, subjects int, unresolved []string) string {
+	msg := fmt.Sprintf("rule %s: %d subject(s) undetermined; %d reference(s) could not be resolved: ", rule, subjects, len(unresolved))
+	shown := unresolved
+	if len(shown) > unresolvedShown {
+		shown = shown[:unresolvedShown]
+	}
+	msg += strings.Join(shown, "; ")
+	if rest := len(unresolved) - len(shown); rest > 0 {
+		msg += fmt.Sprintf("; and %d more", rest)
+	}
+	return msg
 }
 
 // staticPrefix returns the longest glob-free directory prefix of a

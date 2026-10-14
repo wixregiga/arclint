@@ -60,6 +60,84 @@ analysis produces `undetermined`; parse failure produces `failed`. Findings
 remain findings even when suppressed or baselined. A context with no named
 invariants or assertions explicitly reports that no coverage is established.
 
+## Rules that follow calls and field types
+
+Some built-in rules judge the role a type plays: an aggregate never calls a
+repository (`repository/not-called-from-aggregates`), nothing outside an
+aggregate holds one of its members (`aggregate/root-only-references`), no
+aggregate holds a domain service (`domain_service/not-held-by-aggregates`),
+and an entity holds its identity (`entity/identity`). Names alone
+cannot decide these, so arclint resolves every call to the declaration it
+reaches, and every field to the declarations it holds.
+
+arclint resolves inside the binary, for Go, TypeScript, and Python alike.
+It runs no compiler (no `go`, `tsc`, or Python) and never touches the
+network; it reads the repository's own source and manifests, and, for a
+Go dependency, only the package clause of its vendored or module-cache
+copy.
+
+- **Go**: arclint type-checks the repository's packages from source
+  with the standard library's type checker, the files `go build` would
+  compile for the machine arclint runs on. A package outside the
+  repository is known by its name and by the type names the repository
+  uses from it, so a call into it is *external*. Test files are not
+  type-checked.
+- **TypeScript**: arclint follows imports, re-exports, and declared
+  types through the repository's modules, with the paths and base URL
+  of `tsconfig.json`.
+- **Python**: arclint follows imports, class bases, and annotations
+  through the repository's modules; an unannotated value has no
+  declared type.
+
+Every reference ends as one of four answers: *declared* (a declaration
+in an observed file of the repository), *external* (the standard
+library, a dependency, or a builtin), *local* (a type without a
+file-level name, such as an interface literal), or *undetermined*.
+
+A reference arclint cannot follow is never guessed. A function value,
+a value whose type comes from outside the repository and whose method
+a repository type also declares, a file the build leaves out, or an
+import no manifest provides is *undetermined*, with the reason. A
+rule that proves a violation reports it regardless; a rule that finds
+none but met an undetermined reference reports its subject undetermined
+instead of conforming, and `arclint check` prints a coverage line
+naming the first references it could not follow:
+
+```text
+coverage: rule repository/not-called-from-aggregates: 1 subject(s) undetermined;
+  2 reference(s) could not be resolved: internal/order/order.go:41: call clock in
+  Order.Place: clock is a field of function type; the function it holds is not declared; ...
+```
+
+A call belongs to the nearest named function or method around it. An
+anonymous function is part of the method that contains it, because it
+usually runs while that method runs: a Go function literal, a TypeScript
+arrow function, anonymous function expression, or method of an object
+literal, and a Python lambda. So a repository call inside a sort
+comparator or a deferred cleanup of an aggregate method counts as the
+aggregate calling the repository. A *named* function nested inside a
+method, a Python `def` or a TypeScript `function f()`, is its own
+function with no class, and its calls are not the method's. A decorator,
+a member's computed name, and a Python parameter default run when the
+class or function is defined, so their calls belong to the code around
+it; a TypeScript parameter default runs on every call and belongs to the
+method.
+
+A field holds its type and the element types inside pointers, collections,
+and type arguments; a function type holds nothing. A generic type's own
+type parameter holds nothing either: the field that instantiates it,
+`Box[OrderLine]`, holds `OrderLine`. A field's own type is the one its
+values are, through pointers, the repository's type aliases, and an
+optional or nullable wrapper:
+`entity/identity` asks for a field whose own type is the identity, so
+`id *OrderID` or `id?: OrderID` counts and a list of `OrderID` values
+does not. A TypeScript `static` property is no field, the way a Python
+`ClassVar` is none.
+
+Extension rules see the same facts through `ctx.facts(path)`: `calls`,
+each with its `target` and `receiver` when `resolvedCallsAvailable`, and
+the `holds` and `type` of every field when `fieldTypesAvailable`.
+
 ## What the file looks like
 
 Names are keys. Each context holds its aggregates, value objects,

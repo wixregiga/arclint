@@ -18,6 +18,9 @@ type Evaluation struct {
 	assurance   rule.Assurance
 	limitations []string
 	violations  []Violation
+	// unresolved lists the references an undetermined evaluation could
+	// not follow, each with its location and reason.
+	unresolved []string
 }
 
 // NewEvaluation constructs a valid Evaluation or rejects it. The
@@ -93,6 +96,21 @@ func (e Evaluation) Assurance() rule.Assurance { return e.assurance }
 
 // Limitations returns the documented analysis limits.
 func (e Evaluation) Limitations() []string { return append([]string(nil), e.limitations...) }
+
+// Unresolved lists the references an undetermined evaluation could not
+// follow, each with its location and the reason resolution stopped.
+func (e Evaluation) Unresolved() []string { return append([]string(nil), e.unresolved...) }
+
+// withUnresolved records why an undetermined evaluation could not
+// decide; any other outcome either proved its conclusion or was not
+// reached by following references.
+func (e Evaluation) withUnresolved(reasons []string) (Evaluation, error) {
+	if len(reasons) > 0 && e.outcome != OutcomeUndetermined {
+		return Evaluation{}, fmt.Errorf("evaluation of %s: outcome %q carries unresolved references", e.ruleID, e.outcome)
+	}
+	e.unresolved = append([]string(nil), reasons...)
+	return e, nil
+}
 
 // Violations returns the Violations produced by this evaluation.
 func (e Evaluation) Violations() []Violation { return append([]Violation(nil), e.violations...) }

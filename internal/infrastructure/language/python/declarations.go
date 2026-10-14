@@ -17,7 +17,10 @@ import (
 type declarationFacts struct {
 	Decls      []conformance.Declaration
 	Calls      []conformance.Call
+	CallNodes  []*gotreesitter.Node
 	ParseError string
+	walker     *pyWalker
+	root       *gotreesitter.Node
 }
 
 // normalizeType collapses whitespace runs in source-text types so
@@ -66,7 +69,11 @@ func extractDeclarations(ps *parsers, src []byte) *declarationFacts {
 	}
 	w := &pyWalker{lang: parser.Language(), src: src, out: out}
 	w.walk(tree.RootNode(), "", false)
-	w.walkCalls(tree.RootNode(), "")
+	out.walker, out.root = w, tree.RootNode()
+	w.imports = importBindings(w, tree.RootNode())
+	w.rebound = moduleRebindings(w, tree.RootNode())
+	w.fields(tree.RootNode(), fieldScope{})
+	w.walkCalls(tree.RootNode(), "", "")
 	return out
 }
 
@@ -92,9 +99,14 @@ func pythonLanguage() (*gotreesitter.Language, error) {
 }
 
 type pyWalker struct {
-	lang *gotreesitter.Language
-	src  []byte
-	out  *declarationFacts
+	lang    *gotreesitter.Language
+	src     []byte
+	out     *declarationFacts
+	imports []importBinding
+	// rebound names a module-level name bound more than once, by a
+	// second import or by an assignment, def, or class, so an import of
+	// it does not decide what it means.
+	rebound map[string]bool
 }
 
 func (w *pyWalker) name(n *gotreesitter.Node) string {
@@ -117,7 +129,31 @@ func (w *pyWalker) add(kind, name, owner string, n *gotreesitter.Node) *conforma
 }
 
 // nodeIdentifier is the tree-sitter node type of a bare identifier.
-const nodeIdentifier = "identifier"
+const (
+	nodeType            = "type"
+	pythonNone          = "None"
+	bindingImport       = "import"
+	nodeDecorator       = "decorator"
+	builtinStaticmethod = "staticmethod"
+	builtinClassmethod  = "classmethod"
+	builtinSetattr      = "setattr"
+
+	builtinSuper      = "super"
+	nodeString        = "string"
+	builtinsModule    = "builtins"
+	nodeIdentifier    = "identifier"
+	nodeAttribute     = "attribute"
+	nodeAssignment    = "assignment"
+	nodeClass         = "class_definition"
+	nodeFunction      = "function_definition"
+	nodeDecorated     = "decorated_definition"
+	nodeCall          = "call"
+	bindingFunction   = "func"
+	bindingUnknown    = "unknown"
+	bindingAnnotation = "annotation"
+	bindingSelf       = "self"
+	typingModule      = "typing"
+)
 
 // param maps one node under parameters to the neutral shape. Splat
 // parameters keep their prefix in Name ("*args", "**kwargs") so the two
@@ -140,7 +176,7 @@ func (w *pyWalker) param(pn *gotreesitter.Node) (conformance.DeclarationParam, b
 				p.Variadic = true
 			}
 		}
-		if t := pn.ChildByFieldName("type", w.lang); t != nil {
+		if t := pn.ChildByFieldName(nodeType, w.lang); t != nil {
 			p.Type = normalizeType(t.Text(w.src))
 		}
 	case "default_parameter", "typed_default_parameter":
@@ -150,7 +186,7 @@ func (w *pyWalker) param(pn *gotreesitter.Node) (conformance.DeclarationParam, b
 		} else if pn.NamedChildCount() > 0 && pn.NamedChild(0).Type(w.lang) == nodeIdentifier {
 			p.Name = pn.NamedChild(0).Text(w.src)
 		}
-		if t := pn.ChildByFieldName("type", w.lang); t != nil {
+		if t := pn.ChildByFieldName(nodeType, w.lang); t != nil {
 			p.Type = normalizeType(t.Text(w.src))
 		}
 	case "list_splat_pattern", "dictionary_splat_pattern":
@@ -186,12 +222,12 @@ func (w *pyWalker) signature(n *gotreesitter.Node) ([]conformance.DeclarationPar
 // name; inFunction distinguishes nested defs from methods.
 func (w *pyWalker) walk(n *gotreesitter.Node, owner string, inFunction bool) {
 	switch n.Type(w.lang) {
-	case "decorated_definition":
+	case nodeDecorated:
 		if def := n.ChildByFieldName("definition", w.lang); def != nil {
 			w.walk(def, owner, inFunction)
 		}
 		return
-	case "class_definition":
+	case nodeClass:
 		name := w.name(n)
 		w.add("class", name, owner, n)
 		if body := n.ChildByFieldName("body", w.lang); body != nil {
@@ -200,11 +236,11 @@ func (w *pyWalker) walk(n *gotreesitter.Node, owner string, inFunction bool) {
 			}
 		}
 		return
-	case "function_definition":
+	case nodeFunction:
 		name := w.name(n)
 		kind := "method"
 		if owner == "" || inFunction {
-			kind = "func"
+			kind = bindingFunction
 		}
 		if d := w.add(kind, name, owner, n); d != nil {
 			d.Params, d.Results = w.signature(n)
@@ -222,25 +258,49 @@ func (w *pyWalker) walk(n *gotreesitter.Node, owner string, inFunction bool) {
 	}
 }
 
-func (w *pyWalker) walkCalls(n *gotreesitter.Node, enclosing string) {
+func (w *pyWalker) walkCalls(n *gotreesitter.Node, enclosing, owner string) {
 	t := n.Type(w.lang)
 	next := enclosing
 	switch t {
-	case "function_definition":
+	case nodeClass:
+		owner, next = w.name(n), ""
+	case nodeFunction:
+		// Defaults and annotations run where the function is defined;
+		// only the body runs inside it.
+		bodyOwner := owner
+		if enclosing != "" {
+			bodyOwner = ""
+		}
 		if name := w.name(n); name != "" {
 			next = name
 		}
-	case "call":
-		if callee := w.callCallee(n); callee != "" && enclosing != "" {
+		body := n.ChildByFieldName("body", w.lang)
+		for i := 0; i < n.NamedChildCount(); i++ {
+			c := n.NamedChild(i)
+			if body != nil && c.StartByte() == body.StartByte() && c.EndByte() == body.EndByte() {
+				w.walkCalls(c, next, bodyOwner)
+			} else {
+				w.walkCalls(c, enclosing, owner)
+			}
+		}
+		return
+	case nodeCall:
+		if callee := w.callCallee(n); callee != "" {
+			callOwner := owner
+			if enclosing == "" {
+				callOwner = ""
+			}
+			w.out.CallNodes = append(w.out.CallNodes, n)
 			w.out.Calls = append(w.out.Calls, conformance.Call{
-				Callee:    callee,
-				Line:      int(n.StartPoint().Row) + 1,
-				Enclosing: enclosing,
+				Callee:         callee,
+				Line:           int(n.StartPoint().Row) + 1,
+				Enclosing:      enclosing,
+				EnclosingOwner: callOwner,
 			})
 		}
 	}
 	for i := 0; i < n.NamedChildCount(); i++ {
-		w.walkCalls(n.NamedChild(i), next)
+		w.walkCalls(n.NamedChild(i), next, owner)
 	}
 }
 
@@ -252,10 +312,10 @@ func (w *pyWalker) callCallee(n *gotreesitter.Node) string {
 	switch fn.Type(w.lang) {
 	case nodeIdentifier:
 		return fn.Text(w.src)
-	case "attribute":
-		if attr := fn.ChildByFieldName("attribute", w.lang); attr != nil {
+	case nodeAttribute:
+		if attr := fn.ChildByFieldName(nodeAttribute, w.lang); attr != nil {
 			return attr.Text(w.src)
 		}
 	}
-	return ""
+	return fn.Text(w.src)
 }

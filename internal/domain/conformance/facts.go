@@ -46,9 +46,7 @@ func NewFacts(r rule.Rule, zones []rule.Zone, obs Observations) (Facts, error) {
 // a Rule's supplied Facts cannot broaden itself into an inspection view.
 func NewInspectionFacts(zones []rule.Zone, obs Observations, required ...rule.Fact) (Facts, error) {
 	for _, fact := range required {
-		switch fact {
-		case rule.FactFileTree, rule.FactImports, rule.FactDeclarations, rule.FactCalls:
-		default:
+		if !fact.Valid() {
 			return Facts{}, fmt.Errorf("inspection facts: unknown class %q", fact)
 		}
 	}
@@ -80,21 +78,33 @@ func (f Facts) FactsFor(path string) (LanguageFacts, bool) {
 	if !f.Contains(path) {
 		return LanguageFacts{}, false
 	}
-	facts, ok := f.source.observations.FactsFor(path)
+	facts, ok := f.source.observations.facts[path]
 	if !ok {
 		return LanguageFacts{}, false
 	}
 	facts.ImportsAvailable = f.required[rule.FactImports] && facts.ImportsAvailable
 	facts.DeclarationsAvailable = f.required[rule.FactDeclarations] && facts.DeclarationsAvailable
 	facts.CallsAvailable = f.required[rule.FactCalls] && facts.CallsAvailable
-	if !facts.Supports(rule.FactImports) {
-		facts.Imports = nil
+	facts.ResolvedCallsAvailable = f.required[rule.FactResolvedCalls] && facts.Supports(rule.FactResolvedCalls)
+	facts.FieldTypesAvailable = f.required[rule.FactFieldTypes] && facts.Supports(rule.FactFieldTypes)
+	// Only the classes the rule requires are copied; the rest stay
+	// out of its view.
+	facts.Imports = nil
+	if facts.Supports(rule.FactImports) {
+		facts.Imports = append([]Import(nil), f.source.observations.facts[path].Imports...)
 	}
-	if !facts.Supports(rule.FactDeclarations) {
-		facts.Declarations = nil
+	facts.Declarations = nil
+	if facts.Supports(rule.FactDeclarations) {
+		facts.Declarations = copyDeclarations(f.source.observations.facts[path].Declarations, facts.FieldTypesAvailable)
 	}
-	if !facts.Supports(rule.FactCalls) {
-		facts.Calls = nil
+	facts.Calls = nil
+	if facts.Supports(rule.FactCalls) {
+		facts.Calls = append([]Call(nil), f.source.observations.facts[path].Calls...)
+		if !facts.ResolvedCallsAvailable {
+			for i := range facts.Calls {
+				facts.Calls[i].Target, facts.Calls[i].Receiver = Reference{}, Reference{}
+			}
+		}
 	}
 	return facts, true
 }

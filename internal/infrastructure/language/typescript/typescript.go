@@ -11,6 +11,8 @@
 package typescript
 
 //go:generate go run ../../../../tools/gennodestdlib -out stdlib_gen.go -pkg typescript
+//go:generate npm exec --yes --package=typescript@5.9.3 --package=@types/node@24.10.1 -- node ../../../../tools/tsoracle/generate_builtins.cjs builtin_declarations_gen.go
+//go:generate gofmt -w builtin_declarations_gen.go
 
 import (
 	"fmt"
@@ -46,9 +48,16 @@ func (Producer) Language() rule.Language { return rule.LanguageTypeScript }
 func (Producer) Facts(root string, files []conformance.ObservedFile, requested []rule.Fact) (map[string]conformance.LanguageFacts, error) {
 	wantDeclarations := false
 	wantCalls := false
+	wantResolvedCalls, wantFieldTypes := false, false
 	for _, f := range requested {
 		if f == rule.FactDeclarations {
 			wantDeclarations = true
+		}
+		if f == rule.FactResolvedCalls {
+			wantResolvedCalls, wantCalls = true, true
+		}
+		if f == rule.FactFieldTypes {
+			wantFieldTypes, wantDeclarations = true, true
 		}
 		if f == rule.FactCalls {
 			wantCalls = true
@@ -60,7 +69,11 @@ func (Producer) Facts(root string, files []conformance.ObservedFile, requested [
 			return analyzeFile(ps, root, rel, wantDeclarations, wantCalls)
 		}
 	})
-	newResolver(root, files).classifyImports(facts)
+	r := newResolver(root, files)
+	r.classifyImports(facts)
+	if wantResolvedCalls || wantFieldTypes {
+		resolveFacts(root, r, facts, wantResolvedCalls, wantFieldTypes)
+	}
 	return facts, nil
 }
 

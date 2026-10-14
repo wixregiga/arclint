@@ -218,17 +218,22 @@ func ddd() MetaModel {
 				Definition: "The per-file call view: callee identifier, line, and enclosing function, parser-exact and unresolved.",
 				Languages:  Languages{All: true},
 			},
+			{
+				Name:       "resolved_calls",
+				Definition: "The call view with every call resolved by the language's own resolution: the declaration it reaches and, for a method call, the declared type of the value it is called on, or undetermined with the reason.",
+				Languages:  Languages{All: true},
+			},
+			{
+				Name:       "field_types",
+				Definition: "The declaration view with every field resolved by the language's own resolution to the declarations whose values it holds, or undetermined with the reason.",
+				Languages:  Languages{All: true},
+			},
 		},
 		Milestones: []Milestone{
 			{
 				Key:     "field-declarations",
 				Needs:   "Field declarations from the Python adapter, which emits class, method, and func today.",
 				Unlocks: []string{"value_object/no-identity", "domain_event/occurrence-time"},
-			},
-			{
-				Key:     "field-types",
-				Needs:   "The declared type of every field, so that a field of the recorded identity type can be told from any other, and a root held in a field from an identity held there.",
-				Unlocks: []string{"entity/identity", "aggregate/root-only-references", "domain_service/not-held-by-aggregates"},
 			},
 			{
 				Key:     "field-mutability",
@@ -238,7 +243,7 @@ func ddd() MetaModel {
 			{
 				Key:     "resolved-calls",
 				Needs:   "The declaration a call resolves to, so that a call from an aggregate into a repository, or an equality check that compares identities, is a fact rather than a name match.",
-				Unlocks: []string{"repository/not-called-from-aggregates", "entity/equality-by-identity"},
+				Unlocks: []string{"entity/equality-by-identity"},
 			},
 			{
 				Key:     "transaction-facts",
@@ -787,9 +792,10 @@ func ddd() MetaModel {
 							{Work: "vernon2013", Chapter: 5, Page: "173"},
 						},
 						Enforcement: Enforcement{
-							Facts:    []string{"declarations"},
-							Needs:    "field-types",
-							Severity: severityError,
+							By:        EvaluatorDomain,
+							Facts:     []string{"file_tree", "declarations", "field_types"},
+							Languages: Languages{All: true},
+							Severity:  severityError,
 						},
 					},
 					{
@@ -1314,9 +1320,10 @@ func ddd() MetaModel {
 							{Work: "fowler-aggregate"},
 						},
 						Enforcement: Enforcement{
-							Facts:    []string{"declarations"},
-							Needs:    "field-types",
-							Severity: severityError,
+							By:        EvaluatorDomain,
+							Facts:     []string{"file_tree", "declarations", "field_types"},
+							Languages: Languages{All: true},
+							Severity:  severityError,
 						},
 					},
 					{
@@ -1626,9 +1633,9 @@ func ddd() MetaModel {
 							{Work: "vernon-iddd-sample-pages", Page: "363", Section: "Rule: Reference Other Aggregates by Identity"},
 						},
 						Enforcement: Enforcement{
-							Facts:     []string{"declarations"},
-							Languages: Languages{Names: []string{"go", "typescript"}},
-							Needs:     "field-types",
+							By:        EvaluatorDomain,
+							Facts:     []string{"file_tree", "declarations", "field_types"},
+							Languages: Languages{All: true},
 							Severity:  severityError,
 						},
 					},
@@ -1758,9 +1765,10 @@ func ddd() MetaModel {
 							{Work: "vernon2013", Chapter: 10, Page: "387"},
 						},
 						Enforcement: Enforcement{
-							Facts:    []string{"declarations", "calls"},
-							Needs:    "resolved-calls",
-							Severity: severityError,
+							By:        EvaluatorDomain,
+							Facts:     []string{"file_tree", "declarations", "calls", "resolved_calls"},
+							Languages: Languages{All: true},
+							Severity:  severityError,
 						},
 					},
 				},

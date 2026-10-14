@@ -1,0 +1,85 @@
+{
+  "compiler": "5.9.3",
+  "node": "24.17.0",
+  "date": "2026-10-14",
+  "base_commit": "e86b3d759053f08458cdbff1f59c2de4eb2e6622",
+  "repositories": {
+    "boxoffice": {
+      "checked": 184,
+      "agreed": 184,
+      "undetermined": 168,
+      "unavailable": 0,
+      "reasons": {
+        "document is neither declared in the file nor imported": 2,
+        "receiver expression has no established declared type": 14,
+        "ambient modules or namespaces require declaration merging": 12,
+        "binding has no written annotation or resolvable new initializer": 76,
+        "unsupported type expression: typeof router": 1,
+        "callee has no declared function implementation": 32,
+        "destructured parameter has no established type": 20,
+        "destructured binding has no established type": 10,
+        "call expression is not an established function or member": 1
+      },
+      "disagreements": [],
+      "commit": "e86b3d759053f08458cdbff1f59c2de4eb2e6622"
+    },
+    "white-label": {
+      "checked": 922,
+      "agreed": 922,
+      "undetermined": 571,
+      "unavailable": 0,
+      "reasons": {
+        "generic type parameter has no concrete declaration": 28,
+        "call expression is not an established function or member": 36,
+        "import uuid/v4 is not resolved by the configured import graph": 1,
+        "field has no written type annotation": 52,
+        "binding has no written annotation or resolvable new initializer": 222,
+        "aggregate is neither declared in the file nor imported": 2,
+        "receiver expression has no established declared type": 136,
+        "handler is neither declared in the file nor imported": 1,
+        "any has no established declaration": 20,
+        "describe is neither declared in the file nor imported": 4,
+        "beforeEach is neither declared in the file nor imported": 3,
+        "it is neither declared in the file nor imported": 11,
+        "expect is neither declared in the file nor imported": 20,
+        "this is neither declared in the file nor imported": 2,
+        "import target is not an observed TypeScript declaration": 1,
+        "receiver annotation has no single established type: Error | string": 2,
+        "ambient modules or namespaces require declaration merging": 4,
+        "destructured binding has no established type": 10,
+        "callee has no declared function implementation": 11,
+        "module has no declared default export": 4,
+        "command is neither declared in the file nor imported": 1
+      },
+      "disagreements": [],
+      "commit": "503ee491192a3eff026704f4de9a7477daebb630"
+    },
+    "hexagon": {
+      "checked": 661,
+      "agreed": 661,
+      "undetermined": 340,
+      "unavailable": 0,
+      "reasons": {
+        "destructured binding has no established type": 6,
+        "receiver expression has no established declared type": 84,
+        "decorated type may change members": 87,
+        "generic type parameter has no concrete declaration": 12,
+        "call expression is not an established function or member": 23,
+        "field has no written type annotation": 27,
+        "binding has no written annotation or resolvable new initializer": 50,
+        "any has no established declaration": 9,
+        "callee has no declared function implementation": 11,
+        "receiver member has no written type annotation": 6,
+        "conditional type is not resolved": 1,
+        "unknown has no established declaration": 6,
+        "namespace binding needs a named member": 1,
+        "beforeAll is neither declared in the file nor imported": 3,
+        "afterAll is neither declared in the file nor imported": 1,
+        "expect is neither declared in the file nor imported": 11,
+        "afterEach is neither declared in the file nor imported": 2
+      },
+      "disagreements": [],
+      "commit": "5c2d15a7e2d69e83dfddf28468ee9f30e02c30de"
+    }
+  }
+}
