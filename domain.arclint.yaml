@@ -433,6 +433,10 @@ contexts:
             Facts permits an extension finding outside its selected subject only
             at the source location of supplied dependency evidence involving
             that subject.
+          unresolved-is-undetermined: >-
+            Facts never presents a call target or a field type as resolved
+            unless the language's own resolution reached it; what resolution
+            cannot follow is undetermined, with the reason.
       Violation:
         definition: >-
           One suspected breach of a Rule, anchored at a file and line and

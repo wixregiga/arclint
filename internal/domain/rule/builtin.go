@@ -107,12 +107,11 @@ func respectsBuiltIn(id ID, c Constraint) error {
 func builtInEnforcement(inv vocab.BlockInvariant) (Enforcement, error) {
 	facts := make([]Fact, 0, len(inv.Enforcement.Facts))
 	for _, name := range inv.Enforcement.Facts {
-		switch f := Fact(name); f {
-		case FactFileTree, FactImports, FactDeclarations, FactCalls:
-			facts = append(facts, f)
-		default:
+		f := Fact(name)
+		if !f.Valid() {
 			return Enforcement{}, fmt.Errorf("%s: reads unknown fact %q", inv.ID, name)
 		}
+		facts = append(facts, f)
 	}
 	if len(facts) == 0 {
 		facts = []Fact{FactFileTree}
@@ -131,9 +130,16 @@ func builtInEnforcement(inv vocab.BlockInvariant) (Enforcement, error) {
 		}
 	}
 	var limitations []string
-	if hasFact(facts, FactCalls) {
+	switch {
+	case hasFact(facts, FactResolvedCalls):
+		limitations = append(limitations, "calls are resolved to declarations through each language's own resolution; a call it cannot follow leaves the evaluation undetermined unless a violation is proven")
+		limitations = append(limitations, "a call reached through a function value, reflection, or dynamic dispatch the language does not declare is not seen")
+	case hasFact(facts, FactCalls):
 		limitations = append(limitations, "calls are matched by callee name and never resolved to a declaration")
 		limitations = append(limitations, "check bodies, error propagation, and execution paths are not evaluated")
+	}
+	if hasFact(facts, FactFieldTypes) {
+		limitations = append(limitations, "field types are resolved through each language's own resolution; a field type it cannot follow leaves the evaluation undetermined unless a violation is proven")
 	}
 	if inv.ID == "value_object/constructed-through-one-door" || inv.ID == "aggregate/invariants-enforced-by-root" {
 		limitations = append(limitations, "declaration matching does not evaluate the invariant's implementation")
@@ -169,6 +175,12 @@ func builtInEvidence(facts []Fact) EvidenceMethod {
 		parts = append(parts, "static import classification")
 	}
 	switch {
+	case hasFact(facts, FactResolvedCalls) && hasFact(facts, FactFieldTypes):
+		parts = append(parts, "resolved call and field type matching")
+	case hasFact(facts, FactResolvedCalls):
+		parts = append(parts, "resolved call matching")
+	case hasFact(facts, FactFieldTypes):
+		parts = append(parts, "resolved field type matching")
 	case hasFact(facts, FactCalls):
 		parts = append(parts, "declaration and call matching")
 	case hasFact(facts, FactDeclarations):

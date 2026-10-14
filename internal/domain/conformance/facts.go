@@ -46,9 +46,7 @@ func NewFacts(r rule.Rule, zones []rule.Zone, obs Observations) (Facts, error) {
 // a Rule's supplied Facts cannot broaden itself into an inspection view.
 func NewInspectionFacts(zones []rule.Zone, obs Observations, required ...rule.Fact) (Facts, error) {
 	for _, fact := range required {
-		switch fact {
-		case rule.FactFileTree, rule.FactImports, rule.FactDeclarations, rule.FactCalls:
-		default:
+		if !fact.Valid() {
 			return Facts{}, fmt.Errorf("inspection facts: unknown class %q", fact)
 		}
 	}
@@ -87,6 +85,8 @@ func (f Facts) FactsFor(path string) (LanguageFacts, bool) {
 	facts.ImportsAvailable = f.required[rule.FactImports] && facts.ImportsAvailable
 	facts.DeclarationsAvailable = f.required[rule.FactDeclarations] && facts.DeclarationsAvailable
 	facts.CallsAvailable = f.required[rule.FactCalls] && facts.CallsAvailable
+	facts.ResolvedCallsAvailable = f.required[rule.FactResolvedCalls] && facts.ResolvedCallsAvailable
+	facts.FieldTypesAvailable = f.required[rule.FactFieldTypes] && facts.FieldTypesAvailable
 	if !facts.Supports(rule.FactImports) {
 		facts.Imports = nil
 	}
@@ -95,6 +95,18 @@ func (f Facts) FactsFor(path string) (LanguageFacts, bool) {
 	}
 	if !facts.Supports(rule.FactCalls) {
 		facts.Calls = nil
+	}
+	if !facts.Supports(rule.FactResolvedCalls) {
+		facts.ResolvedCallsAvailable = false
+		for i := range facts.Calls {
+			facts.Calls[i].Target, facts.Calls[i].Receiver = Reference{}, Reference{}
+		}
+	}
+	if !facts.Supports(rule.FactFieldTypes) {
+		facts.FieldTypesAvailable = false
+		for i := range facts.Declarations {
+			facts.Declarations[i].Holds = nil
+		}
 	}
 	return facts, true
 }

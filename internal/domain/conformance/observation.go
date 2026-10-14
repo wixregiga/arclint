@@ -115,15 +115,126 @@ type Declaration struct {
 	// method declarations; absent for every other kind.
 	Params  []DeclarationParam
 	Results []string
+	// Holds lists, for a field, the declarations whose values the field
+	// holds: its type and, through pointers, collections, and type
+	// arguments, the element types inside it, never the types inside a
+	// function signature. Valid when FieldTypesAvailable; absent for
+	// every other kind.
+	Holds []Reference
 }
 
-// Call is one source call at the syntactic tier: the callee
-// identifier as written, the line of the call, and the enclosing
-// function or method name. Types are unresolved.
+// Call is one source call: the callee identifier as written, the line
+// of the call, and the enclosing function or method with the type that
+// owns it. Target and Receiver are valid when ResolvedCallsAvailable.
 type Call struct {
 	Callee    string
 	Line      int
 	Enclosing string
+	// EnclosingOwner names the type the enclosing method belongs to,
+	// "" for a function.
+	EnclosingOwner string
+	// Target is the declaration the call reaches.
+	Target Reference
+	// Receiver is, for a method call, the declared type of the value
+	// the method is called on, which may differ from the Target's
+	// owner when the method is promoted from an embedded or inherited
+	// type; the zero Reference for a call that is not a method call.
+	Receiver Reference
+}
+
+// Resolution says how far the language's own resolution followed a
+// reference.
+type Resolution string
+
+const (
+	// ResolutionDeclared reaches a declaration in an observed file of
+	// the repository.
+	ResolutionDeclared Resolution = "declared"
+	// ResolutionExternal reaches a declaration outside the repository:
+	// the standard library, a dependency, or a language builtin.
+	ResolutionExternal Resolution = "external"
+	// ResolutionUndetermined means resolution could not follow the
+	// reference; Reason says why.
+	ResolutionUndetermined Resolution = "undetermined"
+)
+
+// Valid reports whether the value is a defined enum member.
+func (r Resolution) Valid() bool {
+	switch r {
+	case ResolutionDeclared, ResolutionExternal, ResolutionUndetermined:
+		return true
+	}
+	return false
+}
+
+// Reference is the declaration a call or a field's type reaches.
+type Reference struct {
+	Resolution Resolution
+	// File is the repository-relative file holding the declaration,
+	// for a declared reference.
+	File string
+	// Package is the import path or module outside the repository, for
+	// an external reference; "" for a language builtin.
+	Package string
+	// Owner is the type that declares the member reached, "" when the
+	// reference reaches a type or a function.
+	Owner string
+	// Name is the declared name reached.
+	Name string
+	// Reason says why resolution stopped, for an undetermined
+	// reference.
+	Reason string
+}
+
+// IsZero reports the absent Reference: a call that is not a method
+// call has no Receiver.
+func (r Reference) IsZero() bool { return r == Reference{} }
+
+// Declares reports whether the reference reaches the type declared
+// under name in file, as the reached type or as the owner of the
+// member reached.
+func (r Reference) Declares(file, name string) bool {
+	if r.Resolution != ResolutionDeclared || r.File != file {
+		return false
+	}
+	if r.Owner != "" {
+		return r.Owner == name
+	}
+	return r.Name == name
+}
+
+// validate enforces the shape each resolution carries, so an
+// unresolved reference can never pass for a resolved one.
+func (r Reference) validate(observed map[string]bool) error {
+	switch r.Resolution {
+	case ResolutionDeclared:
+		if r.Name == "" {
+			return fmt.Errorf("declared reference without a name")
+		}
+		if !observed[r.File] {
+			return fmt.Errorf("declared reference %s names unobserved file %q", r.Name, r.File)
+		}
+		if r.Package != "" || r.Reason != "" {
+			return fmt.Errorf("declared reference %s carries a package or a reason", r.Name)
+		}
+	case ResolutionExternal:
+		if r.Name == "" {
+			return fmt.Errorf("external reference without a name")
+		}
+		if r.File != "" || r.Reason != "" {
+			return fmt.Errorf("external reference %s carries a file or a reason", r.Name)
+		}
+	case ResolutionUndetermined:
+		if strings.TrimSpace(r.Reason) == "" {
+			return fmt.Errorf("undetermined reference without a reason")
+		}
+		if r.File != "" {
+			return fmt.Errorf("undetermined reference carries file %q", r.File)
+		}
+	default:
+		return fmt.Errorf("reference resolution %q invalid", r.Resolution)
+	}
+	return nil
 }
 
 // LanguageFacts is the immutable normalized description of one file's
@@ -158,6 +269,12 @@ type LanguageFacts struct {
 	// Calls is the normalized call view, valid when CallsAvailable
 	// and no ParseFailure.
 	Calls []Call
+	// ResolvedCallsAvailable records whether every call carries its
+	// Target and Receiver, and whether they were requested.
+	ResolvedCallsAvailable bool
+	// FieldTypesAvailable records whether every field declaration
+	// carries what it Holds, and whether it was requested.
+	FieldTypesAvailable bool
 }
 
 // Supports states whether a requested fact class is available.
@@ -169,6 +286,10 @@ func (f LanguageFacts) Supports(fact rule.Fact) bool {
 		return f.DeclarationsAvailable && f.ParseFailure == ""
 	case rule.FactCalls:
 		return f.CallsAvailable && f.ParseFailure == ""
+	case rule.FactResolvedCalls:
+		return f.ResolvedCallsAvailable && f.CallsAvailable && f.ParseFailure == ""
+	case rule.FactFieldTypes:
+		return f.FieldTypesAvailable && f.DeclarationsAvailable && f.ParseFailure == ""
 	default:
 		return false
 	}
@@ -254,9 +375,57 @@ func NewObservations(files []ObservedFile, facts map[string]LanguageFacts) (Obse
 				return Observations{}, fmt.Errorf("observations: %s: declaration kind %q is outside the closed cross-language vocabulary", path, d.Kind)
 			}
 		}
+		if err := validResolution(f, seen); err != nil {
+			return Observations{}, fmt.Errorf("observations: %s: %w", path, err)
+		}
 		copied[path] = copyLanguageFacts(f)
 	}
 	return Observations{files: sorted, facts: copied}, nil
+}
+
+// validResolution enforces that resolved facts are complete and
+// honest: every call of a file whose calls are resolved carries a
+// valid Target, every field of a file whose field types are resolved
+// carries valid references, and no other declaration or call carries
+// any.
+func validResolution(f LanguageFacts, observed map[string]bool) error {
+	if f.ResolvedCallsAvailable && !f.CallsAvailable {
+		return fmt.Errorf("resolved calls without calls")
+	}
+	if f.FieldTypesAvailable && !f.DeclarationsAvailable {
+		return fmt.Errorf("field types without declarations")
+	}
+	for _, c := range f.Calls {
+		if !f.ResolvedCallsAvailable {
+			if !c.Target.IsZero() || !c.Receiver.IsZero() {
+				return fmt.Errorf("call %s at line %d carries a resolution that was not supplied", c.Callee, c.Line)
+			}
+			continue
+		}
+		if err := c.Target.validate(observed); err != nil {
+			return fmt.Errorf("call %s at line %d: target: %w", c.Callee, c.Line, err)
+		}
+		if c.Receiver.IsZero() {
+			continue
+		}
+		if err := c.Receiver.validate(observed); err != nil {
+			return fmt.Errorf("call %s at line %d: receiver: %w", c.Callee, c.Line, err)
+		}
+	}
+	for _, d := range f.Declarations {
+		if d.Kind != declKindField || !f.FieldTypesAvailable {
+			if len(d.Holds) > 0 {
+				return fmt.Errorf("%s %s carries field types that were not supplied", d.Kind, d.Name)
+			}
+			continue
+		}
+		for _, ref := range d.Holds {
+			if err := ref.validate(observed); err != nil {
+				return fmt.Errorf("field %s.%s: %w", d.Owner, d.Name, err)
+			}
+		}
+	}
+	return nil
 }
 
 func validObservedPath(p string) error {
@@ -303,6 +472,7 @@ func copyLanguageFacts(f LanguageFacts) LanguageFacts {
 	for i := range f.Declarations {
 		f.Declarations[i].Params = append([]DeclarationParam(nil), f.Declarations[i].Params...)
 		f.Declarations[i].Results = append([]string(nil), f.Declarations[i].Results...)
+		f.Declarations[i].Holds = append([]Reference(nil), f.Declarations[i].Holds...)
 	}
 	f.Calls = append([]Call(nil), f.Calls...)
 	return f

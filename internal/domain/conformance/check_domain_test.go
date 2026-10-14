@@ -59,6 +59,7 @@ func domainScenario(t *testing.T) conformance.Request {
 			ImportsAvailable:      true,
 			DeclarationsAvailable: true,
 			CallsAvailable:        true,
+			FieldTypesAvailable:   true,
 			Imports:               imports,
 			Declarations:          decls,
 			Calls:                 calls,
@@ -194,11 +195,11 @@ func TestBuiltInRulesJudgeEveryContextOfTheRecordedDomain(t *testing.T) {
 			}
 		}
 	}
-	if domainRules != 20 {
-		t.Fatalf("built-in domain rules = %d, want 20", domainRules)
+	if domainRules != 24 {
+		t.Fatalf("built-in domain rules = %d, want 24", domainRules)
 	}
-	if got := len(a.AppliedRules()); got != 20 {
-		t.Errorf("applied rules = %d, want 20", got)
+	if got := len(a.AppliedRules()); got != 24 {
+		t.Errorf("applied rules = %d, want 24", got)
 	}
 
 	want := map[string][]string{
@@ -210,6 +211,7 @@ func TestBuiltInRulesJudgeEveryContextOfTheRecordedDomain(t *testing.T) {
 		"aggregate/protects-an-invariant":                       {"docs/model.arclint.yaml:20"},
 		"aggregate/commands-named-for-behavior":                 {"internal/event/event.go:60", "internal/order/order.go:20"},
 		"domain_event/declared":                                 {"docs/model.arclint.yaml:28"},
+		"entity/identity":                                       {"internal/event/event.go:20", "internal/order/order.go:10"},
 	}
 	for id, wantAnchors := range want {
 		if got := anchors[id]; strings.Join(got, ",") != strings.Join(wantAnchors, ",") {
@@ -330,7 +332,7 @@ func observed(paths ...string) []conformance.ObservedFile {
 
 // goDecls is one parsed Go file of declarations and calls.
 func goDecls(pkg string, decls []conformance.Declaration, calls ...conformance.Call) conformance.LanguageFacts {
-	return conformance.LanguageFacts{Language: rule.LanguageGo, Package: pkg, DeclarationsAvailable: true, CallsAvailable: true, Declarations: decls, Calls: calls}
+	return conformance.LanguageFacts{Language: rule.LanguageGo, Package: pkg, DeclarationsAvailable: true, CallsAvailable: true, FieldTypesAvailable: true, Declarations: decls, Calls: calls}
 }
 
 func TestDomainRuleIsUnsupportedWhenNoFileYieldsItsFacts(t *testing.T) {
@@ -583,11 +585,11 @@ func TestReferencesByIdentity(t *testing.T) {
 
 	t.Run("typescript root through an imported module", func(t *testing.T) {
 		facts := map[string]conformance.LanguageFacts{
-			"src/order/order.ts": {Language: rule.LanguageTypeScript, DeclarationsAvailable: true, ImportsAvailable: true, Declarations: []conformance.Declaration{
+			"src/order/order.ts": {Language: rule.LanguageTypeScript, DeclarationsAvailable: true, ImportsAvailable: true, FieldTypesAvailable: true, Declarations: []conformance.Declaration{
 				{Kind: "class", Name: "Order", Exported: true, StartLine: 1},
 			}},
 			"src/refund/refund.ts": {
-				Language: rule.LanguageTypeScript, DeclarationsAvailable: true, ImportsAvailable: true,
+				Language: rule.LanguageTypeScript, DeclarationsAvailable: true, ImportsAvailable: true, FieldTypesAvailable: true,
 				Imports: []conformance.Import{{Path: "../order/order", Line: 1, Class: conformance.ImportInternal, TargetFile: "src/order/order.ts"}},
 				Declarations: []conformance.Declaration{
 					{Kind: "class", Name: "Refund", Exported: true, StartLine: 3},

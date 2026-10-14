@@ -100,12 +100,20 @@ func TestBuiltInEnforcementFollowsTheInvariantsFacts(t *testing.T) {
 			t.Errorf("%s: a file-tree invariant is language-independent; got %v", r.ID(), e.Languages())
 		}
 		limitations := strings.Join(e.Limitations(), "\n")
-		callsRead := false
+		callsRead, callsResolved, fieldsResolved := false, false, false
 		for _, f := range facts {
 			callsRead = callsRead || f == rule.FactCalls
+			callsResolved = callsResolved || f == rule.FactResolvedCalls
+			fieldsResolved = fieldsResolved || f == rule.FactFieldTypes
 		}
-		if callsRead != strings.Contains(limitations, "matched by callee name") {
+		if (callsRead && !callsResolved) != strings.Contains(limitations, "matched by callee name") {
 			t.Errorf("%s: limitations %q do not follow the calls fact", r.ID(), limitations)
+		}
+		if callsResolved != strings.Contains(limitations, "calls are resolved to declarations") {
+			t.Errorf("%s: limitations %q do not follow the resolved calls fact", r.ID(), limitations)
+		}
+		if fieldsResolved != strings.Contains(limitations, "field types are resolved") {
+			t.Errorf("%s: limitations %q do not follow the field types fact", r.ID(), limitations)
 		}
 	}
 }
