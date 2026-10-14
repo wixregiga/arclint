@@ -70,7 +70,7 @@ func extractDeclarations(ps *parsers, path string, src []byte) *declarationFacts
 	}
 	w := &tsWalker{lang: parser.Language(), src: src, out: out}
 	w.walk(tree.RootNode(), "", false)
-	w.walkCalls(tree.RootNode(), "")
+	w.walkCalls(tree.RootNode(), "", "")
 	return out
 }
 
@@ -116,18 +116,14 @@ type tsWalker struct {
 	out  *declarationFacts
 }
 
-const (
-	tsIdentifier         = "identifier"
-	tsArrowFunction      = "arrow_function"
-	tsFunction           = "function"
-	tsFunctionExpression = "function_expression"
-)
-
 func (w *tsWalker) text(n *gotreesitter.Node) string { return n.Text(w.src) }
 
 func (w *tsWalker) name(n *gotreesitter.Node) string {
-	if id := n.ChildByFieldName("name", w.lang); id != nil {
+	if id := n.ChildByFieldName(tsNameField, w.lang); id != nil {
 		return w.text(id)
+	}
+	if defaultDeclaration(n, w.lang) {
+		return tsDefaultKeyword
 	}
 	return ""
 }
@@ -161,13 +157,13 @@ func (w *tsWalker) param(pn *gotreesitter.Node) conformance.DeclarationParam {
 	p := conformance.DeclarationParam{}
 	pattern := pn
 	switch pn.Type(w.lang) {
-	case "required_parameter", "optional_parameter":
-		p.Optional = pn.Type(w.lang) == "optional_parameter"
-		p.Type = w.annotType(pn.ChildByFieldName("type", w.lang))
-		if pn.ChildByFieldName("value", w.lang) != nil {
+	case tsRequiredParameter, tsOptionalParameter:
+		p.Optional = pn.Type(w.lang) == tsOptionalParameter
+		p.Type = w.annotType(pn.ChildByFieldName(tsTypeField, w.lang))
+		if pn.ChildByFieldName(tsValueField, w.lang) != nil {
 			p.Optional = true // a default value makes the parameter optional
 		}
-		if pat := pn.ChildByFieldName("pattern", w.lang); pat != nil {
+		if pat := pn.ChildByFieldName(tsPatternField, w.lang); pat != nil {
 			pattern = pat
 		}
 	case "assignment_pattern": // JS default: x = 3
@@ -177,11 +173,11 @@ func (w *tsWalker) param(pn *gotreesitter.Node) conformance.DeclarationParam {
 		}
 	}
 	switch pattern.Type(w.lang) {
-	case tsIdentifier, "this":
+	case tsIdentifier, tsThis:
 		p.Name = w.text(pattern)
 	case "rest_pattern":
 		p.Variadic = true
-		if pattern.NamedChildCount() > 0 && pattern.NamedChild(0).Type(w.lang) == "identifier" {
+		if pattern.NamedChildCount() > 0 && pattern.NamedChild(0).Type(w.lang) == tsIdentifier {
 			p.Name = w.text(pattern.NamedChild(0))
 		}
 	}
@@ -195,7 +191,7 @@ func (w *tsWalker) param(pn *gotreesitter.Node) conformance.DeclarationParam {
 // arrow_function, function_expression.
 func (w *tsWalker) signature(fn *gotreesitter.Node) ([]conformance.DeclarationParam, []string) {
 	var params []conformance.DeclarationParam
-	if fp := fn.ChildByFieldName("parameters", w.lang); fp != nil {
+	if fp := fn.ChildByFieldName(tsParametersField, w.lang); fp != nil {
 		for i := 0; i < fp.NamedChildCount(); i++ {
 			params = append(params, w.param(fp.NamedChild(i)))
 		}
@@ -224,7 +220,7 @@ func (w *tsWalker) memberPublic(n *gotreesitter.Node) bool {
 			return false
 		}
 	}
-	if id := n.ChildByFieldName("name", w.lang); id != nil && id.Type(w.lang) == "private_property_identifier" {
+	if id := n.ChildByFieldName(tsNameField, w.lang); id != nil && id.Type(w.lang) == "private_property_identifier" {
 		return false
 	}
 	return true
@@ -234,71 +230,84 @@ func (w *tsWalker) memberPublic(n *gotreesitter.Node) bool {
 // current subtree sits under an export_statement.
 func (w *tsWalker) walk(n *gotreesitter.Node, owner string, exported bool) {
 	switch n.Type(w.lang) {
-	case "export_statement":
+	case tsExportStatement:
 		for i := 0; i < n.NamedChildCount(); i++ {
 			w.walk(n.NamedChild(i), owner, true)
 		}
 		return
-	case "class_declaration", "abstract_class_declaration":
+	case tsClassDeclaration, tsAbstractClassDeclaration, tsClassExpression:
 		name := w.name(n)
 		w.add("class", name, owner, exported, n)
-		if body := n.ChildByFieldName("body", w.lang); body != nil {
+		if body := n.ChildByFieldName(tsBodyField, w.lang); body != nil {
 			for i := 0; i < body.NamedChildCount(); i++ {
 				w.walk(body.NamedChild(i), name, exported)
 			}
 		}
 		return
-	case "interface_declaration":
+	case tsInterfaceDeclaration:
 		name := w.name(n)
 		w.add("interface", name, owner, exported, n)
-		if body := n.ChildByFieldName("body", w.lang); body != nil {
+		if body := n.ChildByFieldName(tsBodyField, w.lang); body != nil {
 			for i := 0; i < body.NamedChildCount(); i++ {
 				m := body.NamedChild(i)
 				switch m.Type(w.lang) {
-				case "method_signature":
+				case tsMethodSignature:
 					if d := w.add("method", w.name(m), name, true, m); d != nil {
 						d.Params, d.Results = w.signature(m)
 					}
-				case "property_signature":
-					w.add("field", w.name(m), name, true, m)
+				case tsPropertySignature:
+					w.add(tsFieldDeclaration, w.name(m), name, true, m)
 				}
 			}
 		}
 		return
-	case "type_alias_declaration":
-		w.add("type", w.name(n), owner, exported, n)
+	case tsTypeAliasDeclaration:
+		w.add(tsTypeField, w.name(n), owner, exported, n)
 		return
 	case "enum_declaration":
 		w.add("enum", w.name(n), owner, exported, n)
 		return
-	case "function_declaration", "generator_function_declaration":
+	case tsFunctionDeclaration, tsGeneratorFunctionDeclaration, tsFunctionExpression, tsArrowFunction:
+		if w.name(n) == "" {
+			return
+		}
 		if d := w.add("func", w.name(n), owner, exported, n); d != nil {
 			d.Params, d.Results = w.signature(n)
 		}
 		return
-	case "method_definition":
+	case tsMethodDefinition:
 		// Member visibility is the member's own: private/protected/#name
 		// make it unexported regardless of the class's export.
 		if d := w.add("method", w.name(n), owner, w.memberPublic(n), n); d != nil {
 			d.Params, d.Results = w.signature(n)
 		}
+		if w.name(n) == tsConstructor {
+			if params := n.ChildByFieldName(tsParametersField, w.lang); params != nil {
+				for i := 0; i < params.NamedChildCount(); i++ {
+					p := params.NamedChild(i)
+					if parameterProperty(p, w.lang) {
+						w.add(tsFieldDeclaration, w.param(p).Name, owner, w.memberPublic(p), p)
+					}
+				}
+			}
+		}
 		return
-	case "public_field_definition", "field_definition":
-		w.add("field", w.name(n), owner, w.memberPublic(n), n)
+	case tsPublicFieldDefinition, tsFieldDefinition:
+		w.add(tsFieldDeclaration, w.name(n), owner, w.memberPublic(n), n)
 		return
-	case "lexical_declaration", "variable_declaration":
+	case tsLexicalDeclaration, tsVariableDeclaration:
 		for i := 0; i < n.NamedChildCount(); i++ {
 			d := n.NamedChild(i)
-			if d.Type(w.lang) != "variable_declarator" {
+			if d.Type(w.lang) != tsVariableDeclarator {
 				continue
 			}
 			name := w.name(d)
 			kind := "const"
-			if strings.HasPrefix(w.text(n), "var") || strings.HasPrefix(w.text(n), "let") {
-				kind = "var"
+			if strings.HasPrefix(w.text(n), tsVarKeyword) || strings.HasPrefix(w.text(n), "let") {
+				kind = tsVarKeyword
 			}
 			var fnNode *gotreesitter.Node
-			if v := d.ChildByFieldName("value", w.lang); v != nil {
+			if v := d.ChildByFieldName(tsValueField, w.lang); v != nil {
 				switch v.Type(w.lang) {
 				case tsArrowFunction, tsFunctionExpression, tsFunction:
 					kind = "func"
@@ -309,30 +318,46 @@ func (w *tsWalker) walk(n *gotreesitter.Node, owner string, exported bool) {
 			if decl != nil && fnNode != nil {
 				decl.Params, decl.Results = w.signature(fnNode)
 			}
+			if v := d.ChildByFieldName(tsValueField, w.lang); v != nil && v.Type(w.lang) == tsClassExpression && w.name(v) != "" {
+				w.walk(v, owner, exported)
+			}
 		}
 		return
 	}
 	// Descend only through containers that can hold declarations.
 	switch n.Type(w.lang) {
-	case "program", "statement_block", "module", "internal_module", "ambient_declaration":
+	case tsProgram, tsStatementBlock, tsModule, tsInternalModule, "ambient_declaration":
 		for i := 0; i < n.NamedChildCount(); i++ {
 			w.walk(n.NamedChild(i), owner, exported)
 		}
 	}
 }
 
-func (w *tsWalker) walkCalls(n *gotreesitter.Node, enclosing string) {
+func (w *tsWalker) walkCalls(n *gotreesitter.Node, enclosing, owner string) {
 	t := n.Type(w.lang)
 	next := enclosing
+	nextOwner := owner
 	switch t {
-	case "function_declaration", "generator_function_declaration", "method_definition", "method_signature":
+	case tsClassDeclaration, tsAbstractClassDeclaration, tsClassExpression:
+		nextOwner = w.name(n)
+		next = ""
+	case tsFunctionDeclaration, tsGeneratorFunctionDeclaration, tsMethodDefinition, tsMethodSignature:
+		if t == tsFunctionDeclaration || t == tsGeneratorFunctionDeclaration {
+			nextOwner = ""
+		}
 		if name := w.name(n); name != "" {
 			next = name
 		}
 	case tsArrowFunction, tsFunctionExpression, tsFunction:
-		// Keep the enclosing name from the declarator / method.
-	case "variable_declarator":
-		if v := n.ChildByFieldName("value", w.lang); v != nil {
+		if defaultDeclaration(n, w.lang) {
+			next = tsDefaultKeyword
+			nextOwner = ""
+		}
+		if t == tsFunctionExpression || t == tsFunction {
+			nextOwner = ""
+		}
+	case tsVariableDeclarator:
+		if v := n.ChildByFieldName(tsValueField, w.lang); v != nil {
 			switch v.Type(w.lang) {
 			case tsArrowFunction, tsFunctionExpression, tsFunction:
 				if name := w.name(n); name != "" {
@@ -340,32 +365,40 @@ func (w *tsWalker) walkCalls(n *gotreesitter.Node, enclosing string) {
 				}
 			}
 		}
-	case "call_expression":
-		if callee := w.callCallee(n); callee != "" && enclosing != "" {
+	case tsCallExpression:
+		if callee := w.callCallee(n); callee != "" {
 			w.out.Calls = append(w.out.Calls, conformance.Call{
-				Callee:    callee,
-				Line:      int(n.StartPoint().Row) + 1,
-				Enclosing: enclosing,
+				Callee:         callee,
+				Line:           int(n.StartPoint().Row) + 1,
+				Enclosing:      enclosing,
+				EnclosingOwner: callOwner(enclosing, owner),
 			})
 		}
 	}
 	for i := 0; i < n.NamedChildCount(); i++ {
-		w.walkCalls(n.NamedChild(i), next)
+		w.walkCalls(n.NamedChild(i), next, nextOwner)
 	}
 }
 
 func (w *tsWalker) callCallee(n *gotreesitter.Node) string {
-	fn := n.ChildByFieldName("function", w.lang)
+	fn := n.ChildByFieldName(tsFunction, w.lang)
 	if fn == nil {
 		return ""
 	}
 	switch fn.Type(w.lang) {
 	case tsIdentifier:
 		return w.text(fn)
-	case "member_expression":
-		if prop := fn.ChildByFieldName("property", w.lang); prop != nil {
+	case tsMemberExpression:
+		if prop := fn.ChildByFieldName(tsPropertyField, w.lang); prop != nil {
 			return w.text(prop)
 		}
 	}
-	return ""
+	return normalizeType(w.text(fn))
+}
+
+func callOwner(enclosing, owner string) string {
+	if enclosing == "" {
+		return ""
+	}
+	return owner
 }
