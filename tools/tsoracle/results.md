@@ -100,7 +100,6 @@ No results with a severity of 'error' found!
 gitleaks detect --no-git --verbose
 INF scanned ~7803581 bytes (7.80 MB)
 INF no leaks found
-make[1]: Leaving directory '/home/jofyi/ai/arclint/.claude/worktrees/issue-106-ts'
 ```
 
 ## Benchmarks

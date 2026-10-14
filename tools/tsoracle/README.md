@@ -9,9 +9,12 @@ Run from the ArcLint repository root, after installing the target repository's
 locked dependencies with lifecycle scripts disabled:
 
 ```sh
-go run ./tools/tsoracle /absolute/path/to/repository > /tmp/ts-facts.json
+facts=$(mktemp)
+report=$(mktemp)
+go run ./tools/tsoracle /absolute/path/to/repository > "$facts"
 npm exec --yes --package=typescript@5.9.3 -- \
-  node tools/tsoracle/check.cjs /tmp/ts-facts.json > /tmp/ts-report.json
+  node tools/tsoracle/check.cjs "$facts" > "$report"
+cat "$report"
 ```
 
 The checker uses the nearest `tsconfig.json`, its compiler options, and observed
@@ -43,7 +46,8 @@ To check that an apparently green result can still reject incorrect data:
 
 ```sh
 npm exec --yes --package=typescript@5.9.3 -- \
-  node tools/tsoracle/negative.cjs /tmp/ts-facts.json
+  node tools/tsoracle/negative.cjs "$facts"
+rm -f "$facts" "$report"
 ```
 
 The negative controls require a real repository containing declared targets,
