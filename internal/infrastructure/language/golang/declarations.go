@@ -11,8 +11,9 @@ import (
 // extractDeclarations maps one fully parsed file onto the shared
 // cross-language declaration vocabulary. Go emits its honest subset:
 // struct, interface, type, func, method, field, const, var, parser
-// exact, types never resolved.
-func extractDeclarations(fset *token.FileSet, file *ast.File) []conformance.Declaration {
+// exact. With a resolution every field also carries the declarations
+// it holds.
+func extractDeclarations(fset *token.FileSet, file *ast.File, res resolution) []conformance.Declaration {
 	var out []conformance.Declaration
 	lines := func(n ast.Node) (int, int) {
 		return fset.Position(n.Pos()).Line, fset.Position(n.End()).Line
@@ -39,7 +40,7 @@ func extractDeclarations(fset *token.FileSet, file *ast.File) []conformance.Decl
 			for _, spec := range d.Specs {
 				switch s := spec.(type) {
 				case *ast.TypeSpec:
-					out = append(out, typeDeclarations(fset, s)...)
+					out = append(out, typeDeclarations(fset, s, res)...)
 				case *ast.ValueSpec:
 					kind := "var"
 					if d.Tok == token.CONST {
@@ -65,7 +66,7 @@ func extractDeclarations(fset *token.FileSet, file *ast.File) []conformance.Decl
 // typeDeclarations emits the type itself plus its members: struct
 // fields (embedded fields keep their type's base name) and interface
 // methods with their signatures.
-func typeDeclarations(fset *token.FileSet, s *ast.TypeSpec) []conformance.Declaration {
+func typeDeclarations(fset *token.FileSet, s *ast.TypeSpec, res resolution) []conformance.Declaration {
 	lines := func(n ast.Node) (int, int) {
 		return fset.Position(n.Pos()).Line, fset.Position(n.End()).Line
 	}
@@ -78,11 +79,17 @@ func typeDeclarations(fset *token.FileSet, s *ast.TypeSpec) []conformance.Declar
 		kind = "struct"
 		for _, field := range t.Fields.List {
 			fs, fe := lines(field)
+			var holds []conformance.Reference
+			var typ conformance.Reference
+			if res != nil {
+				holds, typ = res.holds(field.Type), res.fieldType(field.Type)
+			}
 			if len(field.Names) == 0 {
 				name := baseTypeName(field.Type)
 				members = append(members, conformance.Declaration{
 					Kind: "field", Name: name, Owner: owner,
 					Exported: ast.IsExported(name), StartLine: fs, EndLine: fe,
+					Holds: holds, Type: typ,
 				})
 				continue
 			}
@@ -90,6 +97,7 @@ func typeDeclarations(fset *token.FileSet, s *ast.TypeSpec) []conformance.Declar
 				members = append(members, conformance.Declaration{
 					Kind: "field", Name: name.Name, Owner: owner,
 					Exported: ast.IsExported(name.Name), StartLine: fs, EndLine: fe,
+					Holds: append([]conformance.Reference(nil), holds...), Type: typ,
 				})
 			}
 		}

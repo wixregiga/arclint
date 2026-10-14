@@ -117,6 +117,78 @@ export default defineRule({
 	}
 }
 
+// An extension sees the calls, their resolution, and the types fields
+// hold exactly as the built-in rules see them, through ctx.facts.
+func TestEvaluatorFactsCarryResolvedCallsAndFieldTypes(t *testing.T) {
+	root := writeExtensions(t, map[string]string{"resolved.ts": `
+import { defineRule } from "arclint";
+export default defineRule({
+  type: "resolved-probe",
+  check(ctx) {
+    function assert(ok, message) { if (!ok) throw new Error(message); }
+    const f = ctx.facts("order.go");
+    assert(f.callsAvailable && f.resolvedCallsAvailable && f.fieldTypesAvailable, "availability");
+    const save = f.calls.find(c => c.callee === "Save");
+    assert(save.line === 12 && save.enclosing === "Place" && save.enclosingOwner === "Order", "call shape");
+    assert(save.target.resolution === "declared" && save.target.file === "repo.go" && save.target.owner === "Repository" && save.target.name === "Save", "target");
+    assert(save.receiver.resolution === "declared" && save.receiver.name === "Repository", "receiver");
+    const now = f.calls.find(c => c.callee === "Now");
+    assert(now.target.resolution === "external" && now.target.package === "time" && now.receiver == null, "external function");
+    const clock = f.calls.find(c => c.callee === "clock");
+    assert(clock.target.resolution === "undetermined" && clock.target.reason === "clock is a function value", "undetermined with reason");
+    const repo = f.decls.find(d => d.kind === "field" && d.name === "repo");
+    assert(repo.holds.length === 1 && repo.holds[0].file === "repo.go" && repo.holds[0].name === "Repository", "field holds");
+    assert(repo.type.resolution === "declared" && repo.type.name === "Repository", "field type");
+    const plain = ctx.facts("plain.go");
+    assert(plain.callsAvailable && !plain.resolvedCallsAvailable && plain.calls[0].target == null, "unresolved calls carry no target");
+    ctx.report({path: "order.go", message: "resolved facts seen"});
+  }
+});
+`})
+	declared := func(file, owner, name string) conformance.Reference {
+		return conformance.Reference{Resolution: conformance.ResolutionDeclared, File: file, Owner: owner, Name: name}
+	}
+	files := []conformance.ObservedFile{{Path: "order.go"}, {Path: "repo.go"}, {Path: "plain.go"}}
+	obs, err := conformance.NewObservations(files, map[string]conformance.LanguageFacts{
+		"order.go": {
+			Language: rule.LanguageGo, ImportsAvailable: true, DeclarationsAvailable: true, CallsAvailable: true,
+			ResolvedCallsAvailable: true, FieldTypesAvailable: true,
+			Declarations: []conformance.Declaration{
+				{Kind: "struct", Name: "Order"},
+				{Kind: "field", Name: "repo", Owner: "Order", Holds: []conformance.Reference{declared("repo.go", "", "Repository")}, Type: declared("repo.go", "", "Repository")},
+			},
+			Calls: []conformance.Call{
+				{Callee: "Save", Line: 12, Enclosing: "Place", EnclosingOwner: "Order", Target: declared("repo.go", "Repository", "Save"), Receiver: declared("repo.go", "", "Repository")},
+				{Callee: "Now", Line: 13, Enclosing: "Place", EnclosingOwner: "Order", Target: conformance.Reference{Resolution: conformance.ResolutionExternal, Package: "time", Name: "Now"}},
+				{Callee: "clock", Line: 14, Enclosing: "Place", EnclosingOwner: "Order", Target: conformance.Reference{Resolution: conformance.ResolutionUndetermined, Reason: "clock is a function value"}},
+			},
+		},
+		"repo.go": {
+			Language: rule.LanguageGo, ImportsAvailable: true, DeclarationsAvailable: true, CallsAvailable: true,
+			ResolvedCallsAvailable: true, FieldTypesAvailable: true,
+			Declarations: []conformance.Declaration{{Kind: "interface", Name: "Repository"}, {Kind: "method", Name: "Save", Owner: "Repository"}},
+		},
+		"plain.go": {
+			Language: rule.LanguageGo, ImportsAvailable: true, DeclarationsAvailable: true, CallsAvailable: true,
+			Calls: []conformance.Call{{Callee: "run", Line: 3, Enclosing: "main"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	evaluator, err := sobekextension.NewEvaluator(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	findings, err := evaluator.Evaluate("resolved-probe", nil, extensionFacts(t, []string{"order.go", "repo.go", "plain.go"}, obs), vocab.UbiquitousLanguage{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findings) != 1 || findings[0].Message != "resolved facts seen" {
+		t.Fatalf("findings = %+v", findings)
+	}
+}
+
 func TestEvaluatorCannotMutateKnowledgeForAnotherInvocation(t *testing.T) {
 	root := writeExtensions(t, map[string]string{"mutate.ts": `
 import { defineRule } from "arclint";

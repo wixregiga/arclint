@@ -18,6 +18,7 @@ const (
 	declKindClass     = "class"
 	declKindType      = "type"
 	declKindInterface = "interface"
+	declKindField     = "field"
 )
 
 // The words a contract's method begins with: an aggregate invariant is
@@ -39,7 +40,11 @@ func assertKey(key string) string { return assertPrefix + key }
 // an outside the ruleset declares; without a declared Zone it does not
 // apply.
 type domainCheck struct {
-	run        func(r rule.Rule, subject rule.Subject, cc contextCode, code domainCode) ([]Violation, error)
+	run func(r rule.Rule, subject rule.Subject, cc contextCode, code domainCode) ([]Violation, error)
+	// judge replaces run for a check reading resolved facts: besides
+	// its violations it returns every reference it could not follow,
+	// which leaves an evaluation without a violation undetermined.
+	judge      func(r rule.Rule, subject rule.Subject, cc contextCode, code domainCode) ([]Violation, []string, error)
 	needsZones bool
 }
 
@@ -63,6 +68,10 @@ var domainChecks = map[string]domainCheck{
 	"aggregate/invariants-enforced-by-root":                 {run: checkAggregateInvariantsOnRoot},
 	"aggregate/commands-named-for-behavior":                 {run: checkAggregateNoSetters},
 	"aggregate/references-by-identity":                      {run: checkReferencesByIdentity},
+	"aggregate/root-only-references":                        {judge: checkRootOnlyReferences},
+	"entity/identity":                                       {judge: checkEntityIdentity},
+	"domain_service/not-held-by-aggregates":                 {judge: checkServiceNotHeldByAggregates},
+	"repository/not-called-from-aggregates":                 {judge: checkRepositoryNotCalledFromAggregates},
 	"domain_event/declared":                                 {run: checkEventDeclared},
 	"domain_event/no-setters":                               {run: checkEventNoSetters},
 	"domain_service/declared":                               {run: checkServiceDeclared},
@@ -111,11 +120,17 @@ func evaluateDomain(r rule.Rule, facts Facts, knowledge vocab.UbiquitousLanguage
 			out = append(out, e)
 			continue
 		}
-		vs, err := check.run(r, subject, cc, code)
+		var vs []Violation
+		var unresolved []string
+		if check.judge != nil {
+			vs, unresolved, err = check.judge(r, subject, cc, code)
+		} else {
+			vs, err = check.run(r, subject, cc, code)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("rule %s: %w", r.ID(), err)
 		}
-		e, err := completeEvaluation(r, subject, vs)
+		e, err := judgedEvaluation(r, subject, vs, unresolved)
 		if err != nil {
 			return nil, err
 		}
@@ -132,6 +147,9 @@ type domainCode struct {
 	contexts  []contextCode
 	holders   map[string][]string
 	roots     []aggregateRoot
+	// all is the facts of every supplied file, for a check that looks
+	// for holders of a context's terms wherever they are declared.
+	all contractIndex
 }
 
 // aggregateRoot is one located root with the aggregate and context it
@@ -220,7 +238,7 @@ type fileImport struct {
 // supplied code. The Facts view applies the Rule's Exclusions when a
 // Rule is judged and supplies inspection facts when the domain is listed.
 func resolveDomain(facts Facts, knowledge vocab.UbiquitousLanguage) (domainCode, error) {
-	code := domainCode{knowledge: knowledge, holders: map[string][]string{}}
+	code := domainCode{knowledge: knowledge, holders: map[string][]string{}, all: buildContractIndex(facts.paths(), facts)}
 	for _, ctx := range knowledge.Contexts {
 		cc, err := resolveContext(ctx, knowledge.Recording.Path(), facts)
 		if err != nil {
@@ -431,7 +449,7 @@ func (cc contextCode) undecidable(facts []string) (Outcome, bool) {
 	}
 	for _, f := range facts {
 		switch rule.Fact(f) {
-		case rule.FactDeclarations, rule.FactCalls:
+		case rule.FactDeclarations, rule.FactCalls, rule.FactResolvedCalls, rule.FactFieldTypes:
 			if cc.scopeIdx.available(rule.Fact(f)) == 0 {
 				return OutcomeUnsupported, true
 			}
@@ -669,21 +687,42 @@ type fileFacts struct {
 	decls                                 []Declaration
 	calls                                 []Call
 	declarationsAvailable, callsAvailable bool
+	resolvedCalls, fieldTypes             bool
 }
 
-// contractIndex is the parsed facts of a set of files.
+// contractIndex is the parsed facts of a set of files, and the source
+// files among them whose declarations and calls could not be read.
 type contractIndex struct {
-	files []fileFacts
+	files  []fileFacts
+	failed []fileGap
+}
+
+// fileGap is a source file whose facts a check cannot read, and why.
+type fileGap struct {
+	path, reason string
 }
 
 func buildContractIndex(paths []string, supplied Facts) contractIndex {
 	var files []fileFacts
+	var failed []fileGap
 	for _, p := range paths {
 		facts, ok := supplied.FactsFor(p)
-		if !ok || facts.ParseFailure != "" {
+		if !ok {
+			continue
+		}
+		if facts.ParseFailure != "" {
+			if facts.Language != "" {
+				failed = append(failed, fileGap{path: p, reason: "the file does not parse: " + facts.ParseFailure})
+			}
 			continue
 		}
 		if !facts.DeclarationsAvailable && !facts.CallsAvailable {
+			// A language that reads no declarations or calls from a
+			// file, such as one its strict parser rejects, leaves the
+			// file unseen.
+			if facts.Language != "" {
+				failed = append(failed, fileGap{path: p, reason: "its declarations and calls are not available"})
+			}
 			continue
 		}
 		files = append(files, fileFacts{
@@ -694,15 +733,21 @@ func buildContractIndex(paths []string, supplied Facts) contractIndex {
 			calls:                 facts.Calls,
 			declarationsAvailable: facts.DeclarationsAvailable,
 			callsAvailable:        facts.CallsAvailable,
+			resolvedCalls:         facts.Supports(rule.FactResolvedCalls),
+			fieldTypes:            facts.Supports(rule.FactFieldTypes),
 		})
 	}
-	return contractIndex{files: files}
+	return contractIndex{files: files, failed: failed}
 }
 
 func (idx contractIndex) available(fact rule.Fact) int {
 	n := 0
 	for _, f := range idx.files {
-		if (fact == rule.FactDeclarations && f.declarationsAvailable) || (fact == rule.FactCalls && f.callsAvailable) {
+		switch {
+		case fact == rule.FactDeclarations && f.declarationsAvailable,
+			fact == rule.FactCalls && f.callsAvailable,
+			fact == rule.FactResolvedCalls && f.resolvedCalls,
+			fact == rule.FactFieldTypes && f.fieldTypes:
 			n++
 		}
 	}

@@ -109,6 +109,62 @@ declare module "arclint" {
      */
     params?: ParamInfo[];
     results?: string[];
+    /**
+     * Holds lists, for a field when field types are available, the
+     * declarations whose values the field holds: its type and the
+     * element types inside pointers, collections, and type arguments.
+     */
+    holds?: ReferenceInfo[];
+    /**
+     * Type is, for a field when field types are available, the
+     * declaration the field's own type names, through pointers, the
+     * repository's type aliases, and optional or nullable wrappers.
+     */
+    type?: ReferenceInfo;
+  }
+  /**
+   * ReferenceInfo is the declaration a call or a field's type reaches,
+   * as the language's own resolution followed it.
+   */
+  export interface ReferenceInfo {
+    /**
+     * Resolution is declared (an observed file of the repository),
+     * external (the standard library, a dependency, or a builtin),
+     * local (a type without a file-level name), or undetermined.
+     */
+    resolution: string;
+    /**
+     * File is the repository-relative file of a declared reference.
+     */
+    file?: string;
+    /**
+     * Package is the import path or module of an external reference.
+     */
+    package?: string;
+    /**
+     * Owner is the type declaring the member reached, "" for a type or
+     * a function.
+     */
+    owner?: string;
+    name?: string;
+    /**
+     * Reason says why an undetermined reference was not followed.
+     */
+    reason?: string;
+  }
+  /**
+   * CallInfo is one source call: the callee identifier as written, its
+   * line, the enclosing function or method and the type owning it, and,
+   * when resolved calls are available, the declaration it reaches and
+   * the declared type of the value a method is called on.
+   */
+  export interface CallInfo {
+    callee: string;
+    line: number /* int */;
+    enclosing: string;
+    enclosingOwner: string;
+    target?: ReferenceInfo;
+    receiver?: ReferenceInfo;
   }
   /**
    * FactsInfo exposes one file's already-observed declarations and imports.
@@ -143,6 +199,20 @@ declare module "arclint" {
      */
     declarationsAvailable: boolean;
     decls: DeclInfo[];
+    /**
+     * FieldTypesAvailable is true when every field declaration carries
+     * the declarations it holds.
+     */
+    fieldTypesAvailable: boolean;
+    /**
+     * CallsAvailable is false when calls were not supplied or parsing failed.
+     */
+    callsAvailable: boolean;
+    calls: CallInfo[];
+    /**
+     * ResolvedCallsAvailable is true when every call carries its target.
+     */
+    resolvedCallsAvailable: boolean;
     parseError?: string;
   }
   /**

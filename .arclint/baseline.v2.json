@@ -6,6 +6,7 @@
     "aggregate/protects-an-invariant",
     "aggregate/references-by-identity",
     "aggregate/root-declared",
+    "aggregate/root-only-references",
     "application/core-actions-present",
     "application/use-cases-through-ports",
     "assertion/checked-by-its-operation",
@@ -39,12 +40,15 @@
     "domain_event/no-setters",
     "domain_isolation/model-imports-nothing-outside-itself",
     "domain_service/declared",
+    "domain_service/not-held-by-aggregates",
+    "entity/identity",
     "factory/declared",
     "infrastructure/composition-only",
     "infrastructure/outbound-only",
     "infrastructure/stdlib-table-present",
     "invariant/enforced-at-every-mutation",
     "repository/declared",
+    "repository/not-called-from-aggregates",
     "source/snake-case",
     "specification/satisfaction-method",
     "ubiquitous_language/terms-declared-in-code",
@@ -90,6 +94,42 @@
       "ruleId": "aggregate/invariants-enforced-by-root",
       "subject": "rule",
       "message": "aggregate Rule: invariant zone-has-a-path is not enforced by a method of the root; expected EnsureZoneHasAPath (go)",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/root-only-references",
+      "subject": "rule",
+      "message": "aggregate Rule: field Available.Pattern holds Pattern, a member of aggregate Rule; outside the aggregate only its root is held",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/root-only-references",
+      "subject": "rule",
+      "message": "aggregate Rule: field Configured.Zones holds Zone, a member of aggregate Rule; outside the aggregate only its root is held",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/root-only-references",
+      "subject": "rule",
+      "message": "aggregate Rule: field Document.Pattern holds Pattern, a member of aggregate Rule; outside the aggregate only its root is held",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/root-only-references",
+      "subject": "rule",
+      "message": "aggregate Rule: field Request.Zones holds Zone, a member of aggregate Rule; outside the aggregate only its root is held",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/root-only-references",
+      "subject": "rule",
+      "message": "aggregate Rule: field domainScope.zones holds Zone, a member of aggregate Rule; outside the aggregate only its root is held",
+      "count": 1
+    },
+    {
+      "ruleId": "aggregate/root-only-references",
+      "subject": "rule",
+      "message": "aggregate Rule: field membership.zones holds Zone, a member of aggregate Rule; outside the aggregate only its root is held",
       "count": 1
     },
     {

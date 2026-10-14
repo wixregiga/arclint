@@ -226,6 +226,19 @@ facts:
   calls:
     definition: "The per-file call view: callee identifier, line, and enclosing function, parser-exact and unresolved."
     languages: all
+  resolved_calls:
+    definition: >-
+      The call view with every call resolved by the language's own
+      resolution: the declaration it reaches and, for a method call,
+      the declared type of the value it is called on, or undetermined
+      with the reason.
+    languages: all
+  field_types:
+    definition: >-
+      The declaration view with every field resolved by the language's
+      own resolution to the declarations whose values it holds, or
+      undetermined with the reason.
+    languages: all
 
 # Facts arclint does not observe yet. An invariant whose enforcement
 # names one of these is a milestone, not a rejected idea: the rule is
@@ -234,15 +247,12 @@ milestones:
   field-declarations:
     needs: Field declarations from the Python adapter, which emits class, method, and func today.
     unlocks: [value_object/no-identity, domain_event/occurrence-time]
-  field-types:
-    needs: The declared type of every field, so that a field of the recorded identity type can be told from any other, and a root held in a field from an identity held there.
-    unlocks: [entity/identity, aggregate/root-only-references, domain_service/not-held-by-aggregates]
   field-mutability:
     needs: Whether a field can be assigned after construction, in each language's own idiom.
     unlocks: [value_object/immutable-fields, domain_event/immutable]
   resolved-calls:
     needs: The declaration a call resolves to, so that a call from an aggregate into a repository, or an equality check that compares identities, is a fact rather than a name match.
-    unlocks: [repository/not-called-from-aggregates, entity/equality-by-identity]
+    unlocks: [entity/equality-by-identity]
   transaction-facts:
     needs: The unit of work a repository save belongs to, which no syntactic fact carries.
     unlocks: [aggregate/one-per-transaction]
@@ -683,7 +693,7 @@ building_blocks:
         sources:
           - {work: evans2015, page: 11, section: Entities}
           - {work: vernon2013, chapter: 5, page: 173}
-        enforcement: {needs: field-types, facts: [declarations], languages: []}
+        enforcement: {by: domain, facts: [file_tree, declarations, field_types], languages: all}
       - id: entity/equality-by-identity
         statement: Two entities are the same when their identities are the same, whatever their attributes.
         sources:
@@ -1027,7 +1037,7 @@ building_blocks:
         sources:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: fowler-aggregate}
-        enforcement: {needs: field-types, facts: [declarations], languages: []}
+        enforcement: {by: domain, facts: [file_tree, declarations, field_types], languages: all}
       - id: aggregate/one-per-transaction
         statement: One transaction modifies one aggregate instance; transactions do not cross aggregate boundaries.
         sources:
@@ -1237,7 +1247,7 @@ building_blocks:
         sources:
           - {work: vernon-iddd-sample-pages, page: 387, section: Avoid Dependency Injection}
           - {work: vernon-iddd-sample-pages, page: 363, section: "Rule: Reference Other Aggregates by Identity"}
-        enforcement: {needs: field-types, facts: [declarations], languages: [go, typescript]}
+        enforcement: {by: domain, facts: [file_tree, declarations, field_types], languages: all}
     guidance:
       - text: Try the thing first; a service exists only for a business decision that no entity or value object naturally owns, and the more behavior the services hold, the less the model does.
         fundamental: true
@@ -1326,7 +1336,7 @@ building_blocks:
         sources:
           - {work: vernon2013, chapter: 7, page: 266}
           - {work: vernon2013, chapter: 10, page: 387}
-        enforcement: {needs: resolved-calls, facts: [declarations, calls], languages: []}
+        enforcement: {by: domain, facts: [file_tree, declarations, calls, resolved_calls], languages: all}
     guidance:
       - text: Provide repositories only for aggregate roots that actually need direct access; keep application logic focused on the model, delegating all object storage and access to the repositories.
         fundamental: true

@@ -74,8 +74,8 @@ func TestDDDLookupsByIdentity(t *testing.T) {
 	if _, ok := m.Work("evans2015"); !ok {
 		t.Error("evans2015 missing from the bibliography")
 	}
-	if _, ok := m.Milestone("field-types"); !ok {
-		t.Error("field-types milestone missing")
+	if _, ok := m.Milestone("field-mutability"); !ok {
+		t.Error("field-mutability milestone missing")
 	}
 }
 

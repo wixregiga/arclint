@@ -26,7 +26,7 @@ type maskedSource struct {
 // literal, not division (the standard lexer heuristic).
 var jsKeywordBeforeRegex = map[string]bool{
 	"return": true, "typeof": true, "case": true, "in": true, "of": true,
-	"new": true, "delete": true, "void": true, "instanceof": true,
+	"new": true, "delete": true, tsVoidType: true, "instanceof": true,
 	"do": true, "else": true, "yield": true, "await": true, "throw": true,
 }
 

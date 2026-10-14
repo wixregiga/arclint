@@ -74,7 +74,31 @@ const (
 	// FactCalls is the normalized per-file call view: callee
 	// identifier, line, and enclosing func, parser-exact.
 	FactCalls Fact = "calls"
+	// FactResolvedCalls adds to every call the declaration it reaches
+	// and, for a method call, the type of the value it is called on,
+	// each resolved through the language's own resolution or reported
+	// undetermined with the reason.
+	FactResolvedCalls Fact = "resolved_calls"
+	// FactFieldTypes adds to every field declaration the declarations
+	// whose values the field holds, resolved the same way.
+	FactFieldTypes Fact = "field_types"
 )
+
+// Facts returns every fact class in the order the meta-model documents
+// them.
+func Facts() []Fact {
+	return []Fact{FactFileTree, FactImports, FactDeclarations, FactCalls, FactResolvedCalls, FactFieldTypes}
+}
+
+// Valid reports whether the value is a defined fact class.
+func (f Fact) Valid() bool {
+	for _, known := range Facts() {
+		if f == known {
+			return true
+		}
+	}
+	return false
+}
 
 // Assurance is the strength of conclusion justified by Enforcement
 // evidence. It is independent from Rule Severity; unsupported is an
@@ -149,6 +173,19 @@ func NewEnforcement(languages []Language, facts []Fact, evidence EvidenceMethod,
 		if !l.Valid() {
 			return Enforcement{}, fmt.Errorf("enforcement: language %q invalid", l)
 		}
+	}
+	for _, f := range facts {
+		if !f.Valid() {
+			return Enforcement{}, fmt.Errorf("enforcement: fact %q invalid", f)
+		}
+	}
+	// A resolved fact extends the view it resolves, so it is required
+	// together with it.
+	if hasFact(facts, FactResolvedCalls) && !hasFact(facts, FactCalls) {
+		return Enforcement{}, fmt.Errorf("enforcement: %s resolves %s and requires it", FactResolvedCalls, FactCalls)
+	}
+	if hasFact(facts, FactFieldTypes) && !hasFact(facts, FactDeclarations) {
+		return Enforcement{}, fmt.Errorf("enforcement: %s resolves %s and requires it", FactFieldTypes, FactDeclarations)
 	}
 	return Enforcement{
 		languages:   append([]Language(nil), languages...),
@@ -227,7 +264,7 @@ func BuiltinEnforcement(t Type) Enforcement {
 			"line matching against the forbidden pattern over file bytes", AssuranceExact, nil, true)
 		return e
 	case TypeExtension:
-		e, _ := NewEnforcement(nil, []Fact{FactFileTree, FactImports, FactDeclarations},
+		e, _ := NewEnforcement(nil, []Fact{FactFileTree, FactImports, FactDeclarations, FactCalls, FactResolvedCalls, FactFieldTypes},
 			"TypeScript extension executed in the sandboxed SDK runtime",
 			AssuranceHeuristic,
 			[]string{"the engine treats extension evidence as heuristic regardless of the extension's own declaration"}, true)

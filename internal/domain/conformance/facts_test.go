@@ -63,8 +63,21 @@ func TestFactsEnforcesTheDomainBoundary(t *testing.T) {
 	if !ok || !selected.ImportsAvailable || !selected.DeclarationsAvailable {
 		t.Fatalf("required facts missing: %+v", selected)
 	}
-	if selected.CallsAvailable || len(selected.Calls) != 0 {
-		t.Fatalf("facts required by another Rule escaped: %+v", selected.Calls)
+	if !selected.CallsAvailable || len(selected.Calls) != 1 {
+		t.Fatalf("an extension sees the calls built-in rules see: %+v", selected)
+	}
+	allow, err := rule.NewAllowList()
+	if err != nil {
+		t.Fatal(err)
+	}
+	importsOnly, err := conformance.NewFacts(mustRule(t, rule.Spec{
+		ID: "test/imports", Type: rule.TypeConsumes, Params: rule.ConsumesParams{Internal: &allow}, Scope: zoneScope(t, "src"),
+	}), zones, obs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if narrow, _ := importsOnly.FactsFor("src/selected.go"); narrow.CallsAvailable || len(narrow.Calls) != 0 || narrow.DeclarationsAvailable || len(narrow.Declarations) != 0 {
+		t.Fatalf("facts required by another Rule escaped: %+v", narrow)
 	}
 	if got := supplied.ImportsFor("src/selected.go")[0].TargetZones; !reflect.DeepEqual(got, []rule.ZoneName{"target"}) {
 		t.Fatalf("observed import membership = %v", got)

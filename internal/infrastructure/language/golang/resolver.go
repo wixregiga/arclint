@@ -18,7 +18,7 @@ type goModule struct {
 	// dir is repo-relative, "" for the repository root. The nearest
 	// enclosing module owns a file.
 	dir         string
-	requires    map[string]bool
+	requires    map[string]string
 	replaces    []replaceRule
 	inWorkspace bool
 }
@@ -65,9 +65,9 @@ func newResolver(root string, files []conformance.ObservedFile) *resolver {
 		if dir == "." {
 			dir = ""
 		}
-		m := &goModule{path: mf.Module.Mod.Path, dir: dir, requires: map[string]bool{}}
+		m := &goModule{path: mf.Module.Mod.Path, dir: dir, requires: map[string]string{}}
 		for _, req := range mf.Require {
-			m.requires[req.Mod.Path] = true
+			m.requires[req.Mod.Path] = req.Mod.Version
 		}
 		for _, rep := range mf.Replace {
 			m.replaces = append(m.replaces, r.newReplace(dir, rep.Old.Path, rep.New.Path, rep.New.Version))

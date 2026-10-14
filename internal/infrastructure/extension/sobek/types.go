@@ -70,6 +70,46 @@ type DeclInfo struct {
 	// method decls; absent for every other kind.
 	Params  []ParamInfo `json:"params,omitempty"`
 	Results []string    `json:"results,omitempty"`
+	// Holds lists, for a field when field types are available, the
+	// declarations whose values the field holds: its type and the
+	// element types inside pointers, collections, and type arguments.
+	Holds []ReferenceInfo `json:"holds,omitempty"`
+	// Type is, for a field when field types are available, the
+	// declaration the field's own type names, through pointers, the
+	// repository's type aliases, and optional or nullable wrappers.
+	Type *ReferenceInfo `json:"type,omitempty"`
+}
+
+// ReferenceInfo is the declaration a call or a field's type reaches,
+// as the language's own resolution followed it.
+type ReferenceInfo struct {
+	// Resolution is declared (an observed file of the repository),
+	// external (the standard library, a dependency, or a builtin),
+	// local (a type without a file-level name), or undetermined.
+	Resolution string `json:"resolution"`
+	// File is the repository-relative file of a declared reference.
+	File string `json:"file,omitempty"`
+	// Package is the import path or module of an external reference.
+	Package string `json:"package,omitempty"`
+	// Owner is the type declaring the member reached, "" for a type or
+	// a function.
+	Owner string `json:"owner,omitempty"`
+	Name  string `json:"name,omitempty"`
+	// Reason says why an undetermined reference was not followed.
+	Reason string `json:"reason,omitempty"`
+}
+
+// CallInfo is one source call: the callee identifier as written, its
+// line, the enclosing function or method and the type owning it, and,
+// when resolved calls are available, the declaration it reaches and
+// the declared type of the value a method is called on.
+type CallInfo struct {
+	Callee         string         `json:"callee"`
+	Line           int            `json:"line"`
+	Enclosing      string         `json:"enclosing"`
+	EnclosingOwner string         `json:"enclosingOwner"`
+	Target         *ReferenceInfo `json:"target,omitempty"`
+	Receiver       *ReferenceInfo `json:"receiver,omitempty"`
 }
 
 // FactsInfo exposes one file's already-observed declarations and imports.
@@ -92,7 +132,15 @@ type FactsInfo struct {
 	// DeclarationsAvailable is false when declarations were not supplied or parsing failed.
 	DeclarationsAvailable bool       `json:"declarationsAvailable"`
 	Decls                 []DeclInfo `json:"decls"`
-	ParseError            string     `json:"parseError,omitempty"`
+	// FieldTypesAvailable is true when every field declaration carries
+	// the declarations it holds.
+	FieldTypesAvailable bool `json:"fieldTypesAvailable"`
+	// CallsAvailable is false when calls were not supplied or parsing failed.
+	CallsAvailable bool       `json:"callsAvailable"`
+	Calls          []CallInfo `json:"calls"`
+	// ResolvedCallsAvailable is true when every call carries its target.
+	ResolvedCallsAvailable bool   `json:"resolvedCallsAvailable"`
+	ParseError             string `json:"parseError,omitempty"`
 }
 
 // DependencyInfo is the SDK view of the shared domain DependencyImport.

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
@@ -67,16 +68,26 @@ func (s Source) Observe(languages []rule.Language, scan rule.Scan, facts []rule.
 	if err != nil {
 		return conformance.Observations{}, err
 	}
-	produced := map[string]conformance.LanguageFacts{}
-	for _, p := range s.producers {
+	// Languages are produced concurrently: one language waiting on its
+	// toolchain does not hold up the others.
+	supplied := make([]map[string]conformance.LanguageFacts, len(s.producers))
+	failed := make([]error, len(s.producers))
+	var wg sync.WaitGroup
+	for i, p := range s.producers {
 		if !languageRequested(languages, p.Language()) {
 			continue
 		}
-		supplied, err := p.Facts(s.root, files, facts)
-		if err != nil {
-			return conformance.Observations{}, fmt.Errorf("%s facts: %w", p.Language(), err)
+		wg.Go(func() {
+			supplied[i], failed[i] = p.Facts(s.root, files, facts)
+		})
+	}
+	wg.Wait()
+	produced := map[string]conformance.LanguageFacts{}
+	for i, p := range s.producers {
+		if failed[i] != nil {
+			return conformance.Observations{}, fmt.Errorf("%s facts: %w", p.Language(), failed[i])
 		}
-		for path, f := range supplied {
+		for path, f := range supplied[i] {
 			if _, dup := produced[path]; dup {
 				return conformance.Observations{}, fmt.Errorf("two fact producers claim %s", path)
 			}
