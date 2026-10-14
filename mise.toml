@@ -21,6 +21,7 @@ test = "make test"
 vet = "make vet"
 fmt = "make fmt"
 lint = "make lint"
+generate = "make generate"
 schemas = "make schemas"
 lint-schema = "make lint-schema"
 check = "make check"
@@ -28,11 +29,3 @@ check-ro = "make check-ro"
 ci = "make ci"
 release = "make release"
 clean = "make clean"
-
-# The mirror of make generate. Each --only names one generator; repeat it
-# to run several. The Makefile owns the generators, their order and the
-# check that a name is one of them.
-[tasks.generate]
-description = "Regenerate every generated file, for the root and testing/boxoffice"
-usage = 'flag "--only <generator>" var=#true help="Run only this generator: go, schemas, sdk, skill or agents-md; repeat for several"'
-run = 'make generate ONLY="${usage_only:-}"'
