@@ -21,14 +21,15 @@ func main() {
 	pkg := flag.String("pkg", "python", "package name")
 	flag.Parse()
 
-	raw, err := exec.CommandContext(context.Background(), "python3", "-c",
-		"import sys, json; print(json.dumps({'version': sys.version.split()[0], 'modules': sorted(sys.stdlib_module_names)}))").Output()
+	raw, err := exec.CommandContext(context.Background(), "python3", "-S", "-c",
+		"import sys, json, builtins; print(json.dumps({'version': sys.version.split()[0], 'modules': sorted(sys.stdlib_module_names), 'builtins': {n: isinstance(getattr(builtins, n), type) for n in dir(builtins)}}))").Output()
 	if err != nil {
 		log.Fatalf("python3 stdlib_module_names: %v (Python is required at generate time only)", err)
 	}
 	var payload struct {
-		Version string   `json:"version"`
-		Modules []string `json:"modules"`
+		Version  string          `json:"version"`
+		Modules  []string        `json:"modules"`
+		Builtins map[string]bool `json:"builtins"`
 	}
 	if err := json.Unmarshal(bytes.TrimSpace(raw), &payload); err != nil {
 		log.Fatalf("parse: %v", err)
@@ -53,6 +54,17 @@ func main() {
 	}
 	fmt.Fprintf(&b, "}\n")
 
+	fmt.Fprintln(&b, "\n// pyBuiltins records every builtin; true marks a type usable in an annotation.")
+	fmt.Fprintln(&b, "var pyBuiltins = map[string]bool{")
+	names := make([]string, 0, len(payload.Builtins))
+	for name := range payload.Builtins {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		fmt.Fprintf(&b, "\t%q: %t,\n", name, payload.Builtins[name])
+	}
+	fmt.Fprintln(&b, "}")
 	formatted, err := format.Source(b.Bytes())
 	if err != nil {
 		log.Fatalf("format: %v", err)

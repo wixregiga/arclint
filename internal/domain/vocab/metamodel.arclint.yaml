@@ -221,7 +221,7 @@ facts:
       and the syntactic signature of functions and methods. Go emits
       struct, interface, type, func, method, field, const, and var;
       TypeScript emits class, interface, type, enum, func, method, field,
-      const, and var; Python emits class, method, and func only.
+      const, and var; Python emits class, method, func, and instance field.
     languages: all
   calls:
     definition: "The per-file call view: callee identifier, line, and enclosing function, parser-exact and unresolved."
@@ -248,7 +248,7 @@ facts:
 # binary and sourced, only the observation is missing.
 milestones:
   field-declarations:
-    needs: Field declarations from the Python adapter, which emits class, method, and func today.
+    needs: Semantic evaluators for identity fields and occurrence-time fields; all adapters now emit field declarations.
     unlocks: [value_object/no-identity, domain_event/occurrence-time]
   field-mutability:
     needs: Whether a field can be assigned after construction, in each language's own idiom.

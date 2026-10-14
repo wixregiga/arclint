@@ -37,7 +37,14 @@ func (Producer) Language() rule.Language { return rule.LanguagePython }
 func (Producer) Facts(root string, files []conformance.ObservedFile, requested []rule.Fact) (map[string]conformance.LanguageFacts, error) {
 	wantDeclarations := false
 	wantCalls := false
+	wantResolved, wantFields := false, false
 	for _, f := range requested {
+		if f == rule.FactResolvedCalls {
+			wantResolved, wantCalls = true, true
+		}
+		if f == rule.FactFieldTypes {
+			wantFields, wantDeclarations = true, true
+		}
 		if f == rule.FactDeclarations {
 			wantDeclarations = true
 		}
@@ -46,6 +53,9 @@ func (Producer) Facts(root string, files []conformance.ObservedFile, requested [
 		}
 	}
 	res := newResolver(root, files)
+	if wantResolved || wantFields {
+		return resolvedFacts(root, files, res, wantDeclarations, wantCalls, wantResolved, wantFields), nil
+	}
 	return fanout.Analyze(files, analyzable, func() fanout.Analyzer {
 		ps := newParsers()
 		return func(rel string) conformance.LanguageFacts {

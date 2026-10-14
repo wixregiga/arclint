@@ -1,0 +1,120 @@
+package python
+
+import (
+	"os"
+	"path/filepath"
+
+	"github.com/wixregiga/arclint/internal/domain/conformance"
+)
+
+func resolvedFacts(root string, files []conformance.ObservedFile, res *resolver, wantDecls, wantCalls, wantResolved, wantFields bool) map[string]conformance.LanguageFacts {
+	idx := &resolutionIndex{resolver: res, modules: map[string]*pyModule{}, patched: map[string]bool{}}
+	out := map[string]conformance.LanguageFacts{}
+	ps := newParsers()
+	for _, file := range files {
+		if !analyzable(file.Path) {
+			continue
+		}
+		f := analyzeFile(ps, res, root, file.Path, false, false)
+		out[file.Path] = f
+		src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(file.Path)))
+		if err != nil {
+			continue
+		}
+		df := extractDeclarations(ps, src)
+		if df.ParseError != "" {
+			continue
+		}
+		idx.modules[file.Path] = newModule(file.Path, df)
+	}
+	// Record repository-visible monkey patches before resolving any call.
+	for _, m := range idx.modules {
+		for _, mutation := range m.mutations {
+			w := m.facts.walker
+			obj := mutation.node.ChildByFieldName("object", w.lang)
+			attr := mutation.node.ChildByFieldName(nodeAttribute, w.lang)
+			if obj == nil || attr == nil || obj.Text(w.src) == bindingSelf {
+				continue
+			}
+			v := idx.expression(mutation.scope, obj)
+			if v.module != "" {
+				idx.patched[v.module+"::"+attr.Text(w.src)] = true
+			}
+			if v.class != nil {
+				idx.patched[v.ref.File+":"+v.class.name+":"+attr.Text(w.src)] = true
+			}
+		}
+	}
+	for _, m := range idx.modules {
+		for _, c := range m.calls {
+			idx.recordSetattr(c)
+		}
+	}
+	for file, m := range idx.modules {
+		f := out[file]
+		f.DeclarationsAvailable = wantDecls
+		f.CallsAvailable = wantCalls
+		f.ResolvedCallsAvailable = wantResolved
+		f.FieldTypesAvailable = wantFields
+		if wantFields {
+			for _, field := range m.fields {
+				refs := idx.annotationRefs(field.scope, field.annotation, map[*pyBinding]bool{})
+				if len(refs) == 0 {
+					refs = []conformance.Reference{unknown(m.facts.Decls[field.declaration].Name + " has no declared type")}
+				}
+				m.facts.Decls[field.declaration].Holds = refs
+			}
+		}
+		if wantDecls {
+			f.Declarations = m.facts.Decls
+		}
+		if wantCalls {
+			f.Calls = m.facts.Calls
+			if wantResolved {
+				// Both walks are in source order. Definition defaults are collected
+				// separately; use source offsets to associate calls, including calls
+				// sharing a line or nested in another call.
+				scopes := map[uint32]*pyScope{}
+				for _, c := range m.calls {
+					scopes[c.node.StartByte()] = c.scope
+				}
+				for i, node := range m.facts.CallNodes {
+					if scope := scopes[node.StartByte()]; scope != nil {
+						f.Calls[i].Target, f.Calls[i].Receiver = idx.call(pyCall{node, scope})
+					} else {
+						f.Calls[i].Target = unknown("call scope could not be established")
+					}
+				}
+			}
+		}
+		out[file] = f
+	}
+	return out
+}
+
+func (idx *resolutionIndex) recordSetattr(c pyCall) {
+	w := c.scope.module.facts.walker
+	fn := c.node.ChildByFieldName("function", w.lang)
+	if fn == nil {
+		return
+	}
+	v := idx.expression(c.scope, fn)
+	if v.ref.Resolution != conformance.ResolutionExternal || v.ref.Name != builtinSetattr || v.ref.Package != "" && v.ref.Package != builtinsModule {
+		return
+	}
+	args := c.node.ChildByFieldName("arguments", w.lang)
+	if args == nil || args.NamedChildCount() < 2 {
+		return
+	}
+	obj := idx.expression(c.scope, args.NamedChild(0))
+	name, ok := pythonString(args.NamedChild(1).Text(w.src))
+	if !ok {
+		name = "*"
+	}
+	if obj.class != nil {
+		idx.patched[obj.ref.File+":"+obj.class.name+":"+name] = true
+	}
+	if obj.module != "" {
+		idx.patched[obj.module+"::"+name] = true
+	}
+}

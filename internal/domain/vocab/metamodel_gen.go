@@ -210,7 +210,7 @@ func ddd() MetaModel {
 			},
 			{
 				Name:       "declarations",
-				Definition: "The per-file declaration view: kind, name, owner, exported, lines, and the syntactic signature of functions and methods. Go emits struct, interface, type, func, method, field, const, and var; TypeScript emits class, interface, type, enum, func, method, field, const, and var; Python emits class, method, and func only.",
+				Definition: "The per-file declaration view: kind, name, owner, exported, lines, and the syntactic signature of functions and methods. Go emits struct, interface, type, func, method, field, const, and var; TypeScript emits class, interface, type, enum, func, method, field, const, and var; Python emits class, method, func, and instance field.",
 				Languages:  Languages{All: true},
 			},
 			{
@@ -232,7 +232,7 @@ func ddd() MetaModel {
 		Milestones: []Milestone{
 			{
 				Key:     "field-declarations",
-				Needs:   "Field declarations from the Python adapter, which emits class, method, and func today.",
+				Needs:   "Semantic evaluators for identity fields and occurrence-time fields; all adapters now emit field declarations.",
 				Unlocks: []string{"value_object/no-identity", "domain_event/occurrence-time"},
 			},
 			{

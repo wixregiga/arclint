@@ -1,0 +1,499 @@
+package python
+
+import (
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/wixregiga/arclint/internal/domain/conformance"
+	"github.com/wixregiga/arclint/internal/domain/rule"
+)
+
+func resolved(t *testing.T, sources map[string]string) map[string]conformance.LanguageFacts {
+	t.Helper()
+	root, files := writeFiles(t, sources)
+	facts, err := NewProducer().Facts(root, files, []rule.Fact{rule.FactResolvedCalls, rule.FactFieldTypes})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conformance.NewObservations(files, facts); err != nil {
+		t.Fatal(err)
+	}
+	return facts
+}
+
+func TestFieldDeclarations(t *testing.T) {
+	f := resolved(t, map[string]string{"model.py": `from dataclasses import dataclass, InitVar as IV
+from typing import ClassVar as CV, NamedTuple
+@dataclass
+class Model:
+    x: str
+    config: CV[str]
+    init: IV[str]
+    def init(self):
+        self.y: int = 1
+        self.x = 'duplicate'
+        self.z = 0
+    def other(self):
+        self.z: str = 'still untyped'
+        self.later: str
+class Pair(NamedTuple):
+    left: str
+    right: int
+`})["model.py"]
+	var got []string
+	for _, d := range f.Declarations {
+		if d.Kind == "field" {
+			got = append(got, d.Owner+"."+d.Name)
+			if d.Name == "z" && !reflect.DeepEqual(d.Holds, []conformance.Reference{unknown("z has no declared type")}) {
+				t.Errorf("z: %+v", d)
+			}
+		}
+	}
+	want := []string{"Model.x", "Model.y", "Model.z", "Model.later", "Pair.left", "Pair.right"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("fields %v want %v", got, want)
+	}
+}
+
+func TestResolvedImportsFieldsAndCalls(t *testing.T) {
+	facts := resolved(t, map[string]string{
+		"pkg/__init__.py": "from .model import Repo as Repository\nfrom .model import work\n",
+		"pkg/model.py": `from typing import Protocol
+class Base:
+    def save(self): pass
+class Repo(Base): pass
+class Port(Protocol):
+    def execute(self): pass
+def work(): pass
+`,
+		"consumer.py": `from __future__ import annotations
+import pkg.model as module
+from pkg import Repository as R, work as run
+from typing import Optional, Callable, Any
+import os
+class Service:
+    repo: Optional['R']
+    items: list[R]
+    mapping: dict[str, R | None]
+    callback: Callable[[R], R]
+    dynamic: Any
+    def execute(self, p: R):
+        self.repo.save()
+        p.save()
+        value: R
+        value.save()
+        R.save(p)
+        R()
+        module.work()
+        run()
+        os.getcwd()
+        print(len([]))
+module.work()
+`,
+	})
+	f := facts["consumer.py"]
+	wants := []conformance.Reference{
+		declared("pkg/model.py", "Base", "save"), declared("pkg/model.py", "Base", "save"), declared("pkg/model.py", "Base", "save"), declared("pkg/model.py", "Base", "save"),
+		declared("pkg/model.py", "", "Repo"), declared("pkg/model.py", "", "work"), declared("pkg/model.py", "", "work"), external("os", "getcwd"), external("", "print"), external("", "len"), declared("pkg/model.py", "", "work"),
+	}
+	if len(f.Calls) != len(wants) {
+		t.Fatalf("calls: %+v", f.Calls)
+	}
+	for i, c := range f.Calls {
+		if c.Target != wants[i] {
+			t.Errorf("call %d: %+v want %+v", i, c, wants[i])
+		}
+		if i < 4 && c.Receiver != declared("pkg/model.py", "", "Repo") {
+			t.Errorf("receiver %d: %+v", i, c)
+		}
+		if i < 10 && c.EnclosingOwner != "Service" {
+			t.Errorf("owner: %+v", c)
+		}
+	}
+	for _, d := range f.Declarations {
+		if d.Kind != "field" {
+			continue
+		}
+		var want []conformance.Reference
+		switch d.Name {
+		case "repo":
+			want = []conformance.Reference{external("typing", "Optional"), declared("pkg/model.py", "", "Repo")}
+		case "items":
+			want = []conformance.Reference{external("", "list"), declared("pkg/model.py", "", "Repo")}
+		case "mapping":
+			want = []conformance.Reference{external("", "dict"), external("", "str"), declared("pkg/model.py", "", "Repo")}
+		case "callback":
+			want = []conformance.Reference{external("typing", "Callable")}
+		case "dynamic":
+			want = []conformance.Reference{unknown("Any does not declare a concrete type")}
+		}
+		if !reflect.DeepEqual(d.Holds, want) {
+			t.Errorf("field %s: %+v want %+v", d.Name, d.Holds, want)
+		}
+	}
+}
+
+func TestUndeterminedReasons(t *testing.T) {
+	cases := []struct{ name, body, reason string }{
+		{"unannotated", "def f(p):\n    p.save()\n", "p has no declared type"},
+		{"any", "from typing import Any\ndef f(p: Any):\n    p.save()\n", "Any does not declare a concrete type"},
+		{"getattr", "def f(p):\n    getattr(p, 'save')()\n", "computed member call"},
+		{"setattr", "def f(p):\n    setattr(p, 'save', 0)\n", "setattr uses dynamic attribute access"},
+		{"star", "from pkg.model import *\ndef f():\n    Repo()\n", "star import may bind Repo"},
+		{"kwargs", "from pkg.model import Repo\ndef f(**kw):\n    Repo(**kw)\n", "**kwargs plumbing has no declared target"},
+		{"patch", "from pkg.model import Repo\nRepo.save = lambda: None\ndef f(p: Repo):\n    p.save()\n", "monkey patching changes Repo.save"},
+		{"descriptor", "class C:\n    @property\n    def save(self): pass\ndef f(p: C):\n    p.save()\n", "decorated declaration save may be a descriptor or replacement"},
+		{"metaclass", "class C(metaclass=type): pass\ndef f(p: C):\n    p.save()\n", "class C uses a metaclass or class keyword"},
+		{"super", "class C:\n    def f(self):\n        super().save()\n", "super() has no resolvable base"},
+		{"unknown", "def f():\n    Missing()\n", "Missing is neither declared in the file nor imported"},
+		{"computed", "def f(p):\n    p[0]()\n", "computed member call"},
+		{"namespace", "from namespace.mod import C\ndef f():\n    C()\n", "namespace.mod uses a namespace package"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := resolved(t, map[string]string{"consumer.py": tc.body, "pkg/__init__.py": "", "pkg/model.py": "class Repo:\n    def save(self): pass\n", "namespace/mod.py": "class C: pass\n"})["consumer.py"]
+			if len(f.Calls) == 0 {
+				t.Fatal("no call")
+			}
+			if f.Calls[0].Target != unknown(tc.reason) {
+				t.Errorf("%+v want reason %q", f.Calls[0], tc.reason)
+			}
+		})
+	}
+}
+
+func TestFactRequestsAreLazy(t *testing.T) {
+	root, files := writeFiles(t, map[string]string{"x.py": "class C:\n    x: str\n    def f(self):\n        print(self.x)\n"})
+	for _, req := range [][]rule.Fact{nil, {rule.FactDeclarations}, {rule.FactCalls}, {rule.FactFieldTypes}, {rule.FactResolvedCalls}} {
+		got, err := NewProducer().Facts(root, files, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f := got["x.py"]
+		resolvedCalls := len(req) > 0 && req[0] == rule.FactResolvedCalls
+		fields := len(req) > 0 && req[0] == rule.FactFieldTypes
+		if f.ResolvedCallsAvailable != resolvedCalls || f.FieldTypesAvailable != fields {
+			t.Fatal(f)
+		}
+		for _, d := range f.Declarations {
+			if !fields && len(d.Holds) > 0 {
+				t.Fatal("unrequested Holds")
+			}
+		}
+		for _, c := range f.Calls {
+			if !resolvedCalls && (!c.Target.IsZero() || !c.Receiver.IsZero()) {
+				t.Fatal("unrequested resolution")
+			}
+			if c.EnclosingOwner != "C" {
+				t.Fatal("missing syntactic owner", c)
+			}
+		}
+	}
+}
+
+func TestC3AndProtocol(t *testing.T) {
+	f := resolved(t, map[string]string{"x.py": `from typing import Protocol
+class A:
+    def m(self): pass
+class B(A): pass
+class C(A):
+    def m(self): pass
+class D(B,C): pass
+class Port(Protocol):
+    def run(self): pass
+class Use:
+    port: Port
+    def f(self,p: D):
+        p.m()
+        self.port.run()
+`})["x.py"]
+	if f.Calls[0].Target != declared("x.py", "C", "m") || f.Calls[0].Receiver != declared("x.py", "", "D") {
+		t.Fatal(f.Calls[0])
+	}
+	if f.Calls[1].Target != declared("x.py", "Port", "run") {
+		t.Fatal(f.Calls[1])
+	}
+}
+
+func TestCompetingRoots(t *testing.T) {
+	f := resolved(t, map[string]string{"x.py": "from model import C\nC()\n", "model.py": "class C: pass\n", "src/model.py": "class C: pass\n"})["x.py"]
+	if !strings.Contains(f.Calls[0].Target.Reason, "competing source roots") {
+		t.Fatal(f.Calls)
+	}
+}
+
+func TestExternalTypesAndConservativeMembers(t *testing.T) {
+	f := resolved(t, map[string]string{
+		"pyproject.toml": "[project]\nname='app'\ndependencies=['dependency']\n",
+		"x.py": `import dependency as dep
+from dependency import Repo as R
+class C:
+    repo: R
+    def f(self,p: R):
+        dep.work()
+        p.save()
+`,
+	})["x.py"]
+	if f.Calls[0].Target != external("dependency", "work") {
+		t.Fatal(f.Calls[0])
+	}
+	if f.Calls[1].Receiver != external("dependency", "Repo") || f.Calls[1].Target != unknown("external receiver Repo has no observed member declaration for save") {
+		t.Fatal(f.Calls[1])
+	}
+}
+
+func TestLexicalScopeShadowingAndCallOccurrences(t *testing.T) {
+	f := resolved(t, map[string]string{"x.py": `class R:
+    def save(self): pass
+def outer(p: R):
+    def inner(p):
+        p.save()
+    p.save()
+    [p.save() for p in []]
+    getattr(p, 'save')()
+    return R().save()
+R()
+`})["x.py"]
+	for _, c := range f.Calls {
+		if c.Enclosing == "inner" && c.EnclosingOwner != "" {
+			t.Fatal(c)
+		}
+	}
+	if f.Calls[0].Target != unknown("p has no declared type") {
+		t.Fatal(f.Calls[0])
+	}
+	if f.Calls[1].Target != declared("x.py", "R", "save") {
+		t.Fatal(f.Calls[1])
+	}
+	if f.Calls[2].Target.Resolution != conformance.ResolutionUndetermined {
+		t.Fatal(f.Calls[2])
+	}
+	if f.Calls[3].Target != unknown("computed member call") || f.Calls[4].Target != unknown("getattr uses dynamic attribute access") {
+		t.Fatal(f.Calls[3:5])
+	}
+	if len(f.Calls) != 8 {
+		t.Fatal(f.Calls)
+	}
+}
+
+func TestMoreAnnotationShapes(t *testing.T) {
+	f := resolved(t, map[string]string{"x.py": `from typing import Annotated, Union, Callable as Fn, ClassVar
+import dataclasses as dc
+class X: pass
+class User:
+    class_field: ClassVar[X]
+    init: dc.InitVar[X]
+    forward: "dict[str, list[X | None]]"
+    multi: Union[X, str]
+    decorated: Annotated[X, 'metadata']
+    callback: Fn[[X], X]
+    missing: Unknown
+    def f(self,p: X | str):
+        p.save()
+`})["x.py"]
+	got := map[string][]conformance.Reference{}
+	for _, d := range f.Declarations {
+		if d.Kind == "field" {
+			got[d.Name] = d.Holds
+		}
+	}
+	want := map[string][]conformance.Reference{
+		"forward":   {external("", "dict"), external("", "str"), external("", "list"), declared("x.py", "", "X")},
+		"multi":     {external("typing", "Union"), declared("x.py", "", "X"), external("", "str")},
+		"decorated": {external("typing", "Annotated"), declared("x.py", "", "X")},
+		"callback":  {external("typing", "Callable")},
+		"missing":   {unknown("Unknown is neither declared in the file nor imported")},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("%+v want %+v", got, want)
+	}
+	if f.Calls[0].Target != unknown("union annotation has no single receiver type") {
+		t.Fatal(f.Calls[0])
+	}
+}
+
+func TestSuperAndUnresolvedBases(t *testing.T) {
+	f := resolved(t, map[string]string{"x.py": `class Base:
+    def run(self): pass
+class Child(Base):
+    def run(self):
+        super().run()
+class Unknown(Missing): pass
+def f(p: Unknown):
+    p.run()
+`})["x.py"]
+	if f.Calls[0].Target != declared("x.py", "Base", "run") || f.Calls[0].Receiver != declared("x.py", "", "Child") {
+		t.Fatal(f.Calls[0])
+	}
+	if f.Calls[2].Target != unknown("base Missing of Unknown does not resolve to a repository class") {
+		t.Fatal(f.Calls[2])
+	}
+}
+
+func TestModuleMonkeyPatching(t *testing.T) {
+	f := resolved(t, map[string]string{"m.py": "def work(): pass\n", "x.py": "import m\nm.work = lambda: None\ndef f():\n    m.work()\n"})["x.py"]
+	if f.Calls[0].Target != unknown("monkey patching changes work") {
+		t.Fatal(f.Calls)
+	}
+}
+
+func TestGrammarBasedReceiverAnnotations(t *testing.T) {
+	f := resolved(t, map[string]string{"x.py": `from typing import Union as U, Optional as O
+class C:
+    def run(self): pass
+def f(a: U[C,str], b: list[C | str], c: O[C]):
+    a.run()
+    b.append(C())
+    c.run()
+`})["x.py"]
+	if f.Calls[0].Target != unknown("union annotation has no single receiver type") {
+		t.Fatal(f.Calls[0])
+	}
+	if f.Calls[1].Receiver != external("", "list") {
+		t.Fatal(f.Calls[1])
+	}
+	if f.Calls[3].Target != declared("x.py", "C", "run") {
+		t.Fatal(f.Calls[3])
+	}
+}
+
+func TestDescriptorSetattrAndKwargs(t *testing.T) {
+	f := resolved(t, map[string]string{"x.py": `class D:
+    def __get__(self,instance,owner): pass
+class C:
+    descriptor: D
+    def save(self): pass
+def f(p: C, **kw):
+    p.save(**kw)
+    setattr(C, 'save', lambda: None)
+    p.save()
+`})["x.py"]
+	if f.Calls[0].Receiver != declared("x.py", "", "C") || f.Calls[0].Target != unknown("**kwargs plumbing has no declared target") {
+		t.Fatal(f.Calls[0])
+	}
+	if f.Calls[2].Target != unknown("monkey patching changes C.save") {
+		t.Fatal(f.Calls[2])
+	}
+	for _, d := range f.Declarations {
+		if d.Name == "descriptor" && !reflect.DeepEqual(d.Holds, []conformance.Reference{unknown("descriptor type D needs descriptor resolution")}) {
+			t.Fatal(d)
+		}
+	}
+}
+
+func TestCallingFieldDoesNotCallItsAnnotation(t *testing.T) {
+	f := resolved(t, map[string]string{"x.py": `from typing import Callable
+class C:
+    callback: Callable[[], int]
+    constructor: type
+    def f(self):
+        self.callback()
+        self.constructor()
+`})["x.py"]
+	if f.Calls[0].Target != unknown("callable field callback has no declared call target") || f.Calls[1].Target != unknown("callable field constructor has no declared call target") {
+		t.Fatal(f.Calls)
+	}
+}
+
+func TestGeneratedBuiltinsAndDottedExternalModule(t *testing.T) {
+	f := resolved(t, map[string]string{"x.py": `import os.path
+import builtins
+from builtins import getattr as lookup
+class C:
+    exception: FileNotFoundError
+    invalid: len
+def f(p):
+    FileNotFoundError()
+    os.path.join('a', 'b')
+    builtins.getattr(p,'x')
+    lookup(p,'x')
+`})["x.py"]
+	if f.Calls[0].Target != external("", "FileNotFoundError") || f.Calls[1].Target != external("os.path", "join") {
+		t.Fatal(f.Calls)
+	}
+	for _, c := range f.Calls[2:] {
+		if c.Target != unknown("getattr uses dynamic attribute access") {
+			t.Fatal(c)
+		}
+	}
+	for _, d := range f.Declarations {
+		if d.Name == "invalid" && !reflect.DeepEqual(d.Holds, []conformance.Reference{unknown("len is a builtin value, not a declared type")}) {
+			t.Fatal(d)
+		}
+	}
+}
+
+func TestDecoratorsMustBeEstablished(t *testing.T) {
+	f := resolved(t, map[string]string{"x.py": `def dataclass(c): return lambda: None
+@dataclass
+class Replaced: pass
+class C:
+    @staticmethod
+    def f(self):
+        self.run()
+def f():
+    Replaced()
+`})["x.py"]
+	if f.Calls[0].Target != unknown("self has no declared type") {
+		t.Fatal(f.Calls[0])
+	}
+	if f.Calls[1].Target != unknown("decorated declaration Replaced may be a descriptor or replacement") {
+		t.Fatal(f.Calls[1])
+	}
+}
+
+func TestDataclassGeneratedMemberHasNoSourceDeclaration(t *testing.T) {
+	f := resolved(t, map[string]string{"x.py": `from dataclasses import dataclass
+@dataclass
+class User:
+    name: str
+class Anonymous(User):
+    def __init__(self):
+        super().__init__('anonymous')
+User('name')
+`})["x.py"]
+	if f.Calls[0].Target != unknown("dataclass generated member __init__ has no source declaration") {
+		t.Fatal(f.Calls[0])
+	}
+	if f.Calls[2].Target != declared("x.py", "", "User") {
+		t.Fatal(f.Calls[2])
+	}
+}
+
+func TestUntypedAliasesAndValuesDoNotBecomeReceiverTypes(t *testing.T) {
+	facts := resolved(t, map[string]string{"x.py": `class Repo:
+    def save(self): pass
+with open('file') as Repo:
+    Repo.save()
+`, "y.py": `class Repo:
+    def save(self): pass
+try: pass
+except Exception as Repo:
+    Repo.save()
+`, "z.py": `class C:
+    def f(self):
+        self.missing.save()
+def function(): pass
+function.save()
+`})
+	for _, file := range []string{"x.py", "y.py"} {
+		for _, c := range facts[file].Calls {
+			if c.Callee == "save" && c.Target != unknown("Repo has competing bindings") {
+				t.Fatal(file, c)
+			}
+		}
+	}
+	for _, c := range facts["z.py"].Calls {
+		if c.Target.Resolution != conformance.ResolutionUndetermined || c.Receiver.Resolution != conformance.ResolutionUndetermined {
+			t.Fatal(c)
+		}
+	}
+}
+
+func TestStarImportCanReplaceAnEarlierDeclaration(t *testing.T) {
+	f := resolved(t, map[string]string{"x.py": "class Repo: pass\nfrom dependency import *\nRepo()\n"})["x.py"]
+	if f.Calls[0].Target != unknown("star import may bind Repo") {
+		t.Fatal(f.Calls[0])
+	}
+}
