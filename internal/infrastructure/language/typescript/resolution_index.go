@@ -259,7 +259,7 @@ func (r *resolutionIndex) ownType(f *resolutionFile, n *gotreesitter.Node, s *le
 		return uncertain("cyclic type alias cannot be resolved")
 	}
 	switch f.kind(n) {
-	case "type_annotation", "default_type", tsParenthesizedType:
+	case tsTypeAnnotation, "default_type", tsParenthesizedType:
 		if n.NamedChildCount() > 0 {
 			return r.ownType(f, n.NamedChild(0), s, bound, depth)
 		}
@@ -310,7 +310,18 @@ func (r *resolutionIndex) ownType(f *resolutionFile, n *gotreesitter.Node, s *le
 			}
 		}
 	}
-	return r.ownType(next, next.child(alias, tsValueField), next.nodes[alias], inner, depth+1)
+	// An alias of another declaration is that declaration, and one whose
+	// target cannot be followed stays undetermined; an alias of anything
+	// else, a primitive or a branded intersection, is itself the field's
+	// type.
+	own := r.ownType(next, next.child(alias, tsValueField), next.nodes[alias], inner, depth+1)
+	switch own.Resolution {
+	case conformance.ResolutionDeclared, conformance.ResolutionUndetermined:
+		return own
+	case conformance.ResolutionExternal, conformance.ResolutionLocal:
+		return ref
+	}
+	return ref
 }
 
 // local names a type the code writes without a file-level name.
@@ -433,7 +444,7 @@ func definedOutside(n, c *gotreesitter.Node, lang *gotreesitter.Language) bool {
 	switch c.Type(lang) {
 	case "decorator":
 		return true
-	case "computed_property_name":
+	case tsComputedName:
 		switch n.Type(lang) {
 		case tsMethodDefinition, tsPublicFieldDefinition, tsFieldDefinition:
 			return true
@@ -573,6 +584,10 @@ func defaultDeclaration(n *gotreesitter.Node, lang *gotreesitter.Language) bool 
 // explicitly declared method. Ordinary nested functions break that binding.
 func (f *resolutionFile) thisClass(n *gotreesitter.Node) string {
 	for parent := n.Parent(); parent != nil; parent = parent.Parent() {
+		if outer := computedNameClass(f, parent); outer != nil {
+			parent = outer
+			continue
+		}
 		switch f.kind(parent) {
 		case tsFunctionDeclaration, tsGeneratorFunctionDeclaration, tsFunctionExpression, tsFunction:
 			return ""

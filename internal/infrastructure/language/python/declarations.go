@@ -71,9 +71,10 @@ func extractDeclarations(ps *parsers, src []byte) *declarationFacts {
 	w.walk(tree.RootNode(), "", false)
 	out.walker, out.root = w, tree.RootNode()
 	w.imports = importBindings(w, tree.RootNode())
+	w.bound, w.aliases = map[string]bool{}, map[string]string{}
 	w.rebound = moduleRebindings(w, tree.RootNode())
 	w.fields(tree.RootNode(), fieldScope{})
-	w.walkCalls(tree.RootNode(), "", "")
+	w.walkCalls(tree.RootNode(), "", "", "")
 	return out
 }
 
@@ -107,6 +108,11 @@ type pyWalker struct {
 	// second import or by an assignment, def, or class, so an import of
 	// it does not decide what it means.
 	rebound map[string]bool
+	// bound names every name a module-level assignment, def, or class
+	// binds, and aliases the plain ones, cm = classmethod, by what they
+	// were assigned.
+	bound   map[string]bool
+	aliases map[string]string
 }
 
 func (w *pyWalker) name(n *gotreesitter.Node) string {
@@ -147,12 +153,15 @@ const (
 	nodeClass         = "class_definition"
 	nodeFunction      = "function_definition"
 	nodeDecorated     = "decorated_definition"
+	declField         = "field"
 	nodeCall          = "call"
 	bindingFunction   = "func"
 	bindingUnknown    = "unknown"
 	bindingAnnotation = "annotation"
-	bindingSelf       = "self"
-	typingModule      = "typing"
+	// bindingVariadic is a *args parameter: always a tuple.
+	bindingVariadic = "variadic"
+	bindingSelf     = "self"
+	typingModule    = "typing"
 )
 
 // param maps one node under parameters to the neutral shape. Splat
@@ -258,19 +267,20 @@ func (w *pyWalker) walk(n *gotreesitter.Node, owner string, inFunction bool) {
 	}
 }
 
-func (w *pyWalker) walkCalls(n *gotreesitter.Node, enclosing, owner string) {
+// walkCalls records every call with the function it runs in and the
+// class that function belongs to. class names the class whose body the
+// walk stands in directly, whose functions are its methods; a class
+// body itself runs in the scope around it, so a class defined inside a
+// method runs its body's calls in that method.
+func (w *pyWalker) walkCalls(n *gotreesitter.Node, enclosing, owner, class string) {
 	t := n.Type(w.lang)
-	next := enclosing
 	switch t {
 	case nodeClass:
-		owner, next = w.name(n), ""
+		class = w.name(n)
 	case nodeFunction:
 		// Defaults and annotations run where the function is defined;
 		// only the body runs inside it.
-		bodyOwner := owner
-		if enclosing != "" {
-			bodyOwner = ""
-		}
+		next, bodyOwner := enclosing, class
 		if name := w.name(n); name != "" {
 			next = name
 		}
@@ -278,9 +288,9 @@ func (w *pyWalker) walkCalls(n *gotreesitter.Node, enclosing, owner string) {
 		for i := 0; i < n.NamedChildCount(); i++ {
 			c := n.NamedChild(i)
 			if body != nil && c.StartByte() == body.StartByte() && c.EndByte() == body.EndByte() {
-				w.walkCalls(c, next, bodyOwner)
+				w.walkCalls(c, next, bodyOwner, "")
 			} else {
-				w.walkCalls(c, enclosing, owner)
+				w.walkCalls(c, enclosing, owner, class)
 			}
 		}
 		return
@@ -300,7 +310,7 @@ func (w *pyWalker) walkCalls(n *gotreesitter.Node, enclosing, owner string) {
 		}
 	}
 	for i := 0; i < n.NamedChildCount(); i++ {
-		w.walkCalls(n.NamedChild(i), next, owner)
+		w.walkCalls(n.NamedChild(i), enclosing, owner, class)
 	}
 }
 

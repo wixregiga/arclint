@@ -117,9 +117,12 @@ func TestCallableAliasHoldsNoTypeArguments(t *testing.T) {
 func TestResolutionFieldOwnType(t *testing.T) {
 	sources := map[string]string{
 		"id.ts": `export class OrderID {} export type StoredID = OrderID; export type MaybeID = StoredID | null;
+ export type Branded = string & { readonly brand: unique symbol }; export type Plain = string;
  export type Maybe<T> = T | undefined; export type Wrapped<T = OrderID> = Maybe<T>; export type Loop = Loop;`,
-		"main.ts": `import {OrderID, StoredID, MaybeID, Maybe, Wrapped, Loop} from './id';
+		"main.ts": `import {OrderID, StoredID, MaybeID, Maybe, Wrapped, Loop, Branded, Plain} from './id';
  class Order {
+   branded: Branded;
+   plain: Plain;
    generic: Maybe<OrderID>;
    nested: Maybe<Maybe<StoredID>>;
    defaulted: Wrapped;
@@ -146,6 +149,7 @@ func TestResolutionFieldOwnType(t *testing.T) {
 	wants := map[string]conformance.Reference{
 		"id": id, "maybe": id, "nullable": id, "stored": id, "maybeStored": id,
 		"generic": id, "nested": id, "defaulted": id, "loop": uncertain("cyclic type alias cannot be resolved"),
+		"branded": declared("id.ts", "", "Branded"), "plain": declared("id.ts", "", "Plain"),
 		"ids":    external("", "Array"),
 		"either": {Resolution: conformance.ResolutionLocal, Name: "OrderID | string"},
 	}
@@ -608,5 +612,109 @@ const api = { start() { repo.open(); } };
 	want := []string{"clear@.reset", "load@Order.place", "save@Order.place", "flush@Order.later", "sync@.named", "open@.start"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("calls %v, want %v", got, want)
+	}
+}
+
+// Code that runs when a class is defined, a static field or a static
+// block, belongs to the scope around the class: inside a method, to
+// that method.
+func TestStaticClassCodeRunsWhereTheClassIsDefined(t *testing.T) {
+	fa := resolutionFixture(t, map[string]string{"order.ts": `declare const repo: any;
+class Order {
+  place() {
+    class Nested { static marker = repo.save(); static { repo.load(); } field = repo.make(); run() { repo.run(); } }
+  }
+}
+class Top { static boot = repo.boot(); }
+`}, rule.FactResolvedCalls)["order.ts"]
+	var got []string
+	for _, c := range fa.Calls {
+		got = append(got, c.Callee+"@"+c.EnclosingOwner+"."+c.Enclosing)
+	}
+	want := []string{"save@Order.place", "load@Order.place", "make@.", "run@Nested.run", "boot@."}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("calls %v, want %v", got, want)
+	}
+}
+
+// A call through a property that holds a function reaches no declared
+// method, so its target is undetermined while the receiver is kept.
+func TestCallThroughFunctionPropertyIsUndetermined(t *testing.T) {
+	fa := resolutionFixture(t, map[string]string{"order.ts": `class Hooks { constructor(public run: () => void) {} done(): void {} }
+class Order { place(h: Hooks) { h.run(); h.done(); } }
+`}, rule.FactResolvedCalls)["order.ts"]
+	if len(fa.Calls) != 2 {
+		t.Fatalf("calls %+v", fa.Calls)
+	}
+	run, done := fa.Calls[0], fa.Calls[1]
+	if run.Target.Resolution != conformance.ResolutionUndetermined || run.Receiver != declared("order.ts", "", "Hooks") {
+		t.Errorf("h.run(): %+v, want an undetermined target on the declared Hooks", run)
+	}
+	if done.Target != declared("order.ts", "Hooks", "done") {
+		t.Errorf("h.done(): %+v, want the declared method", done)
+	}
+}
+
+// An index signature stores values of its declared type.
+func TestIndexSignatureHoldsItsValues(t *testing.T) {
+	got := resolutionFixture(t, map[string]string{
+		"line.ts": `export class OrderLine {}`,
+		"main.ts": `import {OrderLine} from './line'; class Cache { lines!: { [id: string]: OrderLine }; }`,
+	}, rule.FactResolvedCalls, rule.FactFieldTypes)["main.ts"]
+	line := declared("line.ts", "", "OrderLine")
+	for _, d := range got.Declarations {
+		if d.Kind != "field" {
+			continue
+		}
+		held := false
+		for _, ref := range d.Holds {
+			held = held || ref == line
+		}
+		if !held {
+			t.Errorf("field %s holds %+v, want OrderLine", d.Name, d.Holds)
+		}
+	}
+}
+
+// this in a static initializer or static block is the class, so it
+// reaches the class's static members, not its instance fields.
+func TestStaticInitializerThisIsTheClass(t *testing.T) {
+	fa := resolutionFixture(t, map[string]string{"order.ts": `class Repo { save() {} } class Logger { save() {} }
+class Order { place() { class Nested { repo!: Repo; static repo: Logger = new Logger(); static boot = this.repo.save(); static { this.repo.save(); } } } }
+`}, rule.FactResolvedCalls)["order.ts"]
+	var saves []conformance.Call
+	for _, c := range fa.Calls {
+		if c.Callee == "save" {
+			saves = append(saves, c)
+		}
+	}
+	if len(saves) != 2 {
+		t.Fatalf("calls %+v", fa.Calls)
+	}
+	for _, c := range saves {
+		if c.Target != declared("order.ts", "Logger", "save") {
+			t.Errorf("static this.repo.save(): %+v, want Logger.save through the static field", c)
+		}
+	}
+}
+
+// this in a member's computed name is the this around the class, so it
+// reaches the outer method's own fields.
+func TestComputedNameThisIsOutsideTheClass(t *testing.T) {
+	fa := resolutionFixture(t, map[string]string{"order.ts": `class Repo { save(): "key" { return "key"; } } class Logger { save(): "key" { return "key"; } }
+class Order { repo!: Repo; place() { class Nested { repo!: Repo; static repo: Logger; static [this.repo.save()] = 0; } } }
+`}, rule.FactResolvedCalls)["order.ts"]
+	saves := 0
+	for _, c := range fa.Calls {
+		if c.Callee != "save" {
+			continue
+		}
+		saves++
+		if c.Target != declared("order.ts", "Repo", "save") || c.EnclosingOwner != "Order" {
+			t.Errorf("this.repo.save() in a computed name: %+v, want Repo.save in Order.place", c)
+		}
+	}
+	if saves != 1 {
+		t.Fatalf("calls %+v, want one save", fa.Calls)
 	}
 }

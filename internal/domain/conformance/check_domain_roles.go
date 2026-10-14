@@ -50,6 +50,18 @@ func (cc contextCode) aggregateTypes(agg vocab.Aggregate) []locDecl {
 	return types
 }
 
+// ambiguousTypes spells, as unresolved, the aggregate's root and every
+// member entity that two declarations spell: their fields and methods
+// cannot be told apart from another type's, so no check over them is
+// complete.
+func (cc contextCode) ambiguousTypes(agg vocab.Aggregate) []string {
+	var out []string
+	if ac := cc.aggregates[agg.Name]; len(ac.candidates) > 1 {
+		out = append(out, fmt.Sprintf("root of aggregate %s is spelled by %s, so its fields and calls cannot be recognized", agg.Name, candidateList(ac.candidates)))
+	}
+	return append(out, cc.ambiguousMembers(agg)...)
+}
+
 // ambiguousMembers spells, as unresolved, every member entity of the
 // aggregate that two declarations spell: its fields and methods cannot
 // be told apart from another type's, so no check over them is complete.
@@ -172,8 +184,13 @@ func checkRootOnlyReferences(r rule.Rule, subject rule.Subject, cc contextCode, 
 	var unresolved []string
 	fields, gaps := code.all.resolvedFields()
 	for _, agg := range cc.ctx.Aggregates {
+		// Without a recorded member there is nothing outside the
+		// aggregate could hold, whichever declaration is the root.
+		if len(agg.Entities) == 0 {
+			continue
+		}
 		types := cc.aggregateTypes(agg)
-		unresolved = append(unresolved, cc.ambiguousMembers(agg)...)
+		unresolved = append(unresolved, cc.ambiguousTypes(agg)...)
 		if len(types) < 2 {
 			continue
 		}
@@ -228,7 +245,7 @@ func checkServiceNotHeldByAggregates(r rule.Rule, subject rule.Subject, cc conte
 	fields, gaps := cc.idx.resolvedFields()
 	for _, agg := range cc.ctx.Aggregates {
 		types := cc.aggregateTypes(agg)
-		unresolved = append(unresolved, cc.ambiguousMembers(agg)...)
+		unresolved = append(unresolved, cc.ambiguousTypes(agg)...)
 		unresolved = append(unresolved, gapsAt(gaps, func(g fileGap) bool { return mayHoldMembersOf(g, types) })...)
 		for _, field := range fields {
 			holder, ok := ownerOf(types, field.file, field.decl.Owner)
@@ -321,8 +338,15 @@ func checkEntityIdentity(r rule.Rule, subject rule.Subject, cc contextCode, _ do
 				return nil, nil, err
 			}
 		}
+		if ac := cc.aggregates[agg.Name]; len(ac.candidates) > 1 && agg.Identity != "" {
+			unresolved = append(unresolved, fmt.Sprintf("root of aggregate %s is spelled by %s, so the field holding its identity cannot be recognized", agg.Name, candidateList(ac.candidates)))
+		}
 		for _, e := range agg.Entities {
 			loc := cc.terms[e.Name]
+			if e.Identity != "" && loc.ambiguous() {
+				unresolved = append(unresolved, fmt.Sprintf("member %s of aggregate %s is spelled by %s, so the field holding its identity cannot be recognized", e.Name, agg.Name, candidateList(loc.candidates)))
+				continue
+			}
 			if e.Identity == "" || !loc.located() {
 				continue
 			}
@@ -368,7 +392,7 @@ func checkRepositoryNotCalledFromAggregates(r rule.Rule, subject rule.Subject, c
 	}
 	for _, agg := range cc.ctx.Aggregates {
 		types := cc.aggregateTypes(agg)
-		unresolved = append(unresolved, cc.ambiguousMembers(agg)...)
+		unresolved = append(unresolved, cc.ambiguousTypes(agg)...)
 		unresolved = append(unresolved, gapsAt(gaps, func(g fileGap) bool { return mayHoldMembersOf(g, types) })...)
 		for _, f := range cc.idx.files {
 			if !f.resolvedCalls || isTestFile(f.path) {

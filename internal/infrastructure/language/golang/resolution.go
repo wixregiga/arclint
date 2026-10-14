@@ -254,9 +254,10 @@ func (t typedResolution) holds(typeExpr ast.Expr) []conformance.Reference {
 }
 
 // fieldType names the declaration a field's own type is, through
-// pointers and the repository's own aliases: the type of a value the
-// field stores directly. An alias outside the repository is named as
-// written; arclint knows such a package by name only.
+// pointers and the repository's own aliases of repository types: the
+// type of a value the field stores directly. An alias outside the
+// repository is named as written; arclint knows such a package by name
+// only.
 func (t typedResolution) fieldType(typeExpr ast.Expr) conformance.Reference {
 	tv, ok := t.info.Types[typeExpr]
 	if !ok || tv.Type == nil {
@@ -269,14 +270,57 @@ func (t typedResolution) fieldType(typeExpr ast.Expr) conformance.Reference {
 			typ = x.Elem()
 			continue
 		case *types.Alias:
-			if pkg := x.Obj().Pkg(); pkg != nil && t.tc.sources[pkg.Path()] {
+			// Follow an alias of the repository to the repository type it
+			// names; an alias of anything else, type OrderID = string, is
+			// itself the field's type.
+			if pkg := x.Obj().Pkg(); pkg != nil && t.tc.sources[pkg.Path()] && t.repositoryType(x.Rhs()) {
 				typ = x.Rhs()
 				continue
+			}
+			// An alias of a type that does not resolve proves nothing.
+			if invalidType(types.Unalias(x)) {
+				return t.invalid("the field's type " + types.ExprString(typeExpr))
 			}
 		}
 		break
 	}
 	return t.typeRef(typ, types.ExprString(typeExpr))
+}
+
+// invalidType reports a type the type checker could not resolve,
+// through pointers.
+func invalidType(typ types.Type) bool {
+	for {
+		p, ok := typ.(*types.Pointer)
+		if !ok {
+			break
+		}
+		typ = types.Unalias(p.Elem())
+	}
+	b, ok := typ.(*types.Basic)
+	return ok && b.Kind() == types.Invalid
+}
+
+// repositoryType reports a type that is, through pointers, a defined
+// type or alias declared in repository source.
+func (t typedResolution) repositoryType(typ types.Type) bool {
+	for {
+		p, ok := typ.(*types.Pointer)
+		if !ok {
+			break
+		}
+		typ = p.Elem()
+	}
+	var obj *types.TypeName
+	switch x := typ.(type) {
+	case *types.Alias:
+		obj = x.Obj()
+	case *types.Named:
+		obj = x.Origin().Obj()
+	default:
+		return false
+	}
+	return obj.Pkg() != nil && t.tc.sources[obj.Pkg().Path()]
 }
 
 // collectHolds walks a type into the declarations its values hold: an
