@@ -180,13 +180,3 @@ the tree), the gate is the non-mutating, network-free variant:
 ```bash
 make check-ro
 ```
-
-## Before a pull request
-
-Before you open a pull request, or push more commits to one, run the
-domain-sweep skill (`/domain-sweep`) over the branch against `main`. It
-lists every statement the change adds about what must or never happen
-and places each through the domain-librarian. Record every entry it
-places, through `arclint domain define`, before the pull request is
-opened or updated, and answer each question it raises in the pull
-request.
