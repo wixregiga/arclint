@@ -360,7 +360,7 @@ func (w *tsWalker) walkCalls(n *gotreesitter.Node, enclosing, owner string, defi
 		nextOwner = w.name(n)
 		next = ""
 	case tsMethodDefinition, tsMethodSignature:
-		if n.Parent() != nil && n.Parent().Type(w.lang) != "class_body" && n.Parent().Type(w.lang) != "interface_body" && n.Parent().Type(w.lang) != tsObjectType {
+		if n.Parent() != nil && n.Parent().Type(w.lang) != tsClassBody && n.Parent().Type(w.lang) != "interface_body" && n.Parent().Type(w.lang) != tsObjectType {
 			// A method of an object literal belongs to no class: inside
 			// a function it is part of that function, as an arrow is;
 			// elsewhere it is its own ownerless function.
@@ -410,10 +410,16 @@ func (w *tsWalker) walkCalls(n *gotreesitter.Node, enclosing, owner string, defi
 	}
 	for i := 0; i < n.NamedChildCount(); i++ {
 		c := n.NamedChild(i)
-		if c.Type(w.lang) == "computed_property_name" && definedOutside(n, c, w.lang) {
+		if t == tsClassBody && staticMember(c, w.lang) {
+			// A static field or static block runs when the class is
+			// defined, in the scope around it.
+			w.walkCalls(c, defined.enclosing, defined.owner, defined)
+			continue
+		}
+		if c.Type(w.lang) == tsComputedName && definedOutside(n, c, w.lang) {
 			// A member's computed name runs where its class or object
 			// is defined: around the class, or in the enclosing function.
-			if n.Parent() != nil && n.Parent().Type(w.lang) == "class_body" {
+			if n.Parent() != nil && n.Parent().Type(w.lang) == tsClassBody {
 				w.walkCalls(c, defined.enclosing, defined.owner, defined)
 			} else {
 				w.walkCalls(c, enclosing, owner, defined)
@@ -445,4 +451,16 @@ func callOwner(enclosing, owner string) string {
 		return ""
 	}
 	return owner
+}
+
+// staticMember reports a class member that runs when the class is
+// defined: a static field or a static block.
+func staticMember(n *gotreesitter.Node, lang *gotreesitter.Language) bool {
+	switch n.Type(lang) {
+	case "class_static_block":
+		return true
+	case tsPublicFieldDefinition, tsFieldDefinition:
+		return hasToken(n, lang, "static")
+	}
+	return false
 }

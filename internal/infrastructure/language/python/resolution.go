@@ -126,6 +126,8 @@ func (idx *resolutionIndex) symbol(s *pyScope, name string, seen map[*pyBinding]
 			return pyValue{ref: unknown("monkey patching changes " + b.name)}
 		}
 		return pyValue{ref: declared(b.scope.module.file, "", b.name)}
+	case bindingVariadic:
+		return pyValue{ref: external("", "tuple"), instance: true}
 	case bindingAnnotation:
 		if b.annotation == nil {
 			return pyValue{ref: unknown(b.name + " has no declared type")}

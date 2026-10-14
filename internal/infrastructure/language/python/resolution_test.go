@@ -240,6 +240,148 @@ func TestReboundClassVarKeepsTheField(t *testing.T) {
 	}
 }
 
+// A return annotation runs where its function is defined, so a call in
+// it resolves in that scope.
+func TestReturnAnnotationCallsResolve(t *testing.T) {
+	facts := resolved(t, map[string]string{
+		"repo.py":  "class Repo:\n    def load(self): pass\nrepo = Repo()\n",
+		"order.py": "from repo import Repo\nclass Order:\n    def place(self, r: Repo):\n        def inner() -> r.load():\n            pass\n",
+	})
+	calls := facts["order.py"].Calls
+	if len(calls) != 1 || calls[0].Callee != "load" || calls[0].EnclosingOwner != "Order" || calls[0].Target != declared("repo.py", "Repo", "load") {
+		t.Fatalf("calls %+v, want load in Order.place resolved to Repo.load", calls)
+	}
+}
+
+// staticmethod and classmethod reached through an import from builtins
+// or a plain alias still mark a method that takes no instance.
+func TestAliasedMethodDecoratorsTakeNoInstance(t *testing.T) {
+	facts := resolved(t, map[string]string{
+		"order.py": "import builtins as b\nfrom builtins import staticmethod as sm\ncm = classmethod\nclass Order:\n    def __init__(self):\n        self.kept = 1\n    @cm\n    def make(cls, id):\n        cls.made = id\n    @b.staticmethod\n    def build(x):\n        x.built = 1\n    @sm\n    def other(y):\n        y.othered = 1\n",
+	})
+	var fields []string
+	for _, d := range facts["order.py"].Declarations {
+		if d.Kind == "field" {
+			fields = append(fields, d.Name)
+		}
+	}
+	if !reflect.DeepEqual(fields, []string{"kept"}) {
+		t.Errorf("fields %v, want only kept: the decorated methods take no instance", fields)
+	}
+	rebound := resolved(t, map[string]string{
+		"order.py": "from builtins import staticmethod as sm\ndef passthrough(f): return f\nsm = passthrough\nclass Order:\n    @sm\n    def __init__(self, id):\n        self.id = id\n",
+	})
+	fields = nil
+	for _, d := range rebound["order.py"].Declarations {
+		if d.Kind == "field" {
+			fields = append(fields, d.Name)
+		}
+	}
+	if !reflect.DeepEqual(fields, []string{"id"}) {
+		t.Errorf("fields %v, want id: sm is rebound, so it no longer names staticmethod", fields)
+	}
+	shadowed := resolved(t, map[string]string{
+		"order.py": "from builtins import staticmethod as sm\nclass Order:\n    sm = lambda f: f\n    @sm\n    def __init__(self, id):\n        self.id = id\n",
+	})
+	fields = nil
+	for _, d := range shadowed["order.py"].Declarations {
+		if d.Kind == "field" {
+			fields = append(fields, d.Name)
+		}
+	}
+	if !reflect.DeepEqual(fields, []string{"id"}) {
+		t.Errorf("fields %v, want id: the class body rebinds sm", fields)
+	}
+	// A class-local def shadows the import too, and the instance may be
+	// spelled anything: the field still gets its type, and the check
+	// never aborts.
+	byDef := resolved(t, map[string]string{
+		"order.py": "from builtins import staticmethod as sm\nclass OrderID: pass\nclass Order:\n    def sm(f): return f\n    @sm\n    def __init__(obj):\n        obj.id: OrderID = OrderID()\n",
+	})
+	var id conformance.Declaration
+	for _, d := range byDef["order.py"].Declarations {
+		if d.Kind == "field" && d.Name == "id" {
+			id = d
+		}
+	}
+	if id.Type != declared("order.py", "", "OrderID") {
+		t.Errorf("field id %+v, want its type OrderID", id)
+	}
+	// An annotated class-level assignment shadows too; a method named
+	// after the builtin is still decorated by the builtin.
+	annotated := resolved(t, map[string]string{
+		"order.py": "sm = staticmethod\nclass Order:\n    sm: object = lambda f: f\n    @sm\n    def __init__(self):\n        self.id = 1\n    @staticmethod\n    def staticmethod(x):\n        x.service = 1\n",
+	})
+	fields = nil
+	for _, d := range annotated["order.py"].Declarations {
+		if d.Kind == "field" {
+			fields = append(fields, d.Name)
+		}
+	}
+	if !reflect.DeepEqual(fields, []string{"sm", "id"}) {
+		t.Errorf("fields %v, want sm and id: sm is shadowed in the class, and the static method declares nothing", fields)
+	}
+}
+
+// In a class defined inside a function, a module-level alias does not
+// decide a decorator: a parameter there may shadow it.
+func TestNestedClassIgnoresModuleDecoratorAliases(t *testing.T) {
+	facts := resolved(t, map[string]string{
+		"order.py": "sm = staticmethod\ndef build(sm=lambda f: f):\n    class Order:\n        @sm\n        def attach(self, service):\n            self.service = service\n        @staticmethod\n        def make(x):\n            x.ignored = 1\n    return Order\n",
+	})
+	var fields []string
+	for _, d := range facts["order.py"].Declarations {
+		if d.Kind == "field" {
+			fields = append(fields, d.Name)
+		}
+	}
+	if !reflect.DeepEqual(fields, []string{"service"}) {
+		t.Errorf("fields %v, want service: the alias may be shadowed, and staticmethod itself still counts", fields)
+	}
+}
+
+// A leading *args is a tuple, never the instance; a lambda in a return
+// annotation keeps its own parameter.
+func TestSplatAndAnnotationLambdaScopes(t *testing.T) {
+	facts := resolved(t, map[string]string{
+		"repo.py":  "class OrderRepository:\n    def count(self, value): return 0\n",
+		"order.py": "from repo import OrderRepository\nclass Order(OrderRepository):\n    def place(*args):\n        return args.count(None)\n    def other(self, r: OrderRepository):\n        def inner() -> (lambda r: r.count(None))([]): pass\n",
+	})
+	counts := 0
+	for _, c := range facts["order.py"].Calls {
+		if c.Callee != "count" {
+			continue
+		}
+		counts++
+		if c.Target.Resolution == conformance.ResolutionDeclared {
+			t.Errorf("call %+v reaches the repository; *args is a tuple and the lambda's r is its own", c)
+		}
+	}
+	if counts != 2 {
+		t.Fatalf("calls %+v, want two count calls", facts["order.py"].Calls)
+	}
+}
+
+// A class body runs where the class is defined, so a class inside a
+// method runs its body's calls in that method; its own methods belong to
+// it. *args holds a tuple, whatever its annotation names.
+func TestNestedClassBodiesAndVariadicParameters(t *testing.T) {
+	facts := resolved(t, map[string]string{
+		"repo.py": "class OrderRepository:\n    def save(self): pass\n",
+		"order.py": "from repo import OrderRepository\nclass Order:\n    def place(self, repo: OrderRepository, *repos: OrderRepository):\n        class Nested:\n            marker = repo.save()\n            def run(self):\n                pass\n        repos.count(None)\n",
+	})
+	calls := facts["order.py"].Calls
+	if len(calls) != 2 {
+		t.Fatalf("calls %+v", calls)
+	}
+	if c := calls[0]; c.Callee != "save" || c.EnclosingOwner != "Order" || c.Enclosing != "place" || c.Target != declared("repo.py", "OrderRepository", "save") {
+		t.Errorf("class-body call %+v, want Order.place calling OrderRepository.save", c)
+	}
+	if c := calls[1]; c.Callee != "count" || c.Receiver != external("", "tuple") || c.Target.Resolution == conformance.ResolutionDeclared {
+		t.Errorf("*args call %+v, want a call on a tuple, never the repository", c)
+	}
+}
+
 // A default or an annotation runs where its function is defined, so a
 // call in a method's default belongs to the class body, not the method.
 func TestDefaultCallsRunWhereTheFunctionIsDefined(t *testing.T) {

@@ -64,6 +64,8 @@ type Lines []Line
 
 type Factory[T any] func() T
 
+type Code = string
+
 type Order struct {
 	id      ID
 	lines   []*Line
@@ -79,6 +81,7 @@ type Order struct {
 	viaPtr  Ptr[ID]
 	defined Lines
 	factory Factory[Line]
+	code    Code
 }
 
 func (o *Order) Place(at time.Time) error {
@@ -230,6 +233,7 @@ func TestFieldTypesHoldWhatTheFieldStores(t *testing.T) {
 		"boxed":   declaredRef("store/store.go", "", "Box"),
 		"alias":   declaredRef("order/repository.go", "", "Repository"),
 		"viaPtr":  declaredRef("order/order.go", "", "ID"),
+		"code":    declaredRef("order/order.go", "", "Code"),
 		"clock":   localRef("func() time.Time"),
 	}
 	for name, want := range ownTypes {
@@ -248,6 +252,22 @@ func TestFieldTypesHoldWhatTheFieldStores(t *testing.T) {
 				t.Errorf("field %s holds %+v, want %+v", name, got, want)
 				break
 			}
+		}
+	}
+}
+
+// An alias of a type that does not resolve leaves the field's own type
+// undetermined: code that does not compile proves no identity.
+func TestAliasOfMissingTypeIsUndetermined(t *testing.T) {
+	root := t.TempDir()
+	files := []conformance.ObservedFile{
+		write(t, root, "go.mod", "module example.com/shop\n\ngo 1.24\n"),
+		write(t, root, "order/order.go", "package order\n\ntype OrderID = Missing\n\ntype PtrID = *Missing\n\ntype Order struct {\n\tid  OrderID\n\tptr PtrID\n}\n"),
+	}
+	order := factsOf(t, root, files, resolvedFacts)["order/order.go"]
+	for _, name := range []string{"id", "ptr"} {
+		if got := fieldNamed(t, order, "Order", name).Type; got.Resolution != conformance.ResolutionUndetermined {
+			t.Errorf("field %s own type %+v, want undetermined", name, got)
 		}
 	}
 }

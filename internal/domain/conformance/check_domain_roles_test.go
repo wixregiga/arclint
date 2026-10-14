@@ -254,6 +254,40 @@ func TestRootOnlyReferences(t *testing.T) {
 		}
 	})
 
+	t.Run("a root two declarations spell leaves the aggregate undetermined", func(t *testing.T) {
+		const otherOrder = "internal/order/order_v2.go"
+		facts := map[string]conformance.LanguageFacts{
+			orderGo:    order,
+			otherOrder: goDecls("order", []conformance.Declaration{{Kind: "struct", Name: "Order", Exported: true, StartLine: 3}}),
+			invoiceGo: goDecls("billing", []conformance.Declaration{
+				{Kind: "struct", Name: "Invoice", Exported: true, StartLine: 3},
+				{Kind: "field", Name: "line", Owner: "Invoice", StartLine: 4, Holds: []conformance.Reference{declared(orderGo, "", "Line")}, Type: declared(orderGo, "", "Line")},
+			}),
+		}
+		a := runOne(t, r, nil, observed(orderGo, otherOrder, invoiceGo), facts, knowledge)
+		e := evaluationOf(t, a, r.ID().Qualified(), "ordering")
+		found := false
+		for _, u := range e.Unresolved() {
+			found = found || strings.HasPrefix(u, "root of aggregate Order is spelled by")
+		}
+		if e.Outcome() != conformance.OutcomeUndetermined || !found {
+			t.Fatalf("outcome %s with unresolved %v, want undetermined naming the ambiguous root", e.Outcome(), e.Unresolved())
+		}
+	})
+
+	t.Run("an aggregate without members conforms whatever spells its root", func(t *testing.T) {
+		const otherOrder = "internal/order/order_v2.go"
+		lone := orderingWith(t, vocab.Aggregate{Name: "Order", Definition: "d", Identity: "OrderID", Line: 2})
+		facts := map[string]conformance.LanguageFacts{
+			orderGo:    order,
+			otherOrder: goDecls("order", []conformance.Declaration{{Kind: "struct", Name: "Order", Exported: true, StartLine: 3}}),
+		}
+		a := runOne(t, r, nil, observed(orderGo, otherOrder), facts, lone)
+		if e := evaluationOf(t, a, r.ID().Qualified(), "ordering"); e.Outcome() != conformance.OutcomeConforms {
+			t.Fatalf("outcome %s with unresolved %v, want conforms: no member can be held", e.Outcome(), e.Unresolved())
+		}
+	})
+
 	t.Run("a member two declarations spell leaves the aggregate undetermined", func(t *testing.T) {
 		const otherLine = "internal/order/line_v2.go"
 		facts := map[string]conformance.LanguageFacts{
@@ -333,6 +367,22 @@ func TestEntityIdentity(t *testing.T) {
 	a = run(undetermined("the package failed to load"))
 	if e := evaluationOf(t, a, r.ID().Qualified(), "ordering"); e.Outcome() != conformance.OutcomeUndetermined {
 		t.Fatalf("outcome %s, want undetermined: the unresolved field may hold the identity", e.Outcome())
+	}
+	// A member two declarations spell cannot be judged, so its identity
+	// is not proven present.
+	ambiguous := map[string]conformance.LanguageFacts{
+		orderGo: goDecls("order", []conformance.Declaration{
+			{Kind: "type", Name: "ID", Exported: true, StartLine: 3},
+			{Kind: "type", Name: "LineNumber", Exported: true, StartLine: 4},
+			{Kind: "struct", Name: "Order", Exported: true, StartLine: 5},
+			{Kind: "field", Name: "id", Owner: "Order", StartLine: 6, Holds: []conformance.Reference{declared(orderGo, "", "ID")}, Type: declared(orderGo, "", "ID")},
+			{Kind: "struct", Name: "Line", Exported: true, StartLine: 9},
+		}),
+		"internal/order/line_v2.go": goDecls("order", []conformance.Declaration{{Kind: "struct", Name: "OrderLine", Exported: true, StartLine: 3}}),
+	}
+	a = runOne(t, r, nil, observed(orderGo, "internal/order/line_v2.go"), ambiguous, knowledge)
+	if e := evaluationOf(t, a, r.ID().Qualified(), "ordering"); e.Outcome() != conformance.OutcomeUndetermined || len(e.Unresolved()) != 1 || !strings.HasPrefix(e.Unresolved()[0], "member OrderLine of aggregate Order is spelled by") {
+		t.Fatalf("outcome %s with unresolved %v, want undetermined naming the ambiguous member", e.Outcome(), e.Unresolved())
 	}
 	// An identity no readable file declares, beside a file that could
 	// not be read, is not proven missing.

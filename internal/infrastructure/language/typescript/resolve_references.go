@@ -274,8 +274,12 @@ func (r *resolutionIndex) heldTypes(f *resolutionFile, n *gotreesitter.Node, s *
 		}
 		for i := 0; i < n.NamedChildCount(); i++ {
 			c := n.NamedChild(i)
-			if f.kind(c) == tsPropertySignature {
+			switch f.kind(c) {
+			case tsPropertySignature:
 				add(r.heldTypes(f, f.annotation(c), s, seen))
+			case "index_signature":
+				// { [id: string]: OrderLine } stores OrderLine values.
+				add(r.heldTypes(f, indexSignatureValue(f, c), s, seen))
 			}
 		}
 	case tsConditionalType:
@@ -331,7 +335,7 @@ func (r *resolutionIndex) receiverType(f *resolutionFile, n *gotreesitter.Node, 
 		return uncertain("receiver has no declared type")
 	}
 	switch f.kind(n) {
-	case "type_annotation", tsParenthesizedType, tsReadonlyType:
+	case tsTypeAnnotation, tsParenthesizedType, tsReadonlyType:
 		if n.NamedChildCount() > 0 {
 			return r.receiverType(f, n.NamedChild(0), s)
 		}
@@ -645,9 +649,23 @@ func (f *resolutionFile) ownMember(n *gotreesitter.Node, name string, static boo
 
 func (r *resolutionIndex) staticReceiver(f *resolutionFile, base *gotreesitter.Node, s *lexicalScope) bool {
 	if f.kind(base) == tsThis {
+		// this is the class itself in a static method, static field, or
+		// static block, and an instance in any other member; the nearest
+		// one decides, and a function with its own this ends the search.
 		for n := base.Parent(); n != nil; n = n.Parent() {
-			if f.kind(n) == tsMethodDefinition {
+			if outer := computedNameClass(f, n); outer != nil {
+				// A member's computed name runs where its class is
+				// defined: this is the one around the class.
+				n = outer
+				continue
+			}
+			switch f.kind(n) {
+			case tsMethodDefinition, tsPublicFieldDefinition, tsFieldDefinition:
 				return hasToken(n, f.lang, "static")
+			case "class_static_block":
+				return true
+			case tsClassDeclaration, tsAbstractClassDeclaration, tsClassExpression, tsFunctionDeclaration, tsGeneratorFunctionDeclaration, tsFunctionExpression, tsFunction:
+				return false
 			}
 		}
 	}
@@ -750,9 +768,14 @@ func (r *resolutionIndex) call(f *resolutionFile, n *gotreesitter.Node, owner st
 		return receiver, receiver
 	}
 	static := r.staticReceiver(f, base, s)
-	_, member, target, reason := r.member(receiver, name, static, map[string]bool{})
+	mf, member, target, reason := r.member(receiver, name, static, map[string]bool{})
 	if reason != "" {
 		return uncertain(reason), receiver
+	}
+	if member != nil && !methodNode(mf.kind(member)) {
+		// A property holds a function value, whichever function it was
+		// given: a call through it reaches no declared method.
+		return uncertain(name + " is a property holding a function value; the function it holds is not declared"), receiver
 	}
 	if member == nil && target.Resolution == conformance.ResolutionDeclared {
 		prototype := tsBuiltinObject
@@ -766,4 +789,44 @@ func (r *resolutionIndex) call(f *resolutionFile, n *gotreesitter.Node, owner st
 	target.Owner, target.Name = target.Name, name
 
 	return target, receiver
+}
+
+// methodNode reports a declaration kind that declares a method, not a
+// property that may hold a function value.
+func methodNode(kind string) bool {
+	switch kind {
+	case tsMethodDefinition, tsMethodSignature, "abstract_method_signature":
+		return true
+	}
+	return false
+}
+
+// indexSignatureValue is the type an index signature stores, the one
+// after its key: string in [key: K]: string.
+func indexSignatureValue(f *resolutionFile, n *gotreesitter.Node) *gotreesitter.Node {
+	t := f.child(n, "type")
+	if t == nil {
+		for i := n.NamedChildCount() - 1; i >= 0 && t == nil; i-- {
+			if c := n.NamedChild(i); f.kind(c) == tsTypeAnnotation {
+				t = c
+			}
+		}
+	}
+	if t != nil && f.kind(t) == tsTypeAnnotation && t.NamedChildCount() > 0 {
+		return t.NamedChild(0)
+	}
+	return t
+}
+
+// computedNameClass is, for the computed name of a class member, the
+// class declaring that member; nil for any other node.
+func computedNameClass(f *resolutionFile, n *gotreesitter.Node) *gotreesitter.Node {
+	if f.kind(n) != tsComputedName {
+		return nil
+	}
+	member := n.Parent()
+	if member == nil || member.Parent() == nil || f.kind(member.Parent()) != tsClassBody {
+		return nil
+	}
+	return member.Parent().Parent()
 }

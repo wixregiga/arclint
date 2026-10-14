@@ -198,9 +198,14 @@ func (m *pyModule) collect(n *gotreesitter.Node, s *pyScope, owner *pyClass, inF
 			fs.owner = owner
 		}
 		m.collectParameters(n, s, fs)
-		// Defaults and decorators are evaluated in the enclosing scope.
+		// Defaults, annotations, and decorators are evaluated in the
+		// enclosing scope, the return annotation included.
 		if ps := n.ChildByFieldName("parameters", w.lang); ps != nil {
 			m.collectCalls(ps, s)
+		}
+		if rt := n.ChildByFieldName("return_type", w.lang); rt != nil {
+			// Walked as code, so a lambda inside keeps its own scope.
+			m.collect(rt, s, owner, inFunction)
 		}
 		if body := n.ChildByFieldName("body", w.lang); body != nil {
 			m.collect(body, fs, owner, true)
@@ -341,14 +346,23 @@ func (m *pyModule) collectParameters(n *gotreesitter.Node, outer, fs *pyScope) {
 			kind = bindingAnnotation
 			reason = ""
 		}
-		if strings.HasPrefix(p.Name, "**") {
+		switch {
+		case strings.HasPrefix(p.Name, "**"):
 			kind = bindingUnknown
 			reason = "**kwargs plumbing has no declared target"
+		case strings.HasPrefix(p.Name, "*"):
+			// *repos: Repo holds a tuple of Repo; the annotation names its
+			// elements, not the parameter.
+			kind = bindingVariadic
+			reason = ""
 		}
 		// Parameter annotations are resolved where the function is defined,
 		// not against parameters or locals sharing a type's name.
 		pb := &pyBinding{kind: kind, name: strings.TrimLeft(p.Name, "*"), node: pn, annotation: ann, scope: outer, reason: reason}
-		if i == 0 && fs.owner != nil && (p.Name == bindingSelf || p.Name == "cls" || p.Name == w.instanceParameter(n)) {
+		// The first parameter of a method is its instance (or, for a
+		// classmethod, its class), whatever it is spelled; a staticmethod
+		// has no owner here and so no such parameter.
+		if i == 0 && fs.owner != nil && !strings.HasPrefix(p.Name, "*") {
 			pb.kind = bindingSelf
 			pb.class = fs.owner
 			pb.reason = ""
@@ -393,7 +407,7 @@ func (m *pyModule) collectAssignment(n *gotreesitter.Node, s *pyScope, owner *py
 		}
 	}
 	for j, d := range m.facts.Decls {
-		if d.Kind != "field" || d.Owner != owner.name || d.Name != name || d.StartLine != int(n.StartPoint().Row)+1 {
+		if d.Kind != declField || d.Owner != owner.name || d.Name != name || d.StartLine != int(n.StartPoint().Row)+1 {
 			continue
 		}
 		for _, field := range m.fields {
@@ -423,7 +437,13 @@ func decoratorName(s *pyScope, n *gotreesitter.Node, w *pyWalker) string {
 	if expr == nil {
 		return ""
 	}
-	text := expr.Text(w.src)
+	return decoratorTarget(s, expr.Text(w.src), w, 0)
+}
+
+// decoratorTarget names what a decorator expression refers to: a
+// builtin, an imported name, or, through a plain alias such as
+// cm = classmethod, what the alias stands for.
+func decoratorTarget(s *pyScope, text string, w *pyWalker, depth int) string {
 	head, tail, dotted := strings.Cut(text, ".")
 	b := s.lookup(head)
 	if b == nil {
@@ -433,6 +453,9 @@ func decoratorName(s *pyScope, n *gotreesitter.Node, w *pyWalker) string {
 		return ""
 	}
 	if b.kind != bindingImport {
+		if right := aliasValue(b, w); right != "" && !dotted && depth < maxAliasHops {
+			return decoratorTarget(b.scope, right, w, depth+1)
+		}
 		return ""
 	}
 	qualified := b.imp.module
@@ -449,4 +472,24 @@ func decoratorName(s *pyScope, n *gotreesitter.Node, w *pyWalker) string {
 		return builtinClassmethod
 	}
 	return qualified
+}
+
+// maxAliasHops bounds following one plain alias to another.
+const maxAliasHops = 8
+
+// aliasValue is the name a binding was assigned from, cm for cm = x.y
+// is "x.y", when the binding is one plain assignment of a name.
+func aliasValue(b *pyBinding, w *pyWalker) string {
+	if b.node == nil || b.node.Type(w.lang) != nodeAssignment || b.annotation != nil {
+		return ""
+	}
+	right := b.node.ChildByFieldName("right", w.lang)
+	if right == nil {
+		return ""
+	}
+	switch right.Type(w.lang) {
+	case nodeIdentifier, nodeAttribute:
+		return right.Text(w.src)
+	}
+	return ""
 }

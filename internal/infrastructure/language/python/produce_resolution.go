@@ -72,6 +72,15 @@ func resolvedFacts(root string, files []conformance.ObservedFile, res *resolver,
 				}
 				m.facts.Decls[field.declaration].Type = own
 			}
+			// A field the scope walk could not link to its assignment
+			// still carries an answer: undetermined, never missing.
+			for i := range m.facts.Decls {
+				d := &m.facts.Decls[i]
+				if d.Kind == declField && d.Type.IsZero() {
+					reason := d.Name + " could not be linked to the scope that assigns it"
+					d.Type, d.Holds = unknown(reason), []conformance.Reference{unknown(reason)}
+				}
+			}
 		}
 		if wantDecls {
 			f.Declarations = m.facts.Decls
