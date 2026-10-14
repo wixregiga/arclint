@@ -81,13 +81,38 @@ def git(repo, *args):
     return result.stdout
 
 
+GIT_ESCAPES = {"a": 7, "b": 8, "t": 9, "n": 10, "v": 11, "f": 12, "r": 13, "\\": 92, '"': 34}
+
+
 def git_path(spelled):
-    """Decode a path as Git prints it in a diff header: a name Git quoted,
-    "a/\\303\\251.md", becomes the file's real name."""
-    if len(spelled) >= 2 and spelled.startswith('"') and spelled.endswith('"'):
-        raw = spelled[1:-1].encode("latin-1", "backslashreplace")
-        return raw.decode("unicode_escape").encode("latin-1").decode("utf-8", "replace")
-    return spelled
+    """Decode a path as Git prints it in a diff header. A name Git quoted,
+    such as "docs/\\303\\251.md" or one with a literal "é" beside an
+    escaped line break, becomes the file's real name: escapes and octal
+    bytes are read as bytes, literal characters as UTF-8, and the whole
+    is decoded once."""
+    if not (len(spelled) >= 2 and spelled.startswith('"') and spelled.endswith('"')):
+        return spelled
+    body = spelled[1:-1]
+    out = bytearray()
+    i = 0
+    while i < len(body):
+        ch = body[i]
+        if ch != "\\" or i + 1 >= len(body):
+            out += ch.encode("utf-8")
+            i += 1
+            continue
+        nxt = body[i + 1]
+        octal = body[i + 1:i + 4]
+        if len(octal) == 3 and all(c in "01234567" for c in octal):
+            out.append(int(octal, 8))
+            i += 4
+        elif nxt in GIT_ESCAPES:
+            out.append(GIT_ESCAPES[nxt])
+            i += 2
+        else:
+            out += ch.encode("utf-8")
+            i += 1
+    return out.decode("utf-8", "surrogateescape")
 
 
 def matches_paths(path, globs):
@@ -260,14 +285,33 @@ def collect(repo, base, scope, globs, pattern, test_pattern, keywords_only):
     return files, rows
 
 
+def shown(path):
+    """Spell a path for a line-based report: a backslash and every control
+    character are escaped, so a name with a line break or a tab stays one
+    field on one line. --files -z prints names unchanged instead."""
+    out = []
+    for ch in path:
+        if ch == "\\":
+            out.append("\\\\")
+        elif ch == "\n":
+            out.append("\\n")
+        elif ch == "\t":
+            out.append("\\t")
+        elif ord(ch) < 0x20 or ord(ch) == 0x7F:
+            out.append(f"\\x{ord(ch):02x}")
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
 def render(rows, fmt):
     if fmt == "md":
         out = ["| kind | match | source | text |", "|---|---|---|---|"]
         for kind, match, path, number, text in rows:
             cell = text.replace("|", "\\|")
-            out.append(f"| {kind} | {match} | {path}:{number} | {cell} |")
+            out.append(f"| {kind} | {match} | {shown(path)}:{number} | {cell} |")
         return "\n".join(out) + "\n"
-    return "".join(f"{kind}\t{match}\t{path}:{number}\t{text}\n" for kind, match, path, number, text in rows)
+    return "".join(f"{kind}\t{match}\t{shown(path)}:{number}\t{text}\n" for kind, match, path, number, text in rows)
 
 
 def main():
@@ -281,6 +325,7 @@ def main():
     parser.add_argument("--format", choices=["tsv", "md"], default="tsv")
     parser.add_argument("--out")
     parser.add_argument("--files", action="store_true", help="print touched files only")
+    parser.add_argument("-z", action="store_true", help="with --files, end each name with NUL and print it unchanged")
     parser.add_argument("--keywords-only", action="store_true", help="filter prose by keyword as well")
     args = parser.parse_args()
 
@@ -289,7 +334,10 @@ def main():
     files, rows = collect(repo, args.base, args.scope, args.paths, args.pattern, args.test_pattern, args.keywords_only)
 
     if args.files:
-        sys.stdout.write("".join(f"{path}\n" for path in files))
+        if args.z:
+            sys.stdout.write("".join(f"{path}\0" for path in files))
+        else:
+            sys.stdout.write("".join(f"{shown(path)}\n" for path in files))
         return
 
     text = render(rows, args.format)
