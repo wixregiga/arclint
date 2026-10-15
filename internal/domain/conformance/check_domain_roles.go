@@ -3,6 +3,7 @@ package conformance
 import (
 	"fmt"
 	"path"
+	"strings"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
@@ -271,6 +272,57 @@ func checkServiceNotHeldByAggregates(r rule.Rule, subject rule.Subject, cc conte
 	return vs, unresolved, nil
 }
 
+// changeableParts lists the recorded value objects an identity type
+// holds in its fields that are no aggregate's or member's identity, in
+// field order: a name or a status the identity is composed of. Each is
+// a part the recording has to settle, since a part that can change
+// while the entity stays the same is not part of its identity.
+func (cc contextCode) changeableParts(id locDecl, fields []locDecl) []string {
+	identities := map[string]bool{}
+	for _, agg := range cc.ctx.Aggregates {
+		identities[agg.Identity] = true
+		for _, e := range agg.Entities {
+			identities[e.Identity] = true
+		}
+	}
+	var parts []string
+	seen := map[string]bool{}
+	for _, field := range fields {
+		if !id.owns(field.file, field.decl.Owner) {
+			continue
+		}
+		for _, vo := range cc.ctx.ValueObjects {
+			if identities[vo.Name] || seen[vo.Name] {
+				continue
+			}
+			if loc := cc.terms[vo.Name]; loc.located() && loc.decl().declaredBy(field.decl.Type) {
+				seen[vo.Name] = true
+				parts = append(parts, vo.Name)
+			}
+		}
+	}
+	return parts
+}
+
+// identityRemediation says how to repair a missing identity field.
+// When the identity holds parts that are not identities themselves,
+// adding the field is right only if none of them can change while the
+// entity stays the same; the remediation names them and puts that
+// question first, because the finding cannot tell which is the case.
+func identityRemediation(entity, identity string, parts []string, idType, entityType string) string {
+	declare := fmt.Sprintf("declare a field of type %s on %s", idType, entityType)
+	if len(parts) == 0 {
+		return fmt.Sprintf("%s; its identity is what tells one %s from another", declare, entity)
+	}
+	if len(parts) == 1 {
+		return fmt.Sprintf("%s includes %s, which is not an identity. If %s can change while the %s stays the same, it is not part of the identity; change the identity before adding a field. If it cannot change, %s.",
+			identity, parts[0], parts[0], entity, declare)
+	}
+	list := strings.Join(parts[:len(parts)-1], ", ") + " and " + parts[len(parts)-1]
+	return fmt.Sprintf("%s includes %s, which are not identities. If any of them can change while the %s stays the same, it is not part of the identity; change the identity before adding a field. If none can change, %s.",
+		identity, list, entity, declare)
+}
+
 // checkEntityIdentity judges that every entity with a recorded
 // identity, an aggregate's root or a member, declares a field holding
 // that identity.
@@ -324,7 +376,7 @@ func checkEntityIdentity(r rule.Rule, subject rule.Subject, cc contextCode, _ do
 		}
 		v, err := newViolation(r, subject, decl.file.path, decl.decl.StartLine,
 			fmt.Sprintf("aggregate %s: %s declares no field holding its identity %s", agg.Name, entity, identity),
-			fmt.Sprintf("declare a field of type %s on %s; its identity is what tells one %s from another", id.decl.Name, decl.decl.Name, entity))
+			identityRemediation(entity, identity, cc.changeableParts(id, fields), id.decl.Name, decl.decl.Name))
 		if err != nil {
 			return err
 		}

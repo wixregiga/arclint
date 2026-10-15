@@ -142,6 +142,7 @@ func (c Concept) Doc() ConceptDoc {
 		doc.Questions = []string{
 			"Does this have an identity that survives attribute changes?",
 			"Which aggregate does it belong to, and what tells two of them apart inside it?",
+			identityPartsQuestion,
 		}
 		doc.Supplies = "The project supplies the member entity's name, definition, and the aggregate it belongs to; its local identity and aliases are optional."
 	case ConceptValueObject:
@@ -172,6 +173,7 @@ func (c Concept) Doc() ConceptDoc {
 		doc.Questions = []string{
 			"What is the smallest cluster that must stay consistent in one transaction?",
 			"Which entity do other objects reference by identity rather than reach inside?",
+			identityPartsQuestion,
 		}
 		doc.Supplies = "The project supplies the aggregate's name, definition, and identity; its member entities, invariants, assertions, repository, and factory are recorded under it."
 	case ConceptAggregateRoot:

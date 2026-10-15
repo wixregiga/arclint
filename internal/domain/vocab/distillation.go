@@ -18,6 +18,11 @@ func DistillationRules() []DistillationRule {
 			Example: "order keeps its number when status changes",
 		},
 		{
+			ID:      "identity-regardless-of-history",
+			Rule:    "Define a means of distinguishing each object regardless of its form or history (Evans, DDD Reference, Entities). The model decides what sameness is. An identifier may come from outside the system, or it may be a symbol created for the system. A part that can change while the object stays the same is not part of its identity.",
+			Example: "an order keeps its id when its status changes; a username is the identity only when no operation changes it",
+		},
+		{
 			ID:      "value-test",
 			Rule:    "Two instances with identical values are interchangeable -> value_object.",
 			Example: "any two USD 10 amounts are the same money",

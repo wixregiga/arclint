@@ -47,6 +47,7 @@ context_relation_kinds:
 
 distillation_rules:
   - {id: identity-test, rule: "Concept keeps its business identity while attributes change -> entity.", example: "order keeps its number when status changes"}
+  - {id: identity-regardless-of-history, rule: "Define a means of distinguishing each object regardless of its form or history (Evans, DDD Reference, Entities). The model decides what sameness is. An identifier may come from outside the system, or it may be a symbol created for the system. A part that can change while the object stays the same is not part of its identity.", example: "an order keeps its id when its status changes; a username is the identity only when no operation changes it"}
   - {id: value-test, rule: "Two instances with identical values are interchangeable -> value_object.", example: "any two USD 10 amounts are the same money"}
   - {id: invariant-ownership, rule: "First establish a domain consistency rule and its capable owner; must-always/must-never wording alone does not establish one. Contributor workflow, host guarantees, delivery validation and programming guards are not automatically invariants or assertions. A justified rule holding at all observable times -> the owner's invariants, keyed; a justified guarantee of a named domain operation -> the owner's assertions, keyed, with on: the aggregate's for its command, the domain service's for its operation. A value object's key names value integrity checked at construction; an aggregate's key names the root method that enforces the cluster rule.", example: "total = sum of lines -> Order.invariants.total-is-sum-of-lines; every tier priced before Publish -> Order.assertions.tiers-priced on Publish"}
   - {id: specification-as-thing, rule: "Experts pass the predicate around as a thing -> specifications, a type with SatisfiedBy; never a flag on a value object and never an invariant.", example: "preferred customer is handed to pricing as a spec, not inlined as a must-always"}
@@ -70,6 +71,7 @@ distillation_rules:
 clarification_questions:
   insufficient_info:
     - {q: "Does <X> have an identity that survives attribute changes, or are two <X> with the same values interchangeable?", decides: entity vs value_object}
+    - {q: "What is <Identity> made of? If any part can change while the <X> stays the same, the identity cannot be that part.", decides: identity vs attribute (entity)}
     - {q: "What must never be violated about <X>, even for an instant?", decides: invariants and owner}
     - {q: "Does <rule> hold even while nothing runs, or only when <operation> runs?", decides: invariant vs assertion}
     - {q: "Which operation guarantees <rule>, and who performs it: one aggregate, or a process that spans aggregates?", decides: assertion owner (aggregate vs domain_service)}

@@ -419,6 +419,66 @@ func TestEntityIdentity(t *testing.T) {
 	}
 }
 
+// The remediation of a missing identity field asks first whether the
+// identity holds a part that can change: an identity composed of a
+// recorded value object that is no identity, such as a role's name,
+// is right only if that part never changes while the entity stays
+// the same. A leaf identity keeps the plain instruction.
+func TestEntityIdentityRemediation(t *testing.T) {
+	const roleGo, tenantGo = "internal/role/role.go", "internal/tenant/tenant.go"
+	knowledge := oneContext(t, vocab.BoundedContext{
+		Name: "access", Definition: "d", Line: 1,
+		Aggregates: []vocab.Aggregate{
+			{Name: "Role", Definition: "d", Identity: "RoleID", Line: 2},
+			{Name: "Tenant", Definition: "d", Identity: "TenantID", Line: 3},
+		},
+		ValueObjects: []vocab.ValueObject{
+			{Name: "RoleID", Definition: "d", Line: 4},
+			{Name: "RoleName", Definition: "d", Line: 5},
+			{Name: "TenantID", Definition: "d", Line: 6},
+		},
+	})
+	r := builtInRule(t, "entity/identity")
+	tenant := goDecls("tenant", []conformance.Declaration{
+		{Kind: "struct", Name: "ID", Exported: true, StartLine: 3},
+		{Kind: "struct", Name: "Tenant", Exported: true, StartLine: 5},
+		{Kind: "field", Name: "id", Owner: "Tenant", StartLine: 6, Holds: []conformance.Reference{declared(tenantGo, "", "ID")}, Type: declared(tenantGo, "", "ID")},
+	})
+	remediation := func(t *testing.T, idFields ...conformance.Declaration) string {
+		t.Helper()
+		decls := append([]conformance.Declaration{
+			{Kind: "struct", Name: "ID", Exported: true, StartLine: 3},
+			{Kind: "type", Name: "Name", Exported: true, StartLine: 8},
+			{Kind: "struct", Name: "Role", Exported: true, StartLine: 10},
+			{Kind: "field", Name: "name", Owner: "Role", StartLine: 11, Holds: []conformance.Reference{declared(roleGo, "", "Name")}, Type: declared(roleGo, "", "Name")},
+		}, idFields...)
+		facts := map[string]conformance.LanguageFacts{roleGo: goDecls("role", decls), tenantGo: tenant}
+		a := runOne(t, r, nil, observed(roleGo, tenantGo), facts, knowledge)
+		if got := anchorsOf(a)[r.ID().Qualified()]; strings.Join(got, ",") != roleGo+":10" {
+			t.Fatalf("violations at %v, want Role, which holds no RoleID", got)
+		}
+		return a.Violations()[0].Remediation()
+	}
+
+	t.Run("an identity composed of a name", func(t *testing.T) {
+		got := remediation(t,
+			conformance.Declaration{Kind: "field", Name: "TenantID", Owner: "ID", Exported: true, StartLine: 4, Holds: []conformance.Reference{declared(tenantGo, "", "ID")}, Type: declared(tenantGo, "", "ID")},
+			conformance.Declaration{Kind: "field", Name: "Name", Owner: "ID", Exported: true, StartLine: 5, Holds: []conformance.Reference{declared(roleGo, "", "Name")}, Type: declared(roleGo, "", "Name")},
+		)
+		want := "RoleID includes RoleName, which is not an identity. If RoleName can change while the Role stays the same, it is not part of the identity; change the identity before adding a field. If it cannot change, declare a field of type ID on Role."
+		if got != want {
+			t.Fatalf("remediation\n%s\nwant\n%s\nTenantID is an identity, so only RoleName is asked about", got, want)
+		}
+	})
+
+	t.Run("a leaf identity", func(t *testing.T) {
+		got := remediation(t)
+		if want := "declare a field of type ID on Role; its identity is what tells one Role from another"; got != want {
+			t.Fatalf("remediation %q, want %q", got, want)
+		}
+	})
+}
+
 // Observations refuse a resolution that could pass for what it is
 // not: a declared reference into a file never observed, an
 // undetermined one without its reason, and a resolution on facts whose

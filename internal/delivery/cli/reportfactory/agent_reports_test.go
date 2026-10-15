@@ -13,6 +13,8 @@ import (
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/delivery/cli"
 	"github.com/wixregiga/arclint/internal/delivery/cli/reportfactory"
+	"github.com/wixregiga/arclint/internal/domain/conformance"
+	"github.com/wixregiga/arclint/internal/domain/rule"
 )
 
 func TestAgentReportsPreserveFactsAcrossRenderers(t *testing.T) {
@@ -73,5 +75,76 @@ func TestAgentReportsPreserveFactsAcrossRenderers(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A finding's remediation reaches the reader whichever renderer runs:
+// both human renderers print it under the finding, identically once
+// styling is removed, and JSON carries the same text.
+func TestCheckRemediationAcrossRenderers(t *testing.T) {
+	const remediation = "RoleID includes RoleName, which is not an identity. If RoleName can change while the Role stays the same, it is not part of the identity; change the identity before adding a field. If it cannot change, declare a field of type RoleID on Role."
+	id, err := rule.NewID("entity/identity")
+	if err != nil {
+		t.Fatal(err)
+	}
+	subject, err := rule.ContextSubject("access")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, err := conformance.NewViolation(conformance.ViolationSpec{
+		Rule: id, Subject: subject, Outcome: conformance.OutcomeViolates,
+		Severity: rule.SeverityError, Assurance: rule.AssuranceExact, Evidence: "field types",
+		Message:     "aggregate Role: Role declares no field holding its identity RoleID",
+		Remediation: remediation, Path: "role/role.go", Line: 17,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	enforcement, err := rule.NewEnforcement([]rule.Language{rule.LanguageGo}, []rule.Fact{rule.FactDeclarations, rule.FactFieldTypes}, "field types", rule.AssuranceExact, nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := conformance.NewEvaluation(id, subject, conformance.OutcomeViolates, enforcement, []conformance.Violation{v})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := conformance.NewAssessment([]conformance.Evaluation{e}, nil, []string{"entity/identity"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	report := cli.AssessmentReport{Assessment: a}
+	ansi := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	var plain string
+	for _, name := range []cli.RendererName{cli.RendererPlain, cli.RendererLipgloss, cli.RendererJSON} {
+		render, err := reportfactory.Select(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var buf bytes.Buffer
+		if err := render.Render(&buf, report); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if name == cli.RendererJSON {
+			var docs []struct {
+				RuleID      string `json:"ruleId"`
+				Remediation string `json:"remediation"`
+			}
+			if err := json.Unmarshal(buf.Bytes(), &docs); err != nil {
+				t.Fatalf("JSON output: %v", err)
+			}
+			if len(docs) != 1 || docs[0].Remediation != remediation {
+				t.Fatalf("JSON remediation %+v, want %q", docs, remediation)
+			}
+			continue
+		}
+		output := ansi.ReplaceAllString(buf.String(), "")
+		if !strings.Contains(output, "role/role.go:17: [error] entity/identity aggregate Role: Role declares no field holding its identity RoleID\n  remediation: "+remediation+"\n") {
+			t.Fatalf("%s does not print the remediation under the finding:\n%s", name, output)
+		}
+		if name == cli.RendererPlain {
+			plain = output
+		} else if output != plain {
+			t.Fatalf("human renderers disagree:\nplain: %s\nstyled: %s", plain, output)
+		}
 	}
 }
