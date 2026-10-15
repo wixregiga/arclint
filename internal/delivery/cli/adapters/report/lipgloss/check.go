@@ -17,6 +17,9 @@ func writeCheck(p *out.Printer, th Theme, a conformance.Assessment, agentsContex
 		line := anchor + ": " + th.severityBracket(string(v.Severity())) + " " +
 			th.Muted.Render(id) + " " + v.Message()
 		p.Printf("%s\n", line)
+		if v.Remediation() != "" {
+			p.Printf("  %s: %s\n", th.Muted.Render("remediation"), v.Remediation())
+		}
 	}
 	for _, d := range a.Diagnostics() {
 		switch d.Kind() {

@@ -16,8 +16,7 @@ import (
 type User struct {
 	event.Recorder
 
-	tenantID   tenant.TenantID
-	username   Username
+	id         UserID
 	password   EncryptedPassword
 	enablement Enablement
 	person     Person
@@ -46,18 +45,18 @@ func Register(tenantID tenant.TenantID, credentials Credentials, enablement Enab
 	if err != nil {
 		return nil, fmt.Errorf("register user %s: %w", credentials.Username(), err)
 	}
-	u := &User{tenantID: tenantID, username: credentials.Username(), password: encrypted, enablement: enablement, person: person, clock: now}
+	u := &User{id: NewUserID(tenantID, credentials.Username()), password: encrypted, enablement: enablement, person: person, clock: now}
 	if err := u.EnsurePersonBelongsToTheUsersTenant(); err != nil {
 		return nil, err
 	}
-	u.Raise(UserRegistered{TenantID: tenantID, Username: u.username, Name: person.Name(), Email: person.EmailAddress(), occurredOn: now()})
+	u.Raise(UserRegistered{TenantID: tenantID, Username: u.id.Username, Name: person.Name(), Email: person.EmailAddress(), occurredOn: now()})
 	return u, nil
 }
 
 // Reconstitute rebuilds a user from persisted state; a repository adapter
 // is its only caller.
 func Reconstitute(tenantID tenant.TenantID, username Username, password EncryptedPassword, enablement Enablement, person Person, now func() time.Time) (*User, error) {
-	u := &User{tenantID: tenantID, username: username, password: password, enablement: enablement, person: person, clock: now}
+	u := &User{id: NewUserID(tenantID, username), password: password, enablement: enablement, person: person, clock: now}
 	if err := u.EnsurePersonBelongsToTheUsersTenant(); err != nil {
 		return nil, err
 	}
@@ -65,13 +64,13 @@ func Reconstitute(tenantID tenant.TenantID, username Username, password Encrypte
 }
 
 // UserID is the aggregate's identity.
-func (u *User) UserID() UserID { return NewUserID(u.tenantID, u.username) }
+func (u *User) UserID() UserID { return u.id }
 
 // TenantID is the tenant the user belongs to.
-func (u *User) TenantID() tenant.TenantID { return u.tenantID }
+func (u *User) TenantID() tenant.TenantID { return u.id.TenantID }
 
 // Username is the name the user signs in with.
-func (u *User) Username() Username { return u.username }
+func (u *User) Username() Username { return u.id.Username }
 
 // Password is the stored form of the user's password.
 func (u *User) Password() EncryptedPassword { return u.password }
@@ -94,19 +93,19 @@ func (u *User) ChangePassword(current, changed Password, encrypter Encrypter) er
 	if err := u.AssertChangedPasswordDiffersFromCurrent(current, changed); err != nil {
 		return err
 	}
-	credentials, err := NewCredentials(u.username, changed)
+	credentials, err := NewCredentials(u.id.Username, changed)
 	if err != nil {
 		return err
 	}
 	encrypted, err := encrypter.Encrypt(credentials.Password())
 	if err != nil {
-		return fmt.Errorf("change password of %s: %w", u.username, err)
+		return fmt.Errorf("change password of %s: %w", u.id.Username, err)
 	}
 	u.password = encrypted
 	if err := u.EnsurePersonBelongsToTheUsersTenant(); err != nil {
 		return err
 	}
-	u.Raise(UserPasswordChanged{TenantID: u.tenantID, Username: u.username, occurredOn: u.clock()})
+	u.Raise(UserPasswordChanged{TenantID: u.id.TenantID, Username: u.id.Username, occurredOn: u.clock()})
 	return nil
 }
 
@@ -116,7 +115,7 @@ func (u *User) DefineEnablement(enablement Enablement) error {
 	if err := u.EnsurePersonBelongsToTheUsersTenant(); err != nil {
 		return err
 	}
-	u.Raise(UserEnablementChanged{TenantID: u.tenantID, Username: u.username, Enablement: enablement, occurredOn: u.clock()})
+	u.Raise(UserEnablementChanged{TenantID: u.id.TenantID, Username: u.id.Username, Enablement: enablement, occurredOn: u.clock()})
 	return nil
 }
 
@@ -130,8 +129,8 @@ func (u *User) ChangePersonalName(name FullName) error {
 // person-belongs-to-the-users-tenant: the person record a user carries
 // belongs to the user's own tenant.
 func (u *User) EnsurePersonBelongsToTheUsersTenant() error {
-	if u.person.TenantID() != u.tenantID {
-		return fmt.Errorf("user %s: %w", u.username, ErrPersonOfAnotherTenant)
+	if u.person.TenantID() != u.id.TenantID {
+		return fmt.Errorf("user %s: %w", u.id.Username, ErrPersonOfAnotherTenant)
 	}
 	return nil
 }
@@ -140,7 +139,7 @@ func (u *User) EnsurePersonBelongsToTheUsersTenant() error {
 // changed-password-differs-from-current on ChangePassword.
 func (u *User) AssertChangedPasswordDiffersFromCurrent(current, changed Password) error {
 	if current.Reveal() == changed.Reveal() {
-		return fmt.Errorf("user %s: %w", u.username, ErrPasswordUnchanged)
+		return fmt.Errorf("user %s: %w", u.id.Username, ErrPasswordUnchanged)
 	}
 	return nil
 }

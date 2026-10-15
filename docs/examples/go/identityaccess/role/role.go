@@ -17,8 +17,7 @@ import (
 type Role struct {
 	event.Recorder
 
-	tenantID    tenant.TenantID
-	name        RoleName
+	id          RoleID
 	description string
 	members     []user.Username
 	clock       func() time.Time
@@ -35,7 +34,7 @@ func Provision(tenantID tenant.TenantID, name RoleName, description string, now 
 	if tenantID.IsZero() {
 		return nil, errors.New("role requires a tenant")
 	}
-	r := &Role{tenantID: tenantID, name: name, description: description, clock: now}
+	r := &Role{id: NewRoleID(tenantID, name), description: description, clock: now}
 	if err := r.EnsureMembersListedOnce(); err != nil {
 		return nil, err
 	}
@@ -46,7 +45,7 @@ func Provision(tenantID tenant.TenantID, name RoleName, description string, now 
 // Reconstitute rebuilds a role from persisted state; a repository adapter
 // is its only caller.
 func Reconstitute(tenantID tenant.TenantID, name RoleName, description string, members []user.Username, now func() time.Time) (*Role, error) {
-	r := &Role{tenantID: tenantID, name: name, description: description, members: members, clock: now}
+	r := &Role{id: NewRoleID(tenantID, name), description: description, members: members, clock: now}
 	if err := r.EnsureMembersListedOnce(); err != nil {
 		return nil, err
 	}
@@ -54,13 +53,13 @@ func Reconstitute(tenantID tenant.TenantID, name RoleName, description string, m
 }
 
 // RoleID is the aggregate's identity.
-func (r *Role) RoleID() RoleID { return NewRoleID(r.tenantID, r.name) }
+func (r *Role) RoleID() RoleID { return r.id }
 
 // TenantID is the tenant the role belongs to.
-func (r *Role) TenantID() tenant.TenantID { return r.tenantID }
+func (r *Role) TenantID() tenant.TenantID { return r.id.TenantID }
 
 // Name is the role's name.
-func (r *Role) Name() RoleName { return r.name }
+func (r *Role) Name() RoleName { return r.id.Name }
 
 // Description is the free text the role was described with.
 func (r *Role) Description() string { return r.description }
@@ -95,7 +94,7 @@ func (r *Role) AssignUser(id user.UserID) error {
 	if err := r.EnsureMembersListedOnce(); err != nil {
 		return err
 	}
-	r.Raise(UserAssignedToRole{TenantID: r.tenantID, Name: r.name, Username: id.Username, occurredOn: r.clock()})
+	r.Raise(UserAssignedToRole{TenantID: r.id.TenantID, Name: r.id.Name, Username: id.Username, occurredOn: r.clock()})
 	return nil
 }
 
@@ -120,7 +119,7 @@ func (r *Role) EnsureMembersListedOnce() error {
 	seen := make(map[user.Username]struct{}, len(r.members))
 	for _, m := range r.members {
 		if _, dup := seen[m]; dup {
-			return fmt.Errorf("role %s: %w: %s", r.name, ErrMemberListedTwice, m)
+			return fmt.Errorf("role %s: %w: %s", r.id.Name, ErrMemberListedTwice, m)
 		}
 		seen[m] = struct{}{}
 	}
@@ -131,8 +130,8 @@ func (r *Role) EnsureMembersListedOnce() error {
 // assignee-belongs-to-tenant on AssignUser and UnassignUser: the user
 // belongs to the role's tenant.
 func (r *Role) AssertAssigneeBelongsToTenant(id user.UserID) error {
-	if id.TenantID != r.tenantID {
-		return fmt.Errorf("role %s: %w", r.name, ErrAssigneeOfAnotherTenant)
+	if id.TenantID != r.id.TenantID {
+		return fmt.Errorf("role %s: %w", r.id.Name, ErrAssigneeOfAnotherTenant)
 	}
 	return nil
 }

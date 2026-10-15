@@ -12,8 +12,7 @@ export class Role {
   private readonly recorder = new EventRecorder();
 
   private constructor(
-    private readonly tenant: TenantID,
-    private readonly roleName: RoleName,
+    private readonly id: RoleID,
     private readonly roleDescription: string,
     private members: Username[],
     private readonly clock: Clock,
@@ -23,26 +22,26 @@ export class Role {
 
   /** The constructor door: a tenant provisions a role by name. */
   static provision(tenantId: TenantID, name: RoleName, description: string, clock: Clock): Role {
-    const role = new Role(tenantId, name, description, [], clock);
+    const role = new Role(new RoleID(tenantId, name), description, [], clock);
     role.recorder.raise(new RoleProvisioned(tenantId, name, clock()));
     return role;
   }
 
   /** Rebuilds a role from persisted state; a repository adapter is its only caller. */
   static reconstitute(tenantId: TenantID, name: RoleName, description: string, members: Username[], clock: Clock): Role {
-    return new Role(tenantId, name, description, [...members], clock);
+    return new Role(new RoleID(tenantId, name), description, [...members], clock);
   }
 
   get roleId(): RoleID {
-    return new RoleID(this.tenant, this.roleName);
+    return this.id;
   }
 
   get tenantId(): TenantID {
-    return this.tenant;
+    return this.id.tenantId;
   }
 
   get name(): RoleName {
-    return this.roleName;
+    return this.id.name;
   }
 
   get description(): string {
@@ -70,7 +69,7 @@ export class Role {
     }
     this.members.push(id.username);
     this.ensureMembersListedOnce();
-    this.recorder.raise(new UserAssignedToRole(this.tenant, this.roleName, id.username, this.clock()));
+    this.recorder.raise(new UserAssignedToRole(this.id.tenantId, this.id.name, id.username, this.clock()));
   }
 
   unassignUser(id: UserID): void {
@@ -84,7 +83,7 @@ export class Role {
     const seen = new Set<string>();
     for (const m of this.members) {
       if (seen.has(m.toString())) {
-        throw new Error(`role ${this.roleName.toString()}: member listed twice: ${m.toString()}`);
+        throw new Error(`role ${this.id.name.toString()}: member listed twice: ${m.toString()}`);
       }
       seen.add(m.toString());
     }
@@ -92,8 +91,8 @@ export class Role {
 
   /** Checks the assertion assignee-belongs-to-tenant on assignUser and unassignUser. */
   assertAssigneeBelongsToTenant(id: UserID): void {
-    if (!id.tenantId.equals(this.tenant)) {
-      throw new Error(`role ${this.roleName.toString()}: the user belongs to another tenant`);
+    if (!id.tenantId.equals(this.id.tenantId)) {
+      throw new Error(`role ${this.id.name.toString()}: the user belongs to another tenant`);
     }
   }
 }

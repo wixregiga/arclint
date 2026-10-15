@@ -234,9 +234,9 @@ Provisioning creates a Tenant, a User, and a Role together, which no one of them
 ```yaml
 TenantProvisioningService:
   definition: >-
-    Brings a tenant into existence with its Administrator role and
-    its first administrator, registered through a one-time
-    invitation; spans Tenant, User, and Role.
+    Brings a tenant into existence with its Administrator role and its
+    first administrator, registered through a one-time invitation; spans
+    Tenant, User, and Role.
   assertions:
     administrator-registered:
       on: ProvisionTenant
@@ -401,19 +401,19 @@ The Tenant records one invariant and one assertion:
 ```yaml
 Tenant:
   definition: >-
-    A subscribing organisation that owns users and roles; it is
-    active from provisioning until deactivated, and while active it
-    offers registration invitations that users register through.
+    A subscribing organisation that owns users and roles; it is active
+    from provisioning until deactivated, and while active it offers
+    registration invitations that users register through.
   identity: TenantID
   entities:
     RegistrationInvitation:
       definition: >-
-        An invitation, identified within its tenant, through which a
-        user registers; it is open-ended or limited to a window.
+        An invitation, identified within its tenant, through which a user
+        registers; it is open-ended or limited to a window.
   invariants:
     one-open-invitation-per-description: >-
-      No two invitations of a tenant that are available at the same
-      moment carry the same description.
+      No two invitations of a tenant that are available at the same moment
+      carry the same description.
   assertions:
     invites-only-while-active:
       on: OfferRegistrationInvitation
@@ -665,10 +665,10 @@ No two tenants share a name, but no one tenant owns that rule, so it is not reco
 ```yaml
 questions:
   tenant-name-uniqueness: >-
-    No two tenants share a name, but no single tenant owns that rule.
-    When a tenant's name is registered, what else must change in the
-    same transaction? If nothing, the rule is recorded as an assertion
-    of TenantProvisioningService on ProvisionTenant.
+    No two tenants share a name, but no single tenant owns that rule. When a
+    tenant's name is registered, what else must change in the same
+    transaction? If nothing, the rule is recorded as an assertion of
+    TenantProvisioningService on ProvisionTenant.
 ```
 
 ## The questions that decide
@@ -680,6 +680,7 @@ When the input does not say where a rule lives, the domain-librarian skill asks 
 | Question | Decides | Defined by |
 |---|---|---|
 | Does <X> have an identity that survives attribute changes, or are two <X> with the same values interchangeable? | entity vs value_object | Entity [[36]](#ref-36)[[18]](#ref-18)[[37]](#ref-37)<br>Value Object [[38]](#ref-38)[[39]](#ref-39)[[18]](#ref-18)[[40]](#ref-40) |
+| What is <Identity> made of? If any part can change while the <X> stays the same, the identity cannot be that part. | identity vs attribute (entity) | Entity [[36]](#ref-36)[[18]](#ref-18)[[37]](#ref-37) |
 | What must never be violated about <X>, even for an instant? | invariants and owner |  |
 | Does <rule> hold even while nothing runs, or only when <operation> runs? | invariant vs assertion | Invariant [[7]](#ref-7)[[1]](#ref-1)[[5]](#ref-5)<br>Assertion [[1]](#ref-1)[[11]](#ref-11)[[12]](#ref-12) |
 | Which operation guarantees <rule>, and who performs it: one aggregate, or a process that spans aggregates? | assertion owner (aggregate vs domain_service) | Aggregate [[7]](#ref-7)[[41]](#ref-41)[[42]](#ref-42)[[43]](#ref-43)<br>Domain Service [[13]](#ref-13)[[18]](#ref-18)[[19]](#ref-19)[[20]](#ref-20) |
@@ -707,6 +708,7 @@ The rules the skill applies to turn what an expert said into recorded terms.
 | Rule | States | Example |
 |---|---|---|
 | `identity-test` | Concept keeps its business identity while attributes change -> entity. | order keeps its number when status changes |
+| `identity-regardless-of-history` | Define a means of distinguishing each object regardless of its form or history (Evans, DDD Reference, Entities). The model decides what sameness is. An identifier may come from outside the system, or it may be a symbol created for the system. A part that can change while the object stays the same is not part of its identity. | an order keeps its id when its status changes; a username is the identity only when no operation changes it |
 | `value-test` | Two instances with identical values are interchangeable -> value_object. | any two USD 10 amounts are the same money |
 | `invariant-ownership` | First establish a domain consistency rule and its capable owner; must-always/must-never wording alone does not establish one. Contributor workflow, host guarantees, delivery validation and programming guards are not automatically invariants or assertions. A justified rule holding at all observable times -> the owner's invariants, keyed; a justified guarantee of a named domain operation -> the owner's assertions, keyed, with on: the aggregate's for its command, the domain service's for its operation. A value object's key names value integrity checked at construction; an aggregate's key names the root method that enforces the cluster rule. | total = sum of lines -> Order.invariants.total-is-sum-of-lines; every tier priced before Publish -> Order.assertions.tiers-priced on Publish |
 | `specification-as-thing` | Experts pass the predicate around as a thing -> specifications, a type with SatisfiedBy; never a flag on a value object and never an invariant. | preferred customer is handed to pricing as a spec, not inlined as a must-always |

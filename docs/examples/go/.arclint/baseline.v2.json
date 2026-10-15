@@ -30,18 +30,5 @@
     "value_object/constructed-through-one-door",
     "value_object/no-setters"
   ],
-  "findings": [
-    {
-      "ruleId": "entity/identity",
-      "subject": "identityaccess",
-      "message": "aggregate Role: Role declares no field holding its identity RoleID",
-      "count": 1
-    },
-    {
-      "ruleId": "entity/identity",
-      "subject": "identityaccess",
-      "message": "aggregate User: User declares no field holding its identity UserID",
-      "count": 1
-    }
-  ]
+  "findings": []
 }

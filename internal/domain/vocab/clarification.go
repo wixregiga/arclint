@@ -17,6 +17,10 @@ func InsufficientInfoQuestions() []ClarificationQuestion {
 			Decides:  "entity vs value_object",
 		},
 		{
+			Question: identityPartsQuestion,
+			Decides:  "identity vs attribute (entity)",
+		},
+		{
 			Question: "What must never be violated about <X>, even for an instant?",
 			Decides:  "invariants and owner",
 		},
@@ -66,6 +70,11 @@ func InsufficientInfoQuestions() []ClarificationQuestion {
 		},
 	}
 }
+
+// identityPartsQuestion asks what an identity is made of; the bank
+// carries it, and the concept documentation of entity and aggregate
+// asks it verbatim.
+const identityPartsQuestion = "What is <Identity> made of? If any part can change while the <X> stays the same, the identity cannot be that part."
 
 // ConflictQuestions returns the two conflict bank entries in
 // VOCAB.yaml order (char-exact).

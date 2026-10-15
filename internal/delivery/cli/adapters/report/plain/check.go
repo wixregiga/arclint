@@ -16,6 +16,9 @@ func writeCheck(w io.Writer, a conformance.Assessment, agentsContext string) err
 			anchor = fmt.Sprintf("%s:%d", v.Path(), v.Line())
 		}
 		p.Printf("%s: [%s] %s%s %s\n", anchor, v.Severity(), v.Rule().Qualified(), provenanceTag(v), v.Message())
+		if v.Remediation() != "" {
+			p.Printf("  remediation: %s\n", v.Remediation())
+		}
 	}
 	for _, d := range a.Diagnostics() {
 		switch d.Kind() {

@@ -15,8 +15,7 @@ export class User {
   private readonly recorder = new EventRecorder();
 
   private constructor(
-    private readonly tenant: TenantID,
-    private readonly name: Username,
+    private readonly id: UserID,
     private encrypted: EncryptedPassword,
     private enablementValue: Enablement,
     private personValue: Person,
@@ -30,26 +29,26 @@ export class User {
    * operation and never held.
    */
   static register(tenantId: TenantID, credentials: Credentials, enablement: Enablement, person: Person, encrypter: Encrypter, clock: Clock): User {
-    const user = new User(tenantId, credentials.username, encrypter.encrypt(credentials.password), enablement, person, clock);
+    const user = new User(new UserID(tenantId, credentials.username), encrypter.encrypt(credentials.password), enablement, person, clock);
     user.recorder.raise(new UserRegistered(tenantId, credentials.username, person.name, person.emailAddress, clock()));
     return user;
   }
 
   /** Rebuilds a user from persisted state; a repository adapter is its only caller. */
   static reconstitute(tenantId: TenantID, username: Username, password: EncryptedPassword, enablement: Enablement, person: Person, clock: Clock): User {
-    return new User(tenantId, username, password, enablement, person, clock);
+    return new User(new UserID(tenantId, username), password, enablement, person, clock);
   }
 
   get userId(): UserID {
-    return new UserID(this.tenant, this.name);
+    return this.id;
   }
 
   get tenantId(): TenantID {
-    return this.tenant;
+    return this.id.tenantId;
   }
 
   get username(): Username {
-    return this.name;
+    return this.id.username;
   }
 
   get password(): EncryptedPassword {
@@ -78,16 +77,16 @@ export class User {
       throw new Error("current password does not match");
     }
     this.assertChangedPasswordDiffersFromCurrent(current, changed);
-    const credentials = Credentials.of(this.name, changed);
+    const credentials = Credentials.of(this.id.username, changed);
     this.encrypted = encrypter.encrypt(credentials.password);
     this.ensurePersonBelongsToTheUsersTenant();
-    this.recorder.raise(new UserPasswordChanged(this.tenant, this.name, this.clock()));
+    this.recorder.raise(new UserPasswordChanged(this.id.tenantId, this.id.username, this.clock()));
   }
 
   defineEnablement(enablement: Enablement): void {
     this.enablementValue = enablement;
     this.ensurePersonBelongsToTheUsersTenant();
-    this.recorder.raise(new UserEnablementChanged(this.tenant, this.name, enablement, this.clock()));
+    this.recorder.raise(new UserEnablementChanged(this.id.tenantId, this.id.username, enablement, this.clock()));
   }
 
   changePersonalName(name: FullName): void {
@@ -100,15 +99,15 @@ export class User {
    * the person record a user carries belongs to the user's own tenant.
    */
   ensurePersonBelongsToTheUsersTenant(): void {
-    if (!this.personValue.tenantId.equals(this.tenant)) {
-      throw new Error(`user ${this.name.toString()}: the person belongs to another tenant`);
+    if (!this.personValue.tenantId.equals(this.id.tenantId)) {
+      throw new Error(`user ${this.id.username.toString()}: the person belongs to another tenant`);
     }
   }
 
   /** Checks the assertion changed-password-differs-from-current on changePassword. */
   assertChangedPasswordDiffersFromCurrent(current: Password, changed: Password): void {
     if (current.equals(changed)) {
-      throw new Error(`user ${this.name.toString()}: new password must differ from the current one`);
+      throw new Error(`user ${this.id.username.toString()}: new password must differ from the current one`);
     }
   }
 }
