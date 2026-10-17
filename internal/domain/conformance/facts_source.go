@@ -12,36 +12,43 @@ import (
 // membership resolves Zone membership over the Observations once,
 // for every evaluator.
 type membership struct {
-	names     []rule.ZoneName // sorted
-	zones     map[rule.ZoneName]rule.Zone
-	files     []string                   // sorted repo-relative paths
-	fileZones map[string][]rule.ZoneName // sorted per file
-	zoneFiles map[rule.ZoneName][]string // path order
-	dirZones  map[string][]rule.ZoneName // sorted per directory
+	names    []rule.ZoneName // sorted
+	declared map[rule.ZoneName]bool
+	files    []string // sorted repo-relative paths
+	// ownedFolders holds every folder above an observed file that a Zone
+	// contains.
+	ownedFolders map[string]bool
+	fileZones    map[string][]rule.ZoneName // sorted per file
+	zoneFiles    map[rule.ZoneName][]string // path order
+	dirZones     map[string][]rule.ZoneName // sorted per directory
 }
 
 func newMembership(zones []rule.Zone, obs Observations) (membership, error) {
 	mem := membership{
-		zones:     map[rule.ZoneName]rule.Zone{},
-		fileZones: map[string][]rule.ZoneName{},
-		zoneFiles: map[rule.ZoneName][]string{},
-		dirZones:  map[string][]rule.ZoneName{},
+		declared:     map[rule.ZoneName]bool{},
+		ownedFolders: map[string]bool{},
+		fileZones:    map[string][]rule.ZoneName{},
+		zoneFiles:    map[rule.ZoneName][]string{},
+		dirZones:     map[string][]rule.ZoneName{},
 	}
+	byName := map[rule.ZoneName]rule.Zone{}
 	for _, m := range zones {
-		if _, ok := mem.zones[m.Name()]; ok {
+		if mem.declared[m.Name()] {
 			return membership{}, fmt.Errorf("conformance: duplicate zone %q", m.Name())
 		}
-		mem.zones[m.Name()] = m
+		mem.declared[m.Name()] = true
+		byName[m.Name()] = m
 		mem.names = append(mem.names, m.Name())
 	}
 	sort.Slice(mem.names, func(i, j int) bool { return mem.names[i] < mem.names[j] })
+	folders := map[string]bool{}
 
 	dirSets := map[string]map[rule.ZoneName]bool{}
 	for _, f := range obs.Files() {
 		mem.files = append(mem.files, f.Path)
 		mem.fileZones[f.Path] = nil // Presence records observation even without a Zone.
 		for _, name := range mem.names {
-			if mem.zones[name].Contains(f.Path) {
+			if byName[name].Contains(f.Path) {
 				mem.fileZones[f.Path] = append(mem.fileZones[f.Path], name)
 				mem.zoneFiles[name] = append(mem.zoneFiles[name], f.Path)
 			}
@@ -54,6 +61,17 @@ func newMembership(zones []rule.Zone, obs Observations) (membership, error) {
 		}
 		for _, m := range mem.fileZones[f.Path] {
 			set[m] = true
+		}
+		for folder := path.Dir(f.Path); folder != "." && !folders[folder]; folder = path.Dir(folder) {
+			folders[folder] = true
+		}
+	}
+	for folder := range folders {
+		for _, m := range zones {
+			if m.Contains(folder) {
+				mem.ownedFolders[folder] = true
+				break
+			}
 		}
 	}
 	for d, set := range dirSets {
@@ -250,15 +268,7 @@ func (f Facts) independentFolders(p rule.IndependenceParams) ([]string, error) {
 }
 
 func (f Facts) zoneOwnsFolder(folder string) bool {
-	if f.source == nil {
-		return false
-	}
-	for _, zone := range f.source.membership.zones {
-		if zone.Contains(folder) {
-			return true
-		}
-	}
-	return false
+	return f.source != nil && f.source.membership.ownedFolders[folder]
 }
 
 // sameCodeZones identifies nesting from complete memberships, not a restricted
@@ -296,15 +306,7 @@ func (f Facts) contextScope(name string) (rule.ZoneName, []string, error) {
 	if f.source == nil {
 		return "", nil, nil
 	}
-	if _, ok := f.source.membership.zones[rule.ZoneName(name)]; ok {
-		return rule.ZoneName(name), f.zoneMembers(rule.ZoneName(name)), nil
-	}
-	var spelled []rule.ZoneName
-	for _, z := range f.zoneNames() {
-		if namedFor(string(z), name) {
-			spelled = append(spelled, z)
-		}
-	}
+	spelled := ZonesNamedFor(name, f.zoneNames())
 	switch len(spelled) {
 	case 0:
 		return "", f.paths(), nil

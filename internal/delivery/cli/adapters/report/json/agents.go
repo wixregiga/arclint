@@ -34,7 +34,9 @@ type hooksStatusDoc struct {
 	Files   []hookFileDoc `json:"files"`
 	// LastEvent is RFC 3339, empty when no hook event reached the project.
 	LastEvent string `json:"lastEvent"`
-	Limits    string `json:"limits"`
+	// Silence says why no hook event reached the project, empty once one has.
+	Silence []string `json:"silence"`
+	Limits  string   `json:"limits"`
 }
 
 func hooksStatusDocOf(r cli.HooksStatusReport) hooksStatusDoc {
@@ -47,5 +49,5 @@ func hooksStatusDocOf(r cli.HooksStatusReport) hooksStatusDoc {
 	if !s.LastEvent.IsZero() {
 		last = s.LastEvent.Format(time.RFC3339)
 	}
-	return hooksStatusDoc{Project: s.Project, Binary: s.Binary, Files: files, LastEvent: last, Limits: cli.HooksStatusLimits}
+	return hooksStatusDoc{Project: s.Project, Binary: s.Binary, Files: files, LastEvent: last, Silence: append([]string{}, s.Silence...), Limits: cli.HooksStatusLimits}
 }

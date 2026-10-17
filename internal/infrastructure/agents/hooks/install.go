@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/wixregiga/arclint/internal/application"
+	"github.com/wixregiga/arclint/internal/domain/rule"
 )
 
 // eventArgs are the arguments every workflow hook passes to arclint.
@@ -82,7 +83,7 @@ type target struct {
 }
 
 var (
-	hookEvents = []string{sessionStartEvent, postToolUseEvent, stopEvent}
+	hookEvents = []string{sessionStartEvent, promptEvent, postToolUseEvent, stopEvent}
 	distroName = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 	// pinnable is a binary path every host shell runs unquoted.
 	pinnable = regexp.MustCompile(`^(/|[A-Za-z]:/)[A-Za-z0-9._/+-]+$`)
@@ -195,9 +196,14 @@ func (installer *Installer) projectTarget(host hookHost) target {
 	return target{host: host, scope: scopeProject, form: form, path: filepath.Join(installer.root, filepath.FromSlash(host.project))}
 }
 
+// userTargets are the user configuration files of host that can be
+// located.
 func userTargets(host hookHost, configurations []UserConfiguration) []target {
 	targets := make([]target, 0, len(configurations))
 	for _, configuration := range configurations {
+		if configuration.Unreadable != "" {
+			continue
+		}
 		form := nativeForm
 		if configuration.Windows {
 			form = windowsForm
@@ -245,6 +251,11 @@ func (installer *Installer) Install(hosts []string, project bool) (installation 
 	configurations, err := installer.users()
 	if err != nil {
 		return installation, fmt.Errorf("install workflow hooks: %w", err)
+	}
+	for _, configuration := range configurations {
+		if configuration.Unreadable != "" {
+			return installation, fmt.Errorf("install workflow hooks: the Windows profile's configuration cannot be located: %s", configuration.Unreadable)
+		}
 	}
 	for _, host := range selected {
 		users := userTargets(host, configurations)
@@ -349,13 +360,59 @@ func (installer *Installer) Status() (status application.HooksStatus, err error)
 				localEntry.Problems = append(localEntry.Problems, host.shared+" also lists the workflow hooks; every file that lists them runs each event.")
 			}
 		}
-		status.Files = append(status.Files, entries...)
+		// A user file that cannot be located is listed with the other user
+		// files, before this project's.
+		status.Files = append(status.Files, entries[:len(users)]...)
+		status.Files = append(status.Files, unreadableFiles(host, configurations)...)
+		status.Files = append(status.Files, entries[len(users)])
 	}
 	status.LastEvent, err = lastEvent(installer.root)
 	if err != nil {
 		return status, fmt.Errorf("workflow hook status: %w", err)
 	}
+	if status.LastEvent.IsZero() {
+		status.Silence = installer.silence(status.Files)
+	}
 	return status, nil
+}
+
+// unreadableFiles reports host's file in each user configuration that
+// could not be located; the problem belongs to that file alone. The path is
+// where the host keeps the file unless its variable moves it.
+func unreadableFiles(host hookHost, configurations []UserConfiguration) []application.HookFileStatus {
+	var files []application.HookFileStatus
+	for _, configuration := range configurations {
+		if configuration.Unreadable == "" {
+			continue
+		}
+		files = append(files, application.HookFileStatus{
+			Host:     host.name,
+			Scope:    scopeUser,
+			Windows:  configuration.Windows,
+			Path:     `%USERPROFILE%\` + host.homeDirectory + `\` + host.user,
+			Problems: []string{"The Windows profile's configuration cannot be located, so whether it lists the hooks is unknown: " + configuration.Unreadable + ". Windows host apps that open this project read this file; install from a shell that can run cmd.exe to write it."},
+		})
+	}
+	return files
+}
+
+// silence says why no hook event has reached the project, in the order a
+// user can rule the causes out.
+func (installer *Installer) silence(files []application.HookFileStatus) []string {
+	var reasons []string
+	if !slices.ContainsFunc(files, func(file application.HookFileStatus) bool { return file.Installed }) {
+		reasons = append(reasons, "No configuration file lists every workflow hook, so no host runs them here; run `arclint agents hooks install`.")
+	}
+	ruleset := filepath.Join(installer.root, rule.RulesetFileName)
+	if info, err := os.Stat(ruleset); err != nil {
+		reasons = append(reasons, "This directory holds no "+rule.RulesetFileName+", so the hooks answer nothing here and record no event. Run status in the project's root.")
+	} else {
+		reasons = append(reasons, "The hooks answer only where "+rule.RulesetFileName+" exists when an event arrives; it was last written at "+info.ModTime().Format("2006-01-02 15:04:05 -0700")+". A session that started before then, such as one in a worktree made from an older commit, records its first event here at its next prompt, edit or turn end.")
+	}
+	return append(reasons,
+		"A session reports to the project that holds its working directory: one started in a parent directory, or in another worktree of this repository, reports there or nowhere.",
+		"Claude Code runs the hooks only in sessions that started after they were installed.",
+	)
 }
 
 // inspect reports what a target lists against what install writes there.

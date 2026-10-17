@@ -599,3 +599,69 @@ func statusOf(t *testing.T, installer *Installer) map[string]struct {
 	}
 	return entries
 }
+
+// Without cmd.exe the Windows profile cannot be located. That is a problem
+// of the Windows files alone: status still reports the distribution's
+// files, and install refuses rather than write half of what it promises.
+func TestAnUnreachableWindowsProfileIsAProblemOfItsFilesOnly(t *testing.T) {
+	root, h := t.TempDir(), newHomes(t)
+	binary := testBinary(t, t.TempDir(), "native")
+	reason := `read the Windows environment through cmd.exe: exec: "cmd.exe": executable file not found in $PATH`
+	users := func() ([]UserConfiguration, error) {
+		return []UserConfiguration{h.native, {Windows: true, Unreadable: reason}}, nil
+	}
+	if _, err := NewInstaller(root, "", binary, h.users("")).Install(nil, false); err != nil {
+		t.Fatal(err)
+	}
+	installer := NewInstaller(root, "Ubuntu", binary, users)
+	entries := statusOf(t, installer)
+	for _, host := range []string{"claude", "codex"} {
+		if native := entries[host+" user"]; !native.Installed || len(native.Problems) != 0 {
+			t.Fatalf("%s native file: %+v", host, native)
+		}
+		windows := entries[host+" user windows"]
+		if windows.Installed || len(windows.Problems) != 1 || !strings.Contains(windows.Problems[0], reason) {
+			t.Fatalf("%s Windows file: %+v", host, windows)
+		}
+	}
+	if _, err := installer.Install(nil, false); err == nil || !strings.Contains(err.Error(), "cmd.exe") {
+		t.Fatalf("install without the Windows profile: %v", err)
+	}
+}
+
+// Before any event, status says why none arrived; afterwards it says
+// nothing about silence.
+func TestStatusExplainsWhyNoEventArrived(t *testing.T) {
+	root, h := t.TempDir(), newHomes(t)
+	installer := NewInstaller(root, "", testBinary(t, t.TempDir(), "native"), h.users(""))
+	status, err := installer.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	silence := strings.Join(status.Silence, "\n")
+	for _, want := range []string{"No configuration file lists every workflow hook", "This directory holds no rules.arclint.yaml", "working directory", "started after they were installed"} {
+		if !strings.Contains(silence, want) {
+			t.Fatalf("silence lacks %q:\n%s", want, silence)
+		}
+	}
+	if _, err := installer.Install(nil, false); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(root, "rules.arclint.yaml"), "zones: {}\n")
+	at := time.Date(2026, 10, 16, 13, 45, 48, 0, time.Local)
+	if err := os.Chtimes(filepath.Join(root, "rules.arclint.yaml"), at, at); err != nil {
+		t.Fatal(err)
+	}
+	status, err = installer.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	silence = strings.Join(status.Silence, "\n")
+	if strings.Contains(silence, "No configuration file") || strings.Contains(silence, "holds no") || !strings.Contains(silence, "last written at 2026-10-16 13:45:48") || !strings.Contains(silence, "worktree made from an older commit") {
+		t.Fatalf("silence after install with a ruleset:\n%s", silence)
+	}
+	writeTestFile(t, filepath.Join(root, progressDirectory, "session.json"), "{}")
+	if status, err = installer.Status(); err != nil || len(status.Silence) != 0 {
+		t.Fatalf("silence after an event: %v %v", status.Silence, err)
+	}
+}

@@ -3,6 +3,7 @@ package conformance
 import (
 	"fmt"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -579,6 +580,23 @@ func (cc contextCode) importsUnit(file, unit string) bool {
 
 func under(p, dir string) bool {
 	return strings.HasPrefix(p, dir+"/")
+}
+
+// ZonesNamedFor names the Zones that may hold a bounded context's code:
+// the Zone named exactly as the context, otherwise every Zone whose name
+// spells it. None means the context's code may lie anywhere in the
+// project; more than one leaves it ambiguous, which the check reports.
+func ZonesNamedFor(context string, zones []rule.ZoneName) []rule.ZoneName {
+	if slices.Contains(zones, rule.ZoneName(context)) {
+		return []rule.ZoneName{rule.ZoneName(context)}
+	}
+	var spelled []rule.ZoneName
+	for _, zone := range zones {
+		if namedFor(string(zone), context) {
+			spelled = append(spelled, zone)
+		}
+	}
+	return spelled
 }
 
 // namedFor reports whether a path segment or a file stem spells a

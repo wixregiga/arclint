@@ -270,8 +270,8 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	progressStore := agenthooks.NewProgressStore(root)
-	guideWorkflow, err := application.NewGuideWorkflow(progressStore, repository)
+	progressStore := agenthooks.NewProgressStore(root, recording.Path())
+	guideWorkflow, err := application.NewGuideWorkflow(progressStore, repository, knowledge, agenthooks.TestConventions{})
 	if err != nil {
 		return configError(err)
 	}

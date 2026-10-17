@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/wixregiga/arclint/internal/domain/agent"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
@@ -19,11 +20,20 @@ import (
 
 const activityLog = progressDirectory + "/activity.jsonl"
 
-// loggedActivity is one line of the activity log.
+// loggedActivity is one line of the activity log: an activity and when
+// the command that performed it finished.
 type loggedActivity struct {
-	Kind  string   `json:"kind"`
-	Paths []string `json:"paths,omitempty"`
-	Zones []string `json:"zones,omitempty"`
+	Kind  string    `json:"kind"`
+	Paths []string  `json:"paths,omitempty"`
+	Zones []string  `json:"zones,omitempty"`
+	At    time.Time `json:"at"`
+}
+
+// timedActivity is an activity and when it happened, so activities seen
+// in different places can be put back in the order they happened.
+type timedActivity struct {
+	activity agent.Activity
+	at       time.Time
 }
 
 // selfReported are the kinds ArcLint's own commands record; any other line
@@ -52,7 +62,7 @@ func (log *ActivityLog) Record(activity agent.Activity) (returnErr error) {
 	if _, err := project.Stat(progressDirectory); errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
-	line, err := json.Marshal(loggedActivity{Kind: string(activity.Kind), Paths: activity.Paths, Zones: activity.Zones})
+	line, err := json.Marshal(loggedActivity{Kind: string(activity.Kind), Paths: activity.Paths, Zones: activity.Zones, At: time.Now()})
 	if err != nil {
 		return fmt.Errorf("encode workflow activity: %w", err)
 	}
@@ -123,8 +133,9 @@ func logSize(project *os.Root) (int64, error) {
 
 // readActivities returns the self-reported activities in the complete log
 // lines after cursor, and the cursor after them. A line still being written
-// is left for a later read.
-func readActivities(project *os.Root, cursor int64) ([]agent.Activity, int64, error) {
+// is left for a later read; a line without the time its command finished
+// is not one ArcLint wrote.
+func readActivities(project *os.Root, cursor int64) ([]timedActivity, int64, error) {
 	size, err := logSize(project)
 	if err != nil || cursor >= size {
 		return nil, min(cursor, size), err
@@ -142,13 +153,13 @@ func readActivities(project *os.Root, cursor int64) ([]agent.Activity, int64, er
 		return nil, cursor, fmt.Errorf("workflow activity log: %w", err)
 	}
 	complete := bytes.LastIndexByte(data, '\n') + 1
-	var activities []agent.Activity
+	var activities []timedActivity
 	for _, line := range bytes.Split(data[:complete], []byte("\n")) {
 		var logged loggedActivity
-		if len(line) == 0 || json.Unmarshal(line, &logged) != nil || !selfReported[agent.Kind(logged.Kind)] {
+		if len(line) == 0 || json.Unmarshal(line, &logged) != nil || !selfReported[agent.Kind(logged.Kind)] || logged.At.IsZero() {
 			continue
 		}
-		activities = append(activities, agent.Activity{Kind: agent.Kind(logged.Kind), Paths: logged.Paths, Zones: logged.Zones})
+		activities = append(activities, timedActivity{activity: agent.Activity{Kind: agent.Kind(logged.Kind), Paths: logged.Paths, Zones: logged.Zones}, at: logged.At})
 	}
 	return activities, cursor + int64(complete), nil
 }

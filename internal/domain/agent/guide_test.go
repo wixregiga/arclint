@@ -17,8 +17,14 @@ func advise(t *testing.T, activities ...Activity) [][]Guidance {
 	return received
 }
 
-// changed is a change of path, owned by zones.
+// changed is a change of path, owned by zones, that bears domain meaning.
 func changed(path string, zones ...string) Activity {
+	return Activity{Kind: FilesChanged, Paths: []string{path}, Zones: zones, BearsDomain: true}
+}
+
+// supporting is a change of path, owned by zones, that bears no domain
+// meaning, such as a test.
+func supporting(path string, zones ...string) Activity {
 	return Activity{Kind: FilesChanged, Paths: []string{path}, Zones: zones}
 }
 
@@ -123,6 +129,40 @@ func TestDomainBeforeChangeRemindsOnce(t *testing.T) {
 		nil,
 		nil,
 		nil,
+	}
+	if !reflect.DeepEqual(received, want) {
+		t.Fatalf("received %+v, want %+v", received, want)
+	}
+}
+
+// A test or a file outside the model's code needs no recording; it neither
+// receives the reminder nor uses it up for a later change that does.
+func TestDomainBeforeChangeSkipsFilesBearingNoDomain(t *testing.T) {
+	received := advise(t,
+		everyZone,
+		supporting("internal/a_test.go"),
+		supporting("tools/gate.sh"),
+		changed("internal/a.go"),
+	)
+	want := [][]Guidance{
+		nil,
+		nil,
+		nil,
+		{{Step: DomainStep, Paths: []string{"internal/a.go"}}},
+	}
+	if !reflect.DeepEqual(received, want) {
+		t.Fatalf("received %+v, want %+v", received, want)
+	}
+}
+
+// A file bearing no domain meaning still needs context and the check.
+func TestFilesBearingNoDomainStillNeedContextAndTheCheck(t *testing.T) {
+	received := advise(t, domainChanged, checkRan, supporting("internal/a_test.go", "app"), turnFinished)
+	want := [][]Guidance{
+		nil,
+		nil,
+		{{Step: ContextStep, Paths: []string{"internal/a_test.go"}}},
+		{{Step: CheckStep, Paths: []string{"internal/a_test.go"}}},
 	}
 	if !reflect.DeepEqual(received, want) {
 		t.Fatalf("received %+v, want %+v", received, want)

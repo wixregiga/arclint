@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -24,52 +25,184 @@ const (
 	staleSession = 30 * 24 * time.Hour
 )
 
-// sessionRecord is one session's Progress and how far it has read the
-// activity log. A record without a cursor is not one this store wrote.
+// sessionRecord is one session's Progress, how far it has read the
+// activity log, and the checkout as it last saw it. A record without a
+// cursor is not one this store wrote.
 type sessionRecord struct {
 	Progress agent.Progress
 	Cursor   *int64
+	// Snapshot is the checkout at the session's last update, when Observed;
+	// a project outside a git work tree has none.
+	Snapshot snapshot `json:",omitempty"`
+	Observed bool     `json:",omitempty"`
+	// BetweenTurns is true from the end of a turn, or the session's start,
+	// until the user's next prompt.
+	BetweenTurns bool `json:",omitempty"`
+	// Unattributed is true from a prompt that followed a finished turn
+	// until the next update, which sees the checkout afresh: what changed
+	// between the turns is not the agent's work.
+	Unattributed bool `json:",omitempty"`
 }
 
 // ProgressStore keeps each session's workflow Progress in the project's
 // ArcLint cache. A host can report parallel tool calls at once, so updates
 // of one session hold an exclusive file lock.
-type ProgressStore struct{ root string }
+type ProgressStore struct {
+	root, recording string
+	checkout        checkout
+}
 
-// NewProgressStore keeps progress for the project at root.
-func NewProgressStore(root string) *ProgressStore { return &ProgressStore{root: root} }
+// NewProgressStore keeps progress for the project at root, whose domain
+// recording is at the root-relative path recording.
+func NewProgressStore(root, recording string) *ProgressStore {
+	return &ProgressStore{root: root, recording: recording, checkout: checkout{root: root, now: time.Now}}
+}
 
 // Update replaces the session's Progress with change's result. change also
-// receives the activities ArcLint's own commands recorded since the session
-// last read the log. A new session starts reading at the log's end, so
-// earlier activity is not credited to it; an unreadable record starts the
+// receives, in the order they happened, the activities ArcLint's own
+// commands recorded since the session last read the log and the files the
+// checkout shows changed since the session last saw it. A new session
+// starts reading at the log's end and from the checkout as it is, so
+// earlier work is not credited to it; an unreadable record starts the
 // session over the same way.
 func (store *ProgressStore) Update(session string, change func(agent.Progress, []agent.Activity) agent.Progress) error {
 	return store.locked(session, func(project *os.Root, name string) error {
-		record, found, err := readRecord(project, name)
+		record, started, err := store.current(project, name)
 		if err != nil {
 			return err
 		}
-		if !found {
-			if err := pruneSessions(project, name); err != nil {
-				return err
-			}
-			end, err := logSize(project)
-			if err != nil {
-				return err
-			}
-			record.Cursor = &end
-		}
-		recorded, cursor, err := readActivities(project, *record.Cursor)
+		recorded, err := store.observe(project, &record, started)
 		if err != nil {
 			return err
 		}
-		encoded, err := json.Marshal(sessionRecord{Progress: change(record.Progress, recorded), Cursor: &cursor})
-		if err != nil {
-			return fmt.Errorf("encode workflow progress: %w", err)
-		}
-		return replaceFile(project, name, encoded)
+		record.Progress = change(record.Progress, recorded)
+		return writeRecord(project, name, record)
 	})
+}
+
+// StartSession notes that the session started or resumed. A session
+// starts between turns: files that changed while it was between turns, as
+// before it resumes, are not the agent's work, and the next update sees the
+// checkout afresh. A session whose last turn never finished keeps its view,
+// so the next update reports what that turn changed.
+func (store *ProgressStore) StartSession(session string) error {
+	return store.locked(session, func(project *os.Root, name string) error {
+		record, _, err := store.current(project, name)
+		if err != nil {
+			return err
+		}
+		record.Unattributed = record.Unattributed || record.BetweenTurns
+		return writeRecord(project, name, record)
+	})
+}
+
+// StartTurn notes that the user's prompt started a turn. Files that changed
+// since the last turn finished, or since the session started, are not the
+// agent's work: the next update sees the checkout afresh and reports none
+// of them. After a turn that ended without finishing, such as one the user
+// interrupted, the session keeps its view, so the next update reports what
+// that turn changed.
+func (store *ProgressStore) StartTurn(session string) error {
+	return store.locked(session, func(project *os.Root, name string) error {
+		record, _, err := store.current(project, name)
+		if err != nil {
+			return err
+		}
+		record.Unattributed = record.Unattributed || record.BetweenTurns
+		record.BetweenTurns = false
+		return writeRecord(project, name, record)
+	})
+}
+
+// FinishTurn notes that the agent's turn finished.
+func (store *ProgressStore) FinishTurn(session string) error {
+	return store.locked(session, func(project *os.Root, name string) error {
+		record, _, err := store.current(project, name)
+		if err != nil {
+			return err
+		}
+		record.BetweenTurns = true
+		return writeRecord(project, name, record)
+	})
+}
+
+// current reads the session's record, or starts one and reports so: it
+// reads the activity log from its end, sees the checkout as it is, and is
+// between turns until the user's first prompt.
+func (store *ProgressStore) current(project *os.Root, name string) (sessionRecord, bool, error) {
+	record, found, err := readRecord(project, name)
+	if err != nil || found {
+		return record, false, err
+	}
+	if err := pruneSessions(project, name); err != nil {
+		return record, false, err
+	}
+	end, err := logSize(project)
+	if err != nil {
+		return record, false, err
+	}
+	record.Cursor = &end
+	record.Snapshot, record.Observed = store.look()
+	record.BetweenTurns = true
+	return record, true, nil
+}
+
+// look takes a snapshot of the checkout, and reports whether it could.
+func (store *ProgressStore) look() (snapshot, bool) {
+	taken, err := store.checkout.snapshot()
+	return taken, err == nil
+}
+
+// observe returns the activities since the record's last update, in the
+// order they happened, and advances the record past them. A record that
+// started just now has seen the checkout already. When the checkout cannot
+// be read this time, the record keeps its snapshot, so a later update
+// reports the files changed meanwhile.
+func (store *ProgressStore) observe(project *os.Root, record *sessionRecord, started bool) ([]agent.Activity, error) {
+	logged, cursor, err := readActivities(project, *record.Cursor)
+	if err != nil {
+		return nil, err
+	}
+	record.Cursor = &cursor
+	timed := logged
+	if started {
+		return untimed(timed), nil
+	}
+	if now, seen := store.look(); seen {
+		if record.Observed && !record.Unattributed {
+			for _, file := range store.checkout.changes(record.Snapshot, now) {
+				timed = append(timed, timedActivity{activity: store.changeOf(file.path), at: file.at})
+			}
+		}
+		record.Snapshot, record.Observed, record.Unattributed = now, true, false
+	}
+	return untimed(timed), nil
+}
+
+// untimed puts activities in the order they happened and drops the times.
+func untimed(timed []timedActivity) []agent.Activity {
+	slices.SortStableFunc(timed, func(a, b timedActivity) int { return a.at.Compare(b.at) })
+	activities := make([]agent.Activity, len(timed))
+	for index, entry := range timed {
+		activities[index] = entry.activity
+	}
+	return activities
+}
+
+// changeOf is the activity a changed file of the checkout stands for.
+func (store *ProgressStore) changeOf(path string) agent.Activity {
+	if path == store.recording {
+		return agent.Activity{Kind: agent.DomainChanged, Paths: []string{path}}
+	}
+	return agent.Activity{Kind: agent.FilesChanged, Paths: []string{path}}
+}
+
+func writeRecord(project *os.Root, name string, record sessionRecord) error {
+	encoded, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("encode workflow progress: %w", err)
+	}
+	return replaceFile(project, name, encoded)
 }
 
 // Deliver reports whether event, a digest of one host event, differs from

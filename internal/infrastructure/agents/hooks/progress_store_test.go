@@ -38,7 +38,7 @@ func addContext(path string) func(agent.Progress, []agent.Activity) agent.Progre
 
 func TestProgressStoreKeepsSessionsApart(t *testing.T) {
 	root := t.TempDir()
-	store := NewProgressStore(root)
+	store := NewProgressStore(root, recording)
 	for _, step := range []struct{ session, path string }{{"a", "x"}, {"b", "y"}, {"a", "z"}} {
 		if err := store.Update(step.session, addContext(step.path)); err != nil {
 			t.Fatal(err)
@@ -51,7 +51,7 @@ func TestProgressStoreKeepsSessionsApart(t *testing.T) {
 
 func TestProgressStoreReadsRecordedActivityOncePerSession(t *testing.T) {
 	root := t.TempDir()
-	store := NewProgressStore(root)
+	store := NewProgressStore(root, recording)
 	log := NewActivityLog(root, recording)
 	if err := log.Record(agent.Activity{Kind: agent.CheckRan}); err != nil {
 		t.Fatal(err)
@@ -77,20 +77,20 @@ func TestProgressStoreReadsRecordedActivityOncePerSession(t *testing.T) {
 
 func TestProgressStoreLeavesAPartialLineForLater(t *testing.T) {
 	root := t.TempDir()
-	store := NewProgressStore(root)
+	store := NewProgressStore(root, recording)
 	observe(t, store, "s")
 	file, err := os.OpenFile(filepath.Join(root, activityLog), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = file.Close() }()
-	if _, err := file.WriteString(`{"kind":"check"}` + "\n" + `{"kind":"con`); err != nil {
+	if _, err := file.WriteString(`{"kind":"check","at":"2026-10-17T10:00:00Z"}` + "\n" + `{"kind":"con`); err != nil {
 		t.Fatal(err)
 	}
 	if seen := observe(t, store, "s"); !reflect.DeepEqual(seen.recorded, []agent.Activity{{Kind: agent.CheckRan}}) {
 		t.Fatalf("complete lines: %+v", seen.recorded)
 	}
-	if _, err := file.WriteString(`text"}` + "\n"); err != nil {
+	if _, err := file.WriteString(`text","at":"2026-10-17T10:00:01Z"}` + "\n"); err != nil {
 		t.Fatal(err)
 	}
 	if seen := observe(t, store, "s"); !reflect.DeepEqual(seen.recorded, []agent.Activity{{Kind: agent.ContextObtained}}) {
@@ -100,7 +100,7 @@ func TestProgressStoreLeavesAPartialLineForLater(t *testing.T) {
 
 func TestProgressStoreStartsOverFromAnUnreadableRecord(t *testing.T) {
 	root := t.TempDir()
-	store := NewProgressStore(root)
+	store := NewProgressStore(root, recording)
 	if err := store.Update("s", addContext("x")); err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestProgressStoreStartsOverFromAnUnreadableRecord(t *testing.T) {
 
 func TestProgressStorePrunesStaleSessionsAndTheirLog(t *testing.T) {
 	root := t.TempDir()
-	store := NewProgressStore(root)
+	store := NewProgressStore(root, recording)
 	observe(t, store, "old")
 	if err := NewActivityLog(root, recording).Record(agent.Activity{Kind: agent.CheckRan}); err != nil {
 		t.Fatal(err)
@@ -145,7 +145,7 @@ func TestProgressStorePrunesStaleSessionsAndTheirLog(t *testing.T) {
 
 func TestProgressStoreKeepsAStaleSessionThatHoldsItsLock(t *testing.T) {
 	root := t.TempDir()
-	store := NewProgressStore(root)
+	store := NewProgressStore(root, recording)
 	observe(t, store, "old")
 	records, err := filepath.Glob(filepath.Join(root, progressDirectory, "*.json"))
 	if err != nil || len(records) != 1 {
@@ -175,7 +175,7 @@ func TestProgressStoreKeepsAStaleSessionThatHoldsItsLock(t *testing.T) {
 
 func TestProgressStoreIgnoresARecordWithoutACursor(t *testing.T) {
 	root := t.TempDir()
-	store := NewProgressStore(root)
+	store := NewProgressStore(root, recording)
 	observe(t, store, "s")
 	if err := NewActivityLog(root, recording).Record(agent.Activity{Kind: agent.CheckRan}); err != nil {
 		t.Fatal(err)
@@ -193,7 +193,7 @@ func TestProgressStoreIgnoresARecordWithoutACursor(t *testing.T) {
 }
 
 func TestProgressStoreSerializesConcurrentUpdates(t *testing.T) {
-	store := NewProgressStore(t.TempDir())
+	store := NewProgressStore(t.TempDir(), recording)
 	var group sync.WaitGroup
 	for index := range 24 {
 		group.Add(1)
@@ -211,7 +211,7 @@ func TestProgressStoreSerializesConcurrentUpdates(t *testing.T) {
 }
 
 func TestProgressStoreLetsOneDeliveryOfAnEventThrough(t *testing.T) {
-	store := NewProgressStore(t.TempDir())
+	store := NewProgressStore(t.TempDir(), recording)
 	results := make([]bool, 8)
 	var wait sync.WaitGroup
 	for index := range results {

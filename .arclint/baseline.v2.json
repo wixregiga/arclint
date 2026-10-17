@@ -127,12 +127,6 @@
       "count": 1
     },
     {
-      "ruleId": "aggregate/root-only-references",
-      "subject": "rule",
-      "message": "aggregate Rule: field membership.zones holds Zone, a member of aggregate Rule; outside the aggregate only its root is held",
-      "count": 1
-    },
-    {
       "ruleId": "bounded_context/code-held-by-one-context",
       "subject": "adoption",
       "message": "context adoption holds 4 file(s) that context rule holds too (internal/domain/rule/exclusion.go, internal/domain/rule/installation.go, internal/domain/rule/pattern.go, and 1 more), and the context map records no shared_kernel between them; a boundary two models straddle is not a boundary",

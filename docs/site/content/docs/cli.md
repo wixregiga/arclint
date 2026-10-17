@@ -30,7 +30,7 @@ weight = 6
 | `arclint agents md` | print the generated `AGENTS.md` architecture block (`markdown`, `agentsmd` aliases); `--write` installs or refreshes it between markers without changing surrounding text |
 | `arclint agents skill` | write generated `SKILL.md` and `VOCAB.yaml` to every `--dir` (repeatable; default `.agents/skills/domain-librarian/` for Codex and `.claude/skills/domain-librarian/` for Claude Code), and the domain schema for human YAML editors to `.arclint/schemas/domain.arclint.schema.json`; the skill describes the model independently of the recording's format |
 | `arclint agents hooks install` | write the workflow hooks into the Claude Code and Codex user configuration, for every project (`--project` for this project's personal files only, `--host claude\|codex` for one host); keeps every other setting and hook |
-| `arclint agents hooks status` | report every configuration file that can list the workflow hooks, what is wrong in each, and when a hook event last reached the project |
+| `arclint agents hooks status` | report every configuration file that can list the workflow hooks, what is wrong in each, when a hook event last reached the project, and why none has |
 | `arclint agents hooks event` | answer one Claude Code or Codex hook event read from stdin with the host's native JSON; the installed hooks run it |
 | `arclint rules [selector]` | list configured Rules, or show one complete Rule when the selector has one exact match; broader selectors produce a narrowed list |
 | `arclint rules schema` | print the indented JSON Schema accepted for `rules.arclint.yaml`; `--write` puts it at `.arclint/schemas/rules.arclint.schema.json` (or under `--dir`) so the ruleset's modeline can name a local copy |

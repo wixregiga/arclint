@@ -21,6 +21,9 @@ type UserConfiguration struct {
 	Windows bool
 	// Directories maps a host name to its user configuration directory.
 	Directories map[string]string
+	// Unreadable says why the directories could not be located, empty when
+	// they were.
+	Unreadable string
 }
 
 // NativeUserConfiguration is this environment's user configuration: each
@@ -40,7 +43,9 @@ func NativeUserConfiguration(home string, getenv func(string) string) UserConfig
 // UserConfigurations returns the user configurations an install writes:
 // this environment's, and inside a WSL distribution also the Windows
 // profile's. They are read when an install or status needs them, since
-// reaching Windows starts cmd.exe.
+// reaching Windows starts cmd.exe. A Windows profile that cannot be reached,
+// as when cmd.exe is missing, is returned as unreadable rather than failing
+// the native configuration with it.
 func UserConfigurations(distro string) func() ([]UserConfiguration, error) {
 	return func() ([]UserConfiguration, error) {
 		home, err := os.UserHomeDir()
@@ -54,7 +59,7 @@ func UserConfigurations(distro string) func() ([]UserConfiguration, error) {
 		}
 		windows, err := windowsUserConfiguration()
 		if err != nil {
-			return nil, fmt.Errorf("windows user configuration: %w", err)
+			windows = UserConfiguration{Windows: true, Unreadable: err.Error()}
 		}
 		return append(configurations, windows), nil
 	}

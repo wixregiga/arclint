@@ -13,6 +13,7 @@ import (
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/domain/agent"
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 const (
@@ -47,11 +48,23 @@ func (z appZone) ConfiguredRules() (rule.Configured, error) {
 	return rule.Configured{Zones: []rule.Zone{zone}}, nil
 }
 
+// noDomain is a project that records no domain yet, so every file other
+// than a test bears domain meaning.
+type noDomain struct{}
+
+func (noDomain) Recording() vocab.DomainRecording { return vocab.DomainRecording{} }
+
+func (noDomain) RecordedLanguage() (vocab.UbiquitousLanguage, bool, error) {
+	return vocab.UbiquitousLanguage{}, false, nil
+}
+
+func (noDomain) Record(vocab.UbiquitousLanguage) error { return nil }
+
 func newTestEvents(t *testing.T, distro string) (*Events, string) {
 	t.Helper()
 	root := t.TempDir()
-	store := NewProgressStore(root)
-	guide, err := application.NewGuideWorkflow(store, appZone{t})
+	store := NewProgressStore(root, recording)
+	guide, err := application.NewGuideWorkflow(store, appZone{t}, noDomain{}, TestConventions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,8 +83,8 @@ func newTestEvents(t *testing.T, distro string) (*Events, string) {
 // ruleset exists they answer nothing and leave no files.
 func TestEventsOutsideAnArclintProjectAnswerNothing(t *testing.T) {
 	root := t.TempDir()
-	store := NewProgressStore(root)
-	guide, err := application.NewGuideWorkflow(store, appZone{t})
+	store := NewProgressStore(root, recording)
+	guide, err := application.NewGuideWorkflow(store, appZone{t}, noDomain{}, TestConventions{})
 	if err != nil {
 		t.Fatal(err)
 	}

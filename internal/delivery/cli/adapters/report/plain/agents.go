@@ -36,6 +36,11 @@ func writeHooksStatus(w io.Writer, r cli.HooksStatusReport) error {
 	if _, err := fmt.Fprintf(w, "Project: %s\nBinary: %s\nLast event: %s\n", s.Project, s.Binary, out.LastHookEvent(s.LastEvent)); err != nil {
 		return fmt.Errorf("write workflow status: %w", err)
 	}
+	for _, reason := range s.Silence {
+		if _, err := fmt.Fprintf(w, "  %s\n", reason); err != nil {
+			return fmt.Errorf("write workflow status: %w", err)
+		}
+	}
 	for _, host := range s.Files {
 		if _, err := fmt.Fprintf(w, "%s %s: %s (installed: %t)\n", host.Host, out.HookScope(host), host.Path, host.Installed); err != nil {
 			return fmt.Errorf("write workflow status: %w", err)
