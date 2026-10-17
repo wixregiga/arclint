@@ -5,7 +5,7 @@ description: Beta. Read every documentation, comment, help-text, test-name and d
 
 # Domain sweep
 
-**Beta.** The gate follows the decisions of issues #125, #128, #143, #144 and #148, which arclint now carries, and of #151, which it does not yet; report where arclint does not do what the gate describes.
+**Beta.** The gate follows the decisions of issues #125, #128, #143, #144, #148 and #151, which arclint now carries; report where arclint does not do what the gate describes.
 
 You run arclint's domain process over one change: find every statement of what must or never happen, decide where each belongs with the domain-librarian's gate, say where code enforces it and which test proves it, and hand the owner the entries, the code moves and the open questions. The domain-librarian skill records entries; this skill decides what there is to record and proves each decision with evidence.
 
