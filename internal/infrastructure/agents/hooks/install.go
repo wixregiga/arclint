@@ -346,28 +346,44 @@ func (installer *Installer) Status() (status application.HooksStatus, err error)
 		// project's file and the shared one; a Windows host app reads its
 		// user file, the shared one, and this project's file when it was
 		// written for both sides.
-		sharedOff, localOff := disablesHooks(host, shared), disablesHooks(host, local.path)
-		off := map[commandForm]bool{nativeForm: sharedOff || localOff, windowsForm: sharedOff || (localOff && local.form == sharedForm)}
+		// A file that cannot be read, or a Windows profile that cannot be
+		// located, may turn its reader's hooks off, so it is no evidence
+		// that they run.
+		off, unknown := map[commandForm]bool{}, map[commandForm]bool{}
+		read := func(path string, forms ...commandForm) {
+			sets, known := disablesHooks(host, path)
+			for _, form := range forms {
+				off[form] = off[form] || sets
+				unknown[form] = unknown[form] || !known
+			}
+		}
+		read(shared, nativeForm, windowsForm)
+		if local.form == sharedForm {
+			read(local.path, nativeForm, windowsForm)
+		} else {
+			read(local.path, nativeForm)
+		}
 		for _, user := range users {
-			off[user.form] = off[user.form] || disablesHooks(host, user.path)
+			read(user.path, user.form)
+		}
+		if slices.ContainsFunc(configurations, func(configuration UserConfiguration) bool {
+			return configuration.Windows && configuration.Unreadable != ""
+		}) {
+			unknown[windowsForm] = true
 		}
 		disabled = disabled || off[nativeForm] || off[windowsForm]
-		// A Windows profile that cannot be located may turn its hooks off,
-		// so its host apps are not said to run this project's hooks.
-		windowsUnknown := slices.ContainsFunc(configurations, func(configuration UserConfiguration) bool {
-			return configuration.Windows && configuration.Unreadable != ""
-		})
+		readerOff := func(form commandForm) bool { return off[form] || unknown[form] }
 		// This project's file runs while any of its readers runs hooks.
 		readersOff := func(file target) bool {
 			if file.scope == scopeUser {
-				return off[file.form]
+				return readerOff(file.form)
 			}
-			return off[nativeForm] && (local.form != sharedForm || off[windowsForm] || windowsUnknown)
+			return readerOff(nativeForm) && (local.form != sharedForm || readerOff(windowsForm))
 		}
 		entries := make([]application.HookFileStatus, 0, len(users)+1)
 		for _, file := range append(slices.Clone(users), local) {
 			entry, runs := installer.inspect(file, readersOff(file))
-			if disablesHooks(host, file.path) {
+			if sets, _ := disablesHooks(host, file.path); sets {
 				entry.Problems = append(entry.Problems, "This file sets "+host.disable+", so the host runs none of the hooks it reads where this file applies; remove the setting to run them.")
 			}
 			entries = append(entries, entry)
@@ -384,14 +400,14 @@ func (installer *Installer) Status() (status application.HooksStatus, err error)
 			sees := user.form == nativeForm || local.form == sharedForm
 			userListed, _ := listsArclintHooks(user.path)
 			if userListed && localListed && sees {
-				localEntry.Problems = append(localEntry.Problems, duplicateProblem(user.path+" already lists the hooks for every project; with both, the host", off[user.form]))
+				localEntry.Problems = append(localEntry.Problems, duplicateProblem(user.path+" already lists the hooks for every project; with both, the host", readerOff(user.form)))
 			}
 			if entry.Installation == application.HooksAbsent && (localEntry.Installation != application.HooksComplete || !sees) {
 				entry.Problems = append(entry.Problems, "Workflow hooks are not installed.")
 			}
 		}
 		if shared != "" {
-			if disablesHooks(host, shared) {
+			if sets, _ := disablesHooks(host, shared); sets {
 				localEntry.Problems = append(localEntry.Problems, host.shared+" sets "+host.disable+", so the host runs no hooks in this project; remove the setting to run them.")
 			}
 			if listed, err := listsArclintHooks(shared); err == nil && listed {
@@ -572,17 +588,18 @@ func duplicateProblem(subject string, off bool) string {
 }
 
 // disablesHooks reports whether the configuration file at path sets the
-// host's setting that turns off every hook it reads.
-func disablesHooks(host hookHost, path string) bool {
+// host's setting that turns off every hook it reads, and whether that is
+// known: a file that cannot be read may set it.
+func disablesHooks(host hookHost, path string) (sets, known bool) {
 	if host.disable == "" || path == "" {
-		return false
+		return false, true
 	}
 	document, _, err := readConfiguration(path)
 	if err != nil {
-		return false
+		return false, false
 	}
-	off, _ := document[host.disable].(bool)
-	return off
+	sets, _ = document[host.disable].(bool)
+	return sets, true
 }
 
 // arclintBinaries names the binaries the workflow handlers in groups run.
