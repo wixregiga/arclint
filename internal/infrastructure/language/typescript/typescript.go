@@ -48,7 +48,7 @@ func (Producer) Language() rule.Language { return rule.LanguageTypeScript }
 func (Producer) Facts(root string, files []conformance.ObservedFile, requested []rule.Fact) (map[string]conformance.LanguageFacts, error) {
 	wantDeclarations := false
 	wantCalls := false
-	wantResolvedCalls, wantFieldTypes := false, false
+	wantResolvedCalls, wantFieldTypes, wantImplementations := false, false, false
 	for _, f := range requested {
 		if f == rule.FactDeclarations {
 			wantDeclarations = true
@@ -62,6 +62,9 @@ func (Producer) Facts(root string, files []conformance.ObservedFile, requested [
 		if f == rule.FactCalls {
 			wantCalls = true
 		}
+		if f == rule.FactImplementations {
+			wantImplementations, wantDeclarations = true, true
+		}
 	}
 	facts := fanout.Analyze(files, analyzable, func() fanout.Analyzer {
 		ps := newParsers()
@@ -71,8 +74,8 @@ func (Producer) Facts(root string, files []conformance.ObservedFile, requested [
 	})
 	r := newResolver(root, files)
 	r.classifyImports(facts)
-	if wantResolvedCalls || wantFieldTypes {
-		resolveFacts(root, r, facts, wantResolvedCalls, wantFieldTypes)
+	if wantResolvedCalls || wantFieldTypes || wantImplementations {
+		resolveFacts(root, r, facts, wantResolvedCalls, wantFieldTypes, wantImplementations)
 	}
 	return facts, nil
 }

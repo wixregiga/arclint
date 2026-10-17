@@ -142,7 +142,7 @@ func fieldKey(owner, name string, line int) string {
 	return owner + "\x00" + name + "\x00" + strconv.Itoa(line)
 }
 
-func resolveFacts(root string, imports *resolver, facts map[string]conformance.LanguageFacts, calls, fields bool) {
+func resolveFacts(root string, imports *resolver, facts map[string]conformance.LanguageFacts, calls, fields, implementations bool) {
 	initializeBuiltins()
 	index := &resolutionIndex{imports: imports, files: map[string]*resolutionFile{}, ambientModules: map[string]bool{}, ambientTargets: map[string]bool{}, globalQuestions: map[string]string{}}
 	ps := newParsers()
@@ -176,8 +176,26 @@ func resolveFacts(root string, imports *resolver, facts map[string]conformance.L
 			f.tree.Release()
 		}
 	}()
+	var interfaces []abstraction
+	if implementations {
+		interfaces = index.repositoryInterfaces()
+	}
 	for rel, f := range index.files {
 		fa := facts[rel]
+		if implementations && fa.DeclarationsAvailable {
+			fa.ImplementationsAvailable = true
+			for i := range fa.Declarations {
+				d := &fa.Declarations[i]
+				if d.Kind != "class" {
+					continue
+				}
+				for _, n := range f.types[d.Name] {
+					if f.isClass(n) && int(n.StartPoint().Row)+1 == d.StartLine {
+						d.Implements = index.classImplementations(f, n, interfaces)
+					}
+				}
+			}
+		}
 		if calls && fa.CallsAvailable {
 			fa.ResolvedCallsAvailable = true
 			for i := range fa.Calls {
