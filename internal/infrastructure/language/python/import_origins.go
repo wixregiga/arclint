@@ -45,17 +45,21 @@ func (o origins) follow(dir, module, dotted string) (string, string) {
 	if m == nil {
 		return "", ""
 	}
+	w := m.facts.walker
 	name, attributes, _ := strings.Cut(dotted, ".")
-	q := qualifiedTarget(m.scope, name, m.facts.walker, 0)
+	q := qualifiedTarget(m.scope, name, w, 0)
 	if q == "" {
 		return "", ""
 	}
+	// The module's writes before it bound the name replace what it
+	// exports; an attribute read through the name is read later, after
+	// every write the module makes on import.
+	limit := captureOffset(m.scope, name, w, noLimit)
 	if attributes != "" {
 		q += "." + attributes
+		limit = noLimit
 	}
-	if mutates(m, q) {
-		// A module that replaces what it re-exports, or an attribute of
-		// it, exports the replacement.
+	if mutatesBefore(m, q, limit) {
 		return "", ""
 	}
 	return q, path.Dir(file)

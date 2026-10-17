@@ -834,6 +834,11 @@ func TestAbstractMarkReachesTheLibrary(t *testing.T) {
 		"setattr_replaced.py":  "import abc\n\nsetattr(abc, \"ABC\", object)\n\n\nclass Encrypter(abc.ABC):\n    pass\n",
 		"setattr_any.py":       "import abc\n\nname = \"ABC\"\nsetattr(abc, name, object)\n\n\nclass Encrypter(abc.ABC):\n    pass\n",
 		"setattr_other.py":     "import abc\n\nsetattr(abc, \"other\", object)\n\n\nclass Encrypter(abc.ABC):\n    pass\n",
+		"captured_first.py":    "from abc import ABC\nimport abc\n\nabc.ABC = object\n\n\nclass Encrypter(ABC):\n    pass\n",
+		"early_facade.py":      "from abc import ABC\nimport abc\n\nabc.ABC = object\n",
+		"uses_early.py":        "from early_facade import ABC\n\n\nclass Encrypter(ABC):\n    pass\n",
+		"annotated_only.py":    "import abc\n\nabc.ABC: type\n\n\nclass Encrypter(abc.ABC):\n    pass\n",
+		"written_after.py":     "import abc\n\n\nclass Encrypter(abc.ABC):\n    pass\n\n\nabc.ABC = object\n",
 		"exported_replaced.py": "from exporter import abstract\n\n\nclass Encrypter(abstract.ABC):\n    pass\n",
 		"pkg/__init__.py":      "",
 		"pkg/facade.py":        "from abc import ABC\n",
@@ -849,6 +854,7 @@ func TestAbstractMarkReachesTheLibrary(t *testing.T) {
 			"module_binding.py": true, "facade_replaced.py": false, "facade_kept.py": true,
 			"prefix_replaced.py": false, "uses_patched.py": false, "pkg/relative.py": true, "exported_replaced.py": false,
 			"spaced_replaced.py": false, "setattr_replaced.py": false, "setattr_any.py": false, "setattr_other.py": true,
+			"captured_first.py": true, "uses_early.py": true, "annotated_only.py": true, "written_after.py": true,
 		} {
 			for _, d := range facts[file].Declarations {
 				if d.Kind == declClass && d.Name == "Encrypter" && d.Abstract != want {

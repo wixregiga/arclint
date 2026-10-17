@@ -82,14 +82,21 @@ func declaresAbstract(df *declarationFacts, c *pyClass, from importOrigin, dir s
 		default:
 			return ""
 		}
-		chain := libraryChain(qualifiedTarget(c.header, w.dottedName(n), w, 0), from, dir)
+		written := w.dottedName(n)
+		chain := libraryChain(qualifiedTarget(c.header, written, w, 0), from, dir)
 		if len(chain) == 0 {
 			return ""
 		}
-		for _, q := range chain {
-			if replaced(df, q) {
-				return ""
-			}
+		// The file's own writes replace the base only when they run
+		// before the class reads it: an attribute path is read by the
+		// class statement, a bare name where it was bound. Every later
+		// name on the chain is another module's, which follow judged.
+		read := c.node.StartByte()
+		if !strings.Contains(written, ".") {
+			read = captureOffset(c.header, written, w, read)
+		}
+		if mutatesBefore(df.module, chain[0], read) {
+			return ""
 		}
 		return chain[len(chain)-1]
 	}
@@ -148,29 +155,53 @@ func libraryChain(q string, from importOrigin, dir string) []string {
 	return nil
 }
 
-// replaced reports whether the file assigns a qualified name or a
-// prefix it is reached through: abc.ABC = object replaces abc.ABC, and
-// facade.abstract = x replaces facade.abstract.ABC.
-func replaced(df *declarationFacts, q string) bool {
-	return mutates(df.module, q)
+// noLimit counts every write of a module, wherever it runs.
+const noLimit = ^uint32(0)
+
+// captureOffset is where a bare name took the value it holds: the
+// import or assignment that bound it, through an alias of another bare
+// name to where that one was bound; fallback when nothing binds it.
+func captureOffset(s *pyScope, name string, w *pyWalker, fallback uint32) uint32 {
+	for hop := 0; hop < maxAliasHops; hop++ {
+		b := s.lookup(name)
+		if b == nil || b.node == nil {
+			return fallback
+		}
+		alias := ""
+		if b.kind != bindingImport {
+			alias = aliasValue(b, w, hop)
+		}
+		if alias == "" || strings.Contains(alias, ".") {
+			return b.node.StartByte()
+		}
+		s, name = b.scope, alias
+	}
+	return fallback
 }
 
-// mutates reports whether a module replaces a qualified name or a
-// prefix of it: by assigning it, (abc).ABC = object as much as
-// abc.ABC = object, or through the builtin setattr. A setattr whose
-// attribute is not a string literal may replace any attribute of its
-// object.
-func mutates(m *pyModule, q string) bool {
+// mutatesBefore reports whether a module replaces a qualified name or a
+// prefix of it in a statement that starts before limit: by assigning
+// it, (abc).ABC = object as much as abc.ABC = object, or through the
+// builtin setattr. An annotation alone, abc.ABC: type, assigns nothing.
+// A setattr whose attribute is not a string literal may replace any
+// attribute of its object.
+func mutatesBefore(m *pyModule, q string, limit uint32) bool {
 	w := m.facts.walker
 	covers := func(target string) bool {
 		return target != "" && (q == target || strings.HasPrefix(q, target+"."))
 	}
 	for _, mutation := range m.mutations {
+		if mutation.node.StartByte() >= limit || !assigns(mutation.node, w) {
+			continue
+		}
 		if covers(qualifiedTarget(mutation.scope, w.dottedName(mutation.node), w, 0)) {
 			return true
 		}
 	}
 	for _, call := range m.calls {
+		if call.node.StartByte() >= limit {
+			continue
+		}
 		object, attribute, ok := setattrTarget(call, w)
 		if !ok {
 			continue
@@ -191,6 +222,13 @@ func mutates(m *pyModule, q string) bool {
 		}
 	}
 	return false
+}
+
+// assigns reports whether the statement writing an attribute target
+// gives it a value: an annotation alone does not.
+func assigns(target *gotreesitter.Node, w *pyWalker) bool {
+	parent := target.Parent()
+	return parent == nil || parent.Type(w.lang) != nodeAssignment || parent.ChildByFieldName("right", w.lang) != nil
 }
 
 // setattrTarget reads a call of the builtin setattr: the dotted object
