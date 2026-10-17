@@ -255,20 +255,27 @@ func TestPlainDomainOverviewSourcePhrases(t *testing.T) {
 	}
 }
 
-// A value object names every aggregate whose identity it is.
+// A value object names every aggregate whose identity it is, and a
+// used contract names the tests that verify it, as a declared one does.
 func TestPlainContextNamesEveryAggregateAnIdentityIdentifies(t *testing.T) {
 	d := &application.DomainKnowledge{
 		Source: "domain.arclint.yaml", Counts: vocab.Counts{Contexts: 1}, Scoped: true, Located: true, UsesLocated: true,
 		Used: []application.DomainUseRef{{
 			Context: "skill", Name: "ItemAddress", Role: conformance.UsedValueObject, Identifies: []string{"Artifact", "Skill"},
 			Sites: []application.DomainUseSite{{Path: "app/uninstall.go", Line: 14, Way: conformance.UseByField, Via: "UninstallItem.Address"}},
+			Invariants: []application.DomainInvariantRef{{
+				Key: "distinct", Statement: "An ItemAddress is distinct.", Owner: "ItemAddress", OwnerConcept: vocab.ConceptValueObject,
+				VerifiedBy: []string{"TestItemAddressIsDistinct"}, Source: "skill/item_address.go:30", Anchor: application.AnchorFound,
+			}},
 		}},
 	}
 	var buf bytes.Buffer
 	if err := New().Render(&buf, cli.ContextReport{Context: application.ArchitecturalContext{Scope: "app/uninstall.go", Domain: d}}); err != nil {
 		t.Fatal(err)
 	}
-	if want := "    value object ItemAddress, identity of Artifact and Skill: app/uninstall.go:14\n"; !strings.Contains(buf.String(), want) {
+	if want := "    value object ItemAddress, identity of Artifact and Skill: app/uninstall.go:14\n" +
+		"      invariant distinct (ItemAddress): An ItemAddress is distinct. skill/item_address.go:30\n" +
+		"        verified by: TestItemAddressIsDistinct (arclint checks that each test exists, not what it proves)\n"; !strings.Contains(buf.String(), want) {
 		t.Fatalf("output lacks %q:\n%s", want, buf.String())
 	}
 }
