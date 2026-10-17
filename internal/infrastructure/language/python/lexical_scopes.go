@@ -128,7 +128,11 @@ type pyClass struct {
 	scope *pyScope
 	// header is the scope the class's base list is evaluated in: its
 	// type parameters' scope when it declares any, otherwise scope.
-	header    *pyScope
+	header *pyScope
+	// inner is the scope its body and methods look past their own
+	// names into: its type parameters over the nearest scope that is not
+	// a class body.
+	inner     *pyScope
 	members   map[string]*pyBinding
 	bases     []*gotreesitter.Node
 	unsafe    string
@@ -229,7 +233,7 @@ func (m *pyModule) collect(n *gotreesitter.Node, s *pyScope, owner *pyClass, inF
 		}
 		return
 	case nodeClass:
-		c := &pyClass{name: w.name(n), node: n, scope: s, header: m.typeParameterScope(n, s, s), members: map[string]*pyBinding{}}
+		c := &pyClass{name: w.name(n), node: n, scope: s, header: m.typeParameterScope(n, s, s), inner: m.typeParameterScope(n, s.lexical(), s), members: map[string]*pyBinding{}}
 		if bases := n.ChildByFieldName("superclasses", w.lang); bases != nil {
 			for i := 0; i < bases.NamedChildCount(); i++ {
 				b := bases.NamedChild(i)
@@ -248,7 +252,7 @@ func (m *pyModule) collect(n *gotreesitter.Node, s *pyScope, owner *pyClass, inF
 		}
 		m.classes[c.name] = c
 		m.declared = append(m.declared, c)
-		cs := &pyScope{parent: s.lexical(), module: m, owner: c, bindings: c.members, classBody: true}
+		cs := &pyScope{parent: c.inner, module: m, owner: c, bindings: c.members, classBody: true}
 		if body := n.ChildByFieldName("body", w.lang); body != nil {
 			m.collect(body, cs, c, false)
 		}
@@ -266,7 +270,7 @@ func (m *pyModule) collect(n *gotreesitter.Node, s *pyScope, owner *pyClass, inF
 		}
 		parent := s
 		if owner != nil && !inFunction {
-			parent = owner.scope.lexical()
+			parent = owner.inner
 		}
 		fs := &pyScope{parent: m.typeParameterScope(n, parent, s), module: m, bindings: map[string]*pyBinding{}}
 		if owner != nil && !inFunction && !m.staticMethods[n.StartByte()] {
