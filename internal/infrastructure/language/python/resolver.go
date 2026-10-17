@@ -224,12 +224,3 @@ func (r *resolver) classify(fileDir, module string) (conformance.ImportClass, st
 	}
 	return conformance.ImportUnknown, "", ""
 }
-
-// repositoryModule reports, for a file of the directory, whether an
-// import of a module reaches the repository's own source.
-func (r *resolver) repositoryModule(fileDir string) func(module string) bool {
-	return func(module string) bool {
-		class, _, _ := r.classify(fileDir, module)
-		return class == conformance.ImportInternal
-	}
-}

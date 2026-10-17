@@ -817,18 +817,42 @@ func TestAbstractMarkReachesTheLibrary(t *testing.T) {
 		"typing_extensions.py": "class Protocol:\n    pass\n",
 		"local.py":             "from typing_extensions import Protocol\n\n\nclass Encrypter(Protocol):\n    def encrypt(self, plain: str) -> str: ...\n",
 		"library.py":           "from typing import Protocol\n\n\nclass Encrypter((Protocol)):\n    def encrypt(self, plain: str) -> str: ...\n",
+		"shared/bases.py":      "from abc import ABC\n",
+		"shared/__init__.py":   "from .bases import ABC as Base\n",
+		"reexported.py":        "from shared.bases import ABC\n\n\nclass Encrypter(ABC):\n    pass\n",
+		"package.py":           "from shared import Base\n\n\nclass Encrypter(Base):\n    pass\n",
+		"replaced.py":          "import abc\n\nabc.ABC = object\n\n\nclass Encrypter(abc.ABC):\n    pass\n",
 	})
 	for _, requested := range [][]rule.Fact{{rule.FactDeclarations}, {rule.FactDeclarations, rule.FactFieldTypes}} {
 		facts, err := NewProducer().Facts(root, files, requested)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for file, want := range map[string]bool{"local.py": false, "library.py": true} {
+		for file, want := range map[string]bool{"local.py": false, "library.py": true, "reexported.py": true, "package.py": true, "replaced.py": false} {
 			for _, d := range facts[file].Declarations {
 				if d.Kind == declClass && d.Name == "Encrypter" && d.Abstract != want {
 					t.Errorf("%v: %s Encrypter abstract = %v, want %v", requested, file, d.Abstract, want)
 				}
 			}
+		}
+	}
+}
+
+// TestAbstractMarkIgnoresARepositoryModuleNamedLikeTheLibrary leaves a
+// class unmarked when the repository's own typing.py may be the module
+// its import reaches.
+func TestAbstractMarkIgnoresARepositoryModuleNamedLikeTheLibrary(t *testing.T) {
+	root, files := writeFiles(t, map[string]string{
+		"typing.py":  "class Protocol:\n    pass\n",
+		"service.py": "from typing import Protocol\n\n\nclass Encrypter(Protocol):\n    pass\n",
+	})
+	facts, err := NewProducer().Facts(root, files, []rule.Fact{rule.FactDeclarations})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range facts["service.py"].Declarations {
+		if d.Kind == declClass && d.Abstract {
+			t.Fatalf("a Protocol the repository's typing.py may provide marks nothing: %+v", d)
 		}
 	}
 }

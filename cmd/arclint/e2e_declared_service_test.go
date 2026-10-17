@@ -203,7 +203,7 @@ func TestDeclaredServiceAssertion(t *testing.T) {
 			}
 
 			write(t, root, tc.path, tc.bare)
-			findings := declaredServiceFindings(t, root, 1)
+			findings, _ := declaredServiceFindings(t, root, 1)
 			if len(findings) != 1 {
 				t.Fatalf("bare declared service: want one finding, got %+v", findings)
 			}
@@ -218,8 +218,8 @@ func TestDeclaredServiceAssertion(t *testing.T) {
 			}
 
 			write(t, root, tc.path, tc.function)
-			if findings := declaredServiceFindings(t, root, 0); len(findings) != 0 {
-				t.Fatalf("a check declared as a function of the context must conform: %+v", findings)
+			if findings, status := declaredServiceFindings(t, root, 0); len(findings) != 0 || status != "structurally_checked" {
+				t.Fatalf("a check declared as a function of the context must conform: %s %+v", status, findings)
 			}
 			stdout := mustRunDomain(t, root, "domain", "overview")
 			if want := "source: " + tc.path + ":" + strconv.Itoa(tc.checkLine); !strings.Contains(stdout, want) {
@@ -227,8 +227,8 @@ func TestDeclaredServiceAssertion(t *testing.T) {
 			}
 
 			write(t, root, tc.path, tc.value)
-			if findings := declaredServiceFindings(t, root, 0); len(findings) != 0 {
-				t.Fatalf("an operation returning the recorded value object must conform: %+v", findings)
+			if findings, status := declaredServiceFindings(t, root, 0); len(findings) != 0 || status != "structurally_checked" {
+				t.Fatalf("an operation returning the recorded value object must conform: %s %+v", status, findings)
 			}
 			stdout = mustRunDomain(t, root, "domain", "overview")
 			if want := "not-empty (on Encrypt)"; !strings.Contains(stdout, want) {
@@ -241,25 +241,37 @@ func TestDeclaredServiceAssertion(t *testing.T) {
 	}
 }
 
-// declaredServiceFindings runs check and returns every violation; the
-// exit code says whether any error-severity finding remains.
-func declaredServiceFindings(t *testing.T, root string, wantExit int) []diagnosticDoc {
+// declaredServiceFindings runs check and returns every violation and
+// the coverage status of the Encrypter guarantee not-empty; the exit
+// code says whether any error-severity finding remains.
+func declaredServiceFindings(t *testing.T, root string, wantExit int) ([]diagnosticDoc, string) {
 	t.Helper()
 	stdout, stderr, code := runBin(t, root, os.Environ(), "check", "--format", "json")
 	if code != wantExit {
 		t.Fatalf("check: exit %d, want %d\nstdout: %s\nstderr: %s", code, wantExit, stdout, stderr)
 	}
-	var diagnostics []diagnosticDoc
+	var diagnostics []struct {
+		diagnosticDoc
+		Contract *struct {
+			Owner  string `json:"owner"`
+			Key    string `json:"key"`
+			Status string `json:"status"`
+		} `json:"contract"`
+	}
 	if err := json.Unmarshal([]byte(stdout), &diagnostics); err != nil {
 		t.Fatalf("check json: %v\n%s", err, stdout)
 	}
 	var findings []diagnosticDoc
+	status := ""
 	for _, d := range diagnostics {
 		if d.Kind == "violation" {
-			findings = append(findings, d)
+			findings = append(findings, d.diagnosticDoc)
+		}
+		if c := d.Contract; c != nil && c.Owner == "Encrypter" && c.Key == "not-empty" {
+			status = c.Status
 		}
 	}
-	return findings
+	return findings, status
 }
 
 // TestDefineAssertionSaysWhereItIsChecked defines an assertion and reads
@@ -377,7 +389,7 @@ func declaredServiceResults() []declaredServiceResult {
 		{"typescript abstract operation beside a generic sibling", "ts", map[string]string{"src/identity/value.ts": tsValue,
 			"src/identity/encrypter.ts": "import { EncryptedPassword } from \"./value\";\n\nexport abstract class Encrypter {\n  abstract other<EncryptedPassword>(): void;\n  abstract encrypt(plain: string): EncryptedPassword;\n}\n"}, true},
 		{"python module attribute of a sibling module", "py", map[string]string{"src/identity/value.py": pyValue, "src/identity/__init__.py": "",
-			"src/identity/encrypter.py": pyService("from src.identity import value", "value.EncryptedPassword")}, true},
+			"src/identity/encrypter.py": pyService("from identity import value", "value.EncryptedPassword")}, true},
 	}
 }
 
@@ -399,13 +411,14 @@ func TestDeclaredServiceResultResolvesThroughTheLanguage(t *testing.T) {
 				want = 0
 			}
 			var findings []diagnosticDoc
-			for _, f := range declaredServiceFindings(t, root, want) {
+			all, status := declaredServiceFindings(t, root, want)
+			for _, f := range all {
 				if f.RuleID == "assertion/checked-by-its-operation" {
 					findings = append(findings, f)
 				}
 			}
-			if tc.value && len(findings) != 0 {
-				t.Fatalf("the operation returns the recorded value: %+v", findings)
+			if tc.value && (len(findings) != 0 || status != "structurally_checked") {
+				t.Fatalf("the operation returns the recorded value: %s %+v", status, findings)
 			}
 			if !tc.value && (len(findings) != 1 || !strings.Contains(findings[0].Message, "declared service Encrypter: not-empty has no check in context identity")) {
 				t.Fatalf("the operation does not return the recorded value: %+v", findings)

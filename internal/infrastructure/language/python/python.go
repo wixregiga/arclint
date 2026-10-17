@@ -14,6 +14,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sync"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
@@ -53,13 +54,15 @@ func (Producer) Facts(root string, files []conformance.ObservedFile, requested [
 		}
 	}
 	res := newResolver(root, files)
+	// The modules a class base is followed into, shared by every worker.
+	modules := &sync.Map{}
 	if wantResolved || wantFields {
-		return resolvedFacts(root, files, res, wantDeclarations, wantCalls, wantResolved, wantFields), nil
+		return resolvedFacts(root, files, res, modules, wantDeclarations, wantCalls, wantResolved, wantFields), nil
 	}
 	return fanout.Analyze(files, analyzable, func() fanout.Analyzer {
 		ps := newParsers()
 		return func(rel string) conformance.LanguageFacts {
-			return analyzeFile(ps, res, root, rel, wantDeclarations, wantCalls)
+			return analyzeFile(ps, res, modules, root, rel, wantDeclarations, wantCalls)
 		}
 	}), nil
 }
@@ -68,7 +71,7 @@ func (Producer) Facts(root string, files []conformance.ObservedFile, requested [
 // target vocabulary assigns Python.
 func analyzable(rel string) bool { return rule.LanguageOf(rel) == rule.LanguagePython }
 
-func analyzeFile(ps *parsers, res *resolver, root, rel string, wantDeclarations, wantCalls bool) conformance.LanguageFacts {
+func analyzeFile(ps *parsers, res *resolver, modules *sync.Map, root, rel string, wantDeclarations, wantCalls bool) conformance.LanguageFacts {
 	facts := conformance.LanguageFacts{Language: rule.LanguagePython, ImportsAvailable: true}
 	src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
 	if err != nil {
@@ -86,10 +89,11 @@ func analyzeFile(ps *parsers, res *resolver, root, rel string, wantDeclarations,
 	}
 	// A strict-parse failure yields honest fact absence without
 	// poisoning the scanner import view.
-	df := extractDeclarations(ps, src, res.repositoryModule(dir))
+	df := extractDeclarations(ps, src)
 	if df.ParseError != "" {
 		return facts
 	}
+	markAbstractClasses(df, origins{res: res, root: root, ps: ps, modules: modules}, dir)
 	if wantDeclarations {
 		facts.DeclarationsAvailable = true
 		facts.Declarations = df.Decls
