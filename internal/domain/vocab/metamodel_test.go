@@ -314,6 +314,16 @@ func TestValidateRejects(t *testing.T) {
 		{"Goodreads work", func(m *MetaModel) {
 			m.Works[2].URL = "https://www.goodreads.com/quotes/3"
 		}, `www.goodreads.com is an excluded source`},
+		{"fully qualified Stack Overflow host", func(m *MetaModel) {
+			m.Works[2].URL = "https://stackoverflow.com./questions/123"
+		}, `works "a-blog": stackoverflow.com is an excluded source`},
+		{"fully qualified Goodreads host", func(m *MetaModel) {
+			m.Works[2].URL = "https://www.goodreads.com./quotes/123"
+		}, `www.goodreads.com is an excluded source`},
+		{"Super User work", func(m *MetaModel) { m.Works[2].URL = "https://superuser.com/questions/123" }, `superuser.com is an excluded source`},
+		{"Server Fault work", func(m *MetaModel) { m.Works[2].URL = "https://serverfault.com/questions/123" }, `serverfault.com is an excluded source`},
+		{"Ask Ubuntu work", func(m *MetaModel) { m.Works[2].URL = "https://askubuntu.com/questions/123" }, `askubuntu.com is an excluded source`},
+		{"MathOverflow work", func(m *MetaModel) { m.Works[2].URL = "https://mathoverflow.net/questions/123" }, `mathoverflow.net is an excluded source`},
 		{"relative work URL", func(m *MetaModel) { m.Works[2].URL = "posts/aggregates" }, `url "posts/aggregates" is not an absolute http or https URL`},
 		{"enforced invariant cites only tier 3", func(m *MetaModel) {
 			m.Blocks[0].Invariants[1].Sources = []Citation{{Work: "a-blog", Illustrative: true}}

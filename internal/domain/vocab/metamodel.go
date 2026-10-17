@@ -745,10 +745,21 @@ func (v *metaModelValidation) works() {
 }
 
 // excludedHosts are the excluded sources a work's URL identifies:
-// Goodreads and the Stack Exchange network, Stack Overflow among it.
-// The other excluded sources (an unknown Medium author, an AI summary,
-// a search snippet) are not decided by a URL.
-var excludedHosts = []string{"goodreads.com", "stackoverflow.com", "stackexchange.com"}
+// Goodreads and the Stack Exchange network, Stack Overflow among it,
+// with the network's sites that live outside stackexchange.com. A host
+// is excluded when it is one of these or a subdomain of one. The other
+// excluded sources (an unknown Medium author, an AI summary, a search
+// snippet) are not decided by a URL.
+var excludedHosts = []string{
+	"goodreads.com",
+	"stackexchange.com",
+	"stackoverflow.com",
+	"superuser.com",
+	"serverfault.com",
+	"askubuntu.com",
+	"mathoverflow.net",
+	"stackapps.com",
+}
 
 // workURL checks that a work's URL is absolute and names no excluded
 // source.
@@ -758,7 +769,8 @@ func (v *metaModelValidation) workURL(w Work) {
 		v.failf("works %q: url %q is not an absolute http or https URL", w.Key, w.URL)
 		return
 	}
-	host := strings.ToLower(u.Hostname())
+	// A fully qualified name's trailing root dot names the same host.
+	host := strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
 	for _, excluded := range excludedHosts {
 		if host == excluded || strings.HasSuffix(host, "."+excluded) {
 			v.failf("works %q: %s is an excluded source and is never cited", w.Key, host)

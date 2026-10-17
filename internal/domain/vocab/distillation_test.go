@@ -1,6 +1,7 @@
 package vocab_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -19,6 +20,29 @@ func TestDistillationRulesCiteTheBibliography(t *testing.T) {
 	}
 	if strings.Contains(r.Rule, "(Evans") {
 		t.Errorf("the rule still carries its source as free text: %q", r.Rule)
+	}
+}
+
+// A distillation rule that repeats a meta-model statement labelled as
+// ArcLint's convention carries the same label, so the skill never
+// presents it unlabelled.
+func TestDistillationRulesLabelTheMetaModelsConventions(t *testing.T) {
+	var conventions []string
+	for _, b := range vocab.DDD().Blocks {
+		conventions = append(conventions, b.Definition.Conventions...)
+		for _, inv := range b.Invariants {
+			conventions = append(conventions, inv.Conventions...)
+		}
+		for _, g := range b.Guidance {
+			conventions = append(conventions, g.Conventions...)
+		}
+	}
+	for _, r := range vocab.DistillationRules() {
+		for _, c := range conventions {
+			if strings.Contains(r.Rule, c) && !slices.Contains(r.Conventions, c) {
+				t.Errorf("distillation rule %s repeats %q without labelling it as ArcLint's convention", r.ID, c)
+			}
+		}
 	}
 }
 
