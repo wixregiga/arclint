@@ -94,6 +94,8 @@ func AgentWorkflow() []string {
 		"Verify the changed behavior through those contracts, then run `arclint check .` and the project's tests before finishing. " +
 			"Fix the findings in the code you changed, including baseline findings there; " +
 			"never weaken rules, baselines or exclusions to clear a finding. " +
+			"Copying code, or moving it only to clear a finding, is not a fix: " +
+			"when a rule refuses what the change needs, report the finding and propose the zone change that would allow it. " +
 			"Report the behavior verified, the checks passed and what remains open, separately.",
 	}
 }

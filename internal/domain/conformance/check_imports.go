@@ -132,18 +132,22 @@ func consumesViolations(r rule.Rule, p rule.ConsumesParams, self rule.ZoneName,
 			if permitted {
 				continue
 			}
-			var message string
+			var message, remediation string
 			switch {
 			case imp.TargetDir == "" && imp.TargetFile == "":
 				message = fmt.Sprintf("import %q is internal but does not resolve into the repository, and Zone %q restricts internal imports", imp.Path, self)
+				remediation = "add the target Zone to the allow-list or remove the import"
 			case len(targets) == 0:
 				message = fmt.Sprintf("import %q resolves to code outside any declared Zone, not allowed for Zone %q", imp.Path, self)
+				remediation = refusedImportRemediation(self,
+					"otherwise declare the Zone that owns the code and add it to the allow-list, or remove the import")
 			default:
 				message = fmt.Sprintf("import %q resolves to Zone(s) %s, not in the allow-list of Zone %q",
 					imp.Path, quotedZones(targets), self)
+				remediation = refusedImportRemediation(self,
+					"otherwise add the target Zone to the allow-list or remove the import")
 			}
-			if err := add(imp.Line, message,
-				"add the target Zone to the allow-list or remove the import"); err != nil {
+			if err := add(imp.Line, message, remediation); err != nil {
 				return nil, err
 			}
 		case ImportUnknown, ImportCgo:
@@ -153,6 +157,20 @@ func consumesViolations(r rule.Rule, p rule.ConsumesParams, self rule.ZoneName,
 		}
 	}
 	return vs, nil
+}
+
+// refusedImportRemediation says how to repair an internal import the
+// allow-list refuses. Copying the imported code into the importing Zone
+// clears the finding and duplicates the code, so the remediation names
+// the design move instead: a shared mechanism gets a Zone of its own,
+// allowed where it is needed and free of product decisions (Evans, DDD
+// Reference 2015, p. 44, Cohesive Mechanisms). otherwise is the repair
+// when the imported code is not a shared mechanism.
+func refusedImportRemediation(self rule.ZoneName, otherwise string) string {
+	return fmt.Sprintf("if the imported code is a shared mechanism, declare a Zone of its own for it, "+
+		"allow that Zone in the imports of Zone %q and of every other Zone that needs it, "+
+		"and keep it free of product decisions (Evans, DDD Reference 2015, p. 44, Cohesive Mechanisms); "+
+		"%s; never copy the code to get around this rule", self, otherwise)
 }
 
 // edge is one internal import occurrence lifted to Zone level.
