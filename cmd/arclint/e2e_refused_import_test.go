@@ -46,7 +46,7 @@ import (
 
 	mechanism := `if the imported code is a shared mechanism, declare a Zone of its own for it, ` +
 		`allow that Zone in the imports of Zone "storage" and of every other Zone that needs it, ` +
-		`and keep it free of product decisions (Evans, DDD Reference 2015, p. 44, Cohesive Mechanisms); `
+		`and keep it free of product decisions (Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 44, Cohesive Mechanisms (tier 1, read)); `
 	copying := "; never copy the code to get around this rule"
 	want := map[string]string{
 		`import "example.com/skills/internal/infra/clients/writeaccess" resolves to Zone(s) ["clients"], not in the allow-list of Zone "storage"`: mechanism +

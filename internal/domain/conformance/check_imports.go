@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 // evaluateConsumes judges every code file of the Rule's Zones
@@ -163,14 +164,14 @@ func consumesViolations(r rule.Rule, p rule.ConsumesParams, self rule.ZoneName,
 // allow-list refuses. Copying the imported code into the importing Zone
 // clears the finding and duplicates the code, so the remediation names
 // the design move instead: a shared mechanism gets a Zone of its own,
-// allowed where it is needed and free of product decisions (Evans, DDD
-// Reference 2015, p. 44, Cohesive Mechanisms). otherwise is the repair
-// when the imported code is not a shared mechanism.
+// allowed where it is needed and free of product decisions, cited from
+// the meta-model's bibliography as vocab.SharedMechanism. otherwise is
+// the repair when the imported code is not a shared mechanism.
 func refusedImportRemediation(self rule.ZoneName, otherwise string) string {
 	return fmt.Sprintf("if the imported code is a shared mechanism, declare a Zone of its own for it, "+
 		"allow that Zone in the imports of Zone %q and of every other Zone that needs it, "+
-		"and keep it free of product decisions (Evans, DDD Reference 2015, p. 44, Cohesive Mechanisms); "+
-		"%s; never copy the code to get around this rule", self, otherwise)
+		"and keep it free of product decisions (%s); "+
+		"%s; never copy the code to get around this rule", self, vocab.SharedMechanism().Cited(), otherwise)
 }
 
 // edge is one internal import occurrence lifted to Zone level.

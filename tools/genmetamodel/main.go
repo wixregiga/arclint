@@ -143,6 +143,7 @@ type citation struct {
 	Chapter      int    `yaml:"chapter"`
 	Page         string `yaml:"page"`
 	Section      string `yaml:"section"`
+	Note         string `yaml:"note"`
 	Illustrative bool   `yaml:"illustrative"`
 }
 
@@ -509,6 +510,9 @@ func (e emitter) citations(cs []citation) {
 		}
 		if c.Section != "" {
 			parts = append(parts, fmt.Sprintf("Section: %q", c.Section))
+		}
+		if c.Note != "" {
+			parts = append(parts, fmt.Sprintf("Note: %q", c.Note))
 		}
 		if c.Illustrative {
 			parts = append(parts, "Illustrative: true")

@@ -103,8 +103,14 @@ func DistillationRules() []DistillationRule {
 			Example: "Discounter.assertions.never-exceeds-total on Discount, verified_by internal/pricing/discounter_test.go:TestDiscountNeverExceedsTotal",
 		},
 		{
-			ID:      "guarantee-has-one-checked-home",
-			Rule:    "A guarantee of a domain service declared as an interface, an abstract class, an ABC, or a Protocol is checked once, in the model, wherever the model can state it: by a function of the context named assert followed by the key, or, when the operation returns a value the business names, by that value's invariant recorded under the same key; only what neither states is verified-by-tests. Never as a method of the interface, a callback, or prose (Evans, DDD Reference: Services, Side-Effect-Free Functions, Assertions; Vernon's IDDD_Samples MD5EncryptionService checks its argument through the shared AssertionConcern).",
+			ID:   "guarantee-has-one-checked-home",
+			Rule: "A guarantee of a domain service declared as an interface, an abstract class, an ABC, or a Protocol is checked once, in the model, wherever the model can state it: by a function of the context named assert followed by the key, or, when the operation returns a value the business names, by that value's invariant recorded under the same key; only what neither states is verified-by-tests. Never as a method of the interface, a callback, or prose.",
+			Sources: []Citation{
+				{Work: evansReference, Page: "14", Section: servicesSection},
+				{Work: evansReference, Page: "21", Section: sideEffectFreeSection},
+				{Work: evansReference, Page: "22", Section: assertionsSection},
+				{Work: iddSamples, Section: "MD5EncryptionService", Note: "checks its argument through the shared AssertionConcern"},
+			},
 			Example: "Encrypter.assertions.not-empty on Encrypt holds because Encrypt returns EncryptedPassword, whose constructor enforces EncryptedPassword.invariants.not-empty; never an AssertNotEmpty on the Encrypter interface",
 		},
 		{

@@ -276,10 +276,11 @@ func TestLibrarianSaysTheDomainDecides(t *testing.T) {
 		"Go makes that verdict hard to forge with unexported fields and a zero value that allows nothing, " +
 		"TypeScript with a private constructor and a private field, and Python only by convention, with an underscore-prefixed name. " +
 		"An automated test proves what the domain cannot see, such as a refusal changing nothing on disk " +
-		"(Evans, DDD Reference 2015, p. 12, Value Objects, p. 14, Services, p. 21, Side-Effect-Free Functions, and p. 22, Assertions; " +
-		"The Go Programming Language Specification, Exported identifiers and Struct literals; " +
-		"TypeScript 2.0 release notes, Private and Protected Constructors, and TypeScript Handbook, Type Compatibility; " +
-		"The Python Tutorial, 9.6 Private Variables)."
+		"(Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 12, Value Objects, p. 14, Services, p. 21, Side-Effect-Free Functions, p. 22, Assertions (tier 1, read); " +
+		"The Go Authors, The Go Programming Language Specification (language version go1.27) (2026-05-26), Exported identifiers, Struct literals (tier 2, read); " +
+		"Microsoft, TypeScript 2.0 release notes (2016), Private and Protected Constructors (tier 2, read); " +
+		"Microsoft, TypeScript Handbook: Type Compatibility (2026-10-16), Private and protected members in classes (tier 2, read); " +
+		"Python Software Foundation, The Python Tutorial, 9. Classes (Python 3.15.0) (2026-10-17), 9.6 Private Variables (tier 2, read))."
 	if got := vocab.ServiceDecides().String(); got != service {
 		t.Errorf("ServiceDecides:\n got %q\nwant %q", got, service)
 	}
@@ -350,8 +351,8 @@ func TestLibrarianWeighsAMoveBetweenLayers(t *testing.T) {
 		}
 	}
 	for work, named := range map[string]string{
-		"evans2015":               "Evans, DDD Reference 2015, p. 10, Layered Architecture, and p. 21, Side-Effect-Free Functions",
-		"stafford-business-logic": "Stafford, Kinds of Business Logic",
+		"evans2015":               "Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 10, Layered Architecture, p. 21, Side-Effect-Free Functions (tier 1, read)",
+		"stafford-business-logic": "Randy Stafford, Service Layer, Kinds of Business Logic (Patterns of Enterprise Application Architecture excerpt) (2002) (tier 2, read)",
 	} {
 		if !strings.Contains(step, named) {
 			t.Errorf("the step does not cite %s as %q", work, named)
