@@ -46,7 +46,7 @@ IMPORTANT: work in this order on every change.
 
 ### The recorded domain
 
-6 contexts, 1 aggregates, 45 value objects, 60 invariants.
+6 contexts, 1 aggregates, 45 value objects, 61 invariants.
 
 - **agent**: value objects Activity, Guidance, Progress; services WorkflowGuide
 - **vocabulary**: value objects DomainRecording, WordLimit, MetaModel
