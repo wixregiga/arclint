@@ -36,20 +36,23 @@ func (o origins) repository(dir, module string) bool {
 	return false
 }
 
-func (o origins) follow(dir, module, dotted string) (string, string) {
+func (o origins) follow(dir, module, dotted string) (string, string, bool) {
 	file := o.moduleFile(dir, module)
 	if file == "" {
-		return "", ""
+		return "", "", false
 	}
 	m := o.module(file)
 	if m == nil {
-		return "", ""
+		return "", "", false
 	}
 	w := m.facts.walker
 	name, attributes, _ := strings.Cut(dotted, ".")
+	if m.scope.lookup(name) == nil {
+		return "", "", false
+	}
 	q := qualifiedTarget(m.scope, name, w, 0)
 	if q == "" {
-		return "", ""
+		return "", path.Dir(file), true
 	}
 	// The module's writes before it bound the name replace what it
 	// exports; an attribute read through the name is read later, after
@@ -60,9 +63,9 @@ func (o origins) follow(dir, module, dotted string) (string, string) {
 		limit = noLimit
 	}
 	if mutatesBefore(m, q, limit) {
-		return "", ""
+		return "", path.Dir(file), true
 	}
-	return q, path.Dir(file)
+	return q, path.Dir(file), true
 }
 
 // moduleFile is the repository file a module imported from the directory

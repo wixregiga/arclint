@@ -205,17 +205,15 @@ func (c Carriers) owner(ctx, owner string) (locDecl, bool) {
 // modelCarrier locates the check a declared service's assertion has in
 // the model, through the operation the recorded assertion names.
 func (c Carriers) modelCarrier(cc contextCode, service locDecl, owner, key string) (Carrier, bool, error) {
-	var operation *locDecl
+	var ops []locDecl
 	if as, aggregate, recorded := cc.recordedAssertion(owner, key); recorded && !aggregate {
-		op, found, err := cc.unitIdx(service).methodNamed(service.decl.Name, as.On)
+		var err error
+		ops, err = cc.unitIdx(service).methodsNamed(service.decl.Name, as.On)
 		if err != nil {
 			return Carrier{}, false, err
 		}
-		if found {
-			operation = &op
-		}
 	}
-	check, err := cc.modelCheck(service, operation, key)
+	check, err := cc.modelCheck(service, ops, key)
 	if err != nil || !check.found {
 		return Carrier{}, false, err
 	}

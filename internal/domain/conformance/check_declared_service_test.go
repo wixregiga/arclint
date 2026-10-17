@@ -184,3 +184,46 @@ func TestDeclaredServiceCoverageReadsTheReturnedValue(t *testing.T) {
 	}
 	t.Fatalf("no coverage for the Encrypter guarantee: %#v", a.Contracts())
 }
+
+// Every overload of a declared service's operation must return the
+// recorded value for its invariant to check the guarantee: one overload
+// returning anything else leaves the guarantee without a check, in
+// whatever order the overloads are written.
+func TestDeclaredServiceOverloadsAllReturnTheValue(t *testing.T) {
+	knowledge := oneContext(t, vocab.BoundedContext{
+		Name: "identity", Definition: "d", Line: 1,
+		ValueObjects: []vocab.ValueObject{
+			{Name: "EncryptedPassword", Definition: "d", Line: 2, Invariants: []vocab.Invariant{{Key: "not-empty", Statement: "s", Line: 3}}},
+		},
+		Services: []vocab.DomainService{{
+			Name: "Encrypter", Definition: "d", Line: 4,
+			Assertions: []vocab.Assertion{{Key: "not-empty", On: "encrypt", Statement: "s", Line: 5}},
+		}},
+	})
+	file := "src/identity/password.ts"
+	value := conformance.Reference{Resolution: conformance.ResolutionDeclared, File: file, Name: "EncryptedPassword"}
+	text := conformance.Reference{Resolution: conformance.ResolutionExternal, Name: "string"}
+	run := func(results ...conformance.Reference) int {
+		decls := []conformance.Declaration{
+			{Kind: "class", Name: "EncryptedPassword", Exported: true, StartLine: 1},
+			{Kind: "method", Name: "from", Owner: "EncryptedPassword", Exported: true, StartLine: 2, Results: []string{"EncryptedPassword"}},
+			{Kind: "interface", Name: "Encrypter", Exported: true, StartLine: 5},
+		}
+		for i, r := range results {
+			decls = append(decls, conformance.Declaration{Kind: "method", Name: "encrypt", Owner: "Encrypter", Exported: true, StartLine: 6 + i, Type: r})
+		}
+		facts := map[string]conformance.LanguageFacts{file: {
+			Language: rule.LanguageTypeScript, DeclarationsAvailable: true, CallsAvailable: true, FieldTypesAvailable: true, Declarations: decls,
+		}}
+		return len(runOne(t, builtInRule(t, "assertion/checked-by-its-operation"), nil, observed(file), facts, knowledge).Violations())
+	}
+	if got := run(value, value); got != 0 {
+		t.Errorf("every overload returns the value: %d findings", got)
+	}
+	if got := run(value, text); got != 1 {
+		t.Errorf("a later overload returns a string: %d findings, want 1", got)
+	}
+	if got := run(text, value); got != 1 {
+		t.Errorf("an earlier overload returns a string: %d findings, want 1", got)
+	}
+}
