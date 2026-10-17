@@ -89,13 +89,15 @@ func TestDeclaredServiceIsCheckedInTheModel(t *testing.T) {
 		want    []string
 		outcome conformance.Outcome
 	}{
-		{"the recorded value", state{result: ref(declared(userFile, "Password"))}, nil, conformance.OutcomeConforms},
+		// A check in the model with no implementation observed leaves
+		// the guarantee undetermined, never conforming.
+		{"the recorded value", state{result: ref(declared(userFile, "Password"))}, nil, conformance.OutcomeUndetermined},
 		{"another package's type of the same name", state{result: ref(declared(foreignFile, "Password"))}, []string{noCheck}, conformance.OutcomeViolates},
 		{"a collection of the value", state{result: ref(conformance.Reference{Resolution: conformance.ResolutionLocal, Name: "[]user.Password"})}, []string{noCheck}, conformance.OutcomeViolates},
 		{"a value whose invariant has another key", state{result: ref(declared(userFile, "Username"))}, []string{noCheck}, conformance.OutcomeViolates},
 		{"a result resolution cannot follow", state{result: ref(conformance.Reference{Resolution: conformance.ResolutionUndetermined, Reason: "the type checker could not type the result type user.Password"})}, nil, conformance.OutcomeUndetermined},
 		{"a result no resolution reached", state{result: ref(conformance.Reference{})}, nil, conformance.OutcomeUndetermined},
-		{"a function of the context", state{result: stringResult, user: []conformance.Declaration{assertNotWeak}}, nil, conformance.OutcomeConforms},
+		{"a function of the context", state{result: stringResult, user: []conformance.Declaration{assertNotWeak}}, nil, conformance.OutcomeUndetermined},
 		{"a function only a test declares", state{result: stringResult, test: []conformance.Declaration{assertNotWeak}}, []string{noCheck}, conformance.OutcomeViolates},
 		{"a method named like the check", state{result: stringResult, user: []conformance.Declaration{{Kind: "method", Name: "AssertNotWeak", Owner: "Password", StartLine: 20}}}, []string{noCheck}, conformance.OutcomeViolates},
 		{"a function nested in another", state{result: stringResult, user: []conformance.Declaration{{Kind: "func", Name: "AssertNotWeak", Owner: "propose", StartLine: 21}}}, []string{noCheck}, conformance.OutcomeViolates},
@@ -165,14 +167,28 @@ func TestDeclaredServiceCoverageReadsTheReturnedValue(t *testing.T) {
 		}},
 	})
 	file := "internal/user/password.go"
-	facts := map[string]conformance.LanguageFacts{file: goDecls("user", []conformance.Declaration{
+	value := conformance.Reference{Resolution: conformance.ResolutionDeclared, File: file, Name: "EncryptedPassword"}
+	model := goDecls("user", []conformance.Declaration{
 		{Kind: "struct", Name: "EncryptedPassword", Exported: true, StartLine: 3},
 		{Kind: "func", Name: "NewEncryptedPassword", Exported: true, StartLine: 6, Results: []string{"EncryptedPassword", "error"}},
 		{Kind: "interface", Name: "Encrypter", Exported: true, StartLine: 12},
-		{Kind: "method", Name: "Encrypt", Owner: "Encrypter", Exported: true, StartLine: 13, Results: []string{"EncryptedPassword", "error"},
-			Type: conformance.Reference{Resolution: conformance.ResolutionDeclared, File: file, Name: "EncryptedPassword"}},
-	})}
-	a := runOne(t, builtInRule(t, "assertion/checked-by-its-operation"), nil, observed(file), facts, knowledge)
+		{Kind: "method", Name: "Encrypt", Owner: "Encrypter", Exported: true, StartLine: 13, Results: []string{"EncryptedPassword", "error"}, Type: value},
+	})
+	model.ImplementationsAvailable = true
+	// One implementation returns the value too, so the guarantee holds
+	// for every implementation observed.
+	adapterFile := "internal/adapters/encrypter.go"
+	adapter := goDecls("adapters", []conformance.Declaration{
+		{Kind: "struct", Name: "Plain", Exported: true, StartLine: 3, Implements: []conformance.Implementation{{
+			Abstraction: conformance.Reference{Resolution: conformance.ResolutionDeclared, File: file, Name: "Encrypter"},
+			Evidence:    conformance.ImplementationExact,
+			Operations:  []conformance.Reference{{Resolution: conformance.ResolutionDeclared, File: adapterFile, Owner: "Plain", Name: "Encrypt"}},
+		}}},
+		{Kind: "method", Name: "Encrypt", Owner: "Plain", Exported: true, StartLine: 5, Type: value},
+	})
+	adapter.ImplementationsAvailable = true
+	facts := map[string]conformance.LanguageFacts{file: model, adapterFile: adapter}
+	a := runOne(t, builtInRule(t, "assertion/checked-by-its-operation"), nil, observed(file, adapterFile), facts, knowledge)
 	for _, c := range a.Contracts() {
 		if c.Owner() != "Encrypter" {
 			continue

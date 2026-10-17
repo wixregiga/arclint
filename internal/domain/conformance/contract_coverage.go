@@ -20,6 +20,7 @@ type ContractCoverage struct {
 	carrier                        Carrier
 	located                        bool
 	bodilessOwner                  string
+	implementations                []ServiceImplementation
 }
 
 // ContractCoverageSpec is the input to the validated coverage value.
@@ -38,6 +39,9 @@ type ContractCoverageSpec struct {
 	// has no body to call a checking method from, an interface or an
 	// abstract class; its carrier is then a test under verified_by.
 	BodilessOwner string
+	// Implementations are the implementations of a declared domain
+	// service, each as the check of the assertion judged it.
+	Implementations []ServiceImplementation
 }
 
 // NewContractCoverage validates the recording and preserves each check unchanged.
@@ -67,6 +71,15 @@ func NewContractCoverage(s ContractCoverageSpec) (ContractCoverage, error) {
 		kind: s.Kind, path: s.Path, line: s.Line, checks: append([]Evaluation(nil), s.Checks...),
 		unperformed: append([]string(nil), s.Unperformed...), bodilessOwner: s.BodilessOwner,
 	}
+	for _, impl := range s.Implementations {
+		if err := impl.validate(); err != nil {
+			return ContractCoverage{}, fmt.Errorf("contract coverage: %w", err)
+		}
+	}
+	if len(s.Implementations) > 0 && s.Kind != vocab.ConceptAssertion {
+		return ContractCoverage{}, fmt.Errorf("contract coverage: only an assertion of a domain service has implementations")
+	}
+	out.implementations = append([]ServiceImplementation(nil), s.Implementations...)
 	if s.BodilessOwner != "" && s.Kind != vocab.ConceptAssertion {
 		return ContractCoverage{}, fmt.Errorf("contract coverage: only an assertion's owner is judged by how it is declared")
 	}
@@ -112,6 +125,12 @@ func (c ContractCoverage) Carrier() (Carrier, bool) { return c.carrier, c.locate
 // class, so a test under verified_by carries the assertion; "" when the
 // owner has a body or was not located.
 func (c ContractCoverage) BodilessOwner() string { return c.bodilessOwner }
+
+// Implementations lists the implementations of a declared domain
+// service, each as the check of the assertion judged it.
+func (c ContractCoverage) Implementations() []ServiceImplementation {
+	return append([]ServiceImplementation(nil), c.implementations...)
+}
 
 // Unperformed explains why applicable checks were not attempted.
 func (c ContractCoverage) Unperformed() []string { return append([]string(nil), c.unperformed...) }

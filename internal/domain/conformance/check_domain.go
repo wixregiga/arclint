@@ -51,6 +51,23 @@ type domainCheck struct {
 	// names, wherever they are: what the context's own code supplies
 	// does not decide whether it can judge.
 	readsTests bool
+	// partial lists the facts a check reads only for some of what it
+	// judges, and only where they are supplied: each file without them
+	// leaves that part undetermined, with the reason, so their absence
+	// never makes the whole context unsupported.
+	partial []rule.Fact
+}
+
+// decidingFacts are the invariant's facts whose absence from a
+// context's code keeps the check from judging it at all.
+func (d domainCheck) decidingFacts(facts []string) []string {
+	out := make([]string, 0, len(facts))
+	for _, f := range facts {
+		if !slices.Contains(d.partial, rule.Fact(f)) {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // domainChecks maps every block invariant the domain evaluator carries
@@ -66,25 +83,30 @@ var domainChecks = map[string]domainCheck{
 	"value_object/constructed-through-one-door":             {run: checkValueObjectConstructor},
 	"value_object/no-setters":                               {run: checkValueObjectNoSetters},
 	"invariant/enforced-at-every-mutation":                  {run: checkInvariantEnforcedAtMutation},
-	"assertion/checked-by-its-operation":                    {judge: checkAssertionChecked},
-	"invariant/verifying-tests-declared":                    {judge: checkInvariantTestsDeclared, readsTests: true},
-	"assertion/verifying-tests-declared":                    {judge: checkAssertionTestsDeclared, readsTests: true},
-	"specification/satisfaction-method":                     {run: checkSpecificationSatisfaction},
-	"aggregate/protects-an-invariant":                       {run: checkAggregateProtectsInvariant},
-	"aggregate/root-declared":                               {run: checkAggregateRootDeclared},
-	"aggregate/invariants-enforced-by-root":                 {run: checkAggregateInvariantsOnRoot},
-	"aggregate/commands-named-for-behavior":                 {run: checkAggregateNoSetters},
-	"aggregate/references-by-identity":                      {run: checkReferencesByIdentity},
-	"aggregate/root-only-references":                        {judge: checkRootOnlyReferences},
-	"entity/identity":                                       {judge: checkEntityIdentity},
-	"domain_service/not-held-by-aggregates":                 {judge: checkServiceNotHeldByAggregates},
-	"repository/not-called-from-aggregates":                 {judge: checkRepositoryNotCalledFromAggregates},
-	"domain_event/declared":                                 {run: checkEventDeclared},
-	"domain_event/no-setters":                               {run: checkEventNoSetters},
-	"domain_service/declared":                               {run: checkServiceDeclared},
-	"domain_service/records-an-assertion":                   {run: checkServiceRecordsAssertion},
-	"repository/declared":                                   {run: checkRepositoryDeclared},
-	"factory/declared":                                      {run: checkFactoryDeclared},
+	"assertion/checked-by-its-operation": {
+		judge: checkAssertionChecked,
+		// Only an implementation of a declared domain service is read
+		// through resolved calls and the implementations fact.
+		partial: []rule.Fact{rule.FactResolvedCalls, rule.FactImplementations},
+	},
+	"invariant/verifying-tests-declared":    {judge: checkInvariantTestsDeclared, readsTests: true},
+	"assertion/verifying-tests-declared":    {judge: checkAssertionTestsDeclared, readsTests: true},
+	"specification/satisfaction-method":     {run: checkSpecificationSatisfaction},
+	"aggregate/protects-an-invariant":       {run: checkAggregateProtectsInvariant},
+	"aggregate/root-declared":               {run: checkAggregateRootDeclared},
+	"aggregate/invariants-enforced-by-root": {run: checkAggregateInvariantsOnRoot},
+	"aggregate/commands-named-for-behavior": {run: checkAggregateNoSetters},
+	"aggregate/references-by-identity":      {run: checkReferencesByIdentity},
+	"aggregate/root-only-references":        {judge: checkRootOnlyReferences},
+	"entity/identity":                       {judge: checkEntityIdentity},
+	"domain_service/not-held-by-aggregates": {judge: checkServiceNotHeldByAggregates},
+	"repository/not-called-from-aggregates": {judge: checkRepositoryNotCalledFromAggregates},
+	"domain_event/declared":                 {run: checkEventDeclared},
+	"domain_event/no-setters":               {run: checkEventNoSetters},
+	"domain_service/declared":               {run: checkServiceDeclared},
+	"domain_service/records-an-assertion":   {run: checkServiceRecordsAssertion},
+	"repository/declared":                   {run: checkRepositoryDeclared},
+	"factory/declared":                      {run: checkFactoryDeclared},
 }
 
 // evaluateDomain judges one built-in domain Rule: the block invariant
@@ -116,7 +138,7 @@ func evaluateDomain(r rule.Rule, facts Facts, knowledge vocab.UbiquitousLanguage
 		if err != nil {
 			return nil, fmt.Errorf("domain: %w", err)
 		}
-		outcome, undecided := cc.undecidable(inv.Enforcement.Facts)
+		outcome, undecided := cc.undecidable(check.decidingFacts(inv.Enforcement.Facts))
 		if check.readsTests {
 			// The tests are read where they are, so only an exclusion of
 			// the recording that names them keeps the rule from judging.
@@ -1434,7 +1456,7 @@ func checkInvariantEnforcedAtMutation(r rule.Rule, subject rule.Subject, cc cont
 // or else by the tests its verified_by names; an aggregate root so
 // declared names the tests. An owner whose type is not located is left
 // to aggregate/root-declared or domain_service/declared.
-func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ domainCode) ([]Violation, []string, error) {
+func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, code domainCode) ([]Violation, []string, error) {
 	var vs []Violation
 	var unresolved []string
 	for _, agg := range cc.ctx.Aggregates {
@@ -1468,7 +1490,7 @@ func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ 
 			vs = append(vs, more...)
 			continue
 		}
-		more, open, err := declaredServiceChecked(r, subject, cc, owner, s.Assertions)
+		more, open, err := declaredServiceChecked(r, subject, cc, code, owner, s.Assertions)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1489,7 +1511,7 @@ func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ 
 // the three is a finding on the model, never a request for a method the
 // abstraction cannot hold; a result the language's resolution cannot
 // follow leaves it undetermined, with the reason.
-func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, owner assertionOwner, assertions []vocab.Assertion) ([]Violation, []string, error) {
+func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, code domainCode, owner assertionOwner, assertions []vocab.Assertion) ([]Violation, []string, error) {
 	var vs []Violation
 	var unresolved []string
 	service := owner.decl
@@ -1514,6 +1536,15 @@ func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, o
 		check, err := cc.modelCheck(service, ops, as.Key)
 		if err != nil {
 			return nil, nil, err
+		}
+		if check.found && hasOp {
+			more, open, err := implementationsChecked(r, subject, cc, code, owner, op, ops, as)
+			if err != nil {
+				return nil, nil, err
+			}
+			vs = append(vs, more...)
+			unresolved = append(unresolved, open...)
+			continue
 		}
 		if check.found || len(as.VerifiedBy) > 0 {
 			continue
@@ -1540,6 +1571,42 @@ func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, o
 		vs = append(vs, v)
 	}
 	return vs, unresolved, nil
+}
+
+// implementationsChecked judges every implementation of a declared
+// service against the guarantee's check in the model: each one's
+// operation reaches it, or the finding anchors at that operation. With
+// no implementation observed the guarantee is undetermined, never
+// conforming, unless the tests its verified_by names verify it.
+func implementationsChecked(r rule.Rule, subject rule.Subject, cc contextCode, code domainCode, owner assertionOwner, op locDecl, ops []locDecl, as vocab.Assertion) ([]Violation, []string, error) {
+	reach := cc.reachOf(owner.decl, ops, as.Key)
+	judged, open := code.implementationsOf(owner.decl, op, reach)
+	if len(judged) == 0 {
+		if len(as.VerifiedBy) > 0 {
+			return nil, nil, nil
+		}
+		return nil, append([]string{fmt.Sprintf("declared service %s: no implementation of it is observed, so whether one reaches the check of %s is undetermined", owner.decl.decl.Name, as.Key)}, open...), nil
+	}
+	var vs []Violation
+	for _, j := range judged {
+		switch j.Outcome {
+		case OutcomeConforms:
+		case OutcomeViolates:
+			v, err := newViolation(r, subject, j.at.file.path, j.at.decl.StartLine, j.Reason,
+				// The guarantee already has its home in the model; only
+				// this implementation fails to reach it.
+				fmt.Sprintf("%s from %s.%s, so %s holds for every implementation of %s", reach.must(), j.Type, j.Operation, as.Key, owner.decl.decl.Name))
+			if err != nil {
+				return nil, nil, err
+			}
+			vs = append(vs, v)
+		case OutcomeUndetermined:
+			open = append(open, fmt.Sprintf("%s:%d: implementation %s of %s: %s", j.Path, j.Line, j.Type, owner.decl.decl.Name, j.Reason))
+		case OutcomeSuspectedViolation, OutcomeUnsupported, OutcomeNotApplicable, OutcomeFailed:
+			// judgeImplementation decides only the three outcomes above.
+		}
+	}
+	return vs, open, nil
 }
 
 // modelShape is how the model checks a guarantee of a declared service.
@@ -1581,8 +1648,17 @@ func (cc contextCode) modelCheck(service locDecl, ops []locDecl, key string) (mo
 	if fn, ok := cc.contextFunction(service, assertKey(key)); ok {
 		return modelCheckAt{found: true, shape: checkedByFunction, at: fn}, nil
 	}
+	return cc.valueCheck(ops, key), nil
+}
+
+// valueCheck locates the value object every declaration of a declared
+// service's operation returns, as the language's resolution names its
+// result, when that value records an invariant of the key; one
+// declaration whose result resolution cannot follow leaves it
+// undetermined.
+func (cc contextCode) valueCheck(ops []locDecl, key string) modelCheckAt {
 	if len(ops) == 0 {
-		return modelCheckAt{}, nil
+		return modelCheckAt{}
 	}
 	var values []locDecl
 	for _, vo := range cc.ctx.ValueObjects {
@@ -1591,7 +1667,7 @@ func (cc contextCode) modelCheck(service locDecl, ops []locDecl, key string) (mo
 		}
 	}
 	if len(values) == 0 {
-		return modelCheckAt{}, nil
+		return modelCheckAt{}
 	}
 	// One overload that returns something else decides it; an overload
 	// whose result cannot be followed leaves it open only when none does.
@@ -1605,15 +1681,15 @@ func (cc contextCode) modelCheck(service locDecl, ops []locDecl, key string) (mo
 				open = unresolved
 			}
 		case !found, returned != nil && !sameDecl(*returned, value):
-			return modelCheckAt{}, nil
+			return modelCheckAt{}
 		default:
 			returned = &value
 		}
 	}
 	if open != "" {
-		return modelCheckAt{unresolved: open}, nil
+		return modelCheckAt{unresolved: open}
 	}
-	return modelCheckAt{found: true, shape: checkedByValue, at: *returned}, nil
+	return modelCheckAt{found: true, shape: checkedByValue, at: *returned}
 }
 
 // returnedValue names the recorded value one declaration of an

@@ -131,6 +131,38 @@ export interface DeclInfo {
    * the same way (T for (T, error), T for a TypeScript Promise<T>).
    */
   type?: ReferenceInfo;
+  /**
+   * Implements lists, for a struct, type, or class when
+   * implementations are available, the interfaces and abstract
+   * classes of the repository it implements.
+   */
+  implements?: ImplementationInfo[];
+}
+/**
+ * ImplementationInfo is one interface or abstract class a type
+ * implements, with the evidence the language established it by.
+ */
+export interface ImplementationInfo {
+  /**
+   * Abstraction is the interface or abstract class; undetermined with
+   * the name the code writes when resolution cannot follow it.
+   */
+  abstraction: ReferenceInfo;
+  /**
+   * Evidence is exact (the language's own checking or the code's
+   * declaration), heuristic (member names alone), or undetermined (a
+   * runtime registration, or a clause resolution cannot follow).
+   */
+  evidence: string;
+  /**
+   * Reason says why the evidence is heuristic or undetermined.
+   */
+  reason?: string;
+  /**
+   * Operations are, for each method the abstraction declares, the
+   * method the type's own lookup reaches.
+   */
+  operations: ReferenceInfo[];
 }
 /**
  * ReferenceInfo is the declaration a call or a field's type reaches,
@@ -214,6 +246,11 @@ export interface FactsInfo {
    * the declarations it holds.
    */
   fieldTypesAvailable: boolean;
+  /**
+   * ImplementationsAvailable is true when every type declaration
+   * carries the abstractions it implements.
+   */
+  implementationsAvailable: boolean;
   /**
    * CallsAvailable is false when calls were not supplied or parsing failed.
    */

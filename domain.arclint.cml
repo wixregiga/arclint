@@ -283,6 +283,8 @@ BoundedContext conformance {
       def void ensureUnresolvedIsUndetermined();
       "Facts exposes a test file that scan.exclude leaves out only to the checks of the tests verified_by names, and only when the recording names it; no other Rule, Zone or context sees it."
       def void ensureExcludedTestsOnlyForTheirCheck();
+      "Facts presents a type as implementing an interface or abstract class exactly only where the language's checking or the code's own declaration establishes it; a match of member names alone is heuristic, and a runtime registration undetermined."
+      def void ensureImplementationsStateTheirEvidence();
     }
 
     "One suspected breach of a Rule, anchored at a file and line and carrying the PatternReference of the Pattern that distributed the Rule when one did. It has no lifecycle: every assessment derives its Violations fresh, and two Violations with the same values are the same finding."

@@ -210,6 +210,13 @@ func assessContractCoverage(req Request, prepared, located map[string]Facts) ([]
 			if spec.Kind == vocab.ConceptAssertion && spec.BodilessOwner == "" {
 				spec.BodilessOwner = carriers.BodilessOwner(spec.Context, spec.Owner)
 			}
+			if id == ruleAssertionChecked {
+				// The implementations are judged over the Rule's own facts,
+				// so the listing and the check agree.
+				if spec.Implementations, err = carriersOf(code).Implementations(spec.Context, spec.Owner, spec.Key); err != nil {
+					return nil, fmt.Errorf("contract coverage: %s %s of %s: %w", spec.Kind, spec.Key, spec.Owner, err)
+				}
+			}
 			for _, cc := range code.contexts {
 				if cc.ctx.Name != spec.Context {
 					continue
@@ -258,11 +265,12 @@ func evaluateRecordedContract(r rule.Rule, contract recordedContract, cc context
 	if cc.scopeParseFailures > 0 {
 		return simpleEvaluation(r, subject, OutcomeFailed)
 	}
-	if outcome, unavailable := cc.undecidable(inv.Enforcement.Facts); unavailable {
+	deciding := check.decidingFacts(inv.Enforcement.Facts)
+	if outcome, unavailable := cc.undecidable(deciding); unavailable {
 		return simpleEvaluation(r, subject, outcome)
 	}
 	// Partial analysis cannot establish coverage for an individual contract.
-	for _, fact := range inv.Enforcement.Facts {
+	for _, fact := range deciding {
 		if available := cc.scopeIdx.available(rule.Fact(fact)); fact != string(rule.FactFileTree) && available < cc.scopeAnalysisFiles {
 			return undeterminedEvaluation(r, subject, fmt.Sprintf("%d of %d analyzed files in %s yield %s facts",
 				available, cc.scopeAnalysisFiles, cc.searched(), fact))
