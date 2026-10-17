@@ -33,7 +33,8 @@ const (
 )
 
 // render builds the page from the meta-model, the librarian's questions,
-// and the examples read from repo.
+// the rules the meta-model declines to enforce, and the examples read
+// from repo.
 func render(repo fs.FS) ([]byte, error) {
 	sn, err := readSnippets(repo)
 	if err != nil {
@@ -81,6 +82,7 @@ func render(repo fs.FS) ([]byte, error) {
 		return nil, err
 	}
 	p.questions()
+	p.declined()
 	p.references()
 	if unused := sn.unused(); len(unused) > 0 {
 		return nil, fmt.Errorf("anchors the page never quotes: %s", strings.Join(unused, ", "))
@@ -531,6 +533,43 @@ func (p *page) questions() {
 		p.printf("| `%s` | %s | %s |\n", r.ID, cell(r.Rule), cell(r.Example))
 	}
 	p.printf("\n")
+}
+
+// declined writes the rules the meta-model declines to enforce, each
+// with its reason and its basis: the cited works, or the issue where the
+// owner decided it.
+func (p *page) declined() {
+	p.printf("## Rules arclint declines to enforce\n\n")
+	p.printf("Some rules are left unenforced on purpose. Each is recorded in the meta-model with the reason and its basis, a cited work with its page or an owner decision with its issue, so a gap reads as a decision and not an oversight. ")
+	p.printf("The domain-librarian skill checks a proposed rule against this list and cites the reason when it declines one. New literature of tier 1 or 2 or a new owner decision reopens an entry; a request alone does not.\n\n")
+	p.printf("Each basis is labeled by the tier of the work it cites, or as an owner decision:\n\n")
+	for _, t := range vocab.Tiers() {
+		p.printf("- **%s:** %s.\n", t.Label(), t.Meaning())
+	}
+	p.printf("- **%s:** a decision the project's owner recorded in an arclint issue.\n\n", vocab.DecisionLabel)
+	p.printf("| Declined | Not enforced | Why | Basis |\n|---|---|---|---|\n")
+	for _, d := range p.m.Declined {
+		p.printf("| `%s` | %s | %s | %s |\n", d.ID, cell(d.Statement), cell(d.Reason), p.basis(d))
+	}
+	p.printf("\n")
+}
+
+// basis labels each cited work of a declined rule with its tier, or the
+// owner decision with its issue.
+func (p *page) basis(d vocab.DeclinedRule) string {
+	if d.Decision != "" {
+		number := strings.TrimPrefix(d.Decision, vocab.DecisionIssues)
+		return fmt.Sprintf("%s, [#%s](%s)", vocab.DecisionLabel, number, d.Decision)
+	}
+	labeled := make([]string, 0, len(d.Sources))
+	for _, c := range d.Sources {
+		w, ok := p.m.Work(c.Work)
+		if !ok {
+			continue
+		}
+		labeled = append(labeled, w.Tier.Label()+p.cite([]vocab.Citation{c}))
+	}
+	return strings.Join(labeled, "<br>")
 }
 
 func (p *page) questionTable(qs []vocab.ClarificationQuestion) {

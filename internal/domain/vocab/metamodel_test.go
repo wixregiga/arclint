@@ -1,6 +1,7 @@
 package vocab
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -173,7 +174,10 @@ func validModel() MetaModel {
 		Description: "The vocabulary.",
 		Works: []Work{{
 			Key: "evans2015", Title: "Reference", Authors: []string{"Eric Evans"},
-			Year: 2015, Verification: VerifiedText,
+			Year: 2015, Verification: VerifiedText, Tier: TierCanonical,
+		}, {
+			Key: "a-blog", Title: "A post", Authors: []string{"A Practitioner"},
+			Year: 2020, Verification: VerifiedFetched, Tier: TierPractitioner,
 		}},
 		Facts: []FactDefinition{{Name: "declarations", Definition: "Declarations.", Languages: Languages{All: true}}},
 		Milestones: []Milestone{{
@@ -217,6 +221,26 @@ func validModel() MetaModel {
 				Records:    Recording{Section: "none"},
 			},
 		},
+		Declined: []DeclinedRule{
+			{
+				ID: "aggregate/required-factory", Statement: "Every aggregate names a factory.",
+				Reason: "Only complicated creation calls for one.", Sources: cite,
+			},
+			{
+				ID: "aggregate/waived-when-missing", Statement: "A waiver silences a missing rule.",
+				Reason: "A warning does not fail.", Decision: DecisionIssues + "129",
+			},
+		},
+	}
+}
+
+// A tier 3 work may illustrate a declined rule beside a tier 1 or 2
+// work that names a page.
+func TestValidateAcceptsIllustratingBlog(t *testing.T) {
+	m := validModel()
+	m.Declined[0].Sources = append(m.Declined[0].Sources, Citation{Work: "a-blog"})
+	if err := m.Validate(); err != nil {
+		t.Fatalf("rejected: %v", err)
 	}
 }
 
@@ -277,6 +301,32 @@ func TestValidateRejects(t *testing.T) {
 		{"limitation off the domain evaluator", func(m *MetaModel) {
 			m.Blocks[0].Invariants[0].Enforcement.Limitations = []string{"a thrown error is not seen"}
 		}, `evaluator "loader" runs none`},
+		{"declined off every block", func(m *MetaModel) { m.Declined[0].ID = "nowhere/required-factory" }, `prefixed by a building block's term`},
+		{"declined without a slash", func(m *MetaModel) { m.Declined[0].ID = "aggregate" }, `prefixed by a building block's term`},
+		{"declined name not kebab", func(m *MetaModel) { m.Declined[0].ID = "aggregate/Required_Factory" }, `not lowercase kebab case`},
+		{"declined names an invariant", func(m *MetaModel) { m.Declined[0].ID = "aggregate/identity-recorded" }, `names an invariant arclint enforces`},
+		{"declined twice", func(m *MetaModel) { m.Declined[1].ID = m.Declined[0].ID }, `id recorded twice`},
+		{"declined without statement", func(m *MetaModel) { m.Declined[0].Statement = " " }, `statement must say what is not enforced`},
+		{"declined without reason", func(m *MetaModel) { m.Declined[0].Reason = "" }, `reason must say why`},
+		{"declined without basis", func(m *MetaModel) { m.Declined[1].Decision = "" }, `a basis is required`},
+		{"declined on two bases", func(m *MetaModel) { m.Declined[0].Decision = DecisionIssues + "1" }, `not both`},
+		{"declined literature without a page", func(m *MetaModel) {
+			m.Declined[0].Sources = []Citation{{Work: "evans2015", Section: "Factories"}}
+		}, `name a page`},
+		{"declined literature unlisted", func(m *MetaModel) {
+			m.Declined[0].Sources = []Citation{{Work: "nobody", Page: "1"}}
+		}, `cites work "nobody"`},
+		{"declined literature a blog alone", func(m *MetaModel) {
+			m.Declined[0].Sources = []Citation{{Work: "a-blog", Page: "1"}}
+		}, `a tier 3 work may only illustrate`},
+		{"work without tier", func(m *MetaModel) { m.Works[0].Tier = 0 }, `tier 0 is not 1, 2, or 3`},
+		{"work beyond tier 3", func(m *MetaModel) { m.Works[1].Tier = 4 }, `tier 4 is not 1, 2, or 3`},
+		{"declined decision elsewhere", func(m *MetaModel) {
+			m.Declined[1].Decision = "https://example.com/issues/129"
+		}, `not a link to an arclint issue`},
+		{"declined decision not an issue number", func(m *MetaModel) {
+			m.Declined[1].Decision = DecisionIssues + "129#comment"
+		}, `not a link to an arclint issue`},
 		{"empty limitation", func(m *MetaModel) {
 			m.Blocks[0].Invariants[1].Enforcement.By = EvaluatorDomain
 			m.Blocks[0].Invariants[1].Enforcement.Limitations = []string{" "}
@@ -308,6 +358,68 @@ func TestValidateReportsEveryFailure(t *testing.T) {
 	for _, want := range []string{`"nobody"`, `"mystical"`, "at least one author"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("joined error lacks %q:\n%v", want, err)
+		}
+	}
+}
+
+// A declined rule that names a block's rule, such as factory/declared in
+// its reason, names one the meta-model enforces, so a renamed invariant
+// cannot leave a reason pointing at nothing.
+func TestDDDDeclinedReasonsNameRecordedInvariants(t *testing.T) {
+	m := DDD()
+	if len(m.Declined) == 0 {
+		t.Fatal("the meta-model records no declined rule")
+	}
+	ruleID := regexp.MustCompile(`\b([a-z_]+)/([a-z][a-z0-9-]*)\b`)
+	for _, d := range m.Declined {
+		for _, match := range ruleID.FindAllStringSubmatch(d.Reason, -1) {
+			if _, ok := m.Block(match[1]); !ok {
+				continue
+			}
+			if _, ok := m.Invariant(match[0]); !ok {
+				t.Errorf("declined %s: reason names %s, which is not a recorded invariant", d.ID, match[0])
+			}
+		}
+	}
+}
+
+// The factory entry is the one the issue asks the librarian to cite:
+// asked to require a factory for every aggregate, it answers with Evans,
+// DDD Reference 2015, p. 18.
+func TestDDDDeclinesFactoryForEveryAggregate(t *testing.T) {
+	m := DDD()
+	for _, d := range m.Declined {
+		if d.ID != "factory/required-for-every-aggregate" {
+			continue
+		}
+		if d.Term() != "factory" {
+			t.Errorf("term = %q, want factory", d.Term())
+		}
+		for _, c := range d.Sources {
+			if c.Work == "evans2015" && c.Page == "18" {
+				return
+			}
+		}
+		t.Fatalf("sources = %v, want Evans 2015 p. 18", d.Sources)
+	}
+	t.Fatal("factory/required-for-every-aggregate is not declined")
+}
+
+// The canonical works stay in the bibliography at tier 1: a canonical
+// reference is never removed or demoted.
+func TestDDDKeepsCanonicalWorksAtTierOne(t *testing.T) {
+	m := DDD()
+	for _, key := range []string{
+		"evans2003", "evans2015", "vernon2013", "evans-fowler-1997",
+		"vernon-effective-aggregate-design-1", "vernon-effective-aggregate-design-2",
+	} {
+		w, ok := m.Work(key)
+		if !ok {
+			t.Errorf("canonical work %s is not in the bibliography", key)
+			continue
+		}
+		if w.Tier != TierCanonical {
+			t.Errorf("canonical work %s is %s, want %s", key, w.Tier.Label(), TierCanonical.Label())
 		}
 	}
 }

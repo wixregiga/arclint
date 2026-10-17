@@ -76,6 +76,7 @@ func render(src []byte, sourceName, pkg string) ([]byte, error) {
 	e.milestones(doc.Milestones)
 	e.phases(doc.Phases)
 	e.blocks(doc.Blocks)
+	e.declined(doc.Declined)
 	e.printf("}\n}\n")
 	formatted, err := format.Source(b.Bytes())
 	if err != nil {
@@ -98,6 +99,7 @@ type document struct {
 	Milestones  ordered[milestone] `yaml:"milestones"`
 	Phases      []phase            `yaml:"phases"`
 	Blocks      []block            `yaml:"building_blocks"`
+	Declined    []declined         `yaml:"declined"`
 }
 
 type work struct {
@@ -111,6 +113,7 @@ type work struct {
 	URL          string   `yaml:"url"`
 	License      string   `yaml:"license"`
 	Verification string   `yaml:"verification"`
+	Tier         int      `yaml:"tier"`
 }
 
 type fact struct {
@@ -184,6 +187,14 @@ type enforcement struct {
 	Needs       string    `yaml:"needs"`
 	Severity    string    `yaml:"severity"`
 	Limitations []string  `yaml:"limitations"`
+}
+
+type declined struct {
+	ID        string     `yaml:"id"`
+	Statement string     `yaml:"statement"`
+	Reason    string     `yaml:"reason"`
+	Sources   []citation `yaml:"sources"`
+	Decision  string     `yaml:"decision"`
 }
 
 type guidance struct {
@@ -271,6 +282,11 @@ var (
 		"fetched": "VerifiedFetched",
 		"carried": "VerifiedCarried",
 	}
+	tiers = map[int]string{
+		1: "TierCanonical",
+		2: "TierPublished",
+		3: "TierPractitioner",
+	}
 	evaluators = map[string]string{
 		"loader":  "EvaluatorLoader",
 		"domain":  "EvaluatorDomain",
@@ -316,6 +332,9 @@ func parse(src []byte) (document, error) {
 		}
 		if _, ok := verifications[w.Verification]; !ok {
 			problems = append(problems, fmt.Errorf("works %q: verification %q is not text, fetched, or carried", key, w.Verification))
+		}
+		if _, ok := tiers[w.Tier]; !ok {
+			problems = append(problems, fmt.Errorf("works %q: tier %d is not 1, 2, or 3", key, w.Tier))
 		}
 	}
 	for _, b := range doc.Blocks {
@@ -384,6 +403,7 @@ func (e emitter) works(ws ordered[work]) {
 		e.str("URL", w.URL)
 		e.str("License", w.License)
 		e.printf("Verification: %s,\n", verifications[w.Verification])
+		e.printf("Tier: %s,\n", tiers[w.Tier])
 		e.printf("},\n")
 	}
 	e.printf("},\n")
@@ -552,6 +572,23 @@ func (e emitter) guidance(gs []guidance) {
 			e.printf("Fundamental: true,\n")
 		}
 		e.citations(g.Sources)
+		e.printf("},\n")
+	}
+	e.printf("},\n")
+}
+
+func (e emitter) declined(ds []declined) {
+	if len(ds) == 0 {
+		return
+	}
+	e.printf("Declined: []DeclinedRule{\n")
+	for _, d := range ds {
+		e.printf("{\n")
+		e.str("ID", d.ID)
+		e.str("Statement", d.Statement)
+		e.str("Reason", d.Reason)
+		e.citations(d.Sources)
+		e.str("Decision", d.Decision)
 		e.printf("},\n")
 	}
 	e.printf("},\n")
