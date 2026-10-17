@@ -36,7 +36,7 @@ if True:
     def conditional():
         pass
 `)
-	got := extractDeclarations(newParsers(), src, nil)
+	got := extractDeclarations(newParsers(), src)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}
@@ -77,7 +77,7 @@ func TestPythonSignatureextractDeclarations(t *testing.T) {
 def top(x: int) -> dict[str, int]:
     return {}
 `)
-	got := extractDeclarations(newParsers(), src, nil)
+	got := extractDeclarations(newParsers(), src)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}
@@ -123,7 +123,7 @@ func TestPythonextractCalls(t *testing.T) {
     def publish(self):
         return self.published_frozen()
 `)
-	got := extractDeclarations(newParsers(), src, nil)
+	got := extractDeclarations(newParsers(), src)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}
@@ -233,7 +233,7 @@ class Concrete(ByABC):
 class Plain(Generic[T]):
     pass
 `)
-	got := extractDeclarations(newParsers(), src, nil)
+	got := abstractDeclarations(src)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}
@@ -259,7 +259,7 @@ class Plain(Generic[T]):
 class Shadowed(ABC):
     pass
 `)
-	got = extractDeclarations(newParsers(), local, nil)
+	got = abstractDeclarations(local)
 	for _, d := range got.Decls {
 		if d.Abstract {
 			t.Fatalf("a local class named ABC declares nothing abstract: %+v", d)
@@ -273,7 +273,7 @@ from shapes import ABC
 class Twice(ABC):
     pass
 `)
-	got = extractDeclarations(newParsers(), rebound, nil)
+	got = abstractDeclarations(rebound)
 	for _, d := range got.Decls {
 		if d.Abstract {
 			t.Fatalf("a name the module binds twice decides nothing: %+v", d)
@@ -332,7 +332,7 @@ class Shelf:
         class InMiddle(ABC):
             pass
 `)
-	got := extractDeclarations(newParsers(), src, nil)
+	got := abstractDeclarations(src)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}
@@ -354,7 +354,7 @@ class Shelf:
 // TestPythonAbstractClassAfterADestructuringRebinding leaves a class
 // unmarked when the module rebinds the imported name by destructuring.
 func TestPythonAbstractClassAfterADestructuringRebinding(t *testing.T) {
-	got := extractDeclarations(newParsers(), []byte("from abc import ABC\n\nABC, other = object, None\n\n\nclass Encrypter(ABC):\n    pass\n"), nil)
+	got := abstractDeclarations([]byte("from abc import ABC\n\nABC, other = object, None\n\n\nclass Encrypter(ABC):\n    pass\n"))
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}
@@ -364,3 +364,22 @@ func TestPythonAbstractClassAfterADestructuringRebinding(t *testing.T) {
 		}
 	}
 }
+
+// abstractDeclarations extracts one file's declarations and marks its
+// abstract classes as a file read without a repository: every import
+// reaches the library.
+func abstractDeclarations(src []byte) *declarationFacts {
+	df := extractDeclarations(newParsers(), src)
+	if df.ParseError == "" {
+		markAbstractClasses(df, libraryOnly{}, ".")
+	}
+	return df
+}
+
+// libraryOnly is the origin of a file read without a repository: every
+// import reaches the library.
+type libraryOnly struct{}
+
+func (libraryOnly) repository(string, string) bool { return false }
+
+func (libraryOnly) follow(string, string, string) (string, string) { return "", "" }
