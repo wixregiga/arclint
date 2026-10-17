@@ -2,6 +2,7 @@ package python
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
@@ -21,7 +22,7 @@ func resolvedFacts(root string, files []conformance.ObservedFile, res *resolver,
 		if err != nil {
 			continue
 		}
-		df := extractDeclarations(ps, src)
+		df := extractDeclarations(ps, src, res.repositoryModule(path.Dir(file.Path)))
 		if df.ParseError != "" {
 			continue
 		}

@@ -60,7 +60,7 @@ func TestExportPythonOracle(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		idx.modules[file.Path] = newModule(file.Path, extractDeclarations(ps, src))
+		idx.modules[file.Path] = newModule(file.Path, extractDeclarations(ps, src, nil))
 	}
 	var queries []oracleQuery
 	add := func(file string, src []byte, offset uint32, method, kind string, ref conformance.Reference) {

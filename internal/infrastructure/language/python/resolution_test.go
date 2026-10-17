@@ -791,11 +791,44 @@ func TestResultTypesFollowTheReturnAnnotation(t *testing.T) {
 	}
 
 	facts = resolved(t, map[string]string{
+		"captured.py": "from typing import Protocol\n\n\nclass EncryptedPassword:\n    pass\n\n\nmatch str:\n    case EncryptedPassword:\n        pass\n\n\nclass Encrypter(Protocol):\n    def encrypt(self, plain: str) -> EncryptedPassword: ...\n",
+	})
+	for _, d := range facts["captured.py"].Declarations {
+		if d.Kind == declMethod && d.Name == "encrypt" && d.Type.Resolution != conformance.ResolutionUndetermined {
+			t.Errorf("a result naming a name a match pattern rebinds = %+v, want undetermined", d.Type)
+		}
+	}
+
+	facts = resolved(t, map[string]string{
 		"generic.py": "from typing import Protocol\n\n\nclass EncryptedPassword:\n    pass\n\n\nclass Encrypter[EncryptedPassword](Protocol):\n    def encrypt(self, plain: str) -> EncryptedPassword: ...\n",
 	})
 	for _, d := range facts["generic.py"].Declarations {
 		if d.Kind == declMethod && d.Name == "encrypt" && (d.Type.Resolution != conformance.ResolutionUndetermined || !strings.Contains(d.Type.Reason, "type parameter")) {
 			t.Errorf("a method result naming its class's type parameter = %+v, want undetermined", d.Type)
+		}
+	}
+}
+
+// TestAbstractMarkReachesTheLibrary marks a class whose Protocol base is
+// the library's, and leaves one unmarked whose Protocol comes from a
+// module of the repository that shares the library's name.
+func TestAbstractMarkReachesTheLibrary(t *testing.T) {
+	root, files := writeFiles(t, map[string]string{
+		"typing_extensions.py": "class Protocol:\n    pass\n",
+		"local.py":             "from typing_extensions import Protocol\n\n\nclass Encrypter(Protocol):\n    def encrypt(self, plain: str) -> str: ...\n",
+		"library.py":           "from typing import Protocol\n\n\nclass Encrypter((Protocol)):\n    def encrypt(self, plain: str) -> str: ...\n",
+	})
+	for _, requested := range [][]rule.Fact{{rule.FactDeclarations}, {rule.FactDeclarations, rule.FactFieldTypes}} {
+		facts, err := NewProducer().Facts(root, files, requested)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for file, want := range map[string]bool{"local.py": false, "library.py": true} {
+			for _, d := range facts[file].Declarations {
+				if d.Kind == declClass && d.Name == "Encrypter" && d.Abstract != want {
+					t.Errorf("%v: %s Encrypter abstract = %v, want %v", requested, file, d.Abstract, want)
+				}
+			}
 		}
 	}
 }
