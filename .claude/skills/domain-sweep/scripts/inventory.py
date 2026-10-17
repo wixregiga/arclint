@@ -102,16 +102,12 @@ GENERATED = re.compile(r"Code generated .* DO NOT EDIT")
 # path, a key, a format verb or a struct tag.
 WORDS = re.compile(r"[A-Za-z]{2,}[ \t]+[A-Za-z]{2,}")
 
-# Test declarations, matched against a line's code alone: every literal on
-# the line reads "", so a declaration written inside a fixture string is
-# not one. A TypeScript call whose name is on the next line ends in "(".
+# Go and Python test declarations, matched against a line's code alone:
+# every literal on the line reads "", so a declaration written inside a
+# fixture string is not one. ts_sources follows TypeScript test calls token
+# by token.
 GO_TEST = re.compile(r"^\s*func\s+Test\w*\s*\(")
 PY_TEST = re.compile(r"^\s*(?:async\s+)?def\s+test\w*\s*\(|^\s*class\s+Test\w*\b")
-TS_TEST = re.compile(
-    r"(?:^|[^\w.$])(?:it|test|describe)(?:\.\w+)*"
-    r"(?:\s*\((?:[^()]|\([^()]*\))*\))?"  # the table of test.each([...])
-    r"\s*\(\s*(\"\"|$)"
-)
 LITERAL = '""'
 
 TS_SUFFIXES = (".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs")
@@ -401,10 +397,20 @@ def skip_regex(text, i):
     return len(text)
 
 
+TEST_CALLEES = {"it", "test", "describe"}
+
+
 def ts_sources(lines):
     """Map line number to source for a TypeScript or JavaScript file.
     Template literals may nest code in ${ }, which may nest literals; a
-    stack keeps the brace depth of each open substitution."""
+    stack keeps the brace depth of each open substitution.
+
+    A test declaration is followed token by token: a callee (it, test or
+    describe, with .only, .each and the like), any type arguments, any
+    table it takes in parentheses or as a tagged template, then a call
+    whose first argument
+    is a literal: that literal is the test's name, and every line it spans
+    is a test row."""
     found = {}
     state = "code"  # code, block, template, or string (a quoted literal continued past a line)
     quote = None  # the quote of a continued string
@@ -412,16 +418,27 @@ def ts_sources(lines):
     depth = 0
     parens = []  # for each open parenthesis, whether it opened a condition
     prev = "operator"  # the previous token: ("word", name), "operand" or "operator"
-    pending_test = False  # a test call ended its line before its name
-    in_test_name = False  # a test's name literal goes on past a line
+    before = "operator"  # the token before prev
+    after_dot = False  # prev was a member access dot: the next word is a property
+    # The test declaration being read: None; "callee"; ("open", n), just
+    # after the call's parenthesis, the n-th open; ("args", n), inside a
+    # call whose first argument is no literal; ("tagged", t), inside a
+    # tagged template table, the t-th open template; ("generic", n), inside
+    # type arguments, it.each<Row>(...), n angle brackets deep;
+    # ("name", "string") or ("name", t), inside the name literal.
+    test_call = None
+    callee_line = 0  # the line the test callee began on
+
+    def templates_open():
+        return len(stack) + (1 if state == "template" else 0)
+
     for number, text in enumerate(lines, start=1):
         kinds = set()
-        code = []
         if state in ("template", "string"):
             kinds.add("text")
         elif state == "block":
             kinds.add("comment")
-        if in_test_name:
+        if isinstance(test_call, tuple) and test_call[0] == "name":
             kinds.add("test")
         segment = []  # the template characters read on this line
 
@@ -429,6 +446,41 @@ def ts_sources(lines):
             if WORDS.search("".join(segment)):
                 kinds.add("text")
             segment.clear()
+
+        def token(kind):
+            nonlocal prev, before, after_dot
+            before, prev, after_dot = prev, kind, False
+
+        def literal_starts(continues):
+            """A string or template opens in code; continues names how the
+            literal is followed: "string" or the template's open count."""
+            nonlocal test_call
+            if isinstance(test_call, tuple) and test_call[0] == "open":
+                test_call = ("name", continues)
+                kinds.add("test")
+                if callee_line != number:
+                    found[callee_line] = "test"
+            elif test_call == "callee" and continues != "string":
+                test_call = ("tagged", continues)
+            elif test_call == "callee":
+                test_call = None
+
+        def literal_ends(closed):
+            """A string or template closed; closed is "string" or the open
+            count it had."""
+            nonlocal test_call
+            if test_call == ("name", closed):
+                test_call = None
+            elif test_call == ("tagged", closed):
+                test_call = "callee"
+
+        def other_token():
+            """Any token that is not part of a test declaration's shape."""
+            nonlocal test_call
+            if test_call == "callee":
+                test_call = None
+            elif isinstance(test_call, tuple) and test_call[0] == "open":
+                test_call = ("args", test_call[1])
 
         i = 0
         while i < len(text):
@@ -444,9 +496,11 @@ def ts_sources(lines):
                 if how != "closed":
                     if how == "open":
                         state = "code"
+                        literal_ends("string")
                     break
-                state, prev = "code", "operand"
-                code.append(LITERAL)
+                state = "code"
+                literal_ends("string")
+                token("operand")
                 continue
             if state == "template":
                 if char == "\\":
@@ -455,13 +509,17 @@ def ts_sources(lines):
                     continue
                 if char == "`":
                     end_segment()
-                    state, prev = "code", "operand"
+                    closed = templates_open()
+                    state = "code"
+                    literal_ends(closed)
+                    token("operand")
                     i += 1
                     continue
                 if text[i:i + 2] == "${":
                     end_segment()
                     stack.append(depth)
-                    depth, state, prev = 0, "code", "operator"
+                    depth, state = 0, "code"
+                    token("operator")
                     i += 2
                     continue
                 segment.append(char)
@@ -477,147 +535,234 @@ def ts_sources(lines):
                 i += 2
                 continue
             if char.isspace():
-                code.append(char)
                 i += 1
                 continue
             if char.isalpha() or char in "_$":
                 j = i
                 while j < len(text) and (text[j].isalnum() or text[j] in "_$"):
                     j += 1
-                code.append(text[i:j])
-                prev = ("word", text[i:j])
+                word = text[i:j]
+                if after_dot:
+                    # A property: counts.in is an operand, and test.each
+                    # stays a test callee.
+                    if test_call != "callee":
+                        other_token()
+                    token("operand")
+                else:
+                    if word in TEST_CALLEES and test_call in (None, "callee"):
+                        test_call, callee_line = "callee", number
+                    else:
+                        other_token()
+                    token(("word", word))
                 i = j
                 continue
             if char.isdigit():
                 j = i
                 while j < len(text) and (text[j].isalnum() or text[j] in "_."):
                     j += 1
-                code.append(text[i:j])
-                prev, i = "operand", j
+                other_token()
+                token("operand")
+                i = j
                 continue
             if char == "`":
                 state = "template"
-                code.append(LITERAL)
+                literal_starts(templates_open())
                 i += 1
                 continue
             if char in "\"'":
+                literal_starts("string")
                 i, content, how = scan_quoted(text, i + 1, char)
                 if WORDS.search(content):
                     kinds.add("text")
-                code.append(LITERAL)
                 if how == "continued":
                     state, quote = "string", char
                     kinds.add("text")
                     break
-                prev = "operand"
+                literal_ends("string")
+                token("operand")
                 continue
             if char == "/" and not ends_operand(prev):
+                other_token()
                 i = skip_regex(text, i)
-                code.append(LITERAL)
-                prev = "operand"
+                token("operand")
+                continue
+            if text[i:i + 3] == "...":
+                other_token()
+                token("operator")
+                i += 3
+                continue
+            if char == "." or pair == "?.":
+                if test_call != "callee":
+                    other_token()
+                i += 1 if char == "." else 2
+                before, prev, after_dot = prev, "operator", True
                 continue
             if pair in ("++", "--"):
                 # After an operand, ++ and -- are postfix and end it; before
                 # one, they are prefix.
-                code.append(pair)
-                prev = "operand" if ends_operand(prev) else "operator"
+                other_token()
+                token("operand" if ends_operand(prev) else "operator")
                 i += 2
                 continue
             if char == "!" and ends_operand(prev) and text[i + 1:i + 2] != "=":
                 # A non-null assertion, count!, ends an operand.
-                code.append(char)
-                prev, i = "operand", i + 1
+                other_token()
+                token("operand")
+                i += 1
                 continue
             if char == "(":
-                parens.append(isinstance(prev, tuple) and prev[1] in CONTROL_KEYWORDS)
-                prev = "operator"
+                condition = (isinstance(prev, tuple) and prev[1] in CONTROL_KEYWORDS) or (
+                    prev == ("word", "await") and before == ("word", "for")
+                )
+                parens.append(condition)
+                if test_call == "callee":
+                    test_call = ("open", len(parens))
+                else:
+                    other_token()
+                token("operator")
             elif char == ")":
-                prev = "operator" if (parens.pop() if parens else False) else "operand"
-                code.append(char)
-                i += 1
-                continue
+                opened = len(parens)
+                closes_condition = parens.pop() if parens else False
+                if isinstance(test_call, tuple) and test_call[0] in ("open", "args") and test_call[1] == opened:
+                    test_call = "callee"
+                else:
+                    other_token()
+                token("operator" if closes_condition else "operand")
             elif char == "]":
-                prev = "operand"
-                code.append(char)
-                i += 1
-                continue
+                other_token()
+                token("operand")
             elif char == "{":
+                other_token()
                 depth += 1
-                prev = "operator"
+                token("operator")
             elif char == "}":
                 if depth == 0 and stack:
                     depth = stack.pop()
                     state = "template"
                     i += 1
                     continue
+                other_token()
                 depth -= 1
-                prev = "operator"
+                token("operator")
+            elif char == "<" and test_call == "callee":
+                test_call = ("generic", 1)
+                token("operator")
+            elif char in "<>" and isinstance(test_call, tuple) and test_call[0] == "generic":
+                level = test_call[1] + (1 if char == "<" else -1)
+                test_call = ("generic", level) if level else "callee"
+                token("operator")
             else:
-                prev = "operator"
-            code.append(char)
+                other_token()
+                token("operator")
             i += 1
         if state == "template":
             # The literal goes on past this line: every line it spans is text.
             kinds.add("text")
         end_segment()
-        line_code = "".join(code)
-        declared = TS_TEST.search(line_code)
-        if declared or (pending_test and line_code.lstrip().startswith(LITERAL)):
-            kinds.add("test")
-        if declared:
-            pending_test = declared.group(1) == ""
-        elif line_code.strip():
-            pending_test = False
-        in_test_name = "test" in kinds and state in ("template", "string")
         if kinds and text.strip():
             found[number] = pick(kinds)
     return found
 
 
 PY_STRING = re.compile(r"([rRbBuUfF]{0,2})('\'\'|\"\"\"|'|\")")
+PY_OPEN = "([{"
+PY_CLOSE = ")]}"
 
 
 def python_sources(lines):
-    """Map line number to source for a Python file."""
+    """Map line number to source for a Python file. F-strings are read as
+    Python 3.12 reads them: the literal parts are text, and the code in a
+    { } replacement field is code, comments and nested strings included,
+    up to a format spec after a top-level colon, which is text again. A
+    stack holds what is open: ["string", quote, raw], ["fstring", quote,
+    raw] (an f-string's literal part), ["field", depth] (a replacement
+    field, with its bracket depth) and ["spec"] (a format spec)."""
     found = {}
-    open_quote = None  # the quote of a string that goes on past a line
+    stack = []
     for number, text in enumerate(lines, start=1):
         kinds = set()
-        code = []
-        i = 0
-        if open_quote:
+        code = []  # the line's code outside every literal, for declarations
+        segment = []  # the literal characters read on this line
+
+        def end_segment():
+            if WORDS.search("".join(segment)):
+                kinds.add("text")
+            segment.clear()
+
+        def in_literal():
+            return bool(stack) and stack[-1][0] in ("string", "fstring", "spec")
+
+        if in_literal():
             kinds.add("text")
-            end, how = find_close(text, 0, open_quote)
-            if end < 0:
-                if len(open_quote) == 1 and how != "continued":
-                    open_quote = None
-                if text.strip():
-                    found[number] = "text"
-                continue
-            open_quote = None
-            code.append(LITERAL)
-            i = end
+        continued = False
+        i = 0
         while i < len(text):
             char = text[i]
+            top = stack[-1] if stack else None
+            if top is not None and top[0] in ("string", "fstring"):
+                quote, raw = top[1], top[2]
+                if char == "\\":
+                    if i + 1 == len(text):
+                        continued = True
+                        i += 1
+                        continue
+                    segment.append(text[i:i + 2])
+                    i += 2
+                    continue
+                if text.startswith(quote, i):
+                    end_segment()
+                    stack.pop()
+                    i += len(quote)
+                    continue
+                if top[0] == "fstring" and char in "{}":
+                    if text[i:i + 2] in ("{{", "}}"):
+                        segment.append(char)
+                        i += 2
+                        continue
+                    if char == "{":
+                        end_segment()
+                        stack.append(["field", 0])
+                        i += 1
+                        continue
+                segment.append(char)
+                i += 1
+                continue
+            if top is not None and top[0] == "spec":
+                if char == "{":
+                    end_segment()
+                    stack.append(["field", 0])
+                elif char == "}":
+                    end_segment()
+                    stack.pop()  # the spec
+                    stack.pop()  # its field
+                else:
+                    segment.append(char)
+                i += 1
+                continue
+            # Code: at the top level, or inside a replacement field.
             if char == "#":
                 kinds.add("comment")
                 break
             match = PY_STRING.match(text, i) if char in "'\"rRbBuUfF" else None
-            if match:
-                quote = match.group(2)
-                body = match.end()
-                end, how = find_close(text, body, quote)
-                code.append(LITERAL)
-                if end < 0:
-                    if len(quote) == 3 or how == "continued":
-                        open_quote = quote
-                        kinds.add("text")
-                    elif WORDS.search(text[body:]):
-                        kinds.add("text")
-                    break
-                if WORDS.search(text[body:end - len(quote)]):
-                    kinds.add("text")
-                i = end
+            if match and (char in "'\"" or i == 0 or not (text[i - 1].isalnum() or text[i - 1] == "_")):
+                prefix, quote = match.group(1).lower(), match.group(2)
+                stack.append(["fstring" if "f" in prefix else "string", quote, "r" in prefix])
+                if not stack[:-1]:
+                    code.append(LITERAL)
+                i = match.end()
+                continue
+            if top is not None and top[0] == "field":
+                if char in PY_OPEN:
+                    top[1] += 1
+                elif char in PY_CLOSE:
+                    if top[1] == 0 and char == "}":
+                        stack.pop()
+                        i += 1
+                        continue
+                    top[1] -= 1
+                elif char == ":" and top[1] == 0:
+                    stack.append(["spec"])
+                i += 1
                 continue
             if char.isalnum() or char == "_":
                 j = i
@@ -628,28 +773,19 @@ def python_sources(lines):
                 continue
             code.append(char)
             i += 1
+        if in_literal():
+            # The literal goes on past this line: every line it spans is text.
+            kinds.add("text")
+        end_segment()
+        # A one-quote literal ends with its line unless a backslash carries
+        # it on; an unterminated one is closed here, as Python refuses it.
+        while stack and stack[-1][0] in ("string", "fstring") and len(stack[-1][1]) == 1 and not continued:
+            stack.pop()
         if PY_TEST.search("".join(code)):
             kinds.add("test")
         if kinds and text.strip():
             found[number] = pick(kinds)
     return found
-
-
-def find_close(text, i, quote):
-    """Return the index past the closing quote, or -1 when the line does
-    not close the string, and "continued" when the line ends in a
-    backslash inside it. A backslash escapes the next character, in raw
-    strings too, where it stays in the value."""
-    while i < len(text):
-        if text[i] == "\\":
-            if i + 1 == len(text):
-                return -1, "continued"
-            i += 2
-            continue
-        if text.startswith(quote, i):
-            return i + len(quote), "closed"
-        i += 1
-    return -1, "open"
 
 
 def pick(kinds):
