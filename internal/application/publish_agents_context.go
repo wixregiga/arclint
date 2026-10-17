@@ -63,7 +63,7 @@ func AgentCommandSurface() []AgentCommandDoc {
 		{"agents hooks install", "agents hooks install", "write the workflow hooks into Claude Code and Codex user configuration, for every project and worktree (`--project` for this project only); they advise when work skips context, domain recording or the check, and never block"},
 		{"agents hooks status", "agents hooks status", "show which configuration files list the workflow hooks and when a hook event last reached this project; Codex runs them after you trust them in /hooks"},
 		{"agents md", "agents md --write", "refresh this block after changing " + rule.RulesetFileName + " or the vocabulary"},
-		{"agents skill", "agents skill", "write the " + vocab.SkillName + " skill to `" + vocab.SkillDirectory + "/` when your harness lacks it"},
+		{"agents skill", "agents skill", "write the " + vocab.SkillName + " skill to `" + vocab.AgentsSkillDirectory + "/` for Codex and `" + vocab.ClaudeSkillDirectory + "/` for Claude Code when your harness lacks it"},
 		{"baseline", "baseline", "manage the committed baseline of adopted findings"},
 		{"patterns", "patterns", "list the Patterns that resolve offline (embedded, vendored, authored); `patterns install <pattern>` extends " + rule.RulesetFileName + " with one, `patterns vendor` copies one under `.arclint/patterns`"},
 	}

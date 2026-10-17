@@ -311,7 +311,9 @@ Three commands do the agent-facing work:
 - `arclint agents md --write`: generates the AGENTS.md block from the
   ruleset (this repository's [AGENTS.md](AGENTS.md) is produced this
   way), so the agent-facing context cannot drift from the enforced
-  contract. `arclint agents skill` emits a skill bundle.
+  contract. `arclint agents skill` writes the domain-librarian skill
+  where Codex (`.agents/skills`) and Claude Code (`.claude/skills`)
+  load project skills.
 - `arclint domain`: inspects and maintains the project's ubiquitous
   language in a committed domain file: bounded contexts,
   entities, aggregates, value objects, invariants, and events, with a
@@ -366,7 +368,7 @@ context [paths...]  the architecture, or everything binding the given paths (--z
 domain              inspect and maintain the project's ubiquitous language (init/overview/list/show/explain/define/remove/schema)
 agents hooks        install/status the Claude Code and Codex workflow hooks; event answers a host
 agents md           architecture block; --write installs it in AGENTS.md
-agents skill        domain-librarian SKILL.md, vocabulary and schema
+agents skill        domain-librarian skill for Codex and Claude Code, and the domain schema
 baseline capture    adopt current findings   ·  baseline refresh: drop stale entries
 patterns            list the patterns that resolve offline: embedded, vendored, authored (--remote lists a registry)
 patterns install    extend rules.arclint.yaml with one pattern; vendors it first when it came from the registry

@@ -1,9 +1,21 @@
 package vocab
 
-// Domain-librarian skill artifact names and default install directory.
+// Where agent harnesses load the domain-librarian skill, relative to
+// the project root: Codex scans .agents/skills and Claude Code scans
+// .claude/skills. arclint agents skill writes the same files into each.
 const (
-	// SkillDirectory is the default relative directory for skill artifacts.
-	SkillDirectory = ".agents/skills/domain-librarian"
+	AgentsSkillDirectory = ".agents/skills/" + SkillName
+	ClaudeSkillDirectory = ".claude/skills/" + SkillName
+)
+
+// SkillDirectories returns every directory the skill is written into
+// by default, in write order.
+func SkillDirectories() []string {
+	return []string{AgentsSkillDirectory, ClaudeSkillDirectory}
+}
+
+// Domain-librarian skill artifact names.
+const (
 	// SkillProtocolFile is the skill entrypoint filename (SKILL.md).
 	SkillProtocolFile = "SKILL.md"
 	// SkillVocabularyFile is the VOCAB.yaml filename.

@@ -25,12 +25,9 @@ func (uc PublishSkillProtocol) Render() string {
 	return vocab.SkillMarkdown()
 }
 
-// Execute writes SKILL.md under dir (default DomainLibrarianSkillDir
-// when dir is empty), reporting whether the file changed and its path.
+// Execute writes SKILL.md under dir, one of SkillDirectories, reporting
+// whether the file changed and its path.
 func (uc PublishSkillProtocol) Execute(dir string) (changed bool, path string, err error) {
-	if dir == "" {
-		dir = DomainLibrarianSkillDir
-	}
 	content := []byte(uc.Render())
 	changed, path, err = uc.writer.Write(dir, vocab.SkillProtocolFile, content)
 	if err != nil {

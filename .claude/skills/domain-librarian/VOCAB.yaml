@@ -1,0 +1,117 @@
+# domain-librarian core reference: DDD vocabulary, distillation rules, clarification protocol.
+version: 1
+
+vocabulary:
+  # Strategic design
+  domain: "A sphere of knowledge, influence, or activity. The subject area to which the user applies a program is the domain of the software."
+  model: "A system of abstractions that describes selected aspects of a domain and can be used to solve problems related to that domain. A model has meaning only inside a bounded context."
+  ubiquitous_language: "A language structured around the domain model and used by all team members within a bounded context to connect all the activities of the team with the software. The model is the backbone of the language; the code uses the same terms as the conversation, and a change in the language is a change to the model."
+  context: "The setting in which a word or statement appears that determines its meaning. Statements about a model can only be understood in a context."
+  bounded_context: "A description of a boundary, typically a subsystem or the work of a particular team, within which a particular model is defined and applicable. The boundary is set explicitly in terms of team organization, usage within specific parts of the application, and physical manifestations such as code bases and database schemas."
+  context_map: "The named bounded contexts in play on a project and the points of contact between their models: the translation for any communication, what is shared, what is isolated, and which way influence runs. It maps the existing terrain; transformations come later."
+  context_relation: "One point of contact on the context map, a relationship between an upstream context, whose actions affect the downstream context's success, and a downstream context, whose actions do not significantly affect the upstream. Its kind is one of the published relationship patterns."
+  core_domain: "The critical core of the model, the real business asset, boiled down and kept small so it can be distinguished from the mass of supporting model and code, and where the deepest model and the best developers are invested."
+  generic_subdomain: "A cohesive subdomain that is not the motivation for the project, factored out into a separate module as a generic model, kept free of the project's specialties, and developed with lower priority than the core domain."
+  big_ball_of_mud: "A part of a system where models are mixed and boundaries are inconsistent, designated as such by drawing a boundary around the whole mess so that no sophisticated modeling is attempted inside it and it is kept from sprawling into other contexts."
+  # Tactical design
+  domain_isolation: "The expression of the domain model and the business logic kept free of any dependency on infrastructure, user interface, or application logic that is not business logic, so that the domain objects, relieved of displaying, storing, and managing themselves, can be focused on expressing the model. The key goal is isolation; a layered architecture is one way to reach it, and hexagonal and related patterns serve as well or better to the degree that they keep the model's expression free of references to other system concerns. Domain-Driven Design demands the isolation, not any one architecture around it."
+  entity: "An object defined primarily by its identity rather than its attributes: a thread of identity that runs through time and often across distinct representations, whose attributes may change while it stays the same thing. The model defines what it means to be the same thing."
+  value_object: "An object that describes or computes some characteristic of a thing and has no conceptual identity: it matters only as the combination of its attributes, two with the same attribute values are equal, and it is treated as immutable, with every operation a side-effect-free function."
+  invariant: "A consistency rule that must hold whenever the objects it constrains can be observed: an aggregate's invariants hold at the end of every operation on the aggregate, and a value object's invariants hold for every value that exists. The aggregate root, or the value object's constructor, is responsible for enforcing it, so that a state violating it is never reachable. In the code an invariant is stated as an assertion."
+  assertion: "A stated post-condition of an operation or invariant of a class or aggregate, made explicit so that the effect of an operation can be known without tracing its implementation. Assertions define the contracts of services and entity modifiers and the invariants on aggregates; where they cannot be coded directly, they are written as automated unit tests."
+  specification: "A predicate-like value object that tells whether a candidate object matches some criteria, separating the statement of what kind of objects can be selected from the object that does the selecting. It answers through one operation, isSatisfiedBy, and can be combined with other specifications."
+  business_rule: "A rule of the business as a domain expert states it, before the model has placed it. Once placed it is an invariant, when it must hold at all times for an aggregate or a value; an assertion, when it is a guarantee of one command of a root or one operation of a domain service; a specification, when experts pass the predicate around as a thing they name; or not a domain rule, when it is a programming guard or an application policy such as notifying or exporting. It is an intake word and is never recorded as its own section."
+  aggregate: "A cluster of entities and value objects with a boundary around it, treated as a single unit for the purpose of data changes. The one boundary is three things at once. It is a consistency boundary: properties and invariants are defined for the aggregate as a whole, the root enforces them, and inside the boundary consistency rules apply synchronously while across it updates are handled asynchronously. It is a transactional boundary: the aggregate is loaded, saved, and removed whole, one transaction changes one aggregate, and transactions do not cross the boundary. It is a reference boundary: one entity is the root, external objects hold references to the root only, a member's identity is local to the aggregate, and what one aggregate keeps of another is that aggregate's identity."
+  aggregate_root: "The one entity of an aggregate that external objects may hold references to, that carries the aggregate's globally unique identity, and that is responsible for enforcing the aggregate's invariants."
+  command: "An operation of an aggregate root that changes the state of that one aggregate and returns no domain information, named for what it does in the ubiquitous language. It is never a setter, and it is never the request a use case receives."
+  query: "An operation of an aggregate or a value object that returns a result and changes no observable state; Evans calls it a side-effect-free function. No operation is both a query and a command."
+  domain_event: "A full-fledged part of the domain model representing something that happened in the domain that domain experts care about, as distinct from a system event. It is ordinarily immutable, being a record of the past, and typically carries the time it occurred and the identities of the entities involved."
+  domain_service: "A standalone operation in the domain for a significant process or transformation that is not a natural responsibility of an entity or value object, given a name that is part of the ubiquitous language and a contract stated as assertions. It makes a business decision that no one aggregate or value can make alone; it may read through repositories, but it never commits and never publishes."
+  application_service: "An operation of the application layer that runs one use case flow: it translates the request into domain values, fetches aggregates through repositories, invokes their commands or one domain service, commits, and publishes what happened, holding application logic that is not business logic and never the domain rules themselves. Use case is the same thing seen from the request; the two words are not two kinds."
+  repository: "For each type of aggregate that needs global access, a service that provides the illusion of an in-memory collection of all objects of that aggregate's root type, with methods to add and remove objects and to select them by criteria meaningful to domain experts, encapsulating the storage and query technology."
+  factory: "A separate object that encapsulates the creation of an entire, internally consistent aggregate, or of a complex value object, when construction becomes complicated or would reveal too much internal structure; it creates the whole as a piece, enforcing its invariants, without requiring the client to reference the concrete classes being instantiated."
+  module: "A named partition of the code that tells the story of the system and contains a cohesive set of concepts, its name part of the ubiquitous language and reflecting insight into the domain, chosen so that the concepts inside can be understood and reasoned about independently."
+  # Structural vocabulary
+  zone: "A named, physical partition of the codebase resolved via file paths or directory boundaries. It acts as a jurisdictional area where a specific set of architectural rules, technology constraints, and dependency rules are strictly enforced."
+  question: "Something about a bounded context's model that the team has not settled, recorded in the domain file in place of a guess so that the gap is visible and can be answered. A question is never a rule; arclint enforces nothing from it and reports it only when asked what is open."
+
+context_relation_kinds:
+  partnership: "The two contexts succeed or fail together; the teams coordinate planning and the evolution of their interfaces. Influence runs both ways."
+  shared_kernel: "An explicitly bounded subset of the model, and the code and database design associated with it, that the two teams agree to share and change only in consultation. Influence runs both ways."
+  customer_supplier: "The downstream team is the upstream team's customer; downstream priorities factor into upstream planning and jointly developed acceptance tests validate the interface."
+  conformist: "The downstream team eliminates translation by adhering to the upstream model as it is, sharing the upstream's ubiquitous language."
+  anticorruption_layer: "The downstream context isolates itself with a layer that presents the upstream's functionality in terms of the downstream's own model, translating in one or both directions."
+  open_host_service: "The upstream context defines an open protocol giving access to its subsystem as a set of services, augmented by one-off translators only for idiosyncratic clients."
+  published_language: "The two contexts translate through a well-documented shared language that can express the necessary domain information, often combined with an open-host service."
+  separate_ways: "The two contexts have no connection at all, so each may find simple, specialized solutions within its own scope."
+
+distillation_rules:
+  - {id: identity-test, rule: "Concept keeps its business identity while attributes change -> entity.", example: "order keeps its number when status changes"}
+  - {id: identity-regardless-of-history, rule: "Define a means of distinguishing each object regardless of its form or history (Evans, DDD Reference, Entities). The model decides what sameness is. An identifier may come from outside the system, or it may be a symbol created for the system. A part that can change while the object stays the same is not part of its identity.", example: "an order keeps its id when its status changes; a username is the identity only when no operation changes it"}
+  - {id: value-test, rule: "Two instances with identical values are interchangeable -> value_object.", example: "any two USD 10 amounts are the same money"}
+  - {id: invariant-ownership, rule: "First establish a domain consistency rule and its capable owner; must-always/must-never wording alone does not establish one. Contributor workflow, host guarantees, delivery validation and programming guards are not automatically invariants or assertions. A justified rule holding at all observable times -> the owner's invariants, keyed; a justified guarantee of a named domain operation -> the owner's assertions, keyed, with on: the aggregate's for its command, the domain service's for its operation. A value object's key names value integrity checked at construction; an aggregate's key names the root method that enforces the cluster rule.", example: "total = sum of lines -> Order.invariants.total-is-sum-of-lines; every tier priced before Publish -> Order.assertions.tiers-priced on Publish"}
+  - {id: specification-as-thing, rule: "Experts pass the predicate around as a thing -> specifications, a type with SatisfiedBy; never a flag on a value object and never an invariant.", example: "preferred customer is handed to pricing as a spec, not inlined as a must-always"}
+  - {id: language-not-guards, rule: "Record only what you would say to an expert who never saw the language; programming-only guards are not domain contracts.", example: "nil receiver check is not an invariant; a Price is never negative is"}
+  - {id: transaction-boundary, rule: "Smallest cluster consistent in one transaction -> one aggregate; everything else by ID, eventually.", example: "reject: customer and all orders save together"}
+  - {id: thing-first, rule: "A behavior goes to the entity or value that naturally owns it before any service is considered; a service that could be a method on one root is a wrong home.", example: "Tenant.Deactivate, not TenantService.Deactivate(tenant)"}
+  - {id: command-vs-query, rule: "Changes the state of one aggregate and returns no domain information -> a command of that root; changes nothing and answers a question -> a query of the root or value; never both in one operation. Neither is recorded.", example: "Tenant.Deactivate is a command; Tenant.IsRegistrationAvailableThrough is a query"}
+  - {id: domain-service-when-no-owner, rule: "Does it make a business decision that no one aggregate can make alone? Yes -> domain_service, recorded under services with its contract; it may read through repositories, never commits, never publishes.", example: "TenantProvisioningService over Tenant, User, and Role; Encrypter for knowledge no aggregate holds"}
+  - {id: application-service-holds-no-rule, rule: "If I delete every step here, is any business decision lost? No -> application_service: loading, invoking, committing, publishing, notifying, translating; not recorded. Yes -> the decision is placed under its owner and reported as a finding.", example: "the ProvisionTenant use case runs the service in one unit of work and publishes; it holds no rule"}
+  - {id: contract-of-a-service, rule: "A guarantee of one operation of a domain service -> the service's assertions, keyed, with on naming the operation; the set is the service's contract.", example: "TenantProvisioningService.assertions.tenant-name-unique on ProvisionTenant"}
+  - {id: precondition-as-assertion, rule: "A rule that holds only when one named command runs, not at every instant -> the owner's assertions with on that command; the statement stays as the expert said it and is never rewritten into a post-condition.", example: "Tenant.assertions.invites-only-while-active on OfferRegistrationInvitation, not a Tenant invariant, because a deactivated tenant is legal"}
+  - {id: not-a-domain-rule, rule: "A promise about delivery (notify, export, retry, transaction control) or a programming guard -> no entry; the application service or the code does it.", example: "notify billing on TenantProvisioned is a subscriber, not an assertion"}
+  - {id: intention-revealing-name, rule: "Name a service and its operations for effect and purpose in the ubiquitous language, never for the means; a name ending in Manager, Helper, Handler, or Processor is a finding to rename, not a kind. An application service's input is named for the request, never with the word command.", example: "TenantProvisioningService.ProvisionTenant, not TenantManager.Handle; ProvisionTenantRequest, not ProvisionTenantCommand"}
+  - {id: event-detection, rule: "State change experts say in past tense -> domain_event; technical changes are not events.", example: "OrderConfirmed yes, RowUpdated no"}
+  - {id: context-split, rule: "Same word, materially different meaning per team -> separate bounded_contexts + relation.", example: "Product: price in Catalog, weight in Shipping"}
+  - {id: language-fidelity, rule: "Record terms exactly as experts say them; reject developer jargon.", example: "policy renewal, not ContractUpdateManager"}
+  - {id: synonym-collapse, rule: "One meaning, one canonical term per context; synonyms become aliases.", example: "client/customer/account -> customer"}
+  - {id: repository-gate, rule: "Repositories only for aggregate roots; inner entity wanting one = wrong boundary.", example: "reject OrderLineRepository; reject \"we must list comps, so Comp is a root\""}
+  - {id: minimal-evidence, rule: "Classify on the fewest deciding facts; two plausible kinds -> ask, never guess.", example: "'we track shipments' alone decides nothing -> ask"}
+
+clarification_questions:
+  insufficient_info:
+    - {q: "Does <X> have an identity that survives attribute changes, or are two <X> with the same values interchangeable?", decides: entity vs value_object}
+    - {q: "What is <Identity> made of? If any part can change while the <X> stays the same, the identity cannot be that part.", decides: identity vs attribute (entity)}
+    - {q: "What must never be violated about <X>, even for an instant?", decides: invariants and owner}
+    - {q: "Does <rule> hold even while nothing runs, or only when <operation> runs?", decides: invariant vs assertion}
+    - {q: "Which operation guarantees <rule>, and who performs it: one aggregate, or a process that spans aggregates?", decides: assertion owner (aggregate vs domain_service)}
+    - {q: "Does <X> change anything, or does it only answer a question?", decides: command vs query}
+    - {q: "Can one <Aggregate> do <X> with what it already holds, or does <X> need another aggregate or knowledge none of them holds?", decides: command vs domain_service}
+    - {q: "Is <X> a result the business names, or a step the software takes to deliver one?", decides: domain_service vs application_service}
+    - {q: "Do experts pass this predicate around as a thing they name, rather than as a rule that simply holds?", decides: specification vs invariant or assertion}
+    - {q: "Is this a property of the value itself (constructor) or of the cluster that must stay consistent on every command?", decides: value integrity vs cluster invariant}
+    - {q: "Would you say this to an expert who never saw the language?", decides: domain contract vs programming-only guard}
+    - {q: "When <X> changes, what else must change in the same transaction?", decides: aggregate boundary}
+    - {q: "Does the business care about <X>'s lifecycle (created, changed, closed)?", decides: entity vs value_object vs domain_event}
+    - {q: "Which people/teams use the term <X>, and do they mean the same thing?", decides: bounded_context assignment}
+  conflict:
+    - {q: "<X> is already defined as <def> in context <C>: (a) same concept, (b) different concept needing its own context, or (c) a correction?", decides: reuse vs split vs update}
+    - {q: "This change breaks invariant <rule> owned by <owner>. Is the invariant wrong, or is this a different concept?", decides: revision vs new term}
+  policy: Ask the single question that unblocks; batch only when several concepts block at once; never ask what the input already answers.
+
+library_file:
+  purpose: The project's shared domain language. Learn its recording from arclint context and arclint domain; record through arclint domain define and arclint domain remove, which validate each write and let ArcLint write the format.
+  shape: |  # model fields, not file syntax; optional fields marked ?
+    project: name and description?
+    contexts: named responsibilities, each with a definition
+      aggregates: definition, identity, aliases?, repository?, factory?
+        entities: definition, identity?, aliases?
+        invariants: keyed statements enforced by the root
+        assertions: keyed guarantees with on naming the operation and statement
+      value_objects: definition, aliases?, keyed invariants?
+      events: definition, raised_by aggregate?
+      services: definition, keyed assertions with on and statement?
+      specifications: definition
+      questions: keyed unresolved decisions
+    relations: from context, to context, kind, description?
+      kind: one published context_relation_kinds key
+  rules:
+    - Record every entry through arclint domain define and remove entries through arclint domain remove; never hand-write the domain file.
+    - Every term carries a definition; no definition, no entry.
+    - A term lives in exactly one context; same word elsewhere is a second term.
+    - Aliases point at the canonical term; never duplicate definitions.
+    - Every entity lives under the aggregate that owns it; an aggregate names its identity; an invariant lives under the one aggregate or value object that enforces it.
+    - Unresolved classifications are never written; an open question is written under `questions`, keyed, and nothing is enforced from it.
+    - Definitions read as plain human sentences, without em dashes; humans own the document.
+    - Established vocabulary may be explained in context definitions without tactical entries; tactical classifications require their own evidence.
+    - A term matching a code object uses the code's exact spelling (TermCase, RuleID), never a prose-spaced variant.

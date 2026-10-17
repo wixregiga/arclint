@@ -121,7 +121,7 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 		"3. If the change introduces or changes a meaning, record it in the project's domain recording through `arclint domain define` before writing code, using the domain-librarian skill.",
 		"4. Implement one complete behavior path through the zones `arclint context` reported",
 		"### Commands",
-		"- `arclint agents skill`: write the domain-librarian skill to `.agents/skills/domain-librarian/` when your harness lacks it",
+		"- `arclint agents skill`: write the domain-librarian skill to `.agents/skills/domain-librarian/` for Codex and `.claude/skills/domain-librarian/` for Claude Code when your harness lacks it",
 		"### The recorded domain",
 		"2 contexts, 2 aggregates, 1 value objects, 1 invariants.",
 		"- **catalog**: aggregates Event (Organizer); value objects Price; events EventPublished",

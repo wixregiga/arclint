@@ -25,12 +25,9 @@ func (uc PublishSkillVocabulary) Render() string {
 	return vocab.VocabularyYAML()
 }
 
-// Execute writes VOCAB.yaml under dir (default DomainLibrarianSkillDir
-// when dir is empty), reporting whether the file changed and its path.
+// Execute writes VOCAB.yaml under dir, one of SkillDirectories, reporting
+// whether the file changed and its path.
 func (uc PublishSkillVocabulary) Execute(dir string) (changed bool, path string, err error) {
-	if dir == "" {
-		dir = DomainLibrarianSkillDir
-	}
 	content := []byte(uc.Render())
 	changed, path, err = uc.writer.Write(dir, vocab.SkillVocabularyFile, content)
 	if err != nil {
