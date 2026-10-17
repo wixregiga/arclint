@@ -596,7 +596,8 @@ func aliasValue(b *pyBinding, w *pyWalker, depth int) string {
 	}
 	switch right.Type(w.lang) {
 	case nodeIdentifier, nodeAttribute:
-		return right.Text(w.src)
+		// (abc) . ABC is abc.ABC.
+		return w.dottedName(right)
 	}
 	return ""
 }

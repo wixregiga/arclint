@@ -426,3 +426,18 @@ func TestDeclaredServiceResultResolvesThroughTheLanguage(t *testing.T) {
 		})
 	}
 }
+
+// TestDefineAssertionOnAnAbstractRoot says that an aggregate whose root is
+// declared as an abstract class is verified by its named tests, the
+// only home the rule accepts for it.
+func TestDefineAssertionOnAnAbstractRoot(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "rules.arclint.yaml", "runtime: [ts]\nzones:\n  src:\n    paths: [\"src/**\"]\n")
+	write(t, root, "src/identity/user.ts", "export abstract class User {\n  abstract changePassword(): void;\n}\n")
+	mustRunDomain(t, root, "domain", "define", "bounded_context", "identity", "--definition", "Who may sign in, and with what.")
+	mustRunDomain(t, root, "domain", "define", "aggregate", "User", "--definition", "A person who may sign in.", "--identity", "UserID")
+	stdout := mustRunDomain(t, root, "domain", "define", "assertion", "credentials-current", "--owner", "User", "--on", "ChangePassword", "--statement", "A user signs in with the password it chose last.")
+	if want := "  check: the root of User is declared as an abstract class, with no body to call assertCredentialsCurrent from, so the tests named with --verified-by verify it, and changePassword is declared on it.\n"; !strings.HasSuffix(stdout, want) {
+		t.Fatalf("abstract root:\n got %q\nwant suffix %q", stdout, want)
+	}
+}
