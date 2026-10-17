@@ -38,6 +38,16 @@ type fingerprint struct {
 	Changed  int64  `json:"changed,omitempty"`
 }
 
+// at is when the file last changed: its change time where the system
+// records one, which a copy keeping the source's modification time still
+// moves to the moment of the copy, otherwise its modification time.
+func (file fingerprint) at() time.Time {
+	if file.Changed != 0 {
+		return time.Unix(0, file.Changed)
+	}
+	return time.Unix(0, file.Modified)
+}
+
 // snapshot holds the fingerprint of every project file git shows changed,
 // keyed by its slash-separated path relative to the project root.
 type snapshot map[string]fingerprint
@@ -148,7 +158,7 @@ func (c checkout) removedAt(path string) time.Time {
 func (c checkout) changes(before, after snapshot) []changedFile {
 	var changed []changedFile
 	add := func(path string, now fingerprint) {
-		at := time.Unix(0, now.Modified)
+		at := now.at()
 		if now.Absent {
 			at = c.removedAt(path)
 		}
