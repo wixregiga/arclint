@@ -200,6 +200,27 @@ func (f Facts) selectedZoneFiles(name rule.ZoneName) (selected, excluded []strin
 	return selected, excluded
 }
 
+// excludedAnalyzed counts the files the Rule's Exclusion removed from a
+// context's scope (the Zone named for it, or the repository) that an
+// analyzer read: files whose exclusion, not their language, keeps their
+// facts from the Rule.
+func (f Facts) excludedAnalyzed(zone rule.ZoneName) int {
+	if f.source == nil {
+		return 0
+	}
+	excluded := f.excluded
+	if zone != "" {
+		_, excluded = f.selectedZoneFiles(zone)
+	}
+	n := 0
+	for _, path := range excluded {
+		if facts, ok := f.source.observations.facts[path]; ok && facts.Language != "" {
+			n++
+		}
+	}
+	return n
+}
+
 func (f Facts) zoneNames() []rule.ZoneName {
 	if f.source == nil {
 		return nil

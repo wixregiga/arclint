@@ -190,13 +190,16 @@ type contextCode struct {
 	// scopeImportFiles counts the scope files yielding the imports fact.
 	scopeImportFiles   int
 	scopeAnalysisFiles int
-	scopeParseFailures int
-	aggregates         map[string]aggregateCode
-	terms              map[string]termLocation
-	files              []string
-	idx                contractIndex
-	imports            []fileImport
-	importFiles        int
+	// excludedAnalysisFiles counts the analyzed files of the context's
+	// code that the Rule's Exclusion removed from the scope.
+	excludedAnalysisFiles int
+	scopeParseFailures    int
+	aggregates            map[string]aggregateCode
+	terms                 map[string]termLocation
+	files                 []string
+	idx                   contractIndex
+	imports               []fileImport
+	importFiles           int
 }
 
 // aggregateCode is one aggregate's root as located: exactly one
@@ -269,6 +272,7 @@ func resolveContext(ctx vocab.BoundedContext, recording string, facts Facts) (co
 		return contextCode{}, err
 	}
 	cc.zone, cc.scope = zone, scope
+	cc.excludedAnalysisFiles = facts.excludedAnalyzed(zone)
 	cc.scopeIdx = buildContractIndex(scope, facts)
 	cc.scopeImportFiles = importSupport(scope, facts)
 	for _, file := range scope {
@@ -441,11 +445,20 @@ func (cc contextCode) unitIdx(d locDecl) contractIndex {
 }
 
 // undecidable reports the outcome of a context the invariant's facts
-// cannot judge: unsupported when the scope has files but none yields a
-// fact the invariant reads. An empty scope is decidable: nothing in it
-// declares the recorded terms, and the checks say so.
+// cannot judge: not applicable when the Rule's Exclusion removed every
+// analyzed file of the context's code, so the exclusion and not the
+// language keeps the code from the Rule; unsupported when the scope has
+// files but none yields a fact the invariant reads. An empty scope is
+// otherwise decidable: nothing in it declares the recorded terms, and
+// the checks say so.
 func (cc contextCode) undecidable(facts []string) (Outcome, bool) {
-	if len(facts) == 0 || len(cc.scope) == 0 {
+	if len(facts) == 0 {
+		return "", false
+	}
+	if cc.scopeAnalysisFiles == 0 && cc.excludedAnalysisFiles > 0 {
+		return OutcomeNotApplicable, true
+	}
+	if len(cc.scope) == 0 {
 		return "", false
 	}
 	for _, f := range facts {

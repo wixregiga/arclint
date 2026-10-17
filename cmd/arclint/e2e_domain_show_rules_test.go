@@ -435,3 +435,23 @@ func TestDomainShowDoesNotPromotePartialCoverage(t *testing.T) {
 		t.Errorf("price-set with one of its checks disabled: %+v", priceSet)
 	}
 }
+
+// A Rule whose Exclusion removes every analyzed file of a context does
+// not apply there; show says the exclusion, not the language, kept the
+// rule from the code.
+func TestDomainShowNamesAnExclusionRatherThanALanguage(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "rules.arclint.yaml", "runtime: [go]\nzones:\n  catalog:\n    paths: [\"catalog/**\"]\n  pricing:\n    paths: [\"pricing/**\"]\n"+
+		"rules:\n  aggregate/invariants-enforced-by-root:\n    exclude:\n      paths: [catalog/product.go, catalog/reservation.go]\n      reason: generated\n")
+	write(t, root, "domain.arclint.yaml", catalogDomain)
+	write(t, root, "catalog/README.md", "# Catalog\n")
+	for path, content := range showRulesFixtures["go"].files {
+		write(t, root, path, content)
+	}
+	product := showRulesJSON(t, root, "Product")
+	priceSet := product.Rules.Checks[0]
+	if priceSet.Key != "price-set" || priceSet.Status != "not_checked" || len(priceSet.Reasons) != 1 ||
+		priceSet.Reasons[0] != "aggregate/invariants-enforced-by-root: the rule's scope excludes every analyzed file of context catalog's code" {
+		t.Errorf("price-set with its root-method check excluded: %+v", priceSet)
+	}
+}
