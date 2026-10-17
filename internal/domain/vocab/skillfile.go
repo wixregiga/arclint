@@ -47,7 +47,7 @@ const (
 
 	SkillIntro = "You maintain the project's shared domain language and classify concepts only where the evidence justifies a tactical model. Keep meanings faithful to the user's decisions, responsibilities clear, and the library consistent within bounded contexts. Ask only for a decision that the available evidence does not resolve."
 
-	SkillReference = "Read `VOCAB.yaml` (same directory) once per session for the vocabulary, distillation rule ids with examples, the rules arclint declines to enforce with their reasons, clarification question banks, and the library file shape. This file carries the behavioral protocol; VOCAB.yaml carries the data."
+	SkillReference = "Read `VOCAB.yaml` (same directory) once per session for the vocabulary and its sources, distillation rule ids with examples, the rules arclint declines to enforce with their reasons, clarification question banks, the bibliography the sources cite, and the library file shape. This file carries the behavioral protocol; VOCAB.yaml carries the data."
 
 	SkillEconomy = "Classify from the fewest facts that decide the litmus test; reading more \"for confidence\" is a failure. Prefer zero tool calls beyond: read VOCAB.yaml, read the library file, one write. Never ask what the input already answers."
 )
@@ -57,7 +57,7 @@ const (
 // them by position, so inserting a rule renumbers the ones after it.
 func SkillProtocolRules() []string {
 	return []string{
-		"**Evidence.** Use the source text and explicit user decisions, quoting the fragment that supports each meaning or classification and citing the deciding rule id. Recordings, assistant definitions, issue checklists and passing tests are claims to examine; they do not independently establish user approval. Missing classification evidence means do not assign a kind; it does not make an understood word meaningless.",
+		"**Evidence.** Use the source text and explicit user decisions, quoting the fragment that supports each meaning or classification and citing the deciding rule id. Recordings, assistant definitions, issue checklists and passing tests are claims to examine; they do not independently establish user approval. Missing classification evidence means do not assign a kind; it does not make an understood word meaningless. When a meaning rests on the literature, cite a work of VOCAB.yaml's bibliography by key with its tier and whether its page was read; a tier 3 work only illustrates, and a label naming arclint's convention marks words no cited source states.",
 		"**Litmus first.** Before assigning a tactical kind, establish that the project needs to model the concept that way. Run the value-test on the concept itself: must two of these with equal values be told apart? A system, its instructions, packaging, host configuration and running instance are different candidates; evidence about one cannot classify another. When a meaning is established but no tactical kind is justified, explain it in its context definition; do not force a value object, entity or aggregate, or invent code to hold it.",
 		"**Inherited labels.** Re-test inherited classifications against their cited evidence. Distinguish PASS, FAIL and NOT ESTABLISHED; absence of evidence is not a positive identity test. Respect explicit user decisions wherever they occurred. A configuration record or a snapshot does not alone establish identity of the concept it describes.",
 		"**Carried values.** An attribute the input says is carried, kept, or supplied by another term is that term's value; its identity question is already answered; asking it is a failure. Measurements, units, and amounts may support a value_object classification; record an invariant only when its own evidence passes the invariant gate.",
@@ -129,7 +129,7 @@ func LibraryFileSpec() LibraryFile {
 }
 
 // VOCABHeaderComment is line 1 of VOCAB.yaml.
-const VOCABHeaderComment = "# domain-librarian core reference: DDD vocabulary, distillation rules, declined rules, clarification protocol."
+const VOCABHeaderComment = "# domain-librarian core reference: DDD vocabulary and its sources, distillation rules, declined rules, clarification protocol, bibliography."
 
 // Schema document scaffolding (domain.arclint.schema.json). Every
 // property description comes from the meta-model's recordings; these

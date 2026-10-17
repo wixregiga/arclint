@@ -435,10 +435,12 @@ func (p DomainConstraint) Validate() error {
 	return nil
 }
 
-// Proposition states the configured architectural proposition.
+// Proposition states the configured architectural proposition: the
+// invariant's statement with the parts that are arclint's convention
+// labelled.
 func (p DomainConstraint) Proposition() string {
 	inv, _ := vocab.DDD().Invariant(p.Invariant)
-	return inv.Statement
+	return inv.LabelledStatement()
 }
 
 // BlockInvariant returns the meta-model invariant the parameters name.

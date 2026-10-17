@@ -2103,7 +2103,7 @@ func checkRepositoryDeclared(r rule.Rule, subject rule.Subject, cc contextCode, 
 			continue
 		}
 		v, err := newViolation(r, subject, decl.file.path, decl.decl.StartLine,
-			fmt.Sprintf("repository %s of aggregate %s is declared as a %s; a repository is an interface the model owns and the outside implements", agg.Repository, agg.Name, decl.decl.Kind),
+			fmt.Sprintf("repository %s of aggregate %s is declared as a %s; by ArcLint's own convention, which no cited source states, a repository is an interface the model owns and the outside implements", agg.Repository, agg.Name, decl.decl.Kind),
 			fmt.Sprintf("declare %s as an interface (a class in a language without interfaces)", decl.decl.Name))
 		if err != nil {
 			return nil, err

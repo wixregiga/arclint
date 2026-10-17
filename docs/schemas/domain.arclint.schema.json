@@ -57,7 +57,7 @@
           "type": "object",
           "description": "The context's domain services.",
           "propertyNames": { "pattern": "^\\S(.*\\S)?$" },
-          "additionalProperties": { "$ref": "#/$defs/service", "description": "A standalone operation in the domain for a significant process or transformation that is not a natural responsibility of an entity or value object, given a name that is part of the ubiquitous language and a contract stated as assertions. It makes a business decision that no one aggregate or value can make alone; it may read through repositories, but it never commits and never publishes." }
+          "additionalProperties": { "$ref": "#/$defs/service", "description": "A standalone operation in the domain for a significant process or transformation that is not a natural responsibility of an entity or value object, given a name that is part of the ubiquitous language and a contract stated as assertions. It makes a business decision that no one aggregate or value can make alone; it may read through repositories, but it never commits and never publishes. ArcLint's own convention, which no cited source states: \"it never commits and never publishes\"." }
         },
         "specifications": {
           "type": "object",
@@ -196,7 +196,7 @@
     },
     "service": {
       "type": "object",
-      "description": "A standalone operation in the domain for a significant process or transformation that is not a natural responsibility of an entity or value object, given a name that is part of the ubiquitous language and a contract stated as assertions. It makes a business decision that no one aggregate or value can make alone; it may read through repositories, but it never commits and never publishes.",
+      "description": "A standalone operation in the domain for a significant process or transformation that is not a natural responsibility of an entity or value object, given a name that is part of the ubiquitous language and a contract stated as assertions. It makes a business decision that no one aggregate or value can make alone; it may read through repositories, but it never commits and never publishes. ArcLint's own convention, which no cited source states: \"it never commits and never publishes\".",
       "additionalProperties": false,
       "required": ["definition"],
       "properties": {

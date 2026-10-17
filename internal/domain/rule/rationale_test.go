@@ -87,7 +87,7 @@ func TestBuiltInPropositionsDoNotInventRationale(t *testing.T) {
 			continue
 		}
 		inv, ok := vocab.DDD().Invariant(r.ID().Local())
-		if !ok || r.Proposition() != inv.Statement || !r.Rationale().IsZero() {
+		if !ok || r.Proposition() != inv.LabelledStatement() || !r.Rationale().IsZero() {
 			t.Errorf("built-in %s: proposition %q, rationale %q", r.ID(), r.Proposition(), r.Rationale())
 		}
 	}

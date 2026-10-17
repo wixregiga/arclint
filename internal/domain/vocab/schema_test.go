@@ -192,8 +192,8 @@ func TestSchemaObjectsAreTheMetaModelRecordings(t *testing.T) {
 		if !slices.Equal(gotRequired, wantRequired) {
 			t.Errorf("%s: schema requires %v, the meta-model requires %v", c.term, gotRequired, wantRequired)
 		}
-		if c.term != "domain" && c.node.Description != block.Definition.Text {
-			t.Errorf("%s: object description is not the block's definition", c.term)
+		if c.term != "domain" && c.node.Description != block.Definition.Labelled() {
+			t.Errorf("%s: object description is not the block's definition with its conventions labelled", c.term)
 		}
 	}
 }

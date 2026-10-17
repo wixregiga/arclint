@@ -142,8 +142,8 @@ func TestConceptDocsComeFromTheMetaModel(t *testing.T) {
 		if doc.Title != block.Title {
 			t.Errorf("%s Title = %q, want the block's %q", c, doc.Title, block.Title)
 		}
-		if doc.Meaning != block.Definition.Text {
-			t.Errorf("%s Meaning = %q, want the block's definition", c, doc.Meaning)
+		if doc.Meaning != block.Definition.Labelled() {
+			t.Errorf("%s Meaning = %q, want the block's definition with its conventions labelled", c, doc.Meaning)
 		}
 		if len(doc.Sources) != len(block.Definition.Sources) {
 			t.Errorf("%s: %d sources, the block cites %d", c, len(doc.Sources), len(block.Definition.Sources))

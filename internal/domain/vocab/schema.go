@@ -70,7 +70,7 @@ func (b *schemaBuilder) meaning(term string) string {
 		b.fail(fmt.Errorf("schema: building block %q is not recorded", term))
 		return ""
 	}
-	return strings.Join(strings.Fields(block.Definition.Text), " ")
+	return strings.Join(strings.Fields(block.Definition.Labelled()), " ")
 }
 
 func (b *schemaBuilder) fail(err error) {

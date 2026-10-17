@@ -188,6 +188,16 @@ func TestPlainDomainExplainPrintsSources(t *testing.T) {
 			t.Fatalf("missing source %q:\n%s", s, out)
 		}
 	}
+	// A carried page reaches the reader marked unverified beside its
+	// tier, and a checked one marked read.
+	for _, want := range []string{
+		"Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 10, p. 347 (tier 1, unverified page)\n",
+		"Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 16, Aggregates <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf> (tier 1, read)\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("explain lacks %q:\n%s", want, out)
+		}
+	}
 }
 
 func TestPlainDomainMissingNamesTheProjectsDomainFile(t *testing.T) {
