@@ -581,11 +581,12 @@ class TypeScriptLexer:
 
     A slash starts a regular expression or divides, by the token before it
     (see ends_operand). Where that rule cannot see enough, the reading
-    fails safe: a regular expression that cannot end where a regular
-    expression may is read as a division, and a line whose reading opens a
-    string or template it never closes is read again with one slash
-    decision reversed, keeping the first reading that leaves no literal
-    open.
+    fails safe. A regular expression that cannot end where a regular
+    expression may is read as a division. A slash whose token cannot settle
+    it (see token) is read both ways, each reading carried over the next
+    lines: the inventory goes on from the reading that leaves the fewest of
+    them inside a literal or a comment, and keeps the rows every reading
+    gives, so an ambiguous slash makes it read more lines, never fewer.
 
     A test declaration is followed token by token: a callee (it, test or
     describe, with .only, .each and the like), any type arguments, any
@@ -656,6 +657,7 @@ class TypeScriptLexer:
     def sources(self, lines):
         """Map line number to source."""
         found = {}
+        extra = {}  # line number -> kinds another reading of an earlier slash gave it
         for number, text in enumerate(lines, start=1):
             # Only a line with a slash has a decision to reverse.
             start = self.snapshot() if "/" in text else None
@@ -663,20 +665,27 @@ class TypeScriptLexer:
             if slashes:
                 # One line cannot tell a misread regular expression from a
                 # division before a literal that runs on; the lines after
-                # it can. Keep the reading, the first one or one with a
-                # slash reversed, that leaves the fewest lines of the
-                # window inside a literal or a comment, or damaged.
+                # it can. Carry on from the reading, the first one or one
+                # with a slash reversed, that leaves the fewest lines of the
+                # window inside a literal or a comment, or damaged; and
+                # keep every row any of the readings gives, so a wrong
+                # choice reads more lines, never fewer.
                 best = None
                 readings = [frozenset()] + [frozenset([p]) for p in reversed(slashes[-MAX_SLASH_RETRIES:])]
+                kinds, marks = set(kinds), list(marks)
                 for reversed_slashes in readings:
                     self.restore(start)
                     result = self.read(number, text, reversed_slashes)
+                    kinds |= result[0]
+                    marks += result[1]
                     after = self.snapshot()
-                    score = self.window_cost(lines, number, result[3])
+                    score, window = self.window_cost(lines, number, result[3])
+                    for later, later_kinds in window.items():
+                        extra.setdefault(later, set()).update(later_kinds)
                     if best is None or score < best[0]:
-                        best = (score, result, after)
-                _, (kinds, marks, _, _), after = best
-                self.restore(after)
+                        best = (score, after)
+                self.restore(best[1])
+            kinds |= extra.pop(number, set())
             for line in marks:
                 found[line] = "test"
             if kinds and text.strip():
@@ -684,16 +693,22 @@ class TypeScriptLexer:
         return found
 
     def window_cost(self, lines, number, damaged):
-        """Read on from the state after line number for SLASH_WINDOW lines
-        and count the lines that end inside a literal or a comment, a
-        damaged line counting three. The caller restores the state."""
+        """Read on from the state after line number for SLASH_WINDOW lines.
+        Return the count of lines that end inside a literal or a comment, a
+        damaged line counting three, and the kinds each line was given
+        (test for a line a test mark reaches back to). The caller restores
+        the state."""
         cost = 3 if damaged else 0
         cost += 1 if self.state in ("template", "string", "block") else 0
+        window = {}
         for later in range(number + 1, min(len(lines), number + SLASH_WINDOW) + 1):
-            _, _, _, later_damaged = self.read(later, lines[later - 1], frozenset())
+            later_kinds, later_marks, _, later_damaged = self.read(later, lines[later - 1], frozenset())
+            window.setdefault(later, set()).update(later_kinds)
+            for line in later_marks:
+                window.setdefault(line, set()).add("test")
             cost += 3 if later_damaged else 0
             cost += 1 if self.state in ("template", "string", "block") else 0
-        return cost
+        return cost, window
 
     def read(self, number, text, reversed_slashes):
         """Read one line. Return its kinds, the earlier lines it marks as
@@ -1382,8 +1397,15 @@ def collect(repo, base, head, scope, globs, exclude, recordings, hint):
     def wanted(path):
         return path is not None and (matches(path, globs) or is_recording(path, recordings)) and not matches(path, exclude)
 
-    def read_head(path):
-        return read_commit(repo, head, path) if head else read_worktree(repo, path)
+    def read_head(entry):
+        if head:
+            return read_commit(repo, head, entry.new)
+        lines = read_worktree(repo, entry.new)
+        if lines is None and entry.new_blob is not None:
+            # A file a sparse checkout leaves out of the working tree: its
+            # content is the blob the index holds.
+            lines = split_lines(git(repo, "cat-file", "blob", entry.new_blob).decode("utf-8", "replace"))
+        return lines
 
     files = set()
     generated = []
@@ -1411,7 +1433,7 @@ def collect(repo, base, head, scope, globs, exclude, recordings, hint):
         files.update(p for p, w in ((old, old_wanted), (new, new_wanted)) if w)
         added, removed = changed_lines(repo, entry) if entry.old_regular and entry.new_regular else (None, None)
         if new_wanted and entry.new_regular:
-            lines = read_head(new)
+            lines = read_head(entry)
             if lines is not None:
                 every = set(range(1, len(lines) + 1))
                 chosen = every if added is None else added
