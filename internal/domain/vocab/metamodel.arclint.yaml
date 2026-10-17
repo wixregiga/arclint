@@ -979,6 +979,7 @@ building_blocks:
           languages: all
           limitations:
             - a TypeScript test name is matched as text anywhere in its file, so a comment or a string that repeats the name is taken for the test
+            - a test file scan.exclude leaves out is read for this check alone, because verified_by names it; no other rule, Zone, or context sees it, and a file Exclusion of this rule still keeps it unread
     guidance:
       - text: State post-conditions of operations and invariants of classes and aggregates explicitly; where they cannot be coded directly, write automated unit tests for them.
         fundamental: true

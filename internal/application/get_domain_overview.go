@@ -2,6 +2,7 @@ package application
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
@@ -68,7 +69,7 @@ func (uc GetDomainOverview) Execute() (DomainOverview, error) {
 		return DomainOverview{}, fmt.Errorf("load configured rules: %w", err)
 	}
 	required := carrierFacts(lang)
-	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, required)
+	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, required, nil, conformance.NamedTestsToRead(cfg.Rules, lang))
 	if err != nil {
 		return DomainOverview{}, fmt.Errorf("observe contracts: %w", err)
 	}
@@ -105,4 +106,14 @@ func carrierFacts(lang vocab.UbiquitousLanguage) []rule.Fact {
 		}
 	}
 	return facts
+}
+
+// withFacts appends the facts a request does not hold yet.
+func withFacts(required []rule.Fact, facts ...rule.Fact) []rule.Fact {
+	for _, f := range facts {
+		if !slices.Contains(required, f) {
+			required = append(required, f)
+		}
+	}
+	return required
 }
