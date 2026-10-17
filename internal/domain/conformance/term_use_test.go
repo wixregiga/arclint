@@ -33,12 +33,12 @@ func resolvedFile(lang rule.Language, pkg string, decls []conformance.Declaratio
 // prefixes.
 func usesOf(t *testing.T, contexts []vocab.BoundedContext, files map[string]conformance.LanguageFacts, worksite ...string) conformance.TermUses {
 	t.Helper()
-	return usesObserving(t, contexts, files, nil, worksite...)
+	return usesObserving(t, contexts, nil, files, nil, worksite...)
 }
 
 // usesObserving is usesOf over a walk that also observed files no
 // language supplied facts for.
-func usesObserving(t *testing.T, contexts []vocab.BoundedContext, files map[string]conformance.LanguageFacts, unread []string, worksite ...string) conformance.TermUses {
+func usesObserving(t *testing.T, contexts []vocab.BoundedContext, zones []rule.Zone, files map[string]conformance.LanguageFacts, unread []string, worksite ...string) conformance.TermUses {
 	t.Helper()
 	observed := make([]conformance.ObservedFile, 0, len(files)+len(unread))
 	for p := range files {
@@ -56,7 +56,7 @@ func usesObserving(t *testing.T, contexts []vocab.BoundedContext, files map[stri
 	if err != nil {
 		t.Fatalf("newRecordedLanguage: %v", err)
 	}
-	facts, err := conformance.NewInspectionFacts(nil, obs, rule.FactFileTree, rule.FactDeclarations, rule.FactCalls, rule.FactResolvedCalls, rule.FactFieldTypes)
+	facts, err := conformance.NewInspectionFacts(zones, obs, rule.FactFileTree, rule.FactDeclarations, rule.FactCalls, rule.FactResolvedCalls, rule.FactFieldTypes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +289,7 @@ func TestUsesReportUnreadableFiles(t *testing.T) {
 // no facts for, such as a TypeScript declaration file, is undetermined;
 // a file of no configured language is no code to read.
 func TestUsesReportFilesTheirLanguageDidNotRead(t *testing.T) {
-	uses := usesObserving(t, []vocab.BoundedContext{orderingContext()}, goOrdering(), []string{"app/consumer.d.ts", "app/README.md"}, "app")
+	uses := usesObserving(t, []vocab.BoundedContext{orderingContext()}, nil, goOrdering(), []string{"app/consumer.d.ts", "app/README.md"}, "app")
 	if len(uses.Undetermined) != 1 {
 		t.Fatalf("undetermined = %+v", uses.Undetermined)
 	}
@@ -336,5 +336,53 @@ func TestUsesLeaveFunctionResultsUndetermined(t *testing.T) {
 	}
 	if !slices.Equal(lines, []int{3, 4, 5}) {
 		t.Fatalf("undetermined lines = %v: %+v", lines, uses.Undetermined)
+	}
+}
+
+// A member never belongs to a type of another language: a Go method
+// beside a TypeScript class of the same name, each recorded in its own
+// context, makes a use of the Go type alone, and a Go function whose
+// written result names the TypeScript class raises no question about
+// it.
+func TestUsesNeverCrossLanguages(t *testing.T) {
+	zone := func(name, glob string) rule.Zone {
+		g, err := rule.NewGlob(glob)
+		if err != nil {
+			t.Fatal(err)
+		}
+		z, err := rule.NewZone(rule.ZoneName(name), "the "+name+" code", []rule.Glob{g})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return z
+	}
+	gomodel := contextOf("gomodel", nil, []vocab.ValueObject{valueObject("Money")}, nil)
+	tsmodel := contextOf("tsmodel", nil, []vocab.ValueObject{valueObject("Money")}, nil)
+	files := map[string]conformance.LanguageFacts{
+		"model/money.go": resolvedFile(rule.LanguageGo, "model", []conformance.Declaration{
+			{Kind: "struct", Name: "Money", Exported: true, StartLine: 3},
+			{Kind: "method", Name: "Add", Owner: "Money", Exported: true, StartLine: 6},
+			{Kind: "func", Name: "Zero", Exported: true, StartLine: 9, Results: []string{"Money"}},
+		}, nil),
+		"model/money.ts": resolvedFile(rule.LanguageTypeScript, "", []conformance.Declaration{
+			{Kind: "class", Name: "Money", Exported: true, StartLine: 1},
+			{Kind: "method", Name: "add", Owner: "Money", Exported: true, StartLine: 2},
+		}, nil),
+		"app/run.go": resolvedFile(rule.LanguageGo, "app", nil, []conformance.Call{
+			{Callee: "Add", Line: 4, Target: declared("model/money.go", "Money", "Add"), Receiver: declared("model/money.go", "", "Money")},
+			{Callee: "Zero", Line: 5, Target: declared("model/money.go", "", "Zero")},
+		}),
+	}
+	zones := []rule.Zone{zone("gomodel", "model/*.go"), zone("tsmodel", "model/*.ts")}
+	uses := usesObserving(t, []vocab.BoundedContext{gomodel, tsmodel}, zones, files, nil, "app")
+	var got []string
+	for _, u := range uses.Uses {
+		got = append(got, u.Context()+" "+u.Term()+" "+u.Via())
+	}
+	if want := []string{"gomodel Money Add"}; !slices.Equal(got, want) {
+		t.Fatalf("uses = %v, want %v", got, want)
+	}
+	if len(uses.Undetermined) != 1 || uses.Undetermined[0].Context != "gomodel" || uses.Undetermined[0].Line != 5 {
+		t.Fatalf("undetermined = %+v", uses.Undetermined)
 	}
 }
