@@ -80,9 +80,19 @@ export const s: typeof API.s = {
   number: () => node({ type: "number" }),
   integer: () => node({ type: "integer" }),
   boolean: () => node({ type: "boolean" }),
-  enum: (...values: string[]) => node({ type: "string", enum: values }),
+  enum: (...values: string[]) => {
+    for (const value of values) {
+      if (typeof value !== "string") {
+        throw new DefinitionError("s.enum: every value must be a string");
+      }
+    }
+    return node({ type: "string", enum: values });
+  },
   array: (items: Schema) => node({ type: "array", items: schemaOf(items, "s.array: items").toJSON() }),
   object: (props: Record<string, Schema>) => {
+    if (props === null || typeof props !== "object" || Array.isArray(props)) {
+      throw new DefinitionError("s.object: properties must be an object of schemas built with s");
+    }
     const properties: Record<string, unknown> = {};
     const required: string[] = [];
     for (const key of Object.keys(props)) {
@@ -115,6 +125,9 @@ export const defineRule: typeof API.defineRule = (def: RuleDef) => {
     throw new DefinitionError("defineRule: description must be a string");
   }
   const capability = def.capability ?? "heuristic";
+  if (typeof capability !== "string") {
+    throw new DefinitionError("defineRule: capability must be a string");
+  }
   if (
     capability !== "exact" &&
     capability !== "structural" &&

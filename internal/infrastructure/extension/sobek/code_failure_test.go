@@ -278,9 +278,13 @@ export default defineRule({ type: "hostile", check() {} });
 // definition, not code that failed while running.
 func TestMalformedParamsAreDefinitionErrors(t *testing.T) {
 	for name, tc := range map[string]struct{ source, want string }{
-		"params not a schema": {`defineRule({ type: "p", params: {} as any, check() {} })`, "defineRule: params must be a schema built with s"},
+		"params not a schema":          {`defineRule({ type: "p", params: {} as any, check() {} })`, "defineRule: params must be a schema built with s"},
 		"object property not a schema": {`defineRule({ type: "p", params: s.object({ depth: 2 as any }), check() {} })`, `s.object: property "depth" must be a schema built with s`},
-		"array items not a schema": {`defineRule({ type: "p", params: s.object({ list: s.array("x" as any) }), check() {} })`, "s.array: items must be a schema built with s"},
+		"object of null":               {`defineRule({ type: "p", params: s.object(null as any), check() {} })`, "s.object: properties must be an object of schemas built with s"},
+		"object of nothing":            {`defineRule({ type: "p", params: (s.object as any)(), check() {} })`, "s.object: properties must be an object of schemas built with s"},
+		"enum of a non-string":         {`defineRule({ type: "p", params: s.object({ mode: s.enum("a", 1 as any) }), check() {} })`, "s.enum: every value must be a string"},
+		"symbol capability":            {`defineRule({ type: "p", capability: Symbol("bad") as any, check() {} })`, "defineRule: capability must be a string"},
+		"array items not a schema":     {`defineRule({ type: "p", params: s.object({ list: s.array("x" as any) }), check() {} })`, "s.array: items must be a schema built with s"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			root := writeExtensions(t, map[string]string{"params.ts": `
