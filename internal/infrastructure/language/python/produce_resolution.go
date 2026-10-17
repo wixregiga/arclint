@@ -9,7 +9,7 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 )
 
-func resolvedFacts(root string, files []conformance.ObservedFile, res *resolver, modules *sync.Map, wantDecls, wantCalls, wantResolved, wantFields bool) map[string]conformance.LanguageFacts {
+func resolvedFacts(root string, files []conformance.ObservedFile, res *resolver, modules *sync.Map, wantDecls, wantCalls, wantResolved, wantFields, wantImplementations bool) map[string]conformance.LanguageFacts {
 	idx := &resolutionIndex{resolver: res, modules: map[string]*pyModule{}, patched: map[string]bool{}}
 	out := map[string]conformance.LanguageFacts{}
 	ps := newParsers()
@@ -56,12 +56,25 @@ func resolvedFacts(root string, files []conformance.ObservedFile, res *resolver,
 			idx.recordSetattr(c)
 		}
 	}
+	var implementations map[*pyClass][]conformance.Implementation
+	if wantImplementations {
+		implementations = idx.implementationsOf()
+	}
 	for file, m := range idx.modules {
 		f := out[file]
 		f.DeclarationsAvailable = wantDecls
 		f.CallsAvailable = wantCalls
 		f.ResolvedCallsAvailable = wantResolved
 		f.FieldTypesAvailable = wantFields
+		f.ImplementationsAvailable = wantImplementations
+		for _, c := range m.declared {
+			line := int(c.node.StartPoint().Row) + 1
+			for i := range m.facts.Decls {
+				if d := &m.facts.Decls[i]; d.Kind == declClass && d.Name == c.name && d.StartLine == line {
+					d.Implements = implementations[c]
+				}
+			}
+		}
 		if wantFields {
 			for _, field := range m.fields {
 				refs := idx.annotationRefs(field.scope, field.annotation, map[*pyBinding]bool{})

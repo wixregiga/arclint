@@ -135,10 +135,15 @@ type pyClass struct {
 	// inner is the scope its body and methods look past their own
 	// names into: its type parameters over the nearest scope that is not
 	// a class body.
-	inner     *pyScope
-	members   map[string]*pyBinding
-	bases     []*gotreesitter.Node
-	unsafe    string
+	inner   *pyScope
+	members map[string]*pyBinding
+	bases   []*gotreesitter.Node
+	unsafe  string
+	// unnamed says why no reference names the class itself: its name is
+	// ambiguous, or a decorator may replace it. unsafe also covers a
+	// metaclass or customized attribute access, which change what its
+	// members are but not which class it is.
+	unnamed   string
 	dataclass bool
 }
 type pyCall struct {
@@ -176,6 +181,10 @@ type resolutionIndex struct {
 	resolver *resolver
 	modules  map[string]*pyModule
 	patched  map[string]bool
+	// identities is set while classes are named for what they are, not
+	// read for their members: a class whose metaclass or attribute
+	// access is customized is still that class.
+	identities bool
 }
 
 func (s *pyScope) bind(b *pyBinding) {
@@ -255,7 +264,7 @@ func (m *pyModule) collect(n *gotreesitter.Node, s *pyScope, owner *pyClass, inF
 		// A nested same-spelled class cannot be named uniquely by Reference.
 		if old := m.classes[c.name]; old != nil {
 			old.unsafe = "class name " + c.name + " is ambiguous"
-			c.unsafe = old.unsafe
+			c.unsafe, old.unnamed, c.unnamed = old.unsafe, old.unsafe, old.unsafe
 		}
 		m.classes[c.name] = c
 		m.declared = append(m.declared, c)
@@ -412,7 +421,7 @@ func (m *pyModule) collectDecorated(n *gotreesitter.Node, s *pyScope, owner *pyC
 		}
 		b.reason = "decorated declaration " + b.name + " may be a descriptor or replacement"
 		if b.class != nil {
-			b.class.unsafe = b.reason
+			b.class.unsafe, b.class.unnamed = b.reason, b.reason
 		}
 	}
 }

@@ -117,7 +117,7 @@ func (idx *resolutionIndex) symbol(s *pyScope, name string, seen map[*pyBinding]
 		if b.class.scope.owner != nil {
 			return pyValue{ref: unknown("nested class " + b.name + " has no unambiguous top-level declaration")}
 		}
-		if b.class.unsafe != "" {
+		if b.class.unnamed != "" || b.class.unsafe != "" && !idx.identities {
 			return pyValue{ref: unknown(b.class.unsafe)}
 		}
 		return pyValue{ref: declared(b.scope.module.file, "", b.name), class: b.class}
@@ -199,7 +199,37 @@ func (idx *resolutionIndex) member(c *pyClass, name string, seen map[*pyClass]bo
 			return nil, nil, "dataclass generated member " + name + " has no source declaration"
 		}
 	}
+	for _, owner := range mro {
+		if idx.derivesABC(owner) {
+			return nil, nil, owner.name + " derives abc.ABC, whose metaclass abc.ABCMeta may provide " + name
+		}
+	}
 	return nil, nil, ""
+}
+
+// isABC reports a reference to the library's abc.ABC.
+func isABC(ref conformance.Reference) bool {
+	return ref.Resolution == conformance.ResolutionExternal && ref.Package == abcModule && ref.Name == "ABC"
+}
+
+// abcModule is the library module abstract base classes come from.
+const abcModule = "abc"
+
+// derivesABC reports whether one of a class's own bases is abc.ABC,
+// whose metaclass gives the class members no class body declares.
+func (idx *resolutionIndex) derivesABC(c *pyClass) bool {
+	w := c.scope.module.facts.walker
+	for _, node := range c.bases {
+		text := node.Text(w.src)
+		if head, _, ok := strings.Cut(text, "["); ok {
+			text = head
+		}
+		v := idx.dotted(c.header, text, map[*pyBinding]bool{})
+		if isABC(v.ref) {
+			return true
+		}
+	}
+	return false
 }
 
 // mro implements Python's C3 linearization rather than guessing the first
@@ -222,7 +252,9 @@ func (idx *resolutionIndex) mro(c *pyClass, seen map[*pyClass]bool) ([]*pyClass,
 			text = head
 		}
 		v := idx.dotted(c.scope, text, map[*pyBinding]bool{})
-		if v.ref.Resolution == conformance.ResolutionExternal && ((v.ref.Package == "" && v.ref.Name == "object") || (v.ref.Package == typingModule && (v.ref.Name == "Protocol" || v.ref.Name == "Generic"))) {
+		// object, Protocol, Generic, and abc.ABC define no method a
+		// repository class inherits under a name of its own.
+		if v.ref.Resolution == conformance.ResolutionExternal && ((v.ref.Package == "" && v.ref.Name == "object") || (v.ref.Package == typingModule && (v.ref.Name == "Protocol" || v.ref.Name == "Generic")) || isABC(v.ref)) {
 			continue
 		}
 		if v.class == nil {

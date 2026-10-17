@@ -38,7 +38,7 @@ func (Producer) Language() rule.Language { return rule.LanguagePython }
 func (Producer) Facts(root string, files []conformance.ObservedFile, requested []rule.Fact) (map[string]conformance.LanguageFacts, error) {
 	wantDeclarations := false
 	wantCalls := false
-	wantResolved, wantFields := false, false
+	wantResolved, wantFields, wantImplementations := false, false, false
 	for _, f := range requested {
 		if f == rule.FactResolvedCalls {
 			wantResolved, wantCalls = true, true
@@ -52,12 +52,15 @@ func (Producer) Facts(root string, files []conformance.ObservedFile, requested [
 		if f == rule.FactCalls {
 			wantCalls = true
 		}
+		if f == rule.FactImplementations {
+			wantImplementations, wantDeclarations = true, true
+		}
 	}
 	res := newResolver(root, files)
 	// The modules a class base is followed into, shared by every worker.
 	modules := &sync.Map{}
-	if wantResolved || wantFields {
-		return resolvedFacts(root, files, res, modules, wantDeclarations, wantCalls, wantResolved, wantFields), nil
+	if wantResolved || wantFields || wantImplementations {
+		return resolvedFacts(root, files, res, modules, wantDeclarations, wantCalls, wantResolved, wantFields, wantImplementations), nil
 	}
 	return fanout.Analyze(files, analyzable, func() fanout.Analyzer {
 		ps := newParsers()
