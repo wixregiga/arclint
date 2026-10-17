@@ -46,6 +46,11 @@ func TestDeclaredServiceIsCheckedInTheModel(t *testing.T) {
 		{Kind: "struct", Name: "Username", Exported: true, StartLine: 10},
 		{Kind: "func", Name: "NewUsername", Exported: true, StartLine: 13, Results: []string{"Username", "error"}},
 	}
+	aliased := func(alias string) conformance.Import {
+		imp := userImport
+		imp.Alias = alias
+		return imp
+	}
 	assertNotWeak := conformance.Declaration{Kind: "func", Name: "AssertNotWeak", Exported: true, StartLine: 20, Results: []string{"error"}}
 	generator := func(results ...string) []conformance.Declaration {
 		ds := []conformance.Declaration{{Kind: "interface", Name: "PasswordGenerator", Exported: true, StartLine: 5}}
@@ -93,7 +98,13 @@ func TestDeclaredServiceIsCheckedInTheModel(t *testing.T) {
 		{"a collection of the value", state{generator: generator("[]user.Password", "error"), imports: []conformance.Import{userImport}}, []string{noCheck}},
 		{"a value whose invariant has another key", state{generator: generator("user.Username", "error"), imports: []conformance.Import{userImport}}, []string{noCheck}},
 		{"a type that only ends with the value's name", state{generator: generator("user.StrongPassword", "error"), imports: []conformance.Import{userImport}}, []string{noCheck}},
+		{"value through an aliased import", state{generator: generator("v.Password", "error"), imports: []conformance.Import{aliased("v")}}, nil},
+		{"the package name where the import binds an alias", state{generator: generator("user.Password", "error"), imports: []conformance.Import{aliased("v")}}, []string{noCheck}},
+		{"value through a dot import", state{generator: generator("Password", "error"), imports: []conformance.Import{aliased(".")}}, nil},
+		{"value spelled through a blank import", state{generator: generator("user.Password", "error"), imports: []conformance.Import{aliased("_")}}, []string{noCheck}},
+		{"a sized array of the value", state{generator: generator("[0]user.Password", "error"), imports: []conformance.Import{userImport}}, []string{noCheck}},
 		{"a function of the context", state{generator: generator("string", "error"), user: []conformance.Declaration{assertNotWeak}}, nil},
+		{"a function nested in another", state{generator: generator("string", "error"), user: []conformance.Declaration{{Kind: "func", Name: "AssertNotWeak", Owner: "propose", StartLine: 21}}}, []string{noCheck}},
 		{"a function only a test declares", state{generator: generator("string", "error"), test: []conformance.Declaration{assertNotWeak}}, []string{noCheck}},
 		{"a method named like the check", state{generator: generator("string", "error"), user: []conformance.Declaration{{Kind: "method", Name: "AssertNotWeak", Owner: "Password", StartLine: 20}}}, []string{noCheck}},
 		{"no operation, checked by a function", state{generator: generator(), user: []conformance.Declaration{assertNotWeak}}, []string{noOperation}},
@@ -178,4 +189,35 @@ func TestDeclaredServiceCoverageReadsTheReturnedValue(t *testing.T) {
 		return
 	}
 	t.Fatalf("no coverage for the Encrypter guarantee: %#v", a.Contracts())
+}
+
+// In the value's own directory a result names it bare; a qualified name
+// there is another package's type, whatever it ends with.
+func TestDeclaredServiceResultInTheValuesDirectoryIsBare(t *testing.T) {
+	knowledge := oneContext(t, vocab.BoundedContext{
+		Name: "identity", Definition: "d", Line: 1,
+		ValueObjects: []vocab.ValueObject{
+			{Name: "EncryptedPassword", Definition: "d", Line: 2, Invariants: []vocab.Invariant{{Key: "not-empty", Statement: "s", Line: 3}}},
+		},
+		Services: []vocab.DomainService{{
+			Name: "Encrypter", Definition: "d", Line: 4,
+			Assertions: []vocab.Assertion{{Key: "not-empty", On: "Encrypt", Statement: "s", Line: 5}},
+		}},
+	})
+	file := "internal/user/password.go"
+	run := func(result string) int {
+		facts := map[string]conformance.LanguageFacts{file: goDecls("user", []conformance.Declaration{
+			{Kind: "struct", Name: "EncryptedPassword", Exported: true, StartLine: 3},
+			{Kind: "func", Name: "NewEncryptedPassword", Exported: true, StartLine: 6, Results: []string{"EncryptedPassword", "error"}},
+			{Kind: "interface", Name: "Encrypter", Exported: true, StartLine: 12},
+			{Kind: "method", Name: "Encrypt", Owner: "Encrypter", Exported: true, StartLine: 13, Results: []string{result, "error"}},
+		})}
+		return len(runOne(t, builtInRule(t, "assertion/checked-by-its-operation"), nil, observed(file), facts, knowledge).Violations())
+	}
+	if got := run("*EncryptedPassword"); got != 0 {
+		t.Errorf("a bare result naming the value: %d findings", got)
+	}
+	if got := run("foreign.EncryptedPassword"); got != 1 {
+		t.Errorf("another package's type of the same name: %d findings, want 1", got)
+	}
 }

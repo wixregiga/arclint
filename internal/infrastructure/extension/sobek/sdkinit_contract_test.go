@@ -198,6 +198,11 @@ export default defineRule({type: "host-contract", description: "contract", capab
 	// Go's JSON encoder omits them. Both satisfy the published optional types.
 	expectedFacts := expected.(map[string]any)["facts"].(map[string]any)
 	expectedFacts["parseError"] = ""
+	for _, imports := range []any{expectedFacts["imports"], expected.(map[string]any)["imports"]} {
+		for _, imp := range imports.([]any) {
+			imp.(map[string]any)["alias"] = ""
+		}
+	}
 	decl := expectedFacts["decls"].([]any)[0].(map[string]any)
 	decl["params"].([]any)[0].(map[string]any)["variadic"] = false
 	decl["holds"], decl["type"], decl["abstract"] = []any{}, nil, false

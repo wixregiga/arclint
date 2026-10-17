@@ -39,6 +39,10 @@ type ImportInfo struct {
 	TargetZones []string `json:"targetZones"`
 	// TargetObserved distinguishes an observed unzoned target from a target absent from the scan.
 	TargetObserved bool `json:"targetObserved"`
+	// Alias is the name a Go import binds when the source renames it
+	// (v, _, or .); "" when it binds the package's own name and in every
+	// other language.
+	Alias string `json:"alias,omitempty"`
 }
 
 // ParamInfo is one function or method parameter at the syntactic tier.

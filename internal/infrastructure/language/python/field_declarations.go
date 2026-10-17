@@ -241,7 +241,7 @@ func moduleRebindings(w *pyWalker, root *gotreesitter.Node) map[string]bool {
 			}
 		}
 		for _, a := range assignments {
-			if a.Type(w.lang) != nodeAssignment && a.Type(w.lang) != "augmented_assignment" {
+			if a.Type(w.lang) != nodeAssignment && a.Type(w.lang) != nodeAugmented {
 				continue
 			}
 			left := a.ChildByFieldName("left", w.lang)

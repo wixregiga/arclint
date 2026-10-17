@@ -14,7 +14,7 @@ func importBindings(w *pyWalker, n *gotreesitter.Node) []importBinding {
 	}
 	var out []importBinding
 	switch n.Type(w.lang) {
-	case "import_statement", "import_from_statement":
+	case nodeImport, nodeImportFrom:
 		module := ""
 		if m := n.ChildByFieldName("module_name", w.lang); m != nil {
 			module = m.Text(w.src)
@@ -149,7 +149,7 @@ func (m *pyModule) collect(n *gotreesitter.Node, s *pyScope, owner *pyClass, inF
 	case nodeDecorated:
 		m.collectDecorated(n, s, owner, inFunction)
 		return
-	case "import_statement", "import_from_statement":
+	case nodeImport, nodeImportFrom:
 		for _, imp := range importBindings(w, n) {
 			if imp.member == "*" {
 				s.star = true
@@ -211,16 +211,16 @@ func (m *pyModule) collect(n *gotreesitter.Node, s *pyScope, owner *pyClass, inF
 			m.collect(body, fs, owner, true)
 		}
 		return
-	case nodeAssignment, "augmented_assignment", "named_expression":
+	case nodeAssignment, nodeAugmented, "named_expression":
 		m.collectAssignment(n, s, owner, inFunction)
-	case "as_pattern":
+	case nodeAsPattern:
 		for i := 0; i < n.NamedChildCount(); i++ {
 			ch := n.NamedChild(i)
 			if ch.Type(w.lang) == "as_pattern_target" {
 				m.bindPattern(ch, s)
 			}
 		}
-	case "for_statement", "for_in_clause":
+	case "for_statement", nodeForInClause:
 		if left := n.ChildByFieldName("left", w.lang); left != nil {
 			m.bindPattern(left, s)
 		}
@@ -229,7 +229,7 @@ func (m *pyModule) collect(n *gotreesitter.Node, s *pyScope, owner *pyClass, inF
 		// Comprehension targets bind throughout the comprehension scope.
 		for i := 0; i < n.NamedChildCount(); i++ {
 			ch := n.NamedChild(i)
-			if ch.Type(w.lang) == "for_in_clause" {
+			if ch.Type(w.lang) == nodeForInClause {
 				if left := ch.ChildByFieldName("left", w.lang); left != nil {
 					m.bindPattern(left, cs)
 				}

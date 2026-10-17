@@ -977,11 +977,12 @@ var collectionHeads = map[string]bool{
 	"Collection": true, "Deque": true, "deque": true,
 }
 
-// isCollection reports a result text that is a slice, array, map, or
-// generic collection in one of the supported languages.
+// isCollection reports a result text that is a slice, a sized array, a
+// tuple, a map, or a generic collection in one of the supported
+// languages.
 func isCollection(text string) bool {
 	t := strings.TrimSpace(text)
-	if strings.HasPrefix(t, "[]") || strings.HasPrefix(t, "map[") || strings.HasPrefix(t, "...") || strings.HasSuffix(t, "[]") {
+	if strings.HasPrefix(t, "[") || strings.HasPrefix(t, "map[") || strings.HasPrefix(t, "...") || strings.HasSuffix(t, "[]") {
 		return true
 	}
 	toks := identifierTokens(t)
@@ -1576,8 +1577,10 @@ func recordsInvariant(vo vocab.ValueObject, key string) bool {
 }
 
 // contextFunction finds a function of the context spelling a key in its
-// language's method case: in a file the context's code holds, or beside
-// the service. A test file's helper is the test's, not the model's.
+// language's method case: declared at the top of a file the context's
+// code holds, or of a file beside the service. A function nested in
+// another is that function's helper, and a test file's is the test's;
+// neither is the model's.
 func (cc contextCode) contextFunction(service locDecl, key string) (locDecl, bool) {
 	seen := map[string]bool{}
 	for _, idx := range []contractIndex{cc.idx, cc.unitIdx(service)} {
@@ -1587,7 +1590,7 @@ func (cc contextCode) contextFunction(service locDecl, key string) (locDecl, boo
 			}
 			seen[f.path] = true
 			for _, d := range f.decls {
-				if d.Kind == declKindFunc && methodSpelled(d.Name, key, f.lang) {
+				if d.Kind == declKindFunc && d.Owner == "" && methodSpelled(d.Name, key, f.lang) {
 					return locDecl{file: f, decl: d}, true
 				}
 			}
@@ -1597,22 +1600,62 @@ func (cc contextCode) contextFunction(service locDecl, key string) (locDecl, boo
 }
 
 // resultNames reports whether a result of an operation names a located
-// type itself, never a collection of it: bare in the type's own
-// directory, and from another only in a file importing that directory,
-// through its package name in Go.
+// type itself, never a collection of it. In the type's own directory
+// the name stands bare, since a qualified name there is another
+// package's type. From another directory the file imports the type's
+// directory: in Go the name is qualified by the binding the import
+// makes (the package's name, its alias, or bare through a dot import);
+// in TypeScript and Python a module binding may qualify it.
 func (cc contextCode) resultNames(op, target locDecl) bool {
-	qualifier := ""
 	unit := path.Dir(target.file.path)
-	if path.Dir(op.file.path) != unit {
-		if !cc.importsUnit(op.file.path, unit) {
-			return false
+	if path.Dir(op.file.path) == unit {
+		return resultMentions(op.decl.Results, func(res string) bool { return mentionsBareType(res, target.decl.Name) })
+	}
+	for _, fi := range cc.imports {
+		if fi.path != op.file.path || (fi.imp.TargetDir != unit && (fi.imp.TargetFile == "" || path.Dir(fi.imp.TargetFile) != unit)) {
+			continue
 		}
-		if op.file.lang == rule.LanguageGo {
-			qualifier = target.file.pkg
+		if op.file.lang != rule.LanguageGo {
+			if resultMentions(op.decl.Results, func(res string) bool { return mentionsType(res, "", target.decl.Name) }) {
+				return true
+			}
+			continue
+		}
+		var names func(string) bool
+		switch fi.imp.Alias {
+		case "_":
+			continue
+		case ".":
+			names = func(res string) bool { return mentionsBareType(res, target.decl.Name) }
+		case "":
+			names = func(res string) bool { return mentionsType(res, target.file.pkg, target.decl.Name) }
+		default:
+			names = func(res string) bool { return mentionsType(res, fi.imp.Alias, target.decl.Name) }
+		}
+		if resultMentions(op.decl.Results, names) {
+			return true
 		}
 	}
-	for _, res := range op.decl.Results {
-		if !isCollection(res) && mentionsType(res, qualifier, target.decl.Name) {
+	return false
+}
+
+// resultMentions reports whether a result that is not a collection
+// names the type the predicate looks for.
+func resultMentions(results []string, names func(string) bool) bool {
+	for _, res := range results {
+		if !isCollection(res) && names(res) {
+			return true
+		}
+	}
+	return false
+}
+
+// mentionsBareType reports whether a type text names a type unqualified:
+// Password and *Password do, foreign.Password does not.
+func mentionsBareType(text, name string) bool {
+	toks := identifierTokens(text)
+	for i, t := range toks {
+		if t == name && (i == 0 || toks[i-1] != ".") {
 			return true
 		}
 	}
