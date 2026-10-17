@@ -222,6 +222,14 @@ class WrappedMetaModule(metaclass=(abc) . ABCMeta):
 
 class Called(make_base()):
     pass
+
+class Commented((ABC  # the abstract base
+    )):
+    pass
+
+class CommentedMeta(metaclass=(  # abstract
+    ABCMeta)):
+    pass
 `)
 	got := extractDeclarations(newParsers(), src)
 	if got.ParseError != "" {
@@ -240,7 +248,7 @@ class Called(make_base()):
 		"Meta": true, "QualifiedMeta": true,
 		"Concrete": false, "Plain": false, "Generic2": false,
 		"Wrapped": true, "WrappedMeta": true, "WrappedProtocol": true,
-		"Spaced": true, "WrappedModule": true, "WrappedMetaModule": true, "Called": false,
+		"Spaced": true, "WrappedModule": true, "WrappedMetaModule": true, "Called": false, "Commented": true, "CommentedMeta": true,
 	}
 	if !reflect.DeepEqual(abstract, want) {
 		t.Fatalf("abstract marks:\n got %v\nwant %v", abstract, want)
