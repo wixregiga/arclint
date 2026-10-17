@@ -1,12 +1,12 @@
 # Placement gate
 
-Apply after the owner evidence is quoted. Rule ids are the protocol numbers in `.agents/skills/domain-librarian/SKILL.md` and the `distillation_rules` ids in its `VOCAB.yaml`. Each decision below names the issue that records it. Several of those issues are open: the decision already binds placement, but arclint may not enforce it yet. Where a command or flag a decision describes does not exist in the arclint you built, say so in the report and do not write the command.
+Apply after the owner evidence is quoted. Rule ids are the protocol numbers in `.agents/skills/domain-librarian/SKILL.md` and the `distillation_rules` ids in its `VOCAB.yaml`. Each decision below names the issue that records it and, once arclint carries it, the rule or the `VOCAB.yaml` section that does. Issues #148 and #151 are still open: their decisions already bind placement, but arclint does not enforce them yet. Where a command or flag a decision describes does not exist in the arclint you built, say so in the report and do not write the command.
 
 ## Order of checks
 
 For each statement, in this order:
 
-1. **Declined rules.** Compare it with the declined list below. A match is placed `declined`, with the recorded reason and its basis. Do not propose the rule again.
+1. **Declined rules.** Compare it with `declined_rules` in the librarian's `VOCAB.yaml` (protocol rule 11). A match is placed `declined`, with the entry's id, reason and basis. Do not propose the rule again.
 2. **Disagreement.** When two owner sources state it differently, it is a question, whatever row it would otherwise fit. Record the discrepancy with both sources.
 3. **Placement.** Otherwise the first row of the placement table whose conditions hold decides.
 4. **Decide, then carry out.** For a guarantee of an operation, apply the section of that name before choosing the owner.
@@ -26,9 +26,9 @@ For each statement, in this order:
 
 | placement | conditions | deciding rules | example |
 |---|---|---|---|
-| declined | the statement matches a declined rule below | issue #144 | "every aggregate has a factory" (Evans 2015, p. 18) |
+| declined | the statement matches an entry of VOCAB's `declined_rules` | Declined rules (rule 11), issue #144 | `factory/required-for-every-aggregate` (Evans 2015, p. 18) |
 | already recorded | the project's recording at the merge base states it, under the right owner, in equivalent words | Evidence (rule 1) | a statement the change only repeats |
-| change to an existing entry | an entry recorded at the merge base is wrong, incomplete, over its word limit, or silent on a case the change now covers | Precedence (rule 9), Description style (rule 14), issue #125 | an entry that says nothing about the file a symlink reaches |
+| change to an existing entry | an entry recorded at the merge base is wrong, incomplete, over its word limit, or silent on a case the change now covers | Precedence (rule 9), Description style (rule 16), `domain_recording/text-within-word-limit` | an entry that says nothing about the file a symlink reaches |
 | invariant under a value object | value integrity, holds at every observable time, one violation, enforceable in the constructor, owner is the subject | Invariant gate (rule 10), invariant-ownership, value-test | PR #96: `DomainRecording / spelled-with-slashes` (the owner's docs: a domain file path is "written with slashes") |
 | invariant under an aggregate | a cluster rule that must stay consistent in one transaction, owned by the root | rule 10, invariant-ownership, transaction-boundary | candidate `Rule / pattern never chooses the domain file` (needed the owner's decision) |
 | assertion | a guarantee of one named operation of the root or of a domain service, with `on`; the operation is the one that decides (see below) | precondition-as-assertion, contract-of-a-service, issue #128 | an assertion on the service operation that returns the verdict, never on the step that writes |
@@ -43,22 +43,11 @@ A rule found inside a recorded definition is a statement like any other. Wording
 
 ## Declined rules
 
-Recorded in issue #144. When a candidate matches one, place it `declined` and cite the reason. Issue #144 moves this list into the meta-model; once it is there, read it from `VOCAB.yaml` and cite that.
-
-| declined rule | reason | basis |
-|---|---|---|
-| every aggregate has a factory | factories are for creation that "becomes complicated or reveals too much of the internal structure" | Evans 2015, p. 18 (tier 1) |
-| every aggregate has a repository | "Provide repositories only for aggregate roots that actually need direct access" | Evans 2015, p. 17 (tier 1) |
-| every value object carries a rule | no source requires it; p. 22 allows "invariants of classes" | Evans 2015, p. 22 (tier 1) |
-| an application operation owns an assertion | the application layer "does not contain business rules or knowledge" | Evans, quoted in Fowler's AnemicDomainModel (tier 2); Stafford, Service Layer (tier 2) |
-| a call-order check for assertions | it would need to know which calls change things; the decision value of issue #128 makes the order explicit | owner decision, issue #144 |
-| findings on normative keywords in definitions | wording alone does not establish a rule; issue #125 limits length instead | owner decision, issues #125 and #144 |
-| waivers for missing rules | a warning does not fail; the owner monitors it | owner decision, issue #144 |
-| checks derived from recorded ownership, as designed | the term-ownership approach "is forced and barely solves" the problem it was for; reopen only with a different design | owner decision, issue #137 |
+Recorded in issue #144, and carried in the librarian's `VOCAB.yaml` under `declined_rules`: the rules arclint deliberately does not enforce, each with an id, the statement declined, the reason, and its basis (a tier and page of literature, or an owner decision's issue). Read that list; do not copy it here, so it cannot drift. When a candidate states what an entry declines, place it `declined` and cite the entry's id, reason and basis. As the librarian's rule 11 says, new tier 1 or 2 literature or a new owner decision in an issue reopens an entry; a request alone does not, so say which of the two would.
 
 ## Decide, then carry out
 
-Recorded in issue #128. Record a service's assertion on the operation that makes the decision. That operation receives what it needs as values, returns its verdict, and changes nothing. The application gathers those values, asks for the verdict, and makes the changes only when the verdict allows them; it holds no business rule of its own (application-service-holds-no-rule).
+Recorded in issue #128, and in the librarian's rule 13 (Moves between layers). Record a service's assertion on the operation that makes the decision. That operation receives what it needs as values, returns its verdict, and changes nothing. The application gathers those values, asks for the verdict, and makes the changes only when the verdict allows them; it holds no business rule of its own (application-service-holds-no-rule).
 
 - The verdict is a value. A verdict that carries a rule ("approves only when no participant refused") is a value object with that rule as its invariant, so `value_object/constructed-through-one-door` applies.
 - An effect the domain cannot see ("a refusal changes nothing on disk") is proved by an automated test (Evans 2015, p. 22), not by moving the workflow into the domain.
@@ -75,15 +64,17 @@ Recorded in issue #148. A domain service declared the canonical way is "a standa
 
 Never an interface method, a callback, or prose (proposed distillation rule `guarantee-has-one-checked-home`, issue #148). When neither shape exists, report the missing check on the model side. A concrete owner (struct, class) and an aggregate root keep `assertion/checked-by-its-operation` as it stands.
 
+Until issue #148 lands, arclint asks an owner declared as an interface or an abstract class for the tests under its assertion's `verified_by` instead of a checking method (`assertion/checked-by-its-operation`, and `assertion/verifying-tests-declared` checks that they exist). Name those tests for such an owner, and report which of the two shapes the guarantee would take.
+
 ## Proving tests
 
-Recorded in issue #143. For every entry, name the test that proves it as `path:TestName` (Go `func Test...`, Python `def test_...`, the TypeScript `test("...")` name). Read the test before you name it. This is verification of enforcement, not classification, so the librarian's Economy section does not limit it. A test that exists shows the behavior is pinned; whether it proves the statement is your judgment, and you say which. Issue #143 records the name through `--verified-by`; write that flag only when `arclint domain define --help` lists it. For an owner declared as an interface, the proving test is the expected evidence, not an empty `Assert` method.
+Recorded in issue #143. For every entry, name the test that proves it as `path:TestName` from the repository root (Go `func Test...`, Python `def test_...` or `Class.test_...`, the TypeScript `test("...")` name). Read the test before you name it. This is verification of enforcement, not classification, so the librarian's Economy section does not limit it. A test that exists shows the behavior is pinned; whether it proves the statement is your judgment, and you say which. Record it with `arclint domain define invariant|assertion ... --verified-by <path>:<test name>`, repeated for several; the flag replaces the recorded tests, and `--clear-verified-by` records none. `invariant/verifying-tests-declared` and `assertion/verifying-tests-declared` then fail the check when a named test is missing. For an owner declared as an interface, the proving test is the expected evidence, not an empty `Assert` method.
 
 Tests pin behavior; they do not approve it. A rule only tests state, with no doc and no owner's words, needs the owner's yes before it is recorded.
 
 ## Word limits
 
-Recorded in issue #125. Every text you propose fits:
+Recorded in issue #125 and enforced by `domain_recording/text-within-word-limit`: `arclint domain define` refuses a longer text, and `arclint check` reports one already recorded as an error. Every text you propose fits:
 
 | text | limit |
 |---|---|
@@ -96,7 +87,7 @@ A definition says what a word means. When the meaning will not fit, keep what th
 
 ## Sources
 
-The owner's source standard, recorded in issue #151:
+The owner's source standard, recorded in issue #151 (still open; the librarian's `VOCAB.yaml` carries the tiers under `source_tiers`):
 
 | tier | works | may |
 |---|---|---|
@@ -116,10 +107,10 @@ Write the reason in these words so reports compare.
 | programming guard | language-not-guards | you would not say it to an expert who never saw the code (a nil check, a parse error) |
 | delivery promise of an adapter or port | not-a-domain-rule | it describes how one format or one adapter writes, retries, formats, or warns, or how a command controls its transaction (all or nothing) |
 | application precondition | not-a-domain-rule, application-service-holds-no-rule | it holds only when one use case runs and no business decision is lost by deleting the step |
-| application coordination | Behavior (rule 11), application-service-holds-no-rule | it loads, invokes, commits, publishes, notifies or translates, and deleting it loses no business decision |
+| application coordination | Behavior (rule 12), application-service-holds-no-rule | it loads, invokes, commits, publishes, notifies or translates, and deleting it loses no business decision |
 | delivery validation | not-a-domain-rule | the software proves its own output (read back, round trip) |
-| contributor duty | rule 12 (Completeness sweep) | it tells a contributor what to do, or what a contributor's tool (a skill, a script, a make target) promises, not what the domain holds |
-| presentation | rule 14 | it is wording of help, warnings or docs |
+| contributor duty | rule 14 (Completeness sweep) | it tells a contributor what to do, or what a contributor's tool (a skill, a script, a make target) promises, not what the domain holds |
+| presentation | Description style (rule 16) | it is wording of help, warnings or docs |
 | decision already recorded elsewhere | Evidence (rule 1) | the meta-model, another context, or an owner decision that placed it outside the domain already records it (PR #96: `context_map/one-relation-per-pair` is in the meta-model; the CML adapter repeats it) |
 
 A no-entry statement that is still a promise names the test that pins it, or `none`.

@@ -31,7 +31,7 @@ First the YAML fragment the recorded domain would hold, in the shape of `domain.
 
 ```bash
 arclint domain define value_object DomainRecording --context vocabulary --definition "..."
-arclint domain define invariant spelled-with-slashes --owner DomainRecording --context vocabulary --statement "..."
+arclint domain define invariant spelled-with-slashes --owner DomainRecording --context vocabulary --statement "..." --verified-by internal/domain/vocab/domain_recording_test.go:TestNewDomainRecordingStaysInsideTheRepository
 arclint domain define question ruleset-names-the-recording-when --context vocabulary --text "..."
 arclint domain remove invariant <key> --owner <Owner>
 ```
