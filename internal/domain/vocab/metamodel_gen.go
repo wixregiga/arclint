@@ -2072,6 +2072,12 @@ func ddd() MetaModel {
 				Decision:  "https://github.com/wixregiga/arclint/issues/128",
 			},
 			{
+				ID:        "domain_service/no-effect-parameters",
+				Statement: "A domain operation takes no function parameter that carries out an effect.",
+				Reason:    "Evans asks the domain to decide without side effects (DDD Reference 2015, p. 21) but does not name function-typed parameters; a built-in rule would rest on functional-style guidance, which belongs in a Pattern. The design review flags the callback shape instead.",
+				Decision:  "https://github.com/wixregiga/arclint/issues/169",
+			},
+			{
 				ID:        "ubiquitous_language/normative-wording-is-a-rule",
 				Statement: "A definition worded with must, always, or never is reported as a rule recorded in the wrong place.",
 				Reason:    "Must-always or must-never wording alone does not establish a rule; the librarian places a rule only after establishing domain consistency and an owner, as its invariant-ownership distillation rule says. A limit on the length of definitions and statements keeps rules out of long definitions instead.",

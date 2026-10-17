@@ -405,6 +405,32 @@ func TestDDDDeclinesFactoryForEveryAggregate(t *testing.T) {
 	t.Fatal("factory/required-for-every-aggregate is not declined")
 }
 
+// Asked to forbid function parameters that carry out effects in a domain
+// operation, the librarian answers with the owner decision of issue #169:
+// the rule belongs in a Pattern, and the design review flags the shape.
+func TestDDDDeclinesEffectParametersInDomainOperations(t *testing.T) {
+	m := DDD()
+	for _, d := range m.Declined {
+		if d.ID != "domain_service/no-effect-parameters" {
+			continue
+		}
+		if d.Term() != "domain_service" {
+			t.Errorf("term = %q, want domain_service", d.Term())
+		}
+		if want := DecisionIssues + "169"; d.Decision != want {
+			t.Errorf("decision = %q, want %q", d.Decision, want)
+		}
+		if len(d.Sources) != 0 {
+			t.Errorf("sources = %v; an owner decision is the only basis", d.Sources)
+		}
+		if !strings.Contains(d.Reason, "Pattern") {
+			t.Errorf("reason = %q, want it to send the rule to a Pattern", d.Reason)
+		}
+		return
+	}
+	t.Fatal("domain_service/no-effect-parameters is not declined")
+}
+
 // The canonical works stay in the bibliography at tier 1: a canonical
 // reference is never removed or demoted.
 func TestDDDKeepsCanonicalWorksAtTierOne(t *testing.T) {
