@@ -317,10 +317,40 @@ type Encrypter interface {
 
 With neither shape and no tests the finding is on the model, never a
 request for a method the interface cannot hold: `declared service
-Encrypter: not-empty has no check in context identity`. Whether each implementation of the
-service reaches the check is not yet observed. `arclint domain define
+Encrypter: not-empty has no check in context identity`. `arclint domain define
 assertion` prints where the guarantee it records is checked, chosen by
 how the owner is declared.
+
+Every implementation of the service must reach that check. arclint
+reads which types implement the service as each language decides it:
+Go's method sets of a type and of a pointer to it, TypeScript's
+`implements` and `extends` clauses through the repository's classes
+and interfaces, and Python's resolved class hierarchy. The operation of
+each implementation makes a resolved call to the function of the
+context, or returns the value object. One that does neither is the
+finding, at its operation:
+
+```text
+src/adapters/skipping.go:7: [error] assertion/checked-by-its-operation implementation Skipping of declared service Encrypter: Skipping.Encrypt does not call AssertNotEmpty
+  remediation: call AssertNotEmpty from Skipping.Encrypt, so not-empty holds for every implementation of Encrypter
+```
+
+A class that only has the service's method names, or one registered
+through `ABCMeta.register`, cannot prove a violation, so it leaves the
+guarantee undetermined with the reason. So does a service with no
+implementation observed, unless `verified_by` names its tests. An
+implementation in a test file is a test double and is not judged.
+`arclint context` on an implementing file names the check its
+operation must reach, and `arclint domain show` gives each
+implementation's status:
+
+```text
+  not-empty (on Encrypt)  An encrypted password is never empty.
+    enforced at: identityaccess/user/password.go:56
+    status: conforms
+    implementations:
+      PBKDF2Encrypter.Encrypt (exact) must return EncryptedPassword: conforms (identityaccess/adapters/passwords/pbkdf2_encrypter.go:29)
+```
 
 **A domain service** records at least one assertion
 (`domain_service/records-an-assertion`): Evans asks for "a set of

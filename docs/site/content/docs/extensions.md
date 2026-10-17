@@ -306,6 +306,15 @@ declaration states to be abstract: a TypeScript `abstract class`, or a Python
 class naming `abc.ABC` or `typing.Protocol` among its bases or `abc.ABCMeta`
 as its metaclass. An interface is abstract by its `kind` and does not carry it.
 
+When `implementationsAvailable` is true, a struct, type, or class declaration
+carries `implements`: each interface or abstract class of the repository it
+implements, with `evidence`. `exact` means the language's own checking or the
+code's declaration establishes it (Go's method sets, a TypeScript `implements`
+or `extends` clause, a Python base class); `heuristic` means only member names
+match; `undetermined` means a runtime registration such as `ABCMeta.register`,
+or a clause resolution cannot follow, claims it. `operations` names, for each
+method of the abstraction, the method the type's own lookup reaches.
+
 These are parsed import observations, not inferred runtime relationships or
 Rule outcomes. Endpoint paths and memberships describe dependency evidence;
 they do not expand file access. Even when an import names an excluded or
