@@ -312,6 +312,14 @@ class Holder:
         class InMethod(ABC):
             pass
         return InMethod
+
+
+class Shelf:
+    ABC = object
+
+    class Middle:
+        class InMiddle(ABC):
+            pass
 `)
 	got := extractDeclarations(newParsers(), src)
 	if got.ParseError != "" {
@@ -323,9 +331,10 @@ class Holder:
 			abstract[d.Name] = d.Abstract
 		}
 	}
-	// A method's scope skips its class's namespace, so Holder.ABC does
-	// not shadow the import inside build.
-	want := map[string]bool{"Outer": false, "ABC": false, "Encrypter": false, "ByParameter": false, "ByAssignment": false, "Inner": true, "Holder": false, "InMethod": true}
+	// A method's scope and a nested class body skip an enclosing class's
+	// namespace, so neither Holder.ABC nor Shelf.ABC shadows the import.
+	want := map[string]bool{"Outer": false, "ABC": false, "Encrypter": false, "ByParameter": false, "ByAssignment": false, "Inner": true, "Holder": false, "InMethod": true,
+		"Shelf": false, "Middle": false, "InMiddle": true}
 	if !reflect.DeepEqual(abstract, want) {
 		t.Fatalf("abstract classes:\n got %v\nwant %v", abstract, want)
 	}

@@ -258,14 +258,7 @@ func (r *resolutionIndex) resultType(f *resolutionFile, d conformance.Declaratio
 	if ret == nil || ret.NamedChildCount() == 0 {
 		return uncertain("operation has no written return type")
 	}
-	written, scope := ret.NamedChild(0), f.nodes[n]
-	if f.kind(written) == tsGenericType {
-		promise := r.receiverType(f, f.child(written, tsNameField), scope)
-		if args := f.child(written, "type_arguments"); promise == external("", "Promise") && args != nil && args.NamedChildCount() == 1 {
-			written = args.NamedChild(0)
-		}
-	}
-	return r.ownType(f, written, scope, nil, 0)
+	return r.settledType(f, ret.NamedChild(0), f.nodes[n])
 }
 
 // typeArgument is the type written for one type parameter of a generic
@@ -285,17 +278,29 @@ const maxAliasDepth = 64
 // undefined, and type aliases, generic ones with their type arguments
 // substituted, to the one declaration it names.
 func (r *resolutionIndex) ownType(f *resolutionFile, n *gotreesitter.Node, s *lexicalScope, bound map[string]typeArgument, depth int) conformance.Reference {
+	return r.followType(f, n, s, bound, depth, false)
+}
+
+// settledType follows a type the way ownType does and, through the
+// same parentheses and aliases, the Promise it may be to the type the
+// Promise settles to: the value an async operation returns.
+func (r *resolutionIndex) settledType(f *resolutionFile, n *gotreesitter.Node, s *lexicalScope) conformance.Reference {
+	return r.followType(f, n, s, nil, 0, true)
+}
+
+// followType is ownType, settling Promises when settle is set.
+func (r *resolutionIndex) followType(f *resolutionFile, n *gotreesitter.Node, s *lexicalScope, bound map[string]typeArgument, depth int, settle bool) conformance.Reference {
 	if depth > maxAliasDepth {
 		return uncertain("cyclic type alias cannot be resolved")
 	}
 	switch f.kind(n) {
 	case tsTypeAnnotation, "default_type", tsParenthesizedType:
 		if n.NamedChildCount() > 0 {
-			return r.ownType(f, n.NamedChild(0), s, bound, depth)
+			return r.followType(f, n.NamedChild(0), s, bound, depth, settle)
 		}
 	case tsTypeIdentifier:
 		if arg, ok := bound[f.text(n)]; ok {
-			return r.ownType(arg.f, arg.n, arg.s, arg.bound, depth+1)
+			return r.followType(arg.f, arg.n, arg.s, arg.bound, depth+1, settle)
 		}
 	case "union_type":
 		var kept []*gotreesitter.Node
@@ -309,7 +314,7 @@ func (r *resolutionIndex) ownType(f *resolutionFile, n *gotreesitter.Node, s *le
 			kept = append(kept, c)
 		}
 		if len(kept) == 1 {
-			return r.ownType(f, kept[0], s, bound, depth)
+			return r.followType(f, kept[0], s, bound, depth, settle)
 		}
 		return local(normalizeType(f.text(n)))
 	case "intersection_type", tsTupleType, tsFunctionType, tsConstructorType, tsObjectType:
@@ -320,6 +325,9 @@ func (r *resolutionIndex) ownType(f *resolutionFile, n *gotreesitter.Node, s *le
 		named, args = f.child(n, tsNameField), f.child(n, "type_arguments")
 	}
 	ref := r.receiverType(f, named, s)
+	if settle && ref == external("", "Promise") && args != nil && args.NamedChildCount() == 1 {
+		return r.followType(f, args.NamedChild(0), s, bound, depth+1, settle)
+	}
 	if ref.Resolution != conformance.ResolutionDeclared {
 		return ref
 	}
@@ -344,7 +352,7 @@ func (r *resolutionIndex) ownType(f *resolutionFile, n *gotreesitter.Node, s *le
 	// target cannot be followed stays undetermined; an alias of anything
 	// else, a primitive or a branded intersection, is itself the field's
 	// type.
-	own := r.ownType(next, next.child(alias, tsValueField), next.nodes[alias], inner, depth+1)
+	own := r.followType(next, next.child(alias, tsValueField), next.nodes[alias], inner, depth+1, settle)
 	switch own.Resolution {
 	case conformance.ResolutionDeclared, conformance.ResolutionUndetermined:
 		return own
@@ -397,8 +405,8 @@ func (f *resolutionFile) index(n *gotreesitter.Node, scope *lexicalScope, owner 
 		scope = newScope(scope)
 		scope.function = true
 		owner = ""
-	case tsFunctionExpression, tsFunction, tsArrowFunction, tsMethodDefinition, tsMethodSignature:
-		if kind == tsMethodDefinition || kind == tsMethodSignature {
+	case tsFunctionExpression, tsFunction, tsArrowFunction, tsMethodDefinition, tsMethodSignature, tsAbstractMethodSignature:
+		if kind == tsMethodDefinition || kind == tsMethodSignature || kind == tsAbstractMethodSignature {
 			f.operations[fieldKey(owner, f.name(n), int(n.StartPoint().Row)+1)] = n
 		}
 		if defaultDeclaration(n, f.lang) {
@@ -444,8 +452,6 @@ func (f *resolutionFile) index(n *gotreesitter.Node, scope *lexicalScope, owner 
 		if parameterProperty(n, f.lang) && owner != "" {
 			f.fields[fieldKey(owner, f.text(pattern), int(n.StartPoint().Row)+1)] = n
 		}
-	case tsAbstractMethodSignature:
-		f.operations[fieldKey(owner, f.name(n), int(n.StartPoint().Row)+1)] = n
 	case tsTypeParameter:
 		scope.add(f.name(n), sourceBinding{node: n, reason: "generic type parameter has no concrete declaration"})
 	case tsPublicFieldDefinition, tsFieldDefinition, tsPropertySignature:

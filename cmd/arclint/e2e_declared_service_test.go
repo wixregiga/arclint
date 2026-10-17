@@ -370,6 +370,12 @@ func declaredServiceResults() []declaredServiceResult {
 			"src/identity/encrypter.ts": tsService(`import { EncryptedPassword } from "./value";`, "Promise<EncryptedPassword>")}, true},
 		{"typescript promise of a collection of the value", "ts", map[string]string{"src/identity/value.ts": tsValue,
 			"src/identity/encrypter.ts": tsService(`import { EncryptedPassword } from "./value";`, "Promise<EncryptedPassword[]>")}, false},
+		{"typescript parenthesized promise of the value", "ts", map[string]string{"src/identity/value.ts": tsValue,
+			"src/identity/encrypter.ts": tsService(`import { EncryptedPassword } from "./value";`, "(Promise<EncryptedPassword>)")}, true},
+		{"typescript alias of a promise of the value", "ts", map[string]string{"src/identity/value.ts": tsValue,
+			"src/identity/encrypter.ts": tsService("import { EncryptedPassword } from \"./value\";\n\ntype Result<T> = Promise<T>;", "Result<EncryptedPassword>")}, true},
+		{"typescript abstract operation beside a generic sibling", "ts", map[string]string{"src/identity/value.ts": tsValue,
+			"src/identity/encrypter.ts": "import { EncryptedPassword } from \"./value\";\n\nexport abstract class Encrypter {\n  abstract other<EncryptedPassword>(): void;\n  abstract encrypt(plain: string): EncryptedPassword;\n}\n"}, true},
 		{"python module attribute of a sibling module", "py", map[string]string{"src/identity/value.py": pyValue, "src/identity/__init__.py": "",
 			"src/identity/encrypter.py": pyService("from src.identity import value", "value.EncryptedPassword")}, true},
 	}
