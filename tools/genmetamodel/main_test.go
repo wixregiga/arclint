@@ -40,6 +40,7 @@ works:
     author: Eric Evans
     year: 2015
     verification: text
+    tier: 1
 facts:
   declarations:
     definition: Declarations.
@@ -83,6 +84,7 @@ func TestRenderTranscribesMinimalDocument(t *testing.T) {
 		`{Name: "identity", Required: true, Definition: "The root's identity, a value object."}`,
 		`{Work: "evans2015", Page: "16", Section: "Aggregates"}`,
 		`Verification: VerifiedText`,
+		`Tier: TierCanonical`,
 		`Section: SectionAggregates`,
 		`By: EvaluatorPlanned`,
 		`Languages: Languages{Names: []string{"go", "typescript"}}`,
@@ -186,5 +188,49 @@ func TestRenderTranscribesLimitations(t *testing.T) {
 	}
 	if !strings.Contains(string(got), `Limitations: []string{"a thrown error is not seen"}`) {
 		t.Fatalf("output lacks the limitation:\n%s", got)
+	}
+}
+
+const declinedSection = `declined:
+  - id: aggregate/required-factory
+    statement: Every aggregate names a factory.
+    reason: Only complicated creation calls for one.
+    sources: [{work: evans2015, page: 18, section: Factories}]
+  - id: aggregate/waived-when-missing
+    statement: A waiver silences a missing rule.
+    reason: A warning does not fail.
+    decision: https://github.com/wixregiga/arclint/issues/129
+`
+
+func TestRenderTranscribesDeclinedRules(t *testing.T) {
+	got, err := render([]byte(minimal+declinedSection), "minimal.yaml", "vocab")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	out := strings.Join(strings.Fields(string(got)), " ")
+	for _, want := range []string{
+		`Declined: []DeclinedRule{`,
+		`ID: "aggregate/required-factory", Statement: "Every aggregate names a factory.", Reason: "Only complicated creation calls for one.", Sources: []Citation{ {Work: "evans2015", Page: "18", Section: "Factories"}, },`,
+		`ID: "aggregate/waived-when-missing", Statement: "A waiver silences a missing rule.", Reason: "A warning does not fail.", Decision: "https://github.com/wixregiga/arclint/issues/129",`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderRefusesUnknownDeclinedKey(t *testing.T) {
+	src := minimal + strings.Replace(declinedSection, "    decision:", "    waiver: yes\n    decision:", 1)
+	_, err := render([]byte(src), "minimal.yaml", "vocab")
+	if err == nil || !strings.Contains(err.Error(), "waiver") {
+		t.Fatalf("err = %v, want a refusal naming the unknown key waiver", err)
+	}
+}
+
+func TestRenderRefusesUnknownTier(t *testing.T) {
+	src := strings.Replace(minimal, "    tier: 1\n", "    tier: 4\n", 1)
+	_, err := render([]byte(src), "minimal.yaml", "vocab")
+	if err == nil || !strings.Contains(err.Error(), "tier 4") {
+		t.Fatalf("err = %v, want a refusal naming tier 4", err)
 	}
 }

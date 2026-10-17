@@ -17,6 +17,7 @@ func ddd() MetaModel {
 				URL:          "https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf",
 				License:      "CC BY 4.0",
 				Verification: VerifiedText,
+				Tier:         TierCanonical,
 			},
 			{
 				Key:          "evans2003",
@@ -26,6 +27,7 @@ func ddd() MetaModel {
 				Year:         2003,
 				ISBN:         "978-0321125217",
 				Verification: VerifiedCarried,
+				Tier:         TierCanonical,
 			},
 			{
 				Key:          "vernon2013",
@@ -35,6 +37,7 @@ func ddd() MetaModel {
 				Year:         2013,
 				ISBN:         "978-0321834577",
 				Verification: VerifiedCarried,
+				Tier:         TierCanonical,
 			},
 			{
 				Key:          "evans-fowler-1997",
@@ -43,6 +46,7 @@ func ddd() MetaModel {
 				Year:         1997,
 				URL:          "https://martinfowler.com/apsupp/spec.pdf",
 				Verification: VerifiedText,
+				Tier:         TierCanonical,
 			},
 			{
 				Key:          "fowler-aggregate",
@@ -51,6 +55,7 @@ func ddd() MetaModel {
 				Date:         "2013-04-23",
 				URL:          "https://martinfowler.com/bliki/DDD_Aggregate.html",
 				Verification: VerifiedFetched,
+				Tier:         TierPublished,
 			},
 			{
 				Key:          "fowler-bounded-context",
@@ -59,6 +64,7 @@ func ddd() MetaModel {
 				Date:         "2014-01-15",
 				URL:          "https://martinfowler.com/bliki/BoundedContext.html",
 				Verification: VerifiedFetched,
+				Tier:         TierPublished,
 			},
 			{
 				Key:          "fowler-ubiquitous-language",
@@ -67,6 +73,7 @@ func ddd() MetaModel {
 				Date:         "2006-10-31",
 				URL:          "https://martinfowler.com/bliki/UbiquitousLanguage.html",
 				Verification: VerifiedFetched,
+				Tier:         TierPublished,
 			},
 			{
 				Key:          "fowler-evans-classification",
@@ -75,6 +82,7 @@ func ddd() MetaModel {
 				Date:         "2005-12-14",
 				URL:          "https://martinfowler.com/bliki/EvansClassification.html",
 				Verification: VerifiedFetched,
+				Tier:         TierPublished,
 			},
 			{
 				Key:          "fowler-value-object",
@@ -83,6 +91,7 @@ func ddd() MetaModel {
 				Date:         "2016-11-14",
 				URL:          "https://martinfowler.com/bliki/ValueObject.html",
 				Verification: VerifiedFetched,
+				Tier:         TierPublished,
 			},
 			{
 				Key:          "fowler-domain-event",
@@ -91,6 +100,7 @@ func ddd() MetaModel {
 				Date:         "2005-12-12",
 				URL:          "https://martinfowler.com/eaaDev/DomainEvent.html",
 				Verification: VerifiedFetched,
+				Tier:         TierPublished,
 			},
 			{
 				Key:          "fowler-architecture",
@@ -99,6 +109,7 @@ func ddd() MetaModel {
 				Date:         "2019-08-01",
 				URL:          "https://martinfowler.com/architecture/",
 				Verification: VerifiedFetched,
+				Tier:         TierPublished,
 			},
 			{
 				Key:          "fowler-anemic-domain-model",
@@ -107,6 +118,7 @@ func ddd() MetaModel {
 				Date:         "2003-11-25",
 				URL:          "https://martinfowler.com/bliki/AnemicDomainModel.html",
 				Verification: VerifiedFetched,
+				Tier:         TierPublished,
 			},
 			{
 				Key:          "fowler-cqs",
@@ -115,6 +127,7 @@ func ddd() MetaModel {
 				Date:         "2005-12-05",
 				URL:          "https://martinfowler.com/bliki/CommandQuerySeparation.html",
 				Verification: VerifiedFetched,
+				Tier:         TierPublished,
 			},
 			{
 				Key:          "fowler-function-length",
@@ -123,6 +136,7 @@ func ddd() MetaModel {
 				Date:         "2016-11-30",
 				URL:          "https://martinfowler.com/bliki/FunctionLength.html",
 				Verification: VerifiedFetched,
+				Tier:         TierPublished,
 			},
 			{
 				Key:          "stafford-service-layer",
@@ -131,6 +145,7 @@ func ddd() MetaModel {
 				Year:         2002,
 				URL:          "https://martinfowler.com/eaaCatalog/serviceLayer.html",
 				Verification: VerifiedFetched,
+				Tier:         TierPublished,
 			},
 			{
 				Key:          "stafford-business-logic",
@@ -139,6 +154,7 @@ func ddd() MetaModel {
 				Year:         2002,
 				URL:          "https://www.informit.com/articles/article.aspx?p=1398617&seqNum=4",
 				Verification: VerifiedFetched,
+				Tier:         TierPublished,
 			},
 			{
 				Key:          "vernon-iddd-ch1",
@@ -147,6 +163,7 @@ func ddd() MetaModel {
 				Year:         2013,
 				URL:          "https://www.informit.com/articles/article.aspx?p=1944876&seqNum=3",
 				Verification: VerifiedFetched,
+				Tier:         TierCanonical,
 			},
 			{
 				Key:          "vernon-iddd-sample-pages",
@@ -155,6 +172,7 @@ func ddd() MetaModel {
 				Year:         2013,
 				URL:          "https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf",
 				Verification: VerifiedText,
+				Tier:         TierCanonical,
 			},
 			{
 				Key:          "vernon-effective-aggregate-design-1",
@@ -163,6 +181,7 @@ func ddd() MetaModel {
 				Year:         2011,
 				URL:          "https://www.dddcommunity.org/wp-content/uploads/files/pdf_articles/Vernon_2011_1.pdf",
 				Verification: VerifiedText,
+				Tier:         TierCanonical,
 			},
 			{
 				Key:          "vernon-effective-aggregate-design-2",
@@ -171,6 +190,7 @@ func ddd() MetaModel {
 				Year:         2011,
 				URL:          "https://www.dddcommunity.org/wp-content/uploads/files/pdf_articles/Vernon_2011_2.pdf",
 				Verification: VerifiedText,
+				Tier:         TierCanonical,
 			},
 			{
 				Key:          "vernon-iddd-samples",
@@ -179,6 +199,7 @@ func ddd() MetaModel {
 				Date:         "2022-03-26",
 				URL:          "https://github.com/VaughnVernon/IDDD_Samples",
 				Verification: VerifiedFetched,
+				Tier:         TierCanonical,
 			},
 			{
 				Key:          "martin-screaming-architecture",
@@ -187,6 +208,7 @@ func ddd() MetaModel {
 				Date:         "2011-09-30",
 				URL:          "https://blog.cleancoder.com/uncle-bob/2011/09/30/Screaming-Architecture.html",
 				Verification: VerifiedFetched,
+				Tier:         TierPractitioner,
 			},
 			{
 				Key:          "bogard-vertical-slice",
@@ -195,6 +217,7 @@ func ddd() MetaModel {
 				Date:         "2018-04-19",
 				URL:          "https://www.jimmybogard.com/vertical-slice-architecture/",
 				Verification: VerifiedFetched,
+				Tier:         TierPractitioner,
 			},
 		},
 		Facts: []FactDefinition{
@@ -1938,6 +1961,67 @@ func ddd() MetaModel {
 						{Name: "text", Required: true, Definition: "The question, as the team would ask a domain expert."},
 					},
 				},
+			},
+		},
+		Declined: []DeclinedRule{
+			{
+				ID:        "factory/required-for-every-aggregate",
+				Statement: "Every recorded aggregate names a factory.",
+				Reason:    "Evans calls for a factory only \"When creation of an entire, internally consistent aggregate, or a large value object, becomes complicated or reveals too much of the internal structure\". An aggregate whose root constructs it plainly needs none. A factory an aggregate does record is still checked by factory/declared.",
+				Sources: []Citation{
+					{Work: "evans2015", Page: "18", Section: "Factories"},
+				},
+			},
+			{
+				ID:        "repository/required-for-every-aggregate",
+				Statement: "Every recorded aggregate names a repository.",
+				Reason:    "Evans says \"Provide repositories only for aggregate roots that actually need direct access\". An aggregate that nothing looks up directly needs none. A repository an aggregate does record is still checked by repository/for-aggregate-roots-only and repository/declared.",
+				Sources: []Citation{
+					{Work: "evans2015", Page: "17", Section: "Repositories"},
+				},
+			},
+			{
+				ID:        "value_object/records-an-invariant",
+				Statement: "Every recorded value object records at least one invariant.",
+				Reason:    "No source requires a value object to carry a rule. The pattern asks a value object to express the meaning of its attributes, to be immutable, and to offer side-effect-free functions; it asks for no rule. Assertions allow \"invariants of classes\" without requiring one. A value object may record invariants, and value_object/constructed-through-one-door checks the ones it records.",
+				Sources: []Citation{
+					{Work: "evans2015", Page: "12", Section: "Value Objects"},
+					{Work: "evans2015", Page: "22", Section: "Assertions"},
+				},
+			},
+			{
+				ID:        "assertion/owned-by-an-application-operation",
+				Statement: "An assertion is recorded on an operation of an application service.",
+				Reason:    "An assertion is a business guarantee, and the application layer holds none: it \"does not contain business rules or knowledge, but only coordinates tasks and delegates work to collaborations of domain objects\" (Evans, quoted by Fowler), and its logic is what Stafford calls \"workflow logic\". Evans isolates the domain model from \"the user interface, application, and infrastructure code\". An assertion belongs to an aggregate or a domain service, and the domain file records no application service.",
+				Sources: []Citation{
+					{Work: "evans2015", Page: "10", Section: "Layered Architecture"},
+					{Work: "fowler-anemic-domain-model"},
+					{Work: "stafford-business-logic"},
+				},
+			},
+			{
+				ID:        "assertion/checked-before-any-change",
+				Statement: "An operation calls the method that checks its assertion before any call that changes state.",
+				Reason:    "The check would need to know which calls change things, and no fact arclint observes says so in every language. The decision value makes the order explicit instead: the deciding operation returns its verdict as a value, and the application carries out the change only with that value in hand.",
+				Decision:  "https://github.com/wixregiga/arclint/issues/128",
+			},
+			{
+				ID:        "ubiquitous_language/normative-wording-is-a-rule",
+				Statement: "A definition worded with must, always, or never is reported as a rule recorded in the wrong place.",
+				Reason:    "Must-always or must-never wording alone does not establish a rule; the librarian places a rule only after establishing domain consistency and an owner, as its invariant-ownership distillation rule says. A limit on the length of definitions and statements keeps rules out of long definitions instead.",
+				Decision:  "https://github.com/wixregiga/arclint/issues/125",
+			},
+			{
+				ID:        "business_rule/waived-when-missing",
+				Statement: "A recorded term that lacks a rule it is asked to record, such as an aggregate with no invariant, carries a waiver that silences the finding.",
+				Reason:    "A missing rule is reported, never waived. A finding at warning severity does not fail a check, and the owner monitors it instead. An Override still changes the severity of a built-in rule or disables it with a reason, as for every built-in rule.",
+				Decision:  "https://github.com/wixregiga/arclint/issues/129",
+			},
+			{
+				ID:        "bounded_context/checks-derived-from-ownership",
+				Statement: "Checks are derived from recorded ownership, a bounded context owning terms, their spellings, and policy values, and a Zone owning conventions and shared mechanisms.",
+				Reason:    "The owner closed the design as not planned: term ownership as shown was forced and barely solved the case it was meant for, and the derived ownership checks did not look good overall. It reopens only with a different design.",
+				Decision:  "https://github.com/wixregiga/arclint/issues/137",
 			},
 		},
 	}

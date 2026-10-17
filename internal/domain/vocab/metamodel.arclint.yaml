@@ -68,6 +68,12 @@ description: >-
 # outside Vernon's sample pages is equally unchecked. A carried Vernon
 # 2013 chapter 10 page has a vernon-iddd-sample-pages citation beside it
 # wherever the sample's page states the entry.
+#
+# `tier` ranks a work as a basis: 1 for the canonical works (Evans 2003
+# and 2015, Vernon 2013 and his papers, Evans and Fowler 1997), 2 for
+# other published books and Fowler's bliki, 3 for practitioner blogs,
+# which may only illustrate. A canonical reference is never removed or
+# demoted.
 works:
   evans2015:
     title: "Domain-Driven Design Reference: Definitions and Pattern Summaries"
@@ -76,6 +82,7 @@ works:
     url: https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf
     license: CC BY 4.0
     verification: text
+    tier: 1
   evans2003:
     title: "Domain-Driven Design: Tackling Complexity in the Heart of Software"
     author: Eric Evans
@@ -83,6 +90,7 @@ works:
     year: 2003
     isbn: "978-0321125217"
     verification: carried
+    tier: 1
   vernon2013:
     title: Implementing Domain-Driven Design
     author: Vaughn Vernon
@@ -90,126 +98,147 @@ works:
     year: 2013
     isbn: "978-0321834577"
     verification: carried
+    tier: 1
   evans-fowler-1997:
     title: Specifications
     authors: [Eric Evans, Martin Fowler]
     year: 1997
     url: https://martinfowler.com/apsupp/spec.pdf
     verification: text
+    tier: 1
   fowler-aggregate:
     title: DDD_Aggregate
     author: Martin Fowler
     date: 2013-04-23
     url: https://martinfowler.com/bliki/DDD_Aggregate.html
     verification: fetched
+    tier: 2
   fowler-bounded-context:
     title: BoundedContext
     author: Martin Fowler
     date: 2014-01-15
     url: https://martinfowler.com/bliki/BoundedContext.html
     verification: fetched
+    tier: 2
   fowler-ubiquitous-language:
     title: UbiquitousLanguage
     author: Martin Fowler
     date: 2006-10-31
     url: https://martinfowler.com/bliki/UbiquitousLanguage.html
     verification: fetched
+    tier: 2
   fowler-evans-classification:
     title: EvansClassification
     author: Martin Fowler
     date: 2005-12-14
     url: https://martinfowler.com/bliki/EvansClassification.html
     verification: fetched
+    tier: 2
   fowler-value-object:
     title: ValueObject
     author: Martin Fowler
     date: 2016-11-14
     url: https://martinfowler.com/bliki/ValueObject.html
     verification: fetched
+    tier: 2
   fowler-domain-event:
     title: Domain Event
     author: Martin Fowler
     date: 2005-12-12
     url: https://martinfowler.com/eaaDev/DomainEvent.html
     verification: fetched
+    tier: 2
   fowler-architecture:
     title: Software Architecture Guide
     author: Martin Fowler
     date: 2019-08-01
     url: https://martinfowler.com/architecture/
     verification: fetched
+    tier: 2
   fowler-anemic-domain-model:
     title: AnemicDomainModel
     author: Martin Fowler
     date: 2003-11-25
     url: https://martinfowler.com/bliki/AnemicDomainModel.html
     verification: fetched
+    tier: 2
   fowler-cqs:
     title: CommandQuerySeparation
     author: Martin Fowler
     date: 2005-12-05
     url: https://martinfowler.com/bliki/CommandQuerySeparation.html
     verification: fetched
+    tier: 2
   fowler-function-length:
     title: FunctionLength
     author: Martin Fowler
     date: 2016-11-30
     url: https://martinfowler.com/bliki/FunctionLength.html
     verification: fetched
+    tier: 2
   stafford-service-layer:
     title: Service Layer
     author: Randy Stafford
     year: 2002
     url: https://martinfowler.com/eaaCatalog/serviceLayer.html
     verification: fetched
+    tier: 2
   stafford-business-logic:
     title: "Service Layer, Kinds of Business Logic (Patterns of Enterprise Application Architecture excerpt)"
     author: Randy Stafford
     year: 2002
     url: https://www.informit.com/articles/article.aspx?p=1398617&seqNum=4
     verification: fetched
+    tier: 2
   vernon-iddd-ch1:
     title: "Getting Started with Domain-Driven Design (Implementing Domain-Driven Design, chapter 1 excerpt)"
     author: Vaughn Vernon
     year: 2013
     url: https://www.informit.com/articles/article.aspx?p=1944876&seqNum=3
     verification: fetched
+    tier: 1
   vernon-iddd-sample-pages:
     title: "Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-388, index pp. 589-612)"
     author: Vaughn Vernon
     year: 2013
     url: https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf
     verification: text
+    tier: 1
   vernon-effective-aggregate-design-1:
     title: "Effective Aggregate Design Part I: Modeling a Single Aggregate"
     author: Vaughn Vernon
     year: 2011
     url: https://www.dddcommunity.org/wp-content/uploads/files/pdf_articles/Vernon_2011_1.pdf
     verification: text
+    tier: 1
   vernon-effective-aggregate-design-2:
     title: "Effective Aggregate Design Part II: Making Aggregates Work Together"
     author: Vaughn Vernon
     year: 2011
     url: https://www.dddcommunity.org/wp-content/uploads/files/pdf_articles/Vernon_2011_2.pdf
     verification: text
+    tier: 1
   vernon-iddd-samples:
     title: "IDDD_Samples, identity and access context (commit 9b27b11)"
     author: Vaughn Vernon
     date: 2022-03-26
     url: https://github.com/VaughnVernon/IDDD_Samples
     verification: fetched
+    tier: 1
   martin-screaming-architecture:
     title: Screaming Architecture
     author: Robert C. Martin
     date: 2011-09-30
     url: https://blog.cleancoder.com/uncle-bob/2011/09/30/Screaming-Architecture.html
     verification: fetched
+    tier: 3
   bogard-vertical-slice:
     title: Vertical Slice Architecture
     author: Jimmy Bogard
     date: 2018-04-19
     url: https://www.jimmybogard.com/vertical-slice-architecture/
     verification: fetched
+    tier: 3
 
 # The facts arclint observes in source today, one entry per Fact in
 # internal/domain/rule/enforcement.go. An invariant is enforceable across
@@ -1498,3 +1527,99 @@ building_blocks:
       properties:
         - {name: key, required: true, definition: "The question's name in kebab-case, unique within its context; the map key."}
         - {name: text, required: true, definition: "The question, as the team would ask a domain expert."}
+
+# The rules arclint deliberately does not enforce. A milestone above is
+# a rule waiting for an observation; a declined rule is one arclint will
+# not enforce even when it could, recorded so that it is not proposed
+# again without new grounds. Each entry states the rule as someone would
+# propose it, the reason it is declined, and its basis: `sources`, cited
+# works of which at least one of tier 1 or 2 names a page, since a tier
+# 3 work may only illustrate, or `decision`, the link to the arclint
+# issue where the owner decided it. Each basis is labeled by the tier of
+# its works, or as an owner decision. An id is prefixed by the
+# building block the rule is about and never names an invariant. New
+# literature or a new owner decision reopens an entry; a request alone
+# does not.
+declined:
+  - id: factory/required-for-every-aggregate
+    statement: Every recorded aggregate names a factory.
+    reason: >-
+      Evans calls for a factory only "When creation of an entire,
+      internally consistent aggregate, or a large value object, becomes
+      complicated or reveals too much of the internal structure". An
+      aggregate whose root constructs it plainly needs none. A factory an
+      aggregate does record is still checked by factory/declared.
+    sources:
+      - {work: evans2015, page: 18, section: Factories}
+  - id: repository/required-for-every-aggregate
+    statement: Every recorded aggregate names a repository.
+    reason: >-
+      Evans says "Provide repositories only for aggregate roots that
+      actually need direct access". An aggregate that nothing looks up
+      directly needs none. A repository an aggregate does record is still
+      checked by repository/for-aggregate-roots-only and
+      repository/declared.
+    sources:
+      - {work: evans2015, page: 17, section: Repositories}
+  - id: value_object/records-an-invariant
+    statement: Every recorded value object records at least one invariant.
+    reason: >-
+      No source requires a value object to carry a rule. The pattern asks
+      a value object to express the meaning of its attributes, to be
+      immutable, and to offer side-effect-free functions; it asks for no
+      rule. Assertions allow "invariants of classes" without requiring
+      one. A value object may record invariants, and
+      value_object/constructed-through-one-door checks the ones it
+      records.
+    sources:
+      - {work: evans2015, page: 12, section: Value Objects}
+      - {work: evans2015, page: 22, section: Assertions}
+  - id: assertion/owned-by-an-application-operation
+    statement: An assertion is recorded on an operation of an application service.
+    reason: >-
+      An assertion is a business guarantee, and the application layer
+      holds none: it "does not contain business rules or knowledge, but
+      only coordinates tasks and delegates work to collaborations of
+      domain objects" (Evans, quoted by Fowler), and its logic is what
+      Stafford calls "workflow logic". Evans isolates the domain model
+      from "the user interface, application, and infrastructure code". An
+      assertion belongs to an aggregate or a domain service, and the
+      domain file records no application service.
+    sources:
+      - {work: evans2015, page: 10, section: Layered Architecture}
+      - {work: fowler-anemic-domain-model}
+      - {work: stafford-business-logic}
+  - id: assertion/checked-before-any-change
+    statement: An operation calls the method that checks its assertion before any call that changes state.
+    reason: >-
+      The check would need to know which calls change things, and no
+      fact arclint observes says so in every language. The decision value
+      makes the order explicit instead: the deciding operation returns
+      its verdict as a value, and the application carries out the change
+      only with that value in hand.
+    decision: https://github.com/wixregiga/arclint/issues/128
+  - id: ubiquitous_language/normative-wording-is-a-rule
+    statement: A definition worded with must, always, or never is reported as a rule recorded in the wrong place.
+    reason: >-
+      Must-always or must-never wording alone does not establish a rule;
+      the librarian places a rule only after establishing domain
+      consistency and an owner, as its invariant-ownership distillation
+      rule says. A limit on the length of definitions and statements
+      keeps rules out of long definitions instead.
+    decision: https://github.com/wixregiga/arclint/issues/125
+  - id: business_rule/waived-when-missing
+    statement: A recorded term that lacks a rule it is asked to record, such as an aggregate with no invariant, carries a waiver that silences the finding.
+    reason: >-
+      A missing rule is reported, never waived. A finding at warning
+      severity does not fail a check, and the owner monitors it instead.
+      An Override still changes the severity of a built-in rule or
+      disables it with a reason, as for every built-in rule.
+    decision: https://github.com/wixregiga/arclint/issues/129
+  - id: bounded_context/checks-derived-from-ownership
+    statement: Checks are derived from recorded ownership, a bounded context owning terms, their spellings, and policy values, and a Zone owning conventions and shared mechanisms.
+    reason: >-
+      The owner closed the design as not planned: term ownership as
+      shown was forced and barely solved the case it was meant for, and
+      the derived ownership checks did not look good overall. It reopens
+      only with a different design.
+    decision: https://github.com/wixregiga/arclint/issues/137

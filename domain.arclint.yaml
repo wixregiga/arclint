@@ -73,14 +73,11 @@ contexts:
               the domain recording has changed.
   vocabulary:
     definition: >-
-      The recorded Ubiquitous Language of a project and the meta-model it is
-      checked against: the building blocks a domain file may record, the
-      invariants each block carries, and the sources those invariants cite. The
-      rule context reads it to expand a Rule, and the conformance context reads
-      it to judge code against the block invariants. A project writes its
-      language down in one DomainRecording, in YAML or in CML, and the same
-      language translates between the two formats without changing, because
-      where a language is written down is no part of it.
+      The recorded Ubiquitous Language of a project and the meta-model that
+      checks it: building blocks, their invariants and tiered sources, and the
+      rules arclint declines to enforce with their reasons. The rule context
+      reads it to expand a Rule; the conformance context reads it to judge code.
+      A DomainRecording holds it in YAML or CML; the format changes nothing.
     value_objects:
       DomainRecording:
         definition: >-

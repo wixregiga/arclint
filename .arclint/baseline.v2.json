@@ -160,12 +160,6 @@
     {
       "ruleId": "domain_recording/text-within-word-limit",
       "subject": "domain.arclint.yaml",
-      "message": "context \"vocabulary\": the definition has 92 words, and a definition holds at most 60",
-      "count": 1
-    },
-    {
-      "ruleId": "domain_recording/text-within-word-limit",
-      "subject": "domain.arclint.yaml",
       "message": "entity \"Pattern\" of \"Rule\" in context \"rule\": the definition has 101 words, and a definition holds at most 40",
       "count": 1
     },

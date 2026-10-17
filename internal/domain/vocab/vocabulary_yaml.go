@@ -9,7 +9,8 @@ import (
 // project, byte-exact to the litmus vocabulary file. The vocabulary is the
 // meta-model's building blocks, one term per block in meta-model order
 // with a comment naming each phase, followed by the context relation
-// kinds. Hand-assembled so comments and flow-style lines match;
+// kinds, the distillation rules, the source tiers, and the rules the
+// meta-model declines to enforce with their reasons and tiered basis. Hand-assembled so comments and flow-style lines match;
 // yaml.Marshal is never used.
 func VocabularyYAML() string {
 	var b strings.Builder
@@ -61,6 +62,30 @@ func VocabularyYAML() string {
 	}
 	b.WriteString("\n")
 
+	b.WriteString("source_tiers:\n")
+	for _, t := range Tiers() {
+		b.WriteString("  ")
+		b.WriteString(strconv.Itoa(int(t)))
+		b.WriteString(": ")
+		b.WriteString(yamlDoubleQuoted(t.Meaning()))
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+
+	b.WriteString("declined_rules:\n")
+	for _, d := range model.Declined {
+		b.WriteString("  - {id: ")
+		b.WriteString(d.ID)
+		b.WriteString(", statement: ")
+		b.WriteString(yamlDoubleQuoted(d.Statement))
+		b.WriteString(", reason: ")
+		b.WriteString(yamlDoubleQuoted(d.Reason))
+		b.WriteString(", basis: ")
+		b.WriteString(yamlDoubleQuoted(declinedBasis(model, d)))
+		b.WriteString("}\n")
+	}
+	b.WriteString("\n")
+
 	b.WriteString("clarification_questions:\n")
 	b.WriteString("  insufficient_info:\n")
 	for _, q := range InsufficientInfoQuestions() {
@@ -100,6 +125,21 @@ func VocabularyYAML() string {
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+// declinedBasis spells a declined rule's basis for a reader who has
+// only VOCAB.yaml: every cited work in full with its page, labeled by
+// its tier, or the owner decision labeled as one with its issue link.
+func declinedBasis(m MetaModel, d DeclinedRule) string {
+	if d.Decision != "" {
+		return DecisionLabel + ": " + d.Decision
+	}
+	refs := m.References(d.Sources)
+	spelled := make([]string, len(refs))
+	for i, r := range refs {
+		spelled[i] = r.Work.Tier.Label() + ": " + r.String()
+	}
+	return strings.Join(spelled, "; ")
 }
 
 // yamlDoubleQuoted emits a double-quoted YAML scalar, escaping \ and ".

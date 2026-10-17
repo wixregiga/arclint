@@ -15,8 +15,9 @@ import (
 // the building blocks of Domain-Driven Design, each defined with its
 // sources, the shape a project records an instance of it in, the
 // invariants arclint applies to every recorded instance, and the
-// guidance that is advice rather than a checkable proposition. The one
-// instance is DDD, generated from metamodel.arclint.yaml; every
+// guidance that is advice rather than a checkable proposition, and the
+// rules arclint deliberately declines to enforce. The one instance is
+// DDD, generated from metamodel.arclint.yaml; every
 // artifact that explains the language is derived from it.
 type MetaModel struct {
 	Name        string
@@ -27,11 +28,12 @@ type MetaModel struct {
 	Milestones  []Milestone
 	Phases      []Phase
 	Blocks      []BuildingBlock
+	Declined    []DeclinedRule
 }
 
 // Work is one entry of the meta-model's bibliography, the target of
 // every Citation. Verification says how the cited pages were checked
-// while the meta-model was written.
+// while the meta-model was written; Tier ranks the work as a basis.
 type Work struct {
 	Key          string
 	Title        string
@@ -43,6 +45,7 @@ type Work struct {
 	URL          string
 	License      string
 	Verification Verification
+	Tier         Tier
 }
 
 // Verification is how a Work's cited pages were checked.
@@ -60,6 +63,50 @@ const (
 	// against the print edition.
 	VerifiedCarried Verification = "carried"
 )
+
+// Tier ranks a Work as the basis of a claim. A canonical work is never
+// removed from the bibliography or demoted.
+type Tier int
+
+const (
+	// TierCanonical is the canonical literature of Domain-Driven Design:
+	// Evans 2003 and 2015, Vernon 2013 and his papers, and Evans and
+	// Fowler 1997.
+	TierCanonical Tier = 1
+	// TierPublished is another published book or Fowler's bliki.
+	TierPublished Tier = 2
+	// TierPractitioner is a practitioner blog, which may only illustrate.
+	TierPractitioner Tier = 3
+)
+
+// Tiers lists every published Tier, highest rank first.
+func Tiers() []Tier {
+	return []Tier{TierCanonical, TierPublished, TierPractitioner}
+}
+
+// Label is how a reader sees the tier beside a basis: Tier 1, Tier 2,
+// or Tier 3.
+func (t Tier) Label() string {
+	return "Tier " + strconv.Itoa(int(t))
+}
+
+// Meaning says what the tier admits as a basis.
+func (t Tier) Meaning() string {
+	switch t {
+	case TierCanonical:
+		return "the canonical works: Evans 2003 and 2015, Vernon 2013 and his papers, Evans and Fowler 1997"
+	case TierPublished:
+		return "published books and Fowler's bliki"
+	case TierPractitioner:
+		return "practitioner blogs, which may only illustrate"
+	default:
+		return ""
+	}
+}
+
+// DecisionLabel is how a reader sees an owner decision beside a basis,
+// where a cited work shows its tier.
+const DecisionLabel = "Owner decision"
 
 // Citation points a definition, an invariant, a guidance entry, or a
 // relation kind at the Work that states it. Work is required; Chapter,
@@ -147,6 +194,32 @@ type Milestone struct {
 	Key     string
 	Needs   string
 	Unlocks []string
+}
+
+// DeclinedRule is a rule arclint deliberately does not enforce, kept
+// with its reason so that nobody proposes it again without new grounds.
+// Its ID is a building block's term, a slash, and a kebab-case name,
+// like a block invariant's, and it never names an invariant. The basis
+// is exactly one of Sources, cited works of which at least one of tier
+// 1 or 2 names a page, or Decision, the link to the arclint issue where
+// the owner decided it.
+type DeclinedRule struct {
+	ID        string
+	Statement string
+	Reason    string
+	Sources   []Citation
+	Decision  string
+}
+
+// DecisionIssues is the prefix every DeclinedRule decision link starts
+// with: an owner decision is recorded in an arclint issue.
+const DecisionIssues = "https://github.com/wixregiga/arclint/issues/"
+
+// Term is the building block the declined rule is about, the part of
+// its ID before the slash.
+func (d DeclinedRule) Term() string {
+	term, _, _ := strings.Cut(d.ID, "/")
+	return term
 }
 
 // Phase groups building blocks: strategic design, tactical design, and
@@ -446,14 +519,16 @@ var (
 	termPattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 	keyPattern  = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 	rulePattern = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	issueNumber = regexp.MustCompile(`^[1-9][0-9]*$`)
 )
 
 // Validate checks the meta-model as one whole and returns every failure
 // joined: a term or an id recorded twice, a citation of an unlisted
 // work, an invariant whose id is not prefixed by its block's term, a
 // milestone and an invariant that do not name each other, an evaluator
-// or a severity outside the published values, and an enforcement whose
-// facts contradict its evaluator. The generated table is validated by a
+// or a severity outside the published values, an enforcement whose
+// facts contradict its evaluator, and a declined rule without a reason
+// or a basis. The generated table is validated by a
 // test, so a meta-model that fails here never ships.
 func (m MetaModel) Validate() error {
 	v := &metaModelValidation{model: m}
@@ -464,6 +539,7 @@ func (m MetaModel) Validate() error {
 	v.phases()
 	v.blocks()
 	v.milestonesUnlockRecordedInvariants()
+	v.declined()
 	return errors.Join(v.failures...)
 }
 
@@ -512,6 +588,9 @@ func (v *metaModelValidation) works() {
 		case VerifiedText, VerifiedFetched, VerifiedCarried:
 		default:
 			v.failf("works %q: verification %q is not text, fetched, or carried", w.Key, w.Verification)
+		}
+		if !slices.Contains(Tiers(), w.Tier) {
+			v.failf("works %q: tier %d is not 1, 2, or 3", w.Key, w.Tier)
 		}
 	}
 }
@@ -773,4 +852,61 @@ func (v *metaModelValidation) milestonesUnlockRecordedInvariants() {
 			}
 		}
 	}
+}
+
+// declined checks every declined rule: an id prefixed by a recorded
+// building block's term and distinct from every invariant and every
+// other declined rule, a statement and a reason, and exactly one basis.
+// Literature names a page in at least one citation of a tier 1 or tier
+// 2 work, because a declined rule rests on what such a work says at a
+// place a reader can find, and a tier 3 work may only illustrate; an
+// owner decision links the arclint issue that records it.
+func (v *metaModelValidation) declined() {
+	seen := map[string]bool{}
+	for _, d := range v.model.Declined {
+		subject := "declined " + d.ID
+		term, name, found := strings.Cut(d.ID, "/")
+		if _, ok := v.model.Block(term); !found || !ok {
+			v.failf("%s: id must be prefixed by a building block's term and a slash", subject)
+		}
+		if !rulePattern.MatchString(name) {
+			v.failf("%s: name %q after the slash is not lowercase kebab case", subject, name)
+		}
+		if _, ok := v.invariants[d.ID]; ok {
+			v.failf("%s: id names an invariant arclint enforces", subject)
+		}
+		if seen[d.ID] {
+			v.failf("%s: id recorded twice", subject)
+		}
+		seen[d.ID] = true
+		if strings.TrimSpace(d.Statement) == "" {
+			v.failf("%s: statement must say what is not enforced", subject)
+		}
+		if strings.TrimSpace(d.Reason) == "" {
+			v.failf("%s: reason must say why it is not enforced", subject)
+		}
+		switch {
+		case len(d.Sources) > 0 && d.Decision != "":
+			v.failf("%s: the basis is literature or an owner decision, not both", subject)
+		case len(d.Sources) > 0:
+			v.citations(subject, d.Sources)
+			if !slices.ContainsFunc(d.Sources, v.paginatedBasis) {
+				v.failf("%s: literature must name a page in at least one citation of a tier 1 or tier 2 work; a tier 3 work may only illustrate", subject)
+			}
+		case d.Decision != "":
+			number, ok := strings.CutPrefix(d.Decision, DecisionIssues)
+			if !ok || !issueNumber.MatchString(number) {
+				v.failf("%s: decision %q is not a link to an arclint issue, %s<number>", subject, d.Decision, DecisionIssues)
+			}
+		default:
+			v.failf("%s: a basis is required, literature with a page or an owner decision with its issue link", subject)
+		}
+	}
+}
+
+// paginatedBasis says whether a citation can carry a declined rule: it
+// names a page of a tier 1 or tier 2 work.
+func (v *metaModelValidation) paginatedBasis(c Citation) bool {
+	w, ok := v.model.Work(c.Work)
+	return ok && strings.TrimSpace(c.Page) != "" && (w.Tier == TierCanonical || w.Tier == TierPublished)
 }

@@ -732,6 +732,28 @@ The rules the skill applies to turn what an expert said into recorded terms.
 | `repository-gate` | Repositories only for aggregate roots; inner entity wanting one = wrong boundary. | reject OrderLineRepository; reject "we must list comps, so Comp is a root" |
 | `minimal-evidence` | Classify on the fewest deciding facts; two plausible kinds -> ask, never guess. | 'we track shipments' alone decides nothing -> ask |
 
+## Rules arclint declines to enforce
+
+Some rules are left unenforced on purpose. Each is recorded in the meta-model with the reason and its basis, a cited work with its page or an owner decision with its issue, so a gap reads as a decision and not an oversight. The domain-librarian skill checks a proposed rule against this list and cites the reason when it declines one. New literature of tier 1 or 2 or a new owner decision reopens an entry; a request alone does not.
+
+Each basis is labeled by the tier of the work it cites, or as an owner decision:
+
+- **Tier 1:** the canonical works: Evans 2003 and 2015, Vernon 2013 and his papers, Evans and Fowler 1997.
+- **Tier 2:** published books and Fowler's bliki.
+- **Tier 3:** practitioner blogs, which may only illustrate.
+- **Owner decision:** a decision the project's owner recorded in an arclint issue.
+
+| Declined | Not enforced | Why | Basis |
+|---|---|---|---|
+| `factory/required-for-every-aggregate` | Every recorded aggregate names a factory. | Evans calls for a factory only "When creation of an entire, internally consistent aggregate, or a large value object, becomes complicated or reveals too much of the internal structure". An aggregate whose root constructs it plainly needs none. A factory an aggregate does record is still checked by factory/declared. | Tier 1 [[50]](#ref-50) |
+| `repository/required-for-every-aggregate` | Every recorded aggregate names a repository. | Evans says "Provide repositories only for aggregate roots that actually need direct access". An aggregate that nothing looks up directly needs none. A repository an aggregate does record is still checked by repository/for-aggregate-roots-only and repository/declared. | Tier 1 [[29]](#ref-29) |
+| `value_object/records-an-invariant` | Every recorded value object records at least one invariant. | No source requires a value object to carry a rule. The pattern asks a value object to express the meaning of its attributes, to be immutable, and to offer side-effect-free functions; it asks for no rule. Assertions allow "invariants of classes" without requiring one. A value object may record invariants, and value_object/constructed-through-one-door checks the ones it records. | Tier 1 [[28]](#ref-28)<br>Tier 1 [[1]](#ref-1) |
+| `assertion/owned-by-an-application-operation` | An assertion is recorded on an operation of an application service. | An assertion is a business guarantee, and the application layer holds none: it "does not contain business rules or knowledge, but only coordinates tasks and delegates work to collaborations of domain objects" (Evans, quoted by Fowler), and its logic is what Stafford calls "workflow logic". Evans isolates the domain model from "the user interface, application, and infrastructure code". An assertion belongs to an aggregate or a domain service, and the domain file records no application service. | Tier 1 [[27]](#ref-27)<br>Tier 2 [[3]](#ref-3)<br>Tier 2 [[4]](#ref-4) |
+| `assertion/checked-before-any-change` | An operation calls the method that checks its assertion before any call that changes state. | The check would need to know which calls change things, and no fact arclint observes says so in every language. The decision value makes the order explicit instead: the deciding operation returns its verdict as a value, and the application carries out the change only with that value in hand. | Owner decision, [#128](https://github.com/wixregiga/arclint/issues/128) |
+| `ubiquitous_language/normative-wording-is-a-rule` | A definition worded with must, always, or never is reported as a rule recorded in the wrong place. | Must-always or must-never wording alone does not establish a rule; the librarian places a rule only after establishing domain consistency and an owner, as its invariant-ownership distillation rule says. A limit on the length of definitions and statements keeps rules out of long definitions instead. | Owner decision, [#125](https://github.com/wixregiga/arclint/issues/125) |
+| `business_rule/waived-when-missing` | A recorded term that lacks a rule it is asked to record, such as an aggregate with no invariant, carries a waiver that silences the finding. | A missing rule is reported, never waived. A finding at warning severity does not fail a check, and the owner monitors it instead. An Override still changes the severity of a built-in rule or disables it with a reason, as for every built-in rule. | Owner decision, [#129](https://github.com/wixregiga/arclint/issues/129) |
+| `bounded_context/checks-derived-from-ownership` | Checks are derived from recorded ownership, a bounded context owning terms, their spellings, and policy values, and a Zone owning conventions and shared mechanisms. | The owner closed the design as not planned: term ownership as shown was forced and barely solved the case it was meant for, and the derived ownership checks did not look good overall. It reopens only with a different design. | Owner decision, [#137](https://github.com/wixregiga/arclint/issues/137) |
+
 ## References
 
 1. <span id="ref-1"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 22, Assertions <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
@@ -783,3 +805,4 @@ The rules the skill applies to turn what an expert said into recorded terms.
 47. <span id="ref-47"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 2, Bounded Context <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
 48. <span id="ref-48"></span>Martin Fowler, BoundedContext (2014-01-15) <https://martinfowler.com/bliki/BoundedContext.html>
 49. <span id="ref-49"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 2, p. 62
+50. <span id="ref-50"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 18, Factories <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
