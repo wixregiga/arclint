@@ -1747,6 +1747,19 @@ func ddd() MetaModel {
 							Severity:  severityError,
 						},
 					},
+					{
+						ID:        "domain_service/defines-a-contract",
+						Statement: "A domain service records at least one assertion; a service whose contract states nothing promises its callers nothing they can rely on, and the finding asks what the service promises.",
+						Sources: []Citation{
+							{Work: "evans2015", Page: "14", Section: "Services"},
+							{Work: "evans2015", Page: "22", Section: "Assertions"},
+						},
+						Enforcement: Enforcement{
+							By:        EvaluatorDomain,
+							Languages: Languages{All: true},
+							Severity:  severityWarning,
+						},
+					},
 				},
 				Guidance: []Guidance{
 					{

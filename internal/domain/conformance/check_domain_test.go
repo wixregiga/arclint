@@ -201,11 +201,11 @@ func TestBuiltInRulesJudgeEveryContextOfTheRecordedDomain(t *testing.T) {
 			}
 		}
 	}
-	if domainRules != 26 {
-		t.Fatalf("built-in domain rules = %d, want 26", domainRules)
+	if domainRules != 27 {
+		t.Fatalf("built-in domain rules = %d, want 27", domainRules)
 	}
-	if got := len(a.AppliedRules()); got != 27 {
-		t.Errorf("applied rules = %d, want the 26 domain rules and the word limit", got)
+	if got := len(a.AppliedRules()); got != 28 {
+		t.Errorf("applied rules = %d, want the 27 domain rules and the word limit", got)
 	}
 
 	want := map[string][]string{
@@ -1005,6 +1005,70 @@ func TestAssertionRemediationSaysTheDomainDecides(t *testing.T) {
 	want = []string{"call AssertTiersPriced from Publish and fail the operation when it fails"}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("root:\n got %q\nwant %q", got, want)
+	}
+}
+
+// A domain service's contract is its assertions. A service recording
+// none is a warning anchored at its recording, asking what it promises
+// and how to record that; the rule reads the record alone, so it judges
+// a context whose code yields no fact.
+func TestServiceWithoutAssertionDefinesNoContract(t *testing.T) {
+	id := "domain_service/defines-a-contract"
+	r := builtInRule(t, id)
+	if r.Severity() != rule.SeverityWarning {
+		t.Fatalf("severity %s, want %s", r.Severity(), rule.SeverityWarning)
+	}
+	knowledge, err := newRecordedLanguage("p", "", []vocab.BoundedContext{
+		{
+			Name: "identityaccess", Definition: "d", Line: 1,
+			Services: []vocab.DomainService{
+				{Name: "Encrypter", Definition: "d", Line: 3},
+				{
+					Name: "TenantProvisioningService", Definition: "d", Line: 5,
+					Assertions: []vocab.Assertion{{Key: "tenant-active-on-completion", On: "ProvisionTenant", Statement: "A provisioned tenant is active.", Line: 7}},
+				},
+			},
+		},
+		{
+			Name: "provisioning", Definition: "d", Line: 10,
+			Services: []vocab.DomainService{{
+				Name: "InvitationService", Definition: "d", Line: 11,
+				Assertions: []vocab.Assertion{{Key: "invitation-open", On: "Offer", Statement: "Only an active tenant offers an invitation.", Line: 13}},
+			}},
+		},
+		{Name: "billing", Definition: "d", Line: 20},
+	}, nil)
+	if err != nil {
+		t.Fatalf("newRecordedLanguage: %v", err)
+	}
+
+	a := runOne(t, r, nil, nil, map[string]conformance.LanguageFacts{}, knowledge)
+	outcomes := outcomesOf(a)
+	for ctx, want := range map[string]conformance.Outcome{
+		"identityaccess": conformance.OutcomeViolates,
+		"provisioning":   conformance.OutcomeConforms,
+		"billing":        conformance.OutcomeConforms,
+	} {
+		if got := outcomes[id+"|context:"+ctx]; got != want {
+			t.Errorf("context %s: outcome %s, want %s", ctx, got, want)
+		}
+	}
+	vs := a.Violations()
+	if len(vs) != 1 {
+		t.Fatalf("violations = %d, want 1: %v", len(vs), anchorsOf(a)[id])
+	}
+	v := vs[0]
+	if got := fmt.Sprintf("%s:%d", v.Path(), v.Line()); got != testRecording+":3" {
+		t.Errorf("anchor %s, want %s:3", got, testRecording)
+	}
+	if want := "domain service Encrypter of context identityaccess records no assertion; what does Encrypter promise its callers?"; v.Message() != want {
+		t.Errorf("message:\n got %q\nwant %q", v.Message(), want)
+	}
+	if want := `record each guarantee as an assertion on the operation it belongs to: arclint domain define assertion <key> --owner Encrypter --on <operation> --statement "<the guarantee>" --context identityaccess`; v.Remediation() != want {
+		t.Errorf("remediation:\n got %q\nwant %q", v.Remediation(), want)
+	}
+	if v.FailsGate() {
+		t.Errorf("a warning fails the gate")
 	}
 }
 
