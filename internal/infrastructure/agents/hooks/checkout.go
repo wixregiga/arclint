@@ -64,7 +64,6 @@ type changedFile struct {
 // the same moment fail.
 type checkout struct {
 	root string
-	now  func() time.Time
 }
 
 // errNoGit marks a project that is not inside a git work tree, or a
@@ -132,15 +131,11 @@ func (c checkout) fingerprint(path string) fingerprint {
 // removedAt is when a file that no longer exists was removed, as near as
 // the file system tells: removing a file changes its directory, so the
 // nearest directory above it that still exists last changed then or
-// later. It is never later than now.
-func (c checkout) removedAt(path string) time.Time {
-	now := c.now()
+// later. Without such a directory it is now, a time on the file clock.
+func (c checkout) removedAt(path string, now time.Time) time.Time {
 	for directory := filepath.Dir(filepath.Join(c.root, filepath.FromSlash(path))); ; directory = filepath.Dir(directory) {
-		if info, err := os.Stat(directory); err == nil {
-			if modified := info.ModTime(); modified.Before(now) {
-				return modified
-			}
-			return now
+		if stamped := fingerprintOf(directory); !stamped.Absent {
+			return stamped.at()
 		}
 		if directory == c.root || directory == filepath.Dir(directory) {
 			return now
@@ -154,27 +149,27 @@ func (c checkout) removedAt(path string) time.Time {
 // time. A file only before shows is clean again: committed, which changes
 // nothing in the file, or restored, which does; its current fingerprint
 // tells the two apart. A file that no longer exists changed when it was
-// removed.
-func (c checkout) changes(before, after snapshot) []changedFile {
+// removed. now is a time on the file clock.
+func (c checkout) changes(before, after snapshot, now time.Time) []changedFile {
 	var changed []changedFile
-	add := func(path string, now fingerprint) {
-		at := now.at()
-		if now.Absent {
-			at = c.removedAt(path)
+	add := func(path string, current fingerprint) {
+		at := current.at()
+		if current.Absent {
+			at = c.removedAt(path, now)
 		}
 		changed = append(changed, changedFile{path: path, at: at})
 	}
-	for path, now := range after {
-		if was, known := before[path]; !known || was != now {
-			add(path, now)
+	for path, current := range after {
+		if was, known := before[path]; !known || was != current {
+			add(path, current)
 		}
 	}
 	for path, was := range before {
 		if _, still := after[path]; still {
 			continue
 		}
-		if now := c.fingerprint(path); now != was {
-			add(path, now)
+		if current := c.fingerprint(path); current != was {
+			add(path, current)
 		}
 	}
 	slices.SortStableFunc(changed, func(a, b changedFile) int {

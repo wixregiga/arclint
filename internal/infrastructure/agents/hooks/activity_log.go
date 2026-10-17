@@ -75,7 +75,13 @@ func (log *ActivityLog) Record(activity agent.Activity) (returnErr error) {
 		return fmt.Errorf("workflow activity log: %w", err)
 	}
 	defer func() { returnErr = errors.Join(returnErr, unlock()) }()
-	line, err := json.Marshal(loggedActivity{Kind: string(activity.Kind), Paths: activity.Paths, Zones: activity.Zones, At: time.Now()})
+	// The time is read on the file clock, so it compares with the change
+	// times of the files the command saw.
+	at, err := fileClock(log.root)
+	if err != nil {
+		return fmt.Errorf("workflow activity log: %w", err)
+	}
+	line, err := json.Marshal(loggedActivity{Kind: string(activity.Kind), Paths: activity.Paths, Zones: activity.Zones, At: at})
 	if err != nil {
 		return fmt.Errorf("encode workflow activity: %w", err)
 	}

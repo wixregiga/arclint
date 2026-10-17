@@ -57,9 +57,11 @@ type idleTime struct {
 	Until time.Time `json:",omitzero"`
 }
 
-// excludes reports whether a change at at falls in the idle time.
+// excludes reports whether a change at at, a time on the file clock, falls
+// in the idle time. A change in the same tick as either end may have been
+// made on the agent's side of it, so it is never excluded.
 func (idle idleTime) excludes(at time.Time) bool {
-	return !idle.Until.IsZero() && !at.Before(idle.Since) && at.Before(idle.Until)
+	return !idle.Until.IsZero() && at.After(idle.Since) && at.Before(idle.Until)
 }
 
 // close ends the record's current time between turns now, or extends its
@@ -92,13 +94,16 @@ type ProgressStore struct {
 	checkout        checkout
 	// sample takes a snapshot of the checkout.
 	sample func() (snapshot, error)
+	// clock reads the project's file clock, on which every time the store
+	// compares with a file's change time is taken.
+	clock func() (time.Time, error)
 }
 
 // NewProgressStore keeps progress for the project at root, whose domain
 // recording is at the root-relative path recording.
 func NewProgressStore(root, recording string) *ProgressStore {
-	view := checkout{root: root, now: time.Now}
-	return &ProgressStore{root: root, recording: recording, checkout: view, sample: view.snapshot}
+	view := checkout{root: root}
+	return &ProgressStore{root: root, recording: recording, checkout: view, sample: view.snapshot, clock: func() (time.Time, error) { return fileClock(root) }}
 }
 
 // Update replaces the session's Progress with change's result. change also
@@ -135,7 +140,11 @@ func (store *ProgressStore) StartSession(session string) error {
 			return err
 		}
 		if record.BetweenTurns {
-			record.close(store.checkout.now())
+			now, err := store.clock()
+			if err != nil {
+				return err
+			}
+			record.close(now)
 		}
 		return writeRecord(project, name, record)
 	})
@@ -154,7 +163,11 @@ func (store *ProgressStore) StartTurn(session string) error {
 			return err
 		}
 		if record.BetweenTurns {
-			record.close(store.checkout.now())
+			now, err := store.clock()
+			if err != nil {
+				return err
+			}
+			record.close(now)
 		}
 		record.BetweenTurns = false
 		return writeRecord(project, name, record)
@@ -168,7 +181,11 @@ func (store *ProgressStore) FinishTurn(session string) error {
 		if err != nil {
 			return err
 		}
-		record.open(store.checkout.now())
+		now, err := store.clock()
+		if err != nil {
+			return err
+		}
+		record.open(now)
 		record.BetweenTurns = true
 		return writeRecord(project, name, record)
 	})
@@ -190,18 +207,25 @@ func (store *ProgressStore) current(project *os.Root, name string) (sessionRecor
 		return record, false, err
 	}
 	record.Cursor = &end
-	taken, began, err := store.look()
-	record.Snapshot, record.Observed, record.Idle = taken, err == nil, []idleTime{{Until: began}}
+	taken, began, sampled, err := store.look()
+	if err != nil {
+		return record, false, err
+	}
+	record.Snapshot, record.Observed, record.Idle = taken, sampled == nil, []idleTime{{Until: began}}
 	record.BetweenTurns = true
 	return record, true, nil
 }
 
-// look takes a snapshot of the checkout and reports when it began, or why
-// it could not.
-func (store *ProgressStore) look() (snapshot, time.Time, error) {
-	began := store.checkout.now()
-	taken, err := store.sample()
-	return taken, began, err
+// look reads the file clock and then takes a snapshot of the checkout,
+// reporting when the sample began and why it failed if it did. An error
+// is a file clock the store cannot read.
+func (store *ProgressStore) look() (taken snapshot, began time.Time, sampled, err error) {
+	began, err = store.clock()
+	if err != nil {
+		return nil, time.Time{}, nil, err
+	}
+	taken, sampled = store.sample()
+	return taken, began, sampled, nil
 }
 
 // observe returns the activities since the record's last update, in the
@@ -231,7 +255,10 @@ func (store *ProgressStore) observe(project *os.Root, record *sessionRecord, sta
 		record.Cursor = &cursor
 		return untimed(logged), nil
 	}
-	now, began, sampled := store.look()
+	now, began, sampled, err := store.look()
+	if err != nil {
+		return nil, err
+	}
 	// A failed sample is an outcome of the checkout, not of this update.
 	seen := sampled == nil
 	outsideGit := errors.Is(sampled, errNoGit)
@@ -252,7 +279,7 @@ func (store *ProgressStore) observe(project *os.Root, record *sessionRecord, sta
 	if !record.Observed {
 		before = snapshot{}
 	}
-	for _, file := range store.checkout.changes(before, now) {
+	for _, file := range store.checkout.changes(before, now, began) {
 		switch {
 		case file.at.After(began):
 			if was, known := before[file.path]; known {

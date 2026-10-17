@@ -46,9 +46,27 @@ func prompt(session, cwd string) map[string]any {
 
 var turns int
 
-// pause lets the file system clock move past the last write, as the time
-// between two tool calls of an agent does.
-func pause() { time.Sleep(30 * time.Millisecond) }
+// pause waits until the file clock has moved to its next tick, as it does
+// between two tool calls of an agent, so what the test does next is
+// stamped later than what it did before.
+func pause(t *testing.T) {
+	t.Helper()
+	probe := t.TempDir()
+	start := clockOf(t, probe)
+	for clockOf(t, probe).Equal(start) {
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// clockOf reads the file clock of the project at root.
+func clockOf(t *testing.T, root string) time.Time {
+	t.Helper()
+	at, err := fileClock(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return at
+}
 
 // A file a shell command changed gets context and domain advice at the
 // agent's next edit, once, together with the edited file.
@@ -57,7 +75,7 @@ func TestAShellChangeIsAdvisedAtTheNextEditOnce(t *testing.T) {
 	handle(t, events, sessionStart("s", root))
 	handle(t, events, prompt("s", root))
 	writeFile(t, root, "internal/shell.go", "package a // through python\n")
-	pause()
+	pause(t)
 	edit := toolEvent("s", root, "Edit", map[string]any{"file_path": filepath.Join(root, "internal/a.go")})
 	writeFile(t, root, "internal/a.go", "package a // edited\n")
 	output := handle(t, events, edit)
@@ -113,10 +131,10 @@ func TestShellChangesTakeTheirPlaceAmongArclintsOwnActivities(t *testing.T) {
 	handle(t, events, sessionStart("s", root))
 	handle(t, events, prompt("s", root))
 	record(t, root, agent.Activity{Kind: agent.ContextObtained, Paths: []string{"internal"}})
-	pause()
+	pause(t)
 	writeFile(t, root, recording, "project: shop\ndescription: changed by the librarian\n")
 	writeFile(t, root, "internal/shell.go", "package a\n")
-	pause()
+	pause(t)
 	record(t, root, agent.Activity{Kind: agent.CheckRan})
 	if output := handle(t, events, stop("s", root)); output != (hostOutput{}) {
 		t.Fatalf("work done in order was advised: %+v", output)
@@ -131,8 +149,9 @@ func TestChangesBetweenTurnsAreNotTheAgents(t *testing.T) {
 	writeFile(t, root, "internal/before.go", "package a\n")
 	handle(t, events, prompt("s", root))
 	handle(t, events, stop("s", root))
-	pause()
+	pause(t)
 	writeFile(t, root, "internal/between.go", "package a\n")
+	pause(t)
 	if output := handle(t, events, prompt("s", root)); output != (hostOutput{}) {
 		t.Fatalf("the user's changes were advised at the prompt: %+v", output)
 	}
@@ -194,8 +213,9 @@ func TestFilesChangedBeforeASessionResumesAreNotTheAgents(t *testing.T) {
 	handle(t, events, sessionStart("s", root))
 	handle(t, events, prompt("s", root))
 	handle(t, events, stop("s", root))
-	pause()
+	pause(t)
 	writeFile(t, root, "internal/between.go", "package a\n")
+	pause(t)
 	resume := sessionStart("s", root)
 	resume["source"] = "resume"
 	if text := handle(t, events, resume).HookSpecificOutput.AdditionalContext; strings.Contains(text, "internal/between.go") {
@@ -230,13 +250,13 @@ func TestAShellRemovalBeforeTheCheckIsVerified(t *testing.T) {
 	handle(t, events, prompt("s", root))
 	record(t, root, agent.Activity{Kind: agent.ContextObtained})
 	record(t, root, agent.Activity{Kind: agent.DomainChanged, Paths: []string{recording}})
-	pause()
+	pause(t)
 	if err := os.Remove(filepath.Join(root, "internal/a.go")); err != nil {
 		t.Fatal(err)
 	}
-	pause()
+	pause(t)
 	record(t, root, agent.Activity{Kind: agent.CheckRan})
-	pause()
+	pause(t)
 	if output := handle(t, events, stop("s", root)); output != (hostOutput{}) {
 		t.Fatalf("a removal the check verified was advised: %+v", output)
 	}
@@ -253,7 +273,7 @@ func TestContextRecordedWhileTheCheckoutIsSampledIsCredited(t *testing.T) {
 	sample := store.sample
 	store.sample = func() (snapshot, error) {
 		record(t, root, agent.Activity{Kind: agent.ContextObtained, Paths: []string{"internal"}})
-		pause()
+		pause(t)
 		writeFile(t, root, "internal/a.go", "package a // changed in parallel\n")
 		return sample()
 	}
@@ -277,9 +297,9 @@ func TestACheckFinishingDuringTheSampleWaitsForTheNextUpdate(t *testing.T) {
 	sample := store.sample
 	store.sample = func() (snapshot, error) {
 		taken, err := sample()
-		pause()
+		pause(t)
 		writeFile(t, root, "internal/a.go", "package a // changed after the sample\n")
-		pause()
+		pause(t)
 		record(t, root, agent.Activity{Kind: agent.CheckRan})
 		return taken, err
 	}
@@ -303,9 +323,9 @@ func TestAFailedSampleAtThePromptKeepsTheTurnsWork(t *testing.T) {
 	if err := store.FinishTurn("s"); err != nil {
 		t.Fatal(err)
 	}
-	pause()
+	pause(t)
 	writeFile(t, root, "internal/users.go", "package a // the user's edit between turns\n")
-	pause()
+	pause(t)
 	if err := store.StartTurn("s"); err != nil {
 		t.Fatal(err)
 	}
@@ -315,7 +335,7 @@ func TestAFailedSampleAtThePromptKeepsTheTurnsWork(t *testing.T) {
 		t.Fatalf("an update without a sample reported %+v", seen.recorded)
 	}
 	store.sample = sample
-	pause()
+	pause(t)
 	writeFile(t, root, "internal/agents.go", "package a // the agent's edit in the turn\n")
 	want := []agent.Activity{{Kind: agent.FilesChanged, Paths: []string{"internal/agents.go"}}}
 	if seen := observe(t, store, "s"); !reflect.DeepEqual(seen.recorded, want) {
@@ -332,9 +352,9 @@ func TestAFailedSampleLeavesTheLogForTheNextUpdate(t *testing.T) {
 	store := NewProgressStore(root, recording)
 	observe(t, store, "s")
 	writeFile(t, root, "internal/a.go", "package a // changed\n")
-	pause()
+	pause(t)
 	record(t, root, agent.Activity{Kind: agent.CheckRan})
-	pause()
+	pause(t)
 	sample := store.sample
 	store.sample = func() (snapshot, error) { return nil, errGitTimedOut }
 	if seen := observe(t, store, "s"); len(seen.recorded) != 0 {
@@ -355,7 +375,7 @@ func TestRepeatedSampleFailuresStillReadTheLog(t *testing.T) {
 	observe(t, store, "s")
 	store.sample = func() (snapshot, error) { return nil, errGitTimedOut }
 	record(t, root, agent.Activity{Kind: agent.CheckRan})
-	pause()
+	pause(t)
 	observe(t, store, "s")
 	if seen := observe(t, store, "s"); !reflect.DeepEqual(seen.recorded, []agent.Activity{{Kind: agent.CheckRan}}) {
 		t.Fatalf("the second failed sample held the log back: %+v", seen.recorded)
@@ -371,7 +391,7 @@ func TestAChangeDeferredAtStopIsReportedAfterThePrompt(t *testing.T) {
 	sample := store.sample
 	store.sample = func() (snapshot, error) {
 		taken, err := sample()
-		pause()
+		pause(t)
 		writeFile(t, root, "internal/background.go", "package a // written while Stop sampled\n")
 		return taken, err
 	}
@@ -382,7 +402,7 @@ func TestAChangeDeferredAtStopIsReportedAfterThePrompt(t *testing.T) {
 	if err := store.FinishTurn("s"); err != nil {
 		t.Fatal(err)
 	}
-	pause()
+	pause(t)
 	if err := store.StartTurn("s"); err != nil {
 		t.Fatal(err)
 	}
@@ -397,13 +417,13 @@ func TestAChangeDeferredAtStopIsReportedAfterThePrompt(t *testing.T) {
 func TestASessionThatNeverSampledReportsItsChangesOnRecovery(t *testing.T) {
 	root := gitRepository(t, map[string]string{"rules.arclint.yaml": "zones:\n  app: internal/**\n", "internal/a.go": "package a\n"})
 	writeFile(t, root, "internal/a.go", "package a // dirty before the session\n")
-	pause()
+	pause(t)
 	store := NewProgressStore(root, recording)
 	sample := store.sample
 	store.sample = func() (snapshot, error) { return nil, errGitTimedOut }
 	observe(t, store, "s")
 	observe(t, store, "s")
-	pause()
+	pause(t)
 	writeFile(t, root, "internal/agents.go", "package a // the agent's change\n")
 	store.sample = sample
 	want := []agent.Activity{{Kind: agent.FilesChanged, Paths: []string{"internal/agents.go"}}}
@@ -423,23 +443,23 @@ func TestEveryTimeBetweenTurnsStaysExcludedUntilASampleCoversIt(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	pause()
+	pause(t)
 	writeFile(t, root, "internal/users.go", "package a // the user's edit between turns\n")
-	pause()
+	pause(t)
 	sample := store.sample
 	store.sample = func() (snapshot, error) { return nil, errGitTimedOut }
 	if err := store.StartTurn("s"); err != nil {
 		t.Fatal(err)
 	}
 	observe(t, store, "s")
-	pause()
+	pause(t)
 	writeFile(t, root, "internal/agents.go", "package a // the agent's edit in the turn\n")
-	pause()
+	pause(t)
 	observe(t, store, "s")
 	if err := store.FinishTurn("s"); err != nil {
 		t.Fatal(err)
 	}
-	pause()
+	pause(t)
 	if err := store.StartTurn("s"); err != nil {
 		t.Fatal(err)
 	}
@@ -506,10 +526,10 @@ func TestAnUpdateWaitsForALineTimedBeforeItsSample(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	checked := time.Now()
-	pause()
+	checked := clockOf(t, root)
+	pause(t)
 	writeFile(t, root, "internal/a.go", "package a // changed after the check began writing\n")
-	pause()
+	pause(t)
 	seen := make(chan observation, 1)
 	go func() { seen <- observe(t, store, "s") }()
 	time.Sleep(200 * time.Millisecond)
@@ -539,7 +559,7 @@ func TestACopyKeepingAnOldModificationTimeCountsWhenItRan(t *testing.T) {
 	root := gitRepository(t, map[string]string{"rules.arclint.yaml": "zones:\n  app: internal/**\n", "internal/a.go": "package a\n"})
 	writeFile(t, root, "internal/a.go", "package a // dirty\n")
 	old := time.Now().Add(-48 * time.Hour)
-	pause()
+	pause(t)
 	store := NewProgressStore(root, recording)
 	observe(t, store, "s")
 	if err := store.StartTurn("s"); err != nil {
@@ -549,7 +569,7 @@ func TestACopyKeepingAnOldModificationTimeCountsWhenItRan(t *testing.T) {
 	store.sample = func() (snapshot, error) { return nil, errGitTimedOut }
 	observe(t, store, "s")
 	store.sample = sample
-	pause()
+	pause(t)
 	writeFile(t, root, "internal/a.go", "package a // copied\n")
 	if err := os.Chtimes(filepath.Join(root, "internal/a.go"), old, old); err != nil {
 		t.Fatal(err)
