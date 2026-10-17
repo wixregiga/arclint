@@ -59,7 +59,11 @@ func (ps *parsers) forPython() (*gotreesitter.Parser, error) {
 // pure-Go tree-sitter runtime (pinned grammar, deterministic). Classes, functions, and methods
 // carry line spans; visibility follows the leading-underscore
 // convention.
-func extractDeclarations(ps *parsers, src []byte) *declarationFacts {
+//
+// repository reports a module the repository itself provides, so an
+// import of it is never the library's abc or typing; nil when the
+// caller has no resolver and every such import is the library's.
+func extractDeclarations(ps *parsers, src []byte, repository func(module string) bool) *declarationFacts {
 	out := &declarationFacts{}
 	parser, err := ps.forPython()
 	if err != nil {
@@ -80,7 +84,7 @@ func extractDeclarations(ps *parsers, src []byte) *declarationFacts {
 	w.fields(tree.RootNode(), fieldScope{})
 	w.walkCalls(tree.RootNode(), "", "", "")
 	out.module = newModule("", out)
-	markAbstractClasses(out)
+	markAbstractClasses(out, repository)
 	return out
 }
 

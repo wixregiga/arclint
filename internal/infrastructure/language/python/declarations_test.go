@@ -36,7 +36,7 @@ if True:
     def conditional():
         pass
 `)
-	got := extractDeclarations(newParsers(), src)
+	got := extractDeclarations(newParsers(), src, nil)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}
@@ -77,7 +77,7 @@ func TestPythonSignatureextractDeclarations(t *testing.T) {
 def top(x: int) -> dict[str, int]:
     return {}
 `)
-	got := extractDeclarations(newParsers(), src)
+	got := extractDeclarations(newParsers(), src, nil)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}
@@ -123,7 +123,7 @@ func TestPythonextractCalls(t *testing.T) {
     def publish(self):
         return self.published_frozen()
 `)
-	got := extractDeclarations(newParsers(), src)
+	got := extractDeclarations(newParsers(), src, nil)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}
@@ -233,7 +233,7 @@ class Concrete(ByABC):
 class Plain(Generic[T]):
     pass
 `)
-	got := extractDeclarations(newParsers(), src)
+	got := extractDeclarations(newParsers(), src, nil)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}
@@ -259,7 +259,7 @@ class Plain(Generic[T]):
 class Shadowed(ABC):
     pass
 `)
-	got = extractDeclarations(newParsers(), local)
+	got = extractDeclarations(newParsers(), local, nil)
 	for _, d := range got.Decls {
 		if d.Abstract {
 			t.Fatalf("a local class named ABC declares nothing abstract: %+v", d)
@@ -273,7 +273,7 @@ from shapes import ABC
 class Twice(ABC):
     pass
 `)
-	got = extractDeclarations(newParsers(), rebound)
+	got = extractDeclarations(newParsers(), rebound, nil)
 	for _, d := range got.Decls {
 		if d.Abstract {
 			t.Fatalf("a name the module binds twice decides nothing: %+v", d)
@@ -332,7 +332,7 @@ class Shelf:
         class InMiddle(ABC):
             pass
 `)
-	got := extractDeclarations(newParsers(), src)
+	got := extractDeclarations(newParsers(), src, nil)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}
@@ -354,7 +354,7 @@ class Shelf:
 // TestPythonAbstractClassAfterADestructuringRebinding leaves a class
 // unmarked when the module rebinds the imported name by destructuring.
 func TestPythonAbstractClassAfterADestructuringRebinding(t *testing.T) {
-	got := extractDeclarations(newParsers(), []byte("from abc import ABC\n\nABC, other = object, None\n\n\nclass Encrypter(ABC):\n    pass\n"))
+	got := extractDeclarations(newParsers(), []byte("from abc import ABC\n\nABC, other = object, None\n\n\nclass Encrypter(ABC):\n    pass\n"), nil)
 	if got.ParseError != "" {
 		t.Fatal(got.ParseError)
 	}

@@ -86,7 +86,7 @@ func analyzeFile(ps *parsers, res *resolver, root, rel string, wantDeclarations,
 	}
 	// A strict-parse failure yields honest fact absence without
 	// poisoning the scanner import view.
-	df := extractDeclarations(ps, src)
+	df := extractDeclarations(ps, src, res.repositoryModule(dir))
 	if df.ParseError != "" {
 		return facts
 	}

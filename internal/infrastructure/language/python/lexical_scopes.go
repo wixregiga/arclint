@@ -318,6 +318,10 @@ func (m *pyModule) collect(n *gotreesitter.Node, s *pyScope, owner *pyClass, inF
 			m.collect(n.NamedChild(i), cs, owner, inFunction)
 		}
 		return
+	case "case_pattern":
+		// A pattern holds no code to run; it binds its captures.
+		m.bindCaptures(n, s)
+		return
 	case "global_statement", "nonlocal_statement":
 		for i := 0; i < n.NamedChildCount(); i++ {
 			ch := n.NamedChild(i)
@@ -588,4 +592,43 @@ func aliasValue(b *pyBinding, w *pyWalker, depth int) string {
 		return right.Text(w.src)
 	}
 	return ""
+}
+
+// bindCaptures binds every name a match pattern captures: a bare name
+// in the pattern or as a keyword pattern's value, a *rest or **rest
+// splat, and the name after as. A dotted name is a value the pattern
+// compares, a class pattern's head names the class it matches, and _
+// binds nothing.
+func (m *pyModule) bindCaptures(n *gotreesitter.Node, s *pyScope) {
+	w := m.facts.walker
+	capture := func(id *gotreesitter.Node) {
+		if name := id.Text(w.src); name != "_" {
+			s.bind(&pyBinding{kind: bindingUnknown, name: name, scope: s, reason: name + " is captured by a match pattern"})
+		}
+	}
+	switch n.Type(w.lang) {
+	case "dotted_name":
+		if parent := n.Parent(); n.NamedChildCount() == 1 && parent != nil && parent.Type(w.lang) != "class_pattern" {
+			capture(n.NamedChild(0))
+		}
+		return
+	case "splat_pattern":
+		if n.NamedChildCount() == 1 && n.NamedChild(0).Type(w.lang) == nodeIdentifier {
+			capture(n.NamedChild(0))
+		}
+		return
+	case nodeAsPattern:
+		if last := n.NamedChild(n.NamedChildCount() - 1); last != nil && last.Type(w.lang) == nodeIdentifier {
+			capture(last)
+		}
+	case "keyword_pattern":
+		// The keyword names an attribute; only its value pattern binds.
+		for i := 1; i < n.NamedChildCount(); i++ {
+			m.bindCaptures(n.NamedChild(i), s)
+		}
+		return
+	}
+	for i := 0; i < n.NamedChildCount(); i++ {
+		m.bindCaptures(n.NamedChild(i), s)
+	}
 }
