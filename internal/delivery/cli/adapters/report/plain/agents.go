@@ -42,7 +42,7 @@ func writeHooksStatus(w io.Writer, r cli.HooksStatusReport) error {
 		}
 	}
 	for _, host := range s.Files {
-		if _, err := fmt.Fprintf(w, "%s %s: %s (installed: %t)\n", host.Host, out.HookScope(host), host.Path, host.Installed); err != nil {
+		if _, err := fmt.Fprintf(w, "%s %s: %s (installed: %s)\n", host.Host, out.HookScope(host), host.Path, host.Installation); err != nil {
 			return fmt.Errorf("write workflow status: %w", err)
 		}
 		for _, problem := range host.Problems {

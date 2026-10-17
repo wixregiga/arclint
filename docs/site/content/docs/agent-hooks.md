@@ -88,8 +88,16 @@ or the same hooks in two files. It also shows
 when a hook event last reached the project. The files show what a host is
 configured to run; the last event shows that a host ran the hooks here.
 
-Until an event arrives, status says why none may have: no file lists every
-hook; the directory holds no `rules.arclint.yaml`; or it does, but a session
+Each file is `complete` when it lists every hook, `partial` when it lists some,
+`absent` when it lists none, and `unknown` when it cannot be read. A host runs
+every hook a partial file lists. A file written by an older install, for
+example, lacks `UserPromptSubmit` and still runs its other hooks; status names
+the hooks it lists and the ones it lacks. In `--format json`, `installed`
+carries the state, and `listed` and `missing` name the events.
+
+Until an event arrives, status says why none may have: no file lists the
+hooks, or none lists all of them while the ones listed still run; the
+directory holds no `rules.arclint.yaml`; or it does, but a session
 started before it existed, as in a worktree made from an older commit, and
 reports here only at its next prompt, edit or turn end. It also notes that a
 session reports to the project holding its working directory, and that Claude

@@ -350,7 +350,7 @@ func (installer *Installer) Status() (status application.HooksStatus, err error)
 			if userListed && localListed && sees {
 				localEntry.Problems = append(localEntry.Problems, user.path+" already runs the hooks in every project; with both, the host runs each event twice here and ArcLint answers the first.")
 			}
-			if !entry.Installed && len(entry.Problems) == 0 && (!localEntry.Installed || !sees) {
+			if entry.Installation == application.HooksAbsent && (localEntry.Installation != application.HooksComplete || !sees) {
 				entry.Problems = append(entry.Problems, "Workflow hooks are not installed.")
 			}
 		}
@@ -386,11 +386,12 @@ func unreadableFiles(host hookHost, configurations []UserConfiguration) []applic
 			continue
 		}
 		files = append(files, application.HookFileStatus{
-			Host:     host.name,
-			Scope:    scopeUser,
-			Windows:  configuration.Windows,
-			Path:     `%USERPROFILE%\` + host.homeDirectory + `\` + host.user,
-			Problems: []string{"The Windows profile's configuration cannot be located, so whether it lists the hooks is unknown: " + configuration.Unreadable + ". Windows host apps that open this project read this file; install from a shell that can run cmd.exe to write it."},
+			Host:         host.name,
+			Scope:        scopeUser,
+			Windows:      configuration.Windows,
+			Path:         `%USERPROFILE%\` + host.homeDirectory + `\` + host.user,
+			Installation: application.HooksUnknown,
+			Problems:     []string{"The Windows profile's configuration cannot be located, so whether it lists the hooks is unknown: " + configuration.Unreadable + ". Windows host apps that open this project read this file; install from a shell that can run cmd.exe to write it."},
 		})
 	}
 	return files
@@ -400,8 +401,15 @@ func unreadableFiles(host hookHost, configurations []UserConfiguration) []applic
 // user can rule the causes out.
 func (installer *Installer) silence(files []application.HookFileStatus) []string {
 	var reasons []string
-	if !slices.ContainsFunc(files, func(file application.HookFileStatus) bool { return file.Installed }) {
-		reasons = append(reasons, "No configuration file lists every workflow hook, so no host runs them here; run `arclint agents hooks install`.")
+	installed := func(installation application.HookInstallation) bool {
+		return slices.ContainsFunc(files, func(file application.HookFileStatus) bool { return file.Installation == installation })
+	}
+	switch {
+	case installed(application.HooksComplete):
+	case installed(application.HooksPartial):
+		reasons = append(reasons, "No configuration file lists every workflow hook, but the hooks a file lists still run and record an event each time one fires; each file below names the hooks it lists and lacks. Run `arclint agents hooks install` to add the missing ones.")
+	default:
+		reasons = append(reasons, "No configuration file lists the workflow hooks, so no host runs them here; run `arclint agents hooks install`.")
 	}
 	ruleset := filepath.Join(installer.root, rule.RulesetFileName)
 	if info, err := os.Stat(ruleset); err != nil {
@@ -417,7 +425,7 @@ func (installer *Installer) silence(files []application.HookFileStatus) []string
 
 // inspect reports what a target lists against what install writes there.
 func (installer *Installer) inspect(file target) application.HookFileStatus {
-	entry := application.HookFileStatus{Host: file.host.name, Scope: file.scope, Windows: file.form == windowsForm, Path: file.path}
+	entry := application.HookFileStatus{Host: file.host.name, Scope: file.scope, Windows: file.form == windowsForm, Path: file.path, Installation: application.HooksUnknown}
 	document, _, err := readConfiguration(file.path)
 	if err != nil {
 		entry.Problems = append(entry.Problems, "Configuration is unreadable: "+err.Error())
@@ -425,7 +433,7 @@ func (installer *Installer) inspect(file target) application.HookFileStatus {
 	}
 	hooks, _ := document["hooks"].(map[string]any)
 	want := installer.groups(file)
-	var differing, missing []string
+	var differing []string
 	binaries := map[string]bool{}
 	for _, event := range hookEvents {
 		listed, _ := hooks[event].([]any)
@@ -434,28 +442,67 @@ func (installer *Installer) inspect(file target) application.HookFileStatus {
 		}
 		switch {
 		case listsGroup(listed, want[event]):
+			entry.Listed = append(entry.Listed, event)
 		case slices.ContainsFunc(listed, holdsArclintHandler):
+			entry.Listed = append(entry.Listed, event)
 			differing = append(differing, event)
 		default:
-			missing = append(missing, event)
+			entry.Missing = append(entry.Missing, event)
 		}
 	}
-	if len(missing) == len(hookEvents) {
+	switch {
+	case len(entry.Listed) == 0:
+		entry.Installation = application.HooksAbsent
 		return entry
+	case len(entry.Missing) == 0:
+		entry.Installation = application.HooksComplete
+	default:
+		entry.Installation = application.HooksPartial
 	}
-	entry.Installed = len(missing) == 0
 	for _, event := range differing {
 		entry.Problems = append(entry.Problems, "The "+event+" hook differs from the one install writes here; installing again replaces it.")
 	}
-	for _, event := range missing {
-		entry.Problems = append(entry.Problems, "The "+event+" hook is missing.")
-	}
+	var unrunnable []string
 	for _, binary := range slices.Sorted(maps.Keys(binaries)) {
 		if problem := binaryProblem(binary); problem != "" {
-			entry.Problems = append(entry.Problems, problem)
+			unrunnable = append(unrunnable, problem)
 		}
 	}
+	if entry.Installation == application.HooksPartial {
+		entry.Problems = append(entry.Problems, partialProblem(entry.Listed, entry.Missing, len(unrunnable) == 0))
+	}
+	entry.Problems = append(entry.Problems, unrunnable...)
 	return entry
+}
+
+// partialProblem names the hooks a file lists and the hooks it lacks. The
+// listed hooks still run unless the binary they name cannot.
+func partialProblem(listed, missing []string, runnable bool) string {
+	verb, object := "is", "it"
+	if len(listed) > 1 {
+		verb = "are"
+	}
+	installed := englishList(listed) + " " + verb + " installed"
+	if runnable {
+		installed += " and still run"
+		if len(listed) == 1 {
+			installed += "s"
+		}
+	}
+	verb = "is"
+	if len(missing) > 1 {
+		verb, object = "are", "them"
+	}
+	return installed + "; " + englishList(missing) + " " + verb + " missing. Run `arclint agents hooks install` to add " + object + "."
+}
+
+// englishList joins names as a sentence lists them: "A", "A and B",
+// "A, B and C".
+func englishList(names []string) string {
+	if len(names) < 2 {
+		return strings.Join(names, "")
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
 }
 
 // arclintBinaries names the binaries the workflow handlers in groups run.
