@@ -1016,6 +1016,23 @@ class InventoryTest(unittest.TestCase):
         self.assertEqual(sorted(rows), ["hand.md:1", "hand.md:2"])
         self.assertIn("generated files have no rows: gen.go, generated.md", result.stderr)
 
+    def test_round_thirty_two_cases(self):
+        self.repo.git("checkout", "-q", "main")
+        with open(os.path.join(self.repo.root, "test_rules.py"), "wb") as handle:
+            handle.write(b"VALUE = 1 # note\rdef \\\n    test_accepts_invalid():\n    pass\n")
+        self.repo.commit("rules")
+        self.repo.git("checkout", "-q", "change")
+        self.repo.git("reset", "-q", "--hard", "main")
+        self.repo.write("web/quota.test.ts", 'const a = 8 as import("./u").T<0> / `a/b\n`.length; const b = 8 as import("./u").T<0> / `c/d\n'
+                        '`.length; test("rejects", () => {});\n')
+        with open(os.path.join(self.repo.root, "test_rules.py"), "wb") as handle:
+            handle.write(b"VALUE = 1 # note\rdef \\\n    test_rejects_invalid():\n    pass\n")
+        rows = self.repo.rows("--base", "main", "--scope", "changed")
+        located = {(row[0], row[3]): row[1] for row in rows}
+        self.assertEqual(located.get(("added", "web/quota.test.ts:3")), "test")
+        self.assertEqual(located.get(("added", "test_rules.py:2")), "test")
+        self.assertEqual(located.get(("deleted", "test_rules.py:2")), "test")
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
