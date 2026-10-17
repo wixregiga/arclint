@@ -447,12 +447,14 @@ func Show(p *out.Printer, st Style, v application.DomainEntryView) {
 			p.Println(st.Bold("Invariants:"))
 			for _, inv := range a.Invariants {
 				p.Printf("  %s\n", namedLine(inv.Key, inv.Statement))
+				ruleDetail(p, st, v.Rules, vocab.ConceptInvariant, inv.Key, "    ")
 			}
 		}
 		if len(a.Assertions) > 0 {
 			p.Println(st.Bold("Assertions:"))
 			for _, as := range a.Assertions {
 				p.Printf("  %s\n", namedLine(as.Key+" (on "+as.On+")", as.Statement))
+				ruleDetail(p, st, v.Rules, vocab.ConceptAssertion, as.Key, "    ")
 			}
 		}
 	case vocab.ConceptEntity:
@@ -469,15 +471,18 @@ func Show(p *out.Printer, st Style, v application.DomainEntryView) {
 			p.Println(st.Bold("Invariants:"))
 			for _, inv := range v.ValueObject.Invariants {
 				p.Printf("  %s\n", namedLine(inv.Key, inv.Statement))
+				ruleDetail(p, st, v.Rules, vocab.ConceptInvariant, inv.Key, "    ")
 			}
 		}
 	case vocab.ConceptInvariant:
 		p.Printf("%s %s\n", st.Bold("Owner:"), v.Owner)
 		p.Printf("%s %s\n", st.Bold("Statement:"), v.Invariant.Statement)
+		ruleDetail(p, st, v.Rules, vocab.ConceptInvariant, v.Invariant.Key, "")
 	case vocab.ConceptAssertion:
 		p.Printf("%s %s\n", st.Bold("Owner:"), v.Owner)
 		p.Printf("%s %s\n", st.Bold("On:"), v.Assertion.On)
 		p.Printf("%s %s\n", st.Bold("Statement:"), v.Assertion.Statement)
+		ruleDetail(p, st, v.Rules, vocab.ConceptAssertion, v.Assertion.Key, "")
 	case vocab.ConceptDomainEvent:
 		if v.Event.RaisedBy != "" {
 			p.Printf("%s %s\n", st.Bold("Raised by:"), v.Event.RaisedBy)
@@ -489,6 +494,7 @@ func Show(p *out.Printer, st Style, v application.DomainEntryView) {
 			p.Println(st.Bold("Assertions:"))
 			for _, as := range v.Service.Assertions {
 				p.Printf("  %s\n", namedLine(as.Key+" (on "+as.On+")", as.Statement))
+				ruleDetail(p, st, v.Rules, vocab.ConceptAssertion, as.Key, "    ")
 			}
 		}
 	case vocab.ConceptSpecification:
@@ -498,6 +504,99 @@ func Show(p *out.Printer, st Style, v application.DomainEntryView) {
 	case vocab.ConceptAggregateRoot, vocab.ConceptBusinessRule:
 		// Resolved to the aggregate, invariant, or assertion they name
 		// before a view exists; no view carries them.
+	}
+	rulesSummary(p, st, v)
+}
+
+// ruleDetail prints, under one recorded invariant or assertion, the
+// code enforcing it and the current check's status of it.
+func ruleDetail(p *out.Printer, st Style, rules *application.DomainEntryRules, kind vocab.Concept, key, indent string) {
+	if rules == nil || !rules.Checked {
+		return
+	}
+	for _, c := range rules.Checks {
+		if c.Kind != kind || c.Key != key {
+			continue
+		}
+		label := func(s string) string {
+			if indent == "" {
+				return st.Bold(strings.ToUpper(s[:1]) + s[1:] + ":")
+			}
+			return st.Muted(s + ":")
+		}
+		switch {
+		case c.Source != "":
+			p.Printf("%s%s %s\n", indent, label("enforced at"), st.Path(c.Source))
+		case c.Expected != "":
+			p.Printf("%s%s %s\n", indent, label("enforced at"), st.Warn("not found; expected "+c.Expected))
+		default:
+			p.Printf("%s%s %s\n", indent, label("enforced at"), st.Warn("not located"))
+		}
+		p.Printf("%s%s %s\n", indent, label("status"), ruleStatus(st, c))
+		for _, f := range c.Findings {
+			line := f.Message
+			if f.Path != "" {
+				line += fmt.Sprintf(" (%s:%d)", f.Path, f.Line)
+			}
+			if f.Status != "" && f.Status != "active" {
+				line = f.Status + ": " + line
+			}
+			p.Printf("%s  %s %s\n", indent, st.Warn("finding:"), line)
+		}
+		for _, r := range c.Reasons {
+			p.Printf("%s  %s\n", indent, r)
+		}
+		for _, r := range c.NotChecked {
+			p.Printf("%s  %s %s\n", indent, st.Muted("not checked:"), r)
+		}
+	}
+}
+
+func ruleStatus(st Style, c application.DomainRuleCheck) string {
+	switch c.Status {
+	case application.RuleConforms:
+		return st.OK("conforms")
+	case application.RuleFinding:
+		return st.Warn("finding")
+	case application.RuleNotObservable:
+		return st.Warn("not observable in the languages ArcLint analyzes")
+	case application.RuleUndetermined:
+		return st.Warn("undetermined")
+	case application.RuleCheckFailed:
+		return st.Warn("check failed")
+	default:
+		return st.Warn("not checked")
+	}
+}
+
+// rulesSummary closes a show: what an entry with no rules can do, why
+// no status was given, and what the structural checks do not prove.
+func rulesSummary(p *out.Printer, st Style, v application.DomainEntryView) {
+	rules := v.Rules
+	switch {
+	case rules == nil:
+	case rules.Aggregate != "":
+		p.Printf("%s none of its own; its aggregate records them: arclint domain show %s\n", st.Bold("Rules:"), rules.Aggregate)
+	case len(rules.Checks) == 0:
+		p.Printf("%s %s records no %s; record one with: %s\n", st.Bold("Rules:"), v.Name, recordableRules(v.Concept), rules.Record)
+	case rules.CheckError != "":
+		p.Printf("%s not checked: %s\n", st.Bold("Rule status:"), rules.CheckError)
+	case !rules.Checked:
+		p.Printf("%s not checked: no check was run\n", st.Bold("Rule status:"))
+	default:
+		p.Println(st.Muted("Statuses come from the structural checks of the current code: they find the enforcing method and its calls, not whether its body enforces the statement."))
+	}
+}
+
+// recordableRules names the rules a concept records.
+func recordableRules(c vocab.Concept) string {
+	switch c {
+	case vocab.ConceptValueObject:
+		return string(vocab.ConceptInvariant)
+	case vocab.ConceptDomainService:
+		return string(vocab.ConceptAssertion)
+	default:
+		return string(vocab.ConceptInvariant) + " or " + string(vocab.ConceptAssertion)
 	}
 }
 

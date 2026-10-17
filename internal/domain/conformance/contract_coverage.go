@@ -17,6 +17,8 @@ type ContractCoverage struct {
 	line                           int
 	checks                         []Evaluation
 	unperformed                    []string
+	carrier                        Carrier
+	located                        bool
 }
 
 // ContractCoverageSpec is the input to the validated coverage value.
@@ -28,6 +30,9 @@ type ContractCoverageSpec struct {
 	Line        int
 	Checks      []Evaluation
 	Unperformed []string
+	// Carrier is the declaration carrying the contract, as a check
+	// located it; nil when no check located one.
+	Carrier *Carrier
 }
 
 // NewContractCoverage validates the recording and preserves each check unchanged.
@@ -52,11 +57,18 @@ func NewContractCoverage(s ContractCoverageSpec) (ContractCoverage, error) {
 			return ContractCoverage{}, fmt.Errorf("contract coverage: an unperformed check needs a reason")
 		}
 	}
-	return ContractCoverage{
+	out := ContractCoverage{
 		context: s.Context, owner: s.Owner, key: s.Key, statement: s.Statement,
 		kind: s.Kind, path: s.Path, line: s.Line, checks: append([]Evaluation(nil), s.Checks...),
 		unperformed: append([]string(nil), s.Unperformed...),
-	}, nil
+	}
+	if s.Carrier != nil {
+		if strings.TrimSpace(s.Carrier.Path) == "" || s.Carrier.Line <= 0 {
+			return ContractCoverage{}, fmt.Errorf("contract coverage: a carrier needs a path and a positive line")
+		}
+		out.carrier, out.located = *s.Carrier, true
+	}
+	return out, nil
 }
 
 // Context names the bounded context holding the contract.
@@ -82,6 +94,10 @@ func (c ContractCoverage) Line() int { return c.line }
 
 // Checks returns detached evaluations of the applicable structural rules.
 func (c ContractCoverage) Checks() []Evaluation { return append([]Evaluation(nil), c.checks...) }
+
+// Carrier is the declaration carrying the contract; false when no
+// check located one.
+func (c ContractCoverage) Carrier() (Carrier, bool) { return c.carrier, c.located }
 
 // Unperformed explains why applicable checks were not attempted.
 func (c ContractCoverage) Unperformed() []string { return append([]string(nil), c.unperformed...) }

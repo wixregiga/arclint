@@ -19,6 +19,7 @@ weight = 6
 | `arclint domain init` | create an empty, schema-hinted domain file (the file `rules.arclint.yaml` names under `domain.file`, else the first of `domain.arclint.yaml`, `domain.arclint.yml` and `domain.arclint.cml` that exists, else `domain.arclint.yaml`); leave an existing file unchanged |
 | `arclint domain overview` | summarize the project's ubiquitous language for understanding |
 | `arclint domain list [type]` | list domain definitions, optionally filtered to `contexts`, `aggregates`, `entities`, `value_objects`, `invariants`, `assertions`, `specifications`, `events`, `services`, or `questions`; `--context` narrows to one context |
+| `arclint domain show <name>` | show one domain definition by its name, key, or alias, with the code enforcing each invariant and assertion it records and its status from the current check; when several entries match, list the command that shows each |
 | `arclint domain show <type> <name>` | show one domain definition by singular type and canonical name |
 | `arclint domain explain [type]` | explain ArcLint's supported domain concepts |
 | `arclint domain define <type> <name>` | create or update a domain definition; `define relation --from --to --kind` records a context pair and `define description --description` records the project description, both without a name argument; `--guided` starts interactive authoring |

@@ -242,3 +242,133 @@ func domainRequestError(err error) error {
 	}
 	return err
 }
+
+// entryCandidate is one recorded entry a bare name may mean.
+type entryCandidate struct {
+	concept vocab.Concept
+	context string
+	owner   string
+	name    string
+}
+
+// command is the show command naming the candidate alone: its concept
+// and canonical name, with --owner for an entry nested under one and
+// --context when the project records several contexts.
+func (c entryCandidate) command(contexts int) string {
+	cmd := fmt.Sprintf("arclint domain show %s %s", c.concept, c.name)
+	if c.owner != "" {
+		cmd += " --owner " + c.owner
+	}
+	if contexts > 1 && c.concept != vocab.ConceptBoundedContext {
+		cmd += " --context " + c.context
+	}
+	return cmd
+}
+
+// locateNamedEntry finds the entry a name, key, or alias means without
+// its concept being named. Exact spellings win; with none, a spelling
+// equal but for case is accepted. One candidate is the entry; several
+// are a usage error listing the command that shows each one.
+func locateNamedEntry(lang vocab.UbiquitousLanguage, context, owner, name string) (DomainEntryView, error) {
+	context = strings.TrimSpace(context)
+	owner = strings.TrimSpace(owner)
+	if context != "" {
+		if _, ok := lang.Context(context); !ok {
+			return DomainEntryView{}, fmt.Errorf("no entry named %q is recorded in context %q of the project domain model: %w",
+				name, context, vocab.ErrDefinitionNotFound)
+		}
+	}
+	all := entryCandidates(lang, context, owner)
+	hits := matchCandidates(all, func(s string) bool { return s == name })
+	if len(hits) == 0 {
+		hits = matchCandidates(all, func(s string) bool { return strings.EqualFold(s, name) })
+	}
+	switch len(hits) {
+	case 0:
+		if c, err := vocab.ParseConcept(name); err == nil {
+			return DomainEntryView{}, fmt.Errorf("%w: %q is a concept, not a recorded entry; name one: arclint domain show %s <name>",
+				ErrDomainUsage, name, c)
+		}
+		return DomainEntryView{}, fmt.Errorf("no entry named %q is recorded in the project domain model; arclint domain list names every entry: %w",
+			name, vocab.ErrDefinitionNotFound)
+	case 1:
+		h := hits[0]
+		return locateEntry(lang, h.concept, h.context, h.owner, h.name)
+	default:
+		lines := make([]string, 0, len(hits))
+		for _, h := range hits {
+			lines = append(lines, "  "+h.command(len(lang.Contexts)))
+		}
+		return DomainEntryView{}, fmt.Errorf("%w: %q names %d recorded entries; show one of them:\n%s",
+			ErrDomainUsage, name, len(hits), strings.Join(lines, "\n"))
+	}
+}
+
+// matchedCandidate pairs a candidate with every spelling that finds
+// it: its name or key, and its aliases.
+type matchedCandidate struct {
+	entryCandidate
+	spellings []string
+}
+
+func matchCandidates(all []matchedCandidate, matches func(string) bool) []entryCandidate {
+	var out []entryCandidate
+	for _, m := range all {
+		for _, s := range m.spellings {
+			if matches(s) {
+				out = append(out, m.entryCandidate)
+				break
+			}
+		}
+	}
+	return out
+}
+
+// entryCandidates lists every entry a show can name, in recording
+// order, narrowed to a context and an owner when they are given.
+func entryCandidates(lang vocab.UbiquitousLanguage, context, owner string) []matchedCandidate {
+	var out []matchedCandidate
+	add := func(c vocab.Concept, ctx, entryOwner, name string, aliases ...string) {
+		if owner != "" && entryOwner != owner {
+			return
+		}
+		out = append(out, matchedCandidate{
+			entryCandidate: entryCandidate{concept: c, context: ctx, owner: entryOwner, name: name},
+			spellings:      append([]string{name}, aliases...),
+		})
+	}
+	for _, ctx := range lang.Contexts {
+		if context != "" && ctx.Name != context {
+			continue
+		}
+		add(vocab.ConceptBoundedContext, ctx.Name, "", ctx.Name)
+		for _, a := range ctx.Aggregates {
+			add(vocab.ConceptAggregate, ctx.Name, "", a.Name, a.Aliases...)
+			for _, e := range a.Entities {
+				add(vocab.ConceptEntity, ctx.Name, a.Name, e.Name, e.Aliases...)
+			}
+		}
+		for _, v := range ctx.ValueObjects {
+			add(vocab.ConceptValueObject, ctx.Name, "", v.Name, v.Aliases...)
+		}
+		for _, oi := range ctx.Invariants() {
+			add(vocab.ConceptInvariant, ctx.Name, oi.Owner, oi.Invariant.Key)
+		}
+		for _, oa := range ctx.Assertions() {
+			add(vocab.ConceptAssertion, ctx.Name, oa.Owner, oa.Assertion.Key)
+		}
+		for _, e := range ctx.Events {
+			add(vocab.ConceptDomainEvent, ctx.Name, "", e.Name)
+		}
+		for _, s := range ctx.Services {
+			add(vocab.ConceptDomainService, ctx.Name, "", s.Name)
+		}
+		for _, s := range ctx.Specifications {
+			add(vocab.ConceptSpecification, ctx.Name, "", s.Name)
+		}
+		for _, q := range ctx.Questions {
+			add(vocab.ConceptQuestion, ctx.Name, "", q.Key)
+		}
+	}
+	return out
+}

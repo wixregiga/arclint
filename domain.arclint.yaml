@@ -405,7 +405,10 @@ contexts:
       ContractCoverage:
         definition: >-
           The checks performed for one recorded invariant or assertion, together
-          with checks not performed and their reasons.
+          with checks not performed and their reasons. When a check located the
+          declaration that carries the contract, it also holds that
+          declaration's file and line, so a reader learns where the code
+          enforces the contract next to how the check judged it.
         invariants:
           unchecked-without-evaluation: >-
             ContractCoverage reports a recorded contract as unchecked when none

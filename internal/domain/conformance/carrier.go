@@ -36,11 +36,16 @@ func NewCarriers(facts Facts, knowledge vocab.UbiquitousLanguage) (Carriers, err
 	if err != nil {
 		return Carriers{}, err
 	}
+	return carriersOf(code), nil
+}
+
+// carriersOf indexes the contexts of resolved domain code by name.
+func carriersOf(code domainCode) Carriers {
 	c := Carriers{contexts: map[string]contextCode{}}
 	for _, cc := range code.contexts {
 		c.contexts[cc.ctx.Name] = cc
 	}
-	return c, nil
+	return c
 }
 
 // TypeFiles lists every file declaring a candidate for the term in the

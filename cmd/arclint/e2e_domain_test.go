@@ -302,7 +302,16 @@ func testDomainFullFlow(t *testing.T) {
 		"  OrderLine  One product on the order.\n" +
 		"Invariants:\n" +
 		"  customer-identified  Every Order identifies its Customer.\n" +
-		"  total-never-negative  An Order's total is never negative.\n"
+		"    enforced at: not found; expected method EnsureCustomerIdentified on Order\n" +
+		"    status: undetermined\n" +
+		"      aggregate/invariants-enforced-by-root: no single declaration of Order is located in the repository\n" +
+		"      invariant/enforced-at-every-mutation: no single declaration of Order is located in the repository\n" +
+		"  total-never-negative  An Order's total is never negative.\n" +
+		"    enforced at: not found; expected method EnsureTotalNeverNegative on Order\n" +
+		"    status: undetermined\n" +
+		"      aggregate/invariants-enforced-by-root: no single declaration of Order is located in the repository\n" +
+		"      invariant/enforced-at-every-mutation: no single declaration of Order is located in the repository\n" +
+		"Statuses come from the structural checks of the current code: they find the enforcing method and its calls, not whether its body enforces the statement.\n"
 	out = mustRunDomain(t, root, "domain", "show", "aggregate", "Order")
 	if out != wantShow {
 		t.Fatalf("show aggregate Order:\n got: %q\nwant: %q", out, wantShow)
@@ -312,7 +321,8 @@ func testDomainFullFlow(t *testing.T) {
 		"Entity: OrderLine\n" +
 		"Context: ordering\n" +
 		"Aggregate: Order\n" +
-		"Definition: One product on the order.\n"
+		"Definition: One product on the order.\n" +
+		"Rules: none of its own; its aggregate records them: arclint domain show Order\n"
 	out = mustRunDomain(t, root, "domain", "show", "entity", "OrderLine")
 	if out != wantEntity {
 		t.Fatalf("show entity OrderLine:\n got: %q\nwant: %q", out, wantEntity)

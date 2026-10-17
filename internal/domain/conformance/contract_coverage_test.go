@@ -1,6 +1,7 @@
 package conformance_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -149,6 +150,92 @@ func TestContractCoverageHonorsAnExclusionOfTheRecordingFile(t *testing.T) {
 		cs := a.Contracts()
 		if len(cs) != 1 || cs[0].Status() != tc.want {
 			t.Errorf("excluding %s: coverage = %#v, want %s", tc.exclude, cs, tc.want)
+		}
+	}
+}
+
+// A check that locates the declaration carrying a contract hands it to
+// the coverage, so a reader learns where the code enforces the contract
+// beside how the check judged it; a contract nothing carries has none.
+func TestContractCoverageCarriesTheDeclarationACheckLocated(t *testing.T) {
+	ctx := vocab.BoundedContext{Name: "catalog", Definition: "d",
+		Aggregates: []vocab.Aggregate{{Name: "Product", Definition: "d", Identity: "ProductID",
+			Invariants: []vocab.Invariant{
+				{Key: "price-set", Statement: "A Product always has a price.", Line: 5},
+				{Key: "name-set", Statement: "A Product always has a name.", Line: 6},
+			}}},
+		ValueObjects: []vocab.ValueObject{{Name: "Sku", Definition: "d",
+			Invariants: []vocab.Invariant{{Key: "well-formed", Statement: "A Sku is never empty.", Line: 9}}}},
+		Services: []vocab.DomainService{{Name: "Reservation", Definition: "d",
+			Assertions: []vocab.Assertion{{Key: "in-stock", On: "Reserve", Statement: "Only stocked Products are reserved.", Line: 12}}}},
+	}
+	knowledge := oneContext(t, ctx)
+	facts := goDecls("catalog", []conformance.Declaration{
+		{Kind: "struct", Name: "Product", StartLine: 1},
+		{Kind: "method", Owner: "Product", Name: "EnsurePriceSet", StartLine: 3},
+		{Kind: "struct", Name: "Sku", StartLine: 10},
+		{Kind: "func", Name: "NewSku", StartLine: 11, Results: []string{"Sku", "error"}},
+		{Kind: "struct", Name: "Reservation", StartLine: 20},
+		{Kind: "method", Owner: "Reservation", Name: "Reserve", StartLine: 21},
+		{Kind: "method", Owner: "Reservation", Name: "AssertInStock", StartLine: 24},
+	}, conformance.Call{Callee: "AssertInStock", Enclosing: "Reserve", Line: 22})
+	obs, err := conformance.NewObservations(observed("catalog.go"), map[string]conformance.LanguageFacts{"catalog.go": facts})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rules []rule.Rule
+	for _, id := range conformance.ContractRuleIDs() {
+		rules = append(rules, builtInRule(t, id))
+	}
+	a, err := conformance.Run(conformance.Request{Rules: rules, Knowledge: knowledge, Observations: obs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"price-set": "catalog.go:3", "name-set": "", "well-formed": "catalog.go:11", "in-stock": "catalog.go:24"}
+	for _, c := range a.Contracts() {
+		got := ""
+		if at, located := c.Carrier(); located {
+			got = fmt.Sprintf("%s:%d", at.Path, at.Line)
+		}
+		if got != want[c.Key()] {
+			t.Errorf("%s of %s: carrier %q, want %q", c.Key(), c.Owner(), got, want[c.Key()])
+		}
+		delete(want, c.Key())
+	}
+	if len(want) > 0 {
+		t.Errorf("contracts without coverage: %v", want)
+	}
+}
+
+// A contract whose owner no declaration spells is undetermined, and the
+// check says so rather than leaving the reader to guess.
+func TestContractCoverageSaysWhyItIsUndetermined(t *testing.T) {
+	ctx := vocab.BoundedContext{Name: "catalog", Definition: "d", Services: []vocab.DomainService{
+		{Name: "Reservation", Definition: "d", Assertions: []vocab.Assertion{{Key: "in-stock", On: "Reserve", Statement: "Only stocked Products are reserved.", Line: 8}}},
+	}}
+	a := runOne(t, builtInRule(t, "assertion/checked-by-its-operation"), nil, observed("catalog.go"),
+		map[string]conformance.LanguageFacts{"catalog.go": goDecls("catalog", nil)}, oneContext(t, ctx))
+	cs := a.Contracts()
+	if len(cs) != 1 || cs[0].Status() != "undetermined" {
+		t.Fatalf("coverage = %#v", cs)
+	}
+	if _, located := cs[0].Carrier(); located {
+		t.Error("an undeclared owner carries nothing")
+	}
+	reasons := cs[0].Checks()[0].Unresolved()
+	if len(reasons) != 1 || reasons[0] != "no single declaration of Reservation is located in the repository" {
+		t.Errorf("reasons = %q", reasons)
+	}
+}
+
+func TestContractCoverageRefusesACarrierWithoutALocation(t *testing.T) {
+	for _, carrier := range []conformance.Carrier{{Path: "", Line: 3}, {Path: "catalog.go", Line: 0}} {
+		_, err := conformance.NewContractCoverage(conformance.ContractCoverageSpec{
+			Context: "catalog", Owner: "Sku", Key: "well-formed", Statement: "A Sku is never empty.",
+			Kind: vocab.ConceptInvariant, Path: testRecording, Line: 4, Carrier: &carrier,
+		})
+		if err == nil {
+			t.Errorf("carrier %+v accepted", carrier)
 		}
 	}
 }

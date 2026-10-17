@@ -50,14 +50,29 @@ func recordedContracts(knowledge vocab.UbiquitousLanguage) []recordedContract {
 	return out
 }
 
+// The built-in Rules that check recorded invariants and assertions.
+const (
+	ruleAssertionChecked        = "assertion/checked-by-its-operation"
+	ruleValueObjectConstructor  = "value_object/constructed-through-one-door"
+	ruleInvariantsEnforcedRoot  = "aggregate/invariants-enforced-by-root"
+	ruleInvariantEnforcedMutate = "invariant/enforced-at-every-mutation"
+)
+
+// ContractRuleIDs names every built-in Rule whose evaluation decides
+// the coverage of a recorded invariant or assertion; a check limited
+// to them still covers every recorded contract.
+func ContractRuleIDs() []string {
+	return []string{ruleAssertionChecked, ruleValueObjectConstructor, ruleInvariantsEnforcedRoot, ruleInvariantEnforcedMutate}
+}
+
 func (c recordedContract) ruleIDs() []string {
 	if c.spec.Kind == vocab.ConceptAssertion {
-		return []string{"assertion/checked-by-its-operation"}
+		return []string{ruleAssertionChecked}
 	}
 	if c.ownerConcept == vocab.ConceptValueObject {
-		return []string{"value_object/constructed-through-one-door"}
+		return []string{ruleValueObjectConstructor}
 	}
-	return []string{"aggregate/invariants-enforced-by-root", "invariant/enforced-at-every-mutation"}
+	return []string{ruleInvariantsEnforcedRoot, ruleInvariantEnforcedMutate}
 }
 
 // isolate retains the located code but passes only this contract to the
@@ -90,6 +105,33 @@ func (c recordedContract) isolate(cc contextCode) contextCode {
 	return cc
 }
 
+// carrier locates the declaration carrying the contract in the code a
+// check of it read, exactly as a listing of the language does; nil
+// when nothing there carries it.
+func (c recordedContract) carrier(code domainCode) (*Carrier, error) {
+	carriers := carriersOf(code)
+	var (
+		at    Carrier
+		found bool
+		err   error
+	)
+	switch {
+	case c.spec.Kind == vocab.ConceptAssertion:
+		at, found, err = carriers.Assertion(c.spec.Context, c.spec.Owner, c.spec.Key)
+	case c.ownerConcept == vocab.ConceptValueObject:
+		at, found = carriers.Constructor(c.spec.Context, c.spec.Owner)
+	default:
+		at, found, err = carriers.Invariant(c.spec.Context, c.spec.Owner, c.spec.Key)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("contract coverage: %s %s of %s: %w", c.spec.Kind, c.spec.Key, c.spec.Owner, err)
+	}
+	if !found {
+		return nil, nil
+	}
+	return &at, nil
+}
+
 func (c recordedContract) ownerLocated(cc contextCode) bool {
 	if c.ownerConcept == vocab.ConceptAggregate {
 		return cc.aggregates[c.spec.Owner].located()
@@ -106,6 +148,7 @@ func assessContractCoverage(req Request, prepared map[string]Facts) ([]ContractC
 	// many invariants and assertions it checks.
 	codeByRule := map[string]domainCode{}
 	var out []ContractCoverage
+	var err error
 	for _, contract := range recordedContracts(req.Knowledge) {
 		spec := contract.spec
 		for _, id := range contract.ruleIDs() {
@@ -120,12 +163,16 @@ func assessContractCoverage(req Request, prepared map[string]Facts) ([]ContractC
 			}
 			code, cached := codeByRule[id]
 			if !cached {
-				var err error
 				code, err = resolveDomain(prepared[id], req.Knowledge)
 				if err != nil {
 					return nil, err
 				}
 				codeByRule[id] = code
+			}
+			if spec.Carrier == nil {
+				if spec.Carrier, err = contract.carrier(code); err != nil {
+					return nil, err
+				}
 			}
 			for _, cc := range code.contexts {
 				if cc.ctx.Name != spec.Context {
@@ -167,12 +214,14 @@ func evaluateRecordedContract(r rule.Rule, contract recordedContract, cc context
 	}
 	// Partial analysis cannot establish coverage for an individual contract.
 	for _, fact := range inv.Enforcement.Facts {
-		if fact != string(rule.FactFileTree) && cc.scopeIdx.available(rule.Fact(fact)) < cc.scopeAnalysisFiles {
-			return simpleEvaluation(r, subject, OutcomeUndetermined)
+		if available := cc.scopeIdx.available(rule.Fact(fact)); fact != string(rule.FactFileTree) && available < cc.scopeAnalysisFiles {
+			return undeterminedEvaluation(r, subject, fmt.Sprintf("%d of %d analyzed files in %s yield %s facts",
+				available, cc.scopeAnalysisFiles, cc.searched(), fact))
 		}
 	}
 	if !contract.ownerLocated(cc) {
-		return simpleEvaluation(r, subject, OutcomeUndetermined)
+		return undeterminedEvaluation(r, subject, fmt.Sprintf("no single declaration of %s is located in %s",
+			contract.spec.Owner, cc.searched()))
 	}
 	check, exists := domainChecks[r.ID().Local()]
 	if !exists {
@@ -183,4 +232,14 @@ func evaluateRecordedContract(r rule.Rule, contract recordedContract, cc context
 		return Evaluation{}, fmt.Errorf("contract coverage: %w", err)
 	}
 	return completeEvaluation(r, subject, violations)
+}
+
+// undeterminedEvaluation leaves a contract undecided with the reason
+// the check could not decide it.
+func undeterminedEvaluation(r rule.Rule, subject rule.Subject, reason string) (Evaluation, error) {
+	e, err := simpleEvaluation(r, subject, OutcomeUndetermined)
+	if err != nil {
+		return Evaluation{}, err
+	}
+	return e.withUnresolved([]string{reason})
 }
