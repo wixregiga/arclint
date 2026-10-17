@@ -15,3 +15,6 @@ coverage.html
 
 # Python resolution oracle environment (tools/pythonoracle)
 .venv-oracle/
+
+# Bytecode from running the skill scripts without -B
+__pycache__/

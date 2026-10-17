@@ -199,3 +199,15 @@ the tree), the gate is the non-mutating, network-free variant:
 ```bash
 make check-ro
 ```
+
+## Before a pull request
+
+Before you open a pull request on arclint, or push more commits to one,
+run the domain-sweep skill (`/domain-sweep`, beta) over the branch
+against `main`. It reads every documentation, comment, help-text,
+test-name and domain-recording line the branch adds or removes, and
+places each rule it states through the domain-librarian. Record every
+entry it places through `arclint domain define` before the pull request
+is opened or updated, and answer each question it raises in the pull
+request. The skill's one source is `.agents/skills/domain-sweep`;
+`make generate ONLY=skill-copies` copies it to `.claude/skills/domain-sweep`.
