@@ -1,0 +1,20 @@
+# Violating case drawn from the rationale: an entity reads the clock to
+# decide whether a hold expired, so the content rule must report the
+# line.
+rule: "entities/deterministic"
+files:
+  internal/entities/order/order.go: |
+    package order
+
+    import "time"
+
+    type Hold struct{ until time.Time }
+
+    func (h Hold) Expired() bool {
+        return time.Now().After(h.until)
+    }
+expect:
+  - kind: violation
+    path: internal/entities/order/order.go
+    line: 8
+    message: "forbidden content matching /time\\.Now\\(|math/rand/"

@@ -165,3 +165,102 @@ const (
 	ruleSchemaProjectPath = ".arclint/schemas/rules.arclint.schema.json"
 	ruleSchemaLitmus      = "docs/schemas/rules.arclint.schema.json"
 )
+
+const contentRuleRules = `runtime: [go]
+
+zones:
+  core: core/**
+
+rules:
+  core/no-panic:
+    rationale: "Core code never panics; a value that cannot be built is an error."
+    on: core
+    content:
+      forbid: '\bpanic\('
+`
+
+// TestContentRuleProvesItsPatternNotItsRationale runs a content Rule
+// through every surface that shows its Assurance, and through the Rule
+// Tests, which ask for a failing case drawn from its Rationale.
+func TestContentRuleProvesItsPatternNotItsRationale(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, "rules.arclint.yaml", contentRuleRules)
+	write(t, dir, "core/keep.go", "package core\n")
+	write(t, dir, ".arclint/tests/clean.yaml",
+		"rule: \"core/no-panic\"\nfiles:\n  core/keep.go: |\n    package core\nexpect: []\n")
+
+	const label = "exact for its pattern; rationale not checked"
+	for _, args := range [][]string{
+		{"rules", "--no-color"},
+		{"rules", "core/no-panic", "--no-color"},
+		{"context", "core/keep.go", "--no-color"},
+		{"agents", "md"},
+	} {
+		stdout, stderr, code := runBin(t, dir, os.Environ(), args...)
+		if code != 0 || !strings.Contains(stdout, label) {
+			t.Errorf("%v: exit %d, no %q in:\n%s\n%s", args, code, label, stdout, stderr)
+		}
+	}
+	stdout, stderr, code := runBin(t, dir, os.Environ(), "check", ".", "--no-color")
+	if code != 0 || !strings.Contains(stdout, "coverage: these rules are exact for their pattern; their rationale is not checked: core/no-panic") {
+		t.Errorf("check: exit %d\n%s\n%s", code, stdout, stderr)
+	}
+	stdout, _, _ = runBin(t, dir, os.Environ(), "check", ".", "--format", "json")
+	if !strings.Contains(stdout, `"message": "rule core/no-panic is exact for its pattern; its rationale is not checked"`) {
+		t.Errorf("check json carries no pattern-bound coverage:\n%s", stdout)
+	}
+
+	// Only a clean case: the Rule is named, and the run fails.
+	stdout, _, code = runBin(t, dir, os.Environ(), "rules", "test", "--no-color")
+	if code != 1 {
+		t.Fatalf("rules test without a failing case: exit %d, want 1\n%s", code, stdout)
+	}
+	for _, want := range []string{
+		"ok   clean (core/no-panic)",
+		"content rules without a failing case",
+		"  core/no-panic\n",
+		"1 passed · 0 failed · 1 content rule(s) without a failing case",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("missing %q in:\n%s", want, stdout)
+		}
+	}
+	stdout, _, code = runBin(t, dir, os.Environ(), "rules", "test", "--format", "json")
+	var run struct {
+		Results            []struct{ Passed bool } `json:"results"`
+		WithoutFailingCase []string                `json:"withoutFailingCase"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &run); err != nil || code != 1 ||
+		len(run.Results) != 1 || !run.Results[0].Passed ||
+		len(run.WithoutFailingCase) != 1 || run.WithoutFailingCase[0] != "core/no-panic" {
+		t.Errorf("rules test json: exit %d, decode %v\n%s", code, err, stdout)
+	}
+
+	// One selected test says nothing of the suite.
+	stdout, _, code = runBin(t, dir, os.Environ(), "rules", "test", "clean", "--no-color")
+	if code != 0 || strings.Contains(stdout, "without a failing case") {
+		t.Errorf("name filter: exit %d\n%s", code, stdout)
+	}
+
+	// A failing case drawn from the Rationale clears the report.
+	write(t, dir, ".arclint/tests/panics.yaml", `rule: "core/no-panic"
+files:
+  core/value.go: |
+    package core
+
+    func Must(ok bool) {
+        if !ok {
+            panic("cannot build")
+        }
+    }
+expect:
+  - kind: violation
+    path: core/value.go
+    line: 5
+    message: "forbidden content matching /\\bpanic\\(/"
+`)
+	stdout, _, code = runBin(t, dir, os.Environ(), "rules", "test", "--no-color")
+	if code != 0 || strings.Contains(stdout, "without a failing case") || !strings.Contains(stdout, "2 passed · 0 failed\n") {
+		t.Errorf("with a failing case: exit %d\n%s", code, stdout)
+	}
+}

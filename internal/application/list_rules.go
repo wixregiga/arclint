@@ -20,7 +20,11 @@ type RuleSummary struct {
 	Proposition string
 	Rationale   string
 	Assurance   string
-	Provenance  string // "namespace/name@version", or "" for repository-local Rules
+	// AssuranceLabel is the Assurance as listings show it; a content
+	// Rule's says it holds for its pattern and leaves the Rationale
+	// unchecked.
+	AssuranceLabel string
+	Provenance     string // "namespace/name@version", or "" for repository-local Rules
 	// BuiltIn marks a Rule arclint composes from the Domain-Driven
 	// Design meta-model for the recorded domain; no ruleset spells it,
 	// and a ruleset adopts it with an Override under its id.

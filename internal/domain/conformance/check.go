@@ -61,7 +61,7 @@ func Run(req Request) (Assessment, error) {
 
 	var evals []Evaluation
 	var diags []Diagnostic
-	var applied []string
+	var applied, patternBound []string
 	for _, r := range rules {
 		if d, ok := r.Disablement(); ok {
 			diag, err := NewCoverage(r.ID().Qualified(),
@@ -73,6 +73,9 @@ func Run(req Request) (Assessment, error) {
 			continue
 		}
 		applied = append(applied, r.ID().Qualified())
+		if r.Enforcement().PatternBound() {
+			patternBound = append(patternBound, r.ID().Qualified())
+		}
 		facts := source.forRule(r)
 		var es []Evaluation
 		var ruleDiags []Diagnostic
@@ -121,6 +124,7 @@ func Run(req Request) (Assessment, error) {
 	for _, r := range rules {
 		prepared[r.ID().Qualified()] = source.forRule(r)
 	}
+	a.patternBound = patternBound
 	a.contracts, err = assessContractCoverage(req, prepared)
 	if err != nil {
 		return Assessment{}, err

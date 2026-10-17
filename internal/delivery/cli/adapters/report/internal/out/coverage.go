@@ -47,3 +47,24 @@ func ContractCoverage(p *Printer, a conformance.Assessment) {
 		p.Printf("contracts: structural checks do not verify that check bodies enforce the recorded statements\n")
 	}
 }
+
+// PatternBoundMessage is the coverage statement for one applied Rule
+// whose Assurance holds only for its pattern.
+func PatternBoundMessage(ruleID string) string {
+	return "rule " + ruleID + " is exact for its pattern; its rationale is not checked"
+}
+
+// PatternBoundSummary states, on one line, that the applied Rules
+// whose Assurance holds only for their pattern leave their Rationale
+// unchecked; "" when no applied Rule is pattern-bound.
+func PatternBoundSummary(a conformance.Assessment) string {
+	ids := a.PatternBoundRules()
+	if len(ids) == 0 {
+		return ""
+	}
+	return "these rules are exact for their pattern; their rationale is not checked: " + strings.Join(ids, ", ")
+}
+
+// WithoutFailingCaseHeading introduces the content Rules no Rule Test
+// exercises with a failing case.
+const WithoutFailingCaseHeading = "content rules without a failing case (add a test whose expect holds a violation drawn from the rule's rationale):"

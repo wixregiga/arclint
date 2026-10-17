@@ -60,7 +60,7 @@ func (RuleDetailReport) report() {}
 
 // RuleTestReport is the result of running authored Rule Tests.
 type RuleTestReport struct {
-	Results []application.RuleTestResult
+	Run application.RuleTestRun
 }
 
 func (RuleTestReport) report() {}

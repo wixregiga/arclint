@@ -122,7 +122,11 @@ Findings and Rule detail carry the label:
 | `heuristic` | may produce false positives or false negatives |
 | `advisory` | guidance without automated truth judgment |
 
-Builtin import and tree Rules use `exact`. Extension Rules are
+Builtin import and tree Rules use `exact`. A content Rule is `exact`
+for its pattern, and its rationale is not checked: every line its
+pattern matches is found, but nothing decides whether the pattern
+covers what the rationale explains. Listings show it as `exact for
+its pattern; rationale not checked`. Extension Rules are
 `heuristic`: the engine treats extension evidence as heuristic
 regardless of what an Extension declares. Severity (`error`,
 `warning`, `info`) is configured on the Rule and is independent from

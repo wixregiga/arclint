@@ -14,6 +14,7 @@ type Assessment struct {
 	evaluations      []Evaluation
 	diagnostics      []Diagnostic // operational and coverage; violations live in evaluations
 	appliedRules     []string     // qualified Rule identities, sorted unique
+	patternBound     []string     // applied Rules whose Assurance holds only for their pattern
 	contracts        []ContractCoverage
 	contractContexts []string
 }
@@ -94,6 +95,13 @@ func (a Assessment) ContractContexts() []string {
 // evaluated.
 func (a Assessment) AppliedRules() []string {
 	return append([]string(nil), a.appliedRules...)
+}
+
+// PatternBoundRules returns the qualified identities of the applied
+// Rules whose Assurance holds only for the pattern their Constraint
+// spells: their check says nothing of what their Rationale explains.
+func (a Assessment) PatternBoundRules() []string {
+	return append([]string(nil), a.patternBound...)
 }
 
 // Violations returns every Violation with its status, in deterministic

@@ -54,6 +54,31 @@ type RuleTestResult struct {
 	Err string
 }
 
+// RuleTestRun is the outcome of running every authored Rule Test: one
+// result per test in source order, and the enabled Rules whose
+// Assurance holds only for their pattern that no test exercises with a
+// failing case.
+type RuleTestRun struct {
+	Results []RuleTestResult
+	// WithoutFailingCase lists qualified Rule identities in
+	// configuration order.
+	WithoutFailingCase []string
+}
+
+// Passed reports whether every test passed and every pattern-bound Rule
+// has a failing case.
+func (r RuleTestRun) Passed() bool {
+	if len(r.WithoutFailingCase) > 0 {
+		return false
+	}
+	for _, result := range r.Results {
+		if !result.Passed() {
+			return false
+		}
+	}
+	return true
+}
+
 // Passed reports whether the test ran and its complete result matched
 // the expectation exactly.
 func (r RuleTestResult) Passed() bool {
@@ -104,17 +129,18 @@ func NewRunRuleTests(rules rule.Repository, tests RuleTestSource,
 }
 
 // Execute runs every Rule Test and returns one result per test in
-// source order. A test naming no configured Rule, or whose
-// conformance check fails, is a test failure carried in its result;
-// the error return is reserved for infrastructure failures.
-func (uc RunRuleTests) Execute() ([]RuleTestResult, error) {
+// source order, together with the pattern-bound Rules that lack a
+// failing case. A test naming no configured Rule, or whose conformance
+// check fails, is a test failure carried in its result; the error
+// return is reserved for infrastructure failures.
+func (uc RunRuleTests) Execute() (RuleTestRun, error) {
 	cfg, err := uc.rules.ConfiguredRules()
 	if err != nil {
-		return nil, fmt.Errorf("load configured rules: %w", err)
+		return RuleTestRun{}, fmt.Errorf("load configured rules: %w", err)
 	}
 	tests, err := uc.tests.Tests()
 	if err != nil {
-		return nil, fmt.Errorf("load rule tests: %w", err)
+		return RuleTestRun{}, fmt.Errorf("load rule tests: %w", err)
 	}
 	byID := make(map[string]rule.Rule, len(cfg.Rules))
 	for _, r := range cfg.Rules {
@@ -131,7 +157,7 @@ func (uc RunRuleTests) Execute() ([]RuleTestResult, error) {
 		}
 		observations, err := uc.fixtures.Observe(t.Files(), cfg.Languages, cfg.Scan, r.Enforcement().Facts())
 		if err != nil {
-			return nil, fmt.Errorf("rule test %q: observe fixture: %w", t.Name(), err)
+			return RuleTestRun{}, fmt.Errorf("rule test %q: observe fixture: %w", t.Name(), err)
 		}
 		// A fixture authors its recorded vocabulary in the domain file
 		// its own ruleset names, else in the first default-named file
@@ -173,7 +199,11 @@ func (uc RunRuleTests) Execute() ([]RuleTestResult, error) {
 		result.Unexpected = comparison.Unexpected
 		results = append(results, result)
 	}
-	return results, nil
+	run := RuleTestRun{Results: results}
+	for _, id := range rule.WithoutFailingCase(cfg.Rules, tests) {
+		run.WithoutFailingCase = append(run.WithoutFailingCase, id.Qualified())
+	}
+	return run, nil
 }
 
 // fixtureVocabulary parses the vocabulary a fixture authors in its

@@ -1,0 +1,18 @@
+# Violating case drawn from the rationale: a use case writes its answer
+# to an HTTP response, so it names a transport package and the content
+# rule must report the import line.
+rule: "features/technology-free"
+files:
+  internal/features/holdseats/holdseats.go: |
+    package holdseats
+
+    import "net/http"
+
+    func Hold(w http.ResponseWriter) {
+        w.WriteHeader(http.StatusCreated)
+    }
+expect:
+  - kind: violation
+    path: internal/features/holdseats/holdseats.go
+    line: 3
+    message: "forbidden content matching /\"net/http\"|\"log/slog\"|\"encoding/json\"/"

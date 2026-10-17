@@ -70,7 +70,7 @@ func TestLipglossRuleListMutesIDAndColorsSeverity(t *testing.T) {
 	err := ansiRenderer().Render(&buf, cli.RuleListReport{
 		Rules: []application.RuleSummary{{
 			ID: "arclint:demo", Type: "structure", Severity: "error",
-			Proposition: "constraint text", Assurance: "exact", Provenance: "ns/n@1",
+			Proposition: "constraint text", Assurance: "exact", AssuranceLabel: "exact", Provenance: "ns/n@1",
 		}},
 	})
 	if err != nil {
@@ -101,7 +101,7 @@ func TestLipglossRuleListMutesTheBuiltInOrigin(t *testing.T) {
 	err := ansiRenderer().Render(&buf, cli.RuleListReport{
 		Rules: []application.RuleSummary{{
 			ID: "aggregate/root-declared", Type: "domain", Severity: "error",
-			Proposition: "composed", Assurance: "exact", BuiltIn: true,
+			Proposition: "composed", Assurance: "exact", AssuranceLabel: "exact", BuiltIn: true,
 		}},
 	})
 	if err != nil {

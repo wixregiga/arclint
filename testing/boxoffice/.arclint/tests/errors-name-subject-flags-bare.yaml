@@ -1,0 +1,16 @@
+# Violating case drawn from the rationale: an entity refusal named
+# ErrNotFound says nothing of what is missing, so the content rule must
+# report the line.
+rule: "entities/errors-name-their-subject"
+files:
+  internal/entities/order/order.go: |
+    package order
+
+    import "errors"
+
+    var ErrNotFound = errors.New("not found")
+expect:
+  - kind: violation
+    path: internal/entities/order/order.go
+    line: 5
+    message: "forbidden content matching /\\bErr(NotFound|Invalid|Failed|Exists)\\b/"

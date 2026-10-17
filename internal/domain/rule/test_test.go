@@ -199,3 +199,93 @@ func TestRuleTestCompareEmptyExpectedAssertsConformance(t *testing.T) {
 		t.Errorf("Compare = %+v, want the one finding unexpected", c)
 	}
 }
+
+func TestRuleTestFailingCaseExpectsAViolation(t *testing.T) {
+	violation := []rule.ExpectedFinding{{Kind: rule.FindingViolation, Path: "m/a.go", Line: 1, Message: "m"}}
+	suppressed := []rule.ExpectedFinding{{Kind: rule.FindingSuppressed, Path: "m/a.go", Line: 1, Message: "m"}}
+	for name, tc := range map[string]struct {
+		expect []rule.ExpectedFinding
+		want   bool
+	}{
+		"violation":  {violation, true},
+		"suppressed": {suppressed, false},
+		"clean":      {nil, false},
+	} {
+		test, err := rule.NewTest(name, "m/r", validFiles(), tc.expect)
+		if err != nil {
+			t.Fatalf("%s: NewTest: %v", name, err)
+		}
+		if got := test.FailingCase(); got != tc.want {
+			t.Errorf("%s: FailingCase() = %v, want %v", name, got, tc.want)
+		}
+	}
+}
+
+func TestWithoutFailingCaseNamesEnabledContentRulesOnly(t *testing.T) {
+	content := func(id string) rule.Rule {
+		r, err := rule.New(rule.Spec{
+			ID: id, Type: rule.TypeContent,
+			Params: rule.ContentParams{Forbid: `\bpanic\(`},
+			Scope:  mustRepoScope(t),
+		})
+		if err != nil {
+			t.Fatalf("New %s: %v", id, err)
+		}
+		return r
+	}
+	structure, err := rule.New(rule.Spec{
+		ID: "m/structure", Type: rule.TypeStructure,
+		Params: rule.StructureParams{Require: []rule.Glob{mustGlob(t, "m/a.go")}},
+		Scope:  mustZoneScope(t, "m"),
+	})
+	if err != nil {
+		t.Fatalf("New structure: %v", err)
+	}
+	disablement, err := rule.NewDisablement("retired here")
+	if err != nil {
+		t.Fatalf("NewDisablement: %v", err)
+	}
+	test := func(name, ruleID string, expect []rule.ExpectedFinding) rule.Test {
+		tc, err := rule.NewTest(name, ruleID, validFiles(), expect)
+		if err != nil {
+			t.Fatalf("NewTest %s: %v", name, err)
+		}
+		return tc
+	}
+	violation := []rule.ExpectedFinding{{Kind: rule.FindingViolation, Path: "m/a.go", Line: 1, Message: "m"}}
+	rules := []rule.Rule{
+		content("m/exemplified"),
+		content("m/clean-only"),
+		content("m/untested"),
+		content("m/disabled").Disable(disablement),
+		structure,
+	}
+	tests := []rule.Test{
+		test("exemplified-fails", "m/exemplified", violation),
+		test("clean-only-clean", "m/clean-only", nil),
+	}
+	got := rule.WithoutFailingCase(rules, tests)
+	var ids []string
+	for _, id := range got {
+		ids = append(ids, id.Qualified())
+	}
+	if strings.Join(ids, ",") != "m/clean-only,m/untested" {
+		t.Fatalf("WithoutFailingCase = %v, want [m/clean-only m/untested]", ids)
+	}
+}
+
+func TestContentEnforcementIsExactForItsPatternOnly(t *testing.T) {
+	content := rule.BuiltinEnforcement(rule.TypeContent)
+	if !content.PatternBound() || content.Assurance() != rule.AssuranceExact {
+		t.Fatalf("content enforcement: pattern bound %v, assurance %q", content.PatternBound(), content.Assurance())
+	}
+	if got := content.AssuranceLabel(); got != "exact for its pattern; rationale not checked" {
+		t.Errorf("content AssuranceLabel() = %q", got)
+	}
+	for _, typ := range []rule.Type{rule.TypeConsumes, rule.TypeStructure, rule.TypeNaming, rule.TypeExtension} {
+		e := rule.BuiltinEnforcement(typ)
+		if e.PatternBound() || e.AssuranceLabel() != string(e.Assurance()) {
+			t.Errorf("%s: pattern bound %v, label %q", typ, e.PatternBound(), e.AssuranceLabel())
+		}
+	}
+}

@@ -178,13 +178,21 @@ No line of a selected file matches a regular expression.
 
 - constraint key: `content`
 - Rule Type: `content`
-- Assurance: `exact`
+- Assurance: `exact` for its pattern; rationale not checked
 - `on`: optional (absent means the whole repository); `files` accepted
 
 `forbid` is an RE2 pattern matched against every line of every
 selected file. A match is a line-anchored Violation. This covers the
 technology fences that used to need an Extension: no `panic`, no
 `net/http` in the domain, one logging voice.
+
+The check finds every line the pattern matches. Nothing checks that
+the pattern covers what the `rationale` explains, so `rules`,
+`context`, AGENTS.md, and `check` coverage say so beside the Rule. A
+pattern narrower than its rationale passes in silence. `arclint rules
+test` names every enabled content Rule without a failing case: write
+at least one Rule Test whose `expect` holds a violation drawn from the
+rationale.
 
 ```yaml
 rules:

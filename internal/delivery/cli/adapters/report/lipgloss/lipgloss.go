@@ -54,7 +54,7 @@ func (r renderer) Render(w io.Writer, rep cli.Report) error {
 	case cli.RuleDetailReport:
 		writeRuleDetail(p, th, x.Detail)
 	case cli.RuleTestReport:
-		writeRuleTestResults(p, th, x.Results)
+		writeRuleTestResults(p, th, x.Run)
 	case cli.InitReport:
 		writeInit(p, th, x.Path)
 	case cli.ContextReport:

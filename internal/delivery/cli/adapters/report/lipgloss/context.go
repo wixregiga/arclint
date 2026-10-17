@@ -79,7 +79,7 @@ func writeContext(p *out.Printer, th Theme, c application.ArchitecturalContext) 
 				via = " (via " + strings.Join(r.Via, ", ") + ")"
 			}
 			sev := th.severity(r.Summary.Severity).Render(r.Summary.Severity)
-			meta := "[" + r.Summary.Type + "/" + sev + "]"
+			meta := "[" + r.Summary.Type + "/" + sev + "/" + r.Summary.AssuranceLabel + "]"
 			p.Printf("  %s %s: %s%s\n", th.Bold.Render(r.Summary.ID), meta, r.Reason, via)
 		}
 	}

@@ -18,7 +18,7 @@ func writeRuleRows(w io.Writer, rows []application.RuleSummary) error {
 			marker = fmt.Sprintf("  (disabled: %s)", row.DisabledReason)
 		}
 		p.Printf("%s  [%s/%s/%s]  %s%s%s\n",
-			row.ID, row.Type, row.Severity, row.Assurance, row.Text(), ruleOrigin(row), marker)
+			row.ID, row.Type, row.Severity, row.AssuranceLabel, row.Text(), ruleOrigin(row), marker)
 	}
 	return p.Err
 }
@@ -55,7 +55,7 @@ func writeRuleDetail(w io.Writer, d application.RuleDetail) error {
 		write("files", strings.Join(d.Files, ", "))
 	}
 	write("evidence", d.Evidence)
-	write("assurance", d.Summary.Assurance)
+	write("assurance", d.Summary.AssuranceLabel)
 	if d.Summary.Severity == "error" {
 		write("when violated", "fails the gate")
 	} else {
@@ -81,11 +81,11 @@ func writeRuleDetail(w io.Writer, d application.RuleDetail) error {
 	return p.Err
 }
 
-func writeRuleTestResults(w io.Writer, results []application.RuleTestResult) error {
+func writeRuleTestResults(w io.Writer, run application.RuleTestRun) error {
 	p := &out.Printer{W: w}
+	results := run.Results
 	if len(results) == 0 {
 		p.Println("no rule tests under .arclint/tests")
-		return p.Err
 	}
 	passed := 0
 	for _, r := range results {
@@ -111,7 +111,20 @@ func writeRuleTestResults(w io.Writer, results []application.RuleTestResult) err
 			}
 		}
 	}
-	p.Printf("%d passed · %d failed\n", passed, len(results)-passed)
+	if len(run.WithoutFailingCase) > 0 {
+		p.Println(out.WithoutFailingCaseHeading)
+		for _, id := range run.WithoutFailingCase {
+			p.Printf("  %s\n", id)
+		}
+	}
+	if len(results) == 0 && len(run.WithoutFailingCase) == 0 {
+		return p.Err
+	}
+	p.Printf("%d passed · %d failed", passed, len(results)-passed)
+	if n := len(run.WithoutFailingCase); n > 0 {
+		p.Printf(" · %d content rule(s) without a failing case", n)
+	}
+	p.Println()
 	return p.Err
 }
 

@@ -217,3 +217,38 @@ func lessFinding(a, b findingKey) bool {
 	}
 	return a.kind < b.kind
 }
+
+// FailingCase reports whether the Test expects its Rule to produce at
+// least one active Violation: a bad example the Rule must catch.
+func (t Test) FailingCase() bool {
+	for _, e := range t.expect {
+		if e.Kind == FindingViolation {
+			return true
+		}
+	}
+	return false
+}
+
+// WithoutFailingCase returns, in the given order, the identities of the
+// enabled Rules whose Assurance holds only for their pattern and that
+// no Test exercises with a failing case. Such a Rule's check decides
+// its pattern alone, so only a bad example drawn from its Rationale
+// shows the pattern catches what the Rationale forbids.
+func WithoutFailingCase(rules []Rule, tests []Test) []ID {
+	failing := map[string]bool{}
+	for _, t := range tests {
+		if t.FailingCase() {
+			failing[t.ruleID] = true
+		}
+	}
+	var out []ID
+	for _, r := range rules {
+		if _, disabled := r.Disablement(); disabled || !r.Enforcement().PatternBound() {
+			continue
+		}
+		if !failing[r.ID().Qualified()] {
+			out = append(out, r.ID())
+		}
+	}
+	return out
+}

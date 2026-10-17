@@ -30,6 +30,9 @@ func writeCheck(w io.Writer, a conformance.Assessment, agentsContext string) err
 			// Violations are rendered from ActiveViolations above.
 		}
 	}
+	if summary := out.PatternBoundSummary(a); summary != "" {
+		p.Printf("coverage: %s\n", summary)
+	}
 	if agentsContext != "" {
 		p.Printf("agents: %s\n", agentsContext)
 	}

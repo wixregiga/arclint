@@ -34,7 +34,7 @@ weight = 6
 | `arclint agents hooks event` | answer one Claude Code or Codex hook event read from stdin with the host's native JSON; the installed hooks run it |
 | `arclint rules [selector]` | list configured Rules, or show one complete Rule when the selector has one exact match; broader selectors produce a narrowed list |
 | `arclint rules schema` | print the indented JSON Schema accepted for `rules.arclint.yaml`; `--write` puts it at `.arclint/schemas/rules.arclint.schema.json` (or under `--dir`) so the ruleset's modeline can name a local copy |
-| `arclint rules test [name]` | run all Rule Tests under `.arclint/tests`, or one test selected by name |
+| `arclint rules test [name]` | run all Rule Tests under `.arclint/tests`, or one test selected by name; a full run also names every enabled content Rule without a failing case |
 | `arclint sdk init` | write `arclint.d.ts` and `tsconfig.json` under `.arclint/extensions` |
 
 `--format human|json` selects one renderer for every semantic command
@@ -44,8 +44,9 @@ plain renderer. Raw schema and generated markdown commands are unchanged.
 `agents hooks event` speaks the hosts' hook protocol instead. See
 [agent hooks](../agent-hooks/) for what it reads and returns.
 
-Exit codes are `0` for a clean command, `1` when the gate fails or a
-Rule Test does not match its expectation, and `2` for configuration or
+Exit codes are `0` for a clean command, `1` when the gate fails, a
+Rule Test does not match its expectation, or a content Rule has no
+failing case, and `2` for configuration or
 usage errors. A gate failure can come from an active error-severity
 Violation or an error-severity operational Diagnostic.
 
@@ -191,6 +192,23 @@ FAIL disallowed-adapters-import (core/consumes)
 
 Adopt that block into `expect:` and re-run until the case passes.
 
+A content Rule's check decides its pattern, not its rationale, so a
+full run asks for a failing case per content Rule: a test whose
+`expect` holds at least one `violation`. Draw the bad example from the
+rationale, not from the pattern. A run names every enabled content Rule
+without one and exits 1:
+
+```
+ok   no-panic-clean (domain/no-panic)
+content rules without a failing case (add a test whose expect holds a violation drawn from the rule's rationale):
+  domain/no-panic
+1 passed · 0 failed · 1 content rule(s) without a failing case
+```
+
+Running one test by name skips this report. `--format json` carries
+the test results under `results` and the Rules under
+`withoutFailingCase`.
+
 ## Context for agents
 
 `arclint context <path|zone>` answers "what is architecturally true
@@ -320,6 +338,11 @@ status. `ruleId` is the qualified id, and `pattern` names the Pattern
 that distributed the Rule; a local Rule has an unqualified `ruleId` and
 no `pattern`. `line` is omitted when the Diagnostic is not line-anchored, and
 `remediation` is omitted when none was supplied.
+
+Each applied content Rule adds a coverage entry with its `ruleId` and
+the message `rule <id> is exact for its pattern; its rationale is not
+checked`. Human output states the same on one `coverage:` line that
+lists those Rules.
 
 The default human output prints active Violations and operational or
 coverage Diagnostics, followed by counts for active, suppressed, and

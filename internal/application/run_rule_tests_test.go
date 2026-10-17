@@ -173,7 +173,8 @@ func TestRunRuleTestsMapsAssessmentToFindings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
-	results, err := uc.Execute()
+	run, err := uc.Execute()
+	results := run.Results
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -267,7 +268,8 @@ func TestRunRuleTestsContainsConformanceErrorAndContinues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
-	results, err := uc.Execute()
+	run, err := uc.Execute()
+	results := run.Results
 	if err != nil {
 		t.Fatalf("Execute must not treat a conformance error as infrastructure: %v", err)
 	}
@@ -344,7 +346,8 @@ func TestRunRuleTestsFeedsFixtureVocabularyToExtensions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
-	results, err := uc.Execute()
+	run, err := uc.Execute()
+	results := run.Results
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -380,7 +383,8 @@ func TestRunRuleTestsContainsFixtureVocabularyError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
-	results, err := uc.Execute()
+	run, err := uc.Execute()
+	results := run.Results
 	if err != nil {
 		t.Fatalf("Execute must contain a fixture vocabulary failure: %v", err)
 	}
@@ -440,7 +444,8 @@ func TestRunRuleTestsResolvesTheFixtureDomainFileFromTheFixtureRuleset(t *testin
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
-	results, err := uc.Execute()
+	run, err := uc.Execute()
+	results := run.Results
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -474,7 +479,8 @@ func TestRunRuleTestsGivesAFixtureWithoutADomainFileTheRecordingItWouldUse(t *te
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
-	results, err := uc.Execute()
+	run, err := uc.Execute()
+	results := run.Results
 	if err != nil || len(results) != 1 || !results[0].Passed() {
 		t.Fatalf("Execute = %+v, %v; want one pass", results, err)
 	}
@@ -496,7 +502,8 @@ func TestRunRuleTestsContainsAFixtureRulesetRecordingError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
-	results, err := uc.Execute()
+	run, err := uc.Execute()
+	results := run.Results
 	if err != nil {
 		t.Fatalf("Execute must contain a fixture ruleset failure: %v", err)
 	}
@@ -530,7 +537,8 @@ func TestRunRuleTestsDiscoversTheFixtureDomainFileAmongTheDefaultNames(t *testin
 			if err != nil {
 				t.Fatalf("NewRunRuleTests: %v", err)
 			}
-			results, err := uc.Execute()
+			run, err := uc.Execute()
+			results := run.Results
 			if err != nil || len(results) != 1 || !results[0].Passed() {
 				t.Fatalf("Execute = %+v, %v; want one pass", results, err)
 			}
@@ -558,7 +566,8 @@ func TestRunRuleTestsFixtureWithOnlyANamedFileIgnoresTheDefaultNames(t *testing.
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
-	results, err := uc.Execute()
+	run, err := uc.Execute()
+	results := run.Results
 	if err != nil || len(results) != 1 || !results[0].Passed() {
 		t.Fatalf("Execute = %+v, %v; want one pass", results, err)
 	}

@@ -242,13 +242,17 @@ extends:
 					// The Rule test must use its own supplied content.
 					write(t, root, subject, language.content+"\n")
 					stdout, stderr, code = runBin(t, root, os.Environ(), "rules", "test", "--format", "json")
-					var results []struct {
-						RuleID     string            `json:"ruleId"`
-						Passed     bool              `json:"passed"`
-						Error      string            `json:"error"`
-						Unexpected []contractFinding `json:"unexpected"`
+					var run struct {
+						Results []struct {
+							RuleID     string            `json:"ruleId"`
+							Passed     bool              `json:"passed"`
+							Error      string            `json:"error"`
+							Unexpected []contractFinding `json:"unexpected"`
+						} `json:"results"`
 					}
-					if err := json.Unmarshal([]byte(stdout), &results); err != nil || len(results) != 1 || results[0].RuleID != ruleID {
+					err = json.Unmarshal([]byte(stdout), &run)
+					results := run.Results
+					if err != nil || len(results) != 1 || results[0].RuleID != ruleID {
 						t.Fatalf("Rule test identity: exit %d, decode %v\n%s\n%s", code, err, stdout, stderr)
 					}
 					if tc.invalid != "" {
