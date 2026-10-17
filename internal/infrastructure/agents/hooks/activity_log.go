@@ -62,15 +62,23 @@ func (log *ActivityLog) Record(activity agent.Activity) (returnErr error) {
 	if _, err := project.Stat(progressDirectory); errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
-	line, err := json.Marshal(loggedActivity{Kind: string(activity.Kind), Paths: activity.Paths, Zones: activity.Zones, At: time.Now()})
-	if err != nil {
-		return fmt.Errorf("encode workflow activity: %w", err)
-	}
 	file, err := project.OpenFile(activityLog, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return fmt.Errorf("workflow activity log: %w", err)
 	}
 	defer func() { returnErr = errors.Join(returnErr, file.Close()) }()
+	// Commands that finish at once take their time and append under one
+	// lock, so the log lists them in the order of their times and a reader
+	// that stops at a time misses none before it.
+	unlock, err := lockFile(file)
+	if err != nil {
+		return fmt.Errorf("workflow activity log: %w", err)
+	}
+	defer func() { returnErr = errors.Join(returnErr, unlock()) }()
+	line, err := json.Marshal(loggedActivity{Kind: string(activity.Kind), Paths: activity.Paths, Zones: activity.Zones, At: time.Now()})
+	if err != nil {
+		return fmt.Errorf("encode workflow activity: %w", err)
+	}
 	if _, err := file.Write(append(line, '\n')); err != nil {
 		return fmt.Errorf("workflow activity log: %w", err)
 	}

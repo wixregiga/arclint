@@ -38,16 +38,50 @@ type sessionRecord struct {
 	// BetweenTurns is true from the end of a turn, or the session's start,
 	// until the user's next prompt.
 	BetweenTurns bool `json:",omitempty"`
-	// BetweenSince and AttributedFrom bound the last time between turns:
-	// from the end of a turn, or from always for a record that started
-	// between turns, until the session started, resumed or received its
-	// next prompt. A file that changed then is not the agent's work. Both
-	// are zero once a snapshot has been taken since.
-	BetweenSince   time.Time `json:",omitzero"`
-	AttributedFrom time.Time `json:",omitzero"`
+	// Idle holds the times between turns that no snapshot has covered yet,
+	// oldest first. A file that changed in a closed one is not the agent's
+	// work.
+	Idle []idleTime `json:",omitempty"`
 	// Unsampled is true after an update whose sample of the checkout failed
 	// for a reason other than the project lying outside a git work tree.
 	Unsampled bool `json:",omitempty"`
+}
+
+// idleTime is one time between turns: from the end of a turn, or from
+// always for a record that started between turns, until the session
+// started, resumed or received its next prompt. Until is zero while it
+// lasts; an open one excludes nothing, so a host that never reports the
+// next prompt never loses the agent's work.
+type idleTime struct {
+	Since time.Time `json:",omitzero"`
+	Until time.Time `json:",omitzero"`
+}
+
+// excludes reports whether a change at at falls in the idle time.
+func (idle idleTime) excludes(at time.Time) bool {
+	return !idle.Until.IsZero() && !at.Before(idle.Since) && at.Before(idle.Until)
+}
+
+// close ends the record's current time between turns now, or extends its
+// end to now when the session started or resumed earlier in it. A record
+// whose earlier idle times a snapshot has covered starts one from always,
+// since that snapshot holds everything before it.
+func (record *sessionRecord) close(now time.Time) {
+	if len(record.Idle) == 0 {
+		record.Idle = []idleTime{{}}
+	}
+	record.Idle[len(record.Idle)-1].Until = now
+}
+
+// open starts a time between turns now. An idle time still open began at
+// an earlier turn's end with no prompt reported since, so the agent worked
+// after it: it starts again now instead.
+func (record *sessionRecord) open(now time.Time) {
+	if last := len(record.Idle) - 1; last >= 0 && record.Idle[last].Until.IsZero() {
+		record.Idle[last].Since = now
+		return
+	}
+	record.Idle = append(record.Idle, idleTime{Since: now})
 }
 
 // ProgressStore keeps each session's workflow Progress in the project's
@@ -101,7 +135,7 @@ func (store *ProgressStore) StartSession(session string) error {
 			return err
 		}
 		if record.BetweenTurns {
-			record.AttributedFrom = store.checkout.now()
+			record.close(store.checkout.now())
 		}
 		return writeRecord(project, name, record)
 	})
@@ -120,7 +154,7 @@ func (store *ProgressStore) StartTurn(session string) error {
 			return err
 		}
 		if record.BetweenTurns {
-			record.AttributedFrom = store.checkout.now()
+			record.close(store.checkout.now())
 		}
 		record.BetweenTurns = false
 		return writeRecord(project, name, record)
@@ -134,7 +168,8 @@ func (store *ProgressStore) FinishTurn(session string) error {
 		if err != nil {
 			return err
 		}
-		record.BetweenTurns, record.BetweenSince = true, store.checkout.now()
+		record.open(store.checkout.now())
+		record.BetweenTurns = true
 		return writeRecord(project, name, record)
 	})
 }
@@ -156,7 +191,7 @@ func (store *ProgressStore) current(project *os.Root, name string) (sessionRecor
 	}
 	record.Cursor = &end
 	taken, began, err := store.look()
-	record.Snapshot, record.Observed, record.AttributedFrom = taken, err == nil, began
+	record.Snapshot, record.Observed, record.Idle = taken, err == nil, []idleTime{{Until: began}}
 	record.BetweenTurns = true
 	return record, true, nil
 }
@@ -225,13 +260,13 @@ func (store *ProgressStore) observe(project *os.Root, record *sessionRecord, sta
 			} else {
 				delete(now, file.path)
 			}
-		case file.at.Before(record.AttributedFrom) && !file.at.Before(record.BetweenSince):
+		case slices.ContainsFunc(record.Idle, func(idle idleTime) bool { return idle.excludes(file.at) }):
 		default:
 			timed = append(timed, timedActivity{activity: store.changeOf(file.path), at: file.at})
 		}
 	}
 	record.Snapshot, record.Observed, record.Unsampled = now, true, false
-	record.BetweenSince, record.AttributedFrom = time.Time{}, time.Time{}
+	record.Idle = nil
 	return untimed(timed), nil
 }
 
