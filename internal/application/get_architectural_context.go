@@ -203,7 +203,7 @@ type DomainKnowledge struct {
 	// Used lists, for a worksite, every recorded entry its code reaches
 	// that is declared outside it, apart from the declared listing in
 	// Contexts; Undetermined lists the references of the worksite that
-	// resolution could not follow, so a use may go unlisted.
+	// may be uses resolution cannot confirm, each with the reason.
 	// UsesLocated is true when the worksite's uses were looked for.
 	UsesLocated  bool                 `json:"usesLocated,omitempty"`
 	Used         []DomainUseRef       `json:"used,omitempty"`

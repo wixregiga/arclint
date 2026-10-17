@@ -5,7 +5,6 @@ import (
 	"path"
 	"slices"
 	"sort"
-	"strings"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
@@ -33,7 +32,7 @@ type UseWay string
 
 const (
 	// UseByCall is a call whose target or receiver resolves to the
-	// term's declaration, a member of it, or a constructor of it.
+	// term's declaration or a member of it.
 	UseByCall UseWay = "call"
 	// UseByField is a field whose type holds the term's declaration.
 	UseByField UseWay = "field"
@@ -67,8 +66,8 @@ type useSite struct {
 // newTermUse is the one door a TermUse is built through. The
 // reference must be resolved by the language to the reached
 // declaration, and the reached declaration must be the term's one
-// located declaration, a member of it, or a constructor of it in its
-// unit; a reference that only spells the term's name is rejected.
+// located declaration or a member of it; a reference that only spells
+// the term's name is rejected.
 func newTermUse(ref Reference, reached locDecl, term usedTerm, site useSite) (TermUse, error) {
 	if ref.Resolution != ResolutionDeclared {
 		return TermUse{}, fmt.Errorf("term use of %s at %s:%d: the reference is %s, not resolved to a declaration", term.name, site.path, site.line, ref.Resolution)
@@ -80,7 +79,7 @@ func newTermUse(ref Reference, reached locDecl, term usedTerm, site useSite) (Te
 		return TermUse{}, fmt.Errorf("term use of %s at %s:%d: the term is not located in one declaration", term.name, site.path, site.line)
 	}
 	if !term.reachedThrough(reached) {
-		return TermUse{}, fmt.Errorf("term use of %s at %s:%d: %s is neither its declaration, a member of it, nor a constructor of it", term.name, site.path, site.line, reached.decl.Name)
+		return TermUse{}, fmt.Errorf("term use of %s at %s:%d: %s is neither its declaration nor a member of it", term.name, site.path, site.line, reached.decl.Name)
 	}
 	if site.path == "" || site.line < 1 || (site.way != UseByCall && site.way != UseByField) {
 		return TermUse{}, fmt.Errorf("term use of %s: a site needs a path, a line, and a way of reaching", term.name)
@@ -148,9 +147,7 @@ type usedTerm struct {
 }
 
 // reachedThrough reports whether a reached declaration is the term's
-// located declaration, a member of it, or a constructor of it: a
-// function that returns it where the type's name can mean only the
-// term's declaration.
+// located declaration or a member of it.
 func (t usedTerm) reachedThrough(reached locDecl) bool {
 	decl := t.candidates[0]
 	switch {
@@ -158,45 +155,33 @@ func (t usedTerm) reachedThrough(reached locDecl) bool {
 		return true
 	case reached.decl.Owner != "" && decl.owns(reached.file, reached.decl.Owner):
 		return true
-	case reached.decl.Kind == declKindFunc && reached.decl.Owner == "":
-		return isTypeKind(decl.decl.Kind) && buildsType(reached, decl)
 	}
 	return false
 }
 
-// buildsType reports whether a function returns the type declared by
-// decl itself, read from the result text where that text can name
-// nothing else. In Go the function is of the type's package and spells
-// the type unqualified, through at most one pointer: a package-level
-// name there is the package's own type, since a dot import of the same
-// name does not compile. In TypeScript and Python the function is of
-// the type's own file, whose module scope holds one binding of the
-// name. A qualified, wrapped, or collection result is not the type.
-func buildsType(fn, decl locDecl) bool {
-	switch fn.file.lang {
-	case rule.LanguageGo:
-		if path.Dir(fn.file.path) != path.Dir(decl.file.path) {
-			return false
-		}
-	default:
-		if fn.file.path != decl.file.path {
-			return false
-		}
+// writtenResult finds the result of a function that is written with
+// the name of the type a declaration of the term declares, when the
+// function lies beside it: in Go in its package, elsewhere in its file.
+// The function may build the term, but its result types are not
+// resolved, so the text can raise the question and never settle it: a
+// type parameter or an import can spell the same name.
+func writtenResult(fn, decl locDecl) (string, bool) {
+	if fn.decl.Kind != declKindFunc || fn.decl.Owner != "" || !isTypeKind(decl.decl.Kind) {
+		return "", false
+	}
+	beside := fn.file.path == decl.file.path
+	if fn.file.lang == rule.LanguageGo {
+		beside = path.Dir(fn.file.path) == path.Dir(decl.file.path)
+	}
+	if !beside {
+		return "", false
 	}
 	for _, r := range fn.decl.Results {
-		text := strings.TrimSpace(r)
-		switch fn.file.lang {
-		case rule.LanguageGo:
-			text = strings.TrimPrefix(text, "*")
-		case rule.LanguagePython:
-			text = strings.Trim(text, `"'`)
-		case rule.LanguageTypeScript:
-		}
-		if text == decl.decl.Name {
-			return true
+		if mentionsType(r, "", decl.decl.Name) {
+			return r, true
 		}
 	}
-	return false
+	return "", false
 }
 
 // usedTerms lists every term of the recorded language as located,
@@ -239,12 +224,12 @@ var termRoles = map[vocab.Concept]UsedRole{
 // Uses finds what the code of the worksite reaches of the recorded
 // domain: for every file the worksite holds, each call whose target or
 // receiver, and each field whose held types, the language resolved to
-// a term located outside the worksite, a member of it, or a
-// constructor of it. A term declared inside the worksite is declared
-// here, not used. A reference resolution could not follow, one that
-// reaches a term two declarations spell, and a file of one of the
-// languages whose calls or field types could not be read are
-// undetermined, with the reason.
+// a term located outside the worksite or a member of it. A term
+// declared inside the worksite is declared here, not used. A reference
+// resolution could not follow, one that reaches a term two
+// declarations spell, a call to a function beside a term whose written
+// result names it, and a file of one of the languages whose calls or
+// field types could not be read are undetermined, with the reason.
 func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Language) (TermUses, error) {
 	var out TermUses
 	seenUse := map[TermUse]bool{}
@@ -314,6 +299,19 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 				out.Uses = append(out.Uses, use)
 			}
 		}
+		for _, term := range c.terms {
+			for _, d := range term.candidates {
+				result, written := writtenResult(reached, d)
+				if !written || inWorksite(d.file.path) {
+					continue
+				}
+				undetermined(UndeterminedUse{
+					Path: site.path, Line: site.line, What: string(site.way) + " " + site.via,
+					Reason: fmt.Sprintf("%s returns %s as written; result types are not resolved", referenceName(ref), result),
+				})
+				break
+			}
+		}
 		return nil
 	}
 	for _, f := range c.all.files {
@@ -371,9 +369,9 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 }
 
 // mayBeReachedThrough reports whether a reached declaration is, for
-// any declaration spelling the term, that declaration, a member of it,
-// or a constructor of it. A located term then makes a use; a term two
-// declarations spell leaves the reference undetermined.
+// any declaration spelling the term, that declaration or a member of
+// it. A located term then makes a use; a term two declarations spell
+// leaves the reference undetermined.
 func (t usedTerm) mayBeReachedThrough(reached locDecl) bool {
 	for _, d := range t.candidates {
 		if (usedTerm{candidates: []locDecl{d}}).reachedThrough(reached) {
