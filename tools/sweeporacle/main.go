@@ -79,7 +79,8 @@ func classify(path string, w *bufio.Writer) error {
 		if tok == token.EOF {
 			break
 		}
-		start := fset.Position(pos).Line
+		// Physical positions: a //line directive must not move them.
+		start := file.PositionFor(pos, false).Line
 		end := start + strings.Count(lit, "\n")
 		switch {
 		case tok == token.COMMENT:
