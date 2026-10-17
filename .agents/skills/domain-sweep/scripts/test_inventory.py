@@ -1144,6 +1144,15 @@ class InventoryTest(unittest.TestCase):
         self.assertEqual(rows["pkg/err.go:5"][1], "text")
         self.assertNotIn("pkg/err.go:6", rows)
 
+    def test_test_names_newer_than_python_s_unicode(self):
+        # U+11F02 is a letter since Unicode 15; Python 3.11's tables leave it unassigned.
+        self.repo.write("pkg/rules_test.go", 'package p\n\nimport "testing"\n\nfunc Test\U00011f02(t *testing.T) {}\nfunc TestG[T any](t *testing.T) {}\n')
+        self.repo.write("test_rules.py", "def test_\U00011f02(): pass\n")
+        rows = self.located(self.repo.rows("--base", "main", "--scope", "changed"))
+        self.assertEqual(rows["pkg/rules_test.go:5"][1], "test")
+        self.assertNotIn("pkg/rules_test.go:6", rows)
+        self.assertEqual(rows["test_rules.py:1"][1], "test")
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")

@@ -121,8 +121,11 @@ WORDS = re.compile(r"[A-Za-z]{2,}[ \t]+[A-Za-z]+|[A-Za-z]+[ \t]+[A-Za-z]{2,}")
 # fixture string is not one. ts_sources follows TypeScript test calls token
 # by token.
 # A Go declaration starts a line or follows a semicolon: func helper() {}; func TestX(.
-GO_TEST = re.compile(r"(?:^|;)\s*func\s+Test\w*\s*\(")
-GO_TEST_NAME = re.compile(r"^\s*Test\w*\s*\(")
+# The name runs to the parenthesis, not by \w: Go names may use letters a
+# newer Unicode has than the running Python, and a [ means a generic
+# function, never a test.
+GO_TEST = re.compile(r"(?:^|;)\s*func\s+Test[^\s(\[]*\s*\(")
+GO_TEST_NAME = re.compile(r"^\s*Test[^\s(\[]*\s*\(")
 GO_FUNC_END = re.compile(r"(?:^|;)\s*func\s*$")
 PY_TEST_CLASS = re.compile(r"^\s*class\s+Test\w*\b")
 PY_TEST_DEF = re.compile(r"^\s*(?:async\s+)?def\s+test")
@@ -436,8 +439,10 @@ def is_generated(path, lines):
 def continues_name(char, extra=""):
     """Whether char may continue an identifier: a letter, a digit, an
     underscore, a combining mark or a connector, as Python and JavaScript
-    identifiers allow (Unicode XID_Continue), or one of extra."""
-    return char in extra or ("a" + char).isidentifier()
+    identifiers allow (Unicode XID_Continue), or one of extra. A code point
+    the running Python's tables leave unassigned counts too: a newer Python
+    may read it as a letter."""
+    return char in extra or ("a" + char).isidentifier() or unicodedata.category(char) == "Cn"
 
 
 def name_end(text, j, extra=""):
