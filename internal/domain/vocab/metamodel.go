@@ -112,7 +112,8 @@ const DecisionLabel = "Owner decision"
 // Citation points a definition, an invariant, a guidance entry, or a
 // relation kind at the Work that states it. Work is required; Chapter,
 // Page, and Section narrow the reference. Page is text because the
-// Reference's front matter is numbered in roman numerals. Illustrative
+// Reference's front matter is numbered in roman numerals. Note says what
+// the cited passage supports when the entry rests on several. Illustrative
 // marks a citation that only illustrates the entry and grounds nothing;
 // a citation of a tier 3 work is always illustrative.
 type Citation struct {
@@ -120,6 +121,7 @@ type Citation struct {
 	Chapter      int
 	Page         string
 	Section      string
+	Note         string
 	Illustrative bool
 }
 
@@ -130,6 +132,7 @@ type Reference struct {
 	Chapter      int
 	Page         string
 	Section      string
+	Note         string
 	Illustrative bool
 }
 
@@ -173,6 +176,13 @@ func (r Reference) String() string {
 	return b.String()
 }
 
+// Inline spells the reference for a sentence that cites it: the
+// authors, the title, the year or date, the narrowing parts and the
+// standing, without the URL.
+func (r Reference) Inline() string {
+	return r.Work.byline() + r.narrowing() + " (" + r.Standing() + ")"
+}
+
 // Keyed spells the reference by its work's bibliography key instead of
 // the work itself, with the narrowing parts and the standing, for a
 // reader that has the bibliography beside it.
@@ -190,6 +200,9 @@ func (r Reference) narrowing() string {
 	}
 	if r.Section != "" {
 		b.WriteString(", " + r.Section)
+	}
+	if r.Note != "" {
+		b.WriteString(", " + r.Note)
 	}
 	return b.String()
 }
@@ -227,7 +240,29 @@ func (m MetaModel) Resolve(c Citation) (Reference, bool) {
 	if !ok {
 		return Reference{}, false
 	}
-	return Reference{Work: w, Chapter: c.Chapter, Page: c.Page, Section: c.Section, Illustrative: c.Illustrative}, true
+	return Reference{Work: w, Chapter: c.Chapter, Page: c.Page, Section: c.Section, Note: c.Note, Illustrative: c.Illustrative}, true
+}
+
+// Inline spells citations for a sentence that cites them, separated by
+// semicolons: consecutive citations of one work with the same standing
+// become one reference that names the work once, lists each citation's
+// narrowing parts, and ends with the standing.
+func (m MetaModel) Inline(cs []Citation) string {
+	refs := m.References(cs)
+	var spelled []string
+	for i := 0; i < len(refs); {
+		r := refs[i]
+		var b strings.Builder
+		b.WriteString(r.Work.byline())
+		j := i
+		for ; j < len(refs) && refs[j].Work.Key == r.Work.Key && refs[j].Illustrative == r.Illustrative; j++ {
+			b.WriteString(refs[j].narrowing())
+		}
+		b.WriteString(" (" + r.Standing() + ")")
+		spelled = append(spelled, b.String())
+		i = j
+	}
+	return strings.Join(spelled, "; ")
 }
 
 // References resolves citations in order, leaving out any that names an
@@ -685,6 +720,28 @@ func (m MetaModel) ValidateDistillationRules(rules []DistillationRule) error {
 			v.grounded(subject, r.Sources, TierPublished)
 		}
 		v.conventions(subject, r.Rule, r.Conventions)
+	}
+	return errors.Join(v.failures...)
+}
+
+// ValidateSourcedStatements checks the guidance arclint repeats to
+// agents against this meta-model's bibliography as its own guidance is
+// checked: every statement says something and cites at least one work,
+// every citation names a listed work, a tier 3 citation is marked
+// illustrative, and a tier 1 or 2 work grounds the statement.
+func (m MetaModel) ValidateSourcedStatements(statements []SourcedStatement) error {
+	v := &metaModelValidation{model: m}
+	for i, s := range statements {
+		subject := fmt.Sprintf("sourced statement %d", i+1)
+		if strings.TrimSpace(s.Text) == "" {
+			v.failf("%s: text must be non-empty", subject)
+		}
+		if len(s.Sources) == 0 {
+			v.failf("%s: must cite at least one work", subject)
+			continue
+		}
+		v.citations(subject, s.Sources)
+		v.grounded(subject, s.Sources, TierPublished)
 	}
 	return errors.Join(v.failures...)
 }

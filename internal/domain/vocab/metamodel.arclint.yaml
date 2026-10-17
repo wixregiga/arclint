@@ -241,6 +241,37 @@ works:
     url: https://github.com/VaughnVernon/IDDD_Samples
     tier: 1
     verification: fetched
+  # The languages' own references ground only what a sentence says about
+  # a language, such as how Go hides a field; they are official
+  # documentation, ranked tier 2 beside the published authority.
+  go-spec:
+    title: "The Go Programming Language Specification (language version go1.27)"
+    author: The Go Authors
+    date: 2026-05-26
+    url: https://go.dev/ref/spec
+    tier: 2
+    verification: fetched
+  typescript-2-0:
+    title: TypeScript 2.0 release notes
+    author: Microsoft
+    year: 2016
+    url: https://www.typescriptlang.org/docs/handbook/release-notes/typescript-2-0.html
+    tier: 2
+    verification: fetched
+  typescript-handbook-type-compatibility:
+    title: "TypeScript Handbook: Type Compatibility"
+    author: Microsoft
+    date: 2026-10-16
+    url: https://www.typescriptlang.org/docs/handbook/type-compatibility.html
+    tier: 2
+    verification: fetched
+  python-tutorial-classes:
+    title: "The Python Tutorial, 9. Classes (Python 3.15.0)"
+    author: Python Software Foundation
+    date: 2026-10-17
+    url: https://docs.python.org/3/tutorial/classes.html
+    tier: 2
+    verification: fetched
   martin-screaming-architecture:
     title: Screaming Architecture
     author: Robert C. Martin

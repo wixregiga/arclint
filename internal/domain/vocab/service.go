@@ -8,15 +8,44 @@ import (
 // SourcedStatement is guidance arclint repeats word for word at each
 // moment an agent decides where behavior goes, with the works that
 // support it, so every place that states it states the same thing.
+// Sources cite the meta-model's bibliography by key, so the bibliography
+// check covers them and every reader sees each work's standing.
 type SourcedStatement struct {
 	Text    string
-	Sources string
+	Sources []Citation
 }
 
 // String spells the statement with its sources before the final period.
 func (s SourcedStatement) String() string {
-	return strings.TrimSuffix(s.Text, ".") + " (" + s.Sources + ")."
+	return strings.TrimSuffix(s.Text, ".") + " (" + s.Cited() + ")."
 }
+
+// Cited spells the statement's sources for a sentence that cites them:
+// each work once, inline, with the narrowing parts of every consecutive
+// citation of it and its standing.
+func (s SourcedStatement) Cited() string {
+	return DDD().Inline(s.Sources)
+}
+
+// SourcedStatements lists every SourcedStatement arclint repeats, so the
+// bibliography check covers each one.
+func SourcedStatements() []SourcedStatement {
+	return []SourcedStatement{DomainDecides(), ServiceDecides(), MovesBetweenLayers(), SharedMechanism()}
+}
+
+// The bibliography keys of the works the agent-facing guidance cites,
+// and the sections of the Reference it names.
+const (
+	anemicDomainModel          = "fowler-anemic-domain-model"
+	kindsOfLogic               = "stafford-business-logic"
+	goSpec                     = "go-spec"
+	iddSamples                 = "vernon-iddd-samples"
+	layeredArchitectureSection = "Layered Architecture"
+	valueObjectsSection        = "Value Objects"
+	servicesSection            = "Services"
+	sideEffectFreeSection      = "Side-Effect-Free Functions"
+	assertionsSection          = "Assertions"
+)
 
 // DomainDecides says where a decision lives and where its change is
 // made: the domain decides, the application carries the change out and
@@ -26,9 +55,11 @@ func DomainDecides() SourcedStatement {
 	return SourcedStatement{
 		Text: "The domain decides; the application gathers what the decision needs and carries out the change. " +
 			"The application layer holds no business rule: it only coordinates tasks and delegates work to the domain.",
-		Sources: "Evans, DDD Reference 2015, p. 10, Layered Architecture, on isolating the domain; " +
-			"Fowler, AnemicDomainModel, quoting Evans 2003, on no business rules or knowledge; " +
-			"Stafford, Kinds of Business Logic, on application logic",
+		Sources: []Citation{
+			{Work: evansReference, Page: "10", Section: layeredArchitectureSection, Note: "on isolating the domain"},
+			{Work: anemicDomainModel, Note: "quoting Evans 2003, on no business rules or knowledge"},
+			{Work: kindsOfLogic, Note: "on application logic"},
+		},
 	}
 }
 
@@ -56,10 +87,43 @@ func ServiceDecides() SourcedStatement {
 			"Go makes that verdict hard to forge with unexported fields and a zero value that allows nothing, " +
 			"TypeScript with a private constructor and a private field, and Python only by convention, with an underscore-prefixed name. " +
 			"An automated test proves what the domain cannot see, such as a refusal changing nothing on disk.",
-		Sources: "Evans, DDD Reference 2015, p. 12, Value Objects, p. 14, Services, p. 21, Side-Effect-Free Functions, and p. 22, Assertions; " +
-			"The Go Programming Language Specification, Exported identifiers and Struct literals; " +
-			"TypeScript 2.0 release notes, Private and Protected Constructors, and TypeScript Handbook, Type Compatibility; " +
-			"The Python Tutorial, 9.6 Private Variables",
+		Sources: []Citation{
+			{Work: evansReference, Page: "12", Section: valueObjectsSection},
+			{Work: evansReference, Page: "14", Section: servicesSection},
+			{Work: evansReference, Page: "21", Section: sideEffectFreeSection},
+			{Work: evansReference, Page: "22", Section: assertionsSection},
+			{Work: goSpec, Section: "Exported identifiers"},
+			{Work: goSpec, Section: "Struct literals"},
+			{Work: "typescript-2-0", Section: "Private and Protected Constructors"},
+			{Work: "typescript-handbook-type-compatibility", Section: "Private and protected members in classes"},
+			{Work: "python-tutorial-classes", Section: "9.6 Private Variables"},
+		},
+	}
+}
+
+// MovesBetweenLayers is the placement the librarian recommends when a
+// recording or a finding would move code between layers: a pure
+// decision operation in the domain and the gathering and the changes in
+// the application service.
+func MovesBetweenLayers() SourcedStatement {
+	return SourcedStatement{
+		Text: "Then recommend the placement decide-then-carry-out names: a pure decision operation in the domain, values in and verdict out, " +
+			"and the gathering and the changes in the application service.",
+		Sources: []Citation{
+			{Work: evansReference, Page: "10", Section: layeredArchitectureSection},
+			{Work: evansReference, Page: "21", Section: sideEffectFreeSection},
+			{Work: kindsOfLogic},
+		},
+	}
+}
+
+// SharedMechanism is the design move the remediation of a refused
+// import names: a shared mechanism gets a Zone of its own, allowed where
+// it is needed and free of product decisions.
+func SharedMechanism() SourcedStatement {
+	return SourcedStatement{
+		Text:    "A shared mechanism gets a Zone of its own, allowed where it is needed and free of product decisions.",
+		Sources: []Citation{{Work: evansReference, Page: "44", Section: "Cohesive Mechanisms"}},
 	}
 }
 

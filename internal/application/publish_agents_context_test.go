@@ -122,7 +122,9 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 		"4. Implement one complete behavior path through the zones `arclint context` reported",
 		"and implementations own their specific decisions. The domain decides; the application gathers what the decision needs and carries out the change. " +
 			"The application layer holds no business rule: it only coordinates tasks and delegates work to the domain " +
-			"(Evans, DDD Reference 2015, p. 10, Layered Architecture, on isolating the domain; Fowler, AnemicDomainModel, quoting Evans 2003, on no business rules or knowledge; Stafford, Kinds of Business Logic, on application logic).\n5. ",
+			"(Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 10, Layered Architecture, on isolating the domain (tier 1, read); " +
+			"Martin Fowler, AnemicDomainModel (2003-11-25), quoting Evans 2003, on no business rules or knowledge (tier 2, read); " +
+			"Randy Stafford, Service Layer, Kinds of Business Logic (Patterns of Enterprise Application Architecture excerpt) (2002), on application logic (tier 2, read)).\n5. ",
 		"### Commands",
 		"- `arclint agents skill`: write the domain-librarian skill to `.agents/skills/domain-librarian/` for Codex and `.claude/skills/domain-librarian/` for Claude Code when your harness lacks it",
 		"### The recorded domain",
