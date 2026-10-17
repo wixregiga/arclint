@@ -113,7 +113,7 @@ type work struct {
 	URL          string   `yaml:"url"`
 	License      string   `yaml:"license"`
 	Verification string   `yaml:"verification"`
-	Tier         int      `yaml:"tier"`
+	Tier         tier     `yaml:"tier"`
 }
 
 type fact struct {
@@ -203,6 +203,23 @@ type guidance struct {
 	Sources     []citation `yaml:"sources"`
 }
 
+// tier is a work's tier, written as a YAML integer. A float such as 1.9
+// or a quoted "1" is refused rather than converted, so no value outside
+// the published tiers can acquire a tier's authority.
+type tier int
+
+func (t *tier) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind != yaml.ScalarNode || value.ShortTag() != "!!int" {
+		return fmt.Errorf("line %d: tier must be the integer 1, 2, or 3, got %q", value.Line, value.Value)
+	}
+	n, err := strconv.Atoi(value.Value)
+	if err != nil {
+		return fmt.Errorf("line %d: tier must be the integer 1, 2, or 3, got %q", value.Line, value.Value)
+	}
+	*t = tier(n)
+	return nil
+}
+
 // languages is the scalar `all` or a sequence of language names.
 type languages struct {
 	All   bool
@@ -282,7 +299,7 @@ var (
 		"fetched": "VerifiedFetched",
 		"carried": "VerifiedCarried",
 	}
-	tiers = map[int]string{
+	tiers = map[tier]string{
 		1: "TierCanonical",
 		2: "TierPublished",
 		3: "TierPractitioner",
