@@ -44,7 +44,13 @@ func (o origins) follow(dir, module, name string) (string, string) {
 	if m == nil {
 		return "", ""
 	}
-	return qualifiedTarget(m.scope, name, m.facts.walker, 0), path.Dir(file)
+	q := qualifiedTarget(m.scope, name, m.facts.walker, 0)
+	if q == "" || mutates(m, q) {
+		// A module that replaces what it re-exports exports the
+		// replacement.
+		return "", ""
+	}
+	return q, path.Dir(file)
 }
 
 // moduleFile is the repository file a module imported from the directory

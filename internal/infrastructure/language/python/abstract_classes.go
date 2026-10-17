@@ -127,10 +127,14 @@ func libraryChain(q string, from importOrigin, dir string) []string {
 		}
 		next := ""
 		// Each dot from the right splits the name into a module and the
-		// names looked up in it: ..ABC is ABC in the package ., and
-		// facade.abstract.ABC is abstract in facade, then its ABC.
-		for at := strings.LastIndex(q, "."); at > 0; at = strings.LastIndex(q[:at], ".") {
+		// names looked up in it: facade.abstract.ABC is abstract in
+		// facade, then its ABC, and .ABC is ABC in the package . itself.
+		lead := len(q) - len(strings.TrimLeft(q, "."))
+		for _, at := range splitPoints(q, lead) {
 			module, rest := q[:at], q[at+1:]
+			if at < lead {
+				module, rest = q[:lead], q[lead:]
+			}
 			name, attributes, _ := strings.Cut(rest, ".")
 			followed, moduleDir := from.follow(dir, module, name)
 			if followed == "" {
@@ -147,16 +151,38 @@ func libraryChain(q string, from importOrigin, dir string) []string {
 	return nil
 }
 
-// replaced reports whether the file assigns a qualified name, as
-// abc.ABC = object does.
+// replaced reports whether the file assigns a qualified name or a
+// prefix it is reached through: abc.ABC = object replaces abc.ABC, and
+// facade.abstract = x replaces facade.abstract.ABC.
 func replaced(df *declarationFacts, q string) bool {
-	w := df.walker
-	for _, m := range df.module.mutations {
-		if qualifiedTarget(m.scope, m.node.Text(w.src), w, 0) == q {
+	return mutates(df.module, q)
+}
+
+// mutates reports whether a module assigns a qualified name or a prefix
+// of it.
+func mutates(m *pyModule, q string) bool {
+	w := m.facts.walker
+	for _, mutation := range m.mutations {
+		target := qualifiedTarget(mutation.scope, mutation.node.Text(w.src), w, 0)
+		if target != "" && (q == target || strings.HasPrefix(q, target+".")) {
 			return true
 		}
 	}
 	return false
+}
+
+// splitPoints lists, right to left, the dots that may separate a module
+// from the names in it, and the end of the leading dots of a relative
+// name, where the package itself is the module.
+func splitPoints(q string, lead int) []int {
+	var out []int
+	for at := strings.LastIndex(q, "."); at >= lead; at = strings.LastIndex(q[:at], ".") {
+		out = append(out, at)
+	}
+	if lead > 0 {
+		out = append(out, lead-1)
+	}
+	return out
 }
 
 // unparenthesized strips the parentheses around an expression: (ABC) is
