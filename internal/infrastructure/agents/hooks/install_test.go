@@ -529,6 +529,16 @@ func TestStatusNamesTheHooksAPartialFileStillRuns(t *testing.T) {
 	if problems := strings.Join(statusOf(t, installer)["claude user"].Problems, "\n"); strings.Contains(problems, "still run") || !strings.Contains(problems, "which does not exist") {
 		t.Fatalf("problems once the binary is gone:\n%s", problems)
 	}
+	// A directory in its place runs nothing either.
+	if err := os.Mkdir(installer.binary, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if problems := strings.Join(statusOf(t, installer)["claude user"].Problems, "\n"); strings.Contains(problems, "still run") || !strings.Contains(problems, "which is not a file") {
+		t.Fatalf("problems with a directory in place of the binary:\n%s", problems)
+	}
+	if err := os.Remove(installer.binary); err != nil {
+		t.Fatal(err)
+	}
 	// disableAllHooks turns off every hook Claude Code reads, so none is
 	// said to run, wherever it is set.
 	shared := filepath.Join(root, ".claude", "settings.json")
