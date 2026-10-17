@@ -383,3 +383,13 @@ type libraryOnly struct{}
 func (libraryOnly) repository(string, string) bool { return false }
 
 func (libraryOnly) follow(string, string, string) (string, string) { return "", "" }
+
+// TestAbstractMarkSkipsFactsThatDidNotParse leaves facts without a parse,
+// such as those of a build without the Python grammar, unmarked.
+func TestAbstractMarkSkipsFactsThatDidNotParse(t *testing.T) {
+	df := &declarationFacts{ParseError: "grammar \"python\" is not embedded in this build"}
+	markAbstractClasses(df, libraryOnly{}, ".")
+	if len(df.Decls) != 0 {
+		t.Fatalf("unparsed facts gained declarations: %+v", df.Decls)
+	}
+}

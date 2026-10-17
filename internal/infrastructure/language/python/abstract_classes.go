@@ -27,10 +27,14 @@ const abstractMetaclass = "abc.ABCMeta"
 // it. An import through a module of the repository is followed to what
 // that module imports, so a re-export of abc.ABC is abc.ABC, while a
 // module of the repository that only shares the library's name is not
-// the library. A file that assigns the library name itself, abc.ABC =
-// object, has replaced it. A class that inherits abstractness from a
+// the library. A file that assigns any name on that way, abc.ABC =
+// object or facade.ABC = object, has replaced it. A class that inherits abstractness from a
 // repository base without stating it is not marked.
 func markAbstractClasses(df *declarationFacts, from importOrigin, dir string) {
+	if df.ParseError != "" || df.module == nil {
+		// Facts that did not parse hold no classes to mark.
+		return
+	}
 	for _, c := range df.module.declared {
 		if !declaresAbstract(df, c, from, dir) {
 			continue
@@ -77,11 +81,16 @@ func declaresAbstract(df *declarationFacts, c *pyClass, from importOrigin, dir s
 		default:
 			return ""
 		}
-		q := libraryName(qualifiedTarget(c.header, n.Text(w.src), w, 0), from, dir)
-		if q == "" || replaced(df, q) {
+		chain := libraryChain(qualifiedTarget(c.header, n.Text(w.src), w, 0), from, dir)
+		if len(chain) == 0 {
 			return ""
 		}
-		return q
+		for _, q := range chain {
+			if replaced(df, q) {
+				return ""
+			}
+		}
+		return chain[len(chain)-1]
 	}
 	for i := 0; i < bases.NamedChildCount(); i++ {
 		arg := bases.NamedChild(i)
@@ -100,23 +109,45 @@ func declaresAbstract(df *declarationFacts, c *pyClass, from importOrigin, dir s
 	return false
 }
 
-// libraryName follows a qualified name through the repository's modules
-// to the library name it reaches; "" when it ends in the repository.
-func libraryName(q string, from importOrigin, dir string) string {
-	for hop := 0; hop < maxAliasHops; hop++ {
-		module, name, ok := cutLast(q, ".")
-		if !ok {
-			return ""
+// libraryChain follows a qualified name through the repository's
+// modules to the library name it reaches, and lists every name on the
+// way, the library name last: facade.abstract.ABC, where facade imports
+// abc as abstract, is facade.abstract.ABC, then abc.ABC. The longest
+// prefix that is a module of the repository is the module the rest is
+// looked up in. Nil when the name ends in the repository or cannot be
+// followed.
+func libraryChain(q string, from importOrigin, dir string) []string {
+	var chain []string
+	for hop := 0; q != "" && hop < maxAliasHops; hop++ {
+		chain = append(chain, q)
+		relative := strings.HasPrefix(q, ".")
+		top, _, dotted := strings.Cut(strings.TrimLeft(q, "."), ".")
+		if !dotted && !relative || !relative && !from.repository(dir, top) {
+			return chain
 		}
-		if !from.repository(dir, module) {
-			return q
+		next := ""
+		// Each dot from the right splits the name into a module and the
+		// names looked up in it: ..ABC is ABC in the package ., and
+		// facade.abstract.ABC is abstract in facade, then its ABC.
+		for at := strings.LastIndex(q, "."); at > 0; at = strings.LastIndex(q[:at], ".") {
+			module, rest := q[:at], q[at+1:]
+			name, attributes, _ := strings.Cut(rest, ".")
+			followed, moduleDir := from.follow(dir, module, name)
+			if followed == "" {
+				continue
+			}
+			next, dir = followed, moduleDir
+			if attributes != "" {
+				next += "." + attributes
+			}
+			break
 		}
-		q, dir = from.follow(dir, module, name)
+		q = next
 	}
-	return ""
+	return nil
 }
 
-// replaced reports whether the file assigns the library name itself, as
+// replaced reports whether the file assigns a qualified name, as
 // abc.ABC = object does.
 func replaced(df *declarationFacts, q string) bool {
 	w := df.walker
@@ -135,13 +166,4 @@ func unparenthesized(n *gotreesitter.Node, w *pyWalker) *gotreesitter.Node {
 		n = n.NamedChild(0)
 	}
 	return n
-}
-
-// cutLast splits s around the last sep: abc.ABC is abc and ABC.
-func cutLast(s, sep string) (string, string, bool) {
-	i := strings.LastIndex(s, sep)
-	if i < 0 {
-		return s, "", false
-	}
-	return s[:i], s[i+len(sep):], true
 }

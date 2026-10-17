@@ -822,13 +822,20 @@ func TestAbstractMarkReachesTheLibrary(t *testing.T) {
 		"reexported.py":        "from shared.bases import ABC\n\n\nclass Encrypter(ABC):\n    pass\n",
 		"package.py":           "from shared import Base\n\n\nclass Encrypter(Base):\n    pass\n",
 		"replaced.py":          "import abc\n\nabc.ABC = object\n\n\nclass Encrypter(abc.ABC):\n    pass\n",
+		"facade.py":            "import abc as abstract\nfrom abc import ABC\n",
+		"module_binding.py":    "from facade import abstract\n\n\nclass Encrypter(abstract.ABC):\n    pass\n",
+		"facade_replaced.py":   "import facade\n\nfacade.ABC = object\n\n\nclass Encrypter(facade.ABC):\n    pass\n",
+		"facade_kept.py":       "import facade\n\n\nclass Encrypter(facade.ABC):\n    pass\n",
 	})
 	for _, requested := range [][]rule.Fact{{rule.FactDeclarations}, {rule.FactDeclarations, rule.FactFieldTypes}} {
 		facts, err := NewProducer().Facts(root, files, requested)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for file, want := range map[string]bool{"local.py": false, "library.py": true, "reexported.py": true, "package.py": true, "replaced.py": false} {
+		for file, want := range map[string]bool{
+			"local.py": false, "library.py": true, "reexported.py": true, "package.py": true, "replaced.py": false,
+			"module_binding.py": true, "facade_replaced.py": false, "facade_kept.py": true,
+		} {
 			for _, d := range facts[file].Declarations {
 				if d.Kind == declClass && d.Name == "Encrypter" && d.Abstract != want {
 					t.Errorf("%v: %s Encrypter abstract = %v, want %v", requested, file, d.Abstract, want)
