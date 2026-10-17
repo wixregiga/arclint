@@ -2073,7 +2073,7 @@ func checkServiceRecordsAssertion(r rule.Rule, subject rule.Subject, cc contextC
 		file, line := cc.recordAnchor(s.Line)
 		v, err := newViolation(r, subject, file, line,
 			fmt.Sprintf("domain service %s of context %s records no assertion: what does its operation guarantee?", s.Name, cc.ctx.Name),
-			fmt.Sprintf("record the guarantee as an assertion on its operation: arclint domain define assertion <key> --owner %s --on <operation> --statement \"<the guarantee>\" --context %s", s.Name, cc.ctx.Name))
+			fmt.Sprintf("record the guarantee in the domain expert's words, through the domain-librarian skill: arclint domain define assertion <key> --owner %s --on <operation> --statement \"<the guarantee>\" --context %s", s.Name, cc.ctx.Name))
 		if err != nil {
 			return nil, err
 		}
