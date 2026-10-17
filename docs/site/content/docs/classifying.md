@@ -36,7 +36,7 @@ A consistency rule that must hold whenever the objects it constrains can be obse
 | `invariant/owned-by-aggregate-or-value-object` | An invariant is owned by exactly one recorded aggregate or value object; an invariant written under a member entity, an event, or under nothing, is rejected. [[8]](#ref-8)[[1]](#ref-1) | when the domain file loads |
 | `invariant/keyed-within-owner` | Every invariant carries a kebab-case key, unique within its owner and distinct from the owner's assertion keys; the parser rejects a key recorded twice under one owner, and the loader rejects an empty key or an empty statement. [[1]](#ref-1)[[5]](#ref-5) | when the domain file loads |
 | `invariant/key-names-the-rule` | An invariant's key names the rule it protects, in the ubiquitous language; a key that names only the act of checking (validate, check, verify, is-valid, check-rules, ensure, assert, guard) is rejected, because a name that describes the means says nothing about the effect. [[9]](#ref-9)[[10]](#ref-10) | when the domain file loads |
-| `invariant/enforced-at-every-mutation` | Every constructor and every command of the root calls the ensure method of the aggregate's invariant, so the invariant is evaluated at the completion of every state-mutating operation and a violation fails the operation; a root with no constructor has no door at which to enforce it. [[8]](#ref-8)[[11]](#ref-11)[[12]](#ref-12) | by `arclint check` |
+| `invariant/enforced-at-every-mutation` | Every constructor and every command of the root calls the ensure method of the aggregate's invariant, so the invariant is evaluated at the completion of every state-mutating operation and a violation fails the operation; a root with no constructor has no door at which to enforce it. [[8]](#ref-8)[[11]](#ref-11) | by `arclint check` |
 
 - **Fundamental.** Model true invariants in consistency boundaries; a rule that can tolerate a delay is not an invariant of the aggregate and belongs to eventual consistency outside it. [[8]](#ref-8)[[5]](#ref-5)[[6]](#ref-6)
 - Report a refused operation under the name of the rule that refused it, so that the interface tells which rule failed without a trace through the implementation. [[9]](#ref-9)
@@ -44,7 +44,7 @@ A consistency rule that must hold whenever the objects it constrains can be obse
 
 ### Assertion
 
-A stated post-condition of an operation or invariant of a class or aggregate, made explicit so that the effect of an operation can be known without tracing its implementation. Assertions define the contracts of services and entity modifiers and the invariants on aggregates; where they cannot be coded directly, they are written as automated unit tests. [[1]](#ref-1)[[13]](#ref-13)[[14]](#ref-14)
+A stated post-condition of an operation or invariant of a class or aggregate, made explicit so that the effect of an operation can be known without tracing its implementation. Assertions define the contracts of services and entity modifiers and the invariants on aggregates; where they cannot be coded directly, they are written as automated unit tests. [[1]](#ref-1)[[12]](#ref-12)[[13]](#ref-13)
 
 **Recorded under** `assertions`. A map keyed by the assertion's name, recorded under the aggregate whose command it constrains or under the domain service whose operation it constrains; the assertions of a service are its contract.
 
@@ -58,14 +58,14 @@ A stated post-condition of an operation or invariant of a class or aggregate, ma
 |---|---|---|
 | `assertion/names-owner-operation-and-check` | An assertion carries a statement, names the operation it constrains, and carries a key naming the method that checks it. [[1]](#ref-1) | when the domain file loads |
 | `assertion/owned-by-an-aggregate-or-service` | An assertion is recorded under one aggregate or one domain service; an assertion under a value object, a member entity, or nothing is rejected. [[1]](#ref-1) | when the domain file loads |
-| `assertion/checked-by-its-operation` | The owner of an assertion, the aggregate's root or the domain service, declares both the operation the assertion names and the checking method (assert followed by the key in the language's method case), and the operation calls the checking method. [[15]](#ref-15)[[1]](#ref-1) | by `arclint check` |
+| `assertion/checked-by-its-operation` | The owner of an assertion, the aggregate's root or the domain service, declares both the operation the assertion names and the checking method (assert followed by the key in the language's method case), and the operation calls the checking method. [[14]](#ref-14)[[1]](#ref-1) | by `arclint check` |
 
 - **Fundamental.** State post-conditions of operations and invariants of classes and aggregates explicitly; where they cannot be coded directly, write automated unit tests for them. [[1]](#ref-1)
-- Seek models with coherent sets of concepts that lead a developer to infer the intended assertions. [[1]](#ref-1)[[16]](#ref-16)
+- Seek models with coherent sets of concepts that lead a developer to infer the intended assertions. [[1]](#ref-1)[[15]](#ref-15)
 
 ### Specification
 
-A predicate-like value object that tells whether a candidate object matches some criteria, separating the statement of what kind of objects can be selected from the object that does the selecting. It answers through one operation, isSatisfiedBy, and can be combined with other specifications. [[17]](#ref-17)[[2]](#ref-2)
+A predicate-like value object that tells whether a candidate object matches some criteria, separating the statement of what kind of objects can be selected from the object that does the selecting. It answers through one operation, isSatisfiedBy, and can be combined with other specifications. [[16]](#ref-16)[[2]](#ref-2)
 
 **Recorded under** `specifications`.
 
@@ -76,7 +76,7 @@ A predicate-like value object that tells whether a candidate object matches some
 
 | Rule | What holds | Checked |
 |---|---|---|
-| `specification/satisfaction-method` | A specification is a declared type carrying a satisfaction method (SatisfiedBy, satisfiedBy, or satisfied_by). [[17]](#ref-17) | by `arclint check` |
+| `specification/satisfaction-method` | A specification is a declared type carrying a satisfaction method (SatisfiedBy, satisfiedBy, or satisfied_by). [[16]](#ref-16) | by `arclint check` |
 
 ## Behavior: which operation carries it
 
@@ -84,23 +84,23 @@ A rule is checked by an operation. These are the operations a model and the appl
 
 ### Command
 
-An operation of an aggregate root that changes the state of that one aggregate and returns no domain information, named for what it does in the ubiquitous language. It is never a setter, and it is never the request a use case receives. [[18]](#ref-18)[[19]](#ref-19)
+An operation of an aggregate root that changes the state of that one aggregate and returns no domain information, named for what it does in the ubiquitous language. It is never a setter, and it is never the request a use case receives. [[17]](#ref-17)[[18]](#ref-18)
 
 **Recording:** A command has no entry of its own; its name is the `on` of the assertions recorded under its aggregate.
 
-- **Fundamental.** Keep commands very simple and let them return no domain information; the logic they rely on belongs in queries, which have no side effects. [[18]](#ref-18)
+- **Fundamental.** Keep commands very simple and let them return no domain information; the logic they rely on belongs in queries, which have no side effects. [[17]](#ref-17)
 
 ### Query
 
-An operation of an aggregate or a value object that returns a result and changes no observable state; Evans calls it a side-effect-free function. No operation is both a query and a command. [[18]](#ref-18)[[19]](#ref-19)
+An operation of an aggregate or a value object that returns a result and changes no observable state; Evans calls it a side-effect-free function. No operation is both a query and a command. [[17]](#ref-17)[[18]](#ref-18)
 
 **Recording:** A query is not recorded; a predicate experts name and pass around is recorded as a specification instead.
 
-- **Fundamental.** Place as much of the logic as possible into queries, operations that return results with no observable side effects. [[18]](#ref-18)
+- **Fundamental.** Place as much of the logic as possible into queries, operations that return results with no observable side effects. [[17]](#ref-17)
 
 ### Domain Service
 
-A standalone operation in the domain for a significant process or transformation that is not a natural responsibility of an entity or value object, given a name that is part of the ubiquitous language and a contract stated as assertions. It makes a business decision that no one aggregate or value can make alone; it may read through repositories, but it never commits and never publishes. [[15]](#ref-15)[[20]](#ref-20)[[21]](#ref-21)[[22]](#ref-22)
+A standalone operation in the domain for a significant process or transformation that is not a natural responsibility of an entity or value object, given a name that is part of the ubiquitous language and a contract stated as assertions. It makes a business decision that no one aggregate or value can make alone; it may read through repositories, but it never commits and never publishes. [[14]](#ref-14)[[19]](#ref-19)[[20]](#ref-20)[[21]](#ref-21)
 
 **Recorded under** `services`. A map keyed by the service's name; its assertions are its contract, each on one operation of the service.
 
@@ -112,27 +112,27 @@ A standalone operation in the domain for a significant process or transformation
 
 | Rule | What holds | Checked |
 |---|---|---|
-| `domain_service/declared` | A recorded service is a declared type spelled with the service's name in the language's type case. [[15]](#ref-15) | by `arclint check` |
-| `domain_service/not-held-by-aggregates` | No aggregate root or member entity declares a field whose type is a recorded domain service; a service reaches an aggregate only as a parameter of one command. [[23]](#ref-23)[[24]](#ref-24) | by `arclint check` |
+| `domain_service/declared` | A recorded service is a declared type spelled with the service's name in the language's type case. [[14]](#ref-14) | by `arclint check` |
+| `domain_service/not-held-by-aggregates` | No aggregate root or member entity declares a field whose type is a recorded domain service; a service reaches an aggregate only as a parameter of one command. [[22]](#ref-22)[[23]](#ref-23) | by `arclint check` |
 
-- **Fundamental.** Try the thing first; a service exists only for a business decision that no entity or value object naturally owns, and the more behavior the services hold, the less the model does. [[15]](#ref-15)[[3]](#ref-3)
-- **Fundamental.** Name the service and its operations for their effect and purpose in the ubiquitous language, never for the means; a name ending in Manager, Helper, Handler, or Processor names no effect. [[15]](#ref-15)[[9]](#ref-9)
-- A service holds collaborators (repositories, other services, a clock) and never state that survives an invocation; Evans no longer holds statelessness to be necessary, and Vernon's services hold repositories. [[20]](#ref-20)[[25]](#ref-25)[[26]](#ref-26)
-- Use a domain service for an operation that spans aggregates; look up what it needs ahead of invoking aggregate behavior, and pass a service into a command only for a dependency resolution the aggregate itself must double-dispatch. [[25]](#ref-25)[[27]](#ref-27)
+- **Fundamental.** Try the thing first; a service exists only for a business decision that no entity or value object naturally owns, and the more behavior the services hold, the less the model does. [[14]](#ref-14)[[3]](#ref-3)
+- **Fundamental.** Name the service and its operations for their effect and purpose in the ubiquitous language, never for the means; a name ending in Manager, Helper, Handler, or Processor names no effect. [[14]](#ref-14)[[9]](#ref-9)
+- A service holds collaborators (repositories, other services, a clock) and never state that survives an invocation; Evans no longer holds statelessness to be necessary, and Vernon's services hold repositories. [[19]](#ref-19)[[24]](#ref-24)[[25]](#ref-25)
+- Use a domain service for an operation that spans aggregates; look up what it needs ahead of invoking aggregate behavior, and pass a service into a command only for a dependency resolution the aggregate itself must double-dispatch. [[24]](#ref-24)[[26]](#ref-26)
 
 ### Application Service
 
-An operation of the application layer that runs one use case flow: it translates the request into domain values, fetches aggregates through repositories, invokes their commands or one domain service, commits, and publishes what happened, holding application logic that is not business logic and never the domain rules themselves. Use case is the same thing seen from the request; the two words are not two kinds. [[28]](#ref-28)[[29]](#ref-29)[[3]](#ref-3)[[30]](#ref-30)[[31]](#ref-31)
+An operation of the application layer that runs one use case flow: it translates the request into domain values, fetches aggregates through repositories, invokes their commands or one domain service, commits, and publishes what happened, holding application logic that is not business logic and never the domain rules themselves. Use case is the same thing seen from the request; the two words are not two kinds. [[27]](#ref-27)[[28]](#ref-28)[[3]](#ref-3)[[29]](#ref-29)[[30]](#ref-30)
 
 **Recording:** Application services are the use cases of the application Zone in rules.arclint.yaml; the domain file does not record them, and a business rule found in one is a finding for the librarian, not an entry.
 
-- **Fundamental.** Keep it thin; it coordinates tasks and delegates work to domain objects, contains no business rules or knowledge, and holds no state reflecting the business situation. If deleting every step it takes would lose a business decision, that decision belongs to an aggregate or a domain service. [[3]](#ref-3)[[28]](#ref-28)
+- **Fundamental.** Keep it thin; it coordinates tasks and delegates work to domain objects, contains no business rules or knowledge, and holds no state reflecting the business situation. If deleting every step it takes would lose a business decision, that decision belongs to an aggregate or a domain service. [[3]](#ref-3)[[27]](#ref-27)
 - Notifying, exporting, retrying, and transaction control are application logic, sometimes called workflow logic; they belong here and are never recorded as domain rules. [[4]](#ref-4)
-- Name the use case for the action it performs, and name its input type for the request (ProvisionTenantRequest), never with the word command, which names a state-changing operation of a root. [[30]](#ref-30)[[19]](#ref-19)
+- Name the use case for the action it performs, and name its input type for the request (ProvisionTenantRequest), never with the word command, which names a state-changing operation of a root. [[29]](#ref-29)[[18]](#ref-18)
 
 ### Domain Event
 
-A full-fledged part of the domain model representing something that happened in the domain that domain experts care about, as distinct from a system event. It is ordinarily immutable, being a record of the past, and typically carries the time it occurred and the identities of the entities involved. [[32]](#ref-32)[[33]](#ref-33)[[34]](#ref-34)
+A full-fledged part of the domain model representing something that happened in the domain that domain experts care about, as distinct from a system event. It is ordinarily immutable, being a record of the past, and typically carries the time it occurred and the identities of the entities involved. [[31]](#ref-31)[[32]](#ref-32)[[33]](#ref-33)
 
 **Recorded under** `events`. A map keyed by the event's name.
 
@@ -144,14 +144,14 @@ A full-fledged part of the domain model representing something that happened in 
 
 | Rule | What holds | Checked |
 |---|---|---|
-| `domain_event/raised-by-an-aggregate` | An event that records what raises it names an aggregate of its own context; an event raised by a value object, a service, or a name the context does not record is rejected. [[32]](#ref-32)[[35]](#ref-35) | when the domain file loads |
-| `domain_event/declared` | A recorded event is a declared type spelled with the event's name in the language's type case. [[32]](#ref-32) | by `arclint check` |
-| `domain_event/no-setters` | An event declares no method whose name begins with set; a record of the past is not edited. [[32]](#ref-32)[[33]](#ref-33)[[36]](#ref-36) | by `arclint check` |
-| `domain_event/occurrence-time` | An event declares a field carrying the time it occurred. [[32]](#ref-32)[[33]](#ref-33)[[36]](#ref-36) | not yet; waits for the `field-declarations` milestone |
-| `domain_event/immutable` | Every field of an event is immutable after construction. [[32]](#ref-32)[[33]](#ref-33) | not yet; waits for the `field-mutability` milestone |
+| `domain_event/raised-by-an-aggregate` | An event that records what raises it names an aggregate of its own context; an event raised by a value object, a service, or a name the context does not record is rejected. [[31]](#ref-31)[[34]](#ref-34) | when the domain file loads |
+| `domain_event/declared` | A recorded event is a declared type spelled with the event's name in the language's type case. [[31]](#ref-31) | by `arclint check` |
+| `domain_event/no-setters` | An event declares no method whose name begins with set; a record of the past is not edited. [[31]](#ref-31)[[32]](#ref-32)[[35]](#ref-35) | by `arclint check` |
+| `domain_event/occurrence-time` | An event declares a field carrying the time it occurred. [[31]](#ref-31)[[32]](#ref-32)[[35]](#ref-35) | not yet; waits for the `field-declarations` milestone |
+| `domain_event/immutable` | Every field of an event is immutable after construction. [[31]](#ref-31)[[32]](#ref-32) | not yet; waits for the `field-mutability` milestone |
 
-- Name an event in the past tense for what happened, and name a time point clearly for which time it is, occurrence or notice. [[33]](#ref-33)[[37]](#ref-37)
-- **Fundamental.** Ignore irrelevant domain activity; make explicit the events the domain experts want to track or be notified of, or which are associated with state change in other model objects. [[32]](#ref-32)
+- Name an event in the past tense for what happened, and name a time point clearly for which time it is, occurrence or notice. [[32]](#ref-32)[[36]](#ref-36)
+- **Fundamental.** Ignore irrelevant domain activity; make explicit the events the domain experts want to track or be notified of, or which are associated with state change in other model objects. [[31]](#ref-31)
 
 ## Where each rule lives
 
@@ -167,7 +167,7 @@ The example column quotes the worked example's `domain.arclint.yaml`; the Go and
 | delivery policy: notify, export, retry, commit | not recorded | application service, or a subscriber to a domain event | plain code | publishing the events after the unit of work | `Execute` | `execute` |  |
 | programming guard: a nil check, a parse failure | not recorded | the code that needs it | plain code |  |  |  |  |
 
-The application service is the one place a rule never lives: keep it thin; it coordinates tasks and delegates work to domain objects, contains no business rules or knowledge, and holds no state reflecting the business situation. If deleting every step it takes would lose a business decision, that decision belongs to an aggregate or a domain service. [[3]](#ref-3)[[28]](#ref-28)
+The application service is the one place a rule never lives: keep it thin; it coordinates tasks and delegates work to domain objects, contains no business rules or knowledge, and holds no state reflecting the business situation. If deleting every step it takes would lose a business decision, that decision belongs to an aggregate or a domain service. [[3]](#ref-3)[[27]](#ref-27)
 
 ## Provisioning a tenant, top to bottom
 
@@ -679,20 +679,20 @@ When the input does not say where a rule lives, the domain-librarian skill asks 
 
 | Question | Decides | Defined by |
 |---|---|---|
-| Does <X> have an identity that survives attribute changes, or are two <X> with the same values interchangeable? | entity vs value_object | Entity [[38]](#ref-38)[[20]](#ref-20)[[39]](#ref-39)<br>Value Object [[40]](#ref-40)[[41]](#ref-41)[[20]](#ref-20)[[42]](#ref-42) |
-| What is <Identity> made of? If any part can change while the <X> stays the same, the identity cannot be that part. | identity vs attribute (entity) | Entity [[38]](#ref-38)[[20]](#ref-20)[[39]](#ref-39) |
+| Does <X> have an identity that survives attribute changes, or are two <X> with the same values interchangeable? | entity vs value_object | Entity [[37]](#ref-37)[[19]](#ref-19)[[38]](#ref-38)<br>Value Object [[39]](#ref-39)[[40]](#ref-40)[[19]](#ref-19)[[41]](#ref-41) |
+| What is <Identity> made of? If any part can change while the <X> stays the same, the identity cannot be that part. | identity vs attribute (entity) | Entity [[37]](#ref-37)[[19]](#ref-19)[[38]](#ref-38) |
 | What must never be violated about <X>, even for an instant? | invariants and owner |  |
-| Does <rule> hold even while nothing runs, or only when <operation> runs? | invariant vs assertion | Invariant [[8]](#ref-8)[[1]](#ref-1)[[5]](#ref-5)[[6]](#ref-6)<br>Assertion [[1]](#ref-1)[[13]](#ref-13)[[14]](#ref-14) |
-| Which operation guarantees <rule>, and who performs it: one aggregate, or a process that spans aggregates? | assertion owner (aggregate vs domain_service) | Aggregate [[8]](#ref-8)[[43]](#ref-43)[[44]](#ref-44)[[45]](#ref-45)[[46]](#ref-46)<br>Domain Service [[15]](#ref-15)[[20]](#ref-20)[[21]](#ref-21)[[22]](#ref-22) |
-| Does <X> change anything, or does it only answer a question? | command vs query | Command [[18]](#ref-18)[[19]](#ref-19)<br>Query [[18]](#ref-18)[[19]](#ref-19) |
-| Can one <Aggregate> do <X> with what it already holds, or does <X> need another aggregate or knowledge none of them holds? | command vs domain_service | Command [[18]](#ref-18)[[19]](#ref-19)<br>Domain Service [[15]](#ref-15)[[20]](#ref-20)[[21]](#ref-21)[[22]](#ref-22) |
-| Is <X> a result the business names, or a step the software takes to deliver one? | domain_service vs application_service | Domain Service [[15]](#ref-15)[[20]](#ref-20)[[21]](#ref-21)[[22]](#ref-22)<br>Application Service [[28]](#ref-28)[[29]](#ref-29)[[3]](#ref-3)[[30]](#ref-30)[[31]](#ref-31) |
-| Do experts pass this predicate around as a thing they name, rather than as a rule that simply holds? | specification vs invariant or assertion | Specification [[17]](#ref-17)[[2]](#ref-2)<br>Invariant [[8]](#ref-8)[[1]](#ref-1)[[5]](#ref-5)[[6]](#ref-6)<br>Assertion [[1]](#ref-1)[[13]](#ref-13)[[14]](#ref-14) |
+| Does <rule> hold even while nothing runs, or only when <operation> runs? | invariant vs assertion | Invariant [[8]](#ref-8)[[1]](#ref-1)[[5]](#ref-5)[[6]](#ref-6)<br>Assertion [[1]](#ref-1)[[12]](#ref-12)[[13]](#ref-13) |
+| Which operation guarantees <rule>, and who performs it: one aggregate, or a process that spans aggregates? | assertion owner (aggregate vs domain_service) | Aggregate [[8]](#ref-8)[[42]](#ref-42)[[43]](#ref-43)[[44]](#ref-44)[[45]](#ref-45)<br>Domain Service [[14]](#ref-14)[[19]](#ref-19)[[20]](#ref-20)[[21]](#ref-21) |
+| Does <X> change anything, or does it only answer a question? | command vs query | Command [[17]](#ref-17)[[18]](#ref-18)<br>Query [[17]](#ref-17)[[18]](#ref-18) |
+| Can one <Aggregate> do <X> with what it already holds, or does <X> need another aggregate or knowledge none of them holds? | command vs domain_service | Command [[17]](#ref-17)[[18]](#ref-18)<br>Domain Service [[14]](#ref-14)[[19]](#ref-19)[[20]](#ref-20)[[21]](#ref-21) |
+| Is <X> a result the business names, or a step the software takes to deliver one? | domain_service vs application_service | Domain Service [[14]](#ref-14)[[19]](#ref-19)[[20]](#ref-20)[[21]](#ref-21)<br>Application Service [[27]](#ref-27)[[28]](#ref-28)[[3]](#ref-3)[[29]](#ref-29)[[30]](#ref-30) |
+| Do experts pass this predicate around as a thing they name, rather than as a rule that simply holds? | specification vs invariant or assertion | Specification [[16]](#ref-16)[[2]](#ref-2)<br>Invariant [[8]](#ref-8)[[1]](#ref-1)[[5]](#ref-5)[[6]](#ref-6)<br>Assertion [[1]](#ref-1)[[12]](#ref-12)[[13]](#ref-13) |
 | Is this a property of the value itself (constructor) or of the cluster that must stay consistent on every command? | value integrity vs cluster invariant |  |
 | Would you say this to an expert who never saw the language? | domain contract vs programming-only guard |  |
 | When <X> changes, what else must change in the same transaction? | aggregate boundary |  |
-| Does the business care about <X>'s lifecycle (created, changed, closed)? | entity vs value_object vs domain_event | Entity [[38]](#ref-38)[[20]](#ref-20)[[39]](#ref-39)<br>Value Object [[40]](#ref-40)[[41]](#ref-41)[[20]](#ref-20)[[42]](#ref-42)<br>Domain Event [[32]](#ref-32)[[33]](#ref-33)[[34]](#ref-34) |
-| Which people/teams use the term <X>, and do they mean the same thing? | bounded_context assignment | Bounded Context [[47]](#ref-47)[[48]](#ref-48)[[49]](#ref-49)[[50]](#ref-50) |
+| Does the business care about <X>'s lifecycle (created, changed, closed)? | entity vs value_object vs domain_event | Entity [[37]](#ref-37)[[19]](#ref-19)[[38]](#ref-38)<br>Value Object [[39]](#ref-39)[[40]](#ref-40)[[19]](#ref-19)[[41]](#ref-41)<br>Domain Event [[31]](#ref-31)[[32]](#ref-32)[[33]](#ref-33) |
+| Which people/teams use the term <X>, and do they mean the same thing? | bounded_context assignment | Bounded Context [[46]](#ref-46)[[47]](#ref-47)[[48]](#ref-48)[[49]](#ref-49) |
 
 ### When the input conflicts with the record
 
@@ -742,42 +742,41 @@ The rules the skill applies to turn what an expert said into recorded terms.
 9. <span id="ref-9"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 20, Intention-Revealing Interfaces <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
 10. <span id="ref-10"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 4, Ubiquitous Language <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
 11. <span id="ref-11"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 10, p. 354
-12. <span id="ref-12"></span>Vaughn Vernon, Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-388, index pp. 589-612) (2013), p. 354, Rule: Model True Invariants in Consistency Boundaries <https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf>
-13. <span id="ref-13"></span>Eric Evans, Domain-Driven Design: Tackling Complexity in the Heart of Software (2003), ch. 10, p. 255
-14. <span id="ref-14"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 5, p. 208
-15. <span id="ref-15"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 14, Services <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
-16. <span id="ref-16"></span>Eric Evans, Domain-Driven Design: Tackling Complexity in the Heart of Software (2003), ch. 10, p. 256
-17. <span id="ref-17"></span>Eric Evans and Martin Fowler, Specifications (1997), p. 2 <https://martinfowler.com/apsupp/spec.pdf>
-18. <span id="ref-18"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 21, Side-Effect-Free Functions <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
-19. <span id="ref-19"></span>Martin Fowler, CommandQuerySeparation (2005-12-05) <https://martinfowler.com/bliki/CommandQuerySeparation.html>
-20. <span id="ref-20"></span>Martin Fowler, EvansClassification (2005-12-14) <https://martinfowler.com/bliki/EvansClassification.html>
-21. <span id="ref-21"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 7, p. 267
-22. <span id="ref-22"></span>Vaughn Vernon, Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-388, index pp. 589-612) (2013), p. xxxix, Guide to This Book <https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf>
-23. <span id="ref-23"></span>Vaughn Vernon, Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-388, index pp. 589-612) (2013), p. 387, Avoid Dependency Injection <https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf>
-24. <span id="ref-24"></span>Vaughn Vernon, Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-388, index pp. 589-612) (2013), p. 363, Rule: Reference Other Aggregates by Identity <https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf>
-25. <span id="ref-25"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 7, p. 268
-26. <span id="ref-26"></span>Vaughn Vernon, IDDD_Samples, identity and access context (commit 9b27b11) (2022-03-26) <https://github.com/VaughnVernon/IDDD_Samples>
-27. <span id="ref-27"></span>Vaughn Vernon, Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-388, index pp. 589-612) (2013), p. 362, Rule: Reference Other Aggregates by Identity <https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf>
-28. <span id="ref-28"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 10, Layered Architecture <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
-29. <span id="ref-29"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 17, Repositories <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
-30. <span id="ref-30"></span>Vaughn Vernon, Getting Started with Domain-Driven Design (Implementing Domain-Driven Design, chapter 1 excerpt) (2013), How To Do DDD <https://www.informit.com/articles/article.aspx?p=1944876&seqNum=3>
-31. <span id="ref-31"></span>Randy Stafford, Service Layer (2002) <https://martinfowler.com/eaaCatalog/serviceLayer.html>
-32. <span id="ref-32"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 13, Domain Events <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
-33. <span id="ref-33"></span>Martin Fowler, Domain Event (2005-12-12) <https://martinfowler.com/eaaDev/DomainEvent.html>
-34. <span id="ref-34"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 8, p. 285
-35. <span id="ref-35"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 8, p. 287
-36. <span id="ref-36"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 8, p. 291
-37. <span id="ref-37"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 8, p. 288
-38. <span id="ref-38"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 11, Entities <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
-39. <span id="ref-39"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 5, p. 171
-40. <span id="ref-40"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 12, Value Objects <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
-41. <span id="ref-41"></span>Martin Fowler, ValueObject (2016-11-14) <https://martinfowler.com/bliki/ValueObject.html>
-42. <span id="ref-42"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 6, p. 219
-43. <span id="ref-43"></span>Martin Fowler, DDD_Aggregate (2013-04-23) <https://martinfowler.com/bliki/DDD_Aggregate.html>
-44. <span id="ref-44"></span>Eric Evans, Domain-Driven Design: Tackling Complexity in the Heart of Software (2003), ch. 6, p. 127
-45. <span id="ref-45"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 10, p. 347
-46. <span id="ref-46"></span>Vaughn Vernon, Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-388, index pp. 589-612) (2013), p. 347, Aggregates <https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf>
-47. <span id="ref-47"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. vi, Definitions <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
-48. <span id="ref-48"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 2, Bounded Context <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
-49. <span id="ref-49"></span>Martin Fowler, BoundedContext (2014-01-15) <https://martinfowler.com/bliki/BoundedContext.html>
-50. <span id="ref-50"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 2, p. 62
+12. <span id="ref-12"></span>Eric Evans, Domain-Driven Design: Tackling Complexity in the Heart of Software (2003), ch. 10, p. 255
+13. <span id="ref-13"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 5, p. 208
+14. <span id="ref-14"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 14, Services <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
+15. <span id="ref-15"></span>Eric Evans, Domain-Driven Design: Tackling Complexity in the Heart of Software (2003), ch. 10, p. 256
+16. <span id="ref-16"></span>Eric Evans and Martin Fowler, Specifications (1997), p. 2 <https://martinfowler.com/apsupp/spec.pdf>
+17. <span id="ref-17"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 21, Side-Effect-Free Functions <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
+18. <span id="ref-18"></span>Martin Fowler, CommandQuerySeparation (2005-12-05) <https://martinfowler.com/bliki/CommandQuerySeparation.html>
+19. <span id="ref-19"></span>Martin Fowler, EvansClassification (2005-12-14) <https://martinfowler.com/bliki/EvansClassification.html>
+20. <span id="ref-20"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 7, p. 267
+21. <span id="ref-21"></span>Vaughn Vernon, Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-388, index pp. 589-612) (2013), p. xxxix, Guide to This Book <https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf>
+22. <span id="ref-22"></span>Vaughn Vernon, Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-388, index pp. 589-612) (2013), p. 387, Avoid Dependency Injection <https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf>
+23. <span id="ref-23"></span>Vaughn Vernon, Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-388, index pp. 589-612) (2013), p. 363, Rule: Reference Other Aggregates by Identity <https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf>
+24. <span id="ref-24"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 7, p. 268
+25. <span id="ref-25"></span>Vaughn Vernon, IDDD_Samples, identity and access context (commit 9b27b11) (2022-03-26) <https://github.com/VaughnVernon/IDDD_Samples>
+26. <span id="ref-26"></span>Vaughn Vernon, Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-388, index pp. 589-612) (2013), p. 362, Rule: Reference Other Aggregates by Identity <https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf>
+27. <span id="ref-27"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 10, Layered Architecture <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
+28. <span id="ref-28"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 17, Repositories <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
+29. <span id="ref-29"></span>Vaughn Vernon, Getting Started with Domain-Driven Design (Implementing Domain-Driven Design, chapter 1 excerpt) (2013), How To Do DDD <https://www.informit.com/articles/article.aspx?p=1944876&seqNum=3>
+30. <span id="ref-30"></span>Randy Stafford, Service Layer (2002) <https://martinfowler.com/eaaCatalog/serviceLayer.html>
+31. <span id="ref-31"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 13, Domain Events <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
+32. <span id="ref-32"></span>Martin Fowler, Domain Event (2005-12-12) <https://martinfowler.com/eaaDev/DomainEvent.html>
+33. <span id="ref-33"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 8, p. 285
+34. <span id="ref-34"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 8, p. 287
+35. <span id="ref-35"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 8, p. 291
+36. <span id="ref-36"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 8, p. 288
+37. <span id="ref-37"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 11, Entities <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
+38. <span id="ref-38"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 5, p. 171
+39. <span id="ref-39"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 12, Value Objects <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
+40. <span id="ref-40"></span>Martin Fowler, ValueObject (2016-11-14) <https://martinfowler.com/bliki/ValueObject.html>
+41. <span id="ref-41"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 6, p. 219
+42. <span id="ref-42"></span>Martin Fowler, DDD_Aggregate (2013-04-23) <https://martinfowler.com/bliki/DDD_Aggregate.html>
+43. <span id="ref-43"></span>Eric Evans, Domain-Driven Design: Tackling Complexity in the Heart of Software (2003), ch. 6, p. 127
+44. <span id="ref-44"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 10, p. 347
+45. <span id="ref-45"></span>Vaughn Vernon, Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-388, index pp. 589-612) (2013), p. 347, Aggregates <https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf>
+46. <span id="ref-46"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. vi, Definitions <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
+47. <span id="ref-47"></span>Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 2, Bounded Context <https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf>
+48. <span id="ref-48"></span>Martin Fowler, BoundedContext (2014-01-15) <https://martinfowler.com/bliki/BoundedContext.html>
+49. <span id="ref-49"></span>Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 2, p. 62
