@@ -67,13 +67,14 @@ func (uc GetDomainOverview) Execute() (DomainOverview, error) {
 	if err != nil {
 		return DomainOverview{}, fmt.Errorf("load configured rules: %w", err)
 	}
-	// Imports tell which T a Go test carrying an assertion takes.
-	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, []rule.Fact{rule.FactImports, rule.FactDeclarations}, nil, conformance.NamedTestsToRead(cfg.Rules, lang))
+	// Imports tell a result naming a value object of another package
+	// from a type that only shares its name.
+	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, []rule.Fact{rule.FactDeclarations, rule.FactImports})
 	if err != nil {
 		return DomainOverview{}, fmt.Errorf("observe contracts: %w", err)
 	}
 	matrix := domainKnowledgeOf(lang)
-	facts, err := conformance.NewInspectionFacts(cfg.Zones, obs, rule.FactImports, rule.FactDeclarations)
+	facts, err := conformance.NewInspectionFacts(cfg.Zones, obs, rule.FactDeclarations, rule.FactImports)
 	if err != nil {
 		return DomainOverview{}, fmt.Errorf("prepare domain facts: %w", err)
 	}

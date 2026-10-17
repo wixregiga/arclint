@@ -1405,12 +1405,11 @@ func checkInvariantEnforcedAtMutation(r rule.Rule, subject rule.Subject, cc cont
 }
 
 // checkAssertionChecked judges every recorded assertion against its
-// owner: an aggregate's root or a domain service declares the operation
-// and the checking method, and the operation calls the check. An owner
-// declared as an interface or an abstract class has no body to call a
-// check from, so its assertion names the tests that verify it instead.
-// An owner whose type is not located is left to aggregate/root-declared
-// or domain_service/declared.
+// owner: an aggregate's root or a concrete domain service declares the
+// operation and the checking method, and the operation calls the check;
+// a domain service declared as an abstraction has the check in the
+// model instead. An owner whose type is not located is left to
+// aggregate/root-declared or domain_service/declared.
 func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ domainCode) ([]Violation, error) {
 	var vs []Violation
 	for _, agg := range cc.ctx.Aggregates {
@@ -1432,16 +1431,192 @@ func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ 
 			continue
 		}
 		decl := loc.decl()
-		more, err := assertionsChecked(r, subject, assertionOwner{
-			label: "service " + s.Name, holder: "the service", context: cc.ctx.Name, decl: decl, idx: cc.unitIdx(decl),
+		owner := assertionOwner{
+			label: "service " + s.Name, holder: "the service", decl: decl, idx: cc.unitIdx(decl),
 			decision: vocab.DecideThenCarryOut(),
-		}, s.Assertions)
+		}
+		var more []Violation
+		var err error
+		if declaredAbstraction(decl) {
+			more, err = declaredServiceChecked(r, subject, cc, owner, s.Assertions)
+		} else {
+			more, err = assertionsChecked(r, subject, owner, s.Assertions)
+		}
 		if err != nil {
 			return nil, err
 		}
 		vs = append(vs, more...)
 	}
 	return vs, nil
+}
+
+// declaredAbstraction reports a type declared as an abstraction that
+// implementations complete: an interface, or a class its own
+// declaration states to be abstract (a TypeScript abstract class, a
+// Python ABC or Protocol). Its operations have no body a check could be
+// called from.
+func declaredAbstraction(d locDecl) bool {
+	return d.decl.Kind == declKindInterface || d.decl.Kind == declKindClass && d.decl.Abstract
+}
+
+// declaredServiceChecked judges the assertions of a domain service
+// declared as an abstraction. The service declares the operation each
+// assertion names, and the guarantee is checked once, in the model: by
+// a function of the context spelled assert followed by the key, or by
+// the value object the operation returns when that value records an
+// invariant of the same key. A guarantee with neither is a finding on
+// the model, never a request for a method the abstraction cannot hold.
+func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, owner assertionOwner, assertions []vocab.Assertion) ([]Violation, error) {
+	var vs []Violation
+	service := owner.decl
+	for _, as := range assertions {
+		op, hasOp, err := owner.idx.methodNamed(service.decl.Name, as.On)
+		if err != nil {
+			return nil, err
+		}
+		if !hasOp {
+			v, err := newViolation(r, subject, service.file.path, service.decl.StartLine,
+				fmt.Sprintf("%s: assertion %s constrains operation %s, which %s does not declare", owner.label, as.Key, as.On, owner.holder),
+				fmt.Sprintf("declare %s on %s", methodSpellings(owner.idx, as.On), service.decl.Name))
+			if err != nil {
+				return nil, err
+			}
+			vs = append(vs, v)
+		}
+		var operation *locDecl
+		if hasOp {
+			operation = &op
+		}
+		_, found, err := cc.modelCheck(service, operation, as.Key)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			continue
+		}
+		fn, err := methodNameFor(assertKey(as.Key), service.file.lang)
+		if err != nil {
+			return nil, err
+		}
+		on := as.On
+		if hasOp {
+			on = op.decl.Name
+		}
+		v, err := newViolation(r, subject, service.file.path, service.decl.StartLine,
+			fmt.Sprintf("declared service %s: %s has no check in context %s", service.decl.Name, as.Key, cc.ctx.Name),
+			fmt.Sprintf("declare the function %s there, or return from %s a value whose invariant %s enforces it", fn, on, as.Key))
+		if err != nil {
+			return nil, err
+		}
+		vs = append(vs, v)
+	}
+	return vs, nil
+}
+
+// modelShape is how the model checks a guarantee of a declared service.
+type modelShape int
+
+const (
+	// checkedByFunction is a function of the context spelled assert
+	// followed by the key.
+	checkedByFunction modelShape = iota + 1
+	// checkedByValue is the value object the operation returns, which
+	// records an invariant of the same key and enforces it where it is
+	// constructed.
+	checkedByValue
+)
+
+// modelCheckAt is where the model checks a guarantee of a declared
+// service: the function, or the value object's type.
+type modelCheckAt struct {
+	shape modelShape
+	at    locDecl
+}
+
+// modelCheck locates the check of a declared service's guarantee in
+// the model: a function of the context spelled assert followed by the
+// key, or else a result of the operation naming a recorded value object
+// of the context that records an invariant of the same key. op is nil
+// when the service does not declare the operation, so only a function
+// can check the guarantee.
+func (cc contextCode) modelCheck(service locDecl, op *locDecl, key string) (modelCheckAt, bool, error) {
+	if _, err := rule.CaseTerm(key, "flatcase"); err != nil {
+		return modelCheckAt{}, false, fmt.Errorf("method name for %q: %w", key, err)
+	}
+	if fn, ok := cc.contextFunction(service, assertKey(key)); ok {
+		return modelCheckAt{shape: checkedByFunction, at: fn}, true, nil
+	}
+	if op == nil {
+		return modelCheckAt{}, false, nil
+	}
+	for _, vo := range cc.ctx.ValueObjects {
+		if !recordsInvariant(vo, key) {
+			continue
+		}
+		loc := cc.terms[vo.Name]
+		if !loc.located() {
+			continue
+		}
+		if cc.resultNames(*op, loc.decl()) {
+			return modelCheckAt{shape: checkedByValue, at: loc.decl()}, true, nil
+		}
+	}
+	return modelCheckAt{}, false, nil
+}
+
+// recordsInvariant reports whether a value object records an invariant
+// under the key.
+func recordsInvariant(vo vocab.ValueObject, key string) bool {
+	for _, inv := range vo.Invariants {
+		if inv.Key == key {
+			return true
+		}
+	}
+	return false
+}
+
+// contextFunction finds a function of the context spelling a key in its
+// language's method case: in a file the context's code holds, or beside
+// the service. A test file's helper is the test's, not the model's.
+func (cc contextCode) contextFunction(service locDecl, key string) (locDecl, bool) {
+	seen := map[string]bool{}
+	for _, idx := range []contractIndex{cc.idx, cc.unitIdx(service)} {
+		for _, f := range idx.files {
+			if seen[f.path] || isTestFile(f.path) {
+				continue
+			}
+			seen[f.path] = true
+			for _, d := range f.decls {
+				if d.Kind == declKindFunc && methodSpelled(d.Name, key, f.lang) {
+					return locDecl{file: f, decl: d}, true
+				}
+			}
+		}
+	}
+	return locDecl{}, false
+}
+
+// resultNames reports whether a result of an operation names a located
+// type itself, never a collection of it: bare in the type's own
+// directory, and from another only in a file importing that directory,
+// through its package name in Go.
+func (cc contextCode) resultNames(op, target locDecl) bool {
+	qualifier := ""
+	unit := path.Dir(target.file.path)
+	if path.Dir(op.file.path) != unit {
+		if !cc.importsUnit(op.file.path, unit) {
+			return false
+		}
+		if op.file.lang == rule.LanguageGo {
+			qualifier = target.file.pkg
+		}
+	}
+	for _, res := range op.decl.Results {
+		if !isCollection(res) && mentionsType(res, qualifier, target.decl.Name) {
+			return true
+		}
+	}
+	return false
 }
 
 // assertionOwner is the declared type that owns a set of assertions:

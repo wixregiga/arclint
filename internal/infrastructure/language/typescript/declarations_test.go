@@ -77,6 +77,38 @@ let counter = 0;
 	diffDecls(t, got.Decls, want)
 }
 
+// TestTypeScriptAbstractClassDeclarations marks an abstract class and
+// emits its abstract members as methods with their signatures, the
+// operations a subclass completes; a concrete class carries no mark.
+func TestTypeScriptAbstractClassDeclarations(t *testing.T) {
+	src := []byte(`export abstract class Encrypter {
+  abstract encrypt(plain: string): EncryptedPassword;
+  protected abstract salt(): string;
+  matches(plain: string): boolean { return plain !== ""; }
+}
+
+export class Plain {}
+`)
+	got := extractDeclarations(newParsers(), "src/identity/encrypter.ts", src)
+	if got.ParseError != "" {
+		t.Fatal(got.ParseError)
+	}
+	want := []conformance.Declaration{
+		{Kind: "class", Name: "Encrypter", Exported: true, Abstract: true, StartLine: 1, EndLine: 5},
+		{
+			Kind: "method", Name: "encrypt", Owner: "Encrypter", Exported: true, StartLine: 2, EndLine: 2,
+			Params: []conformance.DeclarationParam{{Name: "plain", Type: "string"}}, Results: []string{"EncryptedPassword"},
+		},
+		{Kind: "method", Name: "salt", Owner: "Encrypter", StartLine: 3, EndLine: 3, Results: []string{"string"}},
+		{
+			Kind: "method", Name: "matches", Owner: "Encrypter", Exported: true, StartLine: 4, EndLine: 4,
+			Params: []conformance.DeclarationParam{{Name: "plain", Type: "string"}}, Results: []string{"boolean"},
+		},
+		{Kind: "class", Name: "Plain", Exported: true, StartLine: 7, EndLine: 7},
+	}
+	diffDecls(t, got.Decls, want)
+}
+
 func TestJavaScriptextractDeclarations(t *testing.T) {
 	// Exported means "under an ESM export statement": plain JS without
 	// export markers is structurally unexported (CommonJS module.exports

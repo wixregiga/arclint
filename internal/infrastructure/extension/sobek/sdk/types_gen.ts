@@ -98,17 +98,12 @@ export interface DeclInfo {
    */
   exported: boolean;
   /**
-   * Abstract marks a class the language declares abstract: a
-   * TypeScript abstract class, or a Python class deriving ABC or
-   * Protocol, or naming ABCMeta as its metaclass. False for every
-   * other kind.
+   * Abstract marks a class its own declaration states to be abstract:
+   * a TypeScript abstract class, or a Python class naming abc.ABC or
+   * typing.Protocol among its bases or abc.ABCMeta as its metaclass.
+   * An interface is abstract by its kind and does not carry it.
    */
-  abstract: boolean;
-  /**
-   * Generic marks a func, method, or type that declares its own type
-   * parameters. False for every other declaration.
-   */
-  generic: boolean;
+  abstract?: boolean;
   startLine: number /* int */;
   endLine: number /* int */;
   /**

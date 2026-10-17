@@ -795,7 +795,7 @@ func (r *resolutionIndex) call(f *resolutionFile, n *gotreesitter.Node, owner st
 // property that may hold a function value.
 func methodNode(kind string) bool {
 	switch kind {
-	case tsMethodDefinition, tsMethodSignature, "abstract_method_signature":
+	case tsMethodDefinition, tsMethodSignature, tsAbstractMethodSignature:
 		return true
 	}
 	return false

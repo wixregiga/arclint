@@ -928,7 +928,7 @@ building_blocks:
       section: assertions
       note: A map keyed by the assertion's name, recorded under the aggregate whose command it constrains or under the domain service whose operation it constrains; the assertions of a service are its contract.
       properties:
-        - {name: key, required: true, definition: "The assertion's name in kebab-case, unique within its owner; the owner's method that checks it is assert followed by the key, spelled in the language's method case (AssertHasLines, assertHasLines, assert_has_lines)."}
+        - {name: key, required: true, definition: "The assertion's name in kebab-case, unique within its owner; it names the check of this guarantee in the model. On an aggregate's root or a concrete domain service the check is the owner's method assert followed by the key, spelled in the language's method case (AssertHasLines, assertHasLines, assert_has_lines). A domain service declared as an interface, an abstract class, an ABC, or a Protocol holds no body to check in, so its check is a function of the context spelled the same way, or the invariant of the same key on the value object its operation returns."}
         - {name: "on", required: true, definition: "The operation the guarantee belongs to: a command of the root, or an operation of the service."}
         - {name: statement, required: true, definition: "The guarantee as the domain expert states it, in the ubiquitous language (Only an active tenant offers an invitation); it is recorded in the expert's words and never rewritten into a post-condition, because on already names the operation."}
         - name: verified_by
@@ -955,27 +955,11 @@ building_blocks:
           - {work: evans2015, page: 22, section: Assertions}
         enforcement:
           by: domain
-          facts: [file_tree, declarations, calls]
+          facts: [file_tree, declarations, calls, imports]
           languages: all
           limitations:
-            - an owner declared as an interface or an abstract class has no body to call a checking method from; for its assertion the rule asks instead for the tests under verified_by, and assertion/verifying-tests-declared checks that they exist
-            - a Python class is abstract when it derives ABC or Protocol, or names ABCMeta as its metaclass, by the name written in the class statement; a base imported under another name is not seen
-      - id: assertion/verified-by-names-tests
-        statement: "Every entry of an assertion's verified_by names one test: its file's path from the repository root, a colon, and its name. An entry missing either part, a path absolute or outside the repository, or a repeated entry is rejected."
-        sources:
-          - {work: evans2015, page: 22, section: Assertions}
-        enforcement: {by: loader, languages: all}
-      - id: assertion/verifying-tests-declared
-        statement: "Every test an assertion's verified_by names is declared in its file: in Go, a test go test runs; in Python, a def test function or Class.test_name method; in TypeScript, the name written in the file. Existence is checked, not proof."
-        sources:
-          - {work: evans2015, page: 22, section: Assertions}
-        enforcement:
-          by: domain
-          facts: [file_tree, imports, declarations]
-          languages: all
-          limitations:
-            - a TypeScript test name is matched as text anywhere in its file, so a comment or a string that repeats the name is taken for the test
-            - a test file scan.exclude leaves out is read for this check alone, because verified_by names it; no other rule, Zone, or context sees it, and a file Exclusion of this rule still keeps it unread
+            - a domain service declared as an interface, an abstract class, an ABC, or a Protocol is judged by its check in the model, a function of the context spelled assert followed by the key or the invariant of the same key on the value object its operation returns; whether its implementations reach that check is not yet observed
+            - a Python class is a declared abstraction only when its own bases name abc.ABC or typing.Protocol, or its metaclass is abc.ABCMeta; one that is abstract only through a base class of the repository is judged as a concrete service
     guidance:
       - text: State post-conditions of operations and invariants of classes and aggregates explicitly; where they cannot be coded directly, write automated unit tests for them.
         fundamental: true

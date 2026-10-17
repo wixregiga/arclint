@@ -18,12 +18,10 @@ type Carrier struct {
 // the way the built-in domain rules do, so a listing of the language
 // and a check of it never disagree about which declaration carries a
 // contract: the type spelling a term, the constructor a value object's
-// invariants are enforced at, the root method enforcing an invariant
-// or a service method checking an assertion, and the satisfaction method of a
-// specification. An assertion whose owner is declared without a body,
-// an interface or an abstract class, is carried by the first test its
-// verified_by names that the repository declares. Every lookup is
-// within one bounded context, because a name means one thing per context.
+// invariants are enforced at, the root method enforcing an invariant,
+// the method or model check of an assertion, and the satisfaction
+// method of a specification. Every lookup is within one bounded context, because a
+// name means one thing per context.
 type Carriers struct {
 	contexts map[string]contextCode
 	code     domainCode
@@ -112,9 +110,13 @@ func (c Carriers) Invariant(ctx, owner, key string) (Carrier, bool, error) {
 	return c.rootMethod(ctx, owner, key, ensureKey)
 }
 
-// Assertion locates the method checking an assertion: assert followed
-// by the key, in the method case of the owner's language, declared on
-// the aggregate's root or on the domain service's type.
+// Assertion locates the check of an assertion. On the aggregate's root
+// or a concrete domain service it is the method assert followed by the
+// key, in the method case of the owner's language. For a domain service
+// declared as an abstraction it is in the model: the function of the
+// context spelled the same way, or else the constructor of the value
+// object the operation returns, whose invariant of the same key checks
+// it (the value's type when it declares no constructor).
 func (c Carriers) Assertion(ctx, owner, key string) (Carrier, bool, error) {
 	cc, ok := c.contexts[ctx]
 	if !ok {
@@ -144,6 +146,9 @@ func (c Carriers) Assertion(ctx, owner, key string) (Carrier, bool, error) {
 		return Carrier{}, false, nil
 	}
 	decl := loc.decl()
+	if declaredAbstraction(decl) {
+		return c.modelCarrier(cc, decl, owner, key)
+	}
 	m, found, err := cc.unitIdx(decl).methodNamed(decl.decl.Name, assertKey(key))
 	if err != nil || !found {
 		return Carrier{}, false, err
@@ -151,36 +156,29 @@ func (c Carriers) Assertion(ctx, owner, key string) (Carrier, bool, error) {
 	return carrierOf(m), true, nil
 }
 
-// BodilessOwner names how the owner of an assertion is declared when it
-// has no body to call a checking method from, an interface or an
-// abstract class, or "" when it has one or is not located. Such an
-// owner's assertion is verified by the tests its verified_by names.
-func (c Carriers) BodilessOwner(ctx, owner string) string {
-	decl, located := c.owner(ctx, owner)
-	if !located {
-		return ""
-	}
-	return bodiless(decl.decl)
-}
-
-// owner locates the declared type owning a contract: an aggregate's
-// root, or the type spelling a domain service.
-func (c Carriers) owner(ctx, owner string) (locDecl, bool) {
-	cc, ok := c.contexts[ctx]
-	if !ok {
-		return locDecl{}, false
-	}
-	if ac, isAggregate := cc.aggregates[owner]; isAggregate {
-		if !ac.located() {
-			return locDecl{}, false
+// modelCarrier locates the check a declared service's assertion has in
+// the model, through the operation the recorded assertion names.
+func (c Carriers) modelCarrier(cc contextCode, service locDecl, owner, key string) (Carrier, bool, error) {
+	var operation *locDecl
+	if as, aggregate, recorded := cc.recordedAssertion(owner, key); recorded && !aggregate {
+		op, found, err := cc.unitIdx(service).methodNamed(service.decl.Name, as.On)
+		if err != nil {
+			return Carrier{}, false, err
 		}
-		return ac.root(), true
+		if found {
+			operation = &op
+		}
 	}
-	loc := cc.terms[owner]
-	if !loc.located() {
-		return locDecl{}, false
+	check, found, err := cc.modelCheck(service, operation, key)
+	if err != nil || !found {
+		return Carrier{}, false, err
 	}
-	return loc.decl(), true
+	if check.shape == checkedByValue {
+		if doors := cc.unitIdx(check.at).constructors(check.at.decl.Name); len(doors) > 0 {
+			return carrierOf(doors[0]), true, nil
+		}
+	}
+	return carrierOf(check.at), true, nil
 }
 
 // rootMethod finds the method a contract key names on an aggregate's

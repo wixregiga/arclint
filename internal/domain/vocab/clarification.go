@@ -37,6 +37,10 @@ func InsufficientInfoQuestions() []ClarificationQuestion {
 			Decides:  "deciding operation (domain_service) vs carrying out the change (application_service)",
 		},
 		{
+			Question: "Does <operation> return a value the business names? Then the guarantee is that value's invariant.",
+			Decides:  "where a declared domain_service's guarantee is checked (value invariant vs function of the context)",
+		},
+		{
 			Question: "Does <X> change anything, or does it only answer a question?",
 			Decides:  "command vs query",
 		},

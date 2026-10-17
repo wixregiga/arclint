@@ -608,7 +608,7 @@ func TestLoadsAndRoundTripsTheWorkedExampleDomain(t *testing.T) {
 	}
 	counts := lang.Counts()
 	if counts.Contexts != 1 || counts.Aggregates != 3 || counts.Entities != 1 || counts.ValueObjects != 13 || counts.Invariants != 13 ||
-		counts.Assertions != 6 || counts.Events != 8 || counts.Services != 3 || counts.Questions != 1 || counts.Relations != 0 {
+		counts.Assertions != 8 || counts.Events != 8 || counts.Services != 3 || counts.Questions != 1 || counts.Relations != 0 {
 		t.Errorf("worked example counts = %+v", counts)
 	}
 	repo, _ := repository(t, "")
