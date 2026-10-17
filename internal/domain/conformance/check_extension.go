@@ -61,9 +61,13 @@ func evaluateExtensionRule(r rule.Rule, facts Facts,
 		if ref, ok := r.Provenance(); ok {
 			pattern = ref.String()
 		}
-		d, err := NewNearTimeLimit(r.ID().Qualified(), pattern, NearLimit{
+		note, err := NewNearLimit(NearLimitSpec{
 			Extension: params.Uses, Source: run.Source, Limit: limit.Duration(), Elapsed: run.Elapsed,
 		})
+		if err != nil {
+			return nil, nil, fmt.Errorf("rule %s: %w", r.ID(), err)
+		}
+		d, err := NewNearTimeLimit(r.ID().Qualified(), pattern, note)
 		if err != nil {
 			return nil, nil, err
 		}

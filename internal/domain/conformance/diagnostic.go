@@ -46,16 +46,6 @@ type Diagnostic struct {
 	near              NearLimit        // coverage of a check that ran past half its TimeLimit
 }
 
-// NearLimit is an Extension check that finished but ran longer than half
-// its TimeLimit: the Extension, its source file, the TimeLimit in force
-// and how long the check ran.
-type NearLimit struct {
-	Extension string
-	Source    string
-	Limit     time.Duration
-	Elapsed   time.Duration
-}
-
 // NewOperational reports an operational problem. Severity states its
 // gate effect: an error-severity operational Diagnostic fails the gate.
 // ruleID may be empty for rule-less notes; set it when the problem is
@@ -113,11 +103,11 @@ func NewNotEvaluated(ruleID, extension string, failure ExtensionFailure) (Diagno
 // TimeLimit is raised: on the Rule, or for a Rule the Pattern pattern
 // distributes, on its Override; pattern is empty for a local Rule.
 func NewNearTimeLimit(ruleID, pattern string, near NearLimit) (Diagnostic, error) {
-	if strings.TrimSpace(ruleID) == "" || strings.TrimSpace(near.Extension) == "" || strings.TrimSpace(near.Source) == "" {
-		return Diagnostic{}, fmt.Errorf("near-time-limit diagnostic: missing rule, extension or source")
+	if strings.TrimSpace(ruleID) == "" {
+		return Diagnostic{}, fmt.Errorf("near-time-limit diagnostic: missing rule")
 	}
-	if near.Limit <= 0 || 2*near.Elapsed <= near.Limit {
-		return Diagnostic{}, fmt.Errorf("near-time-limit diagnostic: %s is not past half of %s", near.Elapsed, near.Limit)
+	if near == (NearLimit{}) {
+		return Diagnostic{}, fmt.Errorf("near-time-limit diagnostic: missing near limit")
 	}
 	setting := "on rule " + ruleID
 	if pattern != "" {
@@ -127,9 +117,9 @@ func NewNearTimeLimit(ruleID, pattern string, near NearLimit) (Diagnostic, error
 		kind: DiagnosticCoverage, ruleID: ruleID, pattern: pattern, near: near,
 		message: fmt.Sprintf(
 			"rule %s: extension %q took %s of its %s time limit; a run twice as slow would not be evaluated",
-			ruleID, near.Extension, near.Elapsed.Round(time.Millisecond), near.Limit),
+			ruleID, near.Extension(), near.Elapsed().Round(time.Millisecond), near.Limit()),
 		remediation: fmt.Sprintf("raise time_limit above %s %s in %s, or make the check do less work",
-			near.Limit, setting, rule.RulesetFileName),
+			near.Limit(), setting, rule.RulesetFileName),
 	}, nil
 }
 
