@@ -56,7 +56,6 @@ func ServiceDecides() SourcedStatement {
 			"TypeScript with a private constructor and a private field, and Python only by convention, with an underscore-prefixed name. " +
 			"An automated test proves what the domain cannot see, such as a refusal changing nothing on disk.",
 		Sources: "Evans, DDD Reference 2015, p. 12, Value Objects, p. 14, Services, p. 21, Side-Effect-Free Functions, and p. 22, Assertions; " +
-			"Khorikov, Domain model purity vs. domain model completeness (2020), read-decide-act; " +
 			"The Go Programming Language Specification, Exported identifiers and Struct literals; " +
 			"TypeScript 2.0 release notes, Private and Protected Constructors, and TypeScript Handbook, Type Compatibility; " +
 			"The Python Tutorial, 9.6 Private Variables",
