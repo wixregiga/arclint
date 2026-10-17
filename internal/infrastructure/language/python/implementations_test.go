@@ -166,3 +166,48 @@ Port.register(Adapter)
 		t.Errorf("Port.register resolved to %+v", calls)
 	}
 }
+
+// An operation a decorator may replace, or that monkey patching
+// changes, is not the body the class statement writes, so the
+// implementation's operation is undetermined.
+func TestImplementationOperationsKeepMemberUncertainty(t *testing.T) {
+	root, files := writeFiles(t, map[string]string{
+		"port.py": `from abc import ABC, abstractmethod
+
+
+class Encrypter(ABC):
+    @abstractmethod
+    def encrypt(self, plain: str) -> str: ...
+
+
+def checked(fn):
+    return fn
+
+
+class Decorated(Encrypter):
+    @checked
+    def encrypt(self, plain: str) -> str:
+        return plain
+
+
+class Patched(Encrypter):
+    def encrypt(self, plain: str) -> str:
+        return plain
+
+
+Patched.encrypt = lambda self, plain: plain
+`,
+	})
+	facts, err := NewProducer().Facts(root, files, []rule.Fact{rule.FactDeclarations, rule.FactImplementations})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := spellImplementations(facts["port.py"])
+	want := []string{
+		"Decorated -> Encrypter@port.py [exact] encrypt:undetermined",
+		"Patched -> Encrypter@port.py [exact] encrypt:undetermined",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("implementations:\n got %s\nwant %s", strings.Join(got, "\n     "), strings.Join(want, "\n     "))
+	}
+}

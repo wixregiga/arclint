@@ -199,6 +199,11 @@ func (idx *resolutionIndex) implementation(c, a *pyClass, evidence conformance.I
 			ref = unknown(c.name + " has no member " + name)
 		case b.kind != bindingFunction:
 			ref = unknown(name + " of " + owner.name + " is not a method its class defines")
+		case b.reason != "":
+			// A decorator may replace the method with another function.
+			ref = unknown(b.reason)
+		case idx.patched[owner.scope.module.file+":"+owner.name+":"+name] || idx.patched[owner.scope.module.file+":"+owner.name+":*"]:
+			ref = unknown("monkey patching changes " + owner.name + "." + name)
 		default:
 			ref = declared(owner.scope.module.file, owner.name, name)
 		}
