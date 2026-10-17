@@ -295,3 +295,50 @@ export default ` + tc.source + `;
 		})
 	}
 }
+
+// A thrown Proxy whose traps throw is classified without running them
+// outside protection, in both phases.
+func TestThrownProxyIsACodeFailure(t *testing.T) {
+	const proxy = `new Proxy({}, { getPrototypeOf() { throw new Error("trap"); }, get() { throw new Error("trap"); } })`
+	root := writeExtensions(t, map[string]string{"proxy.ts": `
+import { defineRule } from "arclint";
+export default defineRule({ type: "proxy", check() { throw ` + proxy + `; } });
+`})
+	reg, err := sobekextension.LoadDir(root, sobekextension.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = reg.Get("proxy").Check(fakeHost(nil), map[string]any{}, testLimit)
+	var failed *sobekextension.CodeFailure
+	if !errors.As(err, &failed) || failed.Phase != conformance.PhaseCheck || failed.Raised() == "" {
+		t.Fatalf("Check error = %v (%T), want a CodeFailure in check", err, err)
+	}
+
+	root = writeExtensions(t, map[string]string{"proxy.ts": `
+import { defineRule } from "arclint";
+throw ` + proxy + `;
+export default defineRule({ type: "proxy", check() {} });
+`})
+	_, err = sobekextension.LoadDir(root, sobekextension.Options{})
+	if !errors.As(err, &failed) || failed.Phase != conformance.PhaseRegistration {
+		t.Fatalf("LoadDir error = %v (%T), want a CodeFailure in registration", err, err)
+	}
+}
+
+// A malformed defineRule called while checking is still the author's
+// definition error, not code that failed.
+func TestDefinitionErrorInCheckIsNotACodeFailure(t *testing.T) {
+	root := writeExtensions(t, map[string]string{"late.ts": `
+import { defineRule } from "arclint";
+export default defineRule({ type: "late", check() { defineRule({ type: "x", check: 42 } as any); } });
+`})
+	reg, err := sobekextension.LoadDir(root, sobekextension.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = reg.Get("late").Check(fakeHost(nil), map[string]any{}, testLimit)
+	var failed *sobekextension.CodeFailure
+	if err == nil || errors.As(err, &failed) || !strings.Contains(err.Error(), "defineRule: check must be a function") {
+		t.Fatalf("Check error = %v (%T), want a configuration error naming the definition", err, err)
+	}
+}

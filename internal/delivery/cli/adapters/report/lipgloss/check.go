@@ -5,7 +5,7 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 )
 
-func writeCheck(p *out.Printer, th Theme, a conformance.Assessment, agentsContext string) {
+func writeCheck(p *out.Printer, th Theme, a conformance.Assessment, agentsContext, agentsUnchecked string) {
 	for _, v := range a.ActiveViolations() {
 		// Grammar: path[:line]: [sev] rule [(@version)] msg; the id
 		// already names the distributing Pattern, the tag adds its version.
@@ -42,6 +42,9 @@ func writeCheck(p *out.Printer, th Theme, a conformance.Assessment, agentsContex
 	}
 	if agentsContext != "" {
 		p.Printf("%s: %s\n", th.Muted.Render("agents"), agentsContext)
+	}
+	if agentsUnchecked != "" {
+		p.Printf("%s: %s\n", th.Muted.Render("agents"), agentsUnchecked)
 	}
 	out.ContractCoverage(p, a)
 	active := len(a.ActiveViolations())

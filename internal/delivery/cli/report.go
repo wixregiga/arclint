@@ -40,6 +40,9 @@ type Renderer interface {
 type AssessmentReport struct {
 	Assessment    conformance.Assessment
 	AgentsContext string
+	// AgentsContextUnchecked says why the AGENTS.md generated block was
+	// not compared with the rules, "" when it was.
+	AgentsContextUnchecked string
 }
 
 func (AssessmentReport) report() {}

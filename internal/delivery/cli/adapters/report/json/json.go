@@ -29,6 +29,9 @@ func (renderer) Render(w io.Writer, r cli.Report) error {
 		if x.AgentsContext != "" {
 			docs = append(docs, diagnosticDoc{Kind: string(conformance.DiagnosticCoverage), Path: "AGENTS.md", Message: x.AgentsContext, Remediation: application.AgentsContextRefreshCommand})
 		}
+		if x.AgentsContextUnchecked != "" {
+			docs = append(docs, diagnosticDoc{Kind: string(conformance.DiagnosticCoverage), Path: "AGENTS.md", Message: x.AgentsContextUnchecked})
+		}
 		doc = docs
 	case cli.RuleListReport:
 		doc = ruleSummaryDocs(x.Rules)

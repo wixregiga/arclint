@@ -39,7 +39,7 @@ func (Renderer) Render(w io.Writer, r cli.Report) error {
 	w = fullWriter{Writer: w}
 	switch v := r.(type) {
 	case cli.AssessmentReport:
-		return writeCheck(w, v.Assessment, v.AgentsContext)
+		return writeCheck(w, v.Assessment, v.AgentsContext, v.AgentsContextUnchecked)
 	case cli.RuleListReport:
 		return writeRuleRows(w, v.Rules)
 	case cli.RuleDetailReport:

@@ -332,13 +332,13 @@ func TestRunRuleTestsReportsStoppedExtensionAsTheTestsError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
-	results, err := uc.Execute()
+	run, err := uc.Execute()
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 	want := `not evaluated: rule t/p:m/ext: extension "spin" (.arclint/extensions/spin.ts) reached its 5s time limit in check and was stopped after 5.002s, last reading m/all_good.go`
-	if len(results) != 1 || results[0].Passed() || results[0].Err != want {
-		t.Fatalf("results = %+v, want one failed test with Err %q", results, want)
+	if len(run.Results) != 1 || run.Results[0].Passed() || run.Results[0].Err != want {
+		t.Fatalf("results = %+v, want one failed test with Err %q", run.Results, want)
 	}
 }
 
@@ -378,12 +378,12 @@ func TestRunRuleTestsIgnoresTheNearTimeLimitNote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
-	results, err := uc.Execute()
+	run, err := uc.Execute()
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if len(results) != 1 || !results[0].Passed() {
-		t.Fatalf("results = %+v, want a pass despite 4s of the 5s limit", results)
+	if len(run.Results) != 1 || !run.Results[0].Passed() {
+		t.Fatalf("results = %+v, want a pass despite 4s of the 5s limit", run.Results)
 	}
 }
 

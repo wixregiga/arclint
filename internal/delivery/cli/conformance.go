@@ -43,11 +43,16 @@ func NewCheckCommand(assess application.AssessConformance, list application.List
 			if err != nil {
 				return ConfigError(err)
 			}
-			agentsContext, err := inspectAgents.Execute()
-			if err != nil && !reportedAsNotEvaluated(err, assessment) {
-				return ConfigError(err)
+			report := AssessmentReport{Assessment: assessment}
+			report.AgentsContext, err = inspectAgents.Execute()
+			if err != nil {
+				unchecked, ok := agentsContextUnchecked(err)
+				if !ok {
+					return ConfigError(err)
+				}
+				report.AgentsContextUnchecked = unchecked
 			}
-			if err := render.Render(ctx.Stdout, AssessmentReport{Assessment: assessment, AgentsContext: agentsContext}); err != nil {
+			if err := render.Render(ctx.Stdout, report); err != nil {
 				return fmt.Errorf("write output: %w", err)
 			}
 			if !assessment.Complete() {
@@ -61,14 +66,16 @@ func NewCheckCommand(assess application.AssessConformance, list application.List
 	}
 }
 
-// reportedAsNotEvaluated reports whether an error is an extension that
-// failed while registering, which the Assessment already names in its
-// not-evaluated entries. The AGENTS.md comparison needs the same
-// extension inventory, so it is skipped rather than discarding the
-// report.
-func reportedAsNotEvaluated(err error, assessment conformance.Assessment) bool {
+// agentsContextUnchecked turns an extension that failed while
+// registering into the reason the AGENTS.md comparison, which needs the
+// extension inventory, did not run. The Assessment is already complete
+// for the Rules it evaluated, so the report is kept either way.
+func agentsContextUnchecked(err error) (string, bool) {
 	var failure conformance.ExtensionFailure
-	return errors.As(err, &failure) && !assessment.Complete()
+	if !errors.As(err, &failure) {
+		return "", false
+	}
+	return "AGENTS.md generated block was not compared with the rules: " + failure.Error(), true
 }
 
 // splitSelectors splits one flag value into rule selectors; commas and

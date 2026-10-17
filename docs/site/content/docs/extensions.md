@@ -439,7 +439,10 @@ line in human output. Every other Rule is still evaluated and
 reported, and `check` exits `3`. The Rule does not become a Violation,
 is not counted as applied, and is not silently skipped. When one
 extension fails while registering, no extension can run, so every
-extension Rule names that extension as the cause.
+extension Rule names that extension as the cause. The comparison of a
+generated AGENTS.md block, which needs the same extensions, then
+reports one `agents:` line saying it was not compared, and the rest of
+the report still prints.
 
 The entry says why the Rule did not run:
 
