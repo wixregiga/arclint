@@ -930,6 +930,15 @@ class InventoryTest(unittest.TestCase):
         rows = self.located(self.repo.rows("--base", "main"))
         self.assertEqual(rows["docs/contract.md:1"][:2], ("added", "doc"))
 
+    def test_round_twenty_three_cases(self):
+        self.repo.write("web/platform.test.ts", 'test.skipIf("win32" === process.platform)(\n"never overwrites user files", () => {});\n')
+        self.repo.write("web/escaped.test.ts", 't\\u0065st("never overwrites files", () => {});\nconst \\u{61}b = 4 / 2; // Only half.\n')
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {
+            "web/platform.test.ts:1": "test", "web/platform.test.ts:2": "test",
+            "web/escaped.test.ts:1": "test", "web/escaped.test.ts:2": "comment",
+        })
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
