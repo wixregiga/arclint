@@ -963,6 +963,7 @@ building_blocks:
             - whether the implementations of a domain service declared as an interface or an abstract class reach its check in the model is not yet observed
             - a Python class is abstract when its own bases name abc.ABC or typing.Protocol, or its metaclass is abc.ABCMeta, as the library provides them; one abstract only through a base class of the repository is judged as concrete
             - a Python base is read statically, in the order its module runs; a replacement made through more than one call, a decorator, or another module, and a submodule another file imports, are not seen
+            - a Python annotation alone, a star import or a destructuring after the class, and an alias a re-exporting module reads before rebinding its source can still make an abstract base read as concrete; a rebound setattr or called function, or an import inside a called function, can hide a replacement
       - id: assertion/verified-by-names-tests
         statement: "Every entry of an assertion's verified_by names one test: its file's path from the repository root, a colon, and its name. An entry missing either part, a path absolute or outside the repository, or a repeated entry is rejected."
         sources:
