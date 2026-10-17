@@ -55,6 +55,7 @@ func AgentCommandSurface() []AgentCommandDoc {
 	return []AgentCommandDoc{
 		{"context", "context [paths...]", "run before editing under any path: the owning zones, their import contracts, and the recorded domain in one answer (`--zone <names>`, `--format json`)"},
 		{"domain", "domain", "the ubiquitous language and its recording path: contexts, aggregates, value objects, invariants, relations"},
+		{"domain show", "domain show <name>", "when someone asks which rules enforce something: the invariants and assertions an entry records, the code enforcing each one, and its status from the current check (`--format json`)"},
 		{"domain define", "domain define", "record a meaning through validated commands; ArcLint writes the recording's format"},
 		{"domain remove", "domain remove", "remove an entry through validated commands"},
 		{"rules", "rules [selector]", "every configured rule with its constraint and rationale; one match prints the complete rule"},

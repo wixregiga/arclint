@@ -249,6 +249,7 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
+	showDomainDefinition = showDomainDefinition.WithChecks(repository, assess)
 	defineDomainDefinition, err := application.NewDefineDomainDefinition(knowledge, project)
 	if err != nil {
 		return configError(err)

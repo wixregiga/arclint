@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
@@ -30,12 +31,20 @@ type DomainEntryView struct {
 	Service        vocab.DomainService
 	Specification  vocab.Specification
 	Question       vocab.Question
+
+	// Rules is what the entry records about its invariants and
+	// assertions; nil for a concept that records none.
+	Rules *DomainEntryRules
 }
 
 // ShowDomainDefinition presents one recorded entry of the project's
-// Ubiquitous Language.
+// Ubiquitous Language, and for an entry that records invariants or
+// assertions, where the code enforces each one and how the current
+// check judges it.
 type ShowDomainDefinition struct {
 	knowledge vocab.Repository
+	rules     rule.Repository
+	assess    *AssessConformance
 }
 
 // NewShowDomainDefinition requires the Ubiquitous Language repository
@@ -47,18 +56,37 @@ func NewShowDomainDefinition(knowledge vocab.Repository) (ShowDomainDefinition, 
 	return ShowDomainDefinition{knowledge: knowledge}, nil
 }
 
+// WithChecks lends the configured Rules and the Conformance Check, so
+// show reports where each recorded invariant and assertion is enforced
+// and its status. Without them every rule reports that no check ran.
+func (uc ShowDomainDefinition) WithChecks(rules rule.Repository, assess AssessConformance) ShowDomainDefinition {
+	uc.rules = rules
+	uc.assess = &assess
+	return uc
+}
+
 // Execute finds the entry. concept is a spelling vocab.ParseConcept
-// accepts; context and owner narrow the search and may be empty when
-// the name finds the entry alone. A missing entry wraps
+// accepts, or empty to find the entry by its name, key, or alias
+// alone; context and owner narrow the search and may be empty when the
+// name finds the entry alone. A missing entry wraps
 // vocab.ErrDefinitionNotFound; an entry the request cannot pin down
-// (several contexts or owners record it) wraps ErrDomainUsage.
+// (several concepts, contexts, or owners record the name) wraps
+// ErrDomainUsage and names each candidate with the command showing it.
 func (uc ShowDomainDefinition) Execute(concept, context, owner, name string) (DomainEntryView, error) {
-	c, err := vocab.ParseConcept(strings.TrimSpace(concept))
-	if err != nil {
-		return DomainEntryView{}, fmt.Errorf("%w: %v", ErrDomainUsage, err)
+	concept = strings.TrimSpace(concept)
+	var c vocab.Concept
+	if concept != "" {
+		parsed, err := vocab.ParseConcept(concept)
+		if err != nil {
+			return DomainEntryView{}, fmt.Errorf("%w: %v", ErrDomainUsage, err)
+		}
+		c = parsed
 	}
 	name = strings.TrimSpace(name)
 	if name == "" {
+		if c == "" {
+			return DomainEntryView{}, fmt.Errorf("%w: a name is required", ErrDomainUsage)
+		}
 		return DomainEntryView{}, fmt.Errorf("%w: %s: a name is required", ErrDomainUsage, c)
 	}
 	lang, found, err := uc.knowledge.RecordedLanguage()
@@ -66,8 +94,25 @@ func (uc ShowDomainDefinition) Execute(concept, context, owner, name string) (Do
 		return DomainEntryView{}, fmt.Errorf("load domain model: %w", err)
 	}
 	if !found {
+		what := "entry"
+		if c != "" {
+			what = string(c)
+		}
 		return DomainEntryView{}, fmt.Errorf("no %s named %q is recorded: %s is missing: %w",
-			c, name, uc.knowledge.Recording().Path(), vocab.ErrDefinitionNotFound)
+			what, name, uc.knowledge.Recording().Path(), vocab.ErrDefinitionNotFound)
 	}
-	return locateEntry(lang, c, context, owner, name)
+	var view DomainEntryView
+	if c == "" {
+		view, err = locateNamedEntry(lang, context, owner, name)
+	} else {
+		view, err = locateEntry(lang, c, context, owner, name)
+	}
+	if err != nil {
+		return DomainEntryView{}, err
+	}
+	view.Rules = recordedRules(lang, view)
+	if view.Rules != nil && len(view.Rules.Checks) > 0 {
+		uc.judge(view.Context, view.Rules)
+	}
+	return view, nil
 }

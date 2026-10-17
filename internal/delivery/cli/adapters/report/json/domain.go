@@ -522,6 +522,66 @@ func showJSONDoc(v application.DomainEntryView) map[string]any {
 		// Resolved to the aggregate, invariant, or assertion they name
 		// before a view exists; no view carries them.
 	}
+	if v.Rules != nil {
+		doc["rules"] = entryRulesJSON(*v.Rules)
+	}
+	return doc
+}
+
+// entryRulesJSONDoc is what a shown entry records about its invariants
+// and assertions: each one with the code enforcing it and its status,
+// the aggregate recording them for an entity, and the command
+// recording a first one when there is none.
+type entryRulesJSONDoc struct {
+	Checked    bool               `json:"checked"`
+	CheckError string             `json:"checkError,omitempty"`
+	Aggregate  string             `json:"aggregate,omitempty"`
+	Record     string             `json:"record,omitempty"`
+	Checks     []ruleCheckJSONDoc `json:"checks"`
+}
+
+type ruleCheckJSONDoc struct {
+	Kind       string               `json:"kind"`
+	Owner      string               `json:"owner"`
+	Key        string               `json:"key"`
+	On         string               `json:"on,omitempty"`
+	Statement  string               `json:"statement"`
+	Source     string               `json:"source,omitempty"`
+	Expected   string               `json:"expected,omitempty"`
+	Status     string               `json:"status"`
+	Findings   []ruleFindingJSONDoc `json:"findings"`
+	Reasons    []string             `json:"reasons"`
+	NotChecked []string             `json:"notChecked"`
+}
+
+type ruleFindingJSONDoc struct {
+	Rule    string `json:"rule"`
+	Message string `json:"message"`
+	Path    string `json:"path,omitempty"`
+	Line    int    `json:"line,omitempty"`
+	Status  string `json:"status"`
+}
+
+func entryRulesJSON(r application.DomainEntryRules) entryRulesJSONDoc {
+	doc := entryRulesJSONDoc{
+		Checked: r.Checked, CheckError: r.CheckError, Aggregate: r.Aggregate, Record: r.Record,
+		Checks: make([]ruleCheckJSONDoc, 0, len(r.Checks)),
+	}
+	for _, c := range r.Checks {
+		check := ruleCheckJSONDoc{
+			Kind: string(c.Kind), Owner: c.Owner, Key: c.Key, On: c.On, Statement: c.Statement,
+			Source: c.Source, Expected: c.Expected, Status: string(c.Status),
+			Findings:   make([]ruleFindingJSONDoc, 0, len(c.Findings)),
+			Reasons:    presentList(c.Reasons),
+			NotChecked: presentList(c.NotChecked),
+		}
+		for _, f := range c.Findings {
+			check.Findings = append(check.Findings, ruleFindingJSONDoc{
+				Rule: f.Rule, Message: f.Message, Path: f.Path, Line: f.Line, Status: f.Status,
+			})
+		}
+		doc.Checks = append(doc.Checks, check)
+	}
 	return doc
 }
 

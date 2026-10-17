@@ -75,7 +75,7 @@ func NewDomainCommand(
 			},
 			{
 				Name:         "show",
-				Short:        "show one domain definition",
+				Short:        "show one domain definition and the rules that enforce it",
 				Long:         showLong,
 				Example:      showExample,
 				MaxArgs:      2,
@@ -236,10 +236,16 @@ func listRunner(list application.ListDomainDefinitions, render Renderer) func(Co
 
 func showRunner(show application.ShowDomainDefinition, render Renderer) func(Context) error {
 	return func(ctx Context) error {
-		if len(ctx.Args) != 2 {
-			return ConfigError(fmt.Errorf("show requires <concept> <name>"))
+		var concept, name string
+		switch len(ctx.Args) {
+		case 1:
+			name = ctx.Args[0]
+		case 2:
+			concept, name = ctx.Args[0], ctx.Args[1]
+		default:
+			return ConfigError(fmt.Errorf("show requires <name> or <concept> <name>"))
 		}
-		result, err := show.Execute(ctx.Args[0], ctx.String("context"), ctx.String("owner"), ctx.Args[1])
+		result, err := show.Execute(concept, ctx.String("context"), ctx.String("owner"), name)
 		if err != nil {
 			return domainError(err)
 		}
@@ -813,7 +819,42 @@ func completeConcepts() func(args []string, toComplete string) []AutoCompleteCan
 	}
 }
 
+// completeShowArgs completes show's first argument with the concepts
+// and every recorded name, since a name alone finds its entry, and the
+// second with the names recorded under the concept.
 func completeShowArgs(list application.ListDomainDefinitions) func(args []string, toComplete string) []AutoCompleteCandidate {
+	return func(args []string, toComplete string) []AutoCompleteCandidate {
+		if len(args) == 0 {
+			return append(conceptSingularCandidates(toComplete), recordedNameCandidates(list, toComplete)...)
+		}
+		return completeConceptName(list)(args, toComplete)
+	}
+}
+
+// recordedNameCandidates completes with every recorded name and key,
+// whatever its concept.
+func recordedNameCandidates(list application.ListDomainDefinitions, toComplete string) []AutoCompleteCandidate {
+	result, err := list.Execute("", "")
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var names []string
+	for _, c := range vocab.Concepts() {
+		for _, name := range conceptNames(result.Language, c) {
+			if !seen[name] {
+				seen[name] = true
+				names = append(names, name)
+			}
+		}
+	}
+	sort.Strings(names)
+	return filterCandidates(toComplete, names)
+}
+
+// completeConceptName completes <concept> <name>: the concept first,
+// then the names recorded under it.
+func completeConceptName(list application.ListDomainDefinitions) func(args []string, toComplete string) []AutoCompleteCandidate {
 	return func(args []string, toComplete string) []AutoCompleteCandidate {
 		switch len(args) {
 		case 0:
@@ -835,7 +876,7 @@ func completeEditArgs(list application.ListDomainDefinitions, define bool) func(
 			}
 			return append(conceptSingularCandidates(toComplete), filterCandidates(toComplete, values)...)
 		}
-		return completeShowArgs(list)(args, toComplete)
+		return completeConceptName(list)(args, toComplete)
 	}
 }
 
@@ -860,8 +901,16 @@ func definitionNameCandidates(list application.ListDomainDefinitions, conceptArg
 	if err != nil {
 		return nil
 	}
+	names := conceptNames(result.Language, concept)
+	sort.Strings(names)
+	return filterCandidates(toComplete, names)
+}
+
+// conceptNames lists what the language records under a concept: keys
+// for invariants, assertions, and questions; names for everything else.
+func conceptNames(lang vocab.UbiquitousLanguage, concept vocab.Concept) []string {
 	var names []string
-	for _, ctx := range result.Language.Contexts {
+	for _, ctx := range lang.Contexts {
 		switch concept {
 		case vocab.ConceptBoundedContext:
 			names = append(names, ctx.Name)
@@ -910,8 +959,7 @@ func definitionNameCandidates(list application.ListDomainDefinitions, conceptArg
 			}
 		}
 	}
-	sort.Strings(names)
-	return filterCandidates(toComplete, names)
+	return names
 }
 
 func filterCandidates(toComplete string, values []string) []AutoCompleteCandidate {
@@ -1012,14 +1060,28 @@ const listExample = `  arclint domain list
   arclint domain list --context ordering
   arclint domain list --format json`
 
-const showLong = `Show one domain definition.
+const showLong = `Show one domain definition, and which rules enforce it.
 
-Names and keys are matched exactly. Pass --context when the project records
-several bounded contexts and the name is recorded in more than one; pass
---owner when an invariant or assertion key is recorded under more than one
-owner in the same context.`
+Name the entry alone, or its concept and name. A name alone finds the entry
+whose name, key, or alias it spells; when several entries match, show lists
+the command that shows each one. Names are matched exactly, and a name that
+matches nothing exactly matches the entry that spells it in another case.
 
-const showExample = `  arclint domain show bounded_context ordering
+For every invariant and assertion the entry records, show prints the code
+that enforces it and its status from the current check: conforms, finding
+(with the message), not observable in the languages ArcLint analyzes, or why
+it is undetermined or not checked. The checks are structural: they find the
+enforcing method and its calls, not whether the method body enforces the
+statement. An entry that can record rules and records none says so and
+names the command that records one.
+
+Pass --context when the project records several bounded contexts and the
+name is recorded in more than one; pass --owner when an invariant or
+assertion key is recorded under more than one owner in the same context.`
+
+const showExample = `  arclint domain show Order
+  arclint domain show paid-in-full
+  arclint domain show bounded_context ordering
   arclint domain show aggregate Order
   arclint domain show entity OrderLine
   arclint domain show value_object Money

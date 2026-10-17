@@ -38,6 +38,7 @@ IMPORTANT: work in this order on every change.
 
 - `arclint context [paths...]`: run before editing under any path: the owning zones, their import contracts, and the recorded domain in one answer (`--zone <names>`, `--format json`)
 - `arclint domain`: the ubiquitous language and its recording path: contexts, aggregates, value objects, invariants, relations
+- `arclint domain show <name>`: when someone asks which rules enforce something: the invariants and assertions an entry records, the code enforcing each one, and its status from the current check (`--format json`)
 - `arclint domain define`: record a meaning through validated commands; ArcLint writes the recording's format
 - `arclint domain remove`: remove an entry through validated commands
 - `arclint rules [selector]`: every configured rule with its constraint and rationale; one match prints the complete rule
