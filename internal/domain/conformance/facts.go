@@ -191,6 +191,16 @@ func (f Facts) observed(path string) bool {
 	return ok
 }
 
+// held reports whether the repository holds path although the walk may
+// not have observed it, as the content capability tells; it lends
+// nothing of the file.
+func (f Facts) held(path string) bool {
+	if f.source == nil || f.source.observations.content == nil {
+		return false
+	}
+	return f.source.observations.content.Holds(path)
+}
+
 // ZoneOf returns memberships of a selected file only. Other endpoint
 // memberships are carried by DependencyImport, never an unrestricted lookup.
 func (f Facts) ZoneOf(path string) []rule.ZoneName {

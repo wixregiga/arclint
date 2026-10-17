@@ -1078,3 +1078,52 @@ contexts:
 		t.Fatalf("clearing the tests dropped the statement's comment:\n%s", text)
 	}
 }
+
+// A verified_by item written as an alias of a test named elsewhere in
+// the file stays an alias, comment included, through an edit elsewhere.
+func TestRecordKeepsAnAliasedVerifyingTest(t *testing.T) {
+	const aliased = `version: 1
+project: ticketing
+contexts:
+  sales:
+    definition: Selling seats for events.
+    value_objects:
+      Money:
+        definition: An amount in one currency.
+        invariants:
+          never-negative:
+            statement: Money is never negative.
+            verified_by:
+              - &money internal/money/money_test.go:TestMoney
+    services:
+      Pricing:
+        definition: Prices an order against the event's tiers.
+        assertions:
+          tiers-on-sale:
+            on: Price
+            statement: Only a tier on sale prices an order.
+            verified_by:
+              - *money # the same property test
+`
+	repo, _ := repository(t, aliased)
+	lang, _, err := repo.RecordedLanguage()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if got := lang.Contexts[0].Services[0].Assertions[0].VerifiedBy; len(got) != 1 || got[0] != "internal/money/money_test.go:TestMoney" {
+		t.Fatalf("the alias does not read as the test it names: %v", got)
+	}
+	lang.Contexts[0].Services[0].Definition = "Prices an order."
+	edited, err := vocab.NewUbiquitousLanguage(lang.Project, lang.Description, lang.Contexts, lang.Relations)
+	if err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+	edited.Recording = lang.Recording
+	if err := repo.Record(edited); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	written, _ := os.ReadFile(repo.Path())
+	if !strings.Contains(string(written), "            verified_by:\n              - *money # the same property test\n") {
+		t.Fatalf("the aliased test lost its alias or comment:\n%s", written)
+	}
+}

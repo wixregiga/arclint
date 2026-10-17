@@ -130,6 +130,7 @@ func (w *pyWalker) add(kind, name, owner string, n *gotreesitter.Node) *conforma
 	w.out.Decls = append(w.out.Decls, conformance.Declaration{
 		Kind: kind, Name: name, Owner: owner,
 		Exported:  !strings.HasPrefix(name, "_"),
+		Generic:   n.ChildByFieldName("type_parameters", w.lang) != nil,
 		StartLine: int(n.StartPoint().Row) + 1, EndLine: int(n.EndPoint().Row) + 1,
 	})
 	return &w.out.Decls[len(w.out.Decls)-1]
@@ -264,7 +265,9 @@ func (w *pyWalker) walk(n *gotreesitter.Node, owner string, inFunction bool) {
 			}
 		}
 		return
-	case "module", "block", "if_statement", "try_statement", "with_statement":
+	case "module", "block", "if_statement", "elif_clause", "else_clause",
+		"try_statement", "except_clause", "except_group_clause", "finally_clause",
+		"with_statement", "for_statement", "while_statement":
 		for i := 0; i < n.NamedChildCount(); i++ {
 			w.walk(n.NamedChild(i), owner, inFunction)
 		}

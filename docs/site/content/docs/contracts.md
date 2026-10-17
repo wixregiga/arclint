@@ -98,12 +98,14 @@ check that each named test exists:
 
 | Language | A test is |
 |---|---|
-| Go | a `func Test...(t *testing.T)` in a `_test.go` file that returns nothing, named as `go test` runs it, with `testing` under the name the file imports it by |
+| Go | a `func Test...(t *testing.T)` in a `_test.go` file, with no type parameters and no results, named as `go test` runs it, with `testing` under the name the file imports it by |
 | Python | a module-level `def test...`, or a `test...` method spelled `Class.test_name` |
 | TypeScript | its name written in the file, since a test is a call such as `test("...")` |
 
 A missing file, a renamed test, or a function that is not a test is a
-finding at the recorded entry. The check says only that the test exists;
+finding at the recorded entry. A test file the scan does not observe, because
+`scan.exclude` or a `testdata` directory leaves it out, leaves the rule
+undetermined rather than missing. The check says only that the test exists;
 whether the test proves the statement is not checked. In TypeScript a comment
 or a string that repeats the name passes for the test.
 

@@ -173,3 +173,44 @@ func keysOf(m map[string]conformance.Declaration) []string {
 	}
 	return out
 }
+
+// A func or type that declares its own type parameters is generic; a
+// method, which cannot, and a plain func or type are not.
+func TestDeclarationsMarkGenerics(t *testing.T) {
+	root := t.TempDir()
+	files := []conformance.ObservedFile{
+		write(t, root, "go.mod", "module example.com/x\n\ngo 1.22\n"),
+		write(t, root, "g/g_test.go", `package g
+
+import "testing"
+
+type List[T any] struct{ items []T }
+
+type Plain struct{}
+
+func (l *List[T]) Len() int { return len(l.items) }
+
+func Map[T, U any](in []T, f func(T) U) []U { return nil }
+
+func TestCap[T any](t *testing.T) {}
+
+func TestPlain(t *testing.T) {}
+`),
+	}
+	facts, err := golang.NewProducer().Facts(root, files, []rule.Fact{rule.FactDeclarations})
+	if err != nil {
+		t.Fatalf("Facts: %v", err)
+	}
+	got := map[string]bool{}
+	for _, d := range facts["g/g_test.go"].Declarations {
+		if d.Kind != "field" {
+			got[d.Name] = d.Generic
+		}
+	}
+	want := map[string]bool{"List": true, "Plain": false, "Len": false, "Map": true, "TestCap": true, "TestPlain": false}
+	for name, generic := range want {
+		if g, ok := got[name]; !ok || g != generic {
+			t.Errorf("%s generic = %v (declared %v), want %v", name, g, ok, generic)
+		}
+	}
+}

@@ -100,6 +100,13 @@ var declarationKinds = map[string]bool{
 	"const": true, "var": true,
 }
 
+// genericKinds are the declaration kinds that may declare their own
+// type parameters.
+var genericKinds = map[string]bool{
+	"struct": true, "interface": true, "type": true, "class": true,
+	"func": true, "method": true,
+}
+
 // Declaration is one source declaration in the shared cross-language
 // vocabulary: the same shape for every supported language, with each
 // language emitting only the kinds it honestly has.
@@ -119,7 +126,12 @@ type Declaration struct {
 	// Protocol, or naming ABCMeta as its metaclass, by the name the
 	// class statement writes. False for every other kind; an interface
 	// is abstract by its kind.
-	Abstract  bool
+	Abstract bool
+	// Generic marks a func, method, or type that declares its own type
+	// parameters: Go's func F[T any] or type List[T any], TypeScript's
+	// function f<T>() or class Box<T>, Python's def f[T]() or
+	// class Box[T]. False for every other declaration.
+	Generic   bool
 	StartLine int
 	EndLine   int
 	// Params and Results carry the syntactic signature of func and
@@ -340,6 +352,10 @@ type ObservedFile struct {
 // so temporary fixture materialization cannot invalidate later reads.
 type Content interface {
 	Read(path string) (string, error)
+	// Holds reports whether the repository holds a regular file at the
+	// repo-relative path, whether or not the walk observed it: a file
+	// the scan policy leaves out is held and unobserved.
+	Holds(path string) bool
 }
 
 // MapContent is Content backed by an immutable in-memory path-to-bytes map.
@@ -354,6 +370,12 @@ func (m MapContent) Read(path string) (string, error) {
 		return "", fmt.Errorf("file not found")
 	}
 	return s, nil
+}
+
+// Holds reports whether the map records content for path.
+func (m MapContent) Holds(path string) bool {
+	_, ok := m.files[path]
+	return ok
 }
 
 // NewMapContent returns MapContent from an in-memory path-to-bytes map.
@@ -408,6 +430,9 @@ func NewObservations(files []ObservedFile, facts map[string]LanguageFacts) (Obse
 			}
 			if d.Abstract && d.Kind != declKindClass {
 				return Observations{}, fmt.Errorf("observations: %s: %s %s is marked abstract; only a class carries the mark", path, d.Kind, d.Name)
+			}
+			if d.Generic && !genericKinds[d.Kind] {
+				return Observations{}, fmt.Errorf("observations: %s: %s %s is marked generic; only a func, method, or type declares type parameters", path, d.Kind, d.Name)
 			}
 		}
 		if err := validResolution(f, seen); err != nil {

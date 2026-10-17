@@ -68,7 +68,10 @@ type DeclInfo struct {
 	// TypeScript abstract class, or a Python class deriving ABC or
 	// Protocol, or naming ABCMeta as its metaclass. False for every
 	// other kind.
-	Abstract  bool `json:"abstract"`
+	Abstract bool `json:"abstract"`
+	// Generic marks a func, method, or type that declares its own type
+	// parameters. False for every other declaration.
+	Generic   bool `json:"generic"`
 	StartLine int  `json:"startLine"`
 	EndLine   int  `json:"endLine"`
 	// Params and Results carry the syntactic signature of func and

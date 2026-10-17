@@ -555,10 +555,16 @@ func setTests(mapping *yaml.Node, tests []string, order []string) {
 		setField(mapping, keyVerifiedBy, testSequence(tests), order)
 		return
 	}
+	// An item is matched by the test it names, through an alias too,
+	// and keeps its own node: the alias stays an alias.
 	kept := map[string]*yaml.Node{}
 	for _, item := range existing.Content {
-		if _, seen := kept[item.Value]; item.Kind == yaml.ScalarNode && !seen {
-			kept[item.Value] = item
+		named := resolve(item)
+		if named == nil || named.Kind != yaml.ScalarNode {
+			continue
+		}
+		if _, seen := kept[named.Value]; !seen {
+			kept[named.Value] = item
 		}
 	}
 	content := make([]*yaml.Node, 0, len(tests))

@@ -108,6 +108,11 @@ declare module "arclint" {
      * other kind.
      */
     abstract: boolean;
+    /**
+     * Generic marks a func, method, or type that declares its own type
+     * parameters. False for every other declaration.
+     */
+    generic: boolean;
     startLine: number /* int */;
     endLine: number /* int */;
     /**

@@ -115,6 +115,17 @@ func (r rootContent) Read(path string) (string, error) {
 	return string(data), nil
 }
 
+// Holds reports whether the root holds a regular file at the
+// repo-relative path, without following a link; a path that is not
+// repo-relative, or that leaves the root, is held by nothing.
+func (r rootContent) Holds(path string) bool {
+	if path == "" || filepath.IsAbs(path) || !filepath.IsLocal(filepath.FromSlash(path)) {
+		return false
+	}
+	info, err := os.Lstat(filepath.Join(r.root, filepath.FromSlash(path)))
+	return err == nil && info.Mode().IsRegular()
+}
+
 func languageRequested(languages []rule.Language, l rule.Language) bool {
 	for _, known := range languages {
 		if known == l {
