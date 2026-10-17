@@ -250,12 +250,6 @@
     {
       "ruleId": "domain_recording/text-within-word-limit",
       "subject": "domain.arclint.yaml",
-      "message": "value object \"Override\" in context \"adoption\": the definition has 44 words, and a definition holds at most 40",
-      "count": 1
-    },
-    {
-      "ruleId": "domain_recording/text-within-word-limit",
-      "subject": "domain.arclint.yaml",
       "message": "value object \"PatternSource\" in context \"distribution\": the definition has 46 words, and a definition holds at most 40",
       "count": 1
     },
