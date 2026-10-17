@@ -172,3 +172,24 @@ func TestCheckoutSeesACopyThatKeepsTheMetadata(t *testing.T) {
 		t.Fatalf("a copy keeping the metadata showed %v", got)
 	}
 }
+
+// A project reached through a link stamps a removal at its root on the
+// directory the link points to, not on the link.
+func TestARemovalAtARootReachedThroughALinkTakesTheDirectorysTime(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("creating a directory link needs privileges on Windows")
+	}
+	repository := gitRepository(t, map[string]string{"a.go": "package a\n"})
+	link := filepath.Join(t.TempDir(), "project")
+	if err := os.Symlink(repository, link); err != nil {
+		t.Fatal(err)
+	}
+	pause(t)
+	before := clockOf(t, repository)
+	if err := os.Remove(filepath.Join(repository, "a.go")); err != nil {
+		t.Fatal(err)
+	}
+	if removed := (checkout{root: link}).removedAt("a.go", time.Time{}); removed.Before(before) {
+		t.Fatalf("the removal was stamped %v, before the file clock read %v ahead of it", removed, before)
+	}
+}
