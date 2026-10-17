@@ -159,3 +159,67 @@ func TestImplementationsOnlyWhenRequested(t *testing.T) {
 		t.Errorf("implementations supplied without being requested: %+v", f)
 	}
 }
+
+// A comparison of signatures the type checker could not type, or that
+// name types arclint knows by name only, proves neither that a type
+// implements an interface nor that it does not: os.FileMode is an alias
+// of io/fs.FileMode, which a stub of each package cannot tell, and a dot
+// import leaves its names untyped. Each such type is undetermined, and
+// a type that matches through fully known types stays exact.
+func TestImplementationsWithUnknownTypesAreUndetermined(t *testing.T) {
+	root := t.TempDir()
+	files := []conformance.ObservedFile{
+		write(t, root, "go.mod", "module example.com/id\n\ngo 1.24\n"),
+		write(t, root, "user/ports.go", `package user
+
+import (
+	. "context"
+	"os"
+)
+
+type Encrypter interface {
+	Encrypt(c Context) string
+}
+
+type Chmoder interface {
+	Chmod(m os.FileMode) string
+}
+`),
+		write(t, root, "adapters/adapters.go", `package adapters
+
+import (
+	"io/fs"
+	. "io"
+	"os"
+)
+
+type NotAnEncrypter struct{}
+
+func (NotAnEncrypter) Encrypt(r Reader) string { return "" }
+
+type SameMode struct{}
+
+func (SameMode) Chmod(m os.FileMode) string { return "" }
+
+type AliasMode struct{}
+
+func (AliasMode) Chmod(m fs.FileMode) string { return "" }
+`),
+	}
+	facts, err := golang.NewProducer().Facts(root, files, []rule.Fact{rule.FactDeclarations, rule.FactImplementations})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := implementationsOf(facts["adapters/adapters.go"])
+	want := []string{
+		"AliasMode -> Chmoder@user/ports.go [undetermined] AliasMode.Chmod@adapters/adapters.go",
+		"NotAnEncrypter -> Encrypter@user/ports.go [undetermined] NotAnEncrypter.Encrypt@adapters/adapters.go",
+		"SameMode -> Chmoder@user/ports.go [exact] SameMode.Chmod@adapters/adapters.go",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("implementations:\n got %s\nwant %s", strings.Join(got, "\n     "), strings.Join(want, "\n     "))
+	}
+	if _, err := conformance.NewObservations(files, facts); err != nil {
+		t.Errorf("the facts do not validate: %v", err)
+	}
+}

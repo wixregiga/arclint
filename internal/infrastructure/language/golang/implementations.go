@@ -88,12 +88,28 @@ func (tc *typeCheck) computeImplementations() implementations {
 			if !hasMethodNames(iface, names) {
 				continue
 			}
-			if !types.Implements(t.obj.Type(), iface) && !types.Implements(ptr, iface) {
-				continue
-			}
 			impl := conformance.Implementation{
 				Abstraction: res.objectRef(i.obj, ""),
 				Evidence:    conformance.ImplementationExact,
+			}
+			implements := types.Implements(t.obj.Type(), iface) || types.Implements(ptr, iface)
+			invalid, byName := tc.signatureGaps(ptr, iface)
+			switch {
+			case invalid:
+				// A comparison over a type the checker could not type
+				// proves neither that the type implements the interface
+				// nor that it does not.
+				impl.Evidence = conformance.ImplementationUndetermined
+				impl.Reason = "the type checker could not type every signature of " + i.obj.Name() + " and " + t.obj.Name() + ", so whether one implements the other is undetermined"
+			case implements:
+			case byName:
+				// Types of a package arclint reads by name only may be one
+				// type under two names, such as an alias in another
+				// package, so a mismatch proves nothing.
+				impl.Evidence = conformance.ImplementationUndetermined
+				impl.Reason = "the signatures of " + i.obj.Name() + " and " + t.obj.Name() + " name types of a package arclint reads by name only, so whether one implements the other is undetermined"
+			default:
+				continue
 			}
 			for m := range iface.Methods() {
 				impl.Operations = append(impl.Operations, res.reachedMethod(ptr, m))
@@ -105,6 +121,84 @@ func (tc *typeCheck) computeImplementations() implementations {
 		}
 	}
 	return out
+}
+
+// signatureGaps reports whether the signatures compared to decide that
+// a type implements an interface hold a type the checker could not
+// type, and whether they hold one of a package arclint reads by name
+// only: the interface's methods and the methods the type reaches by
+// their names.
+func (tc *typeCheck) signatureGaps(typ types.Type, iface *types.Interface) (invalid, byName bool) {
+	seen := map[types.Type]bool{}
+	for m := range iface.Methods() {
+		i, n := tc.typeGaps(m.Type(), seen)
+		invalid, byName = invalid || i, byName || n
+		obj, _, _ := types.LookupFieldOrMethod(typ, false, m.Pkg(), m.Name())
+		if fn, ok := obj.(*types.Func); ok {
+			i, n = tc.typeGaps(fn.Type(), seen)
+			invalid, byName = invalid || i, byName || n
+		}
+	}
+	return invalid, byName
+}
+
+// typeGaps walks a type for one the checker could not type and for a
+// declared type of a package arclint does not type-check from source,
+// which it knows by name only.
+func (tc *typeCheck) typeGaps(typ types.Type, seen map[types.Type]bool) (invalid, byName bool) {
+	if typ == nil || seen[typ] {
+		return false, false
+	}
+	seen[typ] = true
+	merge := func(ts ...types.Type) {
+		for _, t := range ts {
+			i, n := tc.typeGaps(t, seen)
+			invalid, byName = invalid || i, byName || n
+		}
+	}
+	named := func(obj *types.TypeName, args *types.TypeList) {
+		if pkg := obj.Pkg(); pkg != nil && !tc.sources[pkg.Path()] {
+			byName = true
+		}
+		for t := range args.Types() {
+			merge(t)
+		}
+	}
+	switch x := typ.(type) {
+	case *types.Basic:
+		return x.Kind() == types.Invalid, false
+	case *types.Named:
+		named(x.Obj(), x.TypeArgs())
+	case *types.Alias:
+		named(x.Obj(), x.TypeArgs())
+		merge(x.Rhs())
+	case *types.Pointer:
+		merge(x.Elem())
+	case *types.Slice:
+		merge(x.Elem())
+	case *types.Array:
+		merge(x.Elem())
+	case *types.Chan:
+		merge(x.Elem())
+	case *types.Map:
+		merge(x.Key(), x.Elem())
+	case *types.Signature:
+		merge(x.Params(), x.Results())
+	case *types.Tuple:
+		for v := range x.Variables() {
+			merge(v.Type())
+		}
+	case *types.Struct:
+		for f := range x.Fields() {
+			merge(f.Type())
+		}
+	case *types.Interface:
+		for m := range x.Methods() {
+			merge(m.Type())
+		}
+	case *types.TypeParam, *types.Union:
+	}
+	return invalid, byName
 }
 
 // hasMethodNames reports whether a method set holds a method of every
