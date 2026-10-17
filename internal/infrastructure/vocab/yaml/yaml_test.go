@@ -1013,3 +1013,68 @@ contexts:
 		t.Errorf("clearing the tests does not restore the file:\n%s", text)
 	}
 }
+
+// Comments survive the edits verified_by brings: an invariant's inline
+// comment moves with its statement into the mapping and back, and the
+// comments inside a verified_by list stay through an edit elsewhere
+// and through a change that keeps their tests.
+func TestRecordKeepsCommentsAroundVerifyingTests(t *testing.T) {
+	const scalar = `version: 1
+project: ticketing
+contexts:
+  sales:
+    definition: Selling seats for events.
+    value_objects:
+      Money:
+        definition: An amount in one currency.
+        invariants:
+          never-negative: Money is never negative. # holds for every amount
+`
+	repo, _ := repository(t, scalar)
+	edit := func(change func(*vocab.ValueObject)) string {
+		t.Helper()
+		lang, _, err := repo.RecordedLanguage()
+		if err != nil {
+			t.Fatalf("load: %v", err)
+		}
+		change(&lang.Contexts[0].ValueObjects[0])
+		edited, err := vocab.NewUbiquitousLanguage(lang.Project, lang.Description, lang.Contexts, lang.Relations)
+		if err != nil {
+			t.Fatalf("edit: %v", err)
+		}
+		edited.Recording = lang.Recording
+		if err := repo.Record(edited); err != nil {
+			t.Fatalf("Record: %v", err)
+		}
+		written, _ := os.ReadFile(repo.Path())
+		return string(written)
+	}
+	text := edit(func(v *vocab.ValueObject) {
+		v.Invariants[0].VerifiedBy = []string{"internal/money/money_test.go:TestNeverNegative"}
+	})
+	if want := "          never-negative:\n            statement: Money is never negative. # holds for every amount\n            verified_by:\n"; !strings.Contains(text, want) {
+		t.Fatalf("the inline comment did not move with the statement:\n%s", text)
+	}
+
+	commented := strings.Replace(text,
+		"              - internal/money/money_test.go:TestNeverNegative\n",
+		"              # the property test\n              - internal/money/money_test.go:TestNeverNegative # fuzzed\n", 1)
+	if err := os.WriteFile(repo.Path(), []byte(commented), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if text = edit(func(v *vocab.ValueObject) { v.Definition = "An amount in one currency, in cents." }); !strings.Contains(text,
+		"              # the property test\n              - internal/money/money_test.go:TestNeverNegative # fuzzed\n") {
+		t.Fatalf("an edit elsewhere dropped the comments of verified_by:\n%s", text)
+	}
+	text = edit(func(v *vocab.ValueObject) {
+		v.Invariants[0].VerifiedBy = append(v.Invariants[0].VerifiedBy, "internal/money/money_test.go:TestZero")
+	})
+	if !strings.Contains(text, "              # the property test\n              - internal/money/money_test.go:TestNeverNegative # fuzzed\n              - internal/money/money_test.go:TestZero\n") {
+		t.Fatalf("adding a test dropped the comments of a kept one:\n%s", text)
+	}
+
+	text = edit(func(v *vocab.ValueObject) { v.Invariants[0].VerifiedBy = nil })
+	if !strings.Contains(text, "          never-negative: Money is never negative. # holds for every amount\n") {
+		t.Fatalf("clearing the tests dropped the statement's comment:\n%s", text)
+	}
+}

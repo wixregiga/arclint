@@ -254,12 +254,24 @@ func invariants(invs []vocab.Invariant, order []string) keyed[vocab.Invariant] {
 		name:  func(inv vocab.Invariant) string { return inv.Key },
 		build: build,
 		update: func(n *yaml.Node, inv vocab.Invariant) {
+			tested := len(inv.VerifiedBy) > 0
 			switch {
-			case len(inv.VerifiedBy) == 0 && n.Kind == yaml.ScalarNode:
+			case !tested && n.Kind == yaml.ScalarNode:
 				setScalar(n, textScalar(inv.Statement))
-			case len(inv.VerifiedBy) > 0 && n.Kind == yaml.MappingNode:
+			case tested && n.Kind == yaml.MappingNode:
 				setText(n, keyStatement, inv.Statement, invariantKeys)
 				setTests(n, inv.VerifiedBy, invariantKeys)
+			case tested && n.Kind == yaml.ScalarNode:
+				// The statement alone becomes the mapping's statement, its
+				// node, style, and comments kept.
+				statement := *n
+				setScalar(&statement, textScalar(inv.Statement))
+				m := newMapping()
+				appendKV(m, keyStatement, &statement)
+				appendKV(m, keyVerifiedBy, testSequence(inv.VerifiedBy))
+				*n = *m
+			case !tested && n.Kind == yaml.MappingNode:
+				*n = *statementAlone(n, inv.Statement)
 			default:
 				*n = *build(inv)
 			}
@@ -493,13 +505,72 @@ func setList(mapping *yaml.Node, key string, values []string, order []string) {
 	setField(mapping, key, stringSequence(values), order)
 }
 
-// setTests sets verified_by, removing it when no test is named.
+// statementAlone is an invariant mapping that no longer names tests,
+// written as its statement alone: the statement's node with its style
+// and comments, and the comments of the statement key it loses.
+func statementAlone(mapping *yaml.Node, statement string) *yaml.Node {
+	key, value := mapEntry(mapping, keyStatement)
+	if value == nil || value.Kind != yaml.ScalarNode {
+		return textScalar(statement)
+	}
+	alone := *value
+	setScalar(&alone, textScalar(statement))
+	alone.HeadComment = joinComments(key.HeadComment, alone.HeadComment)
+	alone.LineComment = joinComments(key.LineComment, alone.LineComment)
+	alone.FootComment = joinComments(key.FootComment, alone.FootComment)
+	return &alone
+}
+
+// mapEntry returns the key and value nodes of one mapping entry, nil
+// when the mapping does not hold it.
+func mapEntry(mapping *yaml.Node, key string) (*yaml.Node, *yaml.Node) {
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == key {
+			return mapping.Content[i], mapping.Content[i+1]
+		}
+	}
+	return nil, nil
+}
+
+func joinComments(a, b string) string {
+	switch {
+	case a == "":
+		return b
+	case b == "":
+		return a
+	}
+	return a + "\n" + b
+}
+
+// setTests sets verified_by, removing it when no test is named. A test
+// the list already holds keeps its node and the comments around it,
+// so an edit that leaves the tests alone leaves the list as written.
 func setTests(mapping *yaml.Node, tests []string, order []string) {
 	if len(tests) == 0 {
 		removeField(mapping, keyVerifiedBy)
 		return
 	}
-	setField(mapping, keyVerifiedBy, testSequence(tests), order)
+	_, existing := mapEntry(mapping, keyVerifiedBy)
+	if existing == nil || existing.Kind != yaml.SequenceNode {
+		setField(mapping, keyVerifiedBy, testSequence(tests), order)
+		return
+	}
+	kept := map[string]*yaml.Node{}
+	for _, item := range existing.Content {
+		if _, seen := kept[item.Value]; item.Kind == yaml.ScalarNode && !seen {
+			kept[item.Value] = item
+		}
+	}
+	content := make([]*yaml.Node, 0, len(tests))
+	for _, t := range tests {
+		if item, ok := kept[t]; ok {
+			content = append(content, item)
+			delete(kept, t)
+			continue
+		}
+		content = append(content, stringScalar(t))
+	}
+	existing.Content = content
 }
 
 func appendList(mapping *yaml.Node, key string, values []string) {

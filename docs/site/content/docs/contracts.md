@@ -98,7 +98,7 @@ check that each named test exists:
 
 | Language | A test is |
 |---|---|
-| Go | a `func Test...(t *testing.T)` in a `_test.go` file, named as `go test` runs it |
+| Go | a `func Test...(t *testing.T)` in a `_test.go` file that returns nothing, named as `go test` runs it, with `testing` under the name the file imports it by |
 | Python | a module-level `def test...`, or a `test...` method spelled `Class.test_name` |
 | TypeScript | its name written in the file, since a test is a call such as `test("...")` |
 

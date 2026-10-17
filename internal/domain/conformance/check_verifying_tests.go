@@ -100,10 +100,10 @@ func (code domainCode) judgeVerifyingTest(r rule.Rule, subject rule.Subject, rec
 	}
 }
 
-// testDeclared reports whether a file's declarations declare a test,
-// and when they do not, says what the file declares under the name
-// instead, or "" when nothing.
-type testDeclared func(t vocab.VerifyingTest, decls []Declaration) (bool, string)
+// testDeclared reports whether a file's facts declare a test, and when
+// they do not, says what the file declares under the name instead, or
+// "" when nothing.
+type testDeclared func(t vocab.VerifyingTest, facts LanguageFacts) (bool, string)
 
 // judgeDeclaredTest judges a test of a language whose facts carry
 // declarations. spelling is the declaration a remedy asks for.
@@ -114,8 +114,11 @@ func (code domainCode) judgeDeclaredTest(t vocab.VerifyingTest, finding func(str
 		return nil, fmt.Sprintf("%s: the file does not parse: %s", t, facts.ParseFailure), nil
 	case !facts.DeclarationsAvailable:
 		return nil, fmt.Sprintf("%s: the declarations of %s are not available", t, t.Path), nil
+	case rule.LanguageOf(t.Path) == rule.LanguageGo && !facts.ImportsAvailable:
+		// The name testing is imported by decides which T a Go test takes.
+		return nil, fmt.Sprintf("%s: the imports of %s are not available", t, t.Path), nil
 	}
-	ok, instead := declared(t, facts.Declarations)
+	ok, instead := declared(t, facts)
 	if ok {
 		return nil, "", nil
 	}
@@ -126,22 +129,25 @@ func (code domainCode) judgeDeclaredTest(t vocab.VerifyingTest, finding func(str
 	return finding(message, fmt.Sprintf("declare %s in %s, or name the test that verifies the statement in verified_by", spelling, t.Path))
 }
 
-// goTestDeclared finds a Go test: a function of a _test.go file named
-// Test followed by nothing or by a character that is not a lowercase
-// letter, taking one *testing.T, as go test runs it.
-func goTestDeclared(t vocab.VerifyingTest, decls []Declaration) (bool, string) {
+// goTestDeclared finds a Go test as go test runs it: a function of a
+// _test.go file named Test followed by nothing or by a character that
+// is not a lowercase letter, taking one *testing.T under the name the
+// file imports testing by, and returning nothing.
+func goTestDeclared(t vocab.VerifyingTest, facts LanguageFacts) (bool, string) {
 	if !strings.HasSuffix(t.Path, "_test.go") {
 		return false, "go test runs tests only from _test.go files"
 	}
-	for _, d := range decls {
+	for _, d := range facts.Declarations {
 		if d.Kind != declKindFunc || d.Owner != "" || d.Name != t.Name {
 			continue
 		}
 		switch {
 		case !goTestName(d.Name):
 			return false, fmt.Sprintf("func %s is not named as a test, Test followed by a name that does not begin with a lowercase letter", d.Name)
-		case len(d.Params) != 1 || !goTestingT(d.Params[0].Type):
+		case len(d.Params) != 1 || !goTestingT(d.Params[0].Type, facts.Imports):
 			return false, fmt.Sprintf("func %s does not take one *testing.T", d.Name)
+		case len(d.Results) != 0:
+			return false, fmt.Sprintf("func %s returns a value, and go test runs only a test that returns nothing", d.Name)
 		}
 		return true, ""
 	}
@@ -162,40 +168,56 @@ func goTestName(name string) bool {
 	return !unicode.IsLower(r)
 }
 
-// goTestingT reports whether a parameter type is a pointer to the
-// testing package's T under whatever name the file imports it.
-func goTestingT(typ string) bool {
-	pkg, ok := strings.CutPrefix(typ, "*")
-	if !ok {
-		return false
+// goTestingT reports whether a parameter type, as written, is a pointer
+// to the testing package's T under a name the file imports testing by:
+// testing itself, an alias, or T alone through a dot import.
+func goTestingT(typ string, imports []Import) bool {
+	for _, imp := range imports {
+		if imp.Path != "testing" {
+			continue
+		}
+		switch imp.Name {
+		case "":
+			if typ == "*testing.T" {
+				return true
+			}
+		case "_":
+		case ".":
+			if typ == "*T" {
+				return true
+			}
+		default:
+			if typ == "*"+imp.Name+".T" {
+				return true
+			}
+		}
 	}
-	pkg, ok = strings.CutSuffix(pkg, ".T")
-	return ok && pkg != "" && !strings.ContainsAny(pkg, ".*[] ")
+	return false
 }
 
 // pythonTestDeclared finds a Python test: a module-level function whose
 // name begins with test, or, spelled Class.test_name, such a method of
-// the class.
-func pythonTestDeclared(t vocab.VerifyingTest, decls []Declaration) (bool, string) {
+// the class. A bare name that only a method spells is answered with
+// the spelling that names it.
+func pythonTestDeclared(t vocab.VerifyingTest, facts LanguageFacts) (bool, string) {
 	class, method, isMethod := strings.Cut(t.Name, ".")
 	if !isMethod {
 		method = t.Name
 	}
-	for _, d := range decls {
+	instead := ""
+	for _, d := range facts.Declarations {
 		switch {
 		case isMethod && d.Kind == declKindMethod && d.Owner == class && d.Name == method,
 			!isMethod && d.Kind == declKindFunc && d.Owner == "" && d.Name == method:
-		case !isMethod && d.Kind == declKindMethod && d.Name == method:
-			return false, fmt.Sprintf("%s is a method of %s; name it %s.%s", method, d.Owner, d.Owner, method)
-		default:
-			continue
+			if !strings.HasPrefix(method, "test") {
+				return false, fmt.Sprintf("%s is not named as a test, beginning with test", method)
+			}
+			return true, ""
+		case !isMethod && d.Kind == declKindMethod && d.Name == method && instead == "":
+			instead = fmt.Sprintf("%s is a method of %s; name it %s.%s", method, d.Owner, d.Owner, method)
 		}
-		if !strings.HasPrefix(method, "test") {
-			return false, fmt.Sprintf("%s is not named as a test, beginning with test", method)
-		}
-		return true, ""
 	}
-	return false, ""
+	return false, instead
 }
 
 // pythonTestSpelling is the declaration a remedy asks for.
