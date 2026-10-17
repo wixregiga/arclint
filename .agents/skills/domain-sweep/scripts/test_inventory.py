@@ -1118,6 +1118,14 @@ class InventoryTest(unittest.TestCase):
         self.assertIn("web/quota.test.ts:4", located)
         self.assertIn("web/quota.test.ts:5", located)
 
+    def test_a_name_newer_than_python_s_unicode(self):
+        # U+11F02 is a letter since Unicode 15; Python 3.11's tables leave it unassigned.
+        name = "\U00011f02"
+        self.repo.write("web/quota.test.ts", f"const {name} = 8; const n = {name} / `a/b`.length;\n// Never overwrite.\n"
+                        'test("rejects", () => {});\n')
+        located = self.located(self.repo.rows("--base", "main", "--scope", "changed"))
+        self.assertRowsInclude(located, {"web/quota.test.ts:2": "comment", "web/quota.test.ts:3": "test"})
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")

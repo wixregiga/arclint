@@ -592,7 +592,10 @@ TS_ESCAPE = re.compile(r"\\u(?:([0-9A-Fa-f]{4})|\{([0-9A-Fa-f]+)\})")
 # sets leave some out, such as U+309B).
 OTHER_ID_START = set("\u1885\u1886\u2118\u212e\u309b\u309c")
 OTHER_ID_CONTINUE = set("\u00b7\u0387\u1369\u136a\u136b\u136c\u136d\u136e\u136f\u1370\u1371\u19da\u200c\u200d\u30fb\uff65")
-ID_START_CATEGORIES = {"Lu", "Ll", "Lt", "Lm", "Lo", "Nl"}
+# Cn, a code point the running Python's Unicode tables leave unassigned,
+# counts too: a newer Unicode may make it a letter, and outside strings and
+# comments valid TypeScript holds it nowhere but in a name.
+ID_START_CATEGORIES = {"Lu", "Ll", "Lt", "Lm", "Lo", "Nl", "Cn"}
 ID_CONTINUE_CATEGORIES = ID_START_CATEGORIES | {"Mn", "Mc", "Nd", "Pc"}
 
 
