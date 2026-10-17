@@ -165,12 +165,13 @@ func (t usedTerm) reachedThrough(reached locDecl) bool {
 
 // writtenResult finds the result of a function that is written with
 // the name of the type a declaration of the term declares, when the
-// function lies beside it: in Go in its package, elsewhere in its file.
+// function lies beside it in its own language: in Go in its package,
+// elsewhere in its file.
 // The function may build the term, but its result types are not
 // resolved, so the text can raise the question and never settle it: a
 // type parameter or an import can spell the same name.
 func writtenResult(fn, decl locDecl) (string, bool) {
-	if fn.decl.Kind != declKindFunc || fn.decl.Owner != "" || !isTypeKind(decl.decl.Kind) {
+	if fn.decl.Kind != declKindFunc || fn.decl.Owner != "" || !isTypeKind(decl.decl.Kind) || fn.file.lang != decl.file.lang {
 		return "", false
 	}
 	beside := fn.file.path == decl.file.path

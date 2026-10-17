@@ -24,9 +24,10 @@ func (d locDecl) declaredBy(ref Reference) bool {
 // owns reports whether a member declared in file f under owner belongs
 // to the located type: in Go a method or field belongs to the type of
 // its name in the same package, elsewhere to the class of its name in
-// the same file.
+// the same file. A member never belongs to a type of another language,
+// even one of the same name in the same directory.
 func (d locDecl) owns(f fileFacts, owner string) bool {
-	if owner != d.decl.Name {
+	if owner != d.decl.Name || f.lang != d.file.lang {
 		return false
 	}
 	if f.lang == rule.LanguageGo {
