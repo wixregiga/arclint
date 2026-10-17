@@ -849,6 +849,26 @@ class InventoryTest(unittest.TestCase):
         rows = repo.rows("--base", "main", "--scope", "changed")
         self.assertEqual([row[3] for row in rows], ["NEW.md:1"])
 
+    def test_round_eighteen_cases(self):
+        self.repo.write("web/sample.test.ts", 'const ratio = 4 as import("./units").Count<number> / (test("rejects", () => {}), 2) / 2;\n'
+                        "const cafe\u0301 = 4; const h = cafe\u0301 / 2; // Never round.\n")
+        self.repo.write("test_rules.py", "def test_cafe\u0301():\n    pass\n")
+        with open(os.path.join(self.repo.root, "p.go"), "wb") as handle:
+            handle.write(b"package p\nvar help = `never\r overwrite`\n")
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {
+            "web/sample.test.ts:1": "test", "web/sample.test.ts:2": "comment",
+            "test_rules.py:1": "test", "p.go:2": "text",
+        })
+        root = os.path.join(self.tmp.name, "nested\n")
+        os.mkdir(root)
+        repo = Repo(root)
+        repo.write("README.md", "Base.\n")
+        repo.commit("base")
+        repo.write("rule.md", "A rule.\n")
+        rows = repo.rows("--base", "main", "--scope", "changed")
+        self.assertEqual([row[3] for row in rows], ["rule.md:1"])
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
