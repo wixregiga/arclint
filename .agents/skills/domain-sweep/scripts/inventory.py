@@ -249,13 +249,17 @@ def blob_stored(repo, blob):
     return subprocess.run(["git", "-C", repo, "cat-file", "-e", blob], capture_output=True).returncode == 0
 
 
-def changed_lines(repo, entry):
+def changed_lines(repo, entry, head):
     """The line numbers the change adds to the new file and removes from
-    the old one, from a diff of exactly these two files: blob against blob,
-    or the old blob against the file in the working tree."""
+    the old one, from a diff of exactly the two contents rows are read
+    from: blob against blob for a commit, and against the working tree the
+    old blob against the file's own bytes, staged or not; a file a sparse
+    checkout leaves out is read from its index blob."""
     if entry.old_blob is None or entry.new is None:
         return None, None  # every line is added, or every line removed
-    if entry.new_blob is not None:
+    full = os.path.join(repo, entry.new)
+    on_disk = head is None and os.path.isfile(full) and not os.path.islink(full)
+    if not on_disk:
         out = git_text(repo, "diff", *HUNK_OPTIONS, entry.old_blob, entry.new_blob)
     else:
         # Both sides are plain copies, outside the repository and under
@@ -367,7 +371,9 @@ def is_generated(path, lines):
     line_openers = GENERATED_LINE.get(suffix, C_LINE)
     blocks = GENERATED_BLOCK.get(suffix, C_BLOCK)
     i = 1 if lines and lines[0].startswith("#!") else 0  # a hashbang line
-    if lines and lines[0].strip() in ("+++", "---"):
+    if suffix in ("yaml", "yml") and lines and lines[0].strip() == "---":
+        i = 1  # a YAML document start
+    elif suffix == "md" and lines and lines[0].strip() in ("+++", "---"):
         fence = lines[0].strip()
         i = 1
         while i < len(lines) and lines[i].strip() != fence:
@@ -532,7 +538,7 @@ def go_sources(lines):
 # lines and comments, never the raw text before the slash.
 REGEX_KEYWORDS = {
     "return", "typeof", "case", "do", "else", "in", "new", "delete", "void", "throw", "yield", "await",
-    "instanceof", "default",
+    "instanceof", "default", "extends",
     # A statement ends after these, by automatic semicolon insertion when
     # nothing follows on their line, so a slash after them starts one.
     "debugger", "break", "continue",
@@ -1581,7 +1587,7 @@ def collect(repo, base, head, scope, globs, exclude, recordings, hint):
         if not (old_wanted or new_wanted):
             continue
         files.update(p for p, w in ((old, old_wanted), (new, new_wanted)) if w)
-        added, removed = changed_lines(repo, entry) if entry.old_regular and entry.new_regular else (None, None)
+        added, removed = changed_lines(repo, entry, head) if entry.old_regular and entry.new_regular else (None, None)
         if new_wanted and entry.new_regular:
             lines = read_head(entry)
             if lines is not None:
