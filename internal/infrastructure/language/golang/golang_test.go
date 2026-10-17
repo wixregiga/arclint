@@ -31,11 +31,11 @@ import (
 	"fmt"
 
 	"example.com/x/util"
-	"github.com/pkg/errors"
+	pkgerrors "github.com/pkg/errors"
 	"mystery.example/zzz"
 )
 
-var _ = fmt.Sprint(util.V, errors.New(""), zzz.X)
+var _ = fmt.Sprint(util.V, pkgerrors.New(""), zzz.X)
 `),
 		write(t, root, "util/util.go", "package util\n\nvar V = 1\n"),
 		write(t, root, "broken.go", "package broken\n\nimport (\n"),
@@ -87,6 +87,13 @@ var _ = fmt.Sprint(util.V, errors.New(""), zzz.X)
 	for _, imp := range main.Imports {
 		if imp.Path == "example.com/x/util" && imp.TargetDir != "util" {
 			t.Errorf("internal import target = %q, want util", imp.TargetDir)
+		}
+		wantAlias := ""
+		if imp.Path == "github.com/pkg/errors" {
+			wantAlias = "pkgerrors"
+		}
+		if imp.Alias != wantAlias {
+			t.Errorf("import %q alias = %q, want %q", imp.Path, imp.Alias, wantAlias)
 		}
 	}
 

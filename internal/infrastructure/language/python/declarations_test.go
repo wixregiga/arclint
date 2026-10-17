@@ -269,3 +269,53 @@ class Twice(ABC):
 		}
 	}
 }
+
+// TestPythonAbstractClassShadowedByAnEnclosingScope leaves a nested
+// class unmarked when an enclosing class or function binds the name its
+// base spells, since the base is that binding and not the import.
+func TestPythonAbstractClassShadowedByAnEnclosingScope(t *testing.T) {
+	src := []byte(`from abc import ABC
+
+
+class Outer:
+    class ABC:
+        pass
+
+    class Encrypter(ABC):
+        pass
+
+
+def build(ABC):
+    class ByParameter(ABC):
+        pass
+    return ByParameter
+
+
+def assigned():
+    ABC = object
+
+    class ByAssignment(ABC):
+        pass
+    return ByAssignment
+
+
+def unshadowed():
+    class Inner(ABC):
+        pass
+    return Inner
+`)
+	got := extractDeclarations(newParsers(), src)
+	if got.ParseError != "" {
+		t.Fatal(got.ParseError)
+	}
+	abstract := map[string]bool{}
+	for _, d := range got.Decls {
+		if d.Kind == "class" {
+			abstract[d.Name] = d.Abstract
+		}
+	}
+	want := map[string]bool{"Outer": false, "ABC": false, "Encrypter": false, "ByParameter": false, "ByAssignment": false, "Inner": true}
+	if !reflect.DeepEqual(abstract, want) {
+		t.Fatalf("abstract classes:\n got %v\nwant %v", abstract, want)
+	}
+}

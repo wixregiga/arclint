@@ -169,7 +169,7 @@ func (e *Evaluator) host(supplied conformance.Facts, knowledge vocab.UbiquitousL
 			out = append(out, ImportInfo{
 				Path: imp.Path, Line: imp.Line, Class: string(imp.Class),
 				TargetDir: imp.TargetDir, TargetFile: imp.TargetFile,
-				TargetZones: targets, TargetObserved: imp.TargetObserved,
+				TargetZones: targets, TargetObserved: imp.TargetObserved, Alias: imp.Alias,
 			})
 		}
 		return out

@@ -55,6 +55,10 @@ type Import struct {
 	// TargetFile is the repo-relative file for file-granular languages
 	// when the specifier resolves to one file, else "".
 	TargetFile string
+	// Alias is the name a Go import binds when the source renames it
+	// (v, _, or .); "" when the import binds the package's own name and
+	// in every other language.
+	Alias string
 }
 
 const (

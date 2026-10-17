@@ -301,6 +301,13 @@ represented in the observations. A target can be observed while `targetZones`
 is empty because no declared Zone contains it. A false value for a resolved
 internal target means it was absent from the scan, not necessarily from disk.
 
+`alias` is the name a Go import binds when the source renames it (`v`, `_`,
+or `.`); it is empty when the import binds the package's own name, and in
+every other language. A declaration's `abstract` marks a class its own
+declaration states to be abstract: a TypeScript `abstract class`, or a Python
+class naming `abc.ABC` or `typing.Protocol` among its bases or `abc.ABCMeta`
+as its metaclass. An interface is abstract by its `kind` and does not carry it.
+
 These are parsed import observations, not inferred runtime relationships or
 Rule outcomes. Endpoint paths and memberships describe dependency evidence;
 they do not expand file access. Even when an import names an excluded or
