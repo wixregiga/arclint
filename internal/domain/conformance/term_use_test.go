@@ -165,8 +165,8 @@ func TestUsesFollowResolutionInGo(t *testing.T) {
 	}
 	wantUndetermined := []conformance.UndeterminedUse{
 		{Path: "app/place.go", Line: 7, What: "field PlaceOrder.events", Reason: "the package bus does not type-check"},
-		{Path: "app/place.go", Line: 11, What: "call NewMoney", Reason: "NewMoney returns Money as written; result types are not resolved"},
-		{Path: "app/place.go", Line: 16, What: "call Sum", Reason: "Sum returns []Money as written; result types are not resolved"},
+		{Path: "app/place.go", Line: 11, What: "call NewMoney", Reason: "NewMoney returns Money as written; result types are not resolved", Context: "ordering", Term: "Money"},
+		{Path: "app/place.go", Line: 16, What: "call Sum", Reason: "Sum returns []Money as written; result types are not resolved", Context: "ordering", Term: "Money"},
 		{Path: "app/place.go", Line: 17, What: "call handle", Reason: "a call through a function value is not followed"},
 	}
 	if len(uses.Undetermined) != len(wantUndetermined) {
@@ -231,10 +231,12 @@ func TestUsesReadMembersByFileInTypeScriptAndPython(t *testing.T) {
 	}
 }
 
-// A term declared inside the worksite is declared here, not used; a
-// term two declarations spell leaves a reference to either undetermined
-// rather than picking one.
-func TestUsesSkipTheWorksiteAndNeverPickATwin(t *testing.T) {
+// Uses reports what the worksite reaches wherever it is declared, the
+// worksite included: which entries a listing shows as declared here is
+// the listing's decision. A term two declarations spell leaves a
+// reference to either undetermined, naming the term, rather than
+// picking one.
+func TestUsesReportEveryTermAndNeverPickATwin(t *testing.T) {
 	ctx := orderingContext()
 	ctx.ValueObjects = append(ctx.ValueObjects, valueObject("Currency"))
 	files := goOrdering()
@@ -250,14 +252,15 @@ func TestUsesSkipTheWorksiteAndNeverPickATwin(t *testing.T) {
 		{Callee: "Code", Line: 6, Target: declared("billing/currency.go", "Currency", "Code")},
 	})
 	uses := usesOf(t, []vocab.BoundedContext{ctx}, files, "app", "ordering/order.go")
-	if got := spelled(uses.Uses); len(got) != 1 || got[0] != "Pricing domain_service  call Quote app/place.go:5" {
-		t.Fatalf("the root declared in the worksite is no use, Pricing is: %v", got)
+	want := []string{"Order aggregate  call Place app/place.go:4", "Pricing domain_service  call Quote app/place.go:5"}
+	if got := spelled(uses.Uses); !slices.Equal(got, want) {
+		t.Fatalf("uses = %v, want %v", got, want)
 	}
 	if len(uses.Undetermined) != 1 {
 		t.Fatalf("undetermined = %+v", uses.Undetermined)
 	}
 	u := uses.Undetermined[0]
-	if u.Line != 6 || !strings.Contains(u.Reason, "spelling Currency") || !strings.Contains(u.Reason, "billing/currency.go") || !strings.Contains(u.Reason, "legacy/currency.go") {
+	if u.Line != 6 || u.Context != "ordering" || u.Term != "Currency" || !strings.Contains(u.Reason, "spelling Currency") || !strings.Contains(u.Reason, "billing/currency.go") || !strings.Contains(u.Reason, "legacy/currency.go") {
 		t.Fatalf("twin reference = %+v", u)
 	}
 }

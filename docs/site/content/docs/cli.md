@@ -233,7 +233,7 @@ here`) and names `--full`, which lists the whole recorded model
 instead; bare `arclint context` always lists it whole.
 
 A worksite also lists, under `used here`, the recorded entries its code
-reaches without declaring them: the aggregates, entities, value
+reaches that the declared listing does not show: the aggregates, entities, value
 objects, domain services, events, specifications, repositories, and
 factories that a call's resolved target or receiver, or a field's
 resolved type, reaches, through the entry's declaration (a Python
@@ -241,7 +241,10 @@ resolved type, reaches, through the entry's declaration (a Python
 `Money.of` included). Each entry
 names the lines that reach it and the invariants and assertions that
 bind the code calling it, with their anchors; a member entity carries
-its aggregate's contracts when the aggregate itself is not listed. Only
+its aggregate's contracts when the aggregate itself is not listed. An
+entry the declared listing shows is not listed again as used; a
+repository or factory, which that listing has no place for, stays under
+`used here` even when the worksite declares it. Only
 the language's own resolution makes a use; a name that only matches
 never does. Under `undetermined here`, with the reason, are the
 references that may be uses resolution cannot confirm: one resolution
@@ -266,7 +269,8 @@ The JSON shape carries the same facts under `domain.scoped`,
 and `domain.unanchored`; the used entries travel apart from the
 declared `domain.contexts`, under `domain.used` with each `sites` entry
 (`path`, `line`, `way` as `call` or `field`, and `via`), and the
-references resolution could not follow under `domain.undetermined`.
+references that may be uses under `domain.undetermined`, each with the
+`context` and `term` it may reach when one is known.
 `domain.usesLocated` says the worksite's uses were looked for.
 
 `arclint context --dependencies --format json` adds a `dependencies` block

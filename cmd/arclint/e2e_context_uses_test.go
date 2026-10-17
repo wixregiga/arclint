@@ -446,3 +446,34 @@ func TestContextSummarizesTheMissingContractsOfUsedEntries(t *testing.T) {
 		t.Fatalf("unanchored = %+v", u)
 	}
 }
+
+// An entry the declared listing has no place for, such as a repository,
+// stays listed as used even when the worksite declares it, so no
+// recorded entry the worksite reaches goes unlisted; a reference that
+// may reach an entry the listing does show as declared here is not
+// listed again as undetermined.
+func TestContextListsWhatTheDeclaredListingCannotShow(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "domain.arclint.yaml", strings.Replace(usesDomain, "        identity: OrderID\n", "        identity: OrderID\n        repository: OrderRepository\n", 1))
+	write(t, root, "rules.arclint.yaml", "runtime: [go]\n")
+	write(t, root, "go.mod", "module example.com/shop\n\ngo 1.24\n")
+	write(t, root, "ordering/order.go", "package ordering\n\n// Order is a request.\ntype Order struct{ total Money }\n\n// EnsureHasTotal enforces has-total.\nfunc (o *Order) EnsureHasTotal() error { return nil }\n")
+	write(t, root, "ordering/money.go", "package ordering\n\n// Money is an amount.\ntype Money struct{ cents int }\n\n// NewMoney builds Money.\nfunc NewMoney(cents int) Money { return Money{cents: cents} }\n")
+	write(t, root, "ordering/repository.go", "package ordering\n\n// OrderRepository stores orders.\ntype OrderRepository interface {\n\tSave(o *Order) error\n}\n")
+	write(t, root, "app/place.go", "package app\n\nimport \"example.com/shop/ordering\"\n\n// PlaceOrder stores an order.\ntype PlaceOrder struct {\n\torders ordering.OrderRepository\n}\n\n// Run stores the order.\nfunc (uc PlaceOrder) Run(o *ordering.Order) error {\n\t_ = ordering.NewMoney(1)\n\treturn uc.orders.Save(o)\n}\n")
+	stdout, stderr, code := runBin(t, root, os.Environ(), "context", "ordering/repository.go", "ordering/money.go", "app/place.go")
+	if code != 0 {
+		t.Fatalf("context: exit %d\nstderr: %s", code, stderr)
+	}
+	for _, want := range []string{
+		"  declared here, context ordering:\n    value objects: Money\n",
+		"    repository OrderRepository of aggregate Order: app/place.go:7,13\n",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("context lacks %q:\n%s", want, stdout)
+		}
+	}
+	if strings.Contains(stdout, "NewMoney returns") || strings.Contains(stdout, "undetermined here") {
+		t.Fatalf("a reference that may reach Money, declared here, is not listed as undetermined:\n%s", stdout)
+	}
+}

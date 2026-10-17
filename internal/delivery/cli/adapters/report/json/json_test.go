@@ -714,6 +714,7 @@ func TestJSONContextSeparatesUsedFromDeclared(t *testing.T) {
 				}},
 				Undetermined: []application.UndeterminedUseRef{
 					{Path: "app/uninstall.go", Line: 12, What: "call run", Reason: "run has no declared type"},
+					{Path: "app/uninstall.go", Line: 14, What: "call NewItem", Reason: "NewItem returns Item as written; result types are not resolved", Context: "skill", Term: "Item"},
 					{Path: "app/broken.go", What: "file", Reason: "the file does not parse"},
 				},
 			},
@@ -744,10 +745,12 @@ func TestJSONContextSeparatesUsedFromDeclared(t *testing.T) {
 				} `json:"assertions"`
 			} `json:"used"`
 			Undetermined []struct {
-				Path   string `json:"path"`
-				Line   int    `json:"line"`
-				What   string `json:"what"`
-				Reason string `json:"reason"`
+				Path    string `json:"path"`
+				Line    int    `json:"line"`
+				What    string `json:"what"`
+				Reason  string `json:"reason"`
+				Context string `json:"context"`
+				Term    string `json:"term"`
 			} `json:"undetermined"`
 		} `json:"domain"`
 	}
@@ -776,7 +779,8 @@ func TestJSONContextSeparatesUsedFromDeclared(t *testing.T) {
 	if len(u.Assertions) != 1 || u.Assertions[0].Key != "selected-items-installed" || u.Assertions[0].On != "Select" || u.Assertions[0].Anchor != "found" || u.Assertions[0].Source != "skill/uninstall.go:54" {
 		t.Fatalf("assertions = %+v", u.Assertions)
 	}
-	if len(d.Undetermined) != 2 || d.Undetermined[0].Line != 12 || d.Undetermined[0].Reason != "run has no declared type" || d.Undetermined[1].Line != 0 || d.Undetermined[1].What != "file" {
+	if len(d.Undetermined) != 3 || d.Undetermined[0].Line != 12 || d.Undetermined[0].Reason != "run has no declared type" || d.Undetermined[0].Term != "" ||
+		d.Undetermined[1].Context != "skill" || d.Undetermined[1].Term != "Item" || d.Undetermined[2].Line != 0 || d.Undetermined[2].What != "file" {
 		t.Fatalf("undetermined = %+v", d.Undetermined)
 	}
 	if strings.Contains(buf.String(), `"line": 0`) {
