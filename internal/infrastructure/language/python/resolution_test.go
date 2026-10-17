@@ -765,3 +765,28 @@ func TestStarImportCanReplaceAnEarlierDeclaration(t *testing.T) {
 		t.Fatal(f.Calls[0])
 	}
 }
+
+// TestResultTypesFollowTheReturnAnnotation names the declaration a
+// def's return annotation is, evaluated around the def, and leaves a
+// result that names one of the def's own PEP 695 type parameters
+// undetermined, whatever else shares its name.
+func TestResultTypesFollowTheReturnAnnotation(t *testing.T) {
+	facts := resolved(t, map[string]string{
+		"password.py": "class EncryptedPassword:\n    pass\n\n\nclass Encrypter:\n    def encrypt(self, plain: str) -> EncryptedPassword: ...\n\n    def generic[EncryptedPassword](self, plain: EncryptedPassword) -> EncryptedPassword: ...\n\n    def bare(self, plain: str): ...\n",
+	})
+	types := map[string]conformance.Reference{}
+	for _, d := range facts["password.py"].Declarations {
+		if d.Kind == declMethod {
+			types[d.Name] = d.Type
+		}
+	}
+	if got := types["encrypt"]; got.Resolution != conformance.ResolutionDeclared || got.File != "password.py" || got.Name != "EncryptedPassword" {
+		t.Errorf("encrypt result = %+v, want the declared EncryptedPassword", got)
+	}
+	if got := types["generic"]; got.Resolution != conformance.ResolutionUndetermined || !strings.Contains(got.Reason, "type parameter") {
+		t.Errorf("generic result = %+v, want undetermined as a type parameter", got)
+	}
+	if got := types["bare"]; got.Resolution != conformance.ResolutionUndetermined || !strings.Contains(got.Reason, "no return annotation") {
+		t.Errorf("bare result = %+v, want undetermined without an annotation", got)
+	}
+}

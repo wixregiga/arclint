@@ -88,10 +88,47 @@ func (s *pyScope) lexical() *pyScope {
 	return s
 }
 
+// typeParameterScope is the scope a generic def's or class's PEP 695
+// type parameters open, over parent; parent itself when it declares
+// none. A type parameter stands for whatever type its user chooses, so
+// a name it binds resolves to no declaration. around is the scope the
+// definition statement runs in, whose owner the new scope keeps.
+func (m *pyModule) typeParameterScope(n *gotreesitter.Node, parent, around *pyScope) *pyScope {
+	w := m.facts.walker
+	params := n.ChildByFieldName("type_parameters", w.lang)
+	if params == nil {
+		return parent
+	}
+	tp := &pyScope{parent: parent, module: m, owner: around.owner, bindings: map[string]*pyBinding{}}
+	for i := 0; i < params.NamedChildCount(); i++ {
+		if name := firstIdentifier(params.NamedChild(i), w); name != "" {
+			tp.bind(&pyBinding{kind: bindingUnknown, name: name, scope: tp, reason: name + " is a type parameter, whose type its user chooses"})
+		}
+	}
+	return tp
+}
+
+// firstIdentifier is the first identifier at or under a node: the name
+// a type parameter declares, under a splat or a bound.
+func firstIdentifier(n *gotreesitter.Node, w *pyWalker) string {
+	if n.Type(w.lang) == nodeIdentifier {
+		return n.Text(w.src)
+	}
+	for i := 0; i < n.NamedChildCount(); i++ {
+		if name := firstIdentifier(n.NamedChild(i), w); name != "" {
+			return name
+		}
+	}
+	return ""
+}
+
 type pyClass struct {
-	name      string
-	node      *gotreesitter.Node
-	scope     *pyScope
+	name  string
+	node  *gotreesitter.Node
+	scope *pyScope
+	// header is the scope the class's base list is evaluated in: its
+	// type parameters' scope when it declares any, otherwise scope.
+	header    *pyScope
 	members   map[string]*pyBinding
 	bases     []*gotreesitter.Node
 	unsafe    string
@@ -192,7 +229,7 @@ func (m *pyModule) collect(n *gotreesitter.Node, s *pyScope, owner *pyClass, inF
 		}
 		return
 	case nodeClass:
-		c := &pyClass{name: w.name(n), node: n, scope: s, members: map[string]*pyBinding{}}
+		c := &pyClass{name: w.name(n), node: n, scope: s, header: m.typeParameterScope(n, s, s), members: map[string]*pyBinding{}}
 		if bases := n.ChildByFieldName("superclasses", w.lang); bases != nil {
 			for i := 0; i < bases.NamedChildCount(); i++ {
 				b := bases.NamedChild(i)
@@ -220,7 +257,10 @@ func (m *pyModule) collect(n *gotreesitter.Node, s *pyScope, owner *pyClass, inF
 		name := w.name(n)
 		b := &pyBinding{kind: bindingFunction, name: name, node: n, scope: s}
 		s.bind(b)
-		m.functions = append(m.functions, pyFunction{node: n, scope: s})
+		// Annotations see the def's type parameters, which shadow names
+		// around it; so does its body.
+		annotations := m.typeParameterScope(n, s, s)
+		m.functions = append(m.functions, pyFunction{node: n, scope: annotations})
 		if owner != nil && !inFunction && (name == "__getattribute__" || name == "__getattr__") {
 			owner.unsafe = "class " + owner.name + " customizes attribute access"
 		}
@@ -228,11 +268,11 @@ func (m *pyModule) collect(n *gotreesitter.Node, s *pyScope, owner *pyClass, inF
 		if owner != nil && !inFunction {
 			parent = owner.scope.lexical()
 		}
-		fs := &pyScope{parent: parent, module: m, bindings: map[string]*pyBinding{}}
+		fs := &pyScope{parent: m.typeParameterScope(n, parent, s), module: m, bindings: map[string]*pyBinding{}}
 		if owner != nil && !inFunction && !m.staticMethods[n.StartByte()] {
 			fs.owner = owner
 		}
-		m.collectParameters(n, s, fs)
+		m.collectParameters(n, annotations, fs)
 		// Defaults, annotations, and decorators are evaluated in the
 		// enclosing scope, the return annotation included.
 		if ps := n.ChildByFieldName("parameters", w.lang); ps != nil {
@@ -477,8 +517,9 @@ func decoratorName(s *pyScope, n *gotreesitter.Node, w *pyWalker) string {
 
 // qualifiedTarget names what a dotted name refers to in a scope, a
 // decorator's or a class base's: a builtin, an imported name, or,
-// through a plain alias such as cm = classmethod, what the alias stands
-// for; "" for anything else.
+// through an alias such as cm = classmethod, base = abc for base.ABC,
+// or Base: TypeAlias = ABC, what the alias stands for; "" for anything
+// else.
 func qualifiedTarget(s *pyScope, text string, w *pyWalker, depth int) string {
 	head, tail, dotted := strings.Cut(text, ".")
 	b := s.lookup(head)
@@ -489,10 +530,14 @@ func qualifiedTarget(s *pyScope, text string, w *pyWalker, depth int) string {
 		return ""
 	}
 	if b.kind != bindingImport {
-		if right := aliasValue(b, w); right != "" && !dotted && depth < maxAliasHops {
-			return qualifiedTarget(b.scope, right, w, depth+1)
+		right := aliasValue(b, w, depth)
+		if right == "" || depth >= maxAliasHops {
+			return ""
 		}
-		return ""
+		if dotted {
+			right += "." + tail
+		}
+		return qualifiedTarget(b.scope, right, w, depth+1)
 	}
 	qualified := b.imp.module
 	if b.imp.member != "" {
@@ -513,10 +558,21 @@ func qualifiedTarget(s *pyScope, text string, w *pyWalker, depth int) string {
 // maxAliasHops bounds following one plain alias to another.
 const maxAliasHops = 8
 
+// typeAliasAnnotations are the annotations that declare an assignment
+// an alias of what it assigns: Base: TypeAlias = ABC.
+var typeAliasAnnotations = map[string]bool{
+	"typing.TypeAlias":            true,
+	"typing_extensions.TypeAlias": true,
+}
+
 // aliasValue is the name a binding was assigned from, cm for cm = x.y
-// is "x.y", when the binding is one plain assignment of a name.
-func aliasValue(b *pyBinding, w *pyWalker) string {
-	if b.node == nil || b.node.Type(w.lang) != nodeAssignment || b.annotation != nil {
+// is "x.y", when the binding is one assignment of a name, plain or
+// annotated as a TypeAlias.
+func aliasValue(b *pyBinding, w *pyWalker, depth int) string {
+	if b.node == nil || b.node.Type(w.lang) != nodeAssignment {
+		return ""
+	}
+	if b.annotation != nil && (depth >= maxAliasHops || !typeAliasAnnotations[qualifiedTarget(b.scope, b.annotation.Text(w.src), w, depth+1)]) {
 		return ""
 	}
 	right := b.node.ChildByFieldName("right", w.lang)
