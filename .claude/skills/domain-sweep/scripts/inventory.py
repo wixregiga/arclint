@@ -636,8 +636,8 @@ class TypeScriptLexer:
         for number, text in enumerate(lines, start=1):
             # Only a line with a slash has a decision to reverse.
             start = self.snapshot() if "/" in text else None
-            kinds, marks, slashes, unclosed = self.read(number, text, frozenset())
-            if slashes and (unclosed or self.literals_open() > _literals_open(start)):
+            kinds, marks, slashes, damaged = self.read(number, text, frozenset())
+            if slashes and (damaged or self.literals_open() > _literals_open(start)):
                 for position in reversed(slashes[-MAX_SLASH_RETRIES:]):
                     self.restore(start)
                     retry = self.read(number, text, frozenset([position]))
@@ -656,11 +656,16 @@ class TypeScriptLexer:
     def read(self, number, text, reversed_slashes):
         """Read one line. Return its kinds, the earlier lines it marks as
         test rows, the positions of its slash decisions that could have
-        gone the other way, and whether a quoted string was left open."""
+        gone the other way, and whether the reading shows damage: a quoted
+        string left open, or a comment opened where a slash read as
+        division would have been a regular expression running past it.
+        Every /* and // holds a slash that ends a regular expression, so
+        only a misread one, [/*], can hold a comment opener."""
         kinds = set()
         marks = []
         slashes = []
-        unclosed = False
+        divisions = []  # (slash, end of the regular expression it could open)
+        damaged = False
         if self.state in ("template", "string"):
             kinds.add("text")
         elif self.state == "block":
@@ -754,6 +759,8 @@ class TypeScriptLexer:
                 i += 1
                 continue
             pair = text[i:i + 2]
+            if pair in ("//", "/*") and any(slash < i < end for slash, end in divisions):
+                damaged = True
             if pair == "//":
                 kinds.add("comment")
                 break
@@ -806,7 +813,7 @@ class TypeScriptLexer:
                     kinds.add("text")
                     break
                 if how == "open":
-                    unclosed = True
+                    damaged = True
                 literal_ends("string")
                 token("operand")
                 continue
@@ -827,6 +834,8 @@ class TypeScriptLexer:
                     token("operand")
                     i = end
                 else:
+                    if plausible:
+                        divisions.append((i, end))
                     token("operator", "/")
                     i += 1
                 continue
@@ -869,7 +878,7 @@ class TypeScriptLexer:
             # The literal goes on past this line: every line it spans is text.
             kinds.add("text")
         end_segment()
-        return kinds, marks, slashes, unclosed
+        return kinds, marks, slashes, damaged
 
     def word(self, word, number, token, other_token):
         """Read a name, a keyword or a property."""

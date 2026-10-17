@@ -827,6 +827,15 @@ class InventoryTest(unittest.TestCase):
             "web/ratio.ts:1": "text", "web/suite.test.ts:1": "test", "web/suite.test.ts:3": "test",
         })
 
+    def test_a_misread_slash_that_opens_a_comment(self):
+        self.repo.write("web/x.test.ts", 'type Unit = number\n/[/*]/.test(source);\nconst end = `*/`;\n'
+                        '// Never overwrite.\ntest("rejects", () => {});\nconst q = a / b; /* why\n  it halves */\n')
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {
+            "web/x.test.ts:4": "comment", "web/x.test.ts:5": "test",
+            "web/x.test.ts:6": "comment", "web/x.test.ts:7": "comment",
+        })
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
