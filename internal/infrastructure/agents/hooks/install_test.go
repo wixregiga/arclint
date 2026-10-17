@@ -591,10 +591,10 @@ func TestDisabledHooksBelongToTheSideThatReadsThem(t *testing.T) {
 	}
 }
 
-// A Windows profile that cannot be located may turn its hooks off, so
-// the project's file is not said to run for the Windows host apps while
+// A Windows profile that cannot be located or read may turn its hooks
+// off, so the project's file is not said to run for the Windows host apps while
 // the distribution's own user file turns its hooks off.
-func TestAnUnlocatedWindowsProfileIsNotEvidenceThatHooksRun(t *testing.T) {
+func TestAnUnknownWindowsProfileIsNotEvidenceThatHooksRun(t *testing.T) {
 	root, h := t.TempDir(), newHomes(t)
 	binary := testBinary(t, t.TempDir(), "native")
 	if _, err := NewInstaller(root, "Ubuntu", binary, h.users("Ubuntu")).Install([]string{"claude"}, true); err != nil {
@@ -616,22 +616,26 @@ func TestAnUnlocatedWindowsProfileIsNotEvidenceThatHooksRun(t *testing.T) {
 	}
 	writeTestFile(t, local, string(data))
 	writeTestFile(t, h.file(false, "claude"), `{"disableAllHooks": true}`)
-	users := func() ([]UserConfiguration, error) {
+	unlocated := func() ([]UserConfiguration, error) {
 		return []UserConfiguration{h.native, {Windows: true, Unreadable: "cmd.exe is missing"}}, nil
 	}
-	status, err := NewInstaller(root, "Ubuntu", binary, users).Status()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, entry := range status.Files {
-		if entry.Host == claudeHost && entry.Scope == scopeProject {
-			if problems := strings.Join(entry.Problems, "\n"); entry.Installation != application.HooksPartial || strings.Contains(problems, "still run") {
-				t.Fatalf("project file: %+v", entry)
+	// A Windows profile file that cannot be read is no evidence either.
+	writeTestFile(t, h.file(true, "claude"), `{"disableAllHooks": true,`)
+	for name, users := range map[string]func() ([]UserConfiguration, error){"unlocated": unlocated, "unreadable": h.users("Ubuntu")} {
+		status, err := NewInstaller(root, "Ubuntu", binary, users).Status()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range status.Files {
+			if entry.Host == claudeHost && entry.Scope == scopeProject {
+				if problems := strings.Join(entry.Problems, "\n"); entry.Installation != application.HooksPartial || strings.Contains(problems, "still run") {
+					t.Fatalf("%s Windows profile, project file: %+v", name, entry)
+				}
 			}
 		}
-	}
-	if silence := strings.Join(status.Silence, "\n"); strings.Contains(silence, "still run") {
-		t.Fatalf("silence: %s", silence)
+		if silence := strings.Join(status.Silence, "\n"); strings.Contains(silence, "still run") {
+			t.Fatalf("%s Windows profile, silence: %s", name, silence)
+		}
 	}
 }
 
