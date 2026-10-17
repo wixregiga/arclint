@@ -789,4 +789,13 @@ func TestResultTypesFollowTheReturnAnnotation(t *testing.T) {
 	if got := types["bare"]; got.Resolution != conformance.ResolutionUndetermined || !strings.Contains(got.Reason, "no return annotation") {
 		t.Errorf("bare result = %+v, want undetermined without an annotation", got)
 	}
+
+	facts = resolved(t, map[string]string{
+		"generic.py": "from typing import Protocol\n\n\nclass EncryptedPassword:\n    pass\n\n\nclass Encrypter[EncryptedPassword](Protocol):\n    def encrypt(self, plain: str) -> EncryptedPassword: ...\n",
+	})
+	for _, d := range facts["generic.py"].Declarations {
+		if d.Kind == declMethod && d.Name == "encrypt" && (d.Type.Resolution != conformance.ResolutionUndetermined || !strings.Contains(d.Type.Reason, "type parameter")) {
+			t.Errorf("a method result naming its class's type parameter = %+v, want undetermined", d.Type)
+		}
+	}
 }
