@@ -277,7 +277,6 @@ func TestLibrarianSaysTheDomainDecides(t *testing.T) {
 		"TypeScript with a private constructor and a private field, and Python only by convention, with an underscore-prefixed name. " +
 		"An automated test proves what the domain cannot see, such as a refusal changing nothing on disk " +
 		"(Evans, DDD Reference 2015, p. 12, Value Objects, p. 14, Services, p. 21, Side-Effect-Free Functions, and p. 22, Assertions; " +
-		"Khorikov, Domain model purity vs. domain model completeness (2020), read-decide-act; " +
 		"The Go Programming Language Specification, Exported identifiers and Struct literals; " +
 		"TypeScript 2.0 release notes, Private and Protected Constructors, and TypeScript Handbook, Type Compatibility; " +
 		"The Python Tutorial, 9.6 Private Variables)."
@@ -351,9 +350,8 @@ func TestLibrarianWeighsAMoveBetweenLayers(t *testing.T) {
 		}
 	}
 	for work, named := range map[string]string{
-		"evans2015":                    "Evans, DDD Reference 2015, p. 21",
-		"khorikov-purity-completeness": "Khorikov, Domain model purity vs. domain model completeness (2020)",
-		"stafford-business-logic":      "Stafford, Kinds of Business Logic",
+		"evans2015":               "Evans, DDD Reference 2015, p. 10, Layered Architecture, and p. 21, Side-Effect-Free Functions",
+		"stafford-business-logic": "Stafford, Kinds of Business Logic",
 	} {
 		if !strings.Contains(step, named) {
 			t.Errorf("the step does not cite %s as %q", work, named)
@@ -361,5 +359,38 @@ func TestLibrarianWeighsAMoveBetweenLayers(t *testing.T) {
 		if !cited[work] {
 			t.Errorf("no domain_service guidance cites %s, so the bibliography does not reach it", work)
 		}
+	}
+}
+
+// The domain_service guidance that says the service decides and the
+// application carries out the change is grounded on the canonical
+// reference and on Stafford's published pattern: Evans on layers, side
+// effects, values, and assertions, and Stafford on application logic.
+// A practitioner blog may illustrate but never grounds what agents are
+// told, so the entry cites nothing else.
+func TestDecisionGuidanceIsGroundedOnCanonicalSources(t *testing.T) {
+	block, ok := vocab.DDD().Block("domain_service")
+	if !ok {
+		t.Fatal("no domain_service block")
+	}
+	at := slices.IndexFunc(block.Guidance, func(g vocab.Guidance) bool {
+		return strings.HasPrefix(g.Text, "When an operation would change something outside the model")
+	})
+	if at < 0 {
+		t.Fatal("no domain_service guidance says the service decides and the application carries out the change")
+	}
+	var got []string
+	for _, c := range block.Guidance[at].Sources {
+		got = append(got, c.Work+" "+c.Page+" "+c.Section)
+	}
+	want := []string{
+		"evans2015 10 Layered Architecture",
+		"evans2015 12 Value Objects",
+		"evans2015 21 Side-Effect-Free Functions",
+		"evans2015 22 Assertions",
+		"stafford-business-logic  ",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("sources:\n got %q\nwant %q", got, want)
 	}
 }
