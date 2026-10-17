@@ -368,7 +368,7 @@ func (installer *Installer) Status() (status application.HooksStatus, err error)
 			sees := user.form == nativeForm || local.form == sharedForm
 			userListed, _ := listsArclintHooks(user.path)
 			if userListed && localListed && sees {
-				localEntry.Problems = append(localEntry.Problems, user.path+" already runs the hooks in every project; with both, the host runs each event twice here and ArcLint answers the first.")
+				localEntry.Problems = append(localEntry.Problems, duplicateProblem(user.path+" already lists the hooks for every project; with both, the host", off))
 			}
 			if entry.Installation == application.HooksAbsent && (localEntry.Installation != application.HooksComplete || !sees) {
 				entry.Problems = append(entry.Problems, "Workflow hooks are not installed.")
@@ -379,7 +379,7 @@ func (installer *Installer) Status() (status application.HooksStatus, err error)
 				localEntry.Problems = append(localEntry.Problems, host.shared+" sets "+host.disable+", so the host runs no hooks in this project; remove the setting to run them.")
 			}
 			if listed, err := listsArclintHooks(shared); err == nil && listed {
-				localEntry.Problems = append(localEntry.Problems, host.shared+" also lists the workflow hooks; every file that lists them runs each event.")
+				localEntry.Problems = append(localEntry.Problems, duplicateProblem(host.shared+" also lists the workflow hooks; with every file that lists them, the host", off))
 			}
 		}
 		// A user file that cannot be located is listed with the other user
@@ -465,6 +465,9 @@ func (installer *Installer) inspect(file target, off bool) (application.HookFile
 	}
 	hooks, _ := document["hooks"].(map[string]any)
 	want := installer.groups(file)
+	// A hook install wrote runs the arclint running now, unless it was
+	// removed since.
+	runs := !off && binaryProblem(installer.binary) == ""
 	var running, differing []string
 	binaries := map[string]bool{}
 	for _, event := range hookEvents {
@@ -475,7 +478,7 @@ func (installer *Installer) inspect(file target, off bool) (application.HookFile
 		switch {
 		case listsGroup(listed, want[event]):
 			entry.Listed = append(entry.Listed, event)
-			if !off {
+			if runs {
 				running = append(running, event)
 			}
 		case slices.ContainsFunc(listed, holdsArclintHandler):
@@ -536,6 +539,16 @@ func englishList(names []string) string {
 		return strings.Join(names, "")
 	}
 	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+}
+
+// duplicateProblem completes a sentence about hooks two files list: the
+// host runs each event twice, or would once the setting that turns its
+// hooks off is removed.
+func duplicateProblem(subject string, off bool) string {
+	if off {
+		return subject + " would run each event twice here once its hooks are turned back on, and ArcLint would answer the first."
+	}
+	return subject + " runs each event twice here and ArcLint answers the first."
 }
 
 // disablesHooks reports whether the configuration file at path sets the
