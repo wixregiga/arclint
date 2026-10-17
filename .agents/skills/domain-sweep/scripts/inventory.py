@@ -107,6 +107,8 @@ WORDS = re.compile(r"[A-Za-z]{2,}[ \t]+[A-Za-z]{2,}")
 # fixture string is not one. ts_sources follows TypeScript test calls token
 # by token.
 GO_TEST = re.compile(r"^\s*func\s+Test\w*\s*\(")
+GO_TEST_NAME = re.compile(r"^\s*Test\w*\s*\(")
+GO_FUNC_END = re.compile(r"^\s*func\s*$")
 PY_TEST = re.compile(r"^\s*(?:async\s+)?def\s+test\w*\s*\(|^\s*class\s+Test\w*\b")
 LITERAL = '""'
 
@@ -246,10 +248,22 @@ def split_lines(text):
     return [line[:-1] if line.endswith("\r") else line for line in lines]
 
 
-def is_generated(lines):
+# The comment forms a generated-file marker may use, by file type: line
+# comment openers, and block comment openers with their closers. In
+# Markdown a "#" opens a heading, so only an HTML comment counts.
+GENERATED_LINE = {"md": (), "py": ("#",), "yaml": ("#",), "yml": ("#",)}
+GENERATED_BLOCK = {"md": (("<!--", "-->"),), "py": (), "yaml": (), "yml": ()}
+C_LINE = ("//",)
+C_BLOCK = (("/*", "*/"),)
+
+
+def is_generated(path, lines):
     """A file is generated when a comment before its content says "Code
     generated ... DO NOT EDIT"; front matter at the top of a Markdown page
     is skipped first."""
+    suffix = path.rsplit(".", 1)[-1] if "." in path else ""
+    line_openers = GENERATED_LINE.get(suffix, C_LINE)
+    blocks = GENERATED_BLOCK.get(suffix, C_BLOCK)
     i = 0
     if lines and lines[0].strip() in ("+++", "---"):
         fence = lines[0].strip()
@@ -257,18 +271,19 @@ def is_generated(lines):
         while i < len(lines) and lines[i].strip() != fence:
             i += 1
         i += 1
+    openers = line_openers + tuple(opening for opening, _ in blocks)
     closing = None  # the token that ends the comment block being read
     for text in lines[i:]:
         stripped = text.strip()
-        if GENERATED.search(stripped) and (closing or stripped.startswith(("//", "#", "/*", "<!--"))):
+        if GENERATED.search(stripped) and (closing or (openers and stripped.startswith(openers))):
             return True
         if closing:
             if closing in stripped:
                 closing = None
             continue
-        if not stripped or stripped.startswith(("//", "#")):
+        if not stripped or (line_openers and stripped.startswith(line_openers)):
             continue
-        for opening, end in (("/*", "*/"), ("<!--", "-->")):
+        for opening, end in blocks:
             if stripped.startswith(opening):
                 if end not in stripped[len(opening):]:
                     closing = end
@@ -300,6 +315,7 @@ def go_sources(lines):
     """Map line number to source for a Go file."""
     found = {}
     state = "code"  # code, raw (inside a raw string) or block (inside /* */)
+    after_func = False  # the last code line ended with the keyword func
     for number, text in enumerate(lines, start=1):
         kinds = set()
         code = []
@@ -351,8 +367,13 @@ def go_sources(lines):
                 continue
             code.append(char)
             i += 1
-        if GO_TEST.search("".join(code)):
+        line_code = "".join(code)
+        # Go inserts no semicolon after func, so a declaration may put its
+        # name on the next line.
+        if GO_TEST.search(line_code) or (after_func and GO_TEST_NAME.match(line_code)):
             kinds.add("test")
+        if line_code.strip():
+            after_func = bool(GO_FUNC_END.search(line_code))
         if kinds and text.strip():
             found[number] = pick(kinds)
     return found
@@ -363,7 +384,13 @@ def go_sources(lines):
 # after the parenthesis that closes a condition (if (x) /re/.test(s)).
 # After an operand it divides. The lexer keeps the previous token across
 # lines and comments, never the raw text before the slash.
-REGEX_KEYWORDS = {"return", "typeof", "case", "do", "else", "in", "of", "new", "delete", "void", "throw", "yield", "await", "instanceof"}
+REGEX_KEYWORDS = {
+    "return", "typeof", "case", "do", "else", "in", "of", "new", "delete", "void", "throw", "yield", "await",
+    "instanceof", "default",
+    # A statement ends after these, by automatic semicolon insertion when
+    # nothing follows on their line, so a slash after them starts one.
+    "debugger", "break", "continue",
+}
 CONTROL_KEYWORDS = {"if", "while", "for", "with"}
 
 
@@ -537,6 +564,17 @@ def ts_sources(lines):
             if char.isspace():
                 i += 1
                 continue
+            if number == 1 and i == 0 and pair == "#!":
+                break  # a hashbang line
+            if char == "#" and i + 1 < len(text) and (text[i + 1].isalpha() or text[i + 1] in "_$"):
+                # A private name, #count, is a member: an operand.
+                j = i + 1
+                while j < len(text) and (text[j].isalnum() or text[j] in "_$"):
+                    j += 1
+                other_token()
+                token("operand")
+                i = j
+                continue
             if char.isalpha() or char in "_$":
                 j = i
                 while j < len(text) and (text[j].isalnum() or text[j] in "_$"):
@@ -585,6 +623,11 @@ def ts_sources(lines):
                 other_token()
                 i = skip_regex(text, i)
                 token("operand")
+                continue
+            if pair == "=>":
+                other_token()
+                token("operator")
+                i += 2
                 continue
             if text[i:i + 3] == "...":
                 other_token()
@@ -679,6 +722,8 @@ def python_sources(lines):
     field, with its bracket depth) and ["spec"] (a format spec)."""
     found = {}
     stack = []
+    joined = []  # code of lines a backslash joins to the next
+    joined_start = 0  # the first of those lines
     for number, text in enumerate(lines, start=1):
         kinds = set()
         code = []  # the line's code outside every literal, for declarations
@@ -705,6 +750,19 @@ def python_sources(lines):
                     if i + 1 == len(text):
                         continued = True
                         i += 1
+                        continue
+                    if top[0] == "fstring" and text[i + 1] in "{}":
+                        # A backslash escapes no brace: the brace still
+                        # opens or closes a replacement field.
+                        segment.append(char)
+                        i += 1
+                        continue
+                    if top[0] == "fstring" and not raw and text[i + 1:i + 3] == "N{":
+                        # A named escape, \N{EM DASH}, is literal text.
+                        end = text.find("}", i + 3)
+                        end = len(text) if end < 0 else end + 1
+                        segment.append(text[i:end])
+                        i = end
                         continue
                     segment.append(text[i:i + 2])
                     i += 2
@@ -781,8 +839,19 @@ def python_sources(lines):
         # it on; an unterminated one is closed here, as Python refuses it.
         while stack and stack[-1][0] in ("string", "fstring") and len(stack[-1][1]) == 1 and not continued:
             stack.pop()
-        if PY_TEST.search("".join(code)):
-            kinds.add("test")
+        line_code = "".join(code)
+        if not stack and line_code.rstrip().endswith("\\"):
+            # An explicit line join: the statement goes on on the next line.
+            joined.append(line_code.rstrip()[:-1])
+            joined_start = joined_start or number
+        else:
+            statement = " ".join(joined + [line_code])
+            if PY_TEST.search(statement):
+                if joined_start and joined_start != number:
+                    found[joined_start] = "test"
+                else:
+                    kinds.add("test")
+            joined, joined_start = [], 0
         if kinds and text.strip():
             found[number] = pick(kinds)
     return found
@@ -858,7 +927,7 @@ def collect(repo, base, head, scope, globs, exclude, recordings, hint):
     rows = []
 
     def emit(kind, path, lines, chosen):
-        if is_generated(lines):
+        if is_generated(path, lines):
             if path not in generated:
                 generated.append(path)
             return
