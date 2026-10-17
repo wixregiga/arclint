@@ -155,17 +155,66 @@ func replaced(df *declarationFacts, q string) bool {
 	return mutates(df.module, q)
 }
 
-// mutates reports whether a module assigns a qualified name or a prefix
-// of it.
+// mutates reports whether a module replaces a qualified name or a
+// prefix of it: by assigning it, (abc).ABC = object as much as
+// abc.ABC = object, or through the builtin setattr. A setattr whose
+// attribute is not a string literal may replace any attribute of its
+// object.
 func mutates(m *pyModule, q string) bool {
 	w := m.facts.walker
+	covers := func(target string) bool {
+		return target != "" && (q == target || strings.HasPrefix(q, target+"."))
+	}
 	for _, mutation := range m.mutations {
-		target := qualifiedTarget(mutation.scope, mutation.node.Text(w.src), w, 0)
-		if target != "" && (q == target || strings.HasPrefix(q, target+".")) {
+		if covers(qualifiedTarget(mutation.scope, w.dottedName(mutation.node), w, 0)) {
+			return true
+		}
+	}
+	for _, call := range m.calls {
+		object, attribute, ok := setattrTarget(call, w)
+		if !ok {
+			continue
+		}
+		target := qualifiedTarget(call.scope, object, w, 0)
+		if target == "" {
+			continue
+		}
+		if attribute == "" {
+			// Some attribute of the object is replaced, never the object.
+			if strings.HasPrefix(q, target+".") {
+				return true
+			}
+			continue
+		}
+		if covers(target + "." + attribute) {
 			return true
 		}
 	}
 	return false
+}
+
+// setattrTarget reads a call of the builtin setattr: the dotted object
+// it sets an attribute on, and the attribute when a string literal
+// names it, "" otherwise. ok is false for any other call, and for a
+// setattr whose name the module binds to something else.
+func setattrTarget(call pyCall, w *pyWalker) (string, string, bool) {
+	fn := call.node.ChildByFieldName("function", w.lang)
+	if fn == nil || fn.Type(w.lang) != nodeIdentifier || fn.Text(w.src) != builtinSetattr || call.scope.lookup(builtinSetattr) != nil {
+		return "", "", false
+	}
+	args := call.node.ChildByFieldName("arguments", w.lang)
+	if args == nil || args.NamedChildCount() < 2 {
+		return "", "", false
+	}
+	object := w.dottedName(args.NamedChild(0))
+	if object == "" {
+		return "", "", false
+	}
+	attribute, literal := pythonString(args.NamedChild(1).Text(w.src))
+	if !literal {
+		attribute = ""
+	}
+	return object, attribute, true
 }
 
 // splitPoints lists, right to left, the dots that may separate a module
