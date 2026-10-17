@@ -902,9 +902,11 @@ func writeUsed(p *out.Printer, st Style, d *application.DomainKnowledge) {
 			p.Printf("    %s: %s\n", usedLabel(u), st.Path(siteLines(u.Sites)))
 			for _, inv := range u.Invariants {
 				p.Printf("      invariant %s (%s): %s%s\n", inv.Key, inv.Owner, inv.Statement, anchorSuffix(st, inv.Source, inv.Anchor))
+				writeVerifiedBy(p, st, "        ", inv.VerifiedBy)
 			}
 			for _, a := range u.Assertions {
 				p.Printf("      assertion %s (%s, on %s): %s%s\n", a.Key, a.Owner, a.On, a.Statement, anchorSuffix(st, a.Source, a.Anchor))
+				writeVerifiedBy(p, st, "        ", a.VerifiedBy)
 			}
 			if s := u.Specification; s != nil {
 				p.Printf("      satisfaction method%s\n", anchorSuffix(st, s.Source, s.Anchor))
