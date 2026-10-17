@@ -21,7 +21,7 @@ type RuleTestSource interface {
 // normalized Observations for the requested languages, scan policy,
 // and fact classes through the same analysis production uses.
 type FixtureObserver interface {
-	Observe(files []rule.TestFile, languages []rule.Language, scan rule.Scan, facts []rule.Fact) (conformance.Observations, error)
+	Observe(files []rule.TestFile, languages []rule.Language, scan rule.Scan, facts []rule.Fact, namedTests []string) (conformance.Observations, error)
 }
 
 // VocabularySource is the port through which the use case turns a
@@ -156,10 +156,6 @@ func (uc RunRuleTests) Execute() (RuleTestRun, error) {
 			results = append(results, result)
 			continue
 		}
-		observations, err := uc.fixtures.Observe(t.Files(), cfg.Languages, cfg.Scan, r.Enforcement().Facts())
-		if err != nil {
-			return RuleTestRun{}, fmt.Errorf("rule test %q: observe fixture: %w", t.Name(), err)
-		}
 		// A fixture authors its recorded vocabulary in the domain file
 		// its own ruleset names, else in the first default-named file
 		// it carries; extension rules under test observe it through
@@ -169,6 +165,10 @@ func (uc RunRuleTests) Execute() (RuleTestRun, error) {
 			result.Err = fmt.Sprintf("fixture vocabulary: %v", err)
 			results = append(results, result)
 			continue
+		}
+		observations, err := uc.fixtures.Observe(t.Files(), cfg.Languages, cfg.Scan, r.Enforcement().Facts(), knowledge.VerifyingTestPaths())
+		if err != nil {
+			return RuleTestRun{}, fmt.Errorf("rule test %q: observe fixture: %w", t.Name(), err)
 		}
 		// An expanded Rule is re-derived against the fixture's own
 		// vocabulary, so the test exercises the fixture's recorded

@@ -2,6 +2,7 @@ package vocab
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -80,4 +81,33 @@ func requireVerifyingTests(id string, line int, what string, entries []string) e
 		seen[entry] = true
 	}
 	return nil
+}
+
+// VerifyingTestPaths lists, once each and sorted, the files the tests of
+// every invariant and assertion name under verified_by: the files the
+// recording asks to be read for those tests, whatever the scan leaves
+// out.
+func (l UbiquitousLanguage) VerifyingTestPaths() []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(entries []string) {
+		for _, entry := range entries {
+			t, err := ParseVerifyingTest(entry)
+			if err != nil || seen[t.Path] {
+				continue
+			}
+			seen[t.Path] = true
+			out = append(out, t.Path)
+		}
+	}
+	for _, c := range l.Contexts {
+		for _, oi := range c.Invariants() {
+			add(oi.Invariant.VerifiedBy)
+		}
+		for _, oa := range c.Assertions() {
+			add(oa.Assertion.VerifiedBy)
+		}
+	}
+	sort.Strings(out)
+	return out
 }

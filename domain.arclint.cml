@@ -267,6 +267,8 @@ BoundedContext conformance {
       def void ensureFindingsUseSuppliedEvidence();
       "Facts never presents a call target or a field type as resolved unless the language's own resolution reached it; what resolution cannot follow is undetermined, with the reason."
       def void ensureUnresolvedIsUndetermined();
+      "Facts exposes a test file that scan.exclude leaves out only to the checks of the tests verified_by names, and only when the recording names it; no other Rule, Zone or context sees it."
+      def void ensureExcludedTestsOnlyForTheirCheck();
     }
 
     "One suspected breach of a Rule, anchored at a file and line and carrying the PatternReference of the Pattern that distributed the Rule when one did. It has no lifecycle: every assessment derives its Violations fresh, and two Violations with the same values are the same finding."

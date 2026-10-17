@@ -394,6 +394,10 @@ type Observations struct {
 	files   []ObservedFile
 	facts   map[string]LanguageFacts
 	content Content
+	// named holds the test files the domain recording names under
+	// verified_by that the walk left out, with the facts their check
+	// reads; no Rule, Zone, or context counts them as observed files.
+	named map[string]LanguageFacts
 }
 
 // NewObservations validates and orders the observed repository. Facts
@@ -514,6 +518,57 @@ func (o Observations) Files() []ObservedFile { return append([]ObservedFile(nil)
 func (o Observations) FactsFor(path string) (LanguageFacts, bool) {
 	f, ok := o.facts[path]
 	return copyLanguageFacts(f), ok
+}
+
+// WithNamedTests returns Observations that also hold the test files the
+// domain recording names under verified_by and the walk left out, each
+// with what its language read of it: the imports and declarations a
+// test's check needs, or nothing when no language reads the file. They
+// stay apart from the observed files: no Rule, Zone, or context sees
+// them, only the checks of the tests verified_by names.
+func (o Observations) WithNamedTests(named map[string]LanguageFacts) (Observations, error) {
+	observed := make(map[string]bool, len(o.files))
+	for _, f := range o.files {
+		observed[f.Path] = true
+	}
+	copied := make(map[string]LanguageFacts, len(named))
+	for path, f := range named {
+		if err := validObservedPath(path); err != nil {
+			return Observations{}, fmt.Errorf("named tests: %w", err)
+		}
+		if observed[path] {
+			return Observations{}, fmt.Errorf("named tests: %s is an observed file", path)
+		}
+		if f.Language != "" && !f.Language.Valid() {
+			return Observations{}, fmt.Errorf("named tests: %s: language %q invalid", path, f.Language)
+		}
+		if len(f.Calls) > 0 || f.CallsAvailable || f.ResolvedCallsAvailable || f.FieldTypesAvailable {
+			return Observations{}, fmt.Errorf("named tests: %s carries facts beyond the imports and declarations a test's check reads", path)
+		}
+		for _, d := range f.Declarations {
+			if !declarationKinds[d.Kind] {
+				return Observations{}, fmt.Errorf("named tests: %s: declaration kind %q is outside the closed cross-language vocabulary", path, d.Kind)
+			}
+		}
+		f.Imports = append([]Import(nil), f.Imports...)
+		f.Declarations = copyDeclarations(f.Declarations, false)
+		copied[path] = f
+	}
+	o.named = copied
+	return o, nil
+}
+
+// NamedTest returns what was read of a test file the domain recording
+// names under verified_by and the walk left out; false when the
+// observations hold no such file.
+func (o Observations) NamedTest(path string) (LanguageFacts, bool) {
+	f, ok := o.named[path]
+	if !ok {
+		return LanguageFacts{}, false
+	}
+	f.Imports = append([]Import(nil), f.Imports...)
+	f.Declarations = copyDeclarations(f.Declarations, false)
+	return f, true
 }
 
 // WithContent returns Observations that lend c for Extension content

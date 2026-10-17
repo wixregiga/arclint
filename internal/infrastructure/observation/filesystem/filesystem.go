@@ -65,8 +65,11 @@ func NewSource(root string, producers ...FactProducer) (Source, error) {
 // requested. referencesFor, when not nil, selects the files the
 // reference facts (calls, resolved calls, field types) are needed for:
 // a language holding none of them is observed without those facts, so
-// it never pays for a resolution nobody reads.
-func (s Source) Observe(languages []rule.Language, scan rule.Scan, facts []rule.Fact, referencesFor func(path string) bool) (conformance.Observations, error) {
+// it never pays for a resolution nobody reads. namedTests are the test
+// files the domain recording names under verified_by: each one the walk
+// left out is read too, for the imports and declarations its test's
+// check needs, and held apart from the observed files.
+func (s Source) Observe(languages []rule.Language, scan rule.Scan, facts []rule.Fact, referencesFor func(path string) bool, namedTests []string) (conformance.Observations, error) {
 	files, err := walk(s.root, scan)
 	if err != nil {
 		return conformance.Observations{}, err
@@ -105,9 +108,66 @@ func (s Source) Observe(languages []rule.Language, scan rule.Scan, facts []rule.
 	if err != nil {
 		return conformance.Observations{}, fmt.Errorf("assemble observations: %w", err)
 	}
+	named, err := s.readNamedTests(languages, files, namedTests)
+	if err != nil {
+		return conformance.Observations{}, err
+	}
+	if obs, err = obs.WithNamedTests(named); err != nil {
+		return conformance.Observations{}, fmt.Errorf("assemble observations: %w", err)
+	}
 	// Lazy repository reads for Extension ctx.read: bytes are not
 	// eagerly copied into Observations.
 	return obs.WithContent(rootContent{root: s.root}), nil
+}
+
+// namedTestFacts are the fact classes a named test file is read for.
+var namedTestFacts = []rule.Fact{rule.FactImports, rule.FactDeclarations}
+
+// readNamedTests reads the named test files the walk left out: each one
+// that is a regular file inside the root, with the imports and
+// declarations its language reads when the language is requested, or
+// no facts when none is. A path the walk observed, one outside the
+// root, a link, and a missing file are not read.
+func (s Source) readNamedTests(languages []rule.Language, walked []conformance.ObservedFile, paths []string) (map[string]conformance.LanguageFacts, error) {
+	observed := make(map[string]bool, len(walked))
+	for _, f := range walked {
+		observed[f.Path] = true
+	}
+	var files []conformance.ObservedFile
+	for _, p := range paths {
+		if observed[p] || !(rootContent{root: s.root}).Holds(p) {
+			continue
+		}
+		info, err := os.Lstat(filepath.Join(s.root, filepath.FromSlash(p)))
+		if err != nil {
+			return nil, fmt.Errorf("named test %s: %w", p, err)
+		}
+		files = append(files, conformance.ObservedFile{Path: p, Size: info.Size()})
+	}
+	named := make(map[string]conformance.LanguageFacts, len(files))
+	for _, f := range files {
+		named[f.Path] = conformance.LanguageFacts{}
+	}
+	if len(files) == 0 {
+		return named, nil
+	}
+	for _, p := range s.producers {
+		if !languageRequested(languages, p.Language()) {
+			continue
+		}
+		supplied, err := p.Facts(s.root, files, namedTestFacts)
+		if err != nil {
+			return nil, fmt.Errorf("%s facts of named tests: %w", p.Language(), err)
+		}
+		for path, f := range supplied {
+			if _, ok := named[path]; !ok {
+				continue
+			}
+			f.Calls, f.CallsAvailable, f.ResolvedCallsAvailable, f.FieldTypesAvailable = nil, false, false, false
+			named[path] = f
+		}
+	}
+	return named, nil
 }
 
 // rootContent reads one repo-relative path from the observation root

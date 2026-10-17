@@ -103,9 +103,12 @@ check that each named test exists:
 | TypeScript | its name written in the file, since a test is a call such as `test("...")` |
 
 A missing file, a renamed test, or a function that is not a test is a
-finding at the recorded entry. A test file the scan does not observe, because
-`scan.exclude` or a `testdata` directory leaves it out, leaves the rule
-undetermined rather than missing. The check says only that the test exists;
+finding at the recorded entry. A test file that `scan.exclude` or a `testdata`
+directory leaves out is still read for this check, because `verified_by` names
+it: only its imports and declarations, or its text in TypeScript, are read, and
+no other rule, Zone, or context sees the file. A finding about such a file says
+it was read for that reason. A file Exclusion of the verifying-tests rule still
+keeps the file unread. The check says only that the test exists;
 whether the test proves the statement is not checked. In TypeScript a comment
 or a string that repeats the name passes for the test.
 

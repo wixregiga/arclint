@@ -32,7 +32,7 @@ func NewObserver(producers ...filesystemobservation.FactProducer) Observer {
 // classes, attaches durable fixture content for Extension reads, and
 // removes the temporary tree afterwards.
 func (o Observer) Observe(files []rule.TestFile, languages []rule.Language,
-	scan rule.Scan, facts []rule.Fact,
+	scan rule.Scan, facts []rule.Fact, namedTests []string,
 ) (obs conformance.Observations, err error) {
 	root, err := os.MkdirTemp("", "arclint-ruletest-")
 	if err != nil {
@@ -60,7 +60,7 @@ func (o Observer) Observe(files []rule.TestFile, languages []rule.Language,
 	if err != nil {
 		return conformance.Observations{}, fmt.Errorf("fixture observation: %w", err)
 	}
-	obs, err = source.Observe(languages, scan, facts, nil)
+	obs, err = source.Observe(languages, scan, facts, nil, namedTests)
 	if err != nil {
 		return conformance.Observations{}, fmt.Errorf("fixture observation: %w", err)
 	}

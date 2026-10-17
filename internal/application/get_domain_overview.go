@@ -68,7 +68,7 @@ func (uc GetDomainOverview) Execute() (DomainOverview, error) {
 		return DomainOverview{}, fmt.Errorf("load configured rules: %w", err)
 	}
 	// Imports tell which T a Go test carrying an assertion takes.
-	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, []rule.Fact{rule.FactImports, rule.FactDeclarations}, nil)
+	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, []rule.Fact{rule.FactImports, rule.FactDeclarations}, nil, lang.VerifyingTestPaths())
 	if err != nil {
 		return DomainOverview{}, fmt.Errorf("observe contracts: %w", err)
 	}

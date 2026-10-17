@@ -365,3 +365,25 @@ func TestParseVerifyingTest(t *testing.T) {
 		}
 	}
 }
+
+// The language lists, once each and sorted, the files its invariants
+// and assertions name under verified_by.
+func TestVerifyingTestPathsListTheNamedFiles(t *testing.T) {
+	lang, err := vocab.NewUbiquitousLanguage("p", "", []vocab.BoundedContext{{
+		Name: "pricing", Definition: "d",
+		ValueObjects: []vocab.ValueObject{{Name: "Money", Definition: "d", Invariants: []vocab.Invariant{
+			{Key: "never-negative", Statement: "s", VerifiedBy: []string{"z/money_test.go:TestA", "a/money_test.go:TestB"}},
+		}}},
+		Services: []vocab.DomainService{{Name: "Pricing", Definition: "d", Assertions: []vocab.Assertion{
+			{Key: "capped", On: "Price", Statement: "s", VerifiedBy: []string{"z/money_test.go:TestC", "web/price.test.ts:caps: 100%"}},
+		}}},
+	}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := lang.VerifyingTestPaths()
+	want := []string{"a/money_test.go", "web/price.test.ts", "z/money_test.go"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("paths = %v, want %v", got, want)
+	}
+}

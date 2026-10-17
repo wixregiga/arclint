@@ -341,7 +341,7 @@ func (uc GetArchitecturalContext) inspectContext(out *ArchitecturalContext, cfg 
 	if len(required) == 0 {
 		return conformance.Carriers{}, nil
 	}
-	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, required, referencesFor)
+	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, required, referencesFor, lang.VerifyingTestPaths())
 	if err != nil {
 		return conformance.Carriers{}, fmt.Errorf("observe context: %w", err)
 	}

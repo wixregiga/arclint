@@ -70,13 +70,17 @@ type fakeObservations struct {
 	facts     []rule.Fact
 	// referencesFor is the selection the last observation passed.
 	referencesFor func(string) bool
+	// namedTests are the test files the last observation was asked to
+	// read for verified_by.
+	namedTests []string
 }
 
-func (f *fakeObservations) Observe(languages []rule.Language, scan rule.Scan, facts []rule.Fact, referencesFor func(string) bool) (conformance.Observations, error) {
+func (f *fakeObservations) Observe(languages []rule.Language, scan rule.Scan, facts []rule.Fact, referencesFor func(string) bool, namedTests []string) (conformance.Observations, error) {
 	f.calls++
 	f.languages = languages
 	f.facts = facts
 	f.referencesFor = referencesFor
+	f.namedTests = namedTests
 	return f.obs, nil
 }
 
@@ -473,5 +477,32 @@ func TestListPatternsSummarizes(t *testing.T) {
 	}
 	if _, err := application.NewListPatterns(nil); err == nil {
 		t.Error("no source must be rejected")
+	}
+}
+
+// The check asks the observation source to read the test files the
+// recorded language names under verified_by, whatever the scan leaves
+// out.
+func TestAssessConformanceAsksForTheNamedTestFiles(t *testing.T) {
+	cfg, obs := fixture(t, "m/ok.go")
+	lang, err := vocab.NewUbiquitousLanguage("p", "", []vocab.BoundedContext{{
+		Name: "pricing", Definition: "d",
+		Services: []vocab.DomainService{{Name: "Pricing", Definition: "d", Assertions: []vocab.Assertion{
+			{Key: "capped", On: "Price", Statement: "s", VerifiedBy: []string{"m/price_test.go:TestCapped"}},
+		}}},
+	}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	observations := &fakeObservations{obs: obs}
+	uc, err := application.NewAssessConformance(fakeRepository{cfg}, observations, &fakeBaselineSource{}, nil, &fakeKnowledge{lang: lang, found: true})
+	if err != nil {
+		t.Fatalf("NewAssessConformance: %v", err)
+	}
+	if _, err := uc.Execute(application.AssessConformanceRequest{}); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if got := observations.namedTests; len(got) != 1 || got[0] != "m/price_test.go" {
+		t.Errorf("named test files = %v, want m/price_test.go", got)
 	}
 }
