@@ -53,17 +53,30 @@ type UndeterminedUseRef struct {
 // usedKnowledge groups the worksite's uses into one entry per recorded
 // term, in order of the first site reaching each, with the contracts
 // the located listing carries for it. A term the declared listing
-// shows is declared here: neither its uses nor the references that may
-// reach it are listed again. Every other term, a repository or factory
+// shows is declared here, an implied identity shown with its aggregate
+// included: neither its uses nor the references that may reach it are
+// listed again. Every other term, a repository or factory
 // the listing has no place for included, is listed wherever the
 // worksite reaches it.
 func usedKnowledge(dk, declaredHere *DomainKnowledge, uses conformance.TermUses) ([]DomainUseRef, []UndeterminedUseRef) {
 	type key struct{ context, name string }
+	recorded := map[key]bool{}
+	for _, ctx := range dk.Contexts {
+		for _, v := range ctx.ValueObjects {
+			recorded[key{ctx.Name, v}] = true
+		}
+	}
 	declared := map[key]bool{}
 	for _, ctx := range declaredHere.Contexts {
 		names := append(append(append([]string(nil), ctx.ValueObjects...), ctx.Events...), ctx.Services...)
 		for _, a := range ctx.Aggregates {
 			names = append(append(names, a.Name), a.Entities...)
+			// The listing shows an implied identity with its aggregate; a
+			// recorded one carries contracts of its own, which only its own
+			// entry shows.
+			if a.Identity != "" && !recorded[key{ctx.Name, a.Identity}] {
+				names = append(names, a.Identity)
+			}
 		}
 		for _, s := range ctx.Specifications {
 			names = append(names, s.Name)

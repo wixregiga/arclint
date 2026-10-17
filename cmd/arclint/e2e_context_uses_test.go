@@ -477,3 +477,37 @@ func TestContextListsWhatTheDeclaredListingCannotShow(t *testing.T) {
 		t.Fatalf("a reference that may reach Money, declared here, is not listed as undetermined:\n%s", stdout)
 	}
 }
+
+// The declared listing shows an implied identity with its aggregate, so
+// a field of it in the aggregate's own file is no second entry; a
+// recorded identity carries contracts of its own, so it stays used.
+func TestContextShowsAnImpliedIdentityOnceWithItsAggregate(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		domain     string
+		listedUsed bool
+	}{
+		{"implied", usesDomain, false},
+		{"recorded", strings.Replace(usesDomain, "    value_objects:\n", "    value_objects:\n      OrderID:\n        definition: The identity of an Order.\n        invariants:\n          not-empty: An OrderID is never empty.\n", 1), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			write(t, root, "domain.arclint.yaml", tc.domain)
+			write(t, root, "rules.arclint.yaml", "runtime: [go]\n")
+			write(t, root, "go.mod", "module example.com/shop\n\ngo 1.24\n")
+			write(t, root, "ordering/order.go", "package ordering\n\n// Order is a request.\ntype Order struct {\n\tID OrderID\n}\n\n// EnsureHasTotal enforces has-total.\nfunc (o *Order) EnsureHasTotal() error { return nil }\n")
+			write(t, root, "ordering/order_id.go", "package ordering\n\n// OrderID names an Order.\ntype OrderID string\n")
+			stdout, stderr, code := runBin(t, root, os.Environ(), "context", "ordering/order.go")
+			if code != 0 {
+				t.Fatalf("context: exit %d\nstderr: %s", code, stderr)
+			}
+			if !strings.Contains(stdout, "    aggregates: Order (OrderID)\n") {
+				t.Fatalf("Order is declared here with its identity:\n%s", stdout)
+			}
+			listed := strings.Contains(stdout, "    value object OrderID, identity of Order: ordering/order.go:5\n")
+			if listed != tc.listedUsed {
+				t.Fatalf("OrderID listed as used = %t, want %t:\n%s", listed, tc.listedUsed, stdout)
+			}
+		})
+	}
+}
