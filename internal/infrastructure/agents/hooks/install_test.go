@@ -222,7 +222,7 @@ func TestUserInstallLeavesTheSharedCodexProjectFile(t *testing.T) {
 	if data, err := os.ReadFile(shared); err != nil || string(data) != content {
 		t.Fatalf("the shared project file changed: %v\n%s", err, data)
 	}
-	if problems := strings.Join(statusOf(t, installer)["codex project"].Problems, "\n"); !strings.Contains(problems, h.file(false, "codex")+" already runs the hooks in every project") {
+	if problems := strings.Join(statusOf(t, installer)["codex project"].Problems, "\n"); !strings.Contains(problems, h.file(false, "codex")+" already lists the hooks for every project") {
 		t.Fatalf("duplicate not reported: %s", problems)
 	}
 }
@@ -521,6 +521,14 @@ func TestStatusNamesTheHooksAPartialFileStillRuns(t *testing.T) {
 	if silence := strings.Join(status.Silence, "\n"); !strings.Contains(silence, "the hooks install wrote into a file still run") {
 		t.Fatalf("silence with one hook install wrote:\n%s", silence)
 	}
+	// A hook install wrote runs the arclint that installed it, so none
+	// runs once that binary is gone.
+	if err := os.Remove(installer.binary); err != nil {
+		t.Fatal(err)
+	}
+	if problems := strings.Join(statusOf(t, installer)["claude user"].Problems, "\n"); strings.Contains(problems, "still run") || !strings.Contains(problems, "which does not exist") {
+		t.Fatalf("problems once the binary is gone:\n%s", problems)
+	}
 	// disableAllHooks turns off every hook Claude Code reads, so none is
 	// said to run, wherever it is set.
 	shared := filepath.Join(root, ".claude", "settings.json")
@@ -636,8 +644,15 @@ func TestStatusNamesDuplicateFilesAndTheLastEvent(t *testing.T) {
 	}
 	project := statusOf(t, installer)["claude project"]
 	problems := strings.Join(project.Problems, "\n")
-	if project.Installation != application.HooksComplete || !strings.Contains(problems, h.file(false, "claude")+" already runs the hooks in every project") || !strings.Contains(problems, ".claude/settings.json also lists the workflow hooks") {
+	if project.Installation != application.HooksComplete || !strings.Contains(problems, h.file(false, "claude")+" already lists the hooks for every project") || !strings.Contains(problems, ".claude/settings.json also lists the workflow hooks") {
 		t.Fatalf("duplicates: %+v", project)
+	}
+	// With every hook turned off, the duplicates run nothing until the
+	// setting is removed.
+	writeTestFile(t, filepath.Join(root, ".claude/settings.json"), strings.Replace(string(user), "{", `{"disableAllHooks": true,`, 1))
+	problems = strings.Join(statusOf(t, installer)["claude project"].Problems, "\n")
+	if strings.Count(problems, "would run each event twice here once its hooks are turned back on") != 2 || strings.Contains(problems, " runs each event twice") {
+		t.Fatalf("duplicates while hooks are off: %s", problems)
 	}
 }
 
@@ -655,7 +670,7 @@ func TestStatusNamesADuplicateFromAPartialUserFile(t *testing.T) {
 	if user := entries["codex user"]; user.Installation != application.HooksPartial {
 		t.Fatalf("a partial user file reported installed: %+v", user)
 	}
-	if problems := strings.Join(entries["codex project"].Problems, "\n"); !strings.Contains(problems, h.file(false, "codex")+" already runs the hooks in every project") {
+	if problems := strings.Join(entries["codex project"].Problems, "\n"); !strings.Contains(problems, h.file(false, "codex")+" already lists the hooks for every project") {
 		t.Fatalf("duplicate from a partial user file not reported: %s", problems)
 	}
 }
