@@ -120,6 +120,9 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 		"2. Before editing, state in the project's language:\n   - This change does ___.\n   - These decisions belong to ___.\n   - The caller uses ___.\n   - Existing behavior ___ must remain intact.",
 		"3. If the change introduces or changes a meaning, record it in the project's domain recording through `arclint domain define` before writing code, using the domain-librarian skill.",
 		"4. Implement one complete behavior path through the zones `arclint context` reported",
+		"and implementations own their specific decisions. The domain decides; the application gathers what the decision needs and carries out the change. " +
+			"The application layer holds no business rule: it only coordinates tasks and delegates work to the domain " +
+			"(Evans, DDD Reference 2015, p. 10, Layered Architecture; Evans quoted in Fowler, AnemicDomainModel; Stafford, Service Layer and Kinds of Business Logic).\n5. ",
 		"### Commands",
 		"- `arclint agents skill`: write the domain-librarian skill to `.agents/skills/domain-librarian/` for Codex and `.claude/skills/domain-librarian/` for Claude Code when your harness lacks it",
 		"### The recorded domain",

@@ -1,6 +1,7 @@
 package vocab_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -257,5 +258,97 @@ func TestParseRelationKindRoundTrip(t *testing.T) {
 	}
 	if _, err := vocab.ParseRelationKind("shared-kernel"); err == nil {
 		t.Fatal("hyphen kind should be rejected")
+	}
+}
+
+// When an assertion goes on a domain service, the librarian asks
+// whether its operation changes anything outside the model, in the
+// question bank and in the assertion and domain service Ask lists, and
+// its distillation rule states where the decision lives and where its
+// change is made, then how a domain service applies it, with the
+// sources of both statements.
+func TestLibrarianSaysTheDomainDecides(t *testing.T) {
+	const question = "Does <operation> change anything outside the model, such as a file, a store or another system? Then record the assertion on the operation that decides, and let the application service make the change."
+	const service = "When an operation of a domain service would change something outside the model, such as a file, a store or another system, its assertion goes on the operation that decides. " +
+		"That operation takes what the decision needs as values, returns its verdict, and changes nothing. " +
+		"The application service gathers those values, asks for the verdict, and makes the change only when the verdict allows it " +
+		"(Evans, DDD Reference 2015, p. 14, Services, p. 21, Side-Effect-Free Functions, and p. 22, Assertions; Khorikov, Domain model purity vs. domain model completeness (2020), read-decide-act)."
+	if got := vocab.ServiceDecides().String(); got != service {
+		t.Errorf("ServiceDecides:\n got %q\nwant %q", got, service)
+	}
+
+	var asked bool
+	for _, q := range vocab.InsufficientInfoQuestions() {
+		if q.Question == question {
+			asked = q.Decides == "deciding operation (domain_service) vs carrying out the change (application_service)"
+		}
+	}
+	if !asked {
+		t.Errorf("the insufficient_info bank does not ask %q to decide the deciding operation", question)
+	}
+	for _, c := range []vocab.Concept{vocab.ConceptAssertion, vocab.ConceptDomainService} {
+		if !slices.Contains(c.Doc().Questions, question) {
+			t.Errorf("%s Doc.Questions lacks %q", c, question)
+		}
+	}
+
+	rules := vocab.DistillationRules()
+	at := slices.IndexFunc(rules, func(r vocab.DistillationRule) bool { return r.ID == "decide-then-carry-out" })
+	if at < 1 || rules[at-1].ID != "contract-of-a-service" {
+		t.Fatalf("decide-then-carry-out is not the rule after contract-of-a-service (at %d)", at)
+	}
+	if want := vocab.DomainDecides().String() + " " + service; rules[at].Rule != want {
+		t.Errorf("decide-then-carry-out:\n got %q\nwant %q", rules[at].Rule, want)
+	}
+}
+
+// Before the librarian recommends moving code between layers it states
+// the strongest case against the move from the meta-model's
+// bibliography, then recommends decide-then-carry-out; the protocol
+// step comes after Behavior, and every work it names is one the
+// meta-model cites, so the librarian finds it there.
+func TestLibrarianWeighsAMoveBetweenLayers(t *testing.T) {
+	rules := vocab.SkillProtocolRules()
+	at := slices.IndexFunc(rules, func(r string) bool { return strings.HasPrefix(r, "**Moves between layers.**") })
+	if at < 1 || !strings.HasPrefix(rules[at-1], "**Behavior.**") {
+		t.Fatalf("the Moves between layers step is not the one after Behavior (at %d)", at)
+	}
+	step := rules[at]
+	for _, want := range []string{
+		"`assertion/checked-by-its-operation`",
+		"state the strongest case against the move before recommending it, citing works from the meta-model's bibliography",
+		"decide-then-carry-out",
+		"values in and verdict out",
+	} {
+		if !strings.Contains(step, want) {
+			t.Errorf("the step lacks %q:\n%s", want, step)
+		}
+	}
+	if _, ok := vocab.DistillationRuleByID("decide-then-carry-out"); !ok {
+		t.Error("the step names decide-then-carry-out, which is no distillation rule")
+	}
+
+	model := vocab.DDD()
+	block, ok := model.Block("domain_service")
+	if !ok {
+		t.Fatal("no domain_service block")
+	}
+	cited := map[string]bool{}
+	for _, g := range block.Guidance {
+		for _, c := range g.Sources {
+			cited[c.Work] = true
+		}
+	}
+	for work, named := range map[string]string{
+		"evans2015":                    "Evans, DDD Reference 2015, p. 21",
+		"khorikov-purity-completeness": "Khorikov, Domain model purity vs. domain model completeness (2020)",
+		"stafford-business-logic":      "Stafford, Kinds of Business Logic",
+	} {
+		if !strings.Contains(step, named) {
+			t.Errorf("the step does not cite %s as %q", work, named)
+		}
+		if !cited[work] {
+			t.Errorf("no domain_service guidance cites %s, so the bibliography does not reach it", work)
+		}
 	}
 }

@@ -141,6 +141,14 @@ func ddd() MetaModel {
 				Verification: VerifiedFetched,
 			},
 			{
+				Key:          "khorikov-purity-completeness",
+				Title:        "Domain model purity vs. domain model completeness (DDD Trilemma)",
+				Authors:      []string{"Vladimir Khorikov"},
+				Date:         "2020-08-04",
+				URL:          "https://enterprisecraftsmanship.com/posts/domain-model-purity-completeness/",
+				Verification: VerifiedFetched,
+			},
+			{
 				Key:          "vernon-iddd-ch1",
 				Title:        "Getting Started with Domain-Driven Design (Implementing Domain-Driven Design, chapter 1 excerpt)",
 				Authors:      []string{"Vaughn Vernon"},
@@ -1689,6 +1697,15 @@ func ddd() MetaModel {
 						Sources: []Citation{
 							{Work: "vernon2013", Chapter: 7, Page: "268"},
 							{Work: "vernon-iddd-sample-pages", Page: "362", Section: "Rule: Reference Other Aggregates by Identity"},
+						},
+					},
+					{
+						Text: "When an operation would change something outside the model, such as a file, a store or another system, the service decides and the application service carries out the change; the service's operation takes what the decision needs as values, returns its verdict, and changes nothing, and the application service gathers those values and makes the change only when the verdict allows it.",
+						Sources: []Citation{
+							{Work: "evans2015", Page: "21", Section: "Side-Effect-Free Functions"},
+							{Work: "evans2015", Page: "22", Section: "Assertions"},
+							{Work: "khorikov-purity-completeness"},
+							{Work: "stafford-business-logic"},
 						},
 					},
 				},

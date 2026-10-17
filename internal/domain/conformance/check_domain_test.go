@@ -950,6 +950,64 @@ func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 	}
 }
 
+// Every finding about a service's assertion tells the agent where the
+// decision lives and where its change is made, after the repair; a
+// root's command changes its own aggregate, so a root's finding gives
+// the repair alone.
+func TestAssertionRemediationSaysTheDomainDecides(t *testing.T) {
+	decides := vocab.DecideThenCarryOut()
+	r := builtInRule(t, "assertion/checked-by-its-operation")
+	remediations := func(knowledge vocab.UbiquitousLanguage, file, pkg string, decls []conformance.Declaration) []string {
+		a := runOne(t, r, nil, observed(file), map[string]conformance.LanguageFacts{file: goDecls(pkg, decls)}, knowledge)
+		var out []string
+		for _, v := range a.Violations() {
+			out = append(out, v.Remediation())
+		}
+		return out
+	}
+
+	service := oneContext(t, vocab.BoundedContext{
+		Name: "release", Definition: "d", Line: 1,
+		Services: []vocab.DomainService{{
+			Name: "RetirementPolicy", Definition: "d", Line: 2,
+			Assertions: []vocab.Assertion{{Key: "no-installation-left", On: "Decide", Statement: "A release is retired only when no installation uses it.", Line: 4}},
+		}},
+	})
+	policy := conformance.Declaration{Kind: "struct", Name: "RetirementPolicy", Exported: true, StartLine: 3}
+	decide := conformance.Declaration{Kind: "method", Name: "Decide", Owner: "RetirementPolicy", Exported: true, StartLine: 10, Results: []string{"error"}}
+	check := conformance.Declaration{Kind: "method", Name: "AssertNoInstallationLeft", Owner: "RetirementPolicy", Exported: true, StartLine: 20, Results: []string{"error"}}
+	file := "internal/release/retirement_policy.go"
+	got := remediations(service, file, "release", []conformance.Declaration{policy})
+	want := []string{
+		"declare Decide (go) on RetirementPolicy and call AssertNoInstallationLeft (go) from it. " + decides,
+		"declare AssertNoInstallationLeft (go) on RetirementPolicy and call it from Decide. " + decides,
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("bare service:\n got %q\nwant %q", got, want)
+	}
+	got = remediations(service, file, "release", []conformance.Declaration{policy, decide, check})
+	want = []string{"call AssertNoInstallationLeft from Decide and fail the operation when it fails. " + decides}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("uncalled check:\n got %q\nwant %q", got, want)
+	}
+
+	aggregate := oneContext(t, vocab.BoundedContext{
+		Name: "catalog", Definition: "d", Line: 1,
+		Aggregates: []vocab.Aggregate{{
+			Name: "Event", Definition: "d", Identity: "EventID", Line: 2,
+			Assertions: []vocab.Assertion{{Key: "tiers-priced", On: "Publish", Statement: "s", Line: 4}},
+		}},
+	})
+	root := conformance.Declaration{Kind: "struct", Name: "Event", Exported: true, StartLine: 3}
+	publish := conformance.Declaration{Kind: "method", Name: "Publish", Owner: "Event", Exported: true, StartLine: 10, Results: []string{"error"}}
+	priced := conformance.Declaration{Kind: "method", Name: "AssertTiersPriced", Owner: "Event", Exported: true, StartLine: 20, Results: []string{"error"}}
+	got = remediations(aggregate, "internal/event/event.go", "event", []conformance.Declaration{root, publish, priced})
+	want = []string{"call AssertTiersPriced from Publish and fail the operation when it fails"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("root:\n got %q\nwant %q", got, want)
+	}
+}
+
 // Two contexts holding one file is a finding for each unless they
 // record a shared_kernel. A context with a Zone named for it holds
 // every file of the Zone; one without holds the files of its terms.
