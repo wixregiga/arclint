@@ -154,12 +154,22 @@ type usedTerm struct {
 func (t usedTerm) reachedThrough(reached locDecl) bool {
 	decl := t.candidates[0]
 	switch {
-	case reached.decl.Owner == "" && reached.file.path == decl.file.path && reached.decl.Name == decl.decl.Name:
+	case reached.isDeclaration(decl):
 		return true
 	case reached.decl.Owner != "" && decl.owns(reached.file, reached.decl.Owner):
 		return true
 	}
 	return false
+}
+
+// isDeclaration reports whether a reached declaration is the located one
+// itself, by its whole identity: file, kind, owner, name, and line. A
+// function, or a type nested elsewhere in the file, that only shares the
+// name is another declaration.
+func (d locDecl) isDeclaration(located locDecl) bool {
+	return d.file.path == located.file.path && d.decl.Kind == located.decl.Kind &&
+		d.decl.Owner == located.decl.Owner && d.decl.Name == located.decl.Name &&
+		d.decl.StartLine == located.decl.StartLine
 }
 
 // writtenResult finds the result of a function that is written with
@@ -273,8 +283,8 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 		default:
 			return nil
 		}
-		reached, found := files[ref.File].declaration(ref)
-		if !found {
+		spelled := files[ref.File].declarations(ref)
+		if len(spelled) == 0 {
 			undetermined(UndeterminedUse{
 				Path: site.path, Line: site.line, What: string(site.way) + " " + site.via,
 				Reason: fmt.Sprintf("it reaches %s in %s, whose declarations were not read", referenceName(ref), ref.File),
@@ -282,10 +292,25 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 			return nil
 		}
 		for _, term := range c.terms {
-			if !term.mayBeReachedThrough(reached) {
-				continue
+			var reaching []locDecl
+			for _, d := range spelled {
+				if term.mayBeReachedThrough(d) {
+					reaching = append(reaching, d)
+				}
 			}
-			if len(term.candidates) > 1 {
+			switch {
+			case len(reaching) == 0:
+				continue
+			case len(reaching) < len(spelled):
+				// The file declares the name twice and the reference does
+				// not say which one it reaches.
+				undetermined(UndeterminedUse{
+					Path: site.path, Line: site.line, What: string(site.way) + " " + site.via,
+					Reason:  fmt.Sprintf("it reaches %s in %s, which %d declarations spell, and not all of them are %s", referenceName(ref), ref.File, len(spelled), term.name),
+					Context: term.context, Term: term.name,
+				})
+				continue
+			case len(term.candidates) > 1:
 				undetermined(UndeterminedUse{
 					Path: site.path, Line: site.line, What: string(site.way) + " " + site.via,
 					Reason:  fmt.Sprintf("it reaches %s in %s, one of %s spelling %s, so which is the model's cannot be told", referenceName(ref), ref.File, candidateList(term.candidates), term.name),
@@ -293,7 +318,7 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 				})
 				continue
 			}
-			use, err := newTermUse(ref, reached, term, site)
+			use, err := newTermUse(ref, reaching[0], term, site)
 			if err != nil {
 				return err
 			}
@@ -303,17 +328,20 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 			}
 		}
 		for _, term := range c.terms {
+		written:
 			for _, d := range term.candidates {
-				result, written := writtenResult(reached, d)
-				if !written {
-					continue
+				for _, reached := range spelled {
+					result, ok := writtenResult(reached, d)
+					if !ok {
+						continue
+					}
+					undetermined(UndeterminedUse{
+						Path: site.path, Line: site.line, What: string(site.way) + " " + site.via,
+						Reason:  fmt.Sprintf("%s returns %s as written; result types are not resolved", referenceName(ref), result),
+						Context: term.context, Term: term.name,
+					})
+					break written
 				}
-				undetermined(UndeterminedUse{
-					Path: site.path, Line: site.line, What: string(site.way) + " " + site.via,
-					Reason:  fmt.Sprintf("%s returns %s as written; result types are not resolved", referenceName(ref), result),
-					Context: term.context, Term: term.name,
-				})
-				break
 			}
 		}
 		return nil
@@ -385,15 +413,17 @@ func (t usedTerm) mayBeReachedThrough(reached locDecl) bool {
 	return false
 }
 
-// declaration finds the declaration a resolved reference reaches in
-// the file.
-func (f fileFacts) declaration(ref Reference) (locDecl, bool) {
+// declarations lists the declarations of the file a resolved reference
+// may reach: every one spelled with its name and owner, since a file
+// may declare a name twice and the reference names no line.
+func (f fileFacts) declarations(ref Reference) []locDecl {
+	var out []locDecl
 	for _, d := range f.decls {
 		if d.Name == ref.Name && d.Owner == ref.Owner {
-			return locDecl{file: f, decl: d}, true
+			out = append(out, locDecl{file: f, decl: d})
 		}
 	}
-	return locDecl{}, false
+	return out
 }
 
 // referenceName spells a reached declaration as its owner and name.
