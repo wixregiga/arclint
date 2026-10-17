@@ -208,6 +208,10 @@ type DomainKnowledge struct {
 	UsesLocated  bool                 `json:"usesLocated,omitempty"`
 	Used         []DomainUseRef       `json:"used,omitempty"`
 	Undetermined []UndeterminedUseRef `json:"undetermined,omitempty"`
+	// Implemented lists, for a worksite, every implementation of a
+	// domain service declared as an interface or an abstract class whose
+	// operation lies in it, with the check that operation must reach.
+	Implemented []DomainImplementationRef `json:"implemented,omitempty"`
 }
 
 // GetArchitecturalContext projects Rules, Zones, and reasons each Rule
@@ -287,23 +291,38 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 		// What the scoped listing keeps is declared here; a use of it is
 		// not listed again as used, whether or not --full lists the rest.
 		declaredHere := scopeDomainKnowledge(out.Domain, carriers, *scope)
-		var used []DomainUseRef
-		var undetermined []UndeterminedUseRef
-		if out.Domain.Located {
-			uses, err := carriers.Uses(scope.contains, cfg.Languages)
-			if err != nil {
-				return ArchitecturalContext{}, fmt.Errorf("locate uses: %w", err)
-			}
-			used, undetermined = usedKnowledge(out.Domain, declaredHere, uses)
+		used, undetermined, implemented, err := worksiteUses(out.Domain, declaredHere, carriers, *scope, cfg.Languages)
+		if err != nil {
+			return ArchitecturalContext{}, err
 		}
 		if !req.Full {
 			out.Domain = declaredHere
 		}
 		out.Domain.UsesLocated = out.Domain.Located
-		out.Domain.Used, out.Domain.Undetermined = used, undetermined
+		out.Domain.Used, out.Domain.Undetermined, out.Domain.Implemented = used, undetermined, implemented
 		out.Domain.Unanchored = unanchoredContracts(out.Domain, cfg.Languages)
 	}
 	return out, nil
+}
+
+// worksiteUses locates, in a located model, the recorded entries the
+// worksite's code uses but does not declare, the references that may
+// be uses resolution cannot confirm, and the implementations of
+// declared domain services in the worksite.
+func worksiteUses(dk, declaredHere *DomainKnowledge, carriers conformance.Carriers, scope domainScope, languages []rule.Language) ([]DomainUseRef, []UndeterminedUseRef, []DomainImplementationRef, error) {
+	if !dk.Located {
+		return nil, nil, nil, nil
+	}
+	uses, err := carriers.Uses(scope.contains, languages)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("locate uses: %w", err)
+	}
+	used, undetermined := usedKnowledge(dk, declaredHere, uses)
+	implemented, err := implementedHere(dk, carriers, scope)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("locate implementations: %w", err)
+	}
+	return used, undetermined, implemented, nil
 }
 
 // inspectContext collects the union of this request's fact requirements once.
@@ -340,6 +359,11 @@ func (uc GetArchitecturalContext) inspectContext(out *ArchitecturalContext, cfg 
 		// A declared service's guarantee may be the value its
 		// operation returns, read through resolved result types.
 		required = withFacts(required, carrierFacts(lang)...)
+		if scope != nil && recordsServiceAssertion(lang) {
+			// An implementation in the worksite is told by the type it
+			// implements.
+			required = withFacts(required, rule.FactImplementations)
+		}
 	}
 	if len(required) == 0 {
 		return conformance.Carriers{}, nil

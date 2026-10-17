@@ -72,6 +72,28 @@ type DomainRuleCheck struct {
 	// NotChecked lists the checks that did not run, with their reasons,
 	// next to a status the checks that ran decided.
 	NotChecked []string
+	// Implementations lists, for an assertion of a domain service
+	// declared as an interface or an abstract class, each implementation
+	// and whether its operation reaches the check in the model.
+	Implementations []DomainImplementationCheck
+}
+
+// DomainImplementationCheck is one implementation of a declared domain
+// service as the check of an assertion judged it.
+type DomainImplementationCheck struct {
+	Type      string
+	Operation string
+	// Source is the file:line of the implementation's operation.
+	Source string
+	// Evidence is exact, heuristic, or undetermined: how the language
+	// established that the type implements the service.
+	Evidence string
+	// Must says what the operation does to reach the check.
+	Must   string
+	Status DomainRuleStatus
+	// Reason says why the status is undetermined, or what the finding
+	// is.
+	Reason string
 }
 
 // DomainRuleFinding is one violation a check found for the rule.
@@ -82,6 +104,14 @@ type DomainRuleFinding struct {
 	Line    int
 	// Status is active, suppressed, or baselined.
 	Status string
+}
+
+// implementationStatus reads the outcome of one implementation of a
+// declared domain service as a rule status; every other outcome is
+// undetermined.
+var implementationStatus = map[conformance.Outcome]DomainRuleStatus{
+	conformance.OutcomeConforms: RuleConforms,
+	conformance.OutcomeViolates: RuleFinding,
 }
 
 // recordedRules lists the invariants and assertions a shown entry
@@ -269,6 +299,16 @@ func judgeRule(check *DomainRuleCheck, c conformance.ContractCoverage, cfg rule.
 	case RuleConforms, RuleFinding, RuleUndetermined:
 		// A check read the code; Expected stands when nothing carried
 		// the rule.
+	}
+	for _, impl := range c.Implementations() {
+		status, judged := implementationStatus[impl.Outcome]
+		if !judged {
+			status = RuleUndetermined
+		}
+		check.Implementations = append(check.Implementations, DomainImplementationCheck{
+			Type: impl.Type, Operation: impl.Operation, Source: fmt.Sprintf("%s:%d", impl.Path, impl.Line),
+			Evidence: string(impl.Evidence), Must: impl.Must, Status: status, Reason: impl.Reason,
+		})
 	}
 	for _, e := range c.Checks() {
 		id := e.Rule().Qualified()

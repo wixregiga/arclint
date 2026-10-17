@@ -98,14 +98,23 @@ func carrierFacts(lang vocab.UbiquitousLanguage) []rule.Fact {
 	// A Go test carrying an assertion takes testing's T under the name
 	// its file imports testing by.
 	facts := []rule.Fact{rule.FactImports, rule.FactDeclarations}
+	if recordsServiceAssertion(lang) {
+		return append(facts, rule.FactFieldTypes)
+	}
+	return facts
+}
+
+// recordsServiceAssertion reports whether a domain service of the
+// recording records an assertion.
+func recordsServiceAssertion(lang vocab.UbiquitousLanguage) bool {
 	for _, ctx := range lang.Contexts {
 		for _, s := range ctx.Services {
 			if len(s.Assertions) > 0 {
-				return append(facts, rule.FactFieldTypes)
+				return true
 			}
 		}
 	}
-	return facts
+	return false
 }
 
 // withFacts appends the facts a request does not hold yet.

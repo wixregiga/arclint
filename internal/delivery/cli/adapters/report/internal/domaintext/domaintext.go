@@ -560,6 +560,28 @@ func ruleDetail(p *out.Printer, st Style, rules *application.DomainEntryRules, k
 		for _, r := range c.NotChecked {
 			p.Printf("%s  %s %s\n", indent, st.Muted("not checked:"), r)
 		}
+		if len(c.Implementations) > 0 {
+			p.Printf("%s%s\n", indent, label("implementations"))
+		}
+		for _, impl := range c.Implementations {
+			line := fmt.Sprintf("%s.%s (%s) must %s: %s", impl.Type, impl.Operation, impl.Evidence, impl.Must, implementationStatus(st, impl))
+			p.Printf("%s  %s (%s)\n", indent, line, st.Path(impl.Source))
+			if impl.Reason != "" && impl.Status != application.RuleFinding {
+				p.Printf("%s    %s\n", indent, impl.Reason)
+			}
+		}
+	}
+}
+
+// implementationStatus spells how the check judged one implementation.
+func implementationStatus(st Style, impl application.DomainImplementationCheck) string {
+	switch impl.Status {
+	case application.RuleConforms:
+		return st.OK("conforms")
+	case application.RuleFinding:
+		return st.Warn("finding")
+	default:
+		return st.Warn("undetermined")
 	}
 }
 
@@ -894,6 +916,7 @@ func Knowledge(p *out.Printer, st Style, d *application.DomainKnowledge) {
 		p.Printf("  relation: %s -[%s]-> %s\n", rel.From, rel.Kind, rel.To)
 	}
 	writeUsed(p, st, d)
+	writeImplemented(p, st, d)
 	writeUndetermined(p, st, d)
 	writeUnanchored(p, st, d)
 }
@@ -936,6 +959,26 @@ func writeUsed(p *out.Printer, st Style, d *application.DomainKnowledge) {
 			if s := u.Specification; s != nil {
 				p.Printf("      satisfaction method%s\n", anchorSuffix(st, s.Source, s.Anchor))
 			}
+		}
+	}
+}
+
+// writeImplemented prints, context by context, the implementations of
+// declared domain services in the worksite, each with the check its
+// operation must reach.
+func writeImplemented(p *out.Printer, st Style, d *application.DomainKnowledge) {
+	var contexts []string
+	byContext := map[string][]application.DomainImplementationRef{}
+	for _, impl := range d.Implemented {
+		if _, seen := byContext[impl.Context]; !seen {
+			contexts = append(contexts, impl.Context)
+		}
+		byContext[impl.Context] = append(byContext[impl.Context], impl)
+	}
+	for _, name := range contexts {
+		p.Printf("  %s %s:\n", st.Bold("implemented here, context"), st.Bold(name))
+		for _, impl := range byContext[name] {
+			p.Printf("    %s: %s\n", impl.String(), st.Path(impl.Source))
 		}
 	}
 }
@@ -1076,7 +1119,7 @@ func headline(d *application.DomainKnowledge) string {
 		switch {
 		case uses == "":
 			return fmt.Sprintf("nothing recorded is declared here; --full shows the whole model (%s)", CountsLine(d.Counts))
-		case len(d.Used) == 0 && len(d.Undetermined) == 0:
+		case len(d.Used) == 0 && len(d.Undetermined) == 0 && len(d.Implemented) == 0:
 			return fmt.Sprintf("nothing recorded is declared or used here; --full shows the whole model (%s)", CountsLine(d.Counts))
 		}
 		return fmt.Sprintf("nothing recorded is declared here; %s; --full shows the whole model (%s)", uses, CountsLine(d.Counts))
@@ -1097,6 +1140,9 @@ func usesPhrase(d *application.DomainKnowledge) string {
 	phrase := countPhrase(len(d.Used), "entry", "entries") + " used here"
 	if len(d.Used) == 0 {
 		phrase = "no entry used here"
+	}
+	if n := len(d.Implemented); n > 0 {
+		phrase += ", " + countPhrase(n, "implementation", "implementations") + " of a declared service here"
 	}
 	if n := len(d.Undetermined); n > 0 {
 		phrase += ", " + countPhrase(n, "reference", "references") + " undetermined"

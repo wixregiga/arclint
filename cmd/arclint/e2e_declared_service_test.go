@@ -58,6 +58,10 @@ type declaredServiceCase struct {
 	// module is the file that makes the source one module its language
 	// resolves, where it needs one.
 	module map[string]string
+	// implPath holds an implementation of the service: implFunction
+	// calls the function of the context, implValue returns the value
+	// object.
+	implPath, implFunction, implValue string
 }
 
 const goEncryptedPassword = `package identity
@@ -145,6 +149,22 @@ def assert_not_empty(encrypted: str) -> None:
         raise ValueError("an encrypted password is never empty")
 `
 	finding := "declared service Encrypter: not-empty has no check in context identity"
+	goImpl := func(result, body string) string {
+		return "package adapters\n\nimport \"example.com/identity/src/identity\"\n\n// Plain encrypts nothing.\ntype Plain struct{}\n\n// Encrypt protects a password.\nfunc (*Plain) Encrypt(plain string) " + result + " {\n" + body + "}\n"
+	}
+	goFunction := goImpl("(string, error)", "\tout := \"x\" + plain\n\tif err := identity.AssertNotEmpty(out); err != nil {\n\t\treturn \"\", err\n\t}\n\treturn out, nil\n")
+	goValue := goImpl("(identity.EncryptedPassword, error)", "\treturn identity.NewEncryptedPassword(\"x\" + plain)\n")
+	tsImpl := func(relation, imports, result, body string) string {
+		return "import { " + imports + " } from \"../identity/password\";\n\nexport class Plain " + relation + " Encrypter {\n  encrypt(plain: string): " + result + " {\n" + body + "  }\n}\n"
+	}
+	tsFunction := "    const out = \"x\" + plain;\n    assertNotEmpty(out);\n    return out;\n"
+	tsValue := "    return EncryptedPassword.from(\"x\" + plain);\n"
+	pyImpl := func(imports, result, body string) string {
+		return "from identity.password import " + imports + "\n\n\nclass Plain(Encrypter):\n    def encrypt(self, plain: str) -> " + result + ":\n" + body
+	}
+	pyFunction := pyImpl("Encrypter, assert_not_empty", "str", "        out = \"x\" + plain\n        assert_not_empty(out)\n        return out\n")
+	pyValue := pyImpl("EncryptedPassword, Encrypter", "EncryptedPassword", "        return EncryptedPassword(\"x\" + plain)\n")
+	pyModule := map[string]string{"src/identity/__init__.py": "", "src/adapters/__init__.py": ""}
 	return []declaredServiceCase{
 		{
 			name: "go interface", runtime: "go", path: "src/identity/password.go",
@@ -152,7 +172,8 @@ def assert_not_empty(encrypted: str) -> None:
 			function:  goInterface + goCheck,
 			value:     strings.Replace(goInterface, "Encrypt(plain string) (string, error)", "Encrypt(plain string) (EncryptedPassword, error)", 1),
 			checkLine: 22, valueDoorLine: 9, finding: finding,
-			module: map[string]string{"go.mod": "module example.com/identity\n\ngo 1.22\n"},
+			module:   map[string]string{"go.mod": "module example.com/identity\n\ngo 1.22\n"},
+			implPath: "src/adapters/plain.go", implFunction: goFunction, implValue: goValue,
 		},
 		{
 			name: "typescript interface", runtime: "ts", path: "src/identity/password.ts",
@@ -160,6 +181,9 @@ def assert_not_empty(encrypted: str) -> None:
 			function:  tsInterface + tsCheck,
 			value:     strings.Replace(tsInterface, "encrypt(plain: string): string;", "encrypt(plain: string): EncryptedPassword;", 1),
 			checkLine: 15, valueDoorLine: 2, finding: finding,
+			implPath:     "src/adapters/plain.ts",
+			implFunction: tsImpl("implements", "assertNotEmpty, type Encrypter", "string", tsFunction),
+			implValue:    tsImpl("implements", "EncryptedPassword, type Encrypter", "EncryptedPassword", tsValue),
 		},
 		{
 			name: "typescript abstract class", runtime: "ts", path: "src/identity/password.ts",
@@ -167,6 +191,9 @@ def assert_not_empty(encrypted: str) -> None:
 			function:  tsAbstract + tsCheck,
 			value:     strings.Replace(tsAbstract, "abstract encrypt(plain: string): string;", "abstract encrypt(plain: string): EncryptedPassword;", 1),
 			checkLine: 15, valueDoorLine: 2, finding: finding,
+			implPath:     "src/adapters/plain.ts",
+			implFunction: tsImpl("extends", "assertNotEmpty, Encrypter", "string", tsFunction),
+			implValue:    tsImpl("extends", "EncryptedPassword, Encrypter", "EncryptedPassword", tsValue),
 		},
 		{
 			name: "python abc", runtime: "py", path: "src/identity/password.py",
@@ -174,6 +201,8 @@ def assert_not_empty(encrypted: str) -> None:
 			function:  pyABC + pyCheck,
 			value:     strings.Replace(pyABC, "def encrypt(self, plain: str) -> str: ...", "def encrypt(self, plain: str) -> EncryptedPassword: ...", 1),
 			checkLine: 18, valueDoorLine: 7, finding: finding,
+			module:   pyModule,
+			implPath: "src/adapters/plain.py", implFunction: pyFunction, implValue: pyValue,
 		},
 		{
 			name: "python protocol", runtime: "py", path: "src/identity/password.py",
@@ -181,6 +210,8 @@ def assert_not_empty(encrypted: str) -> None:
 			function:  pyProtocol + pyCheck,
 			value:     strings.Replace(pyProtocol, "def encrypt(self, plain: str) -> str: ...", "def encrypt(self, plain: str) -> EncryptedPassword: ...", 1),
 			checkLine: 17, valueDoorLine: 7, finding: finding,
+			module:   pyModule,
+			implPath: "src/adapters/plain.py", implFunction: pyFunction, implValue: pyValue,
 		},
 	}
 }
@@ -218,8 +249,14 @@ func TestDeclaredServiceAssertion(t *testing.T) {
 			}
 
 			write(t, root, tc.path, tc.function)
+			// A check in the model with no implementation observed is
+			// undetermined, never conforming.
+			if findings, status := declaredServiceFindings(t, root, 0); len(findings) != 0 || status != "undetermined" {
+				t.Fatalf("a check with no implementation observed must be undetermined: %s %+v", status, findings)
+			}
+			write(t, root, tc.implPath, tc.implFunction)
 			if findings, status := declaredServiceFindings(t, root, 0); len(findings) != 0 || status != "structurally_checked" {
-				t.Fatalf("a check declared as a function of the context must conform: %s %+v", status, findings)
+				t.Fatalf("an implementation calling the function of the context must conform: %s %+v", status, findings)
 			}
 			stdout := mustRunDomain(t, root, "domain", "overview")
 			if want := "source: " + tc.path + ":" + strconv.Itoa(tc.checkLine); !strings.Contains(stdout, want) {
@@ -227,8 +264,9 @@ func TestDeclaredServiceAssertion(t *testing.T) {
 			}
 
 			write(t, root, tc.path, tc.value)
+			write(t, root, tc.implPath, tc.implValue)
 			if findings, status := declaredServiceFindings(t, root, 0); len(findings) != 0 || status != "structurally_checked" {
-				t.Fatalf("an operation returning the recorded value object must conform: %s %+v", status, findings)
+				t.Fatalf("an implementation returning the recorded value object must conform: %s %+v", status, findings)
 			}
 			stdout = mustRunDomain(t, root, "domain", "overview")
 			if want := "not-empty (on Encrypt)"; !strings.Contains(stdout, want) {
@@ -421,7 +459,9 @@ func TestDeclaredServiceResultResolvesThroughTheLanguage(t *testing.T) {
 					findings = append(findings, f)
 				}
 			}
-			if tc.value && (len(findings) != 0 || status != "structurally_checked") {
+			// With the value as the check and no implementation observed,
+			// the guarantee is undetermined rather than a finding.
+			if tc.value && (len(findings) != 0 || status != "undetermined") {
 				t.Fatalf("the operation returns the recorded value: %s %+v", status, findings)
 			}
 			if !tc.value && (len(findings) != 1 || !strings.Contains(findings[0].Message, "declared service Encrypter: not-empty has no check in context identity")) {
@@ -443,5 +483,131 @@ func TestDefineAssertionOnAnAbstractRoot(t *testing.T) {
 	stdout := mustRunDomain(t, root, "domain", "define", "assertion", "credentials-current", "--owner", "User", "--on", "ChangePassword", "--statement", "A user signs in with the password it chose last.")
 	if want := "  check: the root of User is declared as an abstract class, with no body to call assertCredentialsCurrent from, so the tests named with --verified-by verify it, and changePassword is declared on it.\n"; !strings.HasSuffix(stdout, want) {
 		t.Fatalf("abstract root:\n got %q\nwant suffix %q", stdout, want)
+	}
+}
+
+// skippingImplementationModule is a Go module whose Encrypter interface
+// has its guarantee checked in the model by AssertNotEmpty, and two
+// implementations: Checked calls the check, Skipping, with a pointer
+// receiver, does not.
+func skippingImplementationModule(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	write(t, root, "rules.arclint.yaml", "runtime: [go]\nzones:\n  identity:\n    paths: [\"src/identity/**\"]\n  adapters:\n    paths: [\"src/adapters/**\"]\n")
+	write(t, root, "domain.arclint.yaml", declaredServiceDomain)
+	write(t, root, "go.mod", "module example.com/identity\n\ngo 1.22\n")
+	write(t, root, "src/identity/password.go", goEncryptedPassword+`
+// Encrypter protects a password.
+type Encrypter interface {
+	Encrypt(plain string) (string, error)
+}
+
+// AssertNotEmpty checks not-empty.
+func AssertNotEmpty(encrypted string) error {
+	if encrypted == "" {
+		return errors.New("an encrypted password is never empty")
+	}
+	return nil
+}
+`)
+	write(t, root, "src/adapters/checked.go", `package adapters
+
+import "example.com/identity/src/identity"
+
+// Checked encrypts and checks the result.
+type Checked struct{}
+
+// Encrypt protects a password.
+func (Checked) Encrypt(plain string) (string, error) {
+	out := "x" + plain
+	if err := identity.AssertNotEmpty(out); err != nil {
+		return "", err
+	}
+	return out, nil
+}
+`)
+	write(t, root, "src/adapters/skipping.go", `package adapters
+
+// Skipping encrypts without the check.
+type Skipping struct{}
+
+// Encrypt protects a password.
+func (*Skipping) Encrypt(plain string) (string, error) {
+	return plain, nil
+}
+`)
+	return root
+}
+
+// TestDeclaredServiceImplementationSkipsTheCheck holds every
+// implementation of a declared service to the check in the model: the
+// one whose operation skips it is the finding, anchored at that
+// operation, and context and domain show name each implementation with
+// what its operation must call.
+func TestDeclaredServiceImplementationSkipsTheCheck(t *testing.T) {
+	root := skippingImplementationModule(t)
+	findings, status := declaredServiceFindings(t, root, 1)
+	if len(findings) != 1 || status != "violates" {
+		t.Fatalf("want one finding, got %s %+v", status, findings)
+	}
+	f := findings[0]
+	want := "implementation Skipping of declared service Encrypter: Skipping.Encrypt does not call AssertNotEmpty"
+	if f.RuleID != "assertion/checked-by-its-operation" || f.Path != "src/adapters/skipping.go" || f.Line != 7 || f.Message != want {
+		t.Fatalf("finding:\n got %+v\nwant %q at src/adapters/skipping.go:7", f, want)
+	}
+
+	stdout := mustRunDomain(t, root, "context", "src/adapters/skipping.go")
+	if want := "implements Encrypter: Skipping.Encrypt must call AssertNotEmpty (assertion not-empty): src/adapters/skipping.go:7"; !strings.Contains(stdout, want) {
+		t.Fatalf("context does not name the implementation (%s):\n%s", want, stdout)
+	}
+	if strings.Contains(stdout, "Checked.Encrypt") {
+		t.Fatalf("context lists an implementation outside the worksite:\n%s", stdout)
+	}
+
+	stdout = mustRunDomain(t, root, "domain", "show", "Encrypter")
+	for _, want := range []string{
+		"status: finding",
+		"Checked.Encrypt (exact) must call AssertNotEmpty: conforms (src/adapters/checked.go:9)",
+		"Skipping.Encrypt (exact) must call AssertNotEmpty: finding (src/adapters/skipping.go:7)",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("domain show lacks %q:\n%s", want, stdout)
+		}
+	}
+	stdout = mustRunDomain(t, root, "domain", "show", "Encrypter", "--format", "json")
+	var doc struct {
+		Rules struct {
+			Checks []struct {
+				Implementations []struct {
+					Type, Operation, Source, Evidence, Must, Status string
+				} `json:"implementations"`
+			} `json:"checks"`
+		} `json:"rules"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &doc); err != nil {
+		t.Fatalf("show json: %v\n%s", err, stdout)
+	}
+	if len(doc.Rules.Checks) != 1 || len(doc.Rules.Checks[0].Implementations) != 2 {
+		t.Fatalf("show json implementations: %+v", doc.Rules.Checks)
+	}
+	if impl := doc.Rules.Checks[0].Implementations[1]; impl.Type != "Skipping" || impl.Status != "finding" || impl.Must != "call AssertNotEmpty" || impl.Evidence != "exact" {
+		t.Fatalf("show json Skipping: %+v", impl)
+	}
+
+	// Once Skipping calls the check, every implementation reaches it.
+	write(t, root, "src/adapters/skipping.go", `package adapters
+
+import "example.com/identity/src/identity"
+
+// Skipping now checks too.
+type Skipping struct{}
+
+// Encrypt protects a password.
+func (*Skipping) Encrypt(plain string) (string, error) {
+	return plain, identity.AssertNotEmpty(plain)
+}
+`)
+	if findings, status := declaredServiceFindings(t, root, 0); len(findings) != 0 || status != "structurally_checked" {
+		t.Fatalf("every implementation calls the check: %s %+v", status, findings)
 	}
 }

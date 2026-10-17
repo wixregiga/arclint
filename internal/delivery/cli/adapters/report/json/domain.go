@@ -563,6 +563,19 @@ type ruleCheckJSONDoc struct {
 	Findings   []ruleFindingJSONDoc `json:"findings"`
 	Reasons    []string             `json:"reasons"`
 	NotChecked []string             `json:"notChecked"`
+	// Implementations lists each implementation of a domain service
+	// declared as an interface or an abstract class.
+	Implementations []implementationJSONDoc `json:"implementations,omitempty"`
+}
+
+type implementationJSONDoc struct {
+	Type      string `json:"type"`
+	Operation string `json:"operation"`
+	Source    string `json:"source"`
+	Evidence  string `json:"evidence"`
+	Must      string `json:"must"`
+	Status    string `json:"status"`
+	Reason    string `json:"reason,omitempty"`
 }
 
 type ruleFindingJSONDoc struct {
@@ -589,6 +602,12 @@ func entryRulesJSON(r application.DomainEntryRules) entryRulesJSONDoc {
 		for _, f := range c.Findings {
 			check.Findings = append(check.Findings, ruleFindingJSONDoc{
 				Rule: f.Rule, Message: f.Message, Path: f.Path, Line: f.Line, Status: f.Status,
+			})
+		}
+		for _, impl := range c.Implementations {
+			check.Implementations = append(check.Implementations, implementationJSONDoc{
+				Type: impl.Type, Operation: impl.Operation, Source: impl.Source, Evidence: impl.Evidence,
+				Must: impl.Must, Status: string(impl.Status), Reason: impl.Reason,
 			})
 		}
 		doc.Checks = append(doc.Checks, check)
