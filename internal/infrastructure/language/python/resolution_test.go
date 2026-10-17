@@ -830,6 +830,10 @@ func TestAbstractMarkReachesTheLibrary(t *testing.T) {
 		"patched_facade.py":    "import abc\n\nabc.ABC = object\nfrom abc import ABC\n",
 		"uses_patched.py":      "from patched_facade import ABC\n\n\nclass Encrypter(ABC):\n    pass\n",
 		"exporter.py":          "import abc as abstract\n\nabstract.ABC = object\n",
+		"spaced_replaced.py":   "import abc\n\n(abc) . ABC = object\n\n\nclass Encrypter(abc.ABC):\n    pass\n",
+		"setattr_replaced.py":  "import abc\n\nsetattr(abc, \"ABC\", object)\n\n\nclass Encrypter(abc.ABC):\n    pass\n",
+		"setattr_any.py":       "import abc\n\nname = \"ABC\"\nsetattr(abc, name, object)\n\n\nclass Encrypter(abc.ABC):\n    pass\n",
+		"setattr_other.py":     "import abc\n\nsetattr(abc, \"other\", object)\n\n\nclass Encrypter(abc.ABC):\n    pass\n",
 		"exported_replaced.py": "from exporter import abstract\n\n\nclass Encrypter(abstract.ABC):\n    pass\n",
 		"pkg/__init__.py":      "",
 		"pkg/facade.py":        "from abc import ABC\n",
@@ -844,6 +848,7 @@ func TestAbstractMarkReachesTheLibrary(t *testing.T) {
 			"local.py": false, "library.py": true, "reexported.py": true, "package.py": true, "replaced.py": false,
 			"module_binding.py": true, "facade_replaced.py": false, "facade_kept.py": true,
 			"prefix_replaced.py": false, "uses_patched.py": false, "pkg/relative.py": true, "exported_replaced.py": false,
+			"spaced_replaced.py": false, "setattr_replaced.py": false, "setattr_any.py": false, "setattr_other.py": true,
 		} {
 			for _, d := range facts[file].Declarations {
 				if d.Kind == declClass && d.Name == "Encrypter" && d.Abstract != want {
