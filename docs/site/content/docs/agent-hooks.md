@@ -20,7 +20,9 @@ the agent does and advise when it skips a step of the project's workflow:
 5. Verify the changed behavior, then run `arclint check .` and the
    project's tests. Fix the findings in the code you changed, including
    baseline findings there; never weaken rules, baselines or exclusions to
-   clear a finding.
+   clear a finding. Copying code, or moving it only to clear a finding, is
+   not a fix: when a rule refuses what the change needs, report the finding
+   and propose the zone change that would allow it.
 
 The generated `AGENTS.md` block opens with these steps in full, and the
 hooks repeat them when a session starts; both come from one source in

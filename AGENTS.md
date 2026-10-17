@@ -24,7 +24,7 @@ IMPORTANT: work in this order on every change.
    Resolve contradictions with the recorded domain and the user's instructions before proceeding. Ask only when an unresolved product decision needs the user's input. This statement is not an approval checkpoint.
 3. If the change introduces or changes a meaning, record it in the project's domain recording through `arclint domain define` before writing code, using the domain-librarian skill. If it does not, say so.
 4. Implement one complete behavior path through the zones `arclint context` reported, keeping existing behavior intact unless the task changes it. Keep names and files understandable from their responsibilities: callers use contracts, and implementations own their specific decisions.
-5. Verify the changed behavior through those contracts, then run `arclint check .` and the project's tests before finishing. Fix the findings in the code you changed, including baseline findings there; never weaken rules, baselines or exclusions to clear a finding. Report the behavior verified, the checks passed and what remains open, separately.
+5. Verify the changed behavior through those contracts, then run `arclint check .` and the project's tests before finishing. Fix the findings in the code you changed, including baseline findings there; never weaken rules, baselines or exclusions to clear a finding. Copying code, or moving it only to clear a finding, is not a fix: when a rule refuses what the change needs, report the finding and propose the zone change that would allow it. Report the behavior verified, the checks passed and what remains open, separately.
 
 ### Commands
 
