@@ -52,16 +52,21 @@ rules:
 		Binary    string
 		LastEvent string
 		Files     []struct {
-			Host, Scope string
-			Installed   bool
-			Problems    []string
+			Host, Scope     string
+			Installed       string
+			Listed, Missing []string
+			Problems        []string
 		}
 	}
 	if err := json.Unmarshal([]byte(stdout), &status); err != nil || code != 0 || status.Binary != binPath || status.LastEvent != "" || len(status.Files) != 4 {
 		t.Fatalf("status: %d %v %s", code, err, stdout)
 	}
 	for _, entry := range status.Files {
-		if entry.Installed != (entry.Scope == "user") || len(entry.Problems) != 0 {
+		want, listed := "absent", 0
+		if entry.Scope == "user" {
+			want, listed = "complete", 4
+		}
+		if entry.Installed != want || len(entry.Listed) != listed || len(entry.Missing) != 4-listed || len(entry.Problems) != 0 {
 			t.Fatalf("status entry: %+v", entry)
 		}
 	}
