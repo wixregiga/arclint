@@ -1,6 +1,6 @@
 # Placement gate
 
-Apply after the owner evidence is quoted. Rule ids are the protocol numbers in `.agents/skills/domain-librarian/SKILL.md` and the `distillation_rules` ids in its `VOCAB.yaml`. Each decision below names the issue that records it and, once arclint carries it, the rule or the `VOCAB.yaml` section that does. Issue #151 is still open: its decision already binds placement, but arclint does not enforce it yet. Where a command or flag a decision describes does not exist in the arclint you built, say so in the report and do not write the command.
+Apply after the owner evidence is quoted. Rule ids are the protocol numbers in `.agents/skills/domain-librarian/SKILL.md` and the `distillation_rules` ids in its `VOCAB.yaml`. Each decision below names the issue that records it and, once arclint carries it, the rule or the `VOCAB.yaml` section that does. Where a command or flag a decision describes does not exist in the arclint you built, say so in the report and do not write the command.
 
 ## Order of checks
 
@@ -87,7 +87,7 @@ A definition says what a word means. When the meaning will not fit, keep what th
 
 ## Sources
 
-The owner's source standard, recorded in issue #151 (still open; the librarian's `VOCAB.yaml` carries the tiers under `source_tiers`):
+The owner's source standard, recorded in issue #151. The librarian's `VOCAB.yaml` carries it: the tiers under `source_tiers`, and every work a source may cite under `bibliography`, by key, with its tier and whether its text was verified:
 
 | tier | works | may |
 |---|---|---|
@@ -96,7 +96,7 @@ The owner's source standard, recorded in issue #151 (still open; the librarian's
 | 3, practitioner blogs | | only illustrate |
 | excluded | Goodreads, unknown Medium authors, Stack Overflow, AI summaries | never be used |
 
-Every citation states its tier and whether you read the page this session. A rule with neither a tier 1 source nor an owner decision is a question, not an entry. Canonical references are never removed or demoted: a proposal that edits a recorded tier 1 citation is refused.
+Cite a work by its `bibliography` key, with its tier and whether you read the page this session; a work the bibliography lacks is named as such, never passed off as one of its entries. A rule with neither a tier 1 source nor an owner decision is a question, not an entry. Canonical references are never removed or demoted: a proposal that edits a recorded tier 1 citation is refused.
 
 ## Reasons for no entry
 
