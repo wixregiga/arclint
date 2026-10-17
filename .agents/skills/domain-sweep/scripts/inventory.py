@@ -219,11 +219,17 @@ def read_worktree(repo, path):
     full = os.path.join(repo, path)
     if os.path.islink(full) or not os.path.isfile(full):
         return None
-    with open(full, "r", encoding="utf-8", errors="replace") as handle:
+    # newline="" keeps a lone carriage return inside its line, as Git does.
+    with open(full, "r", encoding="utf-8", errors="replace", newline="") as handle:
         return split_lines(handle.read())
 
 
 def read_commit(repo, commit, path):
+    """The lines of a regular file in a commit; None for a link, a
+    submodule, or a path the commit does not hold."""
+    entry = git(repo, "--literal-pathspecs", "ls-tree", "-z", commit, "--", path)
+    if not entry.startswith((b"100644 ", b"100755 ")):
+        return None
     result = subprocess.run(["git", "-C", repo, "cat-file", "blob", f"{commit}:{path}"], capture_output=True)
     if result.returncode != 0:
         return None
@@ -402,6 +408,8 @@ def ts_sources(lines):
     parens = []  # for each open parenthesis, whether it opened a condition
     last = None  # last significant character of code, for regex detection
     pending_test = False  # a test call ended its line before its name
+    in_test_name = False  # a test's name literal goes on past a line
+    trailing_word = None  # the identifier code last ended a line with
     for number, text in enumerate(lines, start=1):
         kinds = set()
         code = []
@@ -409,6 +417,8 @@ def ts_sources(lines):
             kinds.add("text")
         elif state == "block":
             kinds.add("comment")
+        if in_test_name:
+            kinds.add("test")
         segment = []  # the template characters read on this line
 
         def end_segment():
@@ -491,9 +501,17 @@ def ts_sources(lines):
                 code.append(LITERAL)
                 last = "/"
                 continue
+            if char == "!" and last is not None and (last.isalnum() or last in "_$)]") and text[i + 1:i + 2] != "=":
+                # A non-null assertion, count!, ends an operand.
+                code.append(char)
+                last = "x"
+                i += 1
+                continue
             if char == "(":
-                word = re.search(r"([A-Za-z_$][\w$]*)\s*$", text[:i])
-                parens.append(bool(word) and word.group(1) in CONTROL_KEYWORDS)
+                before = text[:i]
+                word = re.search(r"([A-Za-z_$][\w$]*)\s*$", before)
+                keyword = word.group(1) if word else (trailing_word if not before.strip() else None)
+                parens.append(keyword in CONTROL_KEYWORDS)
             elif char == ")":
                 closes_condition = parens.pop() if parens else False
                 code.append(char)
@@ -525,6 +543,10 @@ def ts_sources(lines):
             pending_test = declared.group(1) == ""
         elif line_code.strip():
             pending_test = False
+        in_test_name = "test" in kinds and state in ("template", "string")
+        if line_code.strip():
+            word = re.search(r"([A-Za-z_$][\w$]*)\s*$", line_code)
+            trailing_word = word.group(1) if word else None
         if kinds and text.strip():
             found[number] = pick(kinds)
     return found
@@ -765,7 +787,7 @@ def main():
     # Paths git prints are relative to the top of the work tree, wherever
     # --repo points inside it; refs become object ids, so a ref that is
     # also a file name stays a ref.
-    repo = git_text(os.path.abspath(args.repo), "rev-parse", "--show-toplevel").strip()
+    repo = git_text(os.path.abspath(args.repo), "rev-parse", "--show-toplevel").rstrip("\n")
     base, head = (resolve(repo, ref) if ref else None for ref in (args.base, args.head))
     merge_base, files, generated, rows = collect(
         repo, base, head, args.scope, args.paths, args.exclude, set(args.recording), args.hint,
