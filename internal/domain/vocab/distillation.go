@@ -111,7 +111,8 @@ func DistillationRules() []DistillationRule {
 				{Work: evansReference, Page: "22", Section: assertionsSection},
 				{Work: iddSamples, Section: "MD5EncryptionService", Note: "checks its argument through the shared AssertionConcern"},
 			},
-			Example: "Encrypter.assertions.not-empty on Encrypt holds because Encrypt returns EncryptedPassword, whose constructor enforces EncryptedPassword.invariants.not-empty; never an AssertNotEmpty on the Encrypter interface",
+			Conventions: []string{"named assert followed by the key"},
+			Example:     "Encrypter.assertions.not-empty on Encrypt holds because Encrypt returns EncryptedPassword, whose constructor enforces EncryptedPassword.invariants.not-empty; never an AssertNotEmpty on the Encrypter interface",
 		},
 		{
 			ID:      "precondition-as-assertion",
