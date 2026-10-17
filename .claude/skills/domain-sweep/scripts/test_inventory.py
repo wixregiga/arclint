@@ -965,6 +965,13 @@ class InventoryTest(unittest.TestCase):
         md = self.repo.run("--base", "main", "--scope", "changed", "--hint", r"\|", "--format", "md").stdout.splitlines()
         self.assertIn("| added | doc | \\| | doc.md:2 | Use A \\| B. |", md)
 
+    def test_a_test_inside_an_outer_call_s_first_argument(self):
+        self.repo.write("web/suite.test.ts", 'describe(it("never overwrites", () => {}).title, () => {\n  test("keeps", () => {});\n});\n')
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {
+            "web/suite.test.ts:1": "test", "web/suite.test.ts:2": "test",
+        })
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
