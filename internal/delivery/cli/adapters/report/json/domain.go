@@ -533,11 +533,12 @@ func showJSONDoc(v application.DomainEntryView) map[string]any {
 // the aggregate recording them for an entity, and the command
 // recording a first one when there is none.
 type entryRulesJSONDoc struct {
-	Checked    bool               `json:"checked"`
-	CheckError string             `json:"checkError,omitempty"`
-	Aggregate  string             `json:"aggregate,omitempty"`
-	Record     string             `json:"record,omitempty"`
-	Checks     []ruleCheckJSONDoc `json:"checks"`
+	Checked       bool               `json:"checked"`
+	CheckError    string             `json:"checkError,omitempty"`
+	Aggregate     string             `json:"aggregate,omitempty"`
+	ShowAggregate string             `json:"showAggregate,omitempty"`
+	Record        string             `json:"record,omitempty"`
+	Checks        []ruleCheckJSONDoc `json:"checks"`
 }
 
 type ruleCheckJSONDoc struct {
@@ -564,7 +565,7 @@ type ruleFindingJSONDoc struct {
 
 func entryRulesJSON(r application.DomainEntryRules) entryRulesJSONDoc {
 	doc := entryRulesJSONDoc{
-		Checked: r.Checked, CheckError: r.CheckError, Aggregate: r.Aggregate, Record: r.Record,
+		Checked: r.Checked, CheckError: r.CheckError, Aggregate: r.Aggregate, ShowAggregate: r.ShowAggregate, Record: r.Record,
 		Checks: make([]ruleCheckJSONDoc, 0, len(r.Checks)),
 	}
 	for _, c := range r.Checks {

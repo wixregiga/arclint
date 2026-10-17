@@ -576,7 +576,7 @@ func rulesSummary(p *out.Printer, st Style, v application.DomainEntryView) {
 	switch {
 	case rules == nil:
 	case rules.Aggregate != "":
-		p.Printf("%s none of its own; its aggregate records them: arclint domain show %s\n", st.Bold("Rules:"), rules.Aggregate)
+		p.Printf("%s none of its own; its aggregate %s records them: %s\n", st.Bold("Rules:"), rules.Aggregate, rules.ShowAggregate)
 	case len(rules.Checks) == 0:
 		p.Printf("%s %s records no %s; record one with: %s\n", st.Bold("Rules:"), v.Name, recordableRules(v.Concept), rules.Record)
 	case rules.CheckError != "":

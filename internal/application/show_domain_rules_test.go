@@ -129,3 +129,33 @@ func TestShowDomainDefinitionListsTheRulesAnEntryRecords(t *testing.T) {
 		t.Errorf("an event records no rules = %+v err=%v", view.Rules, err)
 	}
 }
+
+// Every command show suggests runs as printed: a recorded name a shell
+// would split is quoted, and the entity's aggregate is named with its
+// concept and context so the command finds that one aggregate.
+func TestShowDomainDefinitionSuggestsCommandsThatRun(t *testing.T) {
+	t.Parallel()
+	lineItem := vocab.ValueObject{Name: "Line Item", Definition: "One line of a basket."}
+	uc, err := application.NewShowDomainDefinition(recorded(t,
+		vocab.BoundedContext{Name: "catalog", Definition: "c", Aggregates: []vocab.Aggregate{orderAggregate()}, ValueObjects: []vocab.ValueObject{lineItem}},
+		vocab.BoundedContext{Name: "checkout", Definition: "c", Aggregates: []vocab.Aggregate{{Name: "Order", Definition: "d", Identity: "OrderID"}}, ValueObjects: []vocab.ValueObject{lineItem}},
+	))
+	if err != nil {
+		t.Fatalf("construct: %v", err)
+	}
+	_, err = uc.Execute("", "", "", "Line Item")
+	if !errors.Is(err, application.ErrDomainUsage) ||
+		!strings.Contains(err.Error(), "arclint domain show value_object 'Line Item' --context catalog\n") ||
+		!strings.HasSuffix(err.Error(), "arclint domain show value_object 'Line Item' --context checkout") {
+		t.Fatalf("ambiguous spaced name: %v", err)
+	}
+	view, err := uc.Execute("", "checkout", "", "Line Item")
+	want := `arclint domain define invariant <key> --owner 'Line Item' --statement "<statement>" --context checkout`
+	if err != nil || view.Rules == nil || view.Rules.Record != want {
+		t.Fatalf("record command = %+v err=%v, want %q", view.Rules, err, want)
+	}
+	view, err = uc.Execute("", "", "", "OrderLine")
+	if err != nil || view.Rules == nil || view.Rules.ShowAggregate != "arclint domain show aggregate Order --context catalog" {
+		t.Fatalf("entity's aggregate command = %+v err=%v", view.Rules, err)
+	}
+}

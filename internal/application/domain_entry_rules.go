@@ -22,8 +22,9 @@ const (
 	// RuleNotObservable means ArcLint reads none of the context's code
 	// in the languages it analyzes, so no check could look.
 	RuleNotObservable DomainRuleStatus = "not_observable"
-	// RuleUndetermined means a check looked but could not decide;
-	// Reasons says why.
+	// RuleUndetermined means a check looked but could not decide, or
+	// the checks that ran conform while another did not run; Reasons
+	// and NotChecked say which.
 	RuleUndetermined DomainRuleStatus = "undetermined"
 	// RuleNotChecked means no check ran: the Rules are disabled, not
 	// configured, or exclude the recording, or show was given no check.
@@ -34,12 +35,14 @@ const (
 
 // DomainEntryRules is what a shown entry records about its invariants
 // and assertions. An entity records none of its own; Aggregate names
-// the aggregate that records them. Record is the command recording a
-// first one when the entry records none and can hold one.
+// the aggregate that records them and ShowAggregate the command showing
+// it. Record is the command recording a first one when the entry
+// records none and can hold one.
 type DomainEntryRules struct {
-	Checks    []DomainRuleCheck
-	Aggregate string
-	Record    string
+	Checks        []DomainRuleCheck
+	Aggregate     string
+	ShowAggregate string
+	Record        string
 	// Checked is true when the current check ran; CheckError says why
 	// it did not when it was asked for and failed.
 	Checked    bool
@@ -126,6 +129,7 @@ func recordedRules(lang vocab.UbiquitousLanguage, view DomainEntryView) *DomainE
 		out.Checks = append(out.Checks, assertionCheck(view.Owner, ownerConcept, view.Assertion))
 	case vocab.ConceptEntity:
 		out.Aggregate = view.Owner
+		out.ShowAggregate = entryCandidate{concept: vocab.ConceptAggregate, context: view.Context, name: view.Owner}.command(len(lang.Contexts))
 	default:
 		return nil
 	}
@@ -153,9 +157,9 @@ func assertionCheck(owner string, ownerConcept vocab.Concept, as vocab.Assertion
 func recordRuleCommand(lang vocab.UbiquitousLanguage, view DomainEntryView, forms ...string) string {
 	commands := make([]string, 0, len(forms))
 	for _, form := range forms {
-		cmd := "arclint domain define " + fmt.Sprintf(form, view.Name)
+		cmd := "arclint domain define " + fmt.Sprintf(form, shellWord(view.Name))
 		if len(lang.Contexts) > 1 {
-			cmd += " --context " + view.Context
+			cmd += " --context " + shellWord(view.Context)
 		}
 		commands = append(commands, cmd)
 	}
@@ -237,8 +241,12 @@ func judgeRule(check *DomainRuleCheck, c conformance.ContractCoverage, languages
 	check.Reasons = nil
 	check.NotChecked = c.Unperformed()
 	switch c.Status() {
-	case "structurally_checked", "incomplete":
+	case "structurally_checked":
 		check.Status = RuleConforms
+	case "incomplete":
+		// The checks that ran conform, but one that did not run could
+		// have found what they cannot see.
+		check.Status = RuleUndetermined
 	case string(conformance.OutcomeViolates), string(conformance.OutcomeSuspectedViolation):
 		check.Status = RuleFinding
 	case string(conformance.OutcomeUnsupported):
