@@ -107,7 +107,11 @@ WORDS = re.compile(r"[A-Za-z]{2,}[ \t]+[A-Za-z]{2,}")
 # not one. A TypeScript call whose name is on the next line ends in "(".
 GO_TEST = re.compile(r"^\s*func\s+Test\w*\s*\(")
 PY_TEST = re.compile(r"^\s*(?:async\s+)?def\s+test\w*\s*\(|^\s*class\s+Test\w*\b")
-TS_TEST = re.compile(r"(?:^|[^\w.$])(?:it|test|describe)(?:\.\w+)*\s*\(\s*(\"\"|$)")
+TS_TEST = re.compile(
+    r"(?:^|[^\w.$])(?:it|test|describe)(?:\.\w+)*"
+    r"(?:\s*\((?:[^()]|\([^()]*\))*\))?"  # the table of test.each([...])
+    r"\s*\(\s*(\"\"|$)"
+)
 LITERAL = '""'
 
 TS_SUFFIXES = (".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs")
@@ -358,20 +362,21 @@ def go_sources(lines):
     return found
 
 
-# A slash after one of these, or at the start of an expression, opens a
-# regular expression literal; after anything else it divides.
-REGEX_BEFORE = set("(,=:[!&|?{};+-*%<>~^")
-REGEX_KEYWORDS = {"return", "typeof", "case", "do", "else", "in", "of", "new", "delete", "void", "throw", "yield", "await"}
-# A parenthesis these open closes a condition, after which a slash starts a
-# statement: if (x) /re/.test(s).
+# A slash opens a regular expression literal where an expression may
+# start: after an operator or punctuation, after one of these keywords, or
+# after the parenthesis that closes a condition (if (x) /re/.test(s)).
+# After an operand it divides. The lexer keeps the previous token across
+# lines and comments, never the raw text before the slash.
+REGEX_KEYWORDS = {"return", "typeof", "case", "do", "else", "in", "of", "new", "delete", "void", "throw", "yield", "await", "instanceof"}
 CONTROL_KEYWORDS = {"if", "while", "for", "with"}
-def regex_allowed(text, i, last):
-    if last is None:
-        return True
-    if last in REGEX_BEFORE:
-        return True
-    word = re.search(r"([A-Za-z_$][\w$]*)\s*$", text[:i])
-    return bool(word) and word.group(1) in REGEX_KEYWORDS
+
+
+def ends_operand(prev):
+    """Whether the previous token ends an operand: a name that is not one
+    of the keywords above, a number, a literal, or a closing bracket."""
+    if isinstance(prev, tuple):
+        return prev[1] not in REGEX_KEYWORDS
+    return prev == "operand"
 
 
 def skip_regex(text, i):
@@ -406,10 +411,9 @@ def ts_sources(lines):
     stack = []  # brace depth in each enclosing ${ } substitution
     depth = 0
     parens = []  # for each open parenthesis, whether it opened a condition
-    last = None  # last significant character of code, for regex detection
+    prev = "operator"  # the previous token: ("word", name), "operand" or "operator"
     pending_test = False  # a test call ended its line before its name
     in_test_name = False  # a test's name literal goes on past a line
-    trailing_word = None  # the identifier code last ended a line with
     for number, text in enumerate(lines, start=1):
         kinds = set()
         code = []
@@ -441,7 +445,7 @@ def ts_sources(lines):
                     if how == "open":
                         state = "code"
                     break
-                state, last = "code", quote
+                state, prev = "code", "operand"
                 code.append(LITERAL)
                 continue
             if state == "template":
@@ -451,13 +455,13 @@ def ts_sources(lines):
                     continue
                 if char == "`":
                     end_segment()
-                    state, last = "code", "`"
+                    state, prev = "code", "operand"
                     i += 1
                     continue
                 if text[i:i + 2] == "${":
                     end_segment()
                     stack.append(depth)
-                    depth, state, last = 0, "code", "{"
+                    depth, state, prev = 0, "code", "operator"
                     i += 2
                     continue
                 segment.append(char)
@@ -471,6 +475,25 @@ def ts_sources(lines):
                 state = "block"
                 kinds.add("comment")
                 i += 2
+                continue
+            if char.isspace():
+                code.append(char)
+                i += 1
+                continue
+            if char.isalpha() or char in "_$":
+                j = i
+                while j < len(text) and (text[j].isalnum() or text[j] in "_$"):
+                    j += 1
+                code.append(text[i:j])
+                prev = ("word", text[i:j])
+                i = j
+                continue
+            if char.isdigit():
+                j = i
+                while j < len(text) and (text[j].isalnum() or text[j] in "_."):
+                    j += 1
+                code.append(text[i:j])
+                prev, i = "operand", j
                 continue
             if char == "`":
                 state = "template"
@@ -486,40 +509,41 @@ def ts_sources(lines):
                     state, quote = "string", char
                     kinds.add("text")
                     break
-                last = char
+                prev = "operand"
                 continue
-            if pair in ("++", "--"):
-                # After an operand, ++ and -- are postfix and a slash that
-                # follows divides; before one, they are prefix.
-                postfix = last is not None and (last.isalnum() or last in "_$)]")
-                code.append(pair)
-                last = "x" if postfix else pair[0]
-                i += 2
-                continue
-            if char == "/" and regex_allowed(text, i, last):
+            if char == "/" and not ends_operand(prev):
                 i = skip_regex(text, i)
                 code.append(LITERAL)
-                last = "/"
+                prev = "operand"
                 continue
-            if char == "!" and last is not None and (last.isalnum() or last in "_$)]") and text[i + 1:i + 2] != "=":
+            if pair in ("++", "--"):
+                # After an operand, ++ and -- are postfix and end it; before
+                # one, they are prefix.
+                code.append(pair)
+                prev = "operand" if ends_operand(prev) else "operator"
+                i += 2
+                continue
+            if char == "!" and ends_operand(prev) and text[i + 1:i + 2] != "=":
                 # A non-null assertion, count!, ends an operand.
                 code.append(char)
-                last = "x"
-                i += 1
+                prev, i = "operand", i + 1
                 continue
             if char == "(":
-                before = text[:i]
-                word = re.search(r"([A-Za-z_$][\w$]*)\s*$", before)
-                keyword = word.group(1) if word else (trailing_word if not before.strip() else None)
-                parens.append(keyword in CONTROL_KEYWORDS)
+                parens.append(isinstance(prev, tuple) and prev[1] in CONTROL_KEYWORDS)
+                prev = "operator"
             elif char == ")":
-                closes_condition = parens.pop() if parens else False
+                prev = "operator" if (parens.pop() if parens else False) else "operand"
                 code.append(char)
-                last = "(" if closes_condition else ")"
+                i += 1
+                continue
+            elif char == "]":
+                prev = "operand"
+                code.append(char)
                 i += 1
                 continue
             elif char == "{":
                 depth += 1
+                prev = "operator"
             elif char == "}":
                 if depth == 0 and stack:
                     depth = stack.pop()
@@ -527,9 +551,10 @@ def ts_sources(lines):
                     i += 1
                     continue
                 depth -= 1
+                prev = "operator"
+            else:
+                prev = "operator"
             code.append(char)
-            if not char.isspace():
-                last = char
             i += 1
         if state == "template":
             # The literal goes on past this line: every line it spans is text.
@@ -544,9 +569,6 @@ def ts_sources(lines):
         elif line_code.strip():
             pending_test = False
         in_test_name = "test" in kinds and state in ("template", "string")
-        if line_code.strip():
-            word = re.search(r"([A-Za-z_$][\w$]*)\s*$", line_code)
-            trailing_word = word.group(1) if word else None
         if kinds and text.strip():
             found[number] = pick(kinds)
     return found
