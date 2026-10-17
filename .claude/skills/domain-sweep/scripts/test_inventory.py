@@ -511,6 +511,56 @@ class InventoryTest(unittest.TestCase):
         out = self.repo.run("--base", "main", "--format", "md").stdout.splitlines()
         self.assertEqual(out[2], "| added | doc | - | docs/a\\|b.md:1 | A rule. |")
 
+    def test_a_lone_carriage_return_stays_in_its_line(self):
+        self.repo.git("checkout", "-q", "main")
+        with open(os.path.join(self.repo.root, "README.md"), "wb") as handle:
+            handle.write(b"First\rparagraph\nOld rule.\n")
+        self.repo.commit("cr")
+        self.repo.git("checkout", "-q", "change")
+        self.repo.git("reset", "-q", "--hard", "main")
+        with open(os.path.join(self.repo.root, "README.md"), "wb") as handle:
+            handle.write(b"First\rparagraph\nNew rule.\n")
+        rows = self.repo.rows("--base", "main", "--scope", "changed")
+        self.assertEqual(sorted((row[0], row[3], row[4]) for row in rows),
+                         [("added", "README.md:2", "New rule."), ("deleted", "README.md:2", "Old rule.")])
+
+    def test_a_non_null_assertion_before_a_division(self):
+        self.repo.write("web/a.ts", "const count: number | undefined = 4;\nconst n = count! / 2; // Only the owner writes.\nconst b = !/x/.test(s);\n")
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual(rows["web/a.ts:2"][1], "comment")
+        self.assertNotIn("web/a.ts:3", rows)
+
+    def test_a_test_name_template_spanning_lines(self):
+        self.repo.write("web/x.test.ts", "test(`never\noverwrites existing files`, () => {});\nconst x = 1;\n")
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual(rows["web/x.test.ts:1"][1], "test")
+        self.assertEqual(rows["web/x.test.ts:2"][1], "test")
+        self.assertNotIn("web/x.test.ts:3", rows)
+
+    def test_a_condition_keyword_on_the_line_before(self):
+        self.repo.write("web/a.ts", 'if\n(true) /[/*]/.test("/");\nconst value = 1;\n')
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual(rows, {})
+
+    def test_a_committed_link_is_not_read_as_its_target(self):
+        self.repo.write("docs/source.md", "Source.\n")
+        self.repo.commit("source")
+        os.symlink("docs/source.md", os.path.join(self.repo.root, "README2.md"))
+        self.repo.commit("link")
+        rows = self.located(self.repo.rows("--base", "main", "--head", "HEAD"))
+        self.assertNotIn("README2.md:1", rows)
+        self.assertIn("docs/source.md:1", rows)
+
+    def test_a_repository_path_ending_in_a_space(self):
+        root = os.path.join(self.tmp.name, "nested ")
+        os.mkdir(root)
+        repo = Repo(root)
+        repo.write("README.md", "Base.\n")
+        repo.commit("base")
+        repo.write("README.md", "Base.\nNew rule.\n")
+        rows = repo.rows("--base", "main", "--scope", "changed")
+        self.assertEqual([row[3] for row in rows], ["README.md:2"])
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
