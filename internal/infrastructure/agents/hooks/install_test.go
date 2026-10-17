@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -450,7 +451,7 @@ func TestStatusNamesMissingChangedAndUnrunnableHooks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if silence := strings.Join(status.Silence, "\n"); strings.Contains(silence, "still run") || !strings.Contains(silence, "whether a host runs them here is not established") {
+	if silence := strings.Join(status.Silence, "\n"); strings.Contains(silence, "still run") || !strings.Contains(silence, "no hook a file lists is established to run here") {
 		t.Fatalf("silence for a partial file whose binary is gone:\n%s", silence)
 	}
 }
@@ -519,6 +520,29 @@ func TestStatusNamesTheHooksAPartialFileStillRuns(t *testing.T) {
 	}
 	if silence := strings.Join(status.Silence, "\n"); !strings.Contains(silence, "the hooks install wrote into a file still run") {
 		t.Fatalf("silence with one hook install wrote:\n%s", silence)
+	}
+	// disableAllHooks turns off every hook Claude Code reads, so none is
+	// said to run, wherever it is set.
+	shared := filepath.Join(root, ".claude", "settings.json")
+	for _, file := range []string{settings, shared} {
+		document["disableAllHooks"] = file == settings
+		data, err = json.Marshal(document)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeTestFile(t, settings, string(data))
+		writeTestFile(t, shared, fmt.Sprintf(`{"disableAllHooks": %t}`, file == shared))
+		status, err = installer.Status()
+		if err != nil {
+			t.Fatal(err)
+		}
+		problems, silence := "", strings.Join(status.Silence, "\n")
+		for _, entry := range status.Files {
+			problems += strings.Join(entry.Problems, "\n") + "\n"
+		}
+		if strings.Contains(problems, "still run") || !strings.Contains(problems, "disableAllHooks") || strings.Contains(silence, "still run") || !strings.Contains(silence, "turns off every hook") {
+			t.Fatalf("%s sets disableAllHooks:\nproblems:\n%s\nsilence:\n%s", file, problems, silence)
+		}
 	}
 }
 

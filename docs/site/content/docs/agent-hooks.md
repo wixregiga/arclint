@@ -94,7 +94,9 @@ every hook a partial file lists. A file written by an older install, for
 example, lacks `UserPromptSubmit` and still runs its other hooks; status names
 the hooks it lists and the ones it lacks. It says a hook still runs only when
 the hook is the one install writes there, because a changed hook may name a
-binary that is gone or a matcher that selects nothing. In `--format json`, `installed`
+binary that is gone or a matcher that selects nothing. While a Claude Code
+file status reads sets `disableAllHooks`, status names that file and says no
+Claude Code hook runs. In `--format json`, `installed`
 carries the state, and `listed` and `missing` name the events.
 
 Until an event arrives, status says why none may have: no file lists the
