@@ -133,7 +133,7 @@ Relations: catalog → ordering (conformist); catalog → capacity (conformist);
 - domain_event/no-setters: An event declares no method whose name begins with set; a record of the past is not edited.
 - domain_service/declared: A recorded service is a declared type spelled with the service's name in the language's type case.
 - domain_service/not-held-by-aggregates: No aggregate root or member entity declares a field whose type is a recorded domain service; a service reaches an aggregate only as a parameter of one command.
-- domain_service/records-an-assertion: A recorded domain service records at least one assertion, a guarantee of one of its operations, where an invariant holds at all times for an aggregate or a value; the rule reads the recorded domain alone and infers nothing from the code's interfaces or protocols, and the finding asks what the service's operation guarantees.
+- domain_service/records-an-assertion: A recorded domain service records at least one assertion, a guarantee of one of its operations; an invariant holds at all times for an aggregate or a value. The rule reads only the recording, never the code's interfaces or protocols.
 - repository/declared: A recorded repository is a declared type (interface, or class in a language without interfaces) spelled with the recorded name in the language's type case, declared in the context's code.
 - repository/not-called-from-aggregates: No method of an aggregate root or of its members calls a repository.
 - factory/declared: A recorded factory is a declared type or function spelled with the recorded name in the language's case, declared in the context's code.

@@ -120,7 +120,7 @@ A standalone operation in the domain for a significant process or transformation
 |---|---|---|
 | `domain_service/declared` | A recorded service is a declared type spelled with the service's name in the language's type case. [[14]](#ref-14) | by `arclint check` |
 | `domain_service/not-held-by-aggregates` | No aggregate root or member entity declares a field whose type is a recorded domain service; a service reaches an aggregate only as a parameter of one command. [[22]](#ref-22)[[23]](#ref-23) | by `arclint check` |
-| `domain_service/records-an-assertion` | A recorded domain service records at least one assertion, a guarantee of one of its operations, where an invariant holds at all times for an aggregate or a value; the rule reads the recorded domain alone and infers nothing from the code's interfaces or protocols, and the finding asks what the service's operation guarantees. [[14]](#ref-14)[[1]](#ref-1) | by `arclint check` |
+| `domain_service/records-an-assertion` | A recorded domain service records at least one assertion, a guarantee of one of its operations; an invariant holds at all times for an aggregate or a value. The rule reads only the recording, never the code's interfaces or protocols. [[14]](#ref-14)[[1]](#ref-1) | by `arclint check` |
 
 - **Fundamental.** Try the thing first; a service exists only for a business decision that no entity or value object naturally owns, and the more behavior the services hold, the less the model does. [[14]](#ref-14)[[3]](#ref-3)
 - **Fundamental.** Name the service and its operations for their effect and purpose in the ubiquitous language, never for the means; a name ending in Manager, Helper, Handler, or Processor names no effect. [[14]](#ref-14)[[9]](#ref-9)

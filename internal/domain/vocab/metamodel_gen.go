@@ -1749,7 +1749,7 @@ func ddd() MetaModel {
 					},
 					{
 						ID:        "domain_service/records-an-assertion",
-						Statement: "A recorded domain service records at least one assertion, a guarantee of one of its operations, where an invariant holds at all times for an aggregate or a value; the rule reads the recorded domain alone and infers nothing from the code's interfaces or protocols, and the finding asks what the service's operation guarantees.",
+						Statement: "A recorded domain service records at least one assertion, a guarantee of one of its operations; an invariant holds at all times for an aggregate or a value. The rule reads only the recording, never the code's interfaces or protocols.",
 						Sources: []Citation{
 							{Work: "evans2015", Page: "14", Section: "Services"},
 							{Work: "evans2015", Page: "22", Section: "Assertions"},
