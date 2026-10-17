@@ -386,3 +386,48 @@ func TestUsesNeverCrossLanguages(t *testing.T) {
 		t.Fatalf("undetermined = %+v", uses.Undetermined)
 	}
 }
+
+// In Go a member belongs only to a type of its own package: an external
+// test package in the same directory declaring a type of the same name
+// makes no use of its own when the production type is reached.
+func TestUsesKeepGoMembersInTheirPackage(t *testing.T) {
+	zone := func(name, glob string) rule.Zone {
+		g, err := rule.NewGlob(glob)
+		if err != nil {
+			t.Fatal(err)
+		}
+		z, err := rule.NewZone(rule.ZoneName(name), "the "+name+" code", []rule.Glob{g})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return z
+	}
+	model := contextOf("model", nil, []vocab.ValueObject{valueObject("Money")}, nil)
+	fixture := contextOf("fixture", nil, []vocab.ValueObject{valueObject("Money")}, nil)
+	files := map[string]conformance.LanguageFacts{
+		"model/money.go": resolvedFile(rule.LanguageGo, "model", []conformance.Declaration{
+			{Kind: "struct", Name: "Money", Exported: true, StartLine: 3},
+			{Kind: "method", Name: "Add", Owner: "Money", Exported: true, StartLine: 6},
+			{Kind: "func", Name: "Zero", Exported: true, StartLine: 9, Results: []string{"Money"}},
+		}, nil),
+		"model/money_test.go": resolvedFile(rule.LanguageGo, "model_test", []conformance.Declaration{
+			{Kind: "struct", Name: "Money", Exported: true, StartLine: 5},
+		}, nil),
+		"app/run.go": resolvedFile(rule.LanguageGo, "app", nil, []conformance.Call{
+			{Callee: "Add", Line: 4, Target: declared("model/money.go", "Money", "Add")},
+			{Callee: "Zero", Line: 5, Target: declared("model/money.go", "", "Zero")},
+		}),
+	}
+	zones := []rule.Zone{zone("model", "model/money.go"), zone("fixture", "model/money_test.go")}
+	uses := usesObserving(t, []vocab.BoundedContext{model, fixture}, zones, files, nil, "app")
+	var got []string
+	for _, u := range uses.Uses {
+		got = append(got, u.Context()+" "+u.Term()+" "+u.Via())
+	}
+	if want := []string{"model Money Add"}; !slices.Equal(got, want) {
+		t.Fatalf("uses = %v, want %v", got, want)
+	}
+	if len(uses.Undetermined) != 1 || uses.Undetermined[0].Context != "model" {
+		t.Fatalf("undetermined = %+v", uses.Undetermined)
+	}
+}
