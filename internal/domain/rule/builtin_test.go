@@ -254,3 +254,41 @@ func TestContextSubject(t *testing.T) {
 		t.Errorf("a file subject is a path")
 	}
 }
+
+func TestBuiltInForComposesWhatTheRecordedLanguageCallsFor(t *testing.T) {
+	ids := func(lang vocab.UbiquitousLanguage) (int, bool) {
+		t.Helper()
+		rules, err := rule.BuiltInFor(lang)
+		if err != nil {
+			t.Fatalf("BuiltInFor: %v", err)
+		}
+		wordLimit := false
+		for _, r := range rules {
+			if r.ID().Qualified() == rule.WordLimitRuleID {
+				wordLimit = true
+			}
+		}
+		return len(rules), wordLimit
+	}
+	all, err := rule.BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, wordLimit := ids(vocab.UbiquitousLanguage{Project: "shop"}); n != 0 || wordLimit {
+		t.Errorf("a language that records nothing composes %d rules", n)
+	}
+	described, err := vocab.NewUbiquitousLanguage("shop", "A shop's catalog and orders.", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, wordLimit := ids(described); n != 1 || !wordLimit {
+		t.Errorf("a language holding only its description composes %d rules, word limit %v; want the word limit alone", n, wordLimit)
+	}
+	recorded, err := vocab.NewUbiquitousLanguage("shop", "", []vocab.BoundedContext{{Name: "ordering", Definition: "Taking orders."}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, wordLimit := ids(recorded); n != len(all) || !wordLimit {
+		t.Errorf("a recorded context composes %d rules, want every built-in Rule (%d)", n, len(all))
+	}
+}

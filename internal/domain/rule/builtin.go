@@ -56,6 +56,31 @@ func BuiltIn() ([]Rule, error) {
 	return append(out, r), nil
 }
 
+// BuiltInFor composes the built-in Rules a recorded language calls for:
+// the meta-model's once it records a context or a relation, and the
+// word limit once it holds any text a WordLimit bounds, so a recording
+// that holds only the project description is judged too.
+func BuiltInFor(lang vocab.UbiquitousLanguage) ([]Rule, error) {
+	all, err := BuiltIn()
+	if err != nil {
+		return nil, err
+	}
+	holdsText := !lang.Empty() || lang.Description != ""
+	var out []Rule
+	for _, r := range all {
+		if r.ID().Qualified() == WordLimitRuleID {
+			if holdsText {
+				out = append(out, r)
+			}
+			continue
+		}
+		if !lang.Empty() {
+			out = append(out, r)
+		}
+	}
+	return out, nil
+}
+
 // builtInSpec is the Spec of the built-in Rule for a check-level block
 // invariant, and false for an invariant no built-in Rule evaluates.
 func builtInSpec(inv vocab.BlockInvariant) (Spec, bool) {
