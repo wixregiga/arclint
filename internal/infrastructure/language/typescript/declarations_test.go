@@ -256,3 +256,33 @@ export class FlatDiscount extends Discounter {
 		t.Fatalf("declarations:\n got %+v\nwant %+v", got.Decls, want)
 	}
 }
+
+// A function, method, class, interface, or type alias that declares
+// type parameters is generic; the same declarations without them are
+// not.
+func TestTypeScriptMarksGenerics(t *testing.T) {
+	src := []byte(`export class Box<T> {
+  map<U>(f: (t: T) => U): Box<U> { return new Box<U>(); }
+  size(): number { return 0; }
+}
+export class Plain {}
+export interface Store<K> { get(key: K): string; }
+export type Pair<A, B> = [A, B];
+export function first<T>(xs: T[]): T { return xs[0]; }
+export function plain(x: number): number { return x; }
+`)
+	got := extractDeclarations(newParsers(), "src/box.ts", src)
+	if got.ParseError != "" {
+		t.Fatal(got.ParseError)
+	}
+	generic := map[string]bool{}
+	for _, d := range got.Decls {
+		generic[d.Name] = d.Generic
+	}
+	want := map[string]bool{"Box": true, "map": true, "size": false, "Plain": false, "Store": true, "get": false, "Pair": true, "first": true, "plain": false}
+	for name, g := range want {
+		if have, ok := generic[name]; !ok || have != g {
+			t.Errorf("%s generic = %v (declared %v), want %v", name, have, ok, g)
+		}
+	}
+}

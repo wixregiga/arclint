@@ -223,3 +223,58 @@ class Generic2(Generic[T]):
 		t.Fatalf("abstract marks:\n got %v\nwant %v", abstract, want)
 	}
 }
+
+// A def or class with its own type parameters is generic; and a def in
+// the body of an elif, else, except, or finally clause, or of a loop,
+// is declared at the level the clause stands at.
+func TestPythonMarksGenericsAndReadsClauseBodies(t *testing.T) {
+	src := []byte(`def first[T](xs: list[T]) -> T:
+    return xs[0]
+
+class Box[T]:
+    pass
+
+def plain(x):
+    return x
+
+if FAST:
+    pass
+elif SLOW:
+    def test_elif():
+        pass
+else:
+    def test_else():
+        pass
+
+try:
+    pass
+except ImportError:
+    def test_except():
+        pass
+finally:
+    def test_finally():
+        pass
+
+for _ in range(1):
+    def test_loop():
+        pass
+`)
+	got := extractDeclarations(newParsers(), src)
+	if got.ParseError != "" {
+		t.Fatal(got.ParseError)
+	}
+	generic := map[string]bool{}
+	for _, d := range got.Decls {
+		if d.Owner != "" {
+			t.Errorf("%s %s is owned by %q, want module level", d.Kind, d.Name, d.Owner)
+		}
+		generic[d.Name] = d.Generic
+	}
+	want := map[string]bool{"first": true, "Box": true, "plain": false,
+		"test_elif": false, "test_else": false, "test_except": false, "test_finally": false, "test_loop": false}
+	for name, g := range want {
+		if have, ok := generic[name]; !ok || have != g {
+			t.Errorf("%s generic = %v (declared %v), want %v", name, have, ok, g)
+		}
+	}
+}

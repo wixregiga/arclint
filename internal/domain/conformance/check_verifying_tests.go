@@ -73,6 +73,9 @@ func (code domainCode) judgeVerifyingTest(r rule.Rule, subject rule.Subject, rec
 		return finding("verified_by "+err.Error(), "spell the test as its file's path from the repository root, a colon, and the test's name")
 	}
 	if !code.facts.observed(t.Path) {
+		if code.facts.held(t.Path) {
+			return nil, fmt.Sprintf("%s: the scan does not observe %s; scan.exclude, a testdata directory, or a directory arclint never walks leaves it out", t, t.Path), nil
+		}
 		return finding(fmt.Sprintf("verified_by names %s, but no file %s is in the repository", t, t.Path),
 			fmt.Sprintf("name the test's file by its path from the repository root, or remove %s from verified_by", t))
 	}
@@ -131,8 +134,9 @@ func (code domainCode) judgeDeclaredTest(t vocab.VerifyingTest, finding func(str
 
 // goTestDeclared finds a Go test as go test runs it: a function of a
 // _test.go file named Test followed by nothing or by a character that
-// is not a lowercase letter, taking one *testing.T under the name the
-// file imports testing by, and returning nothing.
+// is not a lowercase letter, declaring no type parameters, taking one
+// *testing.T under the name the file imports testing by, and returning
+// nothing.
 func goTestDeclared(t vocab.VerifyingTest, facts LanguageFacts) (bool, string) {
 	if !strings.HasSuffix(t.Path, "_test.go") {
 		return false, "go test runs tests only from _test.go files"
@@ -148,6 +152,8 @@ func goTestDeclared(t vocab.VerifyingTest, facts LanguageFacts) (bool, string) {
 			return false, fmt.Sprintf("func %s does not take one *testing.T", d.Name)
 		case len(d.Results) != 0:
 			return false, fmt.Sprintf("func %s returns a value, and go test runs only a test that returns nothing", d.Name)
+		case d.Generic:
+			return false, fmt.Sprintf("func %s declares type parameters, and go test refuses a test that does", d.Name)
 		}
 		return true, ""
 	}

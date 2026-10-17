@@ -149,6 +149,7 @@ func TestVerifyingTestsAreDeclared(t *testing.T) {
 			{Kind: "func", Name: "TestHelper", Exported: true, StartLine: 12, Params: []conformance.DeclarationParam{{Name: "b", Type: "*testing.B"}}},
 			{Kind: "func", Name: "TestOtherT", Exported: true, StartLine: 15, Params: []conformance.DeclarationParam{{Name: "t", Type: "*other.T"}}},
 			{Kind: "func", Name: "TestReturns", Exported: true, StartLine: 18, Params: testingT, Results: []string{"int"}},
+			{Kind: "func", Name: "TestGeneric", Exported: true, StartLine: 21, Params: testingT, Generic: true},
 		}),
 		dotTest: goTestFile("pricing", ".", []conformance.Declaration{
 			{Kind: "func", Name: "TestCapped", Exported: true, StartLine: 5, Params: []conformance.DeclarationParam{{Name: "t", Type: "*T"}}},
@@ -197,6 +198,7 @@ func TestVerifyingTestsAreDeclared(t *testing.T) {
 		{goTest + ":TestOtherT", "func TestOtherT does not take one *testing.T"},
 		{dotTest + ":TestQualified", "func TestQualified does not take one *testing.T"},
 		{goTest + ":TestReturns", "func TestReturns returns a value"},
+		{goTest + ":TestGeneric", "func TestGeneric declares type parameters"},
 		{"internal/pricing/discounter.go:TestLike", "go test runs tests only from _test.go files"},
 		{pyTest + ":helper", "helper is not named as a test, beginning with test"},
 		{pyTest + ":test_caps_at_total", "test_caps_at_total is a method of TestDiscounter; name it TestDiscounter.test_caps_at_total"},
@@ -210,6 +212,14 @@ func TestVerifyingTestsAreDeclared(t *testing.T) {
 		}
 	}
 
+	// A file the repository holds but the scan does not observe, as
+	// scan.exclude leaves it out, is neither missing nor judged.
+	held := map[string]string{tsTest: content[tsTest], "internal/pricing/excluded_test.go": "package pricing\n"}
+	a := runWithContent(t, r, files, facts, held, discounterContext(t, "internal/pricing/excluded_test.go:TestA"))
+	if got := outcomesOf(a)[id+"|context:pricing"]; got != conformance.OutcomeUndetermined || len(a.Violations()) != 0 {
+		t.Errorf("unobserved test file: outcome %s, %q; want undetermined", got, messagesOf(a))
+	}
+
 	// A test file whose declarations or, in Go, imports are not
 	// available leaves the test's existence undetermined, never
 	// conforming.
@@ -217,7 +227,7 @@ func TestVerifyingTestsAreDeclared(t *testing.T) {
 		"unparsed":        {Language: rule.LanguageGo, ParseFailure: "expected declaration"},
 		"without imports": goDecls("pricing", facts[goTest].Declarations),
 	} {
-		a := runWithContent(t, r, files, map[string]conformance.LanguageFacts{goTest: f}, content, discounterContext(t, goTest+":TestDiscountNeverExceedsTotal"))
+		a = runWithContent(t, r, files, map[string]conformance.LanguageFacts{goTest: f}, content, discounterContext(t, goTest+":TestDiscountNeverExceedsTotal"))
 		if got := outcomesOf(a)[id+"|context:pricing"]; got != conformance.OutcomeUndetermined {
 			t.Errorf("%s test file: outcome %s, want undetermined", name, got)
 		}

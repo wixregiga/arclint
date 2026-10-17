@@ -134,6 +134,7 @@ func (w *tsWalker) add(kind, name, owner string, exported bool, n *gotreesitter.
 	}
 	w.out.Decls = append(w.out.Decls, conformance.Declaration{
 		Kind: kind, Name: name, Owner: owner, Exported: exported,
+		Generic:   n.ChildByFieldName("type_parameters", w.lang) != nil,
 		StartLine: int(n.StartPoint().Row) + 1, EndLine: int(n.EndPoint().Row) + 1,
 	})
 	return &w.out.Decls[len(w.out.Decls)-1]

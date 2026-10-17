@@ -30,6 +30,7 @@ func extractDeclarations(fset *token.FileSet, file *ast.File, res resolution) []
 				EndLine:   end,
 				Params:    paramInfos(d.Type.Params),
 				Results:   resultTexts(d.Type.Results),
+				Generic:   d.Type.TypeParams != nil && len(d.Type.TypeParams.List) > 0,
 			}
 			if d.Recv != nil && len(d.Recv.List) > 0 {
 				dec.Kind = "method"
@@ -123,6 +124,7 @@ func typeDeclarations(fset *token.FileSet, s *ast.TypeSpec, res resolution) []co
 	out[0] = conformance.Declaration{
 		Kind: kind, Name: owner,
 		Exported: ast.IsExported(owner), StartLine: start, EndLine: end,
+		Generic: s.TypeParams != nil && len(s.TypeParams.List) > 0,
 	}
 	return append(out, members...)
 }

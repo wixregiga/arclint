@@ -136,3 +136,43 @@ func TestNewSourceRejectsDuplicateProducers(t *testing.T) {
 		t.Errorf("two producers for one language must be rejected")
 	}
 }
+
+// The content capability tells a file the scan leaves out from one the
+// repository does not hold: it holds every regular file under the root,
+// observed or not, and nothing outside it, no directory, and no link.
+func TestContentHoldsFilesTheScanLeavesOut(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "a/service.go", "package a")
+	write(t, root, "b/generated/skip_test.go", "package b")
+	write(t, root, "testdata/fixture_test.go", "package fixture")
+	if err := os.Symlink(filepath.Join(root, "a", "service.go"), filepath.Join(root, "a", "link.go")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	exclude, err := rule.NewGlobs([]string{"**/generated/**"})
+	if err != nil {
+		t.Fatalf("NewGlobs: %v", err)
+	}
+	source, err := filesystemobservation.NewSource(root)
+	if err != nil {
+		t.Fatalf("NewSource: %v", err)
+	}
+	obs, err := source.Observe(nil, rule.Scan{Exclude: exclude}, nil)
+	if err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	content := obs.Content()
+	for path, want := range map[string]bool{
+		"a/service.go":             true,
+		"b/generated/skip_test.go": true,
+		"testdata/fixture_test.go": true,
+		"a/missing_test.go":        false,
+		"a":                        false,
+		"a/link.go":                false,
+		"../outside_test.go":       false,
+		"/etc/passwd":              false,
+	} {
+		if got := content.Holds(path); got != want {
+			t.Errorf("Holds(%q) = %v, want %v", path, got, want)
+		}
+	}
+}
