@@ -31,11 +31,11 @@ coverage: rule aggregate/invariants-enforced-by-root: 1 subject(s) could not be 
 contracts: ordering: 0 invariant(s), 0 assertion(s); 0 structurally checked
   no named contracts to check; coverage is not established
 contracts: structural checks do not verify that check bodies enforce the recorded statements
-1 active finding(s) · 0 suppressed · 0 baselined · 41 rule(s) applied
+1 active finding(s) · 0 suppressed · 0 baselined · 44 rule(s) applied
 ```
 
 The Pattern brought sixteen rules; recording one context with one
-aggregate brought the other twenty-five. An empty model (`contexts: {}`)
+aggregate brought the other twenty-eight. An empty model (`contexts: {}`)
 brings none. With no Go code yet, every rule that reads declarations or
 calls has nothing to read: each reports its subject as unsupported (one
 coverage line per rule, shortened above), and the warning about an
@@ -325,8 +325,9 @@ Services). An assertion is a guarantee of one operation; an invariant
 holds at all times for an aggregate or a value. The rule reads the
 recorded domain alone, so an interface or protocol in the code that
 declares the service's operations records no assertion. The finding
-asks what the service's operation guarantees and shows the command
-that records it:
+asks what the service's operation guarantees and asks for the guarantee
+in the domain expert's words, through the domain-librarian skill, with
+the command that records it:
 `arclint domain define assertion <key> --owner <service> --on <operation> --statement "<the guarantee>"`.
 
 **A value object** with an invariant declares one constructor (`New`,
