@@ -557,6 +557,12 @@ TS_NAME_EXTRA = "$\u200c\u200d"
 TS_ESCAPE = re.compile(r"\\u(?:([0-9A-Fa-f]{4})|\{([0-9A-Fa-f]+)\})")
 
 
+def starts_ts_name(char):
+    """Whether char may start a TypeScript identifier: a letter, $, _, or
+    any other Unicode identifier start (Other_ID_Start, such as U+2118)."""
+    return char.isalpha() or char in "_$" or char.isidentifier()
+
+
 def ts_name(text, i):
     """Read a TypeScript identifier from text[i], its Unicode escapes
     decoded: t\\u0065st is test. Return the index past it and the name.
@@ -922,14 +928,14 @@ class TypeScriptLexer:
                 continue
             if number == 1 and i == 0 and pair == "#!":
                 break  # a hashbang line
-            if char == "#" and i + 1 < len(text) and (text[i + 1].isalpha() or text[i + 1] in "_$"):
-                # A private name, #count, is a member: an operand.
-                j = name_end(text, i + 1, TS_NAME_EXTRA)
+            if char == "#" and i + 1 < len(text) and (starts_ts_name(text[i + 1]) or text.startswith("\\u", i + 1)):
+                # A private name, #count or #\\u0069n, is a member: an operand.
+                j, _ = ts_name(text, i + 1)
                 other_token()
                 token("operand", sure=True)
                 i = j
                 continue
-            if char.isalpha() or char in "_$" or text.startswith("\\u", i):
+            if starts_ts_name(char) or text.startswith("\\u", i):
                 j, word = ts_name(text, i)
                 self.word(word, number, token, other_token)
                 i = j
@@ -1046,11 +1052,15 @@ class TypeScriptLexer:
             token("operand")
             return
         call = self.test_call
-        if word in TEST_CALLEES and (call in (None, "callee") or (isinstance(call, tuple) and call[0] in ("open", "args"))):
+        if word in TEST_CALLEES and (
+            call in (None, "callee") or (isinstance(call, tuple) and call[0] in ("open", "args", "tagged"))
+        ):
             if isinstance(call, tuple):
                 # A test inside another call's arguments, its first one
-                # included: describe(it("...").title, ...).
-                self.test_outer.append((("args", call[1]), self.callee_line))
+                # included, describe(it("...").title, ...), or inside a
+                # tagged table's substitution.
+                outer = ("args", call[1]) if call[0] == "open" else call
+                self.test_outer.append((outer, self.callee_line))
             self.test_call, self.callee_line = "callee", number
         else:
             other_token()
@@ -1131,9 +1141,9 @@ class TypeScriptLexer:
             call = self.test_call
             if isinstance(call, tuple) and call[0] in ("open", "args") and call[1] == opened:
                 self.test_call = "callee"
-            elif any(outer[1] == opened for outer, _ in self.test_outer):
+            elif any(outer == ("args", opened) for outer, _ in self.test_outer):
                 # The interrupted call closes around an unfinished one.
-                while self.test_outer and self.test_outer[-1][0][1] != opened:
+                while self.test_outer and self.test_outer[-1][0] != ("args", opened):
                     self.test_outer.pop()
                 _, self.callee_line = self.test_outer.pop()
                 self.test_call = "callee"
@@ -1175,6 +1185,10 @@ class TypeScriptLexer:
             token("operator", "{")
         elif char == "}":
             if self.depth == 0 and self.stack:
+                # A substitution ends: a test call read inside it is over,
+                # and a tagged table it interrupted resumes.
+                if self.test_call == "callee":
+                    self.drop_call()
                 self.depth = self.stack.pop()
                 self.state = "template"
                 return
@@ -1261,7 +1275,8 @@ def python_sources(lines):
     found = {}
     stack = []
     joined = []  # code of the lines of a statement that goes on
-    joined_start = 0  # the first of those lines
+    joined_lines = []  # the lines that statement spans so far
+    joined_lines_of_pieces = []  # the line of each piece in joined
     brackets = 0  # brackets the statement's code leaves open
     for number, text in enumerate(lines, start=1):
         kinds = set()
@@ -1399,15 +1414,27 @@ def python_sources(lines):
             brackets = max(0, brackets + sum(piece.count(c) for c in PY_OPEN) - sum(piece.count(c) for c in PY_CLOSE))
             explicit = not (last and stack) and piece.rstrip().endswith("\\")
             joined.append(piece.rstrip()[:-1] if explicit else piece)
-            joined_start = joined_start or number
+            joined_lines_of_pieces.append(number)
+            if not joined_lines or joined_lines[-1] != number:
+                joined_lines.append(number)
             if explicit or (last and stack) or brackets:
                 continue  # a backslash, an open literal or an open bracket carries the statement on
-            if py_test_declaration(" ".join(joined)):
-                if joined_start != number:
-                    found[joined_start] = "test"
-                else:
+            statement = " ".join(joined)
+            if py_test_declaration(statement):
+                # The lines from def through the test's name.
+                name_at = PY_TEST_DEF.match(statement) or PY_TEST_CLASS.match(statement)
+                offset, through = 0, joined_lines[-1]
+                for piece_text, line in zip(joined, joined_lines_of_pieces):
+                    offset += len(piece_text) + 1
+                    if offset > name_at.end():
+                        through = line
+                        break
+                for line in joined_lines:
+                    if line < through or (line == through and line != number):
+                        found[line] = "test"
+                if through == number:
                     kinds.add("test")
-            joined, joined_start = [], 0
+            joined, joined_lines, joined_lines_of_pieces = [], [], []
         if kinds and text.strip():
             found[number] = pick(kinds)
     return found

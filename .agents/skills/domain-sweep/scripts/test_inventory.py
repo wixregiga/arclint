@@ -980,6 +980,27 @@ class InventoryTest(unittest.TestCase):
             "web/sample.test.ts:2": "test", "web/sample.test.ts:3": "comment", "web/sample.test.ts:5": "test",
         })
 
+    def test_round_twenty_eight_cases(self):
+        self.repo.git("checkout", "-q", "main")
+        self.repo.write("test_rules.py", "def \\\n    test_accepts_invalid():\n    pass\n")
+        self.repo.commit("rules")
+        self.repo.git("checkout", "-q", "change")
+        self.repo.git("reset", "-q", "--hard", "main")
+        self.repo.write("test_rules.py", "def \\\n    test_rejects_invalid():\n    pass\n")
+        self.repo.write("web/unicode.ts", "const \u2118 = 8; const ratio = \u2118 / `requests/second\nNever count refused requests.\n`.length;\n")
+        self.repo.write("web/private.ts", "class C { #\\u0069n = 8; f() { return this.#\\u0069n / `requests/second\n"
+                        "Never count refused requests.\n`.length; } }\n")
+        self.repo.write("web/table.test.ts", 'test.each`value\n${test("never overwrites", () => {})}\n`("rejects", () => {});\n')
+        rows = self.repo.rows("--base", "main", "--scope", "changed")
+        self.assertIn(("added", "test", "-", "test_rules.py:2", "test_rejects_invalid():"), rows)
+        self.assertIn(("deleted", "test", "-", "test_rules.py:2", "test_accepts_invalid():"), rows)
+        located = self.located(rows)
+        self.assertRowsInclude(located, {
+            "web/unicode.ts:1": "text", "web/unicode.ts:2": "text", "web/unicode.ts:3": "text",
+            "web/private.ts:1": "text", "web/private.ts:2": "text", "web/private.ts:3": "text",
+            "web/table.test.ts:1": "test", "web/table.test.ts:2": "test", "web/table.test.ts:3": "test",
+        })
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
@@ -1080,6 +1101,9 @@ def tokenize_sources(text):
             if not (starts and name and name.type == tokenize.NAME):
                 continue
             if tok.string == "def" and name.string.startswith("test"):
+                # From def through the name's line: def \\ then the name.
+                for line in range(tok.start[0], name.start[0]):
+                    add(line, "test")
                 j = i + 2
                 if tokens[j].string == "[":
                     # PEP 695 type parameters, def test_x[T](, up to their ].
@@ -1090,9 +1114,13 @@ def tokenize_sources(text):
                         if level == 0:
                             break
                 if j < len(tokens) and tokens[j].string == "(":
-                    add(tok.start[0], "test")
+                    add(name.start[0], "test")
+                else:
+                    for line in range(tok.start[0], name.start[0]):
+                        kinds[line].discard("test")
             if tok.string == "class" and name.string.startswith("Test"):
-                add(tok.start[0], "test")
+                for line in range(tok.start[0], name.start[0] + 1):
+                    add(line, "test")
     lines = text.split("\n")
     found = {
         line: inventory.pick(kind)
