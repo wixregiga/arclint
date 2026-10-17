@@ -1748,8 +1748,8 @@ func ddd() MetaModel {
 						},
 					},
 					{
-						ID:        "domain_service/defines-a-contract",
-						Statement: "A domain service records at least one assertion; a service whose contract states nothing promises its callers nothing they can rely on, and the finding asks what the service promises.",
+						ID:        "domain_service/records-an-assertion",
+						Statement: "A recorded domain service records at least one assertion, a guarantee of one of its operations, where an invariant holds at all times for an aggregate or a value; the rule reads the recorded domain alone and infers nothing from the code's interfaces or protocols, and the finding asks what the service's operation guarantees.",
 						Sources: []Citation{
 							{Work: "evans2015", Page: "14", Section: "Services"},
 							{Work: "evans2015", Page: "22", Section: "Assertions"},
@@ -1757,7 +1757,7 @@ func ddd() MetaModel {
 						Enforcement: Enforcement{
 							By:        EvaluatorDomain,
 							Languages: Languages{All: true},
-							Severity:  severityWarning,
+							Severity:  severityError,
 						},
 					},
 				},

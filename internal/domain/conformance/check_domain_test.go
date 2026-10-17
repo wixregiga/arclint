@@ -1008,15 +1008,16 @@ func TestAssertionRemediationSaysTheDomainDecides(t *testing.T) {
 	}
 }
 
-// A domain service's contract is its assertions. A service recording
-// none is a warning anchored at its recording, asking what it promises
-// and how to record that; the rule reads the record alone, so it judges
-// a context whose code yields no fact.
-func TestServiceWithoutAssertionDefinesNoContract(t *testing.T) {
-	id := "domain_service/defines-a-contract"
+// A domain service records at least one assertion, a guarantee of one
+// of its operations. A service recording none is an error anchored at
+// its recording, asking what its operation guarantees and how to record
+// that; the rule reads the record alone, so it judges a context whose
+// code yields no fact.
+func TestServiceWithoutAssertionIsAFinding(t *testing.T) {
+	id := "domain_service/records-an-assertion"
 	r := builtInRule(t, id)
-	if r.Severity() != rule.SeverityWarning {
-		t.Fatalf("severity %s, want %s", r.Severity(), rule.SeverityWarning)
+	if r.Severity() != rule.SeverityError {
+		t.Fatalf("severity %s, want %s", r.Severity(), rule.SeverityError)
 	}
 	knowledge, err := newRecordedLanguage("p", "", []vocab.BoundedContext{
 		{
@@ -1061,14 +1062,40 @@ func TestServiceWithoutAssertionDefinesNoContract(t *testing.T) {
 	if got := fmt.Sprintf("%s:%d", v.Path(), v.Line()); got != testRecording+":3" {
 		t.Errorf("anchor %s, want %s:3", got, testRecording)
 	}
-	if want := "domain service Encrypter of context identityaccess records no assertion; what does Encrypter promise its callers?"; v.Message() != want {
+	if want := "domain service Encrypter of context identityaccess records no assertion: what does its operation guarantee?"; v.Message() != want {
 		t.Errorf("message:\n got %q\nwant %q", v.Message(), want)
 	}
-	if want := `record each guarantee as an assertion on the operation it belongs to: arclint domain define assertion <key> --owner Encrypter --on <operation> --statement "<the guarantee>" --context identityaccess`; v.Remediation() != want {
+	if want := `record the guarantee as an assertion on its operation: arclint domain define assertion <key> --owner Encrypter --on <operation> --statement "<the guarantee>" --context identityaccess`; v.Remediation() != want {
 		t.Errorf("remediation:\n got %q\nwant %q", v.Remediation(), want)
 	}
-	if v.FailsGate() {
-		t.Errorf("a warning fails the gate")
+	if !v.FailsGate() {
+		t.Errorf("an active error does not fail the gate")
+	}
+
+	// The code never answers for the recording: a Go interface, a
+	// TypeScript interface, or a Python Protocol declaring the service's
+	// operations records no assertion, so the finding stands unchanged.
+	files := []string{"identityaccess/user/password.go", "src/identityaccess/user/password.ts", "identityaccess/user/password.py"}
+	facts := map[string]conformance.LanguageFacts{
+		files[0]: goDecls("user", []conformance.Declaration{
+			{Kind: "interface", Name: "Encrypter", Exported: true, StartLine: 3},
+			{Kind: "method", Name: "Encrypt", Owner: "Encrypter", Exported: true, StartLine: 4},
+		}),
+		files[1]: {Language: rule.LanguageTypeScript, DeclarationsAvailable: true, CallsAvailable: true, Declarations: []conformance.Declaration{
+			{Kind: "interface", Name: "Encrypter", Exported: true, StartLine: 1},
+			{Kind: "method", Name: "encrypt", Owner: "Encrypter", Exported: true, StartLine: 2},
+		}},
+		files[2]: {Language: rule.LanguagePython, DeclarationsAvailable: true, CallsAvailable: true, Declarations: []conformance.Declaration{
+			{Kind: "class", Name: "Encrypter", Exported: true, StartLine: 1},
+			{Kind: "method", Name: "encrypt", Owner: "Encrypter", Exported: true, StartLine: 2},
+		}},
+	}
+	withCode := runOne(t, r, nil, observed(files...), facts, knowledge)
+	if got := outcomesOf(withCode)[id+"|context:identityaccess"]; got != conformance.OutcomeViolates {
+		t.Errorf("with declared code: outcome %s, want %s", got, conformance.OutcomeViolates)
+	}
+	if got := withCode.Violations(); len(got) != 1 || got[0].Message() != v.Message() || got[0].Path() != v.Path() || got[0].Line() != v.Line() {
+		t.Errorf("with declared code: violations %v, want the recording's finding alone", anchorsOf(withCode)[id])
 	}
 }
 

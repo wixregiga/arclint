@@ -319,10 +319,14 @@ assertion` prints where the guarantee it records is checked, chosen by
 how the owner is declared.
 
 **A domain service** records at least one assertion
-(`domain_service/defines-a-contract`, warning): Evans defines a service
-with "a service contract, a set of assertions about interactions with
-the service" (DDD Reference, p. 14). The finding asks what the service
-promises and shows the command that records it:
+(`domain_service/records-an-assertion`): Evans asks for "a set of
+assertions about interactions with the service" (DDD Reference, p. 14,
+Services). An assertion is a guarantee of one operation; an invariant
+holds at all times for an aggregate or a value. The rule reads the
+recorded domain alone, so an interface or protocol in the code that
+declares the service's operations records no assertion. The finding
+asks what the service's operation guarantees and shows the command
+that records it:
 `arclint domain define assertion <key> --owner <service> --on <operation> --statement "<the guarantee>"`.
 
 **A value object** with an invariant declares one constructor (`New`,
