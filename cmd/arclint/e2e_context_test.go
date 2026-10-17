@@ -130,7 +130,7 @@ func TestContextWorksiteScopesDomain(t *testing.T) {
 		" entries used here, ",
 		"  declared here, context rule:\n",
 		"  used here, context rule:\n",
-		"    value object RuleID: internal/domain/rule/root.go:",
+		"    value object RuleID, identity of Rule: internal/domain/rule/root.go:",
 		"  undetermined here: ",
 		"    aggregates: Rule (RuleID; Zone, Pattern)\n",
 		"    invariants:\n",

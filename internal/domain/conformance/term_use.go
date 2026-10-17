@@ -253,12 +253,17 @@ func usedTerms(contexts []contextCode) []usedTerm {
 		for _, agg := range cc.ctx.Aggregates {
 			out = append(out, usedTerm{context: cc.ctx.Name, name: agg.Name, role: UsedAggregate, candidates: cc.aggregates[agg.Name].candidates})
 		}
+		identifies := identityOwners(cc.ctx)
 		for _, t := range cc.ctx.Terms() {
 			role, ok := termRoles[t.Concept]
 			if !ok {
 				continue
 			}
-			out = append(out, usedTerm{context: cc.ctx.Name, name: t.Name, role: role, aggregate: t.Aggregate, candidates: cc.terms[t.Name].candidates})
+			aggregate := t.Aggregate
+			if role == UsedValueObject && aggregate == "" {
+				aggregate = identifies[t.Name]
+			}
+			out = append(out, usedTerm{context: cc.ctx.Name, name: t.Name, role: role, aggregate: aggregate, candidates: cc.terms[t.Name].candidates})
 		}
 		for _, agg := range cc.ctx.Aggregates {
 			if agg.Repository != "" {
@@ -270,6 +275,25 @@ func usedTerms(contexts []contextCode) []usedTerm {
 		}
 	}
 	return out
+}
+
+// identityOwners maps each identity the context's aggregates and their
+// members name to the aggregate it belongs to, the first in recording
+// order, whether or not the identity is also recorded as a value object.
+func identityOwners(ctx vocab.BoundedContext) map[string]string {
+	owners := map[string]string{}
+	claim := func(identity, aggregate string) {
+		if _, taken := owners[identity]; identity != "" && !taken {
+			owners[identity] = aggregate
+		}
+	}
+	for _, agg := range ctx.Aggregates {
+		claim(agg.Identity, agg.Name)
+		for _, e := range agg.Entities {
+			claim(e.Identity, agg.Name)
+		}
+	}
+	return owners
 }
 
 // termRoles maps the concepts recorded as types to their roles.
