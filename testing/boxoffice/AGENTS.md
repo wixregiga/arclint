@@ -16,7 +16,7 @@ IMPORTANT: ask arclint before reading around. `make arclint` builds the arclint 
 <!-- arclint:agents:begin -->
 ## Architecture contracts (arclint)
 
-Enforced from rules.arclint.yaml: 59 rules over languages [go, typescript].
+Enforced from rules.arclint.yaml: 60 rules over languages [go, typescript].
 
 ### Workflow
 
@@ -108,7 +108,7 @@ Relations: catalog → ordering (conformist); catalog → capacity (conformist);
 
 ### Built-in rules
 
-26 rules built in from the DDD meta-model judge the recorded domain against the code, and 1 rule built in from the word limits of the domain file judges the recorded text; no Pattern distributes them. Change one through an Override under its id in rules.arclint.yaml (severity, or disable with a reason).
+27 rules built in from the DDD meta-model judge the recorded domain against the code, and 1 rule built in from the word limits of the domain file judges the recorded text; no Pattern distributes them. Change one through an Override under its id in rules.arclint.yaml (severity, or disable with a reason).
 
 - ubiquitous_language/terms-declared-in-code: Every recorded member entity, value object, and identity names one type declaration in the context's code, spelled with the recorded name in the language's type case (in Go, a name the package's own name completes, so rule.ID spells RuleID); a name no declaration spells, or one that two declarations spell with nothing to choose between them, is a finding. Aggregates, events, services, specifications, repositories, and factories state the same for themselves.
 - bounded_context/code-held-by-one-context: A file of a bounded context's code belongs to no other context; two contexts hold the same code only under a recorded shared_kernel relation between them, because a boundary two models straddle is not a boundary.
@@ -133,6 +133,7 @@ Relations: catalog → ordering (conformist); catalog → capacity (conformist);
 - domain_event/no-setters: An event declares no method whose name begins with set; a record of the past is not edited.
 - domain_service/declared: A recorded service is a declared type spelled with the service's name in the language's type case.
 - domain_service/not-held-by-aggregates: No aggregate root or member entity declares a field whose type is a recorded domain service; a service reaches an aggregate only as a parameter of one command.
+- domain_service/defines-a-contract (warning): A domain service records at least one assertion; a service whose contract states nothing promises its callers nothing they can rely on, and the finding asks what the service promises.
 - repository/declared: A recorded repository is a declared type (interface, or class in a language without interfaces) spelled with the recorded name in the language's type case, declared in the context's code.
 - repository/not-called-from-aggregates: No method of an aggregate root or of its members calls a repository.
 - factory/declared: A recorded factory is a declared type or function spelled with the recorded name in the language's case, declared in the context's code.

@@ -31,11 +31,11 @@ coverage: rule aggregate/invariants-enforced-by-root: 1 subject(s) could not be 
 contracts: ordering: 0 invariant(s), 0 assertion(s); 0 structurally checked
   no named contracts to check; coverage is not established
 contracts: structural checks do not verify that check bodies enforce the recorded statements
-1 active finding(s) · 0 suppressed · 0 baselined · 36 rule(s) applied
+1 active finding(s) · 0 suppressed · 0 baselined · 41 rule(s) applied
 ```
 
 The Pattern brought sixteen rules; recording one context with one
-aggregate brought the other twenty. An empty model (`contexts: {}`)
+aggregate brought the other twenty-five. An empty model (`contexts: {}`)
 brings none. With no Go code yet, every rule that reads declarations or
 calls has nothing to read: each reports its subject as unsupported (one
 coverage line per rule, shortened above), and the warning about an
@@ -317,6 +317,13 @@ Encrypter: not-empty has no check in context identity`. Whether each implementat
 service reaches the check is not yet observed. `arclint domain define
 assertion` prints where the guarantee it records is checked, chosen by
 how the owner is declared.
+
+**A domain service** records at least one assertion
+(`domain_service/defines-a-contract`, warning): Evans defines a service
+with "a service contract, a set of assertions about interactions with
+the service" (DDD Reference, p. 14). The finding asks what the service
+promises and shows the command that records it:
+`arclint domain define assertion <key> --owner <service> --on <operation> --statement "<the guarantee>"`.
 
 **A value object** with an invariant declares one constructor (`New`,
 `New<Name>`, `Parse<Name>`, `constructor`, or `__init__`) so a value

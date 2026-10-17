@@ -1378,6 +1378,12 @@ building_blocks:
           - {work: vernon-iddd-sample-pages, page: 387, section: Avoid Dependency Injection}
           - {work: vernon-iddd-sample-pages, page: 363, section: "Rule: Reference Other Aggregates by Identity"}
         enforcement: {by: domain, facts: [file_tree, declarations, field_types], languages: all}
+      - id: domain_service/defines-a-contract
+        statement: A domain service records at least one assertion; a service whose contract states nothing promises its callers nothing they can rely on, and the finding asks what the service promises.
+        sources:
+          - {work: evans2015, page: 14, section: Services}
+          - {work: evans2015, page: 22, section: Assertions}
+        enforcement: {by: domain, languages: all, severity: warning}
     guidance:
       - text: Try the thing first; a service exists only for a business decision that no entity or value object naturally owns, and the more behavior the services hold, the less the model does.
         fundamental: true

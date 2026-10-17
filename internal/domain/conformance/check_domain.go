@@ -82,6 +82,7 @@ var domainChecks = map[string]domainCheck{
 	"domain_event/declared":                                 {run: checkEventDeclared},
 	"domain_event/no-setters":                               {run: checkEventNoSetters},
 	"domain_service/declared":                               {run: checkServiceDeclared},
+	"domain_service/defines-a-contract":                     {run: checkServiceDefinesContract},
 	"repository/declared":                                   {run: checkRepositoryDeclared},
 	"factory/declared":                                      {run: checkFactoryDeclared},
 }
@@ -2059,6 +2060,24 @@ func checkServiceDeclared(r rule.Rule, subject rule.Subject, cc contextCode, _ d
 			return nil, err
 		}
 		vs = append(vs, more...)
+	}
+	return vs, nil
+}
+
+func checkServiceDefinesContract(r rule.Rule, subject rule.Subject, cc contextCode, _ domainCode) ([]Violation, error) {
+	var vs []Violation
+	for _, s := range cc.ctx.Services {
+		if len(s.Assertions) > 0 {
+			continue
+		}
+		file, line := cc.recordAnchor(s.Line)
+		v, err := newViolation(r, subject, file, line,
+			fmt.Sprintf("domain service %s of context %s records no assertion; what does %s promise its callers?", s.Name, cc.ctx.Name, s.Name),
+			fmt.Sprintf("record each guarantee as an assertion on the operation it belongs to: arclint domain define assertion <key> --owner %s --on <operation> --statement \"<the guarantee>\" --context %s", s.Name, cc.ctx.Name))
+		if err != nil {
+			return nil, err
+		}
+		vs = append(vs, v)
 	}
 	return vs, nil
 }
