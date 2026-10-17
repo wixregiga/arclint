@@ -13,12 +13,11 @@ type DomainUseRef struct {
 	// Role is aggregate, entity, value_object, domain_event,
 	// domain_service, specification, repository, or factory.
 	Role conformance.UsedRole `json:"role"`
-	// Aggregate names the aggregate an entity is a member of, or a
+	// Aggregates lists the aggregates the entry belongs to, identifies,
+	// or serves, as its role says: the one an entity is a member of,
+	// every one a value object is the identity of, every one a
 	// repository or factory serves.
-	Aggregate string `json:"aggregate,omitempty"`
-	// Identifies lists, for a value object, every aggregate whose
-	// identity it is.
-	Identifies []string        `json:"identifies,omitempty"`
+	Aggregates []string        `json:"aggregates,omitempty"`
 	Sites      []DomainUseSite `json:"sites"`
 	// Invariants and Assertions are the contracts of the entry, or of
 	// its aggregate for a member entity; Specification is a used
@@ -85,13 +84,19 @@ func usedKnowledge(dk, declaredHere *DomainKnowledge, uses conformance.TermUses)
 			declared[key{ctx.Name, name}] = true
 		}
 	}
+	// One entry per term and role: a name may be one aggregate's
+	// repository and another's factory.
+	type entryKey struct {
+		context, name string
+		role          conformance.UsedRole
+	}
 	var used []DomainUseRef
-	index := map[key]int{}
+	index := map[entryKey]int{}
 	for _, u := range uses.Uses {
-		k := key{u.Context(), u.Term()}
-		if declared[k] {
+		if declared[key{u.Context(), u.Term()}] {
 			continue
 		}
+		k := entryKey{u.Context(), u.Term(), u.Role()}
 		i, ok := index[k]
 		if !ok {
 			i = len(used)
@@ -103,7 +108,10 @@ func usedKnowledge(dk, declaredHere *DomainKnowledge, uses conformance.TermUses)
 	// A member entity carries its aggregate's contracts only when the
 	// aggregate itself is not used, so no contract is listed twice.
 	for i, u := range used {
-		if _, rootUsed := index[key{u.Context, u.Aggregate}]; u.Role == conformance.UsedEntity && rootUsed {
+		if u.Role != conformance.UsedEntity || len(u.Aggregates) == 0 {
+			continue
+		}
+		if _, rootUsed := index[entryKey{u.Context, u.Aggregates[0], conformance.UsedAggregate}]; rootUsed {
 			used[i].Invariants, used[i].Assertions = nil, nil
 		}
 	}
@@ -119,13 +127,15 @@ func usedKnowledge(dk, declaredHere *DomainKnowledge, uses conformance.TermUses)
 
 // usedEntry builds the entry of one used term with its contracts.
 func usedEntry(dk *DomainKnowledge, u conformance.TermUse) DomainUseRef {
-	entry := DomainUseRef{Context: u.Context(), Name: u.Term(), Role: u.Role(), Aggregate: u.Aggregate(), Identifies: u.Identifies()}
+	entry := DomainUseRef{Context: u.Context(), Name: u.Term(), Role: u.Role(), Aggregates: u.Aggregates()}
 	owner := ""
 	switch u.Role() {
 	case conformance.UsedAggregate, conformance.UsedValueObject, conformance.UsedDomainService:
 		owner = u.Term()
 	case conformance.UsedEntity:
-		owner = u.Aggregate()
+		if aggregates := u.Aggregates(); len(aggregates) > 0 {
+			owner = aggregates[0]
+		}
 	case conformance.UsedDomainEvent, conformance.UsedSpecification, conformance.UsedRepository, conformance.UsedFactory:
 	}
 	for _, ctx := range dk.Contexts {

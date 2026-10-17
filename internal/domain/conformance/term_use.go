@@ -44,14 +44,14 @@ const (
 // bounded context and role, and how the code reaches it. Two TermUses
 // with the same values are the same use.
 type TermUse struct {
-	path      string
-	line      int
-	context   string
-	term      string
-	role      UsedRole
-	aggregate string
-	// identifies lists the aggregates whose identity a value object is.
-	identifies []string
+	path    string
+	line    int
+	context string
+	term    string
+	role    UsedRole
+	// aggregates lists the aggregates the term belongs to, identifies, or
+	// serves, as its role says.
+	aggregates []string
 	way        UseWay
 	via        string
 }
@@ -89,7 +89,7 @@ func newTermUse(ref Reference, reached locDecl, term usedTerm, site useSite) (Te
 	}
 	return TermUse{
 		path: site.path, line: site.line, context: term.context, term: term.name,
-		role: term.role, aggregate: term.aggregate, identifies: append([]string(nil), term.identifies...), way: site.way, via: site.via,
+		role: term.role, aggregates: append([]string(nil), term.aggregates...), way: site.way, via: site.via,
 	}, nil
 }
 
@@ -108,13 +108,11 @@ func (u TermUse) Term() string { return u.term }
 // Role is the part the term plays in its context.
 func (u TermUse) Role() UsedRole { return u.role }
 
-// Aggregate names the aggregate an entity is a member of, or a
-// repository or factory serves; "" otherwise.
-func (u TermUse) Aggregate() string { return u.aggregate }
-
-// Identifies lists, for a value object, every aggregate whose identity
-// it is, in recording order; empty otherwise.
-func (u TermUse) Identifies() []string { return append([]string(nil), u.identifies...) }
+// Aggregates lists, in recording order, the aggregates the term
+// belongs to, identifies, or serves, as its role says: the one an
+// entity is a member of, every one a value object is the identity of,
+// every one a repository or factory serves; empty otherwise.
+func (u TermUse) Aggregates() []string { return append([]string(nil), u.aggregates...) }
 
 // Way says whether a call or a field reaches the term.
 func (u TermUse) Way() UseWay { return u.way }
@@ -197,8 +195,7 @@ type usedTerm struct {
 	context    string
 	name       string
 	role       UsedRole
-	aggregate  string
-	identifies []string
+	aggregates []string
 	candidates []locDecl
 }
 
@@ -269,24 +266,48 @@ func usedTerms(contexts []contextCode) []usedTerm {
 			term := usedTerm{context: cc.ctx.Name, name: t.Name, role: role, candidates: cc.terms[t.Name].candidates}
 			switch role {
 			case UsedValueObject:
-				term.identifies = identifies[t.Name]
+				term.aggregates = identifies[t.Name]
 			case UsedEntity:
-				term.aggregate = t.Aggregate
+				term.aggregates = []string{t.Aggregate}
 			case UsedAggregate, UsedDomainEvent, UsedDomainService, UsedSpecification, UsedRepository, UsedFactory:
 				// Belongs to no aggregate as a term of Terms: an aggregate is
 				// its own root, and repositories and factories are listed
-				// with their aggregate below.
+				// with the aggregates they serve below.
 			}
 			out = append(out, term)
 		}
-		for _, agg := range cc.ctx.Aggregates {
-			if agg.Repository != "" {
-				out = append(out, usedTerm{context: cc.ctx.Name, name: agg.Repository, role: UsedRepository, aggregate: agg.Name, candidates: cc.terms[agg.Repository].candidates})
-			}
-			if agg.Factory != "" {
-				out = append(out, usedTerm{context: cc.ctx.Name, name: agg.Factory, role: UsedFactory, aggregate: agg.Name, candidates: cc.terms[agg.Factory].candidates})
-			}
+		out = append(out, servingTerms(cc)...)
+	}
+	return out
+}
+
+// servingTerms lists the repositories and factories the context's
+// aggregates name, each once with every aggregate it serves, in
+// recording order: two aggregates may name one repository.
+func servingTerms(cc contextCode) []usedTerm {
+	var out []usedTerm
+	type key struct {
+		name string
+		role UsedRole
+	}
+	index := map[key]int{}
+	serve := func(name string, role UsedRole, aggregate string) {
+		if name == "" {
+			return
 		}
+		i, seen := index[key{name, role}]
+		if !seen {
+			i = len(out)
+			index[key{name, role}] = i
+			out = append(out, usedTerm{context: cc.ctx.Name, name: name, role: role, candidates: cc.terms[name].candidates})
+		}
+		if !slices.Contains(out[i].aggregates, aggregate) {
+			out[i].aggregates = append(out[i].aggregates, aggregate)
+		}
+	}
+	for _, agg := range cc.ctx.Aggregates {
+		serve(agg.Repository, UsedRepository, agg.Name)
+		serve(agg.Factory, UsedFactory, agg.Name)
 	}
 	return out
 }
@@ -335,6 +356,7 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 		path, context, term, via string
 		line                     int
 		way                      UseWay
+		role                     UsedRole
 	}
 	seenUse := map[useKey]bool{}
 	seenUndetermined := map[UndeterminedUse]bool{}
@@ -417,7 +439,7 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 			if err != nil {
 				return err
 			}
-			if k := (useKey{use.path, use.context, use.term, use.via, use.line, use.way}); !seenUse[k] {
+			if k := (useKey{use.path, use.context, use.term, use.via, use.line, use.way, use.role}); !seenUse[k] {
 				seenUse[k] = true
 				out.Uses = append(out.Uses, use)
 			}

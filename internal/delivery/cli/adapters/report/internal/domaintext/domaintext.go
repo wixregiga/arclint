@@ -226,7 +226,7 @@ func CountsLine(c vocab.Counts) string {
 		n                int
 		singular, plural string
 	}{
-		{c.Aggregates, "aggregate", "aggregates"},
+		{c.Aggregates, aggregateNoun, aggregatesNoun},
 		{c.Entities, "entity", "entities"},
 		{c.ValueObjects, "value object", "value objects"},
 		{c.Invariants, "invariant", "invariants"},
@@ -915,19 +915,19 @@ func writeUsed(p *out.Printer, st Style, d *application.DomainKnowledge) {
 	}
 }
 
-// usedLabel names a used entry by its role, with the aggregate it
-// belongs to or serves.
+// usedLabel names a used entry by its role, with the aggregates it
+// belongs to, identifies, or serves.
 func usedLabel(u application.DomainUseRef) string {
 	switch u.Role {
 	case conformance.UsedEntity:
-		return fmt.Sprintf("entity %s of aggregate %s", u.Name, u.Aggregate)
+		return fmt.Sprintf("entity %s of aggregate %s", u.Name, andList(u.Aggregates))
 	case conformance.UsedRepository:
-		return fmt.Sprintf("repository %s of aggregate %s", u.Name, u.Aggregate)
+		return fmt.Sprintf("repository %s of %s %s", u.Name, aggregateWord(u.Aggregates), andList(u.Aggregates))
 	case conformance.UsedFactory:
-		return fmt.Sprintf("factory %s of aggregate %s", u.Name, u.Aggregate)
+		return fmt.Sprintf("factory %s of %s %s", u.Name, aggregateWord(u.Aggregates), andList(u.Aggregates))
 	case conformance.UsedValueObject:
-		if len(u.Identifies) > 0 {
-			return fmt.Sprintf("value object %s, identity of %s", u.Name, andList(u.Identifies))
+		if len(u.Aggregates) > 0 {
+			return fmt.Sprintf("value object %s, identity of %s", u.Name, andList(u.Aggregates))
 		}
 		return "value object " + u.Name
 	case conformance.UsedDomainEvent:
@@ -940,6 +940,20 @@ func usedLabel(u application.DomainUseRef) string {
 		return "aggregate " + u.Name
 	}
 	return string(u.Role) + " " + u.Name
+}
+
+// The noun for one aggregate and for several, in counts and labels.
+const (
+	aggregateNoun  = "aggregate"
+	aggregatesNoun = "aggregates"
+)
+
+// aggregateWord is the noun for one aggregate name or for several.
+func aggregateWord(names []string) string {
+	if len(names) > 1 {
+		return aggregatesNoun
+	}
+	return aggregateNoun
 }
 
 // andList joins names as prose: A, A and B, A, B and C.
@@ -1072,7 +1086,7 @@ func shownPhrase(d *application.DomainKnowledge) string {
 		shown, total     int
 		singular, plural string
 	}{
-		{s.Aggregates, c.Aggregates, "aggregate", "aggregates"},
+		{s.Aggregates, c.Aggregates, aggregateNoun, aggregatesNoun},
 		{s.Entities, c.Entities, "entity", "entities"},
 		{s.ValueObjects, c.ValueObjects, "value object", "value objects"},
 		{s.Invariants, c.Invariants, "invariant", "invariants"},
