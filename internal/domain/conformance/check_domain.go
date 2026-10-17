@@ -1576,16 +1576,20 @@ func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, c
 // implementationsChecked judges every implementation of a declared
 // service against the guarantee's check in the model: each one's
 // operation reaches it, or the finding anchors at that operation. With
-// no implementation observed the guarantee is undetermined, never
+// no implementation established exactly the guarantee is undetermined, never
 // conforming, unless the tests its verified_by names verify it.
 func implementationsChecked(r rule.Rule, subject rule.Subject, cc contextCode, code domainCode, owner assertionOwner, op locDecl, ops []locDecl, as vocab.Assertion) ([]Violation, []string, error) {
 	reach := cc.reachOf(owner.decl, ops, as.Key)
 	judged, open := code.implementationsOf(owner.decl, op, reach)
-	if len(judged) == 0 {
+	// Only an implementation the language establishes exactly shows the
+	// service is implemented; a match of member names or a registration
+	// cannot, however its operation reads.
+	established := slices.ContainsFunc(judged, func(j judgedImplementation) bool { return j.Evidence == ImplementationExact })
+	if !established {
 		if len(as.VerifiedBy) > 0 {
 			return nil, nil, nil
 		}
-		return nil, append([]string{fmt.Sprintf("declared service %s: no implementation of it is observed, so whether one reaches the check of %s is undetermined", owner.decl.decl.Name, as.Key)}, open...), nil
+		open = append([]string{fmt.Sprintf("declared service %s: no implementation of it is established, so whether one reaches the check of %s is undetermined", owner.decl.decl.Name, as.Key)}, open...)
 	}
 	var vs []Violation
 	for _, j := range judged {

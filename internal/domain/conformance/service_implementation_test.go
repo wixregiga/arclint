@@ -61,9 +61,17 @@ func implementationAdapter(result conformance.Reference, evidence conformance.Im
 	}
 	f := goDecls("adapters", []conformance.Declaration{
 		{Kind: "struct", Name: "Plain", Exported: true, StartLine: 3, Implements: []conformance.Implementation{impl}},
-		{Kind: "method", Name: "Encrypt", Owner: "Plain", Exported: true, StartLine: 5, Type: result},
+		{Kind: "method", Name: "Encrypt", Owner: "Plain", Exported: true, StartLine: 5, EndLine: 7, Type: result},
 	}, calls...)
 	f.ImplementationsAvailable, f.ResolvedCallsAvailable = true, true
+	return f
+}
+
+// withStaticTwin adds to the adapter a static Encrypt, at lines 8 to 10,
+// whose body calls the check: another operation than the instance one.
+func withStaticTwin(f conformance.LanguageFacts, check conformance.Reference) conformance.LanguageFacts {
+	f.Declarations = append(f.Declarations, conformance.Declaration{Kind: "method", Name: "Encrypt", Owner: "Plain", Exported: true, Static: true, StartLine: 8, EndLine: 10, Type: f.Declarations[1].Type})
+	f.Calls = append(f.Calls, conformance.Call{Callee: check.Name, Line: 9, Enclosing: "Encrypt", EnclosingOwner: "Plain", Target: check})
 	return f
 }
 
@@ -136,16 +144,22 @@ func TestEveryImplementationReachesTheCheck(t *testing.T) {
 		{name: "a match of member names alone", outcome: conformance.OutcomeUndetermined, listed: conformance.OutcomeUndetermined,
 			reason: "implements Encrypter only as far as this shows: member names alone",
 			facts:  map[string]conformance.LanguageFacts{implModelFile: implementationModel(text, true), implAdapterFile: implementationAdapter(text, conformance.ImplementationHeuristic, "member names alone")}},
+		{name: "a match of member names alone that calls the function", outcome: conformance.OutcomeUndetermined, listed: conformance.OutcomeConforms,
+			reason: "no implementation of it is established",
+			facts:  map[string]conformance.LanguageFacts{implModelFile: implementationModel(text, true), implAdapterFile: implementationAdapter(text, conformance.ImplementationHeuristic, "member names alone", callTo(check))}},
+		{name: "a static method of the same name calls the function", outcome: conformance.OutcomeViolates, listed: conformance.OutcomeViolates,
+			finding: implAdapterFile + ":5 implementation Plain of declared service Encrypter: Plain.Encrypt does not call AssertNotEmpty",
+			facts:   map[string]conformance.LanguageFacts{implModelFile: implementationModel(text, true), implAdapterFile: withStaticTwin(implementationAdapter(text, exact, ""), check)}},
 		{name: "a registration", outcome: conformance.OutcomeUndetermined, listed: conformance.OutcomeUndetermined,
 			reason: "registered through ABCMeta.register",
 			facts:  map[string]conformance.LanguageFacts{implModelFile: implementationModel(text, true), implAdapterFile: implementationAdapter(text, conformance.ImplementationUndetermined, "registered through ABCMeta.register")}},
 		{name: "no implementation observed", outcome: conformance.OutcomeUndetermined,
-			reason: "declared service Encrypter: no implementation of it is observed, so whether one reaches the check of not-empty is undetermined",
+			reason: "declared service Encrypter: no implementation of it is established, so whether one reaches the check of not-empty is undetermined",
 			facts:  map[string]conformance.LanguageFacts{implModelFile: implementationModel(text, true)}},
 		{name: "no implementation observed, verified by a test", outcome: conformance.OutcomeConforms, verified: []string{"user/password_test.go:TestNotEmpty"},
 			facts: map[string]conformance.LanguageFacts{implModelFile: implementationModel(text, true)}},
 		{name: "only a test double implements it", outcome: conformance.OutcomeUndetermined,
-			reason: "no implementation of it is observed",
+			reason: "no implementation of it is established",
 			facts:  map[string]conformance.LanguageFacts{implModelFile: implementationModel(text, true), "adapters/encrypter_test.go": implementationAdapter(text, exact, "")}},
 		{name: "a file whose implementations are not available", outcome: conformance.OutcomeUndetermined, listed: conformance.OutcomeConforms,
 			reason: "other/other.go: its implementations are not available, so an implementation of Encrypter there is not seen",

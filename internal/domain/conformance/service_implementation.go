@@ -274,7 +274,10 @@ func (r modelReach) reachedBy(f fileFacts, decls []locDecl, op Reference) (bool,
 		return false, fmt.Sprintf("%s: the calls of %s: the language supplied no resolved calls for the file", f.path, qualified(op))
 	}
 	for _, c := range f.calls {
-		if c.Enclosing != op.Name || c.EnclosingOwner != op.Owner {
+		// A call belongs to the operation when it is written in one of
+		// its declarations: a static method of the same name is another
+		// operation.
+		if c.Enclosing != op.Name || c.EnclosingOwner != op.Owner || !withinAny(c.Line, decls) {
 			continue
 		}
 		t := c.Target
@@ -288,8 +291,8 @@ func (r modelReach) reachedBy(f fileFacts, decls []locDecl, op Reference) (bool,
 	return false, open
 }
 
-// operation finds the declarations of the method a reference reaches,
-// overloads included, with the file holding them and the declaration
+// operation finds the declarations of the instance method a reference
+// reaches, overloads included, with the file holding them and the declaration
 // of the type that declares them.
 func (idx contractIndex) operation(ref Reference) (fileFacts, []locDecl, Declaration) {
 	for _, f := range idx.files {
@@ -300,7 +303,7 @@ func (idx contractIndex) operation(ref Reference) (fileFacts, []locDecl, Declara
 		var holder Declaration
 		for _, d := range f.decls {
 			switch {
-			case d.Kind == declKindMethod && d.Owner == ref.Owner && d.Name == ref.Name:
+			case d.Kind == declKindMethod && !d.Static && d.Owner == ref.Owner && d.Name == ref.Name:
 				decls = append(decls, locDecl{file: f, decl: d})
 			case d.Owner == "" && d.Name == ref.Owner && isTypeKind(d.Kind):
 				holder = d
@@ -317,4 +320,14 @@ func qualified(ref Reference) string {
 		return ref.Name
 	}
 	return ref.Owner + "." + ref.Name
+}
+
+// withinAny reports whether a line lies in one of the declarations.
+func withinAny(line int, decls []locDecl) bool {
+	for _, d := range decls {
+		if line >= d.decl.StartLine && line <= max(d.decl.EndLine, d.decl.StartLine) {
+			return true
+		}
+	}
+	return false
 }

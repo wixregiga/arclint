@@ -336,9 +336,11 @@ src/adapters/skipping.go:7: [error] assertion/checked-by-its-operation implement
 ```
 
 A class that only has the service's method names, or one registered
-through `ABCMeta.register`, cannot prove a violation, so it leaves the
-guarantee undetermined with the reason. So does a service with no
-implementation observed, unless `verified_by` names its tests. An
+through `ABCMeta.register`, cannot prove a violation, nor that the
+service is implemented, so it leaves the guarantee undetermined with the
+reason. So does a service with no implementation the language
+establishes exactly, unless `verified_by` names its tests. A static
+method of the same name is never taken for the operation. An
 implementation in a test file is a test double and is not judged.
 `arclint context` on an implementing file names the check its
 operation must reach, and `arclint domain show` gives each
