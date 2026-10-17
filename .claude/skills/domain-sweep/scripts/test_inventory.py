@@ -836,6 +836,19 @@ class InventoryTest(unittest.TestCase):
             "web/x.test.ts:6": "comment", "web/x.test.ts:7": "comment",
         })
 
+    def test_round_seventeen_cases(self):
+        self.repo.write("web/x.test.ts", 'type Box<T> = T;\nconst ratio = 4 as number | Box<number> / 2; test("never overwrite", () => {}); const half = 4 / 2;\n')
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {"web/x.test.ts:2": "test"})
+        root = os.path.join(os.fsencode(self.tmp.name), b"repo\xff")
+        os.mkdir(root)
+        repo = Repo(os.fsdecode(root))
+        repo.write("README.md", "Base.\n")
+        repo.commit("base")
+        repo.write("NEW.md", "A rule.\n")
+        rows = repo.rows("--base", "main", "--scope", "changed")
+        self.assertEqual([row[3] for row in rows], ["NEW.md:1"])
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
