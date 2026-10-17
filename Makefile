@@ -176,15 +176,15 @@ release:
 # Hiding targets from shell auto-completion is done by defining them via variables
 # or prefixing with an underscore.
 
-.PHONY: _quick-verify _verify _examples-go _lint-no-fix _leak _leak-ci _leak-check _noop
+.PHONY: _quick-verify _verify _examples-go _skill-scripts _lint-no-fix _leak _leak-ci _leak-check _noop
 
 # The workflow's finish gate: fast tests and arclint check over the repository.
-_quick-verify: _examples-go
+_quick-verify: _examples-go _skill-scripts
 	$(GO) vet ./...
 	$(GO) test -short ./...
 	$(GO) run -tags "$(GRAMMARS)" ./cmd/arclint check .
 
-_verify: vet test _examples-go
+_verify: vet test _examples-go _skill-scripts
 	$(MAKE) build
 	$(BIN) check .
 	cd docs/examples/go && $(abspath $(BIN)) check .
@@ -195,6 +195,11 @@ _verify: vet test _examples-go
 # check in _verify; the TypeScript one is parsed by arclint, not run.
 _examples-go:
 	cd docs/examples/go && $(GO) vet ./... && $(GO) test ./...
+
+# The domain-sweep skill's script, tested against real git repositories it
+# creates in a temporary directory. -B writes no bytecode into the skill.
+_skill-scripts:
+	python3 -I -B -m unittest discover -s .agents/skills/domain-sweep/scripts -p 'test_*.py'
 
 _noop:
 	@true
