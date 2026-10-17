@@ -92,7 +92,9 @@ Each file is `complete` when it lists every hook, `partial` when it lists some,
 `absent` when it lists none, and `unknown` when it cannot be read. A host runs
 every hook a partial file lists. A file written by an older install, for
 example, lacks `UserPromptSubmit` and still runs its other hooks; status names
-the hooks it lists and the ones it lacks. In `--format json`, `installed`
+the hooks it lists and the ones it lacks. It says a hook still runs only when
+the hook is the one install writes there, because a changed hook may name a
+binary that is gone or a matcher that selects nothing. In `--format json`, `installed`
 carries the state, and `listed` and `missing` name the events.
 
 Until an event arrives, status says why none may have: no file lists the
