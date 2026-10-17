@@ -505,3 +505,22 @@ func TestUndeterminedUseStatesItsReason(t *testing.T) {
 		}
 	}
 }
+
+// An identity also recorded as a value object keeps the aggregate it
+// identifies, as an implied identity does.
+func TestUsesKeepTheAggregateARecordedIdentityIdentifies(t *testing.T) {
+	ctx := orderingContext()
+	ctx.ValueObjects = append(ctx.ValueObjects, valueObject("OrderID"))
+	files := goOrdering()
+	files["ordering/order_id.go"] = resolvedFile(rule.LanguageGo, "ordering", []conformance.Declaration{
+		{Kind: "struct", Name: "OrderID", Exported: true, StartLine: 3},
+	}, nil)
+	files["app/place.go"] = resolvedFile(rule.LanguageGo, "app", []conformance.Declaration{
+		{Kind: "struct", Name: "PlaceOrder", Exported: true, StartLine: 2},
+		{Kind: "field", Name: "id", Owner: "PlaceOrder", StartLine: 3, Holds: []conformance.Reference{declared("ordering/order_id.go", "", "OrderID")}, Type: declared("ordering/order_id.go", "", "OrderID")},
+	}, nil)
+	uses := usesOf(t, []vocab.BoundedContext{ctx}, files, "app")
+	if got := spelled(uses.Uses); len(got) != 1 || got[0] != "OrderID value_object Order field PlaceOrder.id app/place.go:3" {
+		t.Fatalf("uses = %v", got)
+	}
+}
