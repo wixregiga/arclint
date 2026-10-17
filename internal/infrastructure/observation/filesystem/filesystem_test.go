@@ -149,6 +149,11 @@ func TestContentHoldsFilesTheScanLeavesOut(t *testing.T) {
 	if err := os.Symlink(filepath.Join(root, "a", "service.go"), filepath.Join(root, "a", "link.go")); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
+	outside := t.TempDir()
+	write(t, outside, "outside_test.go", "package b")
+	if err := os.Symlink(outside, filepath.Join(root, "linked")); err != nil {
+		t.Fatal(err)
+	}
 	exclude, err := rule.NewGlobs([]string{"**/generated/**"})
 	if err != nil {
 		t.Fatalf("NewGlobs: %v", err)
@@ -169,6 +174,7 @@ func TestContentHoldsFilesTheScanLeavesOut(t *testing.T) {
 		"a/missing_test.go":        false,
 		"a":                        false,
 		"a/link.go":                false,
+		"linked/outside_test.go":   false,
 		"../outside_test.go":       false,
 		"/etc/passwd":              false,
 	} {
@@ -264,6 +270,11 @@ func TestObserveReadsNamedTestsTheScanLeavesOut(t *testing.T) {
 	if err := os.Symlink(filepath.Join(outside, "elsewhere_test.go"), filepath.Join(root, "a", "link_test.go")); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
+	// A linked directory leads outside the root as surely as a linked
+	// file does.
+	if err := os.Symlink(outside, filepath.Join(root, "linked")); err != nil {
+		t.Fatal(err)
+	}
 	exclude, err := rule.NewGlobs([]string{"**/service_test.go", "**/link_test.go"})
 	if err != nil {
 		t.Fatalf("NewGlobs: %v", err)
@@ -275,7 +286,7 @@ func TestObserveReadsNamedTestsTheScanLeavesOut(t *testing.T) {
 		t.Fatalf("NewSource: %v", err)
 	}
 	obs, err := source.Observe([]rule.Language{rule.LanguageGo}, rule.Scan{Exclude: exclude}, []rule.Fact{rule.FactDeclarations, rule.FactCalls}, nil,
-		[]string{"a/service_test.go", "a/kept_test.go", "a/link_test.go", "a/missing_test.go", "../elsewhere_test.go"})
+		[]string{"a/service_test.go", "a/kept_test.go", "a/link_test.go", "a/missing_test.go", "../elsewhere_test.go", "linked/elsewhere_test.go"})
 	if err != nil {
 		t.Fatalf("Observe: %v", err)
 	}
@@ -288,7 +299,7 @@ func TestObserveReadsNamedTestsTheScanLeavesOut(t *testing.T) {
 	if !ok || !named.DeclarationsAvailable || len(named.Declarations) != 1 || named.CallsAvailable || len(named.Calls) != 0 {
 		t.Errorf("the excluded named test file: %+v %v; want its declarations alone", named, ok)
 	}
-	for _, path := range []string{"a/kept_test.go", "a/link_test.go", "a/missing_test.go", "../elsewhere_test.go"} {
+	for _, path := range []string{"a/kept_test.go", "a/link_test.go", "a/missing_test.go", "../elsewhere_test.go", "linked/elsewhere_test.go"} {
 		if _, ok := obs.NamedTest(path); ok {
 			t.Errorf("%s was read as a named test file", path)
 		}
