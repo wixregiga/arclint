@@ -44,7 +44,9 @@ A file that declares itself generated ("Code generated ... DO NOT EDIT" in a
 comment before its content) repeats its generator's text and has no rows;
 --files still lists it, and the summary names it.
 
-Rows are: kind, source, hint, file:line, text.
+Rows are: kind, source, hint, file:line, text. A file name that holds a
+control character or a backslash, or starts with a double quote, is printed
+in double quotes with C escapes, as Git prints it.
   kind    added (the change adds the line), deleted (the change removes it;
           file:line is the line in the merge base) or existing (an unchanged
           line of a file the change touches)
@@ -100,9 +102,13 @@ GENERATED = re.compile(r"Code generated .* DO NOT EDIT")
 # path, a key, a format verb or a struct tag.
 WORDS = re.compile(r"[A-Za-z]{2,}[ \t]+[A-Za-z]{2,}")
 
+# Test declarations, matched against a line's code alone: every literal on
+# the line reads "", so a declaration written inside a fixture string is
+# not one. A TypeScript call whose name is on the next line ends in "(".
 GO_TEST = re.compile(r"^\s*func\s+Test\w*\s*\(")
 PY_TEST = re.compile(r"^\s*(?:async\s+)?def\s+test\w*\s*\(|^\s*class\s+Test\w*\b")
-TS_TEST = re.compile(r"(?:^|[^\w.$])(?:it|test|describe)(?:\.\w+)*\s*\(\s*['\"`]")
+TS_TEST = re.compile(r"(?:^|[^\w.$])(?:it|test|describe)(?:\.\w+)*\s*\(\s*(\"\"|$)")
+LITERAL = '""'
 
 TS_SUFFIXES = (".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs")
 
@@ -110,28 +116,21 @@ KIND_ORDER = {"added": 0, "deleted": 1, "existing": 2}
 
 
 def git(repo, *args):
-    # core.quotePath=false keeps non-ASCII names readable; names Git still
-    # quotes (a quote, a backslash or a control character) are decoded by
-    # git_path.
-    result = subprocess.run(
-        ["git", "-C", repo, "-c", "core.quotePath=false", *args],
-        capture_output=True,
-        text=True,
-        errors="replace",
-    )
+    result = subprocess.run(["git", "-C", repo, *args], capture_output=True)
     if result.returncode != 0:
-        sys.stderr.write(result.stderr)
+        sys.stderr.write(result.stderr.decode("utf-8", "replace"))
         sys.exit(1)
     return result.stdout
 
 
-def git_path(spelled):
-    """Decode a path as Git prints it in a diff header: a name Git quoted,
-    "a/\\303\\251.md", becomes the file's real name."""
-    if len(spelled) >= 2 and spelled.startswith('"') and spelled.endswith('"'):
-        raw = spelled[1:-1].encode("latin-1", "backslashreplace")
-        return raw.decode("unicode_escape").encode("latin-1").decode("utf-8", "replace")
-    return spelled
+def git_text(repo, *args):
+    return git(repo, *args).decode("utf-8", "replace")
+
+
+def git_paths(repo, *args):
+    """The NUL-separated paths a -z command prints, decoded as the file
+    system spells them, so a name that is not UTF-8 still opens."""
+    return [os.fsdecode(name) for name in git(repo, *args).split(b"\0") if name]
 
 
 def matches(path, globs):
@@ -152,56 +151,67 @@ def matches(path, globs):
 TEST_FILE = re.compile(r"(_test\.go|\.(test|spec)\.[cm]?[jt]sx?|_test\.py)$|(^|/)test_[^/]*\.py$")
 
 
-def changed_lines(repo, base, head):
-    """Map each file the change adds lines to, by its path in the head, to
-    those line numbers; and each file it removes lines from, by its path in
-    the merge base, to those."""
+def touched_entries(repo, base, head):
+    """The files the change touches, as (old path, new path): old is None
+    for an added file, new is None for a deleted one, and a rename carries
+    both. Paths come from -z output, never from a diff header."""
     target = [head] if head else []
-    out = git(
-        repo, "diff", "-U0", "--no-color", "--no-ext-diff", "--no-relative",
-        "--src-prefix=a/", "--dst-prefix=b/", "-M", base, *target,
-    )
-    added, removed = {}, {}
-    new_path = old_path = None
-    old_line = new_line = 0
-    # "---" and "+++" name the files only in a file header, before the
-    # first hunk; inside a hunk they are content lines that begin "--" or
-    # "++" with the diff's own sign in front.
-    in_header = False
-    for raw in out.splitlines():
-        if raw.startswith("diff --git"):
-            in_header, new_path, old_path = True, None, None
+    fields = git_paths(repo, "diff", "-z", "--name-status", "--no-relative", "-M", base, *target)
+    entries = []
+    i = 0
+    while i < len(fields):
+        status = fields[i]
+        if status[0] in "RC":
+            entries.append((fields[i + 1] if status[0] == "R" else None, fields[i + 2]))
+            i += 3
             continue
-        if in_header:
-            if raw.startswith("--- "):
-                source = git_path(raw[4:])
-                old_path = None if source == "/dev/null" else source[2:]
-            elif raw.startswith("+++ "):
-                target_path = git_path(raw[4:])
-                new_path = None if target_path == "/dev/null" else target_path[2:]
-            elif raw.startswith("@@"):
-                in_header = False
-            else:
-                continue
-            if in_header:
-                continue
+        path = fields[i + 1]
+        entries.append((path if status[0] != "A" else None, path if status[0] != "D" else None))
+        i += 2
+    if not head:
+        for path in git_paths(repo, "ls-files", "-z", "--others", "--exclude-standard"):
+            entries.append((None, path))
+    return entries
+
+
+def changed_lines(repo, base, head, old, new):
+    """The line numbers the change adds to new, in the head, and removes
+    from old, in the merge base. Settings that would move hunk positions
+    off the files' own lines are turned off: text conversion, external
+    diff, joined hunks. Context lines a configuration still adds advance
+    both sides."""
+    target = [head] if head else []
+    paths = [p for p in (old, new) if p is not None]
+    out = git_text(
+        repo, "--literal-pathspecs", "diff", "-U0", "--inter-hunk-context=0", "--no-color",
+        "--no-ext-diff", "--no-textconv", "--no-relative", "-M", base, *target, "--", *dict.fromkeys(paths),
+    )
+    added, removed = set(), set()
+    old_line = new_line = 0
+    in_hunk = False
+    for raw in out.split("\n"):
+        if raw.startswith("diff --git"):
+            in_hunk = False
+            continue
         hunk = HUNK.match(raw)
         if hunk:
             old_line, new_line = int(hunk.group(1)), int(hunk.group(3))
+            in_hunk = True
             continue
-        if raw.startswith("+") and new_path is not None:
-            added.setdefault(new_path, set()).add(new_line)
+        if not in_hunk:
+            continue
+        if raw.startswith("+"):
+            added.add(new_line)
             new_line += 1
-        elif raw.startswith("-") and old_path is not None:
-            removed.setdefault(old_path, set()).add(old_line)
+        elif raw.startswith("-"):
+            removed.add(old_line)
             old_line += 1
-        # "\ No newline at end of file" advances neither side.
+        elif not raw.startswith("\\"):
+            # A context line; "\\ No newline at end of file" advances
+            # neither side.
+            old_line += 1
+            new_line += 1
     return added, removed
-
-
-def untracked_files(repo):
-    out = git(repo, "ls-files", "-z", "--others", "--exclude-standard")
-    return [name for name in out.split("\0") if name]
 
 
 def read_worktree(repo, path):
@@ -213,10 +223,7 @@ def read_worktree(repo, path):
 
 
 def read_commit(repo, commit, path):
-    result = subprocess.run(
-        ["git", "-C", repo, "cat-file", "blob", f"{commit}:{path}"],
-        capture_output=True,
-    )
+    result = subprocess.run(["git", "-C", repo, "cat-file", "blob", f"{commit}:{path}"], capture_output=True)
     if result.returncode != 0:
         return None
     return result.stdout.decode("utf-8", "replace").splitlines()
@@ -245,19 +252,22 @@ def is_generated(lines):
     return False
 
 
-def skip_quoted(text, i, quote, escapes=True):
-    """Return the index just past the literal that opens at text[i] with
-    quote, and its contents; a literal left open at the end of the line
-    ends there."""
-    j = i + 1
+def scan_quoted(text, j, quote):
+    """Scan a quoted literal's contents from text[j]. Return the index past
+    it, its contents, and how it ends: "closed"; "continued", when the line
+    ends in a backslash inside it and the literal goes on on the next line;
+    or "open", when the line ends without closing it."""
+    start = j
     while j < len(text):
-        if escapes and text[j] == "\\":
+        if text[j] == "\\":
+            if j + 1 == len(text):
+                return len(text), text[start:j], "continued"
             j += 2
             continue
         if text[j] == quote:
-            return j + 1, text[i + 1:j]
+            return j + 1, text[start:j], "closed"
         j += 1
-    return len(text), text[i + 1:]
+    return len(text), text[start:], "open"
 
 
 def go_sources(lines):
@@ -266,52 +276,56 @@ def go_sources(lines):
     state = "code"  # code, raw (inside a raw string) or block (inside /* */)
     for number, text in enumerate(lines, start=1):
         kinds = set()
+        code = []
         if state == "raw":
             kinds.add("text")
         elif state == "block":
             kinds.add("comment")
         i = 0
         while i < len(text):
-            if state == "code":
-                pair = text[i:i + 2]
-                if pair == "//":
-                    kinds.add("comment")
-                    break
-                if pair == "/*":
-                    state = "block"
-                    kinds.add("comment")
-                    i += 2
-                    continue
-                char = text[i]
-                if char == "`":
-                    end = text.find("`", i + 1)
-                    if end < 0:
-                        state = "raw"
-                        kinds.add("text")
-                        break
-                    if WORDS.search(text[i + 1:end]):
-                        kinds.add("text")
-                    i = end + 1
-                    continue
-                if char in "\"'":
-                    i, content = skip_quoted(text, i, char)
-                    if char == '"' and WORDS.search(content):
-                        kinds.add("text")
-                    continue
-                i += 1
-            elif state == "block":
+            if state == "block":
                 end = text.find("*/", i)
                 if end < 0:
                     break
-                state = "code"
-                i = end + 2
-            else:  # raw
+                state, i = "code", end + 2
+                continue
+            if state == "raw":
                 end = text.find("`", i)
                 if end < 0:
                     break
-                state = "code"
+                state, i = "code", end + 1
+                code.append(LITERAL)
+                continue
+            pair = text[i:i + 2]
+            if pair == "//":
+                kinds.add("comment")
+                break
+            if pair == "/*":
+                state = "block"
+                kinds.add("comment")
+                i += 2
+                continue
+            char = text[i]
+            if char == "`":
+                end = text.find("`", i + 1)
+                if end < 0:
+                    state = "raw"
+                    kinds.add("text")
+                    break
+                if WORDS.search(text[i + 1:end]):
+                    kinds.add("text")
+                code.append(LITERAL)
                 i = end + 1
-        if GO_TEST.search(text):
+                continue
+            if char in "\"'":
+                i, content, _ = scan_quoted(text, i + 1, char)
+                if char == '"' and WORDS.search(content):
+                    kinds.add("text")
+                code.append(LITERAL)
+                continue
+            code.append(char)
+            i += 1
+        if GO_TEST.search("".join(code)):
             kinds.add("test")
         if kinds and text.strip():
             found[number] = pick(kinds)
@@ -322,8 +336,9 @@ def go_sources(lines):
 # regular expression literal; after anything else it divides.
 REGEX_BEFORE = set("(,=:[!&|?{};+-*%<>~^")
 REGEX_KEYWORDS = {"return", "typeof", "case", "do", "else", "in", "of", "new", "delete", "void", "throw", "yield", "await"}
-
-
+# A parenthesis these open closes a condition, after which a slash starts a
+# statement: if (x) /re/.test(s).
+CONTROL_KEYWORDS = {"if", "while", "for", "with"}
 def regex_allowed(text, i, last):
     if last is None:
         return True
@@ -360,13 +375,17 @@ def ts_sources(lines):
     Template literals may nest code in ${ }, which may nest literals; a
     stack keeps the brace depth of each open substitution."""
     found = {}
-    state = "code"  # code, block or template
+    state = "code"  # code, block, template, or string (a quoted literal continued past a line)
+    quote = None  # the quote of a continued string
     stack = []  # brace depth in each enclosing ${ } substitution
     depth = 0
+    parens = []  # for each open parenthesis, whether it opened a condition
     last = None  # last significant character of code, for regex detection
+    pending_test = False  # a test call ended its line before its name
     for number, text in enumerate(lines, start=1):
         kinds = set()
-        if state == "template":
+        code = []
+        if state in ("template", "string"):
             kinds.add("text")
         elif state == "block":
             kinds.add("comment")
@@ -384,8 +403,16 @@ def ts_sources(lines):
                 end = text.find("*/", i)
                 if end < 0:
                     break
-                state = "code"
-                i = end + 2
+                state, i = "code", end + 2
+                continue
+            if state == "string":
+                i, _, how = scan_quoted(text, i, quote)
+                if how != "closed":
+                    if how == "open":
+                        state = "code"
+                    break
+                state, last = "code", quote
+                code.append(LITERAL)
                 continue
             if state == "template":
                 if char == "\\":
@@ -417,19 +444,35 @@ def ts_sources(lines):
                 continue
             if char == "`":
                 state = "template"
+                code.append(LITERAL)
                 i += 1
                 continue
             if char in "\"'":
-                i, content = skip_quoted(text, i, char)
+                i, content, how = scan_quoted(text, i + 1, char)
                 if WORDS.search(content):
                     kinds.add("text")
+                code.append(LITERAL)
+                if how == "continued":
+                    state, quote = "string", char
+                    kinds.add("text")
+                    break
                 last = char
                 continue
             if char == "/" and regex_allowed(text, i, last):
                 i = skip_regex(text, i)
+                code.append(LITERAL)
                 last = "/"
                 continue
-            if char == "{":
+            if char == "(":
+                word = re.search(r"([A-Za-z_$][\w$]*)\s*$", text[:i])
+                parens.append(bool(word) and word.group(1) in CONTROL_KEYWORDS)
+            elif char == ")":
+                closes_condition = parens.pop() if parens else False
+                code.append(char)
+                last = "(" if closes_condition else ")"
+                i += 1
+                continue
+            elif char == "{":
                 depth += 1
             elif char == "}":
                 if depth == 0 and stack:
@@ -438,6 +481,7 @@ def ts_sources(lines):
                     i += 1
                     continue
                 depth -= 1
+            code.append(char)
             if not char.isspace():
                 last = char
             i += 1
@@ -445,80 +489,92 @@ def ts_sources(lines):
             # The literal goes on past this line: every line it spans is text.
             kinds.add("text")
         end_segment()
-        if TS_TEST.search(text):
+        line_code = "".join(code)
+        declared = TS_TEST.search(line_code)
+        if declared or (pending_test and line_code.lstrip().startswith(LITERAL)):
             kinds.add("test")
+        pending_test = bool(declared) and declared.group(1) == ""
         if kinds and text.strip():
             found[number] = pick(kinds)
     return found
 
 
-PY_STRING = re.compile(r"(?i)(?<![\w])([rbuf]{0,2})('''|\"\"\"|'|\")")
+PY_STRING = re.compile(r"([rRbBuUfF]{0,2})('\'\'|\"\"\"|'|\")")
 
 
 def python_sources(lines):
     """Map line number to source for a Python file."""
     found = {}
-    open_quote = None  # the triple quote of a string that spans lines
-    raw = False
+    open_quote = None  # the quote of a string that goes on past a line
     for number, text in enumerate(lines, start=1):
         kinds = set()
+        code = []
         i = 0
         if open_quote:
             kinds.add("text")
-            end = find_close(text, 0, open_quote, raw)
+            end, how = find_close(text, 0, open_quote)
             if end < 0:
+                if len(open_quote) == 1 and how != "continued":
+                    open_quote = None
                 if text.strip():
                     found[number] = "text"
                 continue
             open_quote = None
+            code.append(LITERAL)
             i = end
         while i < len(text):
             char = text[i]
             if char == "#":
                 kinds.add("comment")
                 break
-            match = PY_STRING.match(text, i) if char.isalpha() or char in "'\"" else None
-            if match and (char in "'\"" or match.group(1)):
-                prefix, quote = match.group(1), match.group(2)
-                is_raw = "r" in prefix.lower()
+            match = PY_STRING.match(text, i) if char in "'\"rRbBuUfF" else None
+            if match:
+                quote = match.group(2)
                 body = match.end()
-                end = find_close(text, body, quote, is_raw)
+                end, how = find_close(text, body, quote)
+                code.append(LITERAL)
                 if end < 0:
-                    if len(quote) == 3:
-                        open_quote, raw = quote, is_raw
+                    if len(quote) == 3 or how == "continued":
+                        open_quote = quote
                         kinds.add("text")
                     elif WORDS.search(text[body:]):
                         kinds.add("text")
                     break
-                content = text[body:end - len(quote)]
-                if WORDS.search(content):
+                if WORDS.search(text[body:end - len(quote)]):
                     kinds.add("text")
                 i = end
                 continue
             if char.isalnum() or char == "_":
-                while i < len(text) and (text[i].isalnum() or text[i] == "_"):
-                    i += 1
+                j = i
+                while j < len(text) and (text[j].isalnum() or text[j] == "_"):
+                    j += 1
+                code.append(text[i:j])
+                i = j
                 continue
+            code.append(char)
             i += 1
-        if PY_TEST.search(text):
+        if PY_TEST.search("".join(code)):
             kinds.add("test")
         if kinds and text.strip():
             found[number] = pick(kinds)
     return found
 
 
-def find_close(text, i, quote, raw):
+def find_close(text, i, quote):
     """Return the index past the closing quote, or -1 when the line does
-    not close the string. A backslash escapes the next character, in raw
+    not close the string, and "continued" when the line ends in a
+    backslash inside it. A backslash escapes the next character, in raw
     strings too, where it stays in the value."""
     while i < len(text):
         if text[i] == "\\":
+            if i + 1 == len(text):
+                return -1, "continued"
             i += 2
             continue
         if text.startswith(quote, i):
-            return i + len(quote)
+            return i + len(quote), "closed"
         i += 1
-    return -1
+    return -1, "open"
 
 
 def pick(kinds):
@@ -554,9 +610,7 @@ def line_sources(path, lines, recordings):
 
 
 def find_merge_base(repo, base, head):
-    result = subprocess.run(
-        ["git", "-C", repo, "merge-base", base, head], capture_output=True, text=True, errors="replace",
-    )
+    result = subprocess.run(["git", "-C", repo, "merge-base", base, head], capture_output=True, text=True, errors="replace")
     if result.returncode != 0:
         sys.stderr.write(f"inventory: {base} and {head} have no merge base\n{result.stderr}")
         sys.exit(1)
@@ -566,17 +620,15 @@ def find_merge_base(repo, base, head):
 def collect(repo, base, head, scope, globs, exclude, recordings, hint):
     hint_word = re.compile(hint, re.IGNORECASE)
     merge_base = find_merge_base(repo, base, head or "HEAD")
-    added, removed = changed_lines(repo, merge_base, head)
-    if not head:
-        for path in untracked_files(repo):
-            lines = read_worktree(repo, path)
-            if lines is not None:
-                added[path] = set(range(1, len(lines) + 1))
+    untracked = set() if head else set(git_paths(repo, "ls-files", "-z", "--others", "--exclude-standard"))
 
     def wanted(path):
-        return (matches(path, globs) or is_recording(path, recordings)) and not matches(path, exclude)
+        return path is not None and (matches(path, globs) or is_recording(path, recordings)) and not matches(path, exclude)
 
-    files = sorted({p for p in added if wanted(p)} | {p for p in removed if wanted(p)})
+    def read_head(path):
+        return read_commit(repo, head, path) if head else read_worktree(repo, path)
+
+    files = set()
     generated = []
     rows = []
 
@@ -587,32 +639,53 @@ def collect(repo, base, head, scope, globs, exclude, recordings, hint):
             return
         sources = line_sources(path, lines, recordings)
         for number in sorted(sources):
-            if chosen is not None and number not in chosen:
+            if number not in chosen:
                 continue
             text = lines[number - 1].strip()
             found = hint_word.search(text)
             hint_text = found.group(0).lower() if found else "-"
             rows.append((kind, sources[number], hint_text, path, number, text.replace("\t", " ")))
 
-    for path in sorted(p for p in added if wanted(p)):
-        lines = read_commit(repo, head, path) if head else read_worktree(repo, path)
-        if lines is None:
+    for old, new in touched_entries(repo, merge_base, head):
+        old_wanted, new_wanted = wanted(old), wanted(new)
+        if not (old_wanted or new_wanted):
             continue
-        emit("added", path, lines, added[path])
-        if scope == "touched":
-            unchanged = set(range(1, len(lines) + 1)) - added[path]
-            emit("existing", path, lines, unchanged)
-    for path in sorted(p for p in removed if wanted(p)):
-        lines = read_commit(repo, merge_base, path)
-        if lines is not None:
-            emit("deleted", path, lines, removed[path])
+        files.update(p for p, w in ((old, old_wanted), (new, new_wanted)) if w)
+        if new in untracked:
+            lines = read_worktree(repo, new)
+            if lines is not None and new_wanted:
+                emit("added", new, lines, set(range(1, len(lines) + 1)))
+            continue
+        added, removed = changed_lines(repo, merge_base, head, old, new)
+        if new_wanted:
+            lines = read_head(new)
+            if lines is not None:
+                every = set(range(1, len(lines) + 1))
+                emit("added", new, lines, added)
+                if scope == "touched":
+                    emit("existing", new, lines, every - added)
+        if old_wanted and removed:
+            lines = read_commit(repo, merge_base, old)
+            if lines is not None:
+                emit("deleted", old, lines, removed)
 
     hinted = {}
     for kind, _, hint_text, path, _, _ in rows:
         if hint_text != "-":
             hinted[(kind, path)] = hinted.get((kind, path), 0) + 1
     rows.sort(key=lambda r: (KIND_ORDER[r[0]], -hinted.get((r[0], r[3]), 0), r[3], r[4]))
-    return merge_base, files, generated, rows
+    return merge_base, sorted(files), sorted(generated), rows
+
+
+def spell(path):
+    """A path as the output prints it: as is, or, when it holds a control
+    character, a backslash or starts with a quote, in double quotes with C
+    escapes, the way Git quotes a name."""
+    if not any(ord(c) < 0x20 or c in '\\\x7f' for c in path) and not path.startswith('"'):
+        return path
+    escapes = {"\t": "\\t", "\n": "\\n", "\r": "\\r", "\\": "\\\\", '"': '\\"'}
+    body = "".join(escapes.get(c, f"\\{ord(c):03o}" if ord(c) < 0x20 or c == "\x7f" else c) for c in path)
+    return f'"{body}"'
 
 
 def render(rows, fmt):
@@ -620,10 +693,10 @@ def render(rows, fmt):
         out = ["| kind | source | hint | location | text |", "|---|---|---|---|---|"]
         for kind, source, hint_text, path, number, text in rows:
             cell = text.replace("|", "\\|")
-            out.append(f"| {kind} | {source} | {hint_text} | {path}:{number} | {cell} |")
+            out.append(f"| {kind} | {source} | {hint_text} | {spell(path)}:{number} | {cell} |")
         return "\n".join(out) + "\n"
     return "".join(
-        f"{kind}\t{source}\t{hint_text}\t{path}:{number}\t{text}\n"
+        f"{kind}\t{source}\t{hint_text}\t{spell(path)}:{number}\t{text}\n"
         for kind, source, hint_text, path, number, text in rows
     )
 
@@ -652,13 +725,16 @@ def main():
         set(args.recording), args.hint,
     )
 
+    # A path that is not UTF-8 is written back as the bytes it was read as.
+    sys.stdout.reconfigure(errors="surrogateescape")
+    sys.stderr.reconfigure(errors="backslashreplace")
     if args.files:
-        sys.stdout.write("".join(f"{path}\n" for path in files))
+        sys.stdout.write("".join(f"{spell(path)}\n" for path in files))
         return
 
     text = render(rows, args.format)
     if args.out:
-        with open(args.out, "w", encoding="utf-8") as handle:
+        with open(args.out, "w", encoding="utf-8", errors="surrogateescape") as handle:
             handle.write(text)
     else:
         sys.stdout.write(text)

@@ -332,6 +332,111 @@ class InventoryTest(unittest.TestCase):
         self.assertEqual(sources.get("web/a.test.ts:1"), "test")
         self.assertEqual(sources.get("tools/test_a.py:1"), "comment")
 
+    def test_a_name_with_a_space_is_read(self):
+        # Git ends a ---/+++ header path holding a space with a tab.
+        self.repo.write("docs/with space.md", "A rule.\n")
+        self.repo.commit("space")
+        rows = self.located(self.repo.rows("--base", "main", "--head", "HEAD"))
+        self.assertIn("docs/with space.md:1", rows)
+        files = self.repo.run("--base", "main", "--head", "HEAD", "--files").stdout.split("\n")
+        self.assertIn("docs/with space.md", files)
+
+    def test_quoted_names_keep_their_characters(self):
+        for name in ('docs/\u6587".md', 'docs/r\u00e9sum\u00e9".md', "docs/tab\there.md"):
+            self.repo.write(name, "A rule.\n")
+        self.repo.commit("names")
+        rows = self.located(self.repo.rows("--base", "main", "--head", "HEAD"))
+        self.assertIn('docs/\u6587".md:1', rows)
+        self.assertIn('docs/r\u00e9sum\u00e9".md:1', rows)
+        self.assertIn('"docs/tab\\there.md":1', rows, "a control character is escaped, not a column break")
+
+    def test_joined_hunks_keep_their_line_numbers(self):
+        self.repo.git("checkout", "-q", "main")
+        self.repo.write("notes.md", "one\nkeep a\nkeep b\nkeep c\nfive\n")
+        self.repo.commit("notes")
+        self.repo.git("checkout", "-q", "change")
+        self.repo.git("reset", "-q", "--hard", "main")
+        self.repo.git("config", "diff.interHunkContext", "3")
+        self.repo.write("notes.md", "ONE\nkeep a\nkeep b\nkeep c\nFIVE\n")
+        rows = self.repo.rows("--base", "main", "--scope", "changed")
+        self.assertEqual(
+            sorted((row[0], row[3], row[4]) for row in rows),
+            [("added", "notes.md:1", "ONE"), ("added", "notes.md:5", "FIVE"),
+             ("deleted", "notes.md:1", "one"), ("deleted", "notes.md:5", "five")],
+        )
+
+    def test_text_conversion_does_not_move_lines(self):
+        self.repo.git("checkout", "-q", "main")
+        self.repo.write(".gitattributes", "*.md diff=words\n")
+        self.repo.write("rules.md", "Header\nFirst rule.\nSecond rule.\n")
+        self.repo.commit("rules")
+        self.repo.git("checkout", "-q", "change")
+        self.repo.git("reset", "-q", "--hard", "main")
+        self.repo.git("config", "diff.words.textconv", "sed 1d")
+        self.repo.write("rules.md", "Header\nFirst rule.\nSecond rule, changed.\n")
+        rows = self.repo.rows("--base", "main", "--scope", "changed")
+        self.assertEqual(
+            sorted((row[0], row[3]) for row in rows),
+            [("added", "rules.md:3"), ("deleted", "rules.md:3")],
+        )
+
+    def test_a_removal_alone_still_lists_the_file_s_other_lines(self):
+        self.repo.git("checkout", "-q", "main")
+        self.repo.write("rules.md", "Kept statement.\nRemoved statement.\n")
+        self.repo.commit("rules")
+        self.repo.git("checkout", "-q", "change")
+        self.repo.git("reset", "-q", "--hard", "main")
+        self.repo.write("rules.md", "Kept statement.\n")
+        rows = self.repo.rows("--base", "main")
+        self.assertEqual(
+            sorted((row[0], row[3]) for row in rows),
+            [("deleted", "rules.md:2"), ("existing", "rules.md:1")],
+        )
+
+    def test_a_pure_rename_is_touched(self):
+        self.repo.git("checkout", "-q", "main")
+        self.repo.write("old.go", "package p\n\n// A rule the file states.\n")
+        self.repo.commit("old")
+        self.repo.git("checkout", "-q", "change")
+        self.repo.git("reset", "-q", "--hard", "main")
+        self.repo.git("mv", "old.go", "new.go")
+        files = self.repo.run("--base", "main", "--files").stdout.split()
+        self.assertEqual(files, ["new.go", "old.go"])
+        rows = self.repo.rows("--base", "main")
+        self.assertEqual([(row[0], row[3]) for row in rows], [("existing", "new.go:3")])
+
+    def test_a_regex_after_a_condition_is_not_a_comment(self):
+        self.repo.write("web/a.ts", 'if (true) /[/*]/.test("/");\nconst n = 1;\nconst m = (a) / 2; // half\n')
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertNotIn("web/a.ts:1", rows)
+        self.assertNotIn("web/a.ts:2", rows)
+        self.assertEqual(rows["web/a.ts:3"][1], "comment")
+
+    def test_a_typescript_test_name_on_the_next_line(self):
+        self.repo.write("web/x.test.ts", 'test(\n  "refuses an outside path",\n  () => {});\n')
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual(rows["web/x.test.ts:1"][1], "test")
+        self.assertEqual(rows["web/x.test.ts:2"][1], "test")
+        self.assertNotIn("web/x.test.ts:3", rows)
+
+    def test_declarations_inside_fixtures_are_not_tests(self):
+        self.repo.write("pkg/x_test.go", "package pkg\n\nvar fixture = `\nfunc TestNotReal(t *testing.T) {}\n`\n")
+        self.repo.write("web/x.test.ts", 'const f = `\ntest("not a real test", () => {});\n`;\n')
+        self.repo.write("tools/test_x.py", 'F = """\ndef test_not_real():\n"""\n')
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertNotIn("pkg/x_test.go:4", rows)
+        self.assertNotIn("web/x.test.ts:2", rows)
+        self.assertNotIn("tools/test_x.py:2", rows)
+
+    def test_a_string_continued_past_a_line_is_text(self):
+        self.repo.write("tools/a.py", 'message = "first part \\\nnever overwrite"\nvalue = 1\n')
+        self.repo.write("web/a.ts", 'const message = "first part \\\nnever overwrite";\nconst value = 1;\n')
+        rows = self.located(self.repo.rows("--base", "main"))
+        for path in ("tools/a.py", "web/a.ts"):
+            self.assertEqual(rows[f"{path}:1"][1], "text")
+            self.assertEqual(rows[f"{path}:2"][1], "text")
+            self.assertNotIn(f"{path}:3", rows)
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
