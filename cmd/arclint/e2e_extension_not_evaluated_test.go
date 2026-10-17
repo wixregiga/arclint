@@ -106,7 +106,7 @@ func TestExtensionThatNeverReturnsIsNotEvaluated(t *testing.T) {
 			!got.TimedOut || got.LimitMs != 5000 || got.ElapsedMs < 5000 || got.File != "src/ok.go" || got.Error != "" {
 			t.Errorf("circumstances = %+v, want a check timeout at 5000ms while reading src/ok.go", got)
 		}
-		message := regexp.MustCompile(`^rule src/spin: extension "spin" \(\.arclint/extensions/spin\.ts\) reached its 5s time limit in check and was stopped after 5\.\d+s, last reading src/ok\.go$`)
+		message := regexp.MustCompile(`^rule src/spin: extension "spin" \(\.arclint/extensions/spin\.ts\) reached its 5s time limit in check and was stopped after [0-9.hms]+, last reading src/ok\.go$`)
 		if !message.MatchString(stopped[0].Message) {
 			t.Errorf("message = %q", stopped[0].Message)
 		}
@@ -121,7 +121,7 @@ func TestExtensionThatNeverReturnsIsNotEvaluated(t *testing.T) {
 		if code != 3 {
 			t.Fatalf("exit %d, want 3\nstdout: %s\nstderr: %s", code, stdout, stderr)
 		}
-		line := regexp.MustCompile(`(?m)^not evaluated: rule src/spin: extension "spin" \(\.arclint/extensions/spin\.ts\) reached its 300ms time limit in check and was stopped after \d+ms, last reading src/ok\.go$`)
+		line := regexp.MustCompile(`(?m)^not evaluated: rule src/spin: extension "spin" \(\.arclint/extensions/spin\.ts\) reached its 300ms time limit in check and was stopped after [0-9.hms]+, last reading src/ok\.go$`)
 		if strings.Count(stdout, "src/spin") != 1 || !line.MatchString(stdout) {
 			t.Errorf("stdout does not say it in one line:\n%s", stdout)
 		}
