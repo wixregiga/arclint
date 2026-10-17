@@ -45,8 +45,8 @@ lint:
 #   cml        arclint domain export: the root's domain.arclint.cml, the
 #              Context Mapper copy of domain.arclint.yaml
 #   sdk        arclint sdk init: .arclint/extensions/arclint.d.ts and tsconfig.json
-#   skill      arclint agents skill: the domain-librarian skill, and its
-#              Claude install where a project keeps a copy, not a link
+#   skill      arclint agents skill: the domain-librarian skill, one copy
+#              for Codex and one for Claude Code
 #   agents-md  arclint agents md --write: the AGENTS.md architecture block
 # The arclint generators run in each project, the root and the
 # testing/boxoffice test bed, except cml: boxoffice records its domain in
@@ -94,9 +94,6 @@ _generate-sdk:
 _generate-skill:
 	for project in $(GENERATE_PROJECTS); do \
 		(cd $$project && $(ARCLINT) agents skill) || exit 1; \
-		if [ -d $$project/.claude/skills/domain-librarian ] && [ ! -L $$project/.claude/skills/domain-librarian ]; then \
-			(cd $$project && $(ARCLINT) agents skill --dir .claude/skills/domain-librarian) || exit 1; \
-		fi; \
 	done
 
 _generate-agents-md:

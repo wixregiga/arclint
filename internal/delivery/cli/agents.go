@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/wixregiga/arclint/internal/application"
 )
@@ -63,9 +64,10 @@ func newAgentsMDCommand(publish application.PublishAgentsContext, render Rendere
 	}
 }
 
-// newAgentsSkillCommand writes SKILL.md and VOCAB.yaml into --dir
-// (default DomainLibrarianSkillDir) and the Ubiquitous Language schema
-// for human YAML editors into the project's schema directory.
+// newAgentsSkillCommand writes SKILL.md and VOCAB.yaml into every
+// --dir (default: every directory an agent harness loads the skill
+// from) and the Ubiquitous Language schema for human YAML editors into
+// the project's schema directory.
 func newAgentsSkillCommand(
 	protocol application.PublishSkillProtocol,
 	vocabulary application.PublishSkillVocabulary,
@@ -77,28 +79,30 @@ func newAgentsSkillCommand(
 		Short: "write domain-librarian skill artifacts (SKILL.md, VOCAB.yaml) and the domain schema for human YAML editors",
 		Flags: []Flag{
 			{
-				Name:    "dir",
-				Default: application.DomainLibrarianSkillDir,
-				Doc:     "directory to write skill artifacts into; the schema always lands under " + application.SchemaDirectory,
+				Name:   "dir",
+				Repeat: true,
+				Doc:    "directory to write skill artifacts into; repeatable; default " + strings.Join(application.SkillDirectories(nil), " and ") + "; the schema always lands under " + application.SchemaDirectory,
 			},
 		},
 		Run: func(ctx Context) error {
-			dir := ctx.String("dir")
-			writes := make([]ArtifactWrite, 0, 3)
+			dirs := application.SkillDirectories(ctx.Strings("dir"))
+			writes := make([]ArtifactWrite, 0, 2*len(dirs)+1)
 
-			changed, path, err := protocol.Execute(dir)
-			if err != nil {
-				return ConfigError(err)
+			for _, dir := range dirs {
+				changed, path, err := protocol.Execute(dir)
+				if err != nil {
+					return ConfigError(err)
+				}
+				writes = append(writes, ArtifactWrite{Changed: changed, Path: path})
+
+				changed, path, err = vocabulary.Execute(dir)
+				if err != nil {
+					return ConfigError(err)
+				}
+				writes = append(writes, ArtifactWrite{Changed: changed, Path: path})
 			}
-			writes = append(writes, ArtifactWrite{Changed: changed, Path: path})
 
-			changed, path, err = vocabulary.Execute(dir)
-			if err != nil {
-				return ConfigError(err)
-			}
-			writes = append(writes, ArtifactWrite{Changed: changed, Path: path})
-
-			changed, path, err = schema.Execute(application.SchemaDirectory)
+			changed, path, err := schema.Execute(application.SchemaDirectory)
 			if err != nil {
 				return ConfigError(err)
 			}

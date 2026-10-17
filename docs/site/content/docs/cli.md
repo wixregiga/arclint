@@ -28,7 +28,7 @@ weight = 6
 | `arclint domain convert <file>` | translate and prove the same way, then settle `domain.file` in `rules.arclint.yaml` (removing the setting when the project finds the new file by its name, naming it otherwise) and remove the previous file, so the project records its domain in one file |
 | `arclint agents` | command group for agent-facing artifacts |
 | `arclint agents md` | print the generated `AGENTS.md` architecture block (`markdown`, `agentsmd` aliases); `--write` installs or refreshes it between markers without changing surrounding text |
-| `arclint agents skill` | write generated `SKILL.md` and `VOCAB.yaml` to `--dir` (default `.agents/skills/domain-librarian/`), and the domain schema for human YAML editors to `.arclint/schemas/domain.arclint.schema.json`; the skill describes the model independently of the recording's format |
+| `arclint agents skill` | write generated `SKILL.md` and `VOCAB.yaml` to every `--dir` (repeatable; default `.agents/skills/domain-librarian/` for Codex and `.claude/skills/domain-librarian/` for Claude Code), and the domain schema for human YAML editors to `.arclint/schemas/domain.arclint.schema.json`; the skill describes the model independently of the recording's format |
 | `arclint agents hooks install` | write the workflow hooks into the Claude Code and Codex user configuration, for every project (`--project` for this project's personal files only, `--host claude\|codex` for one host); keeps every other setting and hook |
 | `arclint agents hooks status` | report every configuration file that can list the workflow hooks, what is wrong in each, and when a hook event last reached the project |
 | `arclint agents hooks event` | answer one Claude Code or Codex hook event read from stdin with the host's native JSON; the installed hooks run it |
@@ -517,9 +517,16 @@ declaration, `missing`, or `unanchorable` with the reason.
 ## Agent skill artifacts
 
 `arclint agents skill` materializes the domain-librarian skill bundle the
-binary owns: `SKILL.md` and `VOCAB.yaml` under `--dir` (default
-`.agents/skills/domain-librarian/`), plus the domain schema for human YAML editors, which always lands at
+binary owns: `SKILL.md` and `VOCAB.yaml`, plus the domain schema for human YAML editors, which always lands at
 `.arclint/schemas/domain.arclint.schema.json` under the project root.
+By default it writes one identical copy of the skill where each
+supported agent harness loads project skills:
+`.agents/skills/domain-librarian/`, which Codex scans, and
+`.claude/skills/domain-librarian/`, which Claude Code scans. `--dir`
+replaces both with the directories you name; repeat it to write
+several. Running the command again leaves current files untouched. A
+`.claude/skills/domain-librarian` link to the `.agents` copy keeps
+working: both names reach the same current files.
 The skill describes the recorded model fields, independent of the recording's
 format. The librarian records through `arclint domain define` and
 `arclint domain remove`; ArcLint validates every write and writes the format.
