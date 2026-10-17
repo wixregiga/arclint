@@ -705,7 +705,10 @@ class TypeScriptLexer:
         self.case_label = False  # a case or default waits for its colon
         self.after_case_colon = False  # the last token is the colon of a case or statement label
         self.jump_line = 0  # the line a break or continue was read on
-        self.prev_line = 0  # the line the previous token was read on
+        self.prev_line = 0  # the logical line the previous token was read on
+        # Logical lines: Git's lines, each split again at a carriage return,
+        # U+2028 or U+2029, which end a TypeScript line too.
+        self.logical = 0
         self.prev_sure = True  # a slash after the previous token is surely read right (see token)
         self.bound = set()  # keyword spellings bound as names outside every brace: const await
         self.parameter_names = set()  # names a function's parameters bind, for its body
@@ -743,6 +746,7 @@ class TypeScriptLexer:
         with the same signature read them alike."""
         return repr((
             self.state, self.quote, self.stack, self.depth, self.parens, self.braces, self.prev,
+            self.prev_line == self.logical,
             self.prev_sure, self.test_call, self.test_outer, self.type_alias, self.type_arguments,
             self.type_context, self.expression_body, self.case_label, self.bound,
         ))
@@ -833,6 +837,7 @@ class TypeScriptLexer:
         division would have been a regular expression running past it.
         Every /* and // holds a slash that ends a regular expression, so
         only a misread one, [/*], can hold a comment opener."""
+        self.logical += 1
         kinds = set()
         marks = []
         slashes = []
@@ -865,7 +870,7 @@ class TypeScriptLexer:
                     sure = kind[0] == "word" and kind[1] not in ("await", "yield", "of")
                 else:
                     sure = False
-            self.before, self.prev, self.after_dot, self.prev_line = self.prev, kind, False, number
+            self.before, self.prev, self.after_dot, self.prev_line = self.prev, kind, False, self.logical
             self.prev_sure = sure
             self.last_op_before, self.last_op = self.last_op, (op if kind == "operator" else None)
             self.after_case_colon = False
@@ -957,6 +962,7 @@ class TypeScriptLexer:
                 ends = [k for k in (text.find(c, i + 2) for c in "\r\u2028\u2029") if k >= 0]
                 if not ends:
                     break
+                self.logical += 1
                 i = min(ends) + 1
                 continue
             if pair == "/*":
@@ -965,6 +971,8 @@ class TypeScriptLexer:
                 i += 2
                 continue
             if char.isspace():
+                if char in "\r\u2028\u2029":
+                    self.logical += 1
                 i += 1
                 continue
             if number == 1 and i == 0 and pair == "#!":
@@ -1013,7 +1021,7 @@ class TypeScriptLexer:
                 wanted = not ends_operand(self.prev)
                 plausible = closes and not suspicious
                 regex = wanted and plausible
-                if closes and ((wanted and suspicious) or not (self.prev_sure and self.prev_line == number)):
+                if closes and ((wanted and suspicious) or not (self.prev_sure and self.prev_line == self.logical)):
                     # Either reading could be meant, and neither the token
                     # before nor the literal's end settles it: note the
                     # decision. A regular expression that a comment opener
@@ -1059,10 +1067,10 @@ class TypeScriptLexer:
                 # After an operand on the same line, ++ and -- are postfix
                 # and end it; before one, or after a line break, prefix.
                 other_token()
-                token("operand" if ends_operand(self.prev) and self.prev_line == number else "operator")
+                token("operand" if ends_operand(self.prev) and self.prev_line == self.logical else "operator")
                 i += 2
                 continue
-            if char == "!" and ends_operand(self.prev) and self.prev_line == number and text[i + 1:i + 2] != "=":
+            if char == "!" and ends_operand(self.prev) and self.prev_line == self.logical and text[i + 1:i + 2] != "=":
                 # A non-null assertion, count!, ends an operand; it takes no
                 # line break before it.
                 other_token()
@@ -1105,7 +1113,7 @@ class TypeScriptLexer:
             self.test_call, self.callee_line = "callee", number
         else:
             other_token()
-        if prev in (("word", "break"), ("word", "continue")) and self.jump_line == number:
+        if prev in (("word", "break"), ("word", "continue")) and self.jump_line == self.logical:
             # A label: the statement ends after it, as after the break or
             # continue itself.
             token(("keyword", prev[1]))
@@ -1130,7 +1138,7 @@ class TypeScriptLexer:
             token(("keyword" if header and binding else "word", word))
         else:
             if word in ("break", "continue"):
-                self.jump_line = number
+                self.jump_line = self.logical
             elif word in ("case", "default"):
                 self.case_label = True
             elif word in ("function", "class") and (
