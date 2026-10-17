@@ -544,7 +544,7 @@ type libraryOnly struct{}
 
 func (libraryOnly) repository(string, string) bool { return false }
 
-func (libraryOnly) follow(string, string, string) (string, string) { return "", "" }
+func (libraryOnly) follow(string, string, string) (string, string, bool) { return "", "", false }
 
 // TestAbstractMarkSkipsFactsThatDidNotParse leaves facts without a parse,
 // such as those of a build without the Python grammar, unmarked.

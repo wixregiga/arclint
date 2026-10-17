@@ -891,6 +891,23 @@ func (idx contractIndex) methodNamed(owner, key string) (locDecl, bool, error) {
 	return locDecl{}, false, nil
 }
 
+// methodsNamed lists every method a key names on a type, overloads
+// included, spelled in the method case of the file's language.
+func (idx contractIndex) methodsNamed(owner, key string) ([]locDecl, error) {
+	if _, err := rule.CaseTerm(key, "flatcase"); err != nil {
+		return nil, fmt.Errorf("method name for %q: %w", key, err)
+	}
+	var out []locDecl
+	for _, f := range idx.files {
+		for _, d := range f.decls {
+			if d.Kind == declKindMethod && d.Owner == owner && methodSpelled(d.Name, key, f.lang) {
+				out = append(out, locDecl{file: f, decl: d})
+			}
+		}
+	}
+	return out, nil
+}
+
 // constructors lists the doors a type is built through: a constructor
 // or __init__ on it, a factory method on it named create, from, of,
 // parse, new, or build that returns it, and every function of the unit
@@ -1486,11 +1503,11 @@ func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, o
 			}
 			vs = append(vs, v)
 		}
-		var operation *locDecl
-		if hasOp {
-			operation = &op
+		ops, err := owner.idx.methodsNamed(service.decl.Name, as.On)
+		if err != nil {
+			return nil, nil, err
 		}
-		check, err := cc.modelCheck(service, operation, as.Key)
+		check, err := cc.modelCheck(service, ops, as.Key)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1548,16 +1565,19 @@ type modelCheckAt struct {
 // the model: a function of the context spelled assert followed by the
 // key, or else the operation's result, as the language's resolution
 // names it, being a recorded value object of the context that records
-// an invariant of the same key. op is nil when the service does not
-// declare the operation, so only a function can check the guarantee.
-func (cc contextCode) modelCheck(service locDecl, op *locDecl, key string) (modelCheckAt, error) {
+// an invariant of the same key. ops are every declaration of the
+// operation, its overloads included, and each must return that value;
+// one whose result resolution cannot follow leaves the guarantee
+// undetermined. ops is empty when the service does not declare the
+// operation, so only a function can check the guarantee.
+func (cc contextCode) modelCheck(service locDecl, ops []locDecl, key string) (modelCheckAt, error) {
 	if _, err := rule.CaseTerm(key, "flatcase"); err != nil {
 		return modelCheckAt{}, fmt.Errorf("method name for %q: %w", key, err)
 	}
 	if fn, ok := cc.contextFunction(service, assertKey(key)); ok {
 		return modelCheckAt{found: true, shape: checkedByFunction, at: fn}, nil
 	}
-	if op == nil {
+	if len(ops) == 0 {
 		return modelCheckAt{}, nil
 	}
 	var values []locDecl
@@ -1569,21 +1589,44 @@ func (cc contextCode) modelCheck(service locDecl, op *locDecl, key string) (mode
 	if len(values) == 0 {
 		return modelCheckAt{}, nil
 	}
+	var returned *locDecl
+	for _, op := range ops {
+		value, unresolved, found := returnedValue(op, values)
+		if unresolved != "" {
+			return modelCheckAt{unresolved: unresolved}, nil
+		}
+		if !found || returned != nil && !sameDecl(*returned, value) {
+			return modelCheckAt{}, nil
+		}
+		returned = &value
+	}
+	return modelCheckAt{found: true, shape: checkedByValue, at: *returned}, nil
+}
+
+// returnedValue names the recorded value one declaration of an
+// operation returns, as the language's resolution names its result, or
+// why that result cannot be followed.
+func returnedValue(op locDecl, values []locDecl) (locDecl, string, bool) {
 	result := op.decl.Type
 	switch {
 	case !op.file.fieldTypes:
-		return modelCheckAt{unresolved: fmt.Sprintf("%s:%d: the result of %s: the language supplied no resolved types for the file", op.file.path, op.decl.StartLine, op.decl.Name)}, nil
+		return locDecl{}, fmt.Sprintf("%s:%d: the result of %s: the language supplied no resolved types for the file", op.file.path, op.decl.StartLine, op.decl.Name), false
 	case result.IsZero():
-		return modelCheckAt{unresolved: fmt.Sprintf("%s:%d: the result of %s: no resolution reached it", op.file.path, op.decl.StartLine, op.decl.Name)}, nil
+		return locDecl{}, fmt.Sprintf("%s:%d: the result of %s: no resolution reached it", op.file.path, op.decl.StartLine, op.decl.Name), false
 	case result.Resolution == ResolutionUndetermined:
-		return modelCheckAt{unresolved: unresolvedAt(op.file.path, op.decl.StartLine, "the result of "+op.decl.Name, result)}, nil
+		return locDecl{}, unresolvedAt(op.file.path, op.decl.StartLine, "the result of "+op.decl.Name, result), false
 	}
 	for _, v := range values {
 		if v.declaredBy(result) {
-			return modelCheckAt{found: true, shape: checkedByValue, at: v}, nil
+			return v, "", true
 		}
 	}
-	return modelCheckAt{}, nil
+	return locDecl{}, "", false
+}
+
+// sameDecl reports whether two located declarations are one.
+func sameDecl(a, b locDecl) bool {
+	return a.file.path == b.file.path && a.decl.StartLine == b.decl.StartLine && a.decl.Name == b.decl.Name
 }
 
 // recordsInvariant reports whether a value object records an invariant

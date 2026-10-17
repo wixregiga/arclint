@@ -55,10 +55,11 @@ type importOrigin interface {
 	repository(dir, module string) bool
 	// follow names what a dotted path reaches in a module of the
 	// repository, its first name qualified by that module's own imports
-	// and the attributes after it kept, with the module's directory; ""
-	// when the module defines the first name itself, replaces what the
-	// path reaches, or does not resolve to one file.
-	follow(dir, module, path string) (string, string)
+	// and the attributes after it kept, with the module's directory.
+	// bound is false when the module does not resolve to one file or does
+	// not bind the first name; a bound name the module defines itself,
+	// or replaces, reaches "".
+	follow(dir, module, path string) (string, string, bool)
 }
 
 // declaresAbstract reports whether a class's base list names an
@@ -83,7 +84,7 @@ func declaresAbstract(df *declarationFacts, c *pyClass, from importOrigin, dir s
 			return ""
 		}
 		written := w.dottedName(n)
-		chain := libraryChain(qualifiedTarget(c.header, written, w, 0), from, dir)
+		chain := libraryChain(qualifiedTarget(c.header, written, w, 0), from, dir, explicitModules(w))
 		if len(chain) == 0 {
 			return ""
 		}
@@ -120,11 +121,13 @@ func declaresAbstract(df *declarationFacts, c *pyClass, from importOrigin, dir s
 // libraryChain follows a qualified name through the repository's
 // modules to the library name it reaches, and lists every name on the
 // way, the library name last: facade.abstract.ABC, where facade imports
-// abc as abstract, is facade.abstract.ABC, then abc.ABC. The longest
-// prefix that is a module of the repository is the module the rest is
-// looked up in. Nil when the name ends in the repository or cannot be
-// followed.
-func libraryChain(q string, from importOrigin, dir string) []string {
+// abc as abstract, is facade.abstract.ABC, then abc.ABC. Where the name
+// splits into a module and the names read from it is decided the way
+// Python reads it: a module path the file imports explicitly, the
+// longest first, then a package's own binding before a submodule of
+// the same name. explicit holds the module paths the file imports. Nil
+// when the name ends in the repository or cannot be followed.
+func libraryChain(q string, from importOrigin, dir string, explicit map[string]bool) []string {
 	var chain []string
 	for hop := 0; q != "" && hop < maxAliasHops; hop++ {
 		chain = append(chain, q)
@@ -134,25 +137,77 @@ func libraryChain(q string, from importOrigin, dir string) []string {
 			return chain
 		}
 		next := ""
-		// Each dot from the right splits the name into a module and the
-		// names looked up in it: facade.abstract.ABC is abstract in
-		// facade, then its ABC, and .ABC is ABC in the package . itself.
 		lead := len(q) - len(strings.TrimLeft(q, "."))
-		for _, at := range splitPoints(q, lead) {
+		for _, at := range orderedSplits(q, lead, explicit) {
 			module, rest := q[:at], q[at+1:]
 			if at < lead {
 				module, rest = q[:lead], q[lead:]
 			}
-			followed, moduleDir := from.follow(dir, module, rest)
-			if followed == "" {
+			followed, moduleDir, bound := from.follow(dir, module, rest)
+			if !bound {
 				continue
 			}
+			// A module that binds the name decides it, even to something
+			// that is not an import.
 			next, dir = followed, moduleDir
 			break
 		}
 		q = next
+		explicit = nil
 	}
 	return nil
+}
+
+// orderedSplits orders the dots that may separate a module from the
+// names read from it: the module paths imported explicitly, longest
+// first, since the import makes each the attribute its package holds,
+// then the others shortest first, since a package's own binding is the
+// attribute until a submodule import replaces it.
+func orderedSplits(q string, lead int, explicit map[string]bool) []int {
+	all := splitPoints(q, lead)
+	var imported, rest []int
+	for _, at := range all {
+		module := q[:at]
+		if at < lead {
+			module = q[:lead]
+		}
+		if explicit[module] {
+			imported = append(imported, at)
+		} else {
+			rest = append(rest, at)
+		}
+	}
+	for l, r := 0, len(rest)-1; l < r; l, r = l+1, r-1 {
+		rest[l], rest[r] = rest[r], rest[l]
+	}
+	return append(imported, rest...)
+}
+
+// explicitModules lists the module paths a file imports by name, each
+// with the packages above it: import a.b.c imports a, a.b, and a.b.c,
+// and from a.b import c imports a and a.b.
+func explicitModules(w *pyWalker) map[string]bool {
+	out := map[string]bool{}
+	for _, imp := range w.imports {
+		module := imp.loaded
+		if imp.member != "" || module == "" {
+			module = imp.module
+		}
+		if strings.HasPrefix(module, ".") {
+			out[module] = true
+			continue
+		}
+		for at := 0; at >= 0; {
+			next := strings.Index(module[at:], ".")
+			if next < 0 {
+				out[module] = true
+				break
+			}
+			out[module[:at+next]] = true
+			at += next + 1
+		}
+	}
+	return out
 }
 
 // noLimit counts every write of a module, wherever it runs.
@@ -190,8 +245,9 @@ func mutatesBefore(m *pyModule, q string, limit uint32) bool {
 	covers := func(target string) bool {
 		return target != "" && (q == target || strings.HasPrefix(q, target+"."))
 	}
+	runs := func(n *gotreesitter.Node, s *pyScope) bool { return runsBefore(m, n, s, limit) }
 	for _, mutation := range m.mutations {
-		if mutation.node.StartByte() >= limit || !assigns(mutation.node, w) {
+		if !runs(mutation.node, mutation.scope) || !assigns(mutation.node, w) {
 			continue
 		}
 		if covers(qualifiedTarget(mutation.scope, w.dottedName(mutation.node), w, 0)) {
@@ -199,7 +255,7 @@ func mutatesBefore(m *pyModule, q string, limit uint32) bool {
 		}
 	}
 	for _, call := range m.calls {
-		if call.node.StartByte() >= limit {
+		if !runs(call.node, call.scope) {
 			continue
 		}
 		object, attribute, ok := setattrTarget(call, w)
@@ -248,11 +304,86 @@ func setattrTarget(call pyCall, w *pyWalker) (string, string, bool) {
 	if object == "" {
 		return "", "", false
 	}
-	attribute, literal := pythonString(args.NamedChild(1).Text(w.src))
+	attribute, literal := stringLiteral(args.NamedChild(1), w)
 	if !literal {
 		attribute = ""
 	}
 	return object, attribute, true
+}
+
+// stringLiteral decodes a string literal, adjacent literals joined as
+// Python joins them: "A" "BC" is ABC. ok is false for anything else.
+func stringLiteral(n *gotreesitter.Node, w *pyWalker) (string, bool) {
+	n = w.unparenthesized(n)
+	switch n.Type(w.lang) {
+	case nodeString:
+		return pythonString(n.Text(w.src))
+	case "concatenated_string":
+		var joined strings.Builder
+		for i := 0; i < n.NamedChildCount(); i++ {
+			part, ok := stringLiteral(n.NamedChild(i), w)
+			if !ok {
+				return "", false
+			}
+			joined.WriteString(part)
+		}
+		return joined.String(), true
+	}
+	return "", false
+}
+
+// runsBefore reports whether a statement of a module runs on import
+// before limit: at module level, or in a class body there, before limit;
+// or inside a function that a call running on import before limit
+// calls by its name. A function nobody calls on import writes nothing
+// the class can see.
+func runsBefore(m *pyModule, n *gotreesitter.Node, s *pyScope, limit uint32) bool {
+	if runsOnImport(m, s) {
+		return n.StartByte() < limit
+	}
+	def := enclosingDef(n, m.facts.walker)
+	if def == nil {
+		return false
+	}
+	w := m.facts.walker
+	for _, call := range m.calls {
+		if call.node.StartByte() >= limit || !runsOnImport(m, call.scope) {
+			continue
+		}
+		fn := call.node.ChildByFieldName("function", w.lang)
+		if fn == nil || fn.Type(w.lang) != nodeIdentifier {
+			continue
+		}
+		if b := call.scope.lookup(fn.Text(w.src)); b != nil && b.kind == bindingFunction && b.node == def {
+			return true
+		}
+	}
+	return false
+}
+
+// runsOnImport reports whether code in a scope runs when its module is
+// imported: the module's own scope, or a class body within it.
+func runsOnImport(m *pyModule, s *pyScope) bool {
+	for ; s != nil; s = s.parent {
+		if s == m.scope {
+			return true
+		}
+		if !s.classBody {
+			return false
+		}
+	}
+	return false
+}
+
+// enclosingDef is the function definition a node sits in, nil at module
+// level.
+func enclosingDef(n *gotreesitter.Node, w *pyWalker) *gotreesitter.Node {
+	for p := n.Parent(); p != nil; p = p.Parent() {
+		if p.Type(w.lang) == nodeFunction {
+			return p
+		}
+	}
+	return nil
 }
 
 // splitPoints lists, right to left, the dots that may separate a module
