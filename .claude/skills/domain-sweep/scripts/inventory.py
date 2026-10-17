@@ -109,7 +109,11 @@ WORDS = re.compile(r"[A-Za-z]{2,}[ \t]+[A-Za-z]{2,}")
 GO_TEST = re.compile(r"^\s*func\s+Test\w*\s*\(")
 GO_TEST_NAME = re.compile(r"^\s*Test\w*\s*\(")
 GO_FUNC_END = re.compile(r"^\s*func\s*$")
-PY_TEST = re.compile(r"^\s*(?:async\s+)?def\s+test\w*\s*\(|^\s*class\s+Test\w*\b")
+PY_TEST = re.compile(
+    r"^\s*(?:async\s+)?def\s+test\w*\s*"
+    r"(?:\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)?"  # PEP 695 type parameters: def test_x[T](
+    r"\(|^\s*class\s+Test\w*\b"
+)
 LITERAL = '""'
 
 TS_SUFFIXES = (".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs")
@@ -402,14 +406,30 @@ OBJECT_AFTER_WORDS = {
 BLOCK_AFTER = {")", ";", "{", "}", "=>", ">", None}
 
 
+# Keywords after which a function or class stands in an expression; default
+# (export default function f) and the statement keywords do not.
+EXPRESSION_KEYWORDS = REGEX_KEYWORDS - {"default", "else", "do", "debugger", "break", "continue"}
+
+
 def ends_operand(prev):
     """Whether the previous token ends an operand: a name that is not a
     keyword in its place, a number, a literal, or a closing bracket.
-    Tokens are ("word", name), ("keyword", name) for a name in a keyword
-    role, "operand" and "operator"."""
+    Tokens are ("word", name); ("ident", name) for a keyword's spelling
+    the file binds as a name (const await = 4); ("keyword", name) for a
+    name in a keyword role; "operand"; and "operator"."""
     if isinstance(prev, tuple):
-        return prev[0] == "word" and prev[1] not in REGEX_KEYWORDS
+        return prev[0] == "ident" or (prev[0] == "word" and prev[1] not in REGEX_KEYWORDS)
     return prev == "operand"
+
+
+def in_expression(prev, last_op, after_label_colon):
+    """Whether a token after prev stands where an expression is expected,
+    so that a function or class there is an expression."""
+    if isinstance(prev, tuple):
+        return prev[0] == "keyword" and prev[1] == "of" or (prev[0] == "word" and prev[1] in EXPRESSION_KEYWORDS)
+    if prev == "operand" or after_label_colon:
+        return False
+    return last_op not in BLOCK_AFTER
 
 
 def skip_regex(text, i):
@@ -463,6 +483,7 @@ def ts_sources(lines):
     after_case_colon = False  # the last token is the colon of a case label
     jump_line = 0  # the line a break or continue was read on
     prev_line = 0  # the line the previous token was read on
+    bound = set()  # keyword spellings the file binds as names: const await, function f(yield)
     expression_body = False  # a function or class in an expression waits for its body
     after_dot = False  # prev was a member access dot: the next word is a property
     # The test declaration being read: None; "callee"; ("open", n), just
@@ -615,10 +636,18 @@ def ts_sources(lines):
                         # A label: the statement ends after it, as after
                         # the break or continue itself.
                         token(("keyword", prev[1]))
+                    elif word in ("await", "yield") and (
+                        word in bound or prev in (("word", "const"), ("word", "let"), ("word", "var"))
+                        or (parens and parens[-1][3])
+                    ):
+                        # Outside an async function or a generator, a
+                        # script may name a variable or parameter so.
+                        bound.add(word)
+                        token(("ident", word))
                     elif word == "of":
                         # of is a keyword only where a for header's binding
                         # ends: for (const x of xs), never for (i = of / 2;).
-                        binding = (isinstance(prev, tuple) and prev[0] == "word"
+                        binding = (isinstance(prev, tuple) and prev[0] in ("word", "ident")
                                    and prev[1] not in ("let", "const", "var")) or prev == "operand"
                         header = parens and parens[-1][1] and not parens[-1][2]
                         token(("keyword" if header and binding else "word", word))
@@ -627,8 +656,9 @@ def ts_sources(lines):
                             jump_line = number
                         elif word in ("case", "default"):
                             case_label = True
-                        elif word in ("function", "class") and not ends_operand(prev) and not (
-                            prev == "operator" and last_op in BLOCK_AFTER
+                        elif word in ("function", "class") and (
+                            in_expression(prev, last_op, after_case_colon) if prev != ("word", "async")
+                            else in_expression(before, last_op_before, False)
                         ):
                             # In an expression its body, once closed, is an operand.
                             expression_body = True
@@ -700,7 +730,11 @@ def ts_sources(lines):
                     prev == ("word", "await") and before == ("word", "for")
                 )
                 condition = header or (isinstance(prev, tuple) and prev[1] in CONTROL_KEYWORDS)
-                parens.append([condition, header, False])
+                # The parameters of a function declaration or expression.
+                params = prev == ("word", "function") or (
+                    isinstance(prev, tuple) and prev[0] == "word" and before == ("word", "function")
+                )
+                parens.append([condition, header, False, params])
                 if test_call == "callee":
                     test_call = ("open", len(parens))
                 else:
@@ -726,7 +760,7 @@ def ts_sources(lines):
                 elif parens and parens[-1][1]:
                     opens = "object"  # a destructuring pattern in a for header
                 elif isinstance(prev, tuple):
-                    opens = "object" if prev[1] in OBJECT_AFTER_WORDS else "block"
+                    opens = "object" if prev[0] != "ident" and prev[1] in OBJECT_AFTER_WORDS else "block"
                 elif prev == "operand" or after_case_colon:
                     opens = "block"
                 else:
@@ -756,7 +790,7 @@ def ts_sources(lines):
                 test_call = ("generic", level) if level else "callee"
                 token("operator")
             elif char == ":" and (case_label or (
-                isinstance(prev, tuple) and prev[0] == "word" and (not braces or braces[-1] != "object")
+                isinstance(prev, tuple) and prev[0] in ("word", "ident") and (not braces or braces[-1] != "object")
                 and before == "operator" and last_op_before in BLOCK_AFTER
             )):
                 # The colon of a case label or of a statement label: a
