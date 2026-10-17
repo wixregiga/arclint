@@ -77,6 +77,7 @@ import subprocess
 import sys
 import tempfile
 import tokenize
+import unicodedata
 
 DEFAULT_PATHS = ["*.md", "*.go", "*.ts", "*.tsx", "*.mts", "*.cts", "*.py"]
 
@@ -234,9 +235,18 @@ def touched_entries(repo, base, head):
             None if NULL_OID.match(new_blob) else new_blob, old_mode, new_mode,
         ))
     if not head:
+        # Against the working tree, a new side's hash may name content Git
+        # has not stored, a staged rename edited since: read the file then.
+        for entry in entries:
+            if entry.new_blob is not None and not blob_stored(repo, entry.new_blob):
+                entry.new_blob = None
         for path in git_paths(repo, "ls-files", "-z", "--others", "--exclude-standard"):
             entries.append(Entry(None, path, new_mode="100644"))
     return entries
+
+
+def blob_stored(repo, blob):
+    return subprocess.run(["git", "-C", repo, "cat-file", "-e", blob], capture_output=True).returncode == 0
 
 
 def changed_lines(repo, entry):
@@ -565,16 +575,29 @@ def in_expression(prev, last_op, after_label_colon):
 
 
 TEST_CALLEES = {"it", "test", "describe"}
-# Beyond Unicode XID_Continue, a JavaScript identifier continues with $,
-# ZWNJ and ZWJ.
-TS_NAME_EXTRA = "$\u200c\u200d"
 TS_ESCAPE = re.compile(r"\\u(?:([0-9A-Fa-f]{4})|\{([0-9A-Fa-f]+)\})")
 
 
+# Unicode's Other_ID_Start and Other_ID_Continue, which ECMAScript
+# identifiers include by ID_Start and ID_Continue (Python's NFKC-closed XID
+# sets leave some out, such as U+309B).
+OTHER_ID_START = set("\u1885\u1886\u2118\u212e\u309b\u309c")
+OTHER_ID_CONTINUE = set("\u00b7\u0387\u1369\u136a\u136b\u136c\u136d\u136e\u136f\u1370\u1371\u19da\u200c\u200d\u30fb\uff65")
+ID_START_CATEGORIES = {"Lu", "Ll", "Lt", "Lm", "Lo", "Nl"}
+ID_CONTINUE_CATEGORIES = ID_START_CATEGORIES | {"Mn", "Mc", "Nd", "Pc"}
+
+
 def starts_ts_name(char):
-    """Whether char may start a TypeScript identifier: a letter, $, _, or
-    any other Unicode identifier start (Other_ID_Start, such as U+2118)."""
-    return char.isalpha() or char in "_$" or char.isidentifier()
+    """Whether char may start an ECMAScript identifier: $, _, or a Unicode
+    ID_Start character."""
+    return char in "_$" or char in OTHER_ID_START or unicodedata.category(char) in ID_START_CATEGORIES
+
+
+def continues_ts_name(char):
+    """Whether char may continue an ECMAScript identifier: $, ZWNJ, ZWJ, or
+    a Unicode ID_Continue character."""
+    return (char == "$" or char in OTHER_ID_START or char in OTHER_ID_CONTINUE
+            or unicodedata.category(char) in ID_CONTINUE_CATEGORIES)
 
 
 def ts_name(text, i):
@@ -589,7 +612,7 @@ def ts_name(text, i):
             code = int(escape.group(1) or escape.group(2), 16)
             word.append(chr(code) if code <= 0x10FFFF else "\ufffd")
             j = escape.end()
-        elif j == i or continues_name(text[j], TS_NAME_EXTRA):
+        elif j == i or continues_ts_name(text[j]):
             word.append(text[j])
             j += 1
         else:
@@ -1552,6 +1575,8 @@ def collect(repo, base, head, scope, globs, exclude, recordings, hint):
 
     for entry in touched_entries(repo, merge_base, head):
         old, new = entry.old, entry.new
+        if old is not None and new is not None and old != new and is_recording(new, recordings):
+            recordings = recordings | {old}  # a recording renamed keeps its kind on the old side
         old_wanted, new_wanted = wanted(old), wanted(new)
         if not (old_wanted or new_wanted):
             continue
