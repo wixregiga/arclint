@@ -56,12 +56,6 @@ export interface ImportInfo {
    * TargetObserved distinguishes an observed unzoned target from a target absent from the scan.
    */
   targetObserved: boolean;
-  /**
-   * Alias is the name a Go import binds when the source renames it
-   * (v, _, or .); "" when it binds the package's own name and in every
-   * other language.
-   */
-  alias?: string;
 }
 /**
  * ParamInfo is one function or method parameter at the syntactic tier.
@@ -127,7 +121,9 @@ export interface DeclInfo {
   /**
    * Type is, for a field when field types are available, the
    * declaration the field's own type names, through pointers, the
-   * repository's type aliases, and optional or nullable wrappers.
+   * repository's type aliases, and optional or nullable wrappers; for
+   * a func or method, the declaration its first written result names
+   * the same way (T for (T, error), T for a TypeScript Promise<T>).
    */
   type?: ReferenceInfo;
 }

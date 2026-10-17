@@ -151,11 +151,12 @@ func (uc DefineDomainDefinition) assertionHome(lang vocab.UbiquitousLanguage, co
 	if err != nil {
 		return nil, fmt.Errorf("load configured rules: %w", err)
 	}
-	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, []rule.Fact{rule.FactDeclarations, rule.FactImports})
+	required := carrierFacts(lang)
+	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, required)
 	if err != nil {
 		return nil, fmt.Errorf("observe the assertion's owner: %w", err)
 	}
-	facts, err := conformance.NewInspectionFacts(cfg.Zones, obs, rule.FactDeclarations, rule.FactImports)
+	facts, err := conformance.NewInspectionFacts(cfg.Zones, obs, required...)
 	if err != nil {
 		return nil, fmt.Errorf("prepare domain facts: %w", err)
 	}

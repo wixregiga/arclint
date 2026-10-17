@@ -30,7 +30,7 @@ func extractDeclarations(fset *token.FileSet, file *ast.File, res resolution) []
 				EndLine:   end,
 				Params:    paramInfos(d.Type.Params),
 				Results:   resultTexts(d.Type.Results),
-				Generic:   d.Type.TypeParams != nil && len(d.Type.TypeParams.List) > 0,
+				Type:      firstResult(res, d.Type.Results),
 			}
 			if d.Recv != nil && len(d.Recv.List) > 0 {
 				dec.Kind = "method"
@@ -116,6 +116,7 @@ func typeDeclarations(fset *token.FileSet, s *ast.TypeSpec, res resolution) []co
 					Exported: ast.IsExported(name.Name), StartLine: ms, EndLine: me,
 					Params:  paramInfos(funcType.Params),
 					Results: resultTexts(funcType.Results),
+					Type:    firstResult(res, funcType.Results),
 				})
 			}
 		}
@@ -127,6 +128,19 @@ func typeDeclarations(fset *token.FileSet, s *ast.TypeSpec, res resolution) []co
 		Generic: s.TypeParams != nil && len(s.TypeParams.List) > 0,
 	}
 	return append(out, members...)
+}
+
+// firstResult names the declaration a function's first result is, with
+// a resolution; zero without one. A function with no result has
+// nothing to name.
+func firstResult(res resolution, results *ast.FieldList) conformance.Reference {
+	if res == nil {
+		return conformance.Reference{}
+	}
+	if results == nil || len(results.List) == 0 {
+		return conformance.Reference{Resolution: conformance.ResolutionUndetermined, Reason: "the function declares no result"}
+	}
+	return res.resultType(results.List[0].Type)
 }
 
 func paramInfos(fields *ast.FieldList) []conformance.DeclarationParam {

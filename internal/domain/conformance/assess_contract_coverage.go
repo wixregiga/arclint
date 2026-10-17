@@ -263,24 +263,25 @@ func evaluateRecordedContract(r rule.Rule, contract recordedContract, cc context
 	}
 	// Partial analysis cannot establish coverage for an individual contract.
 	for _, fact := range inv.Enforcement.Facts {
-		switch rule.Fact(fact) {
-		case rule.FactFileTree:
-			continue
-		case rule.FactImports:
-			if cc.scopeImportFiles < cc.scopeAnalysisFiles {
-				return undeterminedEvaluation(r, subject, fmt.Sprintf("%d of %d analyzed files in %s yield %s facts",
-					cc.scopeImportFiles, cc.scopeAnalysisFiles, cc.searched(), fact))
-			}
-		default:
-			if available := cc.scopeIdx.available(rule.Fact(fact)); available < cc.scopeAnalysisFiles {
-				return undeterminedEvaluation(r, subject, fmt.Sprintf("%d of %d analyzed files in %s yield %s facts",
-					available, cc.scopeAnalysisFiles, cc.searched(), fact))
-			}
+		if available := cc.scopeIdx.available(rule.Fact(fact)); fact != string(rule.FactFileTree) && available < cc.scopeAnalysisFiles {
+			return undeterminedEvaluation(r, subject, fmt.Sprintf("%d of %d analyzed files in %s yield %s facts",
+				available, cc.scopeAnalysisFiles, cc.searched(), fact))
 		}
 	}
 	if !contract.ownerLocated(cc) {
 		return undeterminedEvaluation(r, subject, fmt.Sprintf("no single declaration of %s is located in %s",
 			contract.spec.Owner, cc.searched()))
+	}
+	check, exists := domainChecks[r.ID().Local()]
+	if !exists {
+		return Evaluation{}, fmt.Errorf("contract coverage: no check for %s", r.ID())
+	}
+	if check.judge != nil {
+		violations, unresolved, err := check.judge(r, subject, contract.isolate(cc), code)
+		if err != nil {
+			return Evaluation{}, fmt.Errorf("contract coverage: %w", err)
+		}
+		return judgedEvaluation(r, subject, violations, unresolved)
 	}
 	violations, err := check.run(r, subject, contract.isolate(cc), code)
 	if err != nil {

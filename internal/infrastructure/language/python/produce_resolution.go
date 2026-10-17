@@ -72,6 +72,7 @@ func resolvedFacts(root string, files []conformance.ObservedFile, res *resolver,
 				}
 				m.facts.Decls[field.declaration].Type = own
 			}
+			idx.resultTypes(m)
 			// A field the scope walk could not link to its assignment
 			// still carries an answer: undetermined, never missing.
 			for i := range m.facts.Decls {
@@ -107,6 +108,32 @@ func resolvedFacts(root string, files []conformance.ObservedFile, res *resolver,
 		out[file] = f
 	}
 	return out
+}
+
+// resultTypes names, for every def, the declaration its return
+// annotation is, evaluated in the scope around the def; a def with no
+// annotation is undetermined.
+func (idx *resolutionIndex) resultTypes(m *pyModule) {
+	w := m.facts.walker
+	for _, fn := range m.functions {
+		name, line := w.name(fn.node), int(fn.node.StartPoint().Row)+1
+		ref := unknown(name + " has no return annotation")
+		if rt := fn.node.ChildByFieldName("return_type", w.lang); rt != nil {
+			ref = idx.annotationReceiver(fn.scope, rt, map[*pyBinding]bool{}).ref
+		}
+		for i := range m.facts.Decls {
+			d := &m.facts.Decls[i]
+			if (d.Kind == declMethod || d.Kind == bindingFunction) && d.Name == name && d.StartLine == line {
+				d.Type = ref
+			}
+		}
+	}
+	for i := range m.facts.Decls {
+		d := &m.facts.Decls[i]
+		if (d.Kind == declMethod || d.Kind == bindingFunction) && d.Type.IsZero() {
+			d.Type = unknown(d.Name + " could not be linked to the scope that defines it")
+		}
+	}
 }
 
 func (idx *resolutionIndex) recordSetattr(c pyCall) {

@@ -92,13 +92,24 @@ type pyField struct {
 	scope       *pyScope
 	class       *pyClass
 }
+
+// pyFunction is one def with the scope its annotations are evaluated
+// in, the scope around it.
+type pyFunction struct {
+	node  *gotreesitter.Node
+	scope *pyScope
+}
 type pyModule struct {
-	file          string
-	facts         *declarationFacts
-	scope         *pyScope
-	calls         []pyCall
-	fields        []pyField
-	classes       map[string]*pyClass
+	file    string
+	facts   *declarationFacts
+	scope   *pyScope
+	calls   []pyCall
+	fields  []pyField
+	classes map[string]*pyClass
+	// declared lists every class in source order, nested ones included,
+	// where classes keeps one per name.
+	declared      []*pyClass
+	functions     []pyFunction
 	mutations     []pyCall
 	staticMethods map[uint32]bool
 }
@@ -136,7 +147,14 @@ func (s *pyScope) lookup(name string) *pyBinding {
 	return nil
 }
 
+// newModule collects the lexical scopes of one file. Extraction already
+// collected them to decide which classes are abstract; that module is
+// reused, named for its file.
 func newModule(file string, df *declarationFacts) *pyModule {
+	if df.module != nil {
+		df.module.file = file
+		return df.module
+	}
 	m := &pyModule{file: file, facts: df, classes: map[string]*pyClass{}, staticMethods: map[uint32]bool{}}
 	m.scope = &pyScope{module: m, bindings: map[string]*pyBinding{}}
 	m.collect(df.root, m.scope, nil, false)
@@ -170,13 +188,14 @@ func (m *pyModule) collect(n *gotreesitter.Node, s *pyScope, owner *pyClass, inF
 				}
 			}
 		}
-		s.bind(&pyBinding{kind: "class", name: c.name, node: n, scope: s, class: c})
+		s.bind(&pyBinding{kind: declClass, name: c.name, node: n, scope: s, class: c})
 		// A nested same-spelled class cannot be named uniquely by Reference.
 		if old := m.classes[c.name]; old != nil {
 			old.unsafe = "class name " + c.name + " is ambiguous"
 			c.unsafe = old.unsafe
 		}
 		m.classes[c.name] = c
+		m.declared = append(m.declared, c)
 		cs := &pyScope{parent: s, module: m, owner: c, bindings: c.members}
 		if body := n.ChildByFieldName("body", w.lang); body != nil {
 			m.collect(body, cs, c, false)
@@ -186,6 +205,7 @@ func (m *pyModule) collect(n *gotreesitter.Node, s *pyScope, owner *pyClass, inF
 		name := w.name(n)
 		b := &pyBinding{kind: bindingFunction, name: name, node: n, scope: s}
 		s.bind(b)
+		m.functions = append(m.functions, pyFunction{node: n, scope: s})
 		if owner != nil && !inFunction && (name == "__getattribute__" || name == "__getattr__") {
 			owner.unsafe = "class " + owner.name + " customizes attribute access"
 		}
@@ -437,13 +457,14 @@ func decoratorName(s *pyScope, n *gotreesitter.Node, w *pyWalker) string {
 	if expr == nil {
 		return ""
 	}
-	return decoratorTarget(s, expr.Text(w.src), w, 0)
+	return qualifiedTarget(s, expr.Text(w.src), w, 0)
 }
 
-// decoratorTarget names what a decorator expression refers to: a
-// builtin, an imported name, or, through a plain alias such as
-// cm = classmethod, what the alias stands for.
-func decoratorTarget(s *pyScope, text string, w *pyWalker, depth int) string {
+// qualifiedTarget names what a dotted name refers to in a scope, a
+// decorator's or a class base's: a builtin, an imported name, or,
+// through a plain alias such as cm = classmethod, what the alias stands
+// for; "" for anything else.
+func qualifiedTarget(s *pyScope, text string, w *pyWalker, depth int) string {
 	head, tail, dotted := strings.Cut(text, ".")
 	b := s.lookup(head)
 	if b == nil {
@@ -454,7 +475,7 @@ func decoratorTarget(s *pyScope, text string, w *pyWalker, depth int) string {
 	}
 	if b.kind != bindingImport {
 		if right := aliasValue(b, w); right != "" && !dotted && depth < maxAliasHops {
-			return decoratorTarget(b.scope, right, w, depth+1)
+			return qualifiedTarget(b.scope, right, w, depth+1)
 		}
 		return ""
 	}

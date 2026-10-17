@@ -67,14 +67,13 @@ func (uc GetDomainOverview) Execute() (DomainOverview, error) {
 	if err != nil {
 		return DomainOverview{}, fmt.Errorf("load configured rules: %w", err)
 	}
-	// Imports tell a result naming a value object of another package
-	// from a type that only shares its name.
-	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, []rule.Fact{rule.FactDeclarations, rule.FactImports})
+	required := carrierFacts(lang)
+	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, required)
 	if err != nil {
 		return DomainOverview{}, fmt.Errorf("observe contracts: %w", err)
 	}
 	matrix := domainKnowledgeOf(lang)
-	facts, err := conformance.NewInspectionFacts(cfg.Zones, obs, rule.FactDeclarations, rule.FactImports)
+	facts, err := conformance.NewInspectionFacts(cfg.Zones, obs, required...)
 	if err != nil {
 		return DomainOverview{}, fmt.Errorf("prepare domain facts: %w", err)
 	}
@@ -88,4 +87,20 @@ func (uc GetDomainOverview) Execute() (DomainOverview, error) {
 	matrix.Unanchored = unanchoredContracts(matrix, cfg.Languages)
 	out.Matrix = matrix
 	return out, nil
+}
+
+// carrierFacts are the facts locating the recorded language needs:
+// declarations, and the resolved result types of operations when a
+// domain service records an assertion, whose check may be the value
+// its operation returns.
+func carrierFacts(lang vocab.UbiquitousLanguage) []rule.Fact {
+	facts := []rule.Fact{rule.FactDeclarations}
+	for _, ctx := range lang.Contexts {
+		for _, s := range ctx.Services {
+			if len(s.Assertions) > 0 {
+				return append(facts, rule.FactFieldTypes)
+			}
+		}
+	}
+	return facts
 }

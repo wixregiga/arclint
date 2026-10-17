@@ -248,7 +248,7 @@ func ddd() MetaModel {
 			},
 			{
 				Name:       "field_types",
-				Definition: "The declaration view with every field resolved by the language's own resolution to the declarations whose values it holds, or undetermined with the reason.",
+				Definition: "The declaration view with every field resolved by the language's own resolution to the declarations whose values it holds, and every function and method to the declaration its first result names, or undetermined with the reason.",
 				Languages:  Languages{All: true},
 			},
 		},
@@ -1149,7 +1149,7 @@ func ddd() MetaModel {
 						},
 						Enforcement: Enforcement{
 							By:          EvaluatorDomain,
-							Facts:       []string{"file_tree", "declarations", "calls", "imports"},
+							Facts:       []string{"file_tree", "declarations", "calls", "field_types"},
 							Languages:   Languages{All: true},
 							Severity:    severityError,
 							Limitations: []string{"a domain service declared as an interface, an abstract class, an ABC, or a Protocol is judged by its check in the model, a function of the context spelled assert followed by the key or the invariant of the same key on the value object its operation returns; whether its implementations reach that check is not yet observed", "a Python class is a declared abstraction only when its own bases name abc.ABC or typing.Protocol, or its metaclass is abc.ABCMeta; one that is abstract only through a base class of the repository is judged as a concrete service"},

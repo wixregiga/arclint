@@ -55,6 +55,9 @@ type declaredServiceCase struct {
 	// value state, where the overview anchors the guarantee.
 	valueDoorLine int
 	finding       string
+	// module is the file that makes the source one module its language
+	// resolves, where it needs one.
+	module map[string]string
 }
 
 const goEncryptedPassword = `package identity
@@ -149,6 +152,7 @@ def assert_not_empty(encrypted: str) -> None:
 			function:  goInterface + goCheck,
 			value:     strings.Replace(goInterface, "Encrypt(plain string) (string, error)", "Encrypt(plain string) (EncryptedPassword, error)", 1),
 			checkLine: 22, valueDoorLine: 9, finding: finding,
+			module: map[string]string{"go.mod": "module example.com/identity\n\ngo 1.22\n"},
 		},
 		{
 			name: "typescript interface", runtime: "ts", path: "src/identity/password.ts",
@@ -194,6 +198,9 @@ func TestDeclaredServiceAssertion(t *testing.T) {
 			root := t.TempDir()
 			write(t, root, "rules.arclint.yaml", "runtime: ["+tc.runtime+"]\nzones:\n  src:\n    paths: [\"src/**\"]\n")
 			write(t, root, "domain.arclint.yaml", declaredServiceDomain)
+			for path, content := range tc.module {
+				write(t, root, path, content)
+			}
 
 			write(t, root, tc.path, tc.bare)
 			findings := declaredServiceFindings(t, root, 1)
@@ -318,5 +325,85 @@ func TestDefineAssertionWithoutARuntime(t *testing.T) {
 	stdout := mustRunDomain(t, root, "domain", "define", "assertion", "not-empty", "--owner", "Encrypter", "--on", "Encrypt", "--statement", "An encrypted password is never empty.")
 	if want := "the function assert-not-empty (spelled in the language's method case) of context identity"; !strings.Contains(stdout, want) {
 		t.Fatalf("no runtime:\n got %q\nwant it to contain %q", stdout, want)
+	}
+}
+
+// declaredServiceResult is one declared service whose operation's
+// result names, or only seems to name, the recorded value object, with
+// whether the language's resolution makes it that value.
+type declaredServiceResult struct {
+	name    string
+	runtime string
+	files   map[string]string
+	value   bool
+}
+
+func declaredServiceResults() []declaredServiceResult {
+	goValue := "package value\n\nimport \"errors\"\n\n// EncryptedPassword is the protected form of a password.\ntype EncryptedPassword struct{ text string }\n\n// NewEncryptedPassword is the one door: invariant not-empty.\nfunc NewEncryptedPassword(text string) (EncryptedPassword, error) {\n\tif text == \"\" {\n\t\treturn EncryptedPassword{}, errors.New(\"empty\")\n\t}\n\treturn EncryptedPassword{text: text}, nil\n}\n"
+	goService := func(imports, result string) string {
+		return "package service\n\nimport " + imports + "\n\n// Encrypter protects a password.\ntype Encrypter interface {\n\tEncrypt(plain string) " + result + "\n}\n"
+	}
+	goMod := "module example.com/identity\n\ngo 1.22\n"
+	tsValue := "export class EncryptedPassword {\n  private constructor(private readonly text: string) {}\n  static from(text: string): EncryptedPassword {\n    if (text === \"\") throw new Error(\"empty\");\n    return new EncryptedPassword(text);\n  }\n}\n"
+	tsOther := "export class OtherPassword {}\n"
+	tsService := func(imports, result string) string {
+		return imports + "\n\nexport interface Encrypter {\n  encrypt(plain: string): " + result + ";\n}\n"
+	}
+	pyValue := "class EncryptedPassword:\n    def __init__(self, text: str) -> None:\n        if not text:\n            raise ValueError(\"empty\")\n        self._text = text\n"
+	pyService := func(imports, result string) string {
+		return "from typing import Protocol\n" + imports + "\n\n\nclass Encrypter(Protocol):\n    def encrypt(self, plain: str) -> " + result + ": ...\n"
+	}
+	return []declaredServiceResult{
+		{"go result through an aliased import", "go", map[string]string{"go.mod": goMod, "src/identity/value/password.go": goValue,
+			"src/identity/service/encrypter.go": goService(`v "example.com/identity/src/identity/value"`, "(v.EncryptedPassword, error)")}, true},
+		{"go callback taking the value", "go", map[string]string{"go.mod": goMod, "src/identity/value/password.go": goValue,
+			"src/identity/service/encrypter.go": goService(`"example.com/identity/src/identity/value"`, "func(value.EncryptedPassword) string")}, false},
+		{"go sized array of the value", "go", map[string]string{"go.mod": goMod, "src/identity/value/password.go": goValue,
+			"src/identity/service/encrypter.go": goService(`"example.com/identity/src/identity/value"`, "[1]value.EncryptedPassword")}, false},
+		{"typescript namespace import of a sibling module", "ts", map[string]string{"src/identity/value.ts": tsValue,
+			"src/identity/encrypter.ts": tsService(`import * as value from "./value";`, "value.EncryptedPassword")}, true},
+		{"typescript value imported under another name", "ts", map[string]string{"src/identity/value.ts": tsValue,
+			"src/identity/encrypter.ts": tsService(`import { EncryptedPassword as Protected } from "./value";`, "Protected")}, true},
+		{"typescript foreign type imported under the value's name", "ts", map[string]string{"src/identity/value.ts": tsValue, "src/identity/other.ts": tsOther,
+			"src/identity/encrypter.ts": tsService(`import { OtherPassword as EncryptedPassword } from "./other";`, "EncryptedPassword")}, false},
+		{"typescript promise of the value", "ts", map[string]string{"src/identity/value.ts": tsValue,
+			"src/identity/encrypter.ts": tsService(`import { EncryptedPassword } from "./value";`, "Promise<EncryptedPassword>")}, true},
+		{"typescript promise of a collection of the value", "ts", map[string]string{"src/identity/value.ts": tsValue,
+			"src/identity/encrypter.ts": tsService(`import { EncryptedPassword } from "./value";`, "Promise<EncryptedPassword[]>")}, false},
+		{"python module attribute of a sibling module", "py", map[string]string{"src/identity/value.py": pyValue, "src/identity/__init__.py": "",
+			"src/identity/encrypter.py": pyService("from src.identity import value", "value.EncryptedPassword")}, true},
+	}
+}
+
+// TestDeclaredServiceResultResolvesThroughTheLanguage holds shape (b) to
+// what the language's own resolution makes of the operation's result:
+// the value object through any binding that names it, and never a type
+// that only shares its name, a collection of it, or a function taking it.
+func TestDeclaredServiceResultResolvesThroughTheLanguage(t *testing.T) {
+	for _, tc := range declaredServiceResults() {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			write(t, root, "rules.arclint.yaml", "runtime: ["+tc.runtime+"]\nzones:\n  src:\n    paths: [\"src/**\"]\n")
+			write(t, root, "domain.arclint.yaml", declaredServiceDomain)
+			for path, content := range tc.files {
+				write(t, root, path, content)
+			}
+			want := 1
+			if tc.value {
+				want = 0
+			}
+			var findings []diagnosticDoc
+			for _, f := range declaredServiceFindings(t, root, want) {
+				if f.RuleID == "assertion/checked-by-its-operation" {
+					findings = append(findings, f)
+				}
+			}
+			if tc.value && len(findings) != 0 {
+				t.Fatalf("the operation returns the recorded value: %+v", findings)
+			}
+			if !tc.value && (len(findings) != 1 || !strings.Contains(findings[0].Message, "declared service Encrypter: not-empty has no check in context identity")) {
+				t.Fatalf("the operation does not return the recorded value: %+v", findings)
+			}
+		})
 	}
 }

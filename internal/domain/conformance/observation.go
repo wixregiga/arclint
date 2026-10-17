@@ -55,10 +55,6 @@ type Import struct {
 	// TargetFile is the repo-relative file for file-granular languages
 	// when the specifier resolves to one file, else "".
 	TargetFile string
-	// Alias is the name a Go import binds when the source renames it
-	// (v, _, or .); "" when the import binds the package's own name and
-	// in every other language.
-	Alias string
 }
 
 const (
@@ -146,8 +142,12 @@ type Declaration struct {
 	// pointers, the repository's type aliases, and optional or nullable
 	// wrappers: OrderID for *OrderID, an alias of OrderID, or
 	// OrderID | undefined, the collection for []OrderID or
-	// list[OrderID]. Valid when FieldTypesAvailable; zero for every
-	// other kind.
+	// list[OrderID]. For a func or method it is, the same way, the
+	// declaration its first written result names (T for (T, error), and
+	// T for a TypeScript Promise<T>), undetermined when it writes none,
+	// and zero when no resolution reached it, which reads as
+	// undetermined. Valid when FieldTypesAvailable; zero for every other
+	// kind.
 	Type Reference
 }
 
@@ -475,14 +475,17 @@ func validResolution(f LanguageFacts, observed map[string]bool) error {
 		}
 	}
 	for _, d := range f.Declarations {
-		if d.Kind != declKindField || !f.FieldTypesAvailable {
-			if len(d.Holds) > 0 || !d.Type.IsZero() {
+		typed := f.FieldTypesAvailable && (d.Kind == declKindField || d.Kind == declKindFunc || d.Kind == declKindMethod)
+		if !typed || d.Kind != declKindField {
+			if len(d.Holds) > 0 || !typed && !d.Type.IsZero() {
 				return fmt.Errorf("%s %s carries field types that were not supplied", d.Kind, d.Name)
 			}
+		}
+		if !typed || d.Kind != declKindField && d.Type.IsZero() {
 			continue
 		}
 		if err := d.Type.validate(observed); err != nil {
-			return fmt.Errorf("field %s.%s: type: %w", d.Owner, d.Name, err)
+			return fmt.Errorf("%s %s.%s: type: %w", d.Kind, d.Owner, d.Name, err)
 		}
 		for _, ref := range d.Holds {
 			if err := ref.validate(observed); err != nil {

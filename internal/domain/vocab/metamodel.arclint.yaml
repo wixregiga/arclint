@@ -272,8 +272,9 @@ facts:
   field_types:
     definition: >-
       The declaration view with every field resolved by the language's
-      own resolution to the declarations whose values it holds, or
-      undetermined with the reason.
+      own resolution to the declarations whose values it holds, and
+      every function and method to the declaration its first result
+      names, or undetermined with the reason.
     languages: all
 
 # Facts arclint does not observe yet. An invariant whose enforcement
@@ -955,7 +956,7 @@ building_blocks:
           - {work: evans2015, page: 22, section: Assertions}
         enforcement:
           by: domain
-          facts: [file_tree, declarations, calls, imports]
+          facts: [file_tree, declarations, calls, field_types]
           languages: all
           limitations:
             - a domain service declared as an interface, an abstract class, an ABC, or a Protocol is judged by its check in the model, a function of the context spelled assert followed by the key or the invariant of the same key on the value object its operation returns; whether its implementations reach that check is not yet observed

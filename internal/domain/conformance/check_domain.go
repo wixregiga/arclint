@@ -66,9 +66,7 @@ var domainChecks = map[string]domainCheck{
 	"value_object/constructed-through-one-door":             {run: checkValueObjectConstructor},
 	"value_object/no-setters":                               {run: checkValueObjectNoSetters},
 	"invariant/enforced-at-every-mutation":                  {run: checkInvariantEnforcedAtMutation},
-	"assertion/checked-by-its-operation":                    {run: checkAssertionChecked},
-	"invariant/verifying-tests-declared":                    {judge: checkInvariantTestsDeclared, readsTests: true},
-	"assertion/verifying-tests-declared":                    {judge: checkAssertionTestsDeclared, readsTests: true},
+	"assertion/checked-by-its-operation":                    {judge: checkAssertionChecked},
 	"specification/satisfaction-method":                     {run: checkSpecificationSatisfaction},
 	"aggregate/protects-an-invariant":                       {run: checkAggregateProtectsInvariant},
 	"aggregate/root-declared":                               {run: checkAggregateRootDeclared},
@@ -1411,8 +1409,9 @@ func checkInvariantEnforcedAtMutation(r rule.Rule, subject rule.Subject, cc cont
 // a domain service declared as an abstraction has the check in the
 // model instead. An owner whose type is not located is left to
 // aggregate/root-declared or domain_service/declared.
-func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ domainCode) ([]Violation, error) {
+func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ domainCode) ([]Violation, []string, error) {
 	var vs []Violation
+	var unresolved []string
 	for _, agg := range cc.ctx.Aggregates {
 		ac := cc.aggregates[agg.Name]
 		if !ac.located() {
@@ -1422,7 +1421,7 @@ func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ 
 			label: "aggregate " + agg.Name, holder: "the root", context: cc.ctx.Name, decl: ac.root(), idx: ac.idx,
 		}, agg.Assertions)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		vs = append(vs, more...)
 	}
@@ -1436,19 +1435,22 @@ func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ 
 			label: "service " + s.Name, holder: "the service", decl: decl, idx: cc.unitIdx(decl),
 			decision: vocab.DecideThenCarryOut(),
 		}
-		var more []Violation
-		var err error
-		if declaredAbstraction(decl) {
-			more, err = declaredServiceChecked(r, subject, cc, owner, s.Assertions)
-		} else {
-			more, err = assertionsChecked(r, subject, owner, s.Assertions)
+		if !declaredAbstraction(decl) {
+			more, err := assertionsChecked(r, subject, owner, s.Assertions)
+			if err != nil {
+				return nil, nil, err
+			}
+			vs = append(vs, more...)
+			continue
 		}
+		more, open, err := declaredServiceChecked(r, subject, cc, owner, s.Assertions)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		vs = append(vs, more...)
+		unresolved = append(unresolved, open...)
 	}
-	return vs, nil
+	return vs, unresolved, nil
 }
 
 // declaredAbstraction reports a type declared as an abstraction that
@@ -1466,21 +1468,24 @@ func declaredAbstraction(d locDecl) bool {
 // a function of the context spelled assert followed by the key, or by
 // the value object the operation returns when that value records an
 // invariant of the same key. A guarantee with neither is a finding on
-// the model, never a request for a method the abstraction cannot hold.
-func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, owner assertionOwner, assertions []vocab.Assertion) ([]Violation, error) {
+// the model, never a request for a method the abstraction cannot hold;
+// a result the language's resolution cannot follow leaves it
+// undetermined, with the reason.
+func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, owner assertionOwner, assertions []vocab.Assertion) ([]Violation, []string, error) {
 	var vs []Violation
+	var unresolved []string
 	service := owner.decl
 	for _, as := range assertions {
 		op, hasOp, err := owner.idx.methodNamed(service.decl.Name, as.On)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !hasOp {
 			v, err := newViolation(r, subject, service.file.path, service.decl.StartLine,
 				fmt.Sprintf("%s: assertion %s constrains operation %s, which %s does not declare", owner.label, as.Key, as.On, owner.holder),
 				fmt.Sprintf("declare %s on %s", methodSpellings(owner.idx, as.On), service.decl.Name))
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			vs = append(vs, v)
 		}
@@ -1488,16 +1493,20 @@ func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, o
 		if hasOp {
 			operation = &op
 		}
-		_, found, err := cc.modelCheck(service, operation, as.Key)
+		check, err := cc.modelCheck(service, operation, as.Key)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		if found {
+		if check.found {
+			continue
+		}
+		if check.unresolved != "" {
+			unresolved = append(unresolved, check.unresolved)
 			continue
 		}
 		fn, err := methodNameFor(assertKey(as.Key), service.file.lang)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		on := as.On
 		if hasOp {
@@ -1507,11 +1516,11 @@ func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, o
 			fmt.Sprintf("declared service %s: %s has no check in context %s", service.decl.Name, as.Key, cc.ctx.Name),
 			fmt.Sprintf("declare the function %s there, or return from %s a value whose invariant %s enforces it", fn, on, as.Key))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		vs = append(vs, v)
 	}
-	return vs, nil
+	return vs, unresolved, nil
 }
 
 // modelShape is how the model checks a guarantee of a declared service.
@@ -1528,41 +1537,55 @@ const (
 )
 
 // modelCheckAt is where the model checks a guarantee of a declared
-// service: the function, or the value object's type.
+// service: the function, or the value object's type. Without one,
+// unresolved says why the operation's result could not be followed.
 type modelCheckAt struct {
-	shape modelShape
-	at    locDecl
+	found      bool
+	shape      modelShape
+	at         locDecl
+	unresolved string
 }
 
 // modelCheck locates the check of a declared service's guarantee in
 // the model: a function of the context spelled assert followed by the
-// key, or else a result of the operation naming a recorded value object
-// of the context that records an invariant of the same key. op is nil
-// when the service does not declare the operation, so only a function
-// can check the guarantee.
-func (cc contextCode) modelCheck(service locDecl, op *locDecl, key string) (modelCheckAt, bool, error) {
+// key, or else the operation's result, as the language's resolution
+// names it, being a recorded value object of the context that records
+// an invariant of the same key. op is nil when the service does not
+// declare the operation, so only a function can check the guarantee.
+func (cc contextCode) modelCheck(service locDecl, op *locDecl, key string) (modelCheckAt, error) {
 	if _, err := rule.CaseTerm(key, "flatcase"); err != nil {
-		return modelCheckAt{}, false, fmt.Errorf("method name for %q: %w", key, err)
+		return modelCheckAt{}, fmt.Errorf("method name for %q: %w", key, err)
 	}
 	if fn, ok := cc.contextFunction(service, assertKey(key)); ok {
-		return modelCheckAt{shape: checkedByFunction, at: fn}, true, nil
+		return modelCheckAt{found: true, shape: checkedByFunction, at: fn}, nil
 	}
 	if op == nil {
-		return modelCheckAt{}, false, nil
+		return modelCheckAt{}, nil
 	}
+	var values []locDecl
 	for _, vo := range cc.ctx.ValueObjects {
-		if !recordsInvariant(vo, key) {
-			continue
-		}
-		loc := cc.terms[vo.Name]
-		if !loc.located() {
-			continue
-		}
-		if cc.resultNames(*op, loc.decl()) {
-			return modelCheckAt{shape: checkedByValue, at: loc.decl()}, true, nil
+		if loc := cc.terms[vo.Name]; recordsInvariant(vo, key) && loc.located() {
+			values = append(values, loc.decl())
 		}
 	}
-	return modelCheckAt{}, false, nil
+	if len(values) == 0 {
+		return modelCheckAt{}, nil
+	}
+	result := op.decl.Type
+	switch {
+	case !op.file.fieldTypes:
+		return modelCheckAt{unresolved: fmt.Sprintf("%s:%d: the result of %s: the language supplied no resolved types for the file", op.file.path, op.decl.StartLine, op.decl.Name)}, nil
+	case result.IsZero():
+		return modelCheckAt{unresolved: fmt.Sprintf("%s:%d: the result of %s: no resolution reached it", op.file.path, op.decl.StartLine, op.decl.Name)}, nil
+	case result.Resolution == ResolutionUndetermined:
+		return modelCheckAt{unresolved: unresolvedAt(op.file.path, op.decl.StartLine, "the result of "+op.decl.Name, result)}, nil
+	}
+	for _, v := range values {
+		if v.declaredBy(result) {
+			return modelCheckAt{found: true, shape: checkedByValue, at: v}, nil
+		}
+	}
+	return modelCheckAt{}, nil
 }
 
 // recordsInvariant reports whether a value object records an invariant
@@ -1597,69 +1620,6 @@ func (cc contextCode) contextFunction(service locDecl, key string) (locDecl, boo
 		}
 	}
 	return locDecl{}, false
-}
-
-// resultNames reports whether a result of an operation names a located
-// type itself, never a collection of it. In the type's own directory
-// the name stands bare, since a qualified name there is another
-// package's type. From another directory the file imports the type's
-// directory: in Go the name is qualified by the binding the import
-// makes (the package's name, its alias, or bare through a dot import);
-// in TypeScript and Python a module binding may qualify it.
-func (cc contextCode) resultNames(op, target locDecl) bool {
-	unit := path.Dir(target.file.path)
-	if path.Dir(op.file.path) == unit {
-		return resultMentions(op.decl.Results, func(res string) bool { return mentionsBareType(res, target.decl.Name) })
-	}
-	for _, fi := range cc.imports {
-		if fi.path != op.file.path || (fi.imp.TargetDir != unit && (fi.imp.TargetFile == "" || path.Dir(fi.imp.TargetFile) != unit)) {
-			continue
-		}
-		if op.file.lang != rule.LanguageGo {
-			if resultMentions(op.decl.Results, func(res string) bool { return mentionsType(res, "", target.decl.Name) }) {
-				return true
-			}
-			continue
-		}
-		var names func(string) bool
-		switch fi.imp.Alias {
-		case "_":
-			continue
-		case ".":
-			names = func(res string) bool { return mentionsBareType(res, target.decl.Name) }
-		case "":
-			names = func(res string) bool { return mentionsType(res, target.file.pkg, target.decl.Name) }
-		default:
-			names = func(res string) bool { return mentionsType(res, fi.imp.Alias, target.decl.Name) }
-		}
-		if resultMentions(op.decl.Results, names) {
-			return true
-		}
-	}
-	return false
-}
-
-// resultMentions reports whether a result that is not a collection
-// names the type the predicate looks for.
-func resultMentions(results []string, names func(string) bool) bool {
-	for _, res := range results {
-		if !isCollection(res) && names(res) {
-			return true
-		}
-	}
-	return false
-}
-
-// mentionsBareType reports whether a type text names a type unqualified:
-// Password and *Password do, foreign.Password does not.
-func mentionsBareType(text, name string) bool {
-	toks := identifierTokens(text)
-	for i, t := range toks {
-		if t == name && (i == 0 || toks[i-1] != ".") {
-			return true
-		}
-	}
-	return false
 }
 
 // assertionOwner is the declared type that owns a set of assertions:

@@ -22,6 +22,9 @@ type declarationFacts struct {
 	ParseError string
 	walker     *pyWalker
 	root       *gotreesitter.Node
+	// module is the file's lexical scopes, collected once the
+	// declarations and fields are known.
+	module *pyModule
 }
 
 // normalizeType collapses whitespace runs in source-text types so
@@ -74,9 +77,10 @@ func extractDeclarations(ps *parsers, src []byte) *declarationFacts {
 	w.imports = importBindings(w, tree.RootNode())
 	w.bound, w.aliases = map[string]bool{}, map[string]string{}
 	w.rebound = moduleRebindings(w, tree.RootNode())
-	w.markAbstractClasses()
 	w.fields(tree.RootNode(), fieldScope{})
 	w.walkCalls(tree.RootNode(), "", "", "")
+	out.module = newModule("", out)
+	markAbstractClasses(out)
 	return out
 }
 
@@ -115,16 +119,6 @@ type pyWalker struct {
 	// were assigned.
 	bound   map[string]bool
 	aliases map[string]string
-	// classes pairs each class declaration with its node, so the
-	// abstract mark can be decided once the module's imports are known.
-	classes []classDeclaration
-}
-
-// classDeclaration is the index of a class in the extracted
-// declarations and the class_definition node it came from.
-type classDeclaration struct {
-	decl int
-	node *gotreesitter.Node
 }
 
 func (w *pyWalker) name(n *gotreesitter.Node) string {
@@ -175,6 +169,8 @@ const (
 	nodeAsPattern     = "as_pattern"
 	nodeForInClause   = "for_in_clause"
 	bindingFunction   = "func"
+	declClass         = "class"
+	declMethod        = "method"
 	bindingUnknown    = "unknown"
 	bindingAnnotation = "annotation"
 	// bindingVariadic is a *args parameter: always a tuple.
@@ -257,9 +253,7 @@ func (w *pyWalker) walk(n *gotreesitter.Node, owner string, inFunction bool) {
 		return
 	case nodeClass:
 		name := w.name(n)
-		if w.add("class", name, owner, n) != nil {
-			w.classes = append(w.classes, classDeclaration{decl: len(w.out.Decls) - 1, node: n})
-		}
+		w.add(declClass, name, owner, n)
 		if body := n.ChildByFieldName("body", w.lang); body != nil {
 			for i := 0; i < body.NamedChildCount(); i++ {
 				w.walk(body.NamedChild(i), name, false)
@@ -268,7 +262,7 @@ func (w *pyWalker) walk(n *gotreesitter.Node, owner string, inFunction bool) {
 		return
 	case nodeFunction:
 		name := w.name(n)
-		kind := "method"
+		kind := declMethod
 		if owner == "" || inFunction {
 			kind = bindingFunction
 		}

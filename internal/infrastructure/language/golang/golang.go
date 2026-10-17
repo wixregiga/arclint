@@ -126,9 +126,6 @@ func analyzeFile(fset *token.FileSet, res *resolver, tc *typeCheck, root, rel st
 			continue
 		}
 		imp := conformance.Import{Path: p, Line: fset.Position(spec.Path.Pos()).Line}
-		if spec.Name != nil {
-			imp.Alias = spec.Name.Name
-		}
 		imp.Class, imp.TargetDir = res.classify(owner, p)
 		facts.Imports = append(facts.Imports, imp)
 	}
