@@ -234,3 +234,13 @@ func TestRenderRefusesUnknownTier(t *testing.T) {
 		t.Fatalf("err = %v, want a refusal naming tier 4", err)
 	}
 }
+
+func TestRenderRefusesTierThatIsNotAnInteger(t *testing.T) {
+	for _, written := range []string{"1.9", `"1"`, "one", "0x1"} {
+		src := strings.Replace(minimal, "    tier: 1\n", "    tier: "+written+"\n", 1)
+		_, err := render([]byte(src), "minimal.yaml", "vocab")
+		if err == nil || !strings.Contains(err.Error(), "tier must be the integer 1, 2, or 3") {
+			t.Errorf("tier %s: err = %v, want a refusal", written, err)
+		}
+	}
+}
