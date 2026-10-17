@@ -481,7 +481,7 @@ func (cc contextCode) undecidable(facts []string) (Outcome, bool) {
 	}
 	for _, f := range facts {
 		switch rule.Fact(f) {
-		case rule.FactDeclarations, rule.FactCalls, rule.FactResolvedCalls, rule.FactFieldTypes:
+		case rule.FactDeclarations, rule.FactCalls, rule.FactResolvedCalls, rule.FactFieldTypes, rule.FactImplementations:
 			if cc.scopeIdx.available(rule.Fact(f)) == 0 {
 				return OutcomeUnsupported, true
 			}
@@ -737,6 +737,7 @@ type fileFacts struct {
 	calls                                 []Call
 	declarationsAvailable, callsAvailable bool
 	resolvedCalls, fieldTypes             bool
+	implementations                       bool
 }
 
 // contractIndex is the parsed facts of a set of files, and the source
@@ -784,6 +785,7 @@ func buildContractIndex(paths []string, supplied Facts) contractIndex {
 			callsAvailable:        facts.CallsAvailable,
 			resolvedCalls:         facts.Supports(rule.FactResolvedCalls),
 			fieldTypes:            facts.Supports(rule.FactFieldTypes),
+			implementations:       facts.Supports(rule.FactImplementations),
 		})
 	}
 	return contractIndex{files: files, failed: failed}
@@ -796,7 +798,8 @@ func (idx contractIndex) available(fact rule.Fact) int {
 		case fact == rule.FactDeclarations && f.declarationsAvailable,
 			fact == rule.FactCalls && f.callsAvailable,
 			fact == rule.FactResolvedCalls && f.resolvedCalls,
-			fact == rule.FactFieldTypes && f.fieldTypes:
+			fact == rule.FactFieldTypes && f.fieldTypes,
+			fact == rule.FactImplementations && f.implementations:
 			n++
 		}
 	}

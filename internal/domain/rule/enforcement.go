@@ -82,12 +82,17 @@ const (
 	// FactFieldTypes adds to every field declaration the declarations
 	// whose values the field holds, resolved the same way.
 	FactFieldTypes Fact = "field_types"
+	// FactImplementations adds to every type declaration the interfaces
+	// and abstract classes of the repository it implements, each with
+	// the evidence the language established it by, and the method its
+	// lookup reaches for each of their operations.
+	FactImplementations Fact = "implementations"
 )
 
 // Facts returns every fact class in the order the meta-model documents
 // them.
 func Facts() []Fact {
-	return []Fact{FactFileTree, FactImports, FactDeclarations, FactCalls, FactResolvedCalls, FactFieldTypes}
+	return []Fact{FactFileTree, FactImports, FactDeclarations, FactCalls, FactResolvedCalls, FactFieldTypes, FactImplementations}
 }
 
 // Valid reports whether the value is a defined fact class.
@@ -190,6 +195,9 @@ func NewEnforcement(languages []Language, facts []Fact, evidence EvidenceMethod,
 	if hasFact(facts, FactFieldTypes) && !hasFact(facts, FactDeclarations) {
 		return Enforcement{}, fmt.Errorf("enforcement: %s resolves %s and requires it", FactFieldTypes, FactDeclarations)
 	}
+	if hasFact(facts, FactImplementations) && !hasFact(facts, FactDeclarations) {
+		return Enforcement{}, fmt.Errorf("enforcement: %s resolves %s and requires it", FactImplementations, FactDeclarations)
+	}
 	return Enforcement{
 		languages:   append([]Language(nil), languages...),
 		facts:       append([]Fact(nil), facts...),
@@ -290,7 +298,7 @@ func BuiltinEnforcement(t Type) Enforcement {
 			"word count of every recorded text against the word limit of its kind", AssuranceExact, nil, true)
 		return e
 	case TypeExtension:
-		e, _ := NewEnforcement(nil, []Fact{FactFileTree, FactImports, FactDeclarations, FactCalls, FactResolvedCalls, FactFieldTypes},
+		e, _ := NewEnforcement(nil, []Fact{FactFileTree, FactImports, FactDeclarations, FactCalls, FactResolvedCalls, FactFieldTypes, FactImplementations},
 			"TypeScript extension executed in the sandboxed SDK runtime",
 			AssuranceHeuristic,
 			[]string{"the engine treats extension evidence as heuristic regardless of the extension's own declaration"}, true)

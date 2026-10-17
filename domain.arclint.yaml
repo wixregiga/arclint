@@ -506,6 +506,11 @@ contexts:
             Facts exposes a test file that scan.exclude leaves out only to the
             checks of the tests verified_by names, and only when the recording
             names it; no other Rule, Zone or context sees it.
+          implementations-state-their-evidence: >-
+            Facts presents a type as implementing an interface or abstract class
+            exactly only where the language's checking or the code's own
+            declaration establishes it; a match of member names alone is
+            heuristic, and a runtime registration undetermined.
       Violation:
         definition: >-
           One suspected breach of a Rule, anchored at a file and line and

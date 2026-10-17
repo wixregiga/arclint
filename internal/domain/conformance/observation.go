@@ -154,7 +154,95 @@ type Declaration struct {
 	// undetermined. Valid when FieldTypesAvailable; zero for every other
 	// kind.
 	Type Reference
+	// Implements lists, for a struct, type, or class, the interfaces
+	// and abstract classes of the repository it implements, each with
+	// the evidence the language established it by. Valid when
+	// ImplementationsAvailable; absent for every other kind.
+	Implements []Implementation
 }
+
+// ImplementationEvidence is how the language established that a type
+// implements an interface or an abstract class.
+type ImplementationEvidence string
+
+const (
+	// ImplementationExact is established by the language's own checking
+	// or by the code's declaration: Go's method sets, a TypeScript
+	// implements or extends clause, a Python class hierarchy.
+	ImplementationExact ImplementationEvidence = "exact"
+	// ImplementationHeuristic is a match of member names alone, with no
+	// declaration relating the type to the abstraction.
+	ImplementationHeuristic ImplementationEvidence = "heuristic"
+	// ImplementationUndetermined is claimed where the language cannot
+	// confirm it: a runtime registration, or a clause whose abstraction
+	// resolution cannot follow.
+	ImplementationUndetermined ImplementationEvidence = "undetermined"
+)
+
+// Valid reports whether the value is a defined enum member.
+func (e ImplementationEvidence) Valid() bool {
+	switch e {
+	case ImplementationExact, ImplementationHeuristic, ImplementationUndetermined:
+		return true
+	}
+	return false
+}
+
+// Implementation is one interface or abstract class a type implements.
+type Implementation struct {
+	// Abstraction is the interface or abstract class: declared in an
+	// observed file, or, for undetermined evidence, undetermined with the
+	// name the code writes.
+	Abstraction Reference
+	Evidence    ImplementationEvidence
+	// Reason says why the evidence is heuristic or undetermined; empty
+	// for exact evidence.
+	Reason string
+	// Operations are, for each method the abstraction declares, the
+	// method the implementing type's own lookup reaches: declared on the
+	// type, promoted from an embedded type, or inherited; undetermined
+	// with the reason where the lookup cannot follow.
+	Operations []Reference
+}
+
+// validate enforces that an implementation states its evidence: exact
+// only for a declared abstraction and without a reason, heuristic for a
+// declared abstraction with the reason, and undetermined with the
+// reason.
+func (i Implementation) validate(observed map[string]bool) error {
+	if !i.Evidence.Valid() {
+		return fmt.Errorf("evidence %q invalid", i.Evidence)
+	}
+	if err := i.Abstraction.validate(observed); err != nil {
+		return fmt.Errorf("abstraction: %w", err)
+	}
+	switch i.Evidence {
+	case ImplementationExact, ImplementationHeuristic:
+		if i.Abstraction.Resolution != ResolutionDeclared || i.Abstraction.Owner != "" {
+			return fmt.Errorf("%s implementation of %s does not reach a declared type", i.Evidence, i.Abstraction.Name)
+		}
+	case ImplementationUndetermined:
+		if i.Abstraction.Resolution != ResolutionDeclared && i.Abstraction.Resolution != ResolutionUndetermined {
+			return fmt.Errorf("undetermined implementation of %s is %s", i.Abstraction.Name, i.Abstraction.Resolution)
+		}
+	}
+	if (i.Evidence == ImplementationExact) != (strings.TrimSpace(i.Reason) == "") {
+		return fmt.Errorf("%s implementation of %s: only exact evidence carries no reason", i.Evidence, i.Abstraction.Name)
+	}
+	for _, op := range i.Operations {
+		if err := op.validate(observed); err != nil {
+			return fmt.Errorf("operation of %s: %w", i.Abstraction.Name, err)
+		}
+		if op.Resolution == ResolutionDeclared && op.Owner == "" {
+			return fmt.Errorf("operation %s of %s is not a method", op.Name, i.Abstraction.Name)
+		}
+	}
+	return nil
+}
+
+// implementerKinds are the declaration kinds that implement an
+// abstraction.
+var implementerKinds = map[string]bool{declKindStruct: true, declKindType: true, declKindClass: true}
 
 // Call is one source call: the callee identifier as written, the line
 // of the call, and the enclosing function or method with the type that
@@ -322,6 +410,9 @@ type LanguageFacts struct {
 	// FieldTypesAvailable records whether every field declaration
 	// carries what it Holds, and whether it was requested.
 	FieldTypesAvailable bool
+	// ImplementationsAvailable records whether every type declaration
+	// carries what it Implements, and whether it was requested.
+	ImplementationsAvailable bool
 }
 
 // Supports states whether a requested fact class is available.
@@ -337,6 +428,8 @@ func (f LanguageFacts) Supports(fact rule.Fact) bool {
 		return f.ResolvedCallsAvailable && f.CallsAvailable && f.ParseFailure == ""
 	case rule.FactFieldTypes:
 		return f.FieldTypesAvailable && f.DeclarationsAvailable && f.ParseFailure == ""
+	case rule.FactImplementations:
+		return f.ImplementationsAvailable && f.DeclarationsAvailable && f.ParseFailure == ""
 	default:
 		return false
 	}
@@ -462,6 +555,9 @@ func validResolution(f LanguageFacts, observed map[string]bool) error {
 	if f.FieldTypesAvailable && !f.DeclarationsAvailable {
 		return fmt.Errorf("field types without declarations")
 	}
+	if f.ImplementationsAvailable && !f.DeclarationsAvailable {
+		return fmt.Errorf("implementations without declarations")
+	}
 	for _, c := range f.Calls {
 		if !f.ResolvedCallsAvailable {
 			if !c.Target.IsZero() || !c.Receiver.IsZero() {
@@ -484,6 +580,14 @@ func validResolution(f LanguageFacts, observed map[string]bool) error {
 		if !typed || d.Kind != declKindField {
 			if len(d.Holds) > 0 || !typed && !d.Type.IsZero() {
 				return fmt.Errorf("%s %s carries field types that were not supplied", d.Kind, d.Name)
+			}
+		}
+		if len(d.Implements) > 0 && (!f.ImplementationsAvailable || !implementerKinds[d.Kind]) {
+			return fmt.Errorf("%s %s carries implementations that were not supplied", d.Kind, d.Name)
+		}
+		for _, impl := range d.Implements {
+			if err := impl.validate(observed); err != nil {
+				return fmt.Errorf("%s %s: implements: %w", d.Kind, d.Name, err)
 			}
 		}
 		if !typed || d.Kind != declKindField && d.Type.IsZero() {
@@ -548,7 +652,7 @@ func (o Observations) WithNamedTests(named map[string]LanguageFacts) (Observatio
 		if f.Language != "" && !f.Language.Valid() {
 			return Observations{}, fmt.Errorf("named tests: %s: language %q invalid", path, f.Language)
 		}
-		if len(f.Calls) > 0 || f.CallsAvailable || f.ResolvedCallsAvailable || f.FieldTypesAvailable {
+		if len(f.Calls) > 0 || f.CallsAvailable || f.ResolvedCallsAvailable || f.FieldTypesAvailable || f.ImplementationsAvailable {
 			return Observations{}, fmt.Errorf("named tests: %s carries facts beyond the imports and declarations a test's check reads", path)
 		}
 		for _, d := range f.Declarations {
@@ -557,7 +661,7 @@ func (o Observations) WithNamedTests(named map[string]LanguageFacts) (Observatio
 			}
 		}
 		f.Imports = append([]Import(nil), f.Imports...)
-		f.Declarations = copyDeclarations(f.Declarations, false)
+		f.Declarations = copyDeclarations(f.Declarations, false, false)
 		copied[path] = f
 	}
 	o.named = copied
@@ -573,7 +677,7 @@ func (o Observations) NamedTest(path string) (LanguageFacts, bool) {
 		return LanguageFacts{}, false
 	}
 	f.Imports = append([]Import(nil), f.Imports...)
-	f.Declarations = copyDeclarations(f.Declarations, false)
+	f.Declarations = copyDeclarations(f.Declarations, false, false)
 	return f, true
 }
 
@@ -592,14 +696,15 @@ func (o Observations) Content() Content {
 
 func copyLanguageFacts(f LanguageFacts) LanguageFacts {
 	f.Imports = append([]Import(nil), f.Imports...)
-	f.Declarations = copyDeclarations(f.Declarations, true)
+	f.Declarations = copyDeclarations(f.Declarations, true, true)
 	f.Calls = append([]Call(nil), f.Calls...)
 	return f
 }
 
 // copyDeclarations copies declarations so a reader cannot change the
-// observed ones, with the types each field holds when holds is set.
-func copyDeclarations(ds []Declaration, holds bool) []Declaration {
+// observed ones, with the types each field holds when holds is set and
+// what each type implements when implements is set.
+func copyDeclarations(ds []Declaration, holds, implements bool) []Declaration {
 	out := append([]Declaration(nil), ds...)
 	for i := range out {
 		out[i].Params = append([]DeclarationParam(nil), out[i].Params...)
@@ -609,6 +714,15 @@ func copyDeclarations(ds []Declaration, holds bool) []Declaration {
 		} else {
 			out[i].Holds, out[i].Type = nil, Reference{}
 		}
+		if !implements {
+			out[i].Implements = nil
+			continue
+		}
+		impls := append([]Implementation(nil), out[i].Implements...)
+		for j := range impls {
+			impls[j].Operations = append([]Reference(nil), impls[j].Operations...)
+		}
+		out[i].Implements = impls
 	}
 	return out
 }

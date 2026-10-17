@@ -220,11 +220,12 @@ func (e *Evaluator) host(supplied conformance.Facts, knowledge vocab.UbiquitousL
 				ImportsAvailable: facts.Supports(rule.FactImports), Imports: imports(path),
 				DeclarationsAvailable: facts.Supports(rule.FactDeclarations),
 				Decls:                 []DeclInfo{}, ParseError: facts.ParseFailure,
-				Dependencies:           []DependencyInfo{},
-				FieldTypesAvailable:    facts.Supports(rule.FactFieldTypes),
-				CallsAvailable:         facts.Supports(rule.FactCalls),
-				Calls:                  []CallInfo{},
-				ResolvedCallsAvailable: facts.Supports(rule.FactResolvedCalls),
+				Dependencies:             []DependencyInfo{},
+				FieldTypesAvailable:      facts.Supports(rule.FactFieldTypes),
+				ImplementationsAvailable: facts.Supports(rule.FactImplementations),
+				CallsAvailable:           facts.Supports(rule.FactCalls),
+				Calls:                    []CallInfo{},
+				ResolvedCallsAvailable:   facts.Supports(rule.FactResolvedCalls),
 			}
 			for _, c := range facts.Calls {
 				call := CallInfo{Callee: c.Callee, Line: c.Line, Enclosing: c.Enclosing, EnclosingOwner: c.EnclosingOwner}
@@ -255,6 +256,13 @@ func (e *Evaluator) host(supplied conformance.Facts, knowledge vocab.UbiquitousL
 					decl.Holds = append(decl.Holds, *referenceInfo(ref))
 				}
 				decl.Type = referenceInfo(d.Type)
+				for _, impl := range d.Implements {
+					info := ImplementationInfo{Abstraction: *referenceInfo(impl.Abstraction), Evidence: string(impl.Evidence), Reason: impl.Reason, Operations: []ReferenceInfo{}}
+					for _, op := range impl.Operations {
+						info.Operations = append(info.Operations, *referenceInfo(op))
+					}
+					decl.Implements = append(decl.Implements, info)
+				}
 				for _, param := range d.Params {
 					decl.Params = append(decl.Params, ParamInfo{
 						Name: param.Name, Type: param.Type,

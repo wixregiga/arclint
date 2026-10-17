@@ -91,6 +91,7 @@ func (f Facts) FactsFor(path string) (LanguageFacts, bool) {
 	facts.CallsAvailable = f.required[rule.FactCalls] && facts.CallsAvailable
 	facts.ResolvedCallsAvailable = f.required[rule.FactResolvedCalls] && facts.Supports(rule.FactResolvedCalls)
 	facts.FieldTypesAvailable = f.required[rule.FactFieldTypes] && facts.Supports(rule.FactFieldTypes)
+	facts.ImplementationsAvailable = f.required[rule.FactImplementations] && facts.Supports(rule.FactImplementations)
 	// Only the classes the rule requires are copied; the rest stay
 	// out of its view.
 	facts.Imports = nil
@@ -99,7 +100,7 @@ func (f Facts) FactsFor(path string) (LanguageFacts, bool) {
 	}
 	facts.Declarations = nil
 	if facts.Supports(rule.FactDeclarations) {
-		facts.Declarations = copyDeclarations(f.source.observations.facts[path].Declarations, facts.FieldTypesAvailable)
+		facts.Declarations = copyDeclarations(f.source.observations.facts[path].Declarations, facts.FieldTypesAvailable, facts.ImplementationsAvailable)
 	}
 	facts.Calls = nil
 	if facts.Supports(rule.FactCalls) {
@@ -212,7 +213,7 @@ func (f Facts) namedTest(path string) (facts LanguageFacts, present, readable bo
 		facts.Imports = append([]Import(nil), f.source.observations.named[path].Imports...)
 	}
 	if facts.Supports(rule.FactDeclarations) {
-		facts.Declarations = copyDeclarations(f.source.observations.named[path].Declarations, false)
+		facts.Declarations = copyDeclarations(f.source.observations.named[path].Declarations, false, false)
 	}
 	return facts, true, true
 }

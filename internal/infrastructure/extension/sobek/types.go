@@ -88,6 +88,27 @@ type DeclInfo struct {
 	// a func or method, the declaration its first written result names
 	// the same way (T for (T, error), T for a TypeScript Promise<T>).
 	Type *ReferenceInfo `json:"type,omitempty"`
+	// Implements lists, for a struct, type, or class when
+	// implementations are available, the interfaces and abstract
+	// classes of the repository it implements.
+	Implements []ImplementationInfo `json:"implements,omitempty"`
+}
+
+// ImplementationInfo is one interface or abstract class a type
+// implements, with the evidence the language established it by.
+type ImplementationInfo struct {
+	// Abstraction is the interface or abstract class; undetermined with
+	// the name the code writes when resolution cannot follow it.
+	Abstraction ReferenceInfo `json:"abstraction"`
+	// Evidence is exact (the language's own checking or the code's
+	// declaration), heuristic (member names alone), or undetermined (a
+	// runtime registration, or a clause resolution cannot follow).
+	Evidence string `json:"evidence"`
+	// Reason says why the evidence is heuristic or undetermined.
+	Reason string `json:"reason,omitempty"`
+	// Operations are, for each method the abstraction declares, the
+	// method the type's own lookup reaches.
+	Operations []ReferenceInfo `json:"operations"`
 }
 
 // ReferenceInfo is the declaration a call or a field's type reaches,
@@ -145,6 +166,9 @@ type FactsInfo struct {
 	// FieldTypesAvailable is true when every field declaration carries
 	// the declarations it holds.
 	FieldTypesAvailable bool `json:"fieldTypesAvailable"`
+	// ImplementationsAvailable is true when every type declaration
+	// carries the abstractions it implements.
+	ImplementationsAvailable bool `json:"implementationsAvailable"`
 	// CallsAvailable is false when calls were not supplied or parsing failed.
 	CallsAvailable bool       `json:"callsAvailable"`
 	Calls          []CallInfo `json:"calls"`

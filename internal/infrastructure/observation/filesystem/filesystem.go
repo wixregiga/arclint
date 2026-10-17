@@ -64,9 +64,9 @@ func NewSource(root string, producers ...FactProducer) (Source, error) {
 // Extension enforcement will discriminate through; the builtin fact
 // classes (file_tree, imports) are gathered whenever their language is
 // requested. referencesFor, when not nil, selects the files the
-// reference facts (calls, resolved calls, field types) are needed for:
-// a language holding none of them is observed without those facts, so
-// it never pays for a resolution nobody reads. namedTests are the test
+// reference facts (calls, resolved calls, field types, implementations)
+// are needed for: a language holding none of them is observed without
+// those facts, so it never pays for a resolution nobody reads. namedTests are the test
 // files the domain recording names under verified_by: each one the walk
 // left out is read too, for the imports and declarations its test's
 // check needs, and held apart from the observed files.
@@ -164,7 +164,7 @@ func (s Source) readNamedTests(languages []rule.Language, walked []conformance.O
 			if _, ok := named[path]; !ok {
 				continue
 			}
-			f.Calls, f.CallsAvailable, f.ResolvedCallsAvailable, f.FieldTypesAvailable = nil, false, false, false
+			f.Calls, f.CallsAvailable, f.ResolvedCallsAvailable, f.FieldTypesAvailable, f.ImplementationsAvailable = nil, false, false, false, false
 			named[path] = f
 		}
 	}
@@ -225,7 +225,7 @@ func withoutReferences(facts []rule.Fact) []rule.Fact {
 	out := make([]rule.Fact, 0, len(facts))
 	for _, f := range facts {
 		switch f {
-		case rule.FactCalls, rule.FactResolvedCalls, rule.FactFieldTypes:
+		case rule.FactCalls, rule.FactResolvedCalls, rule.FactFieldTypes, rule.FactImplementations:
 		default:
 			out = append(out, f)
 		}
