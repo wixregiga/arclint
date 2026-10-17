@@ -431,3 +431,50 @@ func TestUsesKeepGoMembersInTheirPackage(t *testing.T) {
 		t.Fatalf("undetermined = %+v", uses.Undetermined)
 	}
 }
+
+// A reached declaration is the located one only by its whole identity: a
+// top-level function sharing the name of a recorded class nested in the
+// same file reaches no recorded entry.
+func TestUsesMatchTheWholeDeclaration(t *testing.T) {
+	files := map[string]conformance.LanguageFacts{
+		"model.py": resolvedFile(rule.LanguagePython, "", []conformance.Declaration{
+			{Kind: "class", Name: "Container", Exported: true, StartLine: 1},
+			{Kind: "class", Name: "Money", Owner: "Container", Exported: true, StartLine: 2},
+			{Kind: "func", Name: "Money", Exported: true, StartLine: 5, Results: []string{"int"}},
+		}, nil),
+		"app.py": resolvedFile(rule.LanguagePython, "", nil, []conformance.Call{
+			{Callee: "Money", Line: 2, Target: declared("model.py", "", "Money")},
+		}),
+	}
+	uses := usesOf(t, []vocab.BoundedContext{contextOf("model", nil, []vocab.ValueObject{valueObject("Money")}, nil)}, files, "app.py")
+	if len(uses.Uses) != 0 || len(uses.Undetermined) != 0 {
+		t.Fatalf("a function sharing the class's name made a use: uses %v, undetermined %+v", spelled(uses.Uses), uses.Undetermined)
+	}
+}
+
+// A reference names no line, so when its file declares the name twice
+// it reaches a recorded entry only if every such declaration leads to
+// it: a getter and setter of one property are both members of the
+// class, while a function and a class of one name leave the reference
+// undetermined.
+func TestUsesWeighEveryDeclarationOfTheName(t *testing.T) {
+	files := map[string]conformance.LanguageFacts{
+		"model.py": resolvedFile(rule.LanguagePython, "", []conformance.Declaration{
+			{Kind: "func", Name: "Money", Exported: true, StartLine: 1, Results: []string{"int"}},
+			{Kind: "class", Name: "Money", Exported: true, StartLine: 4},
+			{Kind: "method", Name: "cents", Owner: "Money", Exported: true, StartLine: 6},
+			{Kind: "method", Name: "cents", Owner: "Money", Exported: true, StartLine: 10},
+		}, nil),
+		"app.py": resolvedFile(rule.LanguagePython, "", nil, []conformance.Call{
+			{Callee: "Money", Line: 2, Target: declared("model.py", "", "Money")},
+			{Callee: "cents", Line: 3, Target: declared("model.py", "Money", "cents")},
+		}),
+	}
+	uses := usesOf(t, []vocab.BoundedContext{contextOf("model", nil, []vocab.ValueObject{valueObject("Money")}, nil)}, files, "app.py")
+	if got := spelled(uses.Uses); len(got) != 1 || got[0] != "Money value_object  call cents app.py:3" {
+		t.Fatalf("uses = %v", got)
+	}
+	if len(uses.Undetermined) != 1 || uses.Undetermined[0].Line != 2 || !strings.Contains(uses.Undetermined[0].Reason, "which 2 declarations spell, and not all of them are Money") {
+		t.Fatalf("undetermined = %+v", uses.Undetermined)
+	}
+}
