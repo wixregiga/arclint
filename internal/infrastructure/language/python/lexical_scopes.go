@@ -72,7 +72,22 @@ type pyScope struct {
 	bindings  map[string]*pyBinding
 	star      bool
 	uncertain string
+	// classBody marks the namespace of a class body, which the scopes
+	// nested inside it do not see.
+	classBody bool
 }
+
+// lexical is the scope a scope nested here looks names up in: this
+// one, or, for a class body, the nearest enclosing scope that is not
+// a class body, since Python skips class namespaces when it resolves a
+// nested scope's names.
+func (s *pyScope) lexical() *pyScope {
+	for s != nil && s.classBody {
+		s = s.parent
+	}
+	return s
+}
+
 type pyClass struct {
 	name      string
 	node      *gotreesitter.Node
@@ -196,7 +211,7 @@ func (m *pyModule) collect(n *gotreesitter.Node, s *pyScope, owner *pyClass, inF
 		}
 		m.classes[c.name] = c
 		m.declared = append(m.declared, c)
-		cs := &pyScope{parent: s, module: m, owner: c, bindings: c.members}
+		cs := &pyScope{parent: s.lexical(), module: m, owner: c, bindings: c.members, classBody: true}
 		if body := n.ChildByFieldName("body", w.lang); body != nil {
 			m.collect(body, cs, c, false)
 		}
@@ -211,7 +226,7 @@ func (m *pyModule) collect(n *gotreesitter.Node, s *pyScope, owner *pyClass, inF
 		}
 		parent := s
 		if owner != nil && !inFunction {
-			parent = owner.scope
+			parent = owner.scope.lexical()
 		}
 		fs := &pyScope{parent: parent, module: m, bindings: map[string]*pyBinding{}}
 		if owner != nil && !inFunction && !m.staticMethods[n.StartByte()] {
