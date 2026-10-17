@@ -542,6 +542,8 @@ SWALLOWED_TEST = re.compile(r"""(?:^|[^\w.$])(?:it|test|describe)(?:\.\w+)*\s*\(
 # A line whose reading opened a literal it never closed is read again with
 # one slash decision reversed, at most this many, from the last.
 MAX_SLASH_RETRIES = 16
+# How many lines after it a line's readings are compared over.
+SLASH_WINDOW = 30
 
 
 def regex_extent(text, i):
@@ -659,20 +661,39 @@ class TypeScriptLexer:
             start = self.snapshot() if "/" in text else None
             kinds, marks, slashes, damaged = self.read(number, text, frozenset())
             if slashes and (damaged or self.literals_open() > _literals_open(start)):
-                for position in reversed(slashes[-MAX_SLASH_RETRIES:]):
+                # One line cannot tell a misread regular expression from a
+                # division before a literal that runs on; the lines after
+                # it can. Keep the reading, the first one or one with a
+                # slash reversed, that leaves the fewest lines of the
+                # window inside a literal or a comment, or damaged.
+                best = None
+                readings = [frozenset()] + [frozenset([p]) for p in reversed(slashes[-MAX_SLASH_RETRIES:])]
+                for reversed_slashes in readings:
                     self.restore(start)
-                    retry = self.read(number, text, frozenset([position]))
-                    if not retry[3] and self.literals_open() <= _literals_open(start):
-                        kinds, marks = retry[0], retry[1]
-                        break
-                else:
-                    self.restore(start)
-                    kinds, marks, _, _ = self.read(number, text, frozenset())
+                    result = self.read(number, text, reversed_slashes)
+                    after = self.snapshot()
+                    score = self.window_cost(lines, number, result[3])
+                    if best is None or score < best[0]:
+                        best = (score, result, after)
+                _, (kinds, marks, _, _), after = best
+                self.restore(after)
             for line in marks:
                 found[line] = "test"
             if kinds and text.strip():
                 found[number] = pick(kinds)
         return found
+
+    def window_cost(self, lines, number, damaged):
+        """Read on from the state after line number for SLASH_WINDOW lines
+        and count the lines that end inside a literal or a comment, a
+        damaged line counting three. The caller restores the state."""
+        cost = 3 if damaged else 0
+        cost += 1 if self.state in ("template", "string", "block") else 0
+        for later in range(number + 1, min(len(lines), number + SLASH_WINDOW) + 1):
+            _, _, _, later_damaged = self.read(later, lines[later - 1], frozenset())
+            cost += 3 if later_damaged else 0
+            cost += 1 if self.state in ("template", "string", "block") else 0
+        return cost
 
     def read(self, number, text, reversed_slashes):
         """Read one line. Return its kinds, the earlier lines it marks as
@@ -702,14 +723,14 @@ class TypeScriptLexer:
 
         def token(kind, op=None, sure=None):
             """Record a token. sure says whether a slash after it is surely
-            read right: after a literal, a number or a plain name it
-            divides, after most operators it starts a regular expression;
-            after a closing bracket, >, a postfix operator or a name spelled
-            like a keyword, the token's role decides, and the rule may
-            guess wrong."""
+            read right: after a literal, a number, a plain name or a closing
+            parenthesis or square bracket it divides, after most operators
+            it starts a regular expression; after a closing brace, >, a
+            postfix operator or a name spelled like a keyword, the token's
+            role decides, and the rule may guess wrong."""
             if sure is None:
                 if kind == "operator":
-                    sure = op not in (")", "]", "}", ">")
+                    sure = op not in ("}", ">")
                 elif isinstance(kind, tuple):
                     sure = kind[0] == "word" and kind[1] not in ("await", "yield", "of")
                 else:
@@ -798,7 +819,13 @@ class TypeScriptLexer:
                 damaged = True
             if pair == "//":
                 kinds.add("comment")
-                break
+                # A carriage return, U+2028 or U+2029 ends the comment too;
+                # Git's line goes on after it.
+                ends = [k for k in (text.find(c, i + 2) for c in "\r\u2028\u2029") if k >= 0]
+                if not ends:
+                    break
+                i = min(ends) + 1
+                continue
             if pair == "/*":
                 self.state = "block"
                 kinds.add("comment")
@@ -1023,10 +1050,10 @@ class TypeScriptLexer:
             if closes_condition:
                 token("operator", ")")
             else:
-                token("operand")
+                token("operand", sure=True)
         elif char == "]":
             other_token()
-            token("operand")
+            token("operand", sure=True)
         elif char == "{":
             if self.expression_body == "return" and self.last_op == ":":
                 opens = "return type"  # function(): { value: number } {
@@ -1228,7 +1255,13 @@ def python_sources(lines):
             # Code: at the top level, or inside a replacement field.
             if char == "#":
                 kinds.add("comment")
-                break
+                # A lone carriage return ends a Python line, and the comment
+                # with it; Git's line goes on after it.
+                end = text.find("\r", i + 1)
+                if end < 0:
+                    break
+                i = end + 1
+                continue
             match = PY_STRING.match(text, i) if char in "'\"rRbBuUfF" else None
             if match and (char in "'\"" or i == 0 or not (text[i - 1].isalnum() or text[i - 1] == "_")):
                 prefix, quote = match.group(1).lower(), match.group(2)

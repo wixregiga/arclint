@@ -877,6 +877,21 @@ class InventoryTest(unittest.TestCase):
             "web/quota.test.ts:3": "test", "web/greek.ts:2": "comment",
         })
 
+    def test_round_twenty_cases(self):
+        self.repo.write("web/quota.test.ts", 'const ratio = (8) / `requests/second\npending`.length;\n'
+                        'test("rejects invalid input", () => {});\n// Never overwrite.\n'
+                        'const n = +function(){} / `per/second\nnever`.length;\n// Still read.\n')
+        with open(os.path.join(self.repo.root, "message.ts"), "wb") as handle:
+            handle.write(b"// Comment.\rconst message = `first line\nNever overwrite.\n`;\n")
+        with open(os.path.join(self.repo.root, "message.py"), "wb") as handle:
+            handle.write(b'# Comment.\rmessage = """first line\nNever overwrite.\n"""\n')
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {
+            "web/quota.test.ts:3": "test", "web/quota.test.ts:4": "comment", "web/quota.test.ts:7": "comment",
+            "message.ts:1": "comment", "message.ts:2": "text", "message.ts:3": "text",
+            "message.py:1": "comment", "message.py:2": "text", "message.py:3": "text",
+        })
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
