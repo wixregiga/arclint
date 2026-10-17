@@ -299,6 +299,7 @@ An Override changes at least one of:
 | key | effect |
 |---|---|
 | `severity` | `error`, `warning`, or `info` |
+| `time_limit` | for a `uses` Rule only: how long its extension's check may run, such as `30s` |
 | `disable` | a reason string; the Rule stays listed, is marked disabled, and evaluates nothing |
 | `exclude` | `{paths, zones, reason}`: files the Rule does not judge |
 | `suppress` | `{paths, reason}`: findings kept in the Assessment but not active |

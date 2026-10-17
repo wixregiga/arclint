@@ -54,6 +54,7 @@ func writeRuleDetail(w io.Writer, d application.RuleDetail) error {
 		write("zones", strings.Join(d.Zones, ", "))
 		write("files", strings.Join(d.Files, ", "))
 	}
+	write("time limit", d.TimeLimit)
 	write("evidence", d.Evidence)
 	write("assurance", d.Summary.AssuranceLabel)
 	if d.Summary.Severity == "error" {

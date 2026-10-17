@@ -108,7 +108,7 @@ export default defineRule({
 	if err != nil {
 		t.Fatal(err)
 	}
-	findings, err := evaluator.Evaluate("facts-probe", nil, extensionFacts(t, paths, obs), vocab.UbiquitousLanguage{})
+	findings, err := evaluate(evaluator, "facts-probe", nil, extensionFacts(t, paths, obs), vocab.UbiquitousLanguage{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ export default defineRule({
 	if err != nil {
 		t.Fatal(err)
 	}
-	findings, err := evaluator.Evaluate("resolved-probe", nil, extensionFacts(t, []string{"order.go", "repo.go", "plain.go"}, obs), vocab.UbiquitousLanguage{})
+	findings, err := evaluate(evaluator, "resolved-probe", nil, extensionFacts(t, []string{"order.go", "repo.go", "plain.go"}, obs), vocab.UbiquitousLanguage{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ export default defineRule({type: "mutate", check(ctx) {
 		Name: "test", ValueObjects: []vocab.ValueObject{{Name: "Token", Aliases: []string{"original"}}},
 	}}}
 	for range 2 {
-		if _, err := evaluator.Evaluate("mutate", nil, conformance.Facts{}, knowledge); err != nil {
+		if _, err := evaluate(evaluator, "mutate", nil, conformance.Facts{}, knowledge); err != nil {
 			t.Fatal(err)
 		}
 	}

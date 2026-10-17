@@ -82,25 +82,25 @@ func SuppliedSourceName(ext rule.ConfiguredExtension) string {
 }
 
 // Evaluate runs one extension rule over the selected subjects.
-func (e *Evaluator) Evaluate(extension string, params map[string]any, facts conformance.Facts,
-	knowledge vocab.UbiquitousLanguage,
-) ([]conformance.ExtensionFinding, error) {
+func (e *Evaluator) Evaluate(extension string, params map[string]any, limit rule.TimeLimit,
+	facts conformance.Facts, knowledge vocab.UbiquitousLanguage,
+) (conformance.ExtensionRun, error) {
 	e.load()
 	if e.loadErr != nil {
-		return nil, extensionFailure(e.loadErr)
+		return conformance.ExtensionRun{}, extensionFailure(e.loadErr)
 	}
 	ruleType := e.registry.Get(extension)
 	if ruleType == nil {
-		return nil, fmt.Errorf("no extension registers rule %q (looked in %s and the extended patterns)",
+		return conformance.ExtensionRun{}, fmt.Errorf("no extension registers rule %q (looked in %s and the extended patterns)",
 			extension, filepath.Join(e.root, filepath.FromSlash(ExtensionsDir)))
 	}
 	validated, err := ruleType.ValidateParams(params)
 	if err != nil {
-		return nil, err
+		return conformance.ExtensionRun{}, err
 	}
-	reported, err := ruleType.Check(e.host(facts, knowledge), validated)
+	reported, elapsed, err := ruleType.Check(e.host(facts, knowledge), validated, limit.Duration())
 	if err != nil {
-		return nil, extensionFailure(err)
+		return conformance.ExtensionRun{}, extensionFailure(err)
 	}
 	findings := make([]conformance.ExtensionFinding, 0, len(reported))
 	for _, v := range reported {
@@ -112,7 +112,7 @@ func (e *Evaluator) Evaluate(extension string, params map[string]any, facts conf
 			Remediation: v.FixHint,
 		})
 	}
-	return findings, nil
+	return conformance.ExtensionRun{Findings: findings, Elapsed: elapsed}, nil
 }
 
 // extensionFailure translates extension code that did not complete into
@@ -123,14 +123,7 @@ func extensionFailure(err error) error {
 	if !errors.As(err, &failed) {
 		return err
 	}
-	if limit, ok := failed.TimeLimit(); ok {
-		failure, ferr := conformance.NewExtensionTimeout(failed.Source, limit)
-		if ferr != nil {
-			return fmt.Errorf("%w: %w", err, ferr)
-		}
-		return failure
-	}
-	failure, ferr := conformance.NewExtensionFault(failed.Source, failed.Cause())
+	failure, ferr := failed.ExtensionFailure()
 	if ferr != nil {
 		return fmt.Errorf("%w: %w", err, ferr)
 	}
@@ -143,7 +136,7 @@ func extensionFailure(err error) error {
 func (e *Evaluator) RegisteredExtensionRules() ([]application.RegisteredExtensionRule, error) {
 	e.load()
 	if e.loadErr != nil {
-		return nil, e.loadErr
+		return nil, extensionFailure(e.loadErr)
 	}
 	types := e.registry.Types()
 	out := make([]application.RegisteredExtensionRule, 0, len(types))

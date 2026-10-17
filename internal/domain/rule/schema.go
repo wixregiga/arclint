@@ -77,6 +77,13 @@ func (t Type) Schema() TypeSchema {
 			Doc: "narrows the files judged; absent means every selected file",
 		})
 	}
+	if t == TypeExtension {
+		common = append(common, FieldSchema{
+			Name: "time_limit", Kind: "duration", Default: DefaultTimeLimit.String(),
+			Configurable: true,
+			Doc:          "how long the Extension's check may run before the Rule is reported as not evaluated",
+		})
+	}
 	var params []FieldSchema
 	switch t {
 	case TypeConsumes:
@@ -219,6 +226,10 @@ const (
 	idPartJSONPattern = `[a-z0-9_]([a-z0-9._/-]*[a-z0-9_-])?`
 	// ruleIDJSONPattern mirrors NewID: LOCAL or NAMESPACE/NAME:LOCAL.
 	ruleIDJSONPattern = `^(` + patternPartJSONPattern + `/` + patternPartJSONPattern + `:)?` + idPartJSONPattern + `$`
+	// timeLimitJSONPattern mirrors the format ParseTimeLimit reads: one
+	// or more unsigned decimal amounts, each with a unit. A zero amount
+	// matches the format and is rejected at load as not positive.
+	timeLimitJSONPattern = `^(([0-9]+(\.[0-9]*)?|\.[0-9]+)(ns|us|µs|μs|ms|s|m|h))+$`
 	// patternPartJSONPattern is an id part that also excludes "/", the
 	// separator inside a PatternReference.
 	patternPartJSONPattern = `[a-z0-9_]([a-z0-9._-]*[a-z0-9_-])?`
@@ -345,6 +356,7 @@ func defDescriptions() map[string]string {
 		"protectedZone":           "The one declared Zone the Rule protects.",
 		"patternReference":        "Exact reference to one published Pattern version: namespace/name@version.",
 		"severity":                "Gate importance of a Violation.",
+		"timeLimit":               "How long an Extension Rule's check may run before it is stopped and the Rule is reported as not evaluated: a positive duration such as 10s or 1m30s. Only an Extension (uses) Rule carries one; without it the check runs under " + DefaultTimeLimit.String() + ". Registration always runs under " + DefaultTimeLimit.String() + ".",
 		"importPolicy":            "Policy for one import class.",
 		"glob":                    "Repo-relative path pattern: * and ? never cross /, a ** segment matches any number of segments, [...] matches one character. Brace alternation is rejected.",
 		"caseSpec":                "File-name case vocabulary: one or more alternatives of kebab-case, snake_case, camelCase, PascalCase, or regex:PATTERN, combined with | (any-of); applies to the file stem, extension excluded.",
@@ -364,7 +376,7 @@ func defDescriptions() map[string]string {
 		"repositoryZone":          "One repository Zone: its paths as a glob or a list of globs, or an object with paths and an optional description.",
 		"patternZone":             "One Pattern Zone: its description, or an object with the description and the paths the Pattern suggests for the Binding. A Pattern never owns paths.",
 		"rule":                    "One Rule carrying exactly one constraint key (" + strings.Join(ConstraintKeys(), ", ") + "), or an Override carrying none.",
-		"override":                "An Override of a distributed or built-in Rule, keyed by that Rule's ID. It carries no constraint or rationale: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID.",
+		"override":                "An Override of a distributed or built-in Rule, keyed by that Rule's ID. It carries no constraint or rationale: it disables the Rule with a reason, changes its severity or an Extension Rule's time limit, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID.",
 		"exclusion":               "Removes paths or Zones from what the Rule judges; excluded subjects evaluate not applicable.",
 		"suppression":             "Keeps findings at the paths while removing their gate effect; suppressed findings are still reported.",
 	}
@@ -409,6 +421,12 @@ func schemaDefs() map[string]any {
 			"type":        "string",
 			"enum":        []string{string(SeverityError), string(SeverityWarning), string(SeverityInfo)},
 			"default":     string(DefaultSeverity),
+		},
+		"timeLimit": map[string]any{
+			"description": defDescription("timeLimit"),
+			"type":        "string",
+			"pattern":     timeLimitJSONPattern,
+			"default":     DefaultTimeLimit.String(),
 		},
 		"importPolicy": map[string]any{
 			"description": defDescription("importPolicy"),
@@ -742,6 +760,9 @@ func commonRuleProperties(t Type) (map[string]any, []string) {
 	if t.AcceptsFiles() {
 		props["files"] = schemaRef("judgedFiles")
 	}
+	if t == TypeExtension {
+		props["time_limit"] = schemaRef("timeLimit")
+	}
 	return props, required
 }
 
@@ -904,10 +925,11 @@ func overrideSchema() map[string]any {
 	s := strictObjectSchema(
 		defDescription("override"),
 		map[string]any{
-			"disable":  schemaRef("reason"),
-			"severity": schemaRef("severity"),
-			"exclude":  schemaRef("exclusion"),
-			"suppress": schemaRef("suppression"),
+			"disable":    schemaRef("reason"),
+			"severity":   schemaRef("severity"),
+			"time_limit": schemaRef("timeLimit"),
+			"exclude":    schemaRef("exclusion"),
+			"suppress":   schemaRef("suppression"),
 		},
 	)
 	s["minProperties"] = 1

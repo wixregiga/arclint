@@ -119,16 +119,43 @@ func writeJSON(w io.Writer, v any) error {
 // diagnosticDoc is the stable JSON shape of one Diagnostic in the
 // target engine's output.
 type diagnosticDoc struct {
-	Kind        string       `json:"kind"`
-	RuleID      string       `json:"ruleId,omitempty"`
-	Pattern     string       `json:"pattern,omitempty"`
-	Path        string       `json:"path,omitempty"`
-	Line        int          `json:"line,omitempty"`
-	Severity    string       `json:"severity,omitempty"`
-	Status      string       `json:"status,omitempty"`
-	Message     string       `json:"message"`
-	Remediation string       `json:"remediation,omitempty"`
-	Contract    *contractDoc `json:"contract,omitempty"`
+	Kind         string           `json:"kind"`
+	RuleID       string           `json:"ruleId,omitempty"`
+	Pattern      string           `json:"pattern,omitempty"`
+	Path         string           `json:"path,omitempty"`
+	Line         int              `json:"line,omitempty"`
+	Severity     string           `json:"severity,omitempty"`
+	Status       string           `json:"status,omitempty"`
+	Message      string           `json:"message"`
+	Remediation  string           `json:"remediation,omitempty"`
+	Contract     *contractDoc     `json:"contract,omitempty"`
+	NotEvaluated *notEvaluatedDoc `json:"notEvaluated,omitempty"`
+}
+
+// notEvaluatedDoc states the circumstances of a Rule its Extension
+// stopped: which Extension, from where, in which phase, against which
+// limit, after how long, the file it last read, and the error it raised.
+type notEvaluatedDoc struct {
+	Extension string `json:"extension"`
+	Source    string `json:"source"`
+	Phase     string `json:"phase"`
+	TimedOut  bool   `json:"timedOut"`
+	LimitMs   int64  `json:"limitMs"`
+	ElapsedMs int64  `json:"elapsedMs"`
+	File      string `json:"file,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
+func notEvaluatedDocOf(d conformance.Diagnostic) *notEvaluatedDoc {
+	extension, failure, ok := d.NotEvaluated()
+	if !ok {
+		return nil
+	}
+	return &notEvaluatedDoc{
+		Extension: extension, Source: failure.Source(), Phase: string(failure.Phase()),
+		TimedOut: failure.TimedOut(), LimitMs: failure.Limit().Milliseconds(),
+		ElapsedMs: failure.Elapsed().Milliseconds(), File: failure.File(), Error: failure.Raised(),
+	}
 }
 
 // checkDocs keeps the diagnostic array and adds one coverage entry for
@@ -139,15 +166,16 @@ func checkDocs(a conformance.Assessment) []diagnosticDoc {
 	docs := make([]diagnosticDoc, 0, len(diags))
 	for _, d := range diags {
 		docs = append(docs, diagnosticDoc{
-			Kind:        string(d.Kind()),
-			RuleID:      d.RuleID(),
-			Pattern:     d.Pattern(),
-			Path:        d.Path(),
-			Line:        d.Line(),
-			Severity:    string(d.Severity()),
-			Status:      string(d.Status()),
-			Message:     d.Message(),
-			Remediation: d.Remediation(),
+			Kind:         string(d.Kind()),
+			RuleID:       d.RuleID(),
+			Pattern:      d.Pattern(),
+			Path:         d.Path(),
+			Line:         d.Line(),
+			Severity:     string(d.Severity()),
+			Status:       string(d.Status()),
+			Message:      d.Message(),
+			Remediation:  d.Remediation(),
+			NotEvaluated: notEvaluatedDocOf(d),
 		})
 	}
 	for _, id := range a.PatternBoundRules() {
@@ -330,6 +358,7 @@ type ruleDetailDocT struct {
 	Files            []string        `json:"files,omitempty"`
 	Exclusions       []policyNoteDoc `json:"exclusions,omitempty"`
 	Suppressions     []policyNoteDoc `json:"suppressions,omitempty"`
+	TimeLimit        string          `json:"timeLimit,omitempty"`
 	Schema           string          `json:"schema,omitempty"`
 }
 
@@ -343,6 +372,7 @@ func ruleDetailDoc(d application.RuleDetail) ruleDetailDocT {
 		EntireRepository: d.EntireRepository,
 		Zones:            append([]string(nil), d.Zones...),
 		Files:            append([]string(nil), d.Files...),
+		TimeLimit:        d.TimeLimit,
 		Schema:           d.Schema,
 	}
 	for _, e := range d.Exclusions {

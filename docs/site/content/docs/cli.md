@@ -337,13 +337,24 @@ in the complete Conformance Assessment. The stable shape is:
 
 `kind` is `violation`, `operational`, `coverage`, or `not_evaluated`.
 A `not_evaluated` entry names an extension Rule whose extension timed
-out or failed, with the extension's source and the cause in `message`:
+out or failed. `message` says it in one line, and `notEvaluated`
+carries the circumstances as fields (see
+[TypeScript extensions](/docs/extensions/#sandbox-and-failure)):
 
 ```json
 {
   "kind": "not_evaluated",
   "ruleId": "src/spin",
-  "message": "rule src/spin: extension \"spin\": .arclint/extensions/spin.ts exceeded its 5s time limit"
+  "message": "rule src/spin: extension \"spin\" (.arclint/extensions/spin.ts) reached its 5s time limit in check and was stopped after 5.004s, last reading src/ok.go",
+  "notEvaluated": {
+    "extension": "spin",
+    "source": ".arclint/extensions/spin.ts",
+    "phase": "check",
+    "timedOut": true,
+    "limitMs": 5000,
+    "elapsedMs": 5004,
+    "file": "src/ok.go"
+  }
 }
 ```
 

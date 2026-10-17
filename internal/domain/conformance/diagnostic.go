@@ -40,6 +40,8 @@ type Diagnostic struct {
 	remediation       string
 	status            Status // violation kind only
 	suppressionReason string
+	extension         string           // not-evaluated kind only
+	failure           ExtensionFailure // not-evaluated kind only
 }
 
 // NewOperational reports an operational problem. Severity states its
@@ -85,8 +87,10 @@ func NewNotEvaluated(ruleID, extension string, failure ExtensionFailure) (Diagno
 	return Diagnostic{
 		kind:   DiagnosticNotEvaluated,
 		ruleID: ruleID,
-		message: fmt.Sprintf("rule %s: extension %q: %s %s",
+		message: fmt.Sprintf("rule %s: extension %q (%s) %s",
 			ruleID, extension, failure.Source(), failure.Cause()),
+		extension: extension,
+		failure:   failure,
 	}, nil
 }
 
@@ -139,6 +143,12 @@ func (d Diagnostic) Remediation() string { return d.remediation }
 
 // Status reports the violation status; "" for other kinds.
 func (d Diagnostic) Status() Status { return d.status }
+
+// NotEvaluated returns the Extension and the ExtensionFailure that
+// stopped the Rule; false for other kinds.
+func (d Diagnostic) NotEvaluated() (string, ExtensionFailure, bool) {
+	return d.extension, d.failure, d.kind == DiagnosticNotEvaluated
+}
 
 // SuppressionReason returns the suppressing reason, when suppressed.
 func (d Diagnostic) SuppressionReason() string { return d.suppressionReason }

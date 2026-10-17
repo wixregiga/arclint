@@ -48,7 +48,7 @@ func TestOverrideAppliesAdoptionAndPreservesRule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	override, err := adoption.NewOverride(original.ID(), rule.SeverityWarning, &exclusion, &suppression, &disablement)
+	override, err := adoption.NewOverride(original.ID(), rule.SeverityWarning, rule.TimeLimit{}, &exclusion, &suppression, &disablement)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestOverrideRejectsInvalidValues(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := adoption.NewOverride(tc.target, tc.severity, tc.exclusion, tc.suppression, tc.disablement)
+			_, err := adoption.NewOverride(tc.target, tc.severity, rule.TimeLimit{}, tc.exclusion, tc.suppression, tc.disablement)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("got %v, want %s", err, tc.want)
 			}
@@ -120,7 +120,7 @@ func TestOverrideRejectsInvalidValues(t *testing.T) {
 
 func TestOverrideProtectsItsTarget(t *testing.T) {
 	target := overrideTarget(t, true)
-	override, err := adoption.NewOverride(target.ID(), rule.SeverityInfo, nil, nil, nil)
+	override, err := adoption.NewOverride(target.ID(), rule.SeverityInfo, rule.TimeLimit{}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func TestOverrideAdoptsBuiltInAndKeepsUnspecifiedSeverity(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		override, err := adoption.NewOverride(target.ID(), "", nil, nil, &disablement)
+		override, err := adoption.NewOverride(target.ID(), "", rule.TimeLimit{}, nil, nil, &disablement)
 		if err != nil {
 			t.Fatal(err)
 		}

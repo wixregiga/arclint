@@ -23,13 +23,11 @@ var sdkSource string
 // ExtensionsDir is the discovery root, relative to the repo root.
 const ExtensionsDir = ".arclint/extensions"
 
-// Options tunes loading and execution.
+// Options tunes loading. Each check runs under its Rule's TimeLimit,
+// passed to RuleType.Check.
 type Options struct {
-	// CheckTimeout bounds one check() invocation (interrupt-based).
-	// Zero means the 5s default.
-	CheckTimeout time.Duration
-	// RegisterTimeout bounds one extension's registration phase.
-	// Zero means the 5s default.
+	// RegisterTimeout bounds one extension's registration phase. Zero
+	// means rule.DefaultTimeLimit.
 	RegisterTimeout time.Duration
 	// CacheDir persists transpile results ("" disables).
 	CacheDir string
@@ -37,17 +35,11 @@ type Options struct {
 	Version string
 }
 
-const (
-	defaultTimeout = 5 * time.Second
-	sdkNamespace   = "arclint-sdk"
-)
+const sdkNamespace = "arclint-sdk"
 
 func (o *Options) fill() {
-	if o.CheckTimeout == 0 {
-		o.CheckTimeout = defaultTimeout
-	}
 	if o.RegisterTimeout == 0 {
-		o.RegisterTimeout = defaultTimeout
+		o.RegisterTimeout = rule.DefaultTimeLimit.Duration()
 	}
 	if o.Version == "" {
 		// Build info salts the transpile cache: a new arclint (or a new

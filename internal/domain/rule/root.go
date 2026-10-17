@@ -407,6 +407,24 @@ func (r Rule) WithSeverity(s Severity) (Rule, error) {
 	return r, nil
 }
 
+// WithTimeLimit produces the same Extension Rule with a different
+// TimeLimit for its check. Only an Extension Rule carries one.
+func (r Rule) WithTimeLimit(t TimeLimit) (Rule, error) {
+	c, ok := r.constraint.(ExtensionConstraint)
+	if !ok {
+		return Rule{}, fmt.Errorf("rule %s: time_limit applies only to an extension (uses) rule", r.id)
+	}
+	if t.IsZero() {
+		return Rule{}, fmt.Errorf("rule %s: time limit must be a positive duration", r.id)
+	}
+	c.TimeLimit = t
+	r.constraint = c
+	if err := r.EnsureConstraintAcceptsScope(); err != nil {
+		return Rule{}, err
+	}
+	return r, nil
+}
+
 // Exclude removes the Exclusion's subjects from Scope. The
 // identity is unchanged; excluded subjects evaluate not-applicable.
 func (r Rule) Exclude(e Exclusion) (Rule, error) {

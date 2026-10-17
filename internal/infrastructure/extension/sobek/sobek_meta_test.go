@@ -60,7 +60,7 @@ export default defineRule({
 			TargetDir: "src", TargetFile: "src/b.ts",
 		}}
 	}
-	got, err := rt.Check(host, params)
+	got, _, err := rt.Check(host, params, testLimit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +115,7 @@ export default defineRule({
 			}},
 		}
 	}
-	got, err := rt.Check(host, params)
+	got, _, err := rt.Check(host, params, testLimit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ export default defineRule({
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := rt.Check(fakeHost(nil), params) // fakeHost lends no Facts capability
+	got, _, err := rt.Check(fakeHost(nil), params, testLimit) // fakeHost lends no Facts capability
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -294,6 +294,19 @@ contexts:
           Rule's check decides only its pattern, every enabled content Rule
           needs at least one failing case drawn from its Rationale, and arclint
           rules test names each one that has none.
+      TimeLimit:
+        definition: >-
+          How long the check of one Extension Rule may run before it is stopped
+          and the Rule is reported as not evaluated. Only an Extension Rule
+          carries one. The Rule sets it with time_limit, and an Override sets it
+          for an Extension Rule a Pattern distributes; without either the
+          default of 5 seconds applies. An Extension's registration always runs
+          under the default. A check that runs longer than half its TimeLimit is
+          reported as near the limit, because a run twice as slow would stop it.
+        invariants:
+          positive: >-
+            A TimeLimit is a positive duration; zero or a negative duration is
+            rejected at load.
     questions:
       pattern-holds-rules: >-
         In code a Pattern carries the Rules it distributes, which reads like a
@@ -325,7 +338,8 @@ contexts:
           One adopting repository's decision applied onto a Rule an extended
           Pattern distributes or a built-in Rule, keyed by the Rule's RuleID. An
           Override is not a second Rule: it only disables the Rule, changes its
-          Severity, excludes subjects from it, or suppresses its findings.
+          Severity, excludes subjects from it, suppresses its findings, or
+          changes the TimeLimit of an Extension Rule.
         invariants:
           names-a-distributed-rule: >-
             An Override names a distributed or built-in Rule; an Override whose
@@ -465,14 +479,24 @@ contexts:
       ExtensionFailure:
         definition: >-
           The reason an Extension Rule was not evaluated: its Extension ran past
-          its time limit, or its code failed while running. The Rule it stops is
-          reported as not evaluated, never as conforming, and every other Rule
-          of the same check is still evaluated and reported. Two
-          ExtensionFailures with the same cause are the same reason.
+          its time limit, or its code failed while running. It names the
+          Extension's source, the phase it stopped in (registration, or the
+          Rule's check), the time limit in force and the time the Extension ran
+          before it stopped, the file the check last read when one is known, and
+          the error the Extension raised when it did not time out. The Rule it
+          stops is reported as not evaluated, never as conforming, and every
+          other Rule of the same check is still evaluated and reported. Two
+          ExtensionFailures with the same values are the same reason.
         invariants:
           states-its-cause: >-
             ExtensionFailure always states its cause: the time limit its
             Extension exceeded, or the error its Extension raised while running.
+          names-its-phase: >-
+            ExtensionFailure always names the phase its Extension stopped in:
+            registration or check.
+          measures-its-run: >-
+            ExtensionFailure always states how long its Extension ran before it
+            stopped, beside the time limit in force.
   distribution:
     definition: >-
       Moving published Patterns between repositories without changing them: what

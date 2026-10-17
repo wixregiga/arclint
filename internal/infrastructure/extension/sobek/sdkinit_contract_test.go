@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/wixregiga/arclint/internal/domain/rule"
 )
 
 // The editor contract must match the generated wire types and shared API.
@@ -170,7 +172,7 @@ export default defineRule({type: "host-contract", description: "contract", capab
 			return "order_item", nil
 		},
 	}
-	got, err := rt.Check(host, params)
+	got, _, err := rt.Check(host, params, rule.DefaultTimeLimit.Duration())
 	if err != nil {
 		t.Fatal(err)
 	}

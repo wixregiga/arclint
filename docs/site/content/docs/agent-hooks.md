@@ -129,8 +129,9 @@ domain service; the hook adapter only reports what happened.
   the command was started: from Bash or PowerShell, through `wsl.exe`, or
   inside a script or make target. The hooks resolve the Zones that own the
   named paths exactly as `arclint context` does. A failed command, `--help`,
-  a check narrowed by `--only` or `--exclude`, and a domain command that left
-  the recording unchanged record nothing. ArcLint records only where the hooks
+  a check narrowed by `--only` or `--exclude`, a check that left a Rule not
+  evaluated (exit `3`), and a domain command that left the recording
+  unchanged record nothing. ArcLint records only where the hooks
   created that directory, so projects without the hooks, and CI, gain no
   files.
 - The hosts report edits. The file paths of Edit, Write, MultiEdit and

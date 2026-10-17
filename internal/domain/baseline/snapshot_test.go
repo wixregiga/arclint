@@ -126,8 +126,8 @@ func TestAmbiguousIdentitiesRejected(t *testing.T) {
 // stopper is an Extension mechanism whose Extension runs past its limit.
 type stopper struct{ failure conformance.ExtensionFailure }
 
-func (s stopper) Evaluate(string, map[string]any, conformance.Facts, vocab.UbiquitousLanguage) ([]conformance.ExtensionFinding, error) {
-	return nil, s.failure
+func (s stopper) Evaluate(string, map[string]any, rule.TimeLimit, conformance.Facts, vocab.UbiquitousLanguage) (conformance.ExtensionRun, error) {
+	return conformance.ExtensionRun{}, s.failure
 }
 
 // assessStopped runs the snake Rule plus an extension Rule its
@@ -166,7 +166,10 @@ func assessStopped(t *testing.T, paths ...string) conformance.Assessment {
 	if err != nil {
 		t.Fatal(err)
 	}
-	failure, err := conformance.NewExtensionTimeout(".arclint/extensions/spin.ts", 5*time.Second)
+	failure, err := conformance.NewExtensionFailure(conformance.ExtensionFailureSpec{
+		Source: ".arclint/extensions/spin.ts", Phase: conformance.PhaseCheck,
+		Limit: 5 * time.Second, Elapsed: 5 * time.Second, TimedOut: true,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
@@ -26,7 +27,9 @@ import (
 // An Extension that runs past its time limit or fails while running
 // returns an ExtensionFailure: the Rule gets no Evaluation and one
 // not-evaluated Diagnostic, and the check goes on with the other
-// Rules. Any other error aborts the check as a configuration error.
+// Rules. Any other error aborts the check as a configuration error. A
+// check that ran longer than half its TimeLimit adds a coverage
+// Diagnostic saying so: a run twice as slow would stop it.
 func evaluateExtensionRule(r rule.Rule, facts Facts,
 	evaluator ExtensionEvaluator, knowledge vocab.UbiquitousLanguage,
 ) ([]Evaluation, []Diagnostic, error) {
@@ -39,7 +42,8 @@ func evaluateExtensionRule(r rule.Rule, facts Facts,
 		return es, nil, err
 	}
 	selected, excluded := facts.selectedFiles()
-	findings, err := evaluator.Evaluate(params.Uses, params.With, facts, knowledge)
+	limit := params.Limit()
+	run, err := evaluator.Evaluate(params.Uses, params.With, limit, facts, knowledge)
 	var failure ExtensionFailure
 	if errors.As(err, &failure) {
 		d, err := NewNotEvaluated(r.ID().Qualified(), params.Uses, failure)
@@ -52,9 +56,20 @@ func evaluateExtensionRule(r rule.Rule, facts Facts,
 		return nil, nil, fmt.Errorf("rule %s: %w", r.ID(), err)
 	}
 
+	var near []Diagnostic
+	if limit.Near(run.Elapsed) {
+		d, err := NewCoverage(r.ID().Qualified(), fmt.Sprintf(
+			"rule %s: extension %q took %s of its %s time limit; a run twice as slow would not be evaluated, so make the check faster or raise time_limit",
+			r.ID(), params.Uses, run.Elapsed.Round(time.Millisecond), limit))
+		if err != nil {
+			return nil, nil, err
+		}
+		near = append(near, d)
+	}
+
 	var breaches []ExtensionFinding
 	byPath := map[string][]ExtensionFinding{}
-	for _, f := range findings {
+	for _, f := range run.Findings {
 		subject := f.SubjectPath
 		if subject == "" {
 			subject = f.Path
@@ -66,7 +81,8 @@ func evaluateExtensionRule(r rule.Rule, facts Facts,
 		byPath[subject] = append(byPath[subject], f)
 	}
 	if len(breaches) > 0 {
-		return containExtensionScopeBreach(r, params.Uses, selected, excluded, breaches)
+		es, diags, err := containExtensionScopeBreach(r, params.Uses, selected, excluded, breaches)
+		return es, append(diags, near...), err
 	}
 
 	var out []Evaluation
@@ -100,7 +116,7 @@ func evaluateExtensionRule(r rule.Rule, facts Facts,
 		out = append(out, e)
 	}
 	out, err = appendNotApplicable(out, r, excluded)
-	return out, nil, err
+	return out, near, err
 }
 
 // containExtensionScopeBreach discards untrustworthy Extension

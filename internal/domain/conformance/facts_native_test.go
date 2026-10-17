@@ -72,9 +72,9 @@ func TestExcludedTargetRetainsIndependenceEvidence(t *testing.T) {
 	}
 }
 
-func (p incomingFactsProbe) Evaluate(_ string, _ map[string]any, facts conformance.Facts,
+func (p incomingFactsProbe) Evaluate(_ string, _ map[string]any, _ rule.TimeLimit, facts conformance.Facts,
 	_ vocab.UbiquitousLanguage,
-) ([]conformance.ExtensionFinding, error) {
+) (conformance.ExtensionRun, error) {
 	p.t.Helper()
 	const subject = "shared/private.ts"
 	const importer = "client/client.ts"
@@ -103,7 +103,7 @@ func (p incomingFactsProbe) Evaluate(_ string, _ map[string]any, facts conforman
 			SubjectPath: subject, Path: dependency.SourcePath, Line: dependency.Line, Message: "private import",
 		})
 	}
-	return findings, nil
+	return conformance.ExtensionRun{Findings: findings}, nil
 }
 
 func TestNativeAndExtensionUseSameDependencyPrecision(t *testing.T) {

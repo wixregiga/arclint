@@ -284,11 +284,23 @@ func (p ProtectedConstraint) Proposition() string {
 }
 
 // ExtensionConstraint bind a Rule to Extension-supplied enforcement: the
-// registered extension rule name and the parameters its published
-// schema validates host-side before any extension code runs.
+// registered extension rule name, the parameters its published schema
+// validates host-side before any extension code runs, and how long its
+// check may run.
 type ExtensionConstraint struct {
 	Uses string
 	With map[string]any
+	// TimeLimit is zero when the Rule sets none; Limit resolves it.
+	TimeLimit TimeLimit
+}
+
+// Limit returns the TimeLimit the check runs under: the Rule's own, or
+// the default.
+func (p ExtensionConstraint) Limit() TimeLimit {
+	if p.TimeLimit.IsZero() {
+		return DefaultTimeLimit
+	}
+	return p.TimeLimit
 }
 
 // Kind returns the compatibility discriminator TypeExtension.

@@ -108,7 +108,7 @@ func TestLoadAndCheckWithDefaults(t *testing.T) {
 		"a/UserHandler.go": "package a",
 		"a/broken.go":      "package a",
 	})
-	got, err := rt.Check(host, params)
+	got, _, err := rt.Check(host, params, testLimit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ export default defineRule({
 		t.Fatal("rule not registered")
 	}
 	params, _ := rt.ValidateParams(nil)
-	got, err := rt.Check(fakeHost(map[string]string{"a.go": "package a", "b.go": "package b"}), params)
+	got, _, err := rt.Check(fakeHost(map[string]string{"a.go": "package a", "b.go": "package b"}), params, testLimit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ export default defineRule({
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := rt.Check(fakeHost(nil), params)
+		got, _, err := rt.Check(fakeHost(nil), params, testLimit)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -250,14 +250,14 @@ export default defineRule({
   },
 });
 `})
-	reg, err := sobekextension.LoadDir(root, sobekextension.Options{CheckTimeout: 200 * time.Millisecond})
+	reg, err := sobekextension.LoadDir(root, sobekextension.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	rt := reg.Get("spin")
 	params, _ := rt.ValidateParams(nil)
 	start := time.Now()
-	_, err = rt.Check(fakeHost(nil), params)
+	_, _, err = rt.Check(fakeHost(nil), params, 200*time.Millisecond)
 	elapsed := time.Since(start)
 	if err == nil || !strings.Contains(err.Error(), "timeout") {
 		t.Fatalf("expected timeout error, got: %v", err)
@@ -386,7 +386,7 @@ func TestEvaluatorReadUsesObservationContent(t *testing.T) {
 		"m/a.go": "package m\nfunc f() { panic(\"x\") }\n",
 	}))
 
-	findings, err := eval.Evaluate("forbid-content", map[string]any{
+	findings, err := evaluate(eval, "forbid-content", map[string]any{
 		"pattern": `\bpanic\(`,
 	}, extensionFacts(t, []string{"m/a.go"}, obs), vocab.UbiquitousLanguage{})
 	if err != nil {
@@ -405,7 +405,7 @@ func TestEvaluatorReadUsesObservationContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewEvaluator missing: %v", err)
 	}
-	findings, err = evalMissing.Evaluate("forbid-content", map[string]any{
+	findings, err = evaluate(evalMissing, "forbid-content", map[string]any{
 		"pattern": `\bpanic\(`,
 	}, extensionFacts(t, []string{"m/a.go"}, obs), vocab.UbiquitousLanguage{})
 	if err != nil {
@@ -465,7 +465,7 @@ func TestEvaluatorDomainExposesRecordedModel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewUbiquitousLanguage: %v", err)
 	}
-	findings, err := eval.Evaluate("domain-probe", nil, extensionFacts(t, []string{"m/a.go"}, obs), lang)
+	findings, err := evaluate(eval, "domain-probe", nil, extensionFacts(t, []string{"m/a.go"}, obs), lang)
 	if err != nil {
 		t.Fatalf("Evaluate with model: %v", err)
 	}
@@ -480,7 +480,7 @@ func TestEvaluatorDomainExposesRecordedModel(t *testing.T) {
 		t.Errorf("domain findings = %v, want the aggregate and its entity", got)
 	}
 
-	empty, err := eval.Evaluate("domain-probe", nil, extensionFacts(t, []string{"m/a.go"}, obs), vocab.UbiquitousLanguage{})
+	empty, err := evaluate(eval, "domain-probe", nil, extensionFacts(t, []string{"m/a.go"}, obs), vocab.UbiquitousLanguage{})
 	if err != nil {
 		t.Fatalf("Evaluate empty model: %v", err)
 	}
@@ -575,7 +575,7 @@ func TestEvaluatorDomainCarriesRecordedLines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewUbiquitousLanguage: %v", err)
 	}
-	findings, err := eval.Evaluate("domain-line-probe", nil, extensionFacts(t, []string{"m/a.go"}, obs), lang)
+	findings, err := evaluate(eval, "domain-line-probe", nil, extensionFacts(t, []string{"m/a.go"}, obs), lang)
 	if err != nil {
 		t.Fatalf("Evaluate: %v", err)
 	}
@@ -640,7 +640,7 @@ func TestCaseTermParity(t *testing.T) {
 	}
 	host := fakeHost(map[string]string{"probe.txt": ""})
 	host.CaseTerm = rule.CaseTerm
-	got, err := rt.Check(host, map[string]any{})
+	got, _, err := rt.Check(host, map[string]any{}, testLimit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -687,7 +687,7 @@ func TestCaseTermRejectsUnknownCaseInRuntime(t *testing.T) {
 	}
 	host := fakeHost(map[string]string{"probe.txt": ""})
 	host.CaseTerm = rule.CaseTerm
-	if _, err := rt.Check(host, map[string]any{}); err == nil {
+	if _, _, err := rt.Check(host, map[string]any{}, testLimit); err == nil {
 		t.Error("unknown term case accepted by ctx.caseTerm")
 	}
 }
@@ -729,7 +729,7 @@ func TestEvaluatorDomainSourceIsTheProjectsRecording(t *testing.T) {
 		"a recorded language":        recorded,
 		"a language not yet written": {Recording: recording},
 	} {
-		findings, err := eval.Evaluate("domain-source-probe", nil, extensionFacts(t, []string{"m/a.go"}, obs), lang)
+		findings, err := evaluate(eval, "domain-source-probe", nil, extensionFacts(t, []string{"m/a.go"}, obs), lang)
 		if err != nil {
 			t.Fatalf("%s: Evaluate: %v", name, err)
 		}
