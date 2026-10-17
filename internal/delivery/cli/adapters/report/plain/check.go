@@ -26,6 +26,9 @@ func writeCheck(w io.Writer, a conformance.Assessment, agentsContext, agentsUnch
 			p.Printf("operational [%s]: %s\n", d.Severity(), atPath(d))
 		case conformance.DiagnosticCoverage:
 			p.Printf("coverage: %s\n", d.Message())
+			if d.Remediation() != "" {
+				p.Printf("  remediation: %s\n", d.Remediation())
+			}
 		case conformance.DiagnosticNotEvaluated:
 			p.Printf("not evaluated: %s\n", d.Message())
 		case conformance.DiagnosticViolation:

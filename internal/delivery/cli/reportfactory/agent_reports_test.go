@@ -194,3 +194,63 @@ func TestCheckRemediationAcrossRenderers(t *testing.T) {
 		}
 	}
 }
+
+// The near-limit note carries its numbers and its remediation as fields
+// in JSON, and prints the remediation under the coverage line.
+func TestNearTimeLimitAcrossRenderers(t *testing.T) {
+	near, err := conformance.NewNearTimeLimit("src/slow", "", conformance.NearLimit{
+		Extension: "slow", Source: ".arclint/extensions/slow.ts", Limit: 5 * time.Second, Elapsed: 3241*time.Millisecond + 600*time.Microsecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := conformance.NewAssessment(nil, nil, []string{"src/slow"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a, err = a.WithDiagnostics(near); err != nil {
+		t.Fatal(err)
+	}
+	const remediation = "raise time_limit above 5s on rule src/slow in rules.arclint.yaml, or make the check do less work"
+	report := cli.AssessmentReport{Assessment: a}
+	ansi := regexp.MustCompile(`\x1b\[[0-9;]*m`)
+	for _, name := range []cli.RendererName{cli.RendererPlain, cli.RendererLipgloss, cli.RendererJSON} {
+		render, err := reportfactory.Select(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var buf bytes.Buffer
+		if err := render.Render(&buf, report); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if name == cli.RendererJSON {
+			var docs []struct {
+				Kind        string `json:"kind"`
+				RuleID      string `json:"ruleId"`
+				Severity    string `json:"severity"`
+				Remediation string `json:"remediation"`
+				Near        *struct {
+					Extension string `json:"extension"`
+					Source    string `json:"source"`
+					LimitMs   int64  `json:"limitMs"`
+					ElapsedMs int64  `json:"elapsedMs"`
+				} `json:"nearTimeLimit"`
+			}
+			if err := json.Unmarshal(buf.Bytes(), &docs); err != nil {
+				t.Fatalf("JSON output: %v", err)
+			}
+			if len(docs) != 1 || docs[0].Kind != "coverage" || docs[0].RuleID != "src/slow" || docs[0].Severity != "" || docs[0].Remediation != remediation || docs[0].Near == nil {
+				t.Fatalf("JSON near-limit entry: %s", buf.String())
+			}
+			if got := *docs[0].Near; got.Extension != "slow" || got.Source != ".arclint/extensions/slow.ts" || got.LimitMs != 5000 || got.ElapsedMs != 3242 {
+				t.Fatalf("JSON near-limit fields: %+v", got)
+			}
+			continue
+		}
+		output := ansi.ReplaceAllString(buf.String(), "")
+		want := "coverage: rule src/slow: extension \"slow\" took 3.242s of its 5s time limit; a run twice as slow would not be evaluated\n  remediation: " + remediation + "\n"
+		if !strings.Contains(output, want) {
+			t.Fatalf("%s does not print the remediation under the note:\n%s", name, output)
+		}
+	}
+}

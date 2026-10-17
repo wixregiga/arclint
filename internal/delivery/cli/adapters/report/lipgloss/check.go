@@ -31,6 +31,9 @@ func writeCheck(p *out.Printer, th Theme, a conformance.Assessment, agentsContex
 			)
 		case conformance.DiagnosticCoverage:
 			p.Printf("%s: %s\n", th.Muted.Render("coverage"), d.Message())
+			if d.Remediation() != "" {
+				p.Printf("  %s: %s\n", th.Muted.Render("remediation"), d.Remediation())
+			}
 		case conformance.DiagnosticNotEvaluated:
 			p.Printf("%s: %s\n", th.Error.Render("not evaluated"), d.Message())
 		case conformance.DiagnosticViolation:
