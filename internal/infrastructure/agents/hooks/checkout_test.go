@@ -83,7 +83,7 @@ func TestCheckoutShowsEveryChangeSinceASnapshot(t *testing.T) {
 		"internal/c.go":    "package c\n",
 		"internal/gone.go": "package gone\n",
 	})
-	view := checkout{root: root, now: time.Now}
+	view := checkout{root: root}
 	writeFile(t, root, "internal/b.go", "package b // dirty\n")
 	writeFile(t, root, "internal/c.go", "package c // dirty\n")
 	writeFile(t, root, "internal/committed.go", "package committed\n")
@@ -101,7 +101,7 @@ func TestCheckoutShowsEveryChangeSinceASnapshot(t *testing.T) {
 	runGit(t, root, "add", "internal/committed.go")
 	runGit(t, root, "-c", "user.email=test@example.com", "-c", "user.name=test", "commit", "-q", "-m", "commit one file")
 
-	changed := view.changes(before, takeSnapshot(t, view))
+	changed := view.changes(before, takeSnapshot(t, view), clockOf(t, root))
 	got := changedPaths(changed)
 	want := []string{"internal/a.go", "internal/b.go", "internal/c.go", "internal/gone.go", "internal/new.go"}
 	if !reflect.DeepEqual(slices.Sorted(slices.Values(got)), want) {
@@ -116,10 +116,10 @@ func TestCheckoutShowsEveryChangeSinceASnapshot(t *testing.T) {
 
 func TestCheckoutWithoutChangesShowsNone(t *testing.T) {
 	root := gitRepository(t, map[string]string{"internal/a.go": "package a\n"})
-	view := checkout{root: root, now: time.Now}
+	view := checkout{root: root}
 	writeFile(t, root, "internal/a.go", "package a // dirty\n")
 	before := takeSnapshot(t, view)
-	if changed := view.changes(before, takeSnapshot(t, view)); len(changed) != 0 {
+	if changed := view.changes(before, takeSnapshot(t, view), clockOf(t, root)); len(changed) != 0 {
 		t.Fatalf("an unchanged checkout showed %v", changedPaths(changed))
 	}
 }
@@ -128,11 +128,11 @@ func TestCheckoutWithoutChangesShowsNone(t *testing.T) {
 // named from its own root.
 func TestCheckoutOfAProjectInsideARepository(t *testing.T) {
 	repository := gitRepository(t, map[string]string{"service/internal/a.go": "package a\n", "other/b.go": "package b\n"})
-	view := checkout{root: filepath.Join(repository, "service"), now: time.Now}
+	view := checkout{root: filepath.Join(repository, "service")}
 	before := takeSnapshot(t, view)
 	writeFile(t, repository, "service/internal/a.go", "package a // changed\n")
 	writeFile(t, repository, "other/b.go", "package b // changed\n")
-	if got := changedPaths(view.changes(before, takeSnapshot(t, view))); !reflect.DeepEqual(got, []string{"internal/a.go"}) {
+	if got := changedPaths(view.changes(before, takeSnapshot(t, view), clockOf(t, repository))); !reflect.DeepEqual(got, []string{"internal/a.go"}) {
 		t.Fatalf("changed %v, want [internal/a.go]", got)
 	}
 }
@@ -143,7 +143,7 @@ func TestCheckoutOutsideAGitWorkTreeHasNoSnapshot(t *testing.T) {
 	}
 	root := t.TempDir()
 	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(root))
-	if _, err := (checkout{root: root, now: time.Now}).snapshot(); !errors.Is(err, errNoGit) {
+	if _, err := (checkout{root: root}).snapshot(); !errors.Is(err, errNoGit) {
 		t.Fatalf("a directory outside any git work tree: %v", err)
 	}
 }
@@ -155,7 +155,7 @@ func TestCheckoutSeesACopyThatKeepsTheMetadata(t *testing.T) {
 		t.Skip("Windows file information records no change time")
 	}
 	root := gitRepository(t, map[string]string{"internal/a.go": "package a\n"})
-	view := checkout{root: root, now: time.Now}
+	view := checkout{root: root}
 	writeFile(t, root, "internal/a.go", "package a // one\n")
 	path := filepath.Join(root, "internal/a.go")
 	info, err := os.Stat(path)
@@ -168,7 +168,7 @@ func TestCheckoutSeesACopyThatKeepsTheMetadata(t *testing.T) {
 	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
 		t.Fatal(err)
 	}
-	if got := changedPaths(view.changes(before, takeSnapshot(t, view))); !reflect.DeepEqual(got, []string{"internal/a.go"}) {
+	if got := changedPaths(view.changes(before, takeSnapshot(t, view), clockOf(t, root))); !reflect.DeepEqual(got, []string{"internal/a.go"}) {
 		t.Fatalf("a copy keeping the metadata showed %v", got)
 	}
 }

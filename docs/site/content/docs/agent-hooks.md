@@ -175,10 +175,15 @@ domain service; the hook adapter only reports what happened.
   appears, changes again, disappears, or is restored counts as changed, so
   edits through `sed -i`, `>`, `cp`, a Python heredoc or a script get the same
   advice as an edit tool's, once, at the next event. A commit changes no file.
-  Each change takes its place by its modification time among the activities
-  ArcLint recorded, so a shell edit after `arclint context` needs no context,
-  and one before `arclint check` is verified by it. A turn that changed
-  nothing prints nothing.
+  Each change takes its place by the time the file system stamped on it
+  among the activities ArcLint recorded, so a shell edit after
+  `arclint context` needs no context, and one before `arclint check` is
+  verified by it. ArcLint reads its own times from the same file system
+  clock, by writing `.arclint/cache/hooks/clock`, because file times run
+  milliseconds behind the machine's clock. A change in the same clock tick as
+  an ArcLint command, or as the start or end of a time between turns, counts
+  as the agent's and as made after the command. A turn that changed nothing
+  prints nothing.
 - Files that change between turns are not the agent's work. The session sees
   the checkout afresh when it starts or resumes and at the user's next prompt
   after a finished turn. A turn that never finished, such as one the user
@@ -218,12 +223,11 @@ refreshes the index.
   edit tools report changes.
 - Anything else that changes the checkout during a turn, such as your editor or
   another session in the same checkout, counts as the agent's change.
-- A shell change after `arclint context` or `arclint check` in the same shell
-  command, within a few milliseconds, may take its place before them.
-- Order comes from file modification times and this machine's clock. What a
-  parallel tool call does while an event samples the checkout waits for the
-  next event. A file system whose clock runs ahead of the machine's, as some
-  network file systems do, delays changes until the clock catches up.
+- Order comes from the file system's clock, read where the project lives. A
+  file inside the project that lies on another file system, such as a
+  mounted directory, is stamped by that file system's clock. What a parallel
+  tool call does while an event samples the checkout waits for the next
+  event.
 - When `git status` fails at one event, the hooks wait for the next one.
   When it fails at two events in a row, ArcLint's own activities are read
   without the checkout, so a repository git cannot read never holds them
