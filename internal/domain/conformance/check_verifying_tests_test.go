@@ -60,11 +60,12 @@ func messagesOf(a conformance.Assessment) []string {
 }
 
 // A service declared as an interface, as Evans states a service, has
-// no body to call AssertNeverExceedsTotal from. The rule asks for the
-// tests that verify the assertion, with a remedy that can be followed,
-// and conforms once the assertion names them; the operation itself
-// must still be declared. The same holds for an abstract class in
-// TypeScript and Python.
+// no body to call AssertNeverExceedsTotal from. Without a check in the
+// model the rule reports the guarantee on the model, with a remedy that
+// can be followed, among them the tests that verify it, and conforms
+// once the assertion names them; the operation itself must still be
+// declared. The same holds for an abstract class in TypeScript and
+// Python.
 func TestAssertionOfABodilessOwnerIsVerifiedByTests(t *testing.T) {
 	id := "assertion/checked-by-its-operation"
 	r := builtInRule(t, id)
@@ -81,7 +82,7 @@ func TestAssertionOfABodilessOwnerIsVerifiedByTests(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("interface without tests: %q", messagesOf(a))
 	}
-	if want := "service Discounter: Discounter is declared as an interface, which has no body to call AssertNeverExceedsTotal (go) from, and assertion never-exceeds-total names no tests that verify it"; got[0].Message() != want {
+	if want := "declared service Discounter: never-exceeds-total has no check in context pricing"; got[0].Message() != want {
 		t.Errorf("message:\n got %q\nwant %q", got[0].Message(), want)
 	}
 	if want := "arclint domain define assertion never-exceeds-total --context pricing --verified-by <test file>:<test name>"; !strings.Contains(got[0].Remediation(), want) {
@@ -112,12 +113,12 @@ func TestAssertionOfABodilessOwnerIsVerifiedByTests(t *testing.T) {
 		{rule.LanguageTypeScript, "src/pricing/discounter.ts", "discount"},
 		{rule.LanguagePython, "pricing/discounter.py", "discount"},
 	} {
-		facts := map[string]conformance.LanguageFacts{c.file: {Language: c.lang, DeclarationsAvailable: true, CallsAvailable: true, Declarations: []conformance.Declaration{
+		facts := map[string]conformance.LanguageFacts{c.file: {Language: c.lang, DeclarationsAvailable: true, CallsAvailable: true, FieldTypesAvailable: true, Declarations: []conformance.Declaration{
 			{Kind: "class", Name: "Discounter", Exported: true, Abstract: true, StartLine: 1},
 			{Kind: "method", Name: c.op, Owner: "Discounter", Exported: true, StartLine: 2},
 		}}}
 		a := runOne(t, r, nil, observed(c.file), facts, discounterContext(t))
-		if got := messagesOf(a); len(got) != 1 || !strings.Contains(got[0], "Discounter is declared as an abstract class") {
+		if got := messagesOf(a); len(got) != 1 || got[0] != "declared service Discounter: never-exceeds-total has no check in context pricing" {
 			t.Errorf("%s abstract class without tests: %q", c.lang, got)
 		}
 		a = runOne(t, r, nil, observed(c.file), facts, verified)

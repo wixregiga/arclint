@@ -79,7 +79,7 @@ func (c Carriers) AssertionHome(ctx, owner, key string, languages []rule.Languag
 		home.Home = CheckHomeUndeclared
 	case owned.decl.Kind == declKindInterface:
 		home.Home, home.Declared = CheckHomeModel, DeclaredInterface
-	case declaredAbstraction(owned):
+	case bodiless(owned.decl) != "":
 		home.Home, home.Declared = CheckHomeModel, DeclaredAbstractClass
 	default:
 		home.Home = CheckHomeService

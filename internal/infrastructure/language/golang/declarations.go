@@ -30,6 +30,7 @@ func extractDeclarations(fset *token.FileSet, file *ast.File, res resolution) []
 				EndLine:   end,
 				Params:    paramInfos(d.Type.Params),
 				Results:   resultTexts(d.Type.Results),
+				Generic:   d.Type.TypeParams != nil && len(d.Type.TypeParams.List) > 0,
 				Type:      firstResult(res, d.Type.Results),
 			}
 			if d.Recv != nil && len(d.Recv.List) > 0 {

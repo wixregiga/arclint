@@ -103,11 +103,16 @@ declare module "arclint" {
     exported: boolean;
     /**
      * Abstract marks a class its own declaration states to be abstract:
-     * a TypeScript abstract class, or a Python class naming abc.ABC or
-     * typing.Protocol among its bases or abc.ABCMeta as its metaclass.
-     * An interface is abstract by its kind and does not carry it.
+     * a TypeScript abstract class, or a Python class whose bases name
+     * abc.ABC or typing.Protocol, or whose metaclass is abc.ABCMeta, as
+     * the library provides them. False for every other kind.
      */
-    abstract?: boolean;
+    abstract: boolean;
+    /**
+     * Generic marks a func, method, or type that declares its own type
+     * parameters. False for every other declaration.
+     */
+    generic: boolean;
     startLine: number /* int */;
     endLine: number /* int */;
     /**

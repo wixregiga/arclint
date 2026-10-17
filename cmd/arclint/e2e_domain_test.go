@@ -1544,11 +1544,11 @@ func testDomainInterfaceServiceVerifiedByTests(t *testing.T) {
 
 	d := findings(1)
 	if len(d) != 1 || d[0].RuleID != "assertion/checked-by-its-operation" ||
-		!strings.Contains(d[0].Message, "Discounter is declared as an interface, which has no body to call AssertNeverExceedsTotal") {
+		d[0].Message != "declared service Discounter: never-exceeds-total has no check in context pricing" {
 		t.Fatalf("interface without tests: %+v", d)
 	}
 	out := mustRunDomain(t, root, "context", "src/pricing/discounter.go")
-	if !strings.Contains(out, "expected a test under verified_by, since Discounter is declared as an interface") {
+	if !strings.Contains(out, "expected the function AssertNeverExceedsTotal in the context, the invariant never-exceeds-total of a value object the operation returns, or a test under verified_by, since Discounter is declared as an interface") {
 		t.Fatalf("context does not expect the tests of an interface's assertion:\n%s", out)
 	}
 

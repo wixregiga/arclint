@@ -90,11 +90,13 @@ func (uc GetDomainOverview) Execute() (DomainOverview, error) {
 }
 
 // carrierFacts are the facts locating the recorded language needs:
-// declarations, and the resolved result types of operations when a
+// imports and declarations, and the resolved result types of operations when a
 // domain service records an assertion, whose check may be the value
 // its operation returns.
 func carrierFacts(lang vocab.UbiquitousLanguage) []rule.Fact {
-	facts := []rule.Fact{rule.FactDeclarations}
+	// A Go test carrying an assertion takes testing's T under the name
+	// its file imports testing by.
+	facts := []rule.Fact{rule.FactImports, rule.FactDeclarations}
 	for _, ctx := range lang.Contexts {
 		for _, s := range ctx.Services {
 			if len(s.Assertions) > 0 {

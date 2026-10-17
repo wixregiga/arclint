@@ -272,10 +272,6 @@ func evaluateRecordedContract(r rule.Rule, contract recordedContract, cc context
 		return undeterminedEvaluation(r, subject, fmt.Sprintf("no single declaration of %s is located in %s",
 			contract.spec.Owner, cc.searched()))
 	}
-	check, exists := domainChecks[r.ID().Local()]
-	if !exists {
-		return Evaluation{}, fmt.Errorf("contract coverage: no check for %s", r.ID())
-	}
 	if check.judge != nil {
 		violations, unresolved, err := check.judge(r, subject, contract.isolate(cc), code)
 		if err != nil {
