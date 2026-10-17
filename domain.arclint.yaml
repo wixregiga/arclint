@@ -73,11 +73,11 @@ contexts:
               the domain recording has changed.
   vocabulary:
     definition: >-
-      The recorded Ubiquitous Language of a project and the meta-model that
-      checks it: building blocks, their invariants and tiered sources, and the
-      rules arclint declines to enforce with their reasons. The rule context
-      reads it to expand a Rule; the conformance context reads it to judge code.
-      A DomainRecording holds it in YAML or CML; the format changes nothing.
+      The recorded Ubiquitous Language of a project and the MetaModel it is
+      checked against, with the works that ground each rule and guidance. The
+      rule context reads it to expand a Rule, and the conformance context to
+      judge code. A project writes its language in one DomainRecording, in YAML
+      or CML, and the language is the same in either.
     value_objects:
       DomainRecording:
         definition: >-
@@ -109,6 +109,31 @@ contexts:
           definition or an invariant's or assertion's statement, 60 for a
           bounded context's definition, 100 for the project description. A
           definition says what a word means.
+      MetaModel:
+        definition: >-
+          The Domain-Driven Design building blocks arclint speaks about a
+          domain, each with its invariants, guidance and the works stating them.
+          Each cited work has a tier: tier 1 may ground a rule, tier 2 guidance,
+          tier 3 only illustrates.
+        invariants:
+          rules-grounded-in-the-canon: >-
+            Every MetaModel invariant and every fundamental guidance cites at
+            least one tier 1 work that grounds it rather than only illustrating
+            it.
+          entries-grounded: >-
+            Every cited MetaModel definition and every other guidance cites at
+            least one tier 1 or tier 2 work that grounds it rather than only
+            illustrating it.
+          practitioners-only-illustrate: >-
+            A MetaModel citation of a tier 3 work is marked illustrative.
+          carried-pages-shown-unverified: >-
+            A MetaModel citation of a page carried from the draft without being
+            checked is always shown to a reader as an unverified page beside its
+            tier.
+          conventions-quote-their-entry: >-
+            A MetaModel label naming arclint's own convention quotes words of
+            the entry it labels, so a reader sees which words no cited source
+            states.
   rule:
     definition: >-
       The rule bounded context: the Rule aggregate's home, holding everything a
