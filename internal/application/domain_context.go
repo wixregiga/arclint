@@ -255,14 +255,31 @@ type entryCandidate struct {
 // and canonical name, with --owner for an entry nested under one and
 // --context when the project records several contexts.
 func (c entryCandidate) command(contexts int) string {
-	cmd := fmt.Sprintf("arclint domain show %s %s", c.concept, c.name)
+	cmd := fmt.Sprintf("arclint domain show %s %s", c.concept, shellWord(c.name))
 	if c.owner != "" {
-		cmd += " --owner " + c.owner
+		cmd += " --owner " + shellWord(c.owner)
 	}
 	if contexts > 1 && c.concept != vocab.ConceptBoundedContext {
-		cmd += " --context " + c.context
+		cmd += " --context " + shellWord(c.context)
 	}
 	return cmd
+}
+
+// shellWord spells a recorded name as one word of a command a reader
+// pastes into a POSIX shell: as it is when every character is safe
+// there, single-quoted otherwise.
+func shellWord(s string) string {
+	safe := s != ""
+	for _, r := range s {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && !strings.ContainsRune("-_./:@+,=", r) {
+			safe = false
+			break
+		}
+	}
+	if safe {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // locateNamedEntry finds the entry a name, key, or alias means without

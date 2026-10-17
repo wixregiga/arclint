@@ -322,7 +322,7 @@ func testDomainFullFlow(t *testing.T) {
 		"Context: ordering\n" +
 		"Aggregate: Order\n" +
 		"Definition: One product on the order.\n" +
-		"Rules: none of its own; its aggregate records them: arclint domain show Order\n"
+		"Rules: none of its own; its aggregate Order records them: arclint domain show aggregate Order\n"
 	out = mustRunDomain(t, root, "domain", "show", "entity", "OrderLine")
 	if out != wantEntity {
 		t.Fatalf("show entity OrderLine:\n got: %q\nwant: %q", out, wantEntity)

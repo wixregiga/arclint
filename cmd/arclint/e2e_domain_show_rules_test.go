@@ -260,14 +260,15 @@ type shownRules struct {
 		Aggregate string `json:"aggregate"`
 		Record    string `json:"record"`
 		Checks    []struct {
-			Kind     string   `json:"kind"`
-			Owner    string   `json:"owner"`
-			Key      string   `json:"key"`
-			Source   string   `json:"source"`
-			Expected string   `json:"expected"`
-			Status   string   `json:"status"`
-			Reasons  []string `json:"reasons"`
-			Findings []struct {
+			Kind       string   `json:"kind"`
+			Owner      string   `json:"owner"`
+			Key        string   `json:"key"`
+			Source     string   `json:"source"`
+			Expected   string   `json:"expected"`
+			Status     string   `json:"status"`
+			Reasons    []string `json:"reasons"`
+			NotChecked []string `json:"notChecked"`
+			Findings   []struct {
 				Rule    string `json:"rule"`
 				Message string `json:"message"`
 				Status  string `json:"status"`
@@ -412,5 +413,25 @@ func TestDomainShowTextNamesEnforcementAndAbsence(t *testing.T) {
 	_, stderr, code = runBin(t, root, os.Environ(), "domain", "show", "Basket")
 	if code == 0 || !strings.Contains(stderr, `no entry named "Basket"`) {
 		t.Errorf("an unrecorded name: exit %d: %s", code, stderr)
+	}
+}
+
+// A contract whose checks did not all run is not reported as
+// conforming: with the root-method check disabled, the mutation check
+// alone cannot say the invariant is enforced, as arclint check reports
+// it incomplete.
+func TestDomainShowDoesNotPromotePartialCoverage(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "rules.arclint.yaml", "runtime: [go]\nzones:\n  catalog:\n    paths: [\"catalog/**\"]\n  pricing:\n    paths: [\"pricing/**\"]\n"+
+		"rules:\n  aggregate/invariants-enforced-by-root:\n    disable: adopting the model\n")
+	write(t, root, "domain.arclint.yaml", catalogDomain)
+	for path, content := range showRulesFixtures["go"].files {
+		write(t, root, path, content)
+	}
+	product := showRulesJSON(t, root, "Product")
+	priceSet := product.Rules.Checks[0]
+	if priceSet.Key != "price-set" || priceSet.Status != "undetermined" ||
+		len(priceSet.NotChecked) != 1 || !strings.Contains(priceSet.NotChecked[0], "aggregate/invariants-enforced-by-root: disabled: adopting the model") {
+		t.Errorf("price-set with one of its checks disabled: %+v", priceSet)
 	}
 }
