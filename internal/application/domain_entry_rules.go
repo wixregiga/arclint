@@ -208,7 +208,7 @@ func (uc ShowDomainDefinition) judge(context string, rules *DomainEntryRules) {
 			continue
 		}
 		check.Expected = expectedCarrier(*check, cfg.Languages)
-		judgeRule(check, coverage, cfg.Languages)
+		judgeRule(check, coverage, cfg)
 	}
 }
 
@@ -233,7 +233,7 @@ func expectedCarrier(check DomainRuleCheck, languages []rule.Language) string {
 // judgeRule reads one contract's coverage into the rule's status: the
 // declaration a check located, the findings, and the reasons a check
 // could not decide or did not run.
-func judgeRule(check *DomainRuleCheck, c conformance.ContractCoverage, languages []rule.Language) {
+func judgeRule(check *DomainRuleCheck, c conformance.ContractCoverage, cfg rule.Configured) {
 	if at, located := c.Carrier(); located {
 		check.Source = fmt.Sprintf("%s:%d", at.Path, at.Line)
 		check.Expected = ""
@@ -281,7 +281,7 @@ func judgeRule(check *DomainRuleCheck, c conformance.ContractCoverage, languages
 			}
 		case conformance.OutcomeUnsupported:
 			check.Reasons = append(check.Reasons, fmt.Sprintf("%s: none of context %s's code is in a language ArcLint analyzes here (%s)",
-				id, c.Context(), languageNames(languages)))
+				id, c.Context(), languageNames(cfg.Languages)))
 		case conformance.OutcomeUndetermined:
 			for _, reason := range e.Unresolved() {
 				check.Reasons = append(check.Reasons, id+": "+reason)
@@ -289,7 +289,7 @@ func judgeRule(check *DomainRuleCheck, c conformance.ContractCoverage, languages
 		case conformance.OutcomeFailed:
 			check.Reasons = append(check.Reasons, fmt.Sprintf("%s: files of context %s's code failed to parse; arclint check . names them", id, c.Context()))
 		case conformance.OutcomeNotApplicable:
-			check.Reasons = append(check.Reasons, fmt.Sprintf("%s: the rule's scope excludes the domain recording %s", id, c.Path()))
+			check.Reasons = append(check.Reasons, id+": "+notApplicableReason(cfg, e.Rule(), c))
 		case conformance.OutcomeConforms:
 		}
 	}
@@ -304,4 +304,16 @@ func languageNames(languages []rule.Language) string {
 		names = append(names, string(l))
 	}
 	return strings.Join(names, ", ")
+}
+
+// notApplicableReason says which exclusion of the Rule removed the
+// contract: the domain recording it is recorded in, or every analyzed
+// file of its context's code.
+func notApplicableReason(cfg rule.Configured, id rule.ID, c conformance.ContractCoverage) string {
+	for _, r := range cfg.Rules {
+		if r.ID().Equals(id) && r.Scope().ExcludedFile(c.Path()) {
+			return fmt.Sprintf("the rule's scope excludes the domain recording %s", c.Path())
+		}
+	}
+	return fmt.Sprintf("the rule's scope excludes every analyzed file of context %s's code", c.Context())
 }

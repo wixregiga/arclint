@@ -239,3 +239,34 @@ func TestContractCoverageRefusesACarrierWithoutALocation(t *testing.T) {
 		}
 	}
 }
+
+// An Exclusion that removes every analyzed file of the context's code
+// leaves the contract not applicable to the Rule; the language of the
+// files that remain does not make it unsupported.
+func TestContractCoverageIsNotApplicableWhenAnExclusionRemovesTheCode(t *testing.T) {
+	ctx := vocab.BoundedContext{Name: "catalog", Definition: "d", Services: []vocab.DomainService{
+		{Name: "Selection", Definition: "d", Assertions: []vocab.Assertion{{Key: "accompanying-included", On: "Select", Statement: "Accompanying commands are included.", Line: 8}}},
+	}}
+	facts := goDecls("catalog", []conformance.Declaration{
+		{Kind: "struct", Name: "Selection", StartLine: 1},
+		{Kind: "method", Owner: "Selection", Name: "Select", StartLine: 2},
+	})
+	glob, err := rule.NewGlob("catalog/catalog.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	exclusion, err := rule.NewExclusion([]rule.Glob{glob}, nil, "generated")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := builtInRule(t, "assertion/checked-by-its-operation").Exclude(exclusion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zones := []rule.Zone{mustZone(t, "catalog", "catalog/**")}
+	a := runOne(t, r, zones, observed("catalog/catalog.go", "catalog/README.md"),
+		map[string]conformance.LanguageFacts{"catalog/catalog.go": facts}, oneContext(t, ctx))
+	if cs := a.Contracts(); len(cs) != 1 || cs[0].Status() != "not_applicable" {
+		t.Errorf("coverage = %#v, want not_applicable", cs)
+	}
+}
