@@ -1421,7 +1421,7 @@ func ddd() MetaModel {
 						Text: "Tell the aggregate what to do rather than asking it for state and deciding outside it; follow the Law of Demeter.",
 						Sources: []Citation{
 							{Work: "vernon2013", Chapter: 10, Page: "382"},
-							{Work: "vernon-iddd-sample-pages", Page: "382", Section: "Using Law of Demeter and Tell, Don't Ask"},
+							{Work: "vernon-iddd-sample-pages", Page: "383", Section: "Using Law of Demeter and Tell, Don't Ask"},
 						},
 					},
 					{

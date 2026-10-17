@@ -1125,7 +1125,7 @@ building_blocks:
       - text: Tell the aggregate what to do rather than asking it for state and deciding outside it; follow the Law of Demeter.
         sources:
           - {work: vernon2013, chapter: 10, page: 382}
-          - {work: vernon-iddd-sample-pages, page: 382, section: "Using Law of Demeter and Tell, Don't Ask"}
+          - {work: vernon-iddd-sample-pages, page: 383, section: "Using Law of Demeter and Tell, Don't Ask"}
       - text: Keep an aggregate together on one server, and allow different aggregates to be distributed among nodes; where concurrent modification is possible, carry a version for optimistic concurrency.
         fundamental: true
         sources:
