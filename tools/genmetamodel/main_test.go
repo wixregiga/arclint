@@ -39,8 +39,8 @@ works:
     title: Reference
     author: Eric Evans
     year: 2015
-    verification: text
     tier: 1
+    verification: text
 facts:
   declarations:
     definition: Declarations.
@@ -83,8 +83,8 @@ func TestRenderTranscribesMinimalDocument(t *testing.T) {
 		`Languages: Languages{All: true}`,
 		`{Name: "identity", Required: true, Definition: "The root's identity, a value object."}`,
 		`{Work: "evans2015", Page: "16", Section: "Aggregates"}`,
-		`Verification: VerifiedText`,
 		`Tier: TierCanonical`,
+		`Verification: VerifiedText`,
 		`Section: SectionAggregates`,
 		`By: EvaluatorPlanned`,
 		`Languages: Languages{Names: []string{"go", "typescript"}}`,
@@ -169,6 +169,27 @@ func TestRenderRefusesUnknownVerification(t *testing.T) {
 	_, err := render([]byte(src), "minimal.yaml", "vocab")
 	if err == nil || !strings.Contains(err.Error(), `verification "trusted"`) {
 		t.Fatalf("expected verification refusal; got %v", err)
+	}
+}
+
+// An illustrative citation and a convention label reach the table, so
+// the domain package can judge them.
+func TestRenderTranscribesIllustrativeAndConventions(t *testing.T) {
+	src := strings.Replace(minimal,
+		"        sources: [{work: evans2015, page: 16}]\n",
+		"        sources: [{work: evans2015, page: 16}, {work: evans2015, page: 17, illustrative: true}]\n        conventions: [is declared]\n", 1)
+	got, err := render([]byte(src), "minimal.yaml", "vocab")
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	out := strings.Join(strings.Fields(string(got)), " ")
+	for _, want := range []string{
+		`{Work: "evans2015", Page: "17", Illustrative: true}`,
+		`Conventions: []string{"is declared"}`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, got)
+		}
 	}
 }
 

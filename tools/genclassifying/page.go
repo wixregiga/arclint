@@ -145,6 +145,7 @@ func (p *page) front() {
 	p.printf("the definitions, recordings, and checks come from the Domain-Driven Design meta-model arclint carries (`arclint domain`), ")
 	p.printf("the questions are the ones the skill asks, and every code sample is quoted from a worked example under `docs/examples`: the Go example compiles and passes its tests, and both examples pass `arclint check`. ")
 	p.printf("A rule id such as `invariant/enforced-at-every-mutation` is a built-in rule; `arclint rules <id>` prints it in full.\n\n")
+	p.printf("Each reference ends with its standing: the tier of the work, where tier 1 may ground a rule, tier 2 may ground guidance, and tier 3 only illustrates; and whether the cited passage was read or the page was carried from a draft unverified. Words a source does not state are labelled as ArcLint's own convention.\n\n")
 }
 
 // intake explains business rule, the word a rule arrives under before
@@ -155,7 +156,7 @@ func (p *page) intake() error {
 		return err
 	}
 	p.printf("## %s is an intake word\n\n", sentenceCase(b.Title))
-	p.printf("%s%s\n\n", b.Definition.Text, p.cite(b.Definition.Sources))
+	p.printf("%s%s\n\n", b.Definition.Labelled(), p.cite(b.Definition.Sources))
 	p.printf("%s\n\n", b.Records.Note)
 	p.guidance(b.Guidance)
 	return nil
@@ -170,7 +171,7 @@ func (p *page) family(title, lead string, terms []string) error {
 			return err
 		}
 		p.printf("### %s\n\n", b.Title)
-		p.printf("%s%s\n\n", b.Definition.Text, p.cite(b.Definition.Sources))
+		p.printf("%s%s\n\n", b.Definition.Labelled(), p.cite(b.Definition.Sources))
 		if b.Records.Section == vocab.SectionNone {
 			p.printf("**Recording:** %s\n\n", b.Records.Note)
 		} else {
@@ -190,7 +191,7 @@ func (p *page) family(title, lead string, terms []string) error {
 		if len(b.Invariants) > 0 {
 			p.printf("| Rule | What holds | Checked |\n|---|---|---|\n")
 			for _, inv := range b.Invariants {
-				p.printf("| `%s` | %s%s | %s |\n", inv.ID, cell(inv.Statement), p.cite(inv.Sources), checked(inv))
+				p.printf("| `%s` | %s%s | %s |\n", inv.ID, cell(inv.LabelledStatement()), p.cite(inv.Sources), checked(inv))
 			}
 			p.printf("\n")
 		}
@@ -208,7 +209,7 @@ func (p *page) guidance(gs []vocab.Guidance) {
 		if g.Fundamental {
 			mark = "**Fundamental.** "
 		}
-		p.printf("- %s%s%s\n", mark, g.Text, p.cite(g.Sources))
+		p.printf("- %s%s%s\n", mark, g.Labelled(), p.cite(g.Sources))
 	}
 	p.printf("\n")
 }
@@ -340,7 +341,7 @@ func (p *page) homes(ctx vocab.BoundedContext) error {
 	}
 	for _, g := range ab.Guidance {
 		if g.Fundamental {
-			p.printf("The application service is the one place a rule never lives: %s%s\n\n", lowerFirst(g.Text), p.cite(g.Sources))
+			p.printf("The application service is the one place a rule never lives: %s%s\n\n", lowerFirst(g.Labelled()), p.cite(g.Sources))
 		}
 	}
 	return nil
@@ -530,7 +531,7 @@ func (p *page) questions() {
 	p.printf("The rules the skill applies to turn what an expert said into recorded terms.\n\n")
 	p.printf("| Rule | States | Example |\n|---|---|---|\n")
 	for _, r := range vocab.DistillationRules() {
-		p.printf("| `%s` | %s | %s |\n", r.ID, cell(r.Rule), cell(r.Example))
+		p.printf("| `%s` | %s%s | %s |\n", r.ID, cell(r.Labelled()), p.cite(r.Sources), cell(r.Example))
 	}
 	p.printf("\n")
 }

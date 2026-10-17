@@ -172,13 +172,20 @@ func validModel() MetaModel {
 		Name:        "ddd",
 		Title:       "Domain-Driven Design",
 		Description: "The vocabulary.",
-		Works: []Work{{
-			Key: "evans2015", Title: "Reference", Authors: []string{"Eric Evans"},
-			Year: 2015, Verification: VerifiedText, Tier: TierCanonical,
-		}, {
-			Key: "a-blog", Title: "A post", Authors: []string{"A Practitioner"},
-			Year: 2020, Verification: VerifiedFetched, Tier: TierPractitioner,
-		}},
+		Works: []Work{
+			{
+				Key: "evans2015", Title: "Reference", Authors: []string{"Eric Evans"},
+				Year: 2015, Tier: TierCanonical, Verification: VerifiedText,
+			},
+			{
+				Key: "fowler-aggregate", Title: "DDD_Aggregate", Authors: []string{"Martin Fowler"},
+				Date: "2013-04-23", Tier: TierPublished, Verification: VerifiedFetched,
+			},
+			{
+				Key: "a-blog", Title: "A Blog Post", Authors: []string{"A Practitioner"},
+				Year: 2020, Tier: TierPractitioner, Verification: VerifiedFetched,
+			},
+		},
 		Facts: []FactDefinition{{Name: "declarations", Definition: "Declarations.", Languages: Languages{All: true}}},
 		Milestones: []Milestone{{
 			Key: "field-types", Needs: "Field types.", Unlocks: []string{"aggregate/references-by-identity"},
@@ -298,6 +305,52 @@ func TestValidateRejects(t *testing.T) {
 		{"work without authors", func(m *MetaModel) { m.Works[0].Authors = nil }, `at least one author`},
 		{"work verification", func(m *MetaModel) { m.Works[0].Verification = "trusted" }, `verification "trusted"`},
 		{"empty statement", func(m *MetaModel) { m.Blocks[0].Invariants[0].Statement = " " }, `statement must be non-empty`},
+		{"Stack Overflow work", func(m *MetaModel) {
+			m.Works[2].URL = "https://stackoverflow.com/questions/1/aggregates"
+		}, `works "a-blog": stackoverflow.com is an excluded source and is never cited`},
+		{"Stack Exchange work", func(m *MetaModel) {
+			m.Works[2].URL = "https://softwareengineering.StackExchange.com/q/2"
+		}, `softwareengineering.stackexchange.com is an excluded source`},
+		{"Goodreads work", func(m *MetaModel) {
+			m.Works[2].URL = "https://www.goodreads.com/quotes/3"
+		}, `www.goodreads.com is an excluded source`},
+		{"relative work URL", func(m *MetaModel) { m.Works[2].URL = "posts/aggregates" }, `url "posts/aggregates" is not an absolute http or https URL`},
+		{"enforced invariant cites only tier 3", func(m *MetaModel) {
+			m.Blocks[0].Invariants[1].Sources = []Citation{{Work: "a-blog", Illustrative: true}}
+		}, `invariant aggregate/root-declared: an invariant is a rule, and it must cite at least one tier 1 work`},
+		{"enforced invariant cites only tier 2", func(m *MetaModel) {
+			m.Blocks[0].Invariants[1].Sources = []Citation{{Work: "fowler-aggregate"}}
+		}, `invariant aggregate/root-declared: an invariant is a rule, and it must cite at least one tier 1 work`},
+		{"invariant grounded only by an illustrative tier 1 citation", func(m *MetaModel) {
+			m.Blocks[0].Invariants[0].Sources = []Citation{{Work: "evans2015", Page: "16", Illustrative: true}}
+		}, `invariant aggregate/identity-recorded: an invariant is a rule, and it must cite at least one tier 1 work`},
+		{"milestone invariant cites only tier 2", func(m *MetaModel) {
+			m.Blocks[0].Invariants[2].Sources = []Citation{{Work: "fowler-aggregate"}}
+		}, `invariant aggregate/references-by-identity: an invariant is a rule`},
+		{"tier 3 citation not marked illustrative", func(m *MetaModel) {
+			m.Blocks[0].Guidance[0].Sources = []Citation{{Work: "evans2015", Page: "16"}, {Work: "a-blog"}}
+		}, `cites tier 3 work "a-blog" without marking the citation illustrative`},
+		{"fundamental guidance cites only tier 2", func(m *MetaModel) {
+			m.Blocks[0].Guidance[0].Sources = []Citation{{Work: "fowler-aggregate"}}
+		}, `guidance 1: a fundamental guidance must cite at least one tier 1 work`},
+		{"guidance cites only an illustration", func(m *MetaModel) {
+			m.Blocks[0].Guidance = append(m.Blocks[0].Guidance, Guidance{
+				Text: "An example.", Sources: []Citation{{Work: "a-blog", Illustrative: true}},
+			})
+		}, `guidance 2: guidance must cite at least one tier 1 or tier 2 work`},
+		{"definition cites only an illustration", func(m *MetaModel) {
+			m.Blocks[0].Definition.Sources = []Citation{{Work: "a-blog", Illustrative: true}}
+		}, `building_blocks aggregate: definition must cite at least one tier 1 or tier 2 work`},
+		{"kind cites only an illustration", func(m *MetaModel) {
+			m.Blocks[0].Records.Kinds[0].Sources = []Citation{{Work: "evans2015", Illustrative: true}}
+		}, `kind plain: definition must cite at least one tier 1 or tier 2 work`},
+		{"convention that quotes nothing of the entry", func(m *MetaModel) {
+			m.Blocks[0].Invariants[0].Conventions = []string{"its identity is a UUID"}
+		}, `convention label "its identity is a UUID" does not quote the entry's text`},
+		{"empty convention", func(m *MetaModel) { m.Blocks[0].Guidance[0].Conventions = []string{" "} }, `a convention label must quote the words`},
+		{"convention recorded twice", func(m *MetaModel) {
+			m.Blocks[0].Definition.Conventions = []string{"cluster", "cluster"}
+		}, `convention label "cluster" recorded twice`},
 		{"limitation off the domain evaluator", func(m *MetaModel) {
 			m.Blocks[0].Invariants[0].Enforcement.Limitations = []string{"a thrown error is not seen"}
 		}, `evaluator "loader" runs none`},
@@ -343,6 +396,83 @@ func TestValidateRejects(t *testing.T) {
 		if !strings.Contains(err.Error(), c.wants) {
 			t.Errorf("%s: error %q does not mention %q", c.name, err, c.wants)
 		}
+	}
+}
+
+// Tier 2 grounds guidance, a tier 3 work may illustrate anything when the
+// citation says so, and a convention label that quotes its entry is
+// accepted.
+func TestValidateAcceptsGroundedGuidanceAndLabelledConventions(t *testing.T) {
+	m := validModel()
+	b := &m.Blocks[0]
+	b.Guidance = append(b.Guidance, Guidance{
+		Text:        "Keep the root named for the aggregate.",
+		Sources:     []Citation{{Work: "fowler-aggregate"}, {Work: "a-blog", Illustrative: true}},
+		Conventions: []string{"named for the aggregate"},
+	})
+	b.Invariants[1].Sources = []Citation{{Work: "evans2015", Page: "16"}, {Work: "a-blog", Illustrative: true}}
+	b.Invariants[1].Conventions = []string{"is declared"}
+	b.Definition.Conventions = []string{"A cluster"}
+	if err := m.Validate(); err != nil {
+		t.Fatalf("rejected: %v", err)
+	}
+}
+
+func TestReferenceShowsTierAndVerification(t *testing.T) {
+	carried := Work{Title: "Implementing Domain-Driven Design", Authors: []string{"Vaughn Vernon"}, Year: 2013, Tier: TierCanonical, Verification: VerifiedCarried}
+	read := Work{Title: "A Blog Post", Authors: []string{"A Practitioner"}, Year: 2020, URL: "https://example.com/post", Tier: TierPractitioner, Verification: VerifiedFetched}
+	cases := []struct {
+		ref  Reference
+		want string
+	}{
+		{Reference{Work: carried, Chapter: 10, Page: "359"}, "Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 10, p. 359 (tier 1, unverified page)"},
+		{Reference{Work: carried, Chapter: 4, Section: "Isolating the Domain"}, "Vaughn Vernon, Implementing Domain-Driven Design (2013), ch. 4, Isolating the Domain (tier 1, unverified)"},
+		{Reference{Work: read, Illustrative: true}, "A Practitioner, A Blog Post (2020) <https://example.com/post> (tier 3, illustrative, read)"},
+	}
+	for _, c := range cases {
+		if got := c.ref.String(); got != c.want {
+			t.Errorf("got  %q\nwant %q", got, c.want)
+		}
+	}
+}
+
+// Every carried citation the meta-model makes is shown as unverified,
+// and every other as read, so no carried page reaches a reader looking
+// like a checked one.
+func TestDDDReferencesShowTheirVerification(t *testing.T) {
+	m := DDD()
+	var cites []Citation
+	for _, p := range m.Phases {
+		cites = append(cites, p.Definition.Sources...)
+	}
+	for _, b := range m.Blocks {
+		cites = append(cites, b.Definition.Sources...)
+		for _, k := range b.Records.Kinds {
+			cites = append(cites, k.Sources...)
+		}
+		for _, inv := range b.Invariants {
+			cites = append(cites, inv.Sources...)
+		}
+		for _, g := range b.Guidance {
+			cites = append(cites, g.Sources...)
+		}
+	}
+	carried := 0
+	for _, r := range m.References(cites) {
+		s := r.String()
+		if r.Work.Verification == VerifiedCarried {
+			carried++
+			if !strings.Contains(s, "unverified") {
+				t.Errorf("carried reference shown as checked: %s", s)
+			}
+			continue
+		}
+		if !strings.HasSuffix(s, ", read)") {
+			t.Errorf("checked reference not shown as read: %s", s)
+		}
+	}
+	if carried == 0 {
+		t.Fatal("the meta-model cites no carried page; the check above proves nothing")
 	}
 }
 

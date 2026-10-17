@@ -133,15 +133,17 @@ type phase struct {
 }
 
 type meaning struct {
-	Text    string     `yaml:"text"`
-	Sources []citation `yaml:"sources"`
+	Text        string     `yaml:"text"`
+	Sources     []citation `yaml:"sources"`
+	Conventions []string   `yaml:"conventions"`
 }
 
 type citation struct {
-	Work    string `yaml:"work"`
-	Chapter int    `yaml:"chapter"`
-	Page    string `yaml:"page"`
-	Section string `yaml:"section"`
+	Work         string `yaml:"work"`
+	Chapter      int    `yaml:"chapter"`
+	Page         string `yaml:"page"`
+	Section      string `yaml:"section"`
+	Illustrative bool   `yaml:"illustrative"`
 }
 
 type block struct {
@@ -178,6 +180,7 @@ type invariant struct {
 	ID          string      `yaml:"id"`
 	Statement   string      `yaml:"statement"`
 	Sources     []citation  `yaml:"sources"`
+	Conventions []string    `yaml:"conventions"`
 	Enforcement enforcement `yaml:"enforcement"`
 }
 
@@ -202,6 +205,7 @@ type guidance struct {
 	Text        string     `yaml:"text"`
 	Fundamental bool       `yaml:"fundamental"`
 	Sources     []citation `yaml:"sources"`
+	Conventions []string   `yaml:"conventions"`
 }
 
 // tier is a work's tier, written as a YAML integer. A float such as 1.9
@@ -420,8 +424,8 @@ func (e emitter) works(ws ordered[work]) {
 		e.str("ISBN", w.ISBN)
 		e.str("URL", w.URL)
 		e.str("License", w.License)
-		e.printf("Verification: %s,\n", verifications[w.Verification])
 		e.printf("Tier: %s,\n", tiers[w.Tier])
+		e.printf("Verification: %s,\n", verifications[w.Verification])
 		e.printf("},\n")
 	}
 	e.printf("},\n")
@@ -485,6 +489,7 @@ func (e emitter) meaning(field string, m meaning) {
 	e.printf("%s: Meaning{\n", field)
 	e.str("Text", m.Text)
 	e.citations(m.Sources)
+	e.strings("Conventions", m.Conventions)
 	e.printf("},\n")
 }
 
@@ -504,6 +509,9 @@ func (e emitter) citations(cs []citation) {
 		}
 		if c.Section != "" {
 			parts = append(parts, fmt.Sprintf("Section: %q", c.Section))
+		}
+		if c.Illustrative {
+			parts = append(parts, "Illustrative: true")
 		}
 		e.printf("%s", strings.Join(parts, ", "))
 		e.printf("},\n")
@@ -553,6 +561,7 @@ func (e emitter) invariants(is []invariant) {
 		e.str("ID", inv.ID)
 		e.str("Statement", inv.Statement)
 		e.citations(inv.Sources)
+		e.strings("Conventions", inv.Conventions)
 		e.enforcement(inv.Enforcement)
 		e.printf("},\n")
 	}
@@ -597,6 +606,7 @@ func (e emitter) guidance(gs []guidance) {
 			e.printf("Fundamental: true,\n")
 		}
 		e.citations(g.Sources)
+		e.strings("Conventions", g.Conventions)
 		e.printf("},\n")
 	}
 	e.printf("},\n")

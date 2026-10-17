@@ -506,6 +506,12 @@ func TestRepositoryMustBeAnInterfaceInGo(t *testing.T) {
 	if len(vs) != 1 || !strings.Contains(vs[0].Message(), "declared as a struct") {
 		t.Errorf("message = %q, want the declaration kind named", vs[0].Message())
 	}
+	// The Reference asks for "a well-known global interface" to the
+	// collection, not a declared interface type; the message says whose
+	// convention the declared interface is.
+	if len(vs) == 1 && !strings.Contains(vs[0].Message(), "by ArcLint's own convention, which no cited source states, a repository is an interface") {
+		t.Errorf("message = %q, want the interface requirement labelled as ArcLint's convention", vs[0].Message())
+	}
 }
 
 // A constructor or command of one root that takes or returns another

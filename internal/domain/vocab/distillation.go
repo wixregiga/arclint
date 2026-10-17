@@ -1,12 +1,30 @@
 package vocab
 
 // DistillationRule is one domain-librarian distillation rule from
-// VOCAB.yaml: stable id, rule text, and example.
+// VOCAB.yaml: stable id, rule text, and example. Sources cite the
+// meta-model's bibliography for a rule that rests on the literature,
+// so the bibliography check covers them; Conventions quotes the parts
+// of the rule that are arclint's own convention.
 type DistillationRule struct {
-	ID      string
-	Rule    string
-	Example string
+	ID          string
+	Rule        string
+	Example     string
+	Sources     []Citation
+	Conventions []string
 }
+
+// Labelled is the rule as a reader is shown it: the text, then the
+// label naming the parts that are arclint's convention.
+func (r DistillationRule) Labelled() string {
+	return labelConventions(r.Rule, r.Conventions)
+}
+
+// The bibliography key of Evans's Domain-Driven Design Reference and its
+// section on entities, which the identity rules cite.
+const (
+	evansReference  = "evans2015"
+	entitiesSection = "Entities"
+)
 
 // DistillationRules returns the rules in VOCAB.yaml order with
 // char-exact id/rule/example strings.
@@ -19,8 +37,9 @@ func DistillationRules() []DistillationRule {
 		},
 		{
 			ID:      "identity-regardless-of-history",
-			Rule:    "Define a means of distinguishing each object regardless of its form or history (Evans, DDD Reference, Entities). The model decides what sameness is. An identifier may come from outside the system, or it may be a symbol created for the system. A part that can change while the object stays the same is not part of its identity.",
+			Rule:    "Define a means of distinguishing each object regardless of its form or history. The model decides what sameness is. An identifier may come from outside the system, or it may be a symbol created for the system. A part that can change while the object stays the same is not part of its identity.",
 			Example: "an order keeps its id when its status changes; a username is the identity only when no operation changes it",
+			Sources: []Citation{{Work: evansReference, Page: "11", Section: entitiesSection}},
 		},
 		{
 			ID:      "value-test",
@@ -58,9 +77,10 @@ func DistillationRules() []DistillationRule {
 			Example: "Tenant.Deactivate is a command; Tenant.IsRegistrationAvailableThrough is a query",
 		},
 		{
-			ID:      "domain-service-when-no-owner",
-			Rule:    "Does it make a business decision that no one aggregate can make alone? Yes -> domain_service, recorded under services with its contract; it may read through repositories, never commits, never publishes.",
-			Example: "TenantProvisioningService over Tenant, User, and Role; Encrypter for knowledge no aggregate holds",
+			ID:          "domain-service-when-no-owner",
+			Rule:        "Does it make a business decision that no one aggregate can make alone? Yes -> domain_service, recorded under services with its contract; it may read through repositories, never commits, never publishes.",
+			Conventions: []string{"never commits, never publishes"},
+			Example:     "TenantProvisioningService over Tenant, User, and Role; Encrypter for knowledge no aggregate holds",
 		},
 		{
 			ID:      "application-service-holds-no-rule",

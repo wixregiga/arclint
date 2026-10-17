@@ -134,7 +134,7 @@ func (c Concept) Doc() ConceptDoc {
 	model := DDD()
 	if block, ok := model.Block(string(c)); ok {
 		doc.Title = block.Title
-		doc.Meaning = block.Definition.Text
+		doc.Meaning = block.Definition.Labelled()
 		doc.Sources = model.References(block.Definition.Sources)
 	}
 	switch c {

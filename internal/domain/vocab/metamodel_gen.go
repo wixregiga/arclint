@@ -16,8 +16,8 @@ func ddd() MetaModel {
 				Year:         2015,
 				URL:          "https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf",
 				License:      "CC BY 4.0",
-				Verification: VerifiedText,
 				Tier:         TierCanonical,
+				Verification: VerifiedText,
 			},
 			{
 				Key:          "evans2003",
@@ -26,8 +26,8 @@ func ddd() MetaModel {
 				Publisher:    "Addison-Wesley",
 				Year:         2003,
 				ISBN:         "978-0321125217",
-				Verification: VerifiedCarried,
 				Tier:         TierCanonical,
+				Verification: VerifiedCarried,
 			},
 			{
 				Key:          "vernon2013",
@@ -36,8 +36,8 @@ func ddd() MetaModel {
 				Publisher:    "Addison-Wesley",
 				Year:         2013,
 				ISBN:         "978-0321834577",
-				Verification: VerifiedCarried,
 				Tier:         TierCanonical,
+				Verification: VerifiedCarried,
 			},
 			{
 				Key:          "evans-fowler-1997",
@@ -45,8 +45,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Eric Evans", "Martin Fowler"},
 				Year:         1997,
 				URL:          "https://martinfowler.com/apsupp/spec.pdf",
-				Verification: VerifiedText,
 				Tier:         TierCanonical,
+				Verification: VerifiedText,
 			},
 			{
 				Key:          "fowler-aggregate",
@@ -54,8 +54,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Martin Fowler"},
 				Date:         "2013-04-23",
 				URL:          "https://martinfowler.com/bliki/DDD_Aggregate.html",
-				Verification: VerifiedFetched,
 				Tier:         TierPublished,
+				Verification: VerifiedFetched,
 			},
 			{
 				Key:          "fowler-bounded-context",
@@ -63,8 +63,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Martin Fowler"},
 				Date:         "2014-01-15",
 				URL:          "https://martinfowler.com/bliki/BoundedContext.html",
-				Verification: VerifiedFetched,
 				Tier:         TierPublished,
+				Verification: VerifiedFetched,
 			},
 			{
 				Key:          "fowler-ubiquitous-language",
@@ -72,8 +72,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Martin Fowler"},
 				Date:         "2006-10-31",
 				URL:          "https://martinfowler.com/bliki/UbiquitousLanguage.html",
-				Verification: VerifiedFetched,
 				Tier:         TierPublished,
+				Verification: VerifiedFetched,
 			},
 			{
 				Key:          "fowler-evans-classification",
@@ -81,8 +81,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Martin Fowler"},
 				Date:         "2005-12-14",
 				URL:          "https://martinfowler.com/bliki/EvansClassification.html",
-				Verification: VerifiedFetched,
 				Tier:         TierPublished,
+				Verification: VerifiedFetched,
 			},
 			{
 				Key:          "fowler-value-object",
@@ -90,8 +90,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Martin Fowler"},
 				Date:         "2016-11-14",
 				URL:          "https://martinfowler.com/bliki/ValueObject.html",
-				Verification: VerifiedFetched,
 				Tier:         TierPublished,
+				Verification: VerifiedFetched,
 			},
 			{
 				Key:          "fowler-domain-event",
@@ -99,8 +99,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Martin Fowler"},
 				Date:         "2005-12-12",
 				URL:          "https://martinfowler.com/eaaDev/DomainEvent.html",
-				Verification: VerifiedFetched,
 				Tier:         TierPublished,
+				Verification: VerifiedFetched,
 			},
 			{
 				Key:          "fowler-architecture",
@@ -108,8 +108,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Martin Fowler"},
 				Date:         "2019-08-01",
 				URL:          "https://martinfowler.com/architecture/",
-				Verification: VerifiedFetched,
 				Tier:         TierPublished,
+				Verification: VerifiedFetched,
 			},
 			{
 				Key:          "fowler-anemic-domain-model",
@@ -117,8 +117,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Martin Fowler"},
 				Date:         "2003-11-25",
 				URL:          "https://martinfowler.com/bliki/AnemicDomainModel.html",
-				Verification: VerifiedFetched,
 				Tier:         TierPublished,
+				Verification: VerifiedFetched,
 			},
 			{
 				Key:          "fowler-cqs",
@@ -126,8 +126,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Martin Fowler"},
 				Date:         "2005-12-05",
 				URL:          "https://martinfowler.com/bliki/CommandQuerySeparation.html",
-				Verification: VerifiedFetched,
 				Tier:         TierPublished,
+				Verification: VerifiedFetched,
 			},
 			{
 				Key:          "fowler-function-length",
@@ -135,8 +135,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Martin Fowler"},
 				Date:         "2016-11-30",
 				URL:          "https://martinfowler.com/bliki/FunctionLength.html",
-				Verification: VerifiedFetched,
 				Tier:         TierPublished,
+				Verification: VerifiedFetched,
 			},
 			{
 				Key:          "stafford-service-layer",
@@ -144,8 +144,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Randy Stafford"},
 				Year:         2002,
 				URL:          "https://martinfowler.com/eaaCatalog/serviceLayer.html",
-				Verification: VerifiedFetched,
 				Tier:         TierPublished,
+				Verification: VerifiedFetched,
 			},
 			{
 				Key:          "stafford-business-logic",
@@ -153,8 +153,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Randy Stafford"},
 				Year:         2002,
 				URL:          "https://www.informit.com/articles/article.aspx?p=1398617&seqNum=4",
-				Verification: VerifiedFetched,
 				Tier:         TierPublished,
+				Verification: VerifiedFetched,
 			},
 			{
 				Key:          "vernon-iddd-ch1",
@@ -162,8 +162,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Vaughn Vernon"},
 				Year:         2013,
 				URL:          "https://www.informit.com/articles/article.aspx?p=1944876&seqNum=3",
-				Verification: VerifiedFetched,
 				Tier:         TierCanonical,
+				Verification: VerifiedFetched,
 			},
 			{
 				Key:          "vernon-iddd-sample-pages",
@@ -171,8 +171,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Vaughn Vernon"},
 				Year:         2013,
 				URL:          "https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf",
-				Verification: VerifiedText,
 				Tier:         TierCanonical,
+				Verification: VerifiedText,
 			},
 			{
 				Key:          "vernon-effective-aggregate-design-1",
@@ -180,8 +180,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Vaughn Vernon"},
 				Year:         2011,
 				URL:          "https://www.dddcommunity.org/wp-content/uploads/files/pdf_articles/Vernon_2011_1.pdf",
-				Verification: VerifiedText,
 				Tier:         TierCanonical,
+				Verification: VerifiedText,
 			},
 			{
 				Key:          "vernon-effective-aggregate-design-2",
@@ -189,8 +189,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Vaughn Vernon"},
 				Year:         2011,
 				URL:          "https://www.dddcommunity.org/wp-content/uploads/files/pdf_articles/Vernon_2011_2.pdf",
-				Verification: VerifiedText,
 				Tier:         TierCanonical,
+				Verification: VerifiedText,
 			},
 			{
 				Key:          "vernon-iddd-samples",
@@ -198,8 +198,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Vaughn Vernon"},
 				Date:         "2022-03-26",
 				URL:          "https://github.com/VaughnVernon/IDDD_Samples",
-				Verification: VerifiedFetched,
 				Tier:         TierCanonical,
+				Verification: VerifiedFetched,
 			},
 			{
 				Key:          "martin-screaming-architecture",
@@ -207,8 +207,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Robert C. Martin"},
 				Date:         "2011-09-30",
 				URL:          "https://blog.cleancoder.com/uncle-bob/2011/09/30/Screaming-Architecture.html",
-				Verification: VerifiedFetched,
 				Tier:         TierPractitioner,
+				Verification: VerifiedFetched,
 			},
 			{
 				Key:          "bogard-vertical-slice",
@@ -216,8 +216,8 @@ func ddd() MetaModel {
 				Authors:      []string{"Jimmy Bogard"},
 				Date:         "2018-04-19",
 				URL:          "https://www.jimmybogard.com/vertical-slice-architecture/",
-				Verification: VerifiedFetched,
 				Tier:         TierPractitioner,
+				Verification: VerifiedFetched,
 			},
 		},
 		Facts: []FactDefinition{
@@ -1027,6 +1027,7 @@ func ddd() MetaModel {
 							{Work: "evans2015", Page: "16", Section: "Aggregates"},
 							{Work: "vernon2013", Chapter: 10, Page: "354"},
 						},
+						Conventions: []string{"calls the ensure method of the aggregate's invariant"},
 						Enforcement: Enforcement{
 							By:          EvaluatorDomain,
 							Facts:       []string{"file_tree", "declarations", "calls"},
@@ -1147,6 +1148,7 @@ func ddd() MetaModel {
 							{Work: "evans2015", Page: "14", Section: "Services"},
 							{Work: "evans2015", Page: "22", Section: "Assertions"},
 						},
+						Conventions: []string{"the checking method (assert followed by the key in the language's method case)"},
 						Enforcement: Enforcement{
 							By:          EvaluatorDomain,
 							Facts:       []string{"file_tree", "declarations", "calls", "field_types"},
@@ -1370,6 +1372,7 @@ func ddd() MetaModel {
 							{Work: "evans2015", Page: "20", Section: "Intention-Revealing Interfaces"},
 							{Work: "vernon2013", Chapter: 10, Page: "354"},
 						},
+						Conventions: []string{"ensure followed by the key in the language's method case (EnsureLinesFrozen, ensureLinesFrozen, ensure_lines_frozen)"},
 						Enforcement: Enforcement{
 							By:        EvaluatorDomain,
 							Facts:     []string{"file_tree", "declarations"},
@@ -1709,6 +1712,7 @@ func ddd() MetaModel {
 						{Work: "vernon2013", Chapter: 7, Page: "267"},
 						{Work: "vernon-iddd-sample-pages", Page: "xxxix", Section: "Guide to This Book"},
 					},
+					Conventions: []string{"it never commits and never publishes"},
 				},
 				Records: Recording{
 					Section: SectionServices,
@@ -1844,6 +1848,7 @@ func ddd() MetaModel {
 							{Work: "vernon-iddd-ch1", Section: "How To Do DDD"},
 							{Work: "fowler-cqs"},
 						},
+						Conventions: []string{"never with the word command"},
 					},
 				},
 			},
@@ -1881,6 +1886,7 @@ func ddd() MetaModel {
 						Sources: []Citation{
 							{Work: "evans2015", Page: "17", Section: "Repositories"},
 						},
+						Conventions: []string{"(interface, or class in a language without interfaces)"},
 						Enforcement: Enforcement{
 							By:        EvaluatorDomain,
 							Facts:     []string{"file_tree", "declarations"},

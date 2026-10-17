@@ -3,6 +3,7 @@ package vocab
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
 	"slices"
 	"strconv"
@@ -44,8 +45,8 @@ type Work struct {
 	ISBN         string
 	URL          string
 	License      string
-	Verification Verification
 	Tier         Tier
+	Verification Verification
 }
 
 // Verification is how a Work's cited pages were checked.
@@ -70,8 +71,8 @@ type Tier int
 
 const (
 	// TierCanonical is the canonical literature of Domain-Driven Design:
-	// Evans 2003 and 2015, Vernon 2013 and his papers, and Evans and
-	// Fowler 1997.
+	// Evans 2003 and 2015, Vernon 2013 and his papers and sample code,
+	// and Evans and Fowler 1997.
 	TierCanonical Tier = 1
 	// TierPublished is another published book or Fowler's bliki.
 	TierPublished Tier = 2
@@ -94,7 +95,7 @@ func (t Tier) Label() string {
 func (t Tier) Meaning() string {
 	switch t {
 	case TierCanonical:
-		return "the canonical works: Evans 2003 and 2015, Vernon 2013 and his papers, Evans and Fowler 1997"
+		return "the canonical works: Evans 2003 and 2015, Vernon 2013 and his papers and sample code, Evans and Fowler 1997"
 	case TierPublished:
 		return "published books and Fowler's bliki"
 	case TierPractitioner:
@@ -111,38 +112,76 @@ const DecisionLabel = "Owner decision"
 // Citation points a definition, an invariant, a guidance entry, or a
 // relation kind at the Work that states it. Work is required; Chapter,
 // Page, and Section narrow the reference. Page is text because the
-// Reference's front matter is numbered in roman numerals.
+// Reference's front matter is numbered in roman numerals. Illustrative
+// marks a citation that only illustrates the entry and grounds nothing;
+// a citation of a tier 3 work is always illustrative.
 type Citation struct {
-	Work    string
-	Chapter int
-	Page    string
-	Section string
+	Work         string
+	Chapter      int
+	Page         string
+	Section      string
+	Illustrative bool
 }
 
 // Reference is a Citation resolved against the Work it names, the form
 // a reader is shown.
 type Reference struct {
-	Work    Work
-	Chapter int
-	Page    string
-	Section string
+	Work         Work
+	Chapter      int
+	Page         string
+	Section      string
+	Illustrative bool
+}
+
+// Verified reports whether the cited passage was read while the
+// meta-model was written; a carried page is cited but unverified.
+func (r Reference) Verified() bool {
+	return r.Work.Verification != VerifiedCarried
+}
+
+// Standing spells the weight and the verification of the reference for
+// a reader: the work's tier, whether the citation only illustrates, and
+// whether the cited passage was read or carried unverified, as in
+// "tier 1, unverified page".
+func (r Reference) Standing() string {
+	parts := []string{"tier " + strconv.Itoa(int(r.Work.Tier))}
+	if r.Illustrative {
+		parts = append(parts, "illustrative")
+	}
+	switch {
+	case r.Verified():
+		parts = append(parts, "read")
+	case r.Page != "":
+		parts = append(parts, "unverified page")
+	default:
+		parts = append(parts, "unverified")
+	}
+	return strings.Join(parts, ", ")
 }
 
 // String spells the reference for a reader: the authors, the title, the
-// year or date, the narrowing parts, and the URL when the work has one.
+// year or date, the narrowing parts, the URL when the work has one, and
+// the reference's standing.
 func (r Reference) String() string {
 	var b strings.Builder
-	if len(r.Work.Authors) > 0 {
-		b.WriteString(strings.Join(r.Work.Authors, " and "))
-		b.WriteString(", ")
+	b.WriteString(r.Work.byline())
+	b.WriteString(r.narrowing())
+	if r.Work.URL != "" {
+		b.WriteString(" <" + r.Work.URL + ">")
 	}
-	b.WriteString(r.Work.Title)
-	switch {
-	case r.Work.Date != "":
-		b.WriteString(" (" + r.Work.Date + ")")
-	case r.Work.Year != 0:
-		b.WriteString(" (" + strconv.Itoa(r.Work.Year) + ")")
-	}
+	b.WriteString(" (" + r.Standing() + ")")
+	return b.String()
+}
+
+// Keyed spells the reference by its work's bibliography key instead of
+// the work itself, with the narrowing parts and the standing, for a
+// reader that has the bibliography beside it.
+func (r Reference) Keyed() string {
+	return r.Work.Key + r.narrowing() + " (" + r.Standing() + ")"
+}
+
+func (r Reference) narrowing() string {
+	var b strings.Builder
 	if r.Chapter != 0 {
 		b.WriteString(", ch. " + strconv.Itoa(r.Chapter))
 	}
@@ -152,8 +191,31 @@ func (r Reference) String() string {
 	if r.Section != "" {
 		b.WriteString(", " + r.Section)
 	}
-	if r.Work.URL != "" {
-		b.WriteString(" <" + r.Work.URL + ">")
+	return b.String()
+}
+
+// String spells the work for a reader: the authors, the title, the year
+// or date, and the URL when it has one.
+func (w Work) String() string {
+	s := w.byline()
+	if w.URL != "" {
+		s += " <" + w.URL + ">"
+	}
+	return s
+}
+
+func (w Work) byline() string {
+	var b strings.Builder
+	if len(w.Authors) > 0 {
+		b.WriteString(strings.Join(w.Authors, " and "))
+		b.WriteString(", ")
+	}
+	b.WriteString(w.Title)
+	switch {
+	case w.Date != "":
+		b.WriteString(" (" + w.Date + ")")
+	case w.Year != 0:
+		b.WriteString(" (" + strconv.Itoa(w.Year) + ")")
 	}
 	return b.String()
 }
@@ -165,7 +227,7 @@ func (m MetaModel) Resolve(c Citation) (Reference, bool) {
 	if !ok {
 		return Reference{}, false
 	}
-	return Reference{Work: w, Chapter: c.Chapter, Page: c.Page, Section: c.Section}, true
+	return Reference{Work: w, Chapter: c.Chapter, Page: c.Page, Section: c.Section, Illustrative: c.Illustrative}, true
 }
 
 // References resolves citations in order, leaving out any that names an
@@ -232,10 +294,42 @@ type Phase struct {
 
 // Meaning is a definition with the sources that state it: the
 // `definition` of a phase or a building block. A structural-phase
-// block has no sources because arclint is its source.
+// block has no sources because arclint is its source. Conventions
+// quotes the parts of the text that are arclint's own convention
+// rather than a statement of the sources.
 type Meaning struct {
-	Text    string
-	Sources []Citation
+	Text        string
+	Sources     []Citation
+	Conventions []string
+}
+
+// Labelled is the definition as a reader is shown it: the text, then
+// the label naming the parts that are arclint's convention.
+func (d Meaning) Labelled() string {
+	return labelConventions(d.Text, d.Conventions)
+}
+
+// ConventionNote spells the label for the parts of an entry that are
+// arclint's own convention rather than a statement of the cited
+// sources, each quoted as the entry words it; empty when there are none.
+func ConventionNote(conventions []string) string {
+	if len(conventions) == 0 {
+		return ""
+	}
+	quoted := make([]string, len(conventions))
+	for i, c := range conventions {
+		quoted[i] = strconv.Quote(c)
+	}
+	return "ArcLint's own convention, which no cited source states: " + strings.Join(quoted, "; ") + "."
+}
+
+// labelConventions appends the convention label to an entry's text.
+func labelConventions(text string, conventions []string) string {
+	note := ConventionNote(conventions)
+	if note == "" {
+		return text
+	}
+	return text + " " + note
 }
 
 // BuildingBlock is one term of the canonical language.
@@ -325,12 +419,22 @@ type KindDefinition struct {
 // BlockInvariant is one structural rule arclint applies to every
 // recorded instance of a building block, cited to the source that
 // states it and classified by how it is enforced. Its ID is the block's
-// term, a slash, and the rule's kebab-case name.
+// term, a slash, and the rule's kebab-case name. Conventions quotes the
+// parts of the statement that are arclint's own convention rather than
+// a statement of the sources.
 type BlockInvariant struct {
 	ID          string
 	Statement   string
 	Sources     []Citation
+	Conventions []string
 	Enforcement Enforcement
+}
+
+// LabelledStatement is the statement as a reader is shown it: the
+// statement, then the label naming the parts that are arclint's
+// convention.
+func (i BlockInvariant) LabelledStatement() string {
+	return labelConventions(i.Statement, i.Conventions)
 }
 
 // Enforcement classifies how a BlockInvariant is evaluated. By names
@@ -406,11 +510,19 @@ type Languages struct {
 // Guidance is design advice about a building block, cited, never
 // enforced. Fundamental marks the pattern's own directive: an instance
 // that ignores it misuses the block even though arclint cannot observe
-// the misuse.
+// the misuse. Conventions quotes the parts of the text that are
+// arclint's own convention rather than a statement of the sources.
 type Guidance struct {
 	Text        string
 	Fundamental bool
 	Sources     []Citation
+	Conventions []string
+}
+
+// Labelled is the advice as a reader is shown it: the text, then the
+// label naming the parts that are arclint's convention.
+func (g Guidance) Labelled() string {
+	return labelConventions(g.Text, g.Conventions)
 }
 
 // Level derives where the invariant is evaluated: a milestone when it
@@ -527,7 +639,11 @@ var (
 
 // Validate checks the meta-model as one whole and returns every failure
 // joined: a term or an id recorded twice, a citation of an unlisted
-// work, an invariant whose id is not prefixed by its block's term, a
+// work, a work without a published tier, a tier 3 citation not marked
+// illustrative, an invariant or a fundamental guidance that no tier 1
+// work grounds, any other cited entry that no tier 1 or 2 work grounds,
+// a convention label that does not quote its entry, an invariant whose
+// id is not prefixed by its block's term, a
 // milestone and an invariant that do not name each other, an evaluator
 // or a severity outside the published values, an enforcement whose
 // facts contradict its evaluator, and a declined rule without a reason
@@ -543,6 +659,33 @@ func (m MetaModel) Validate() error {
 	v.blocks()
 	v.milestonesUnlockRecordedInvariants()
 	v.declined()
+	return errors.Join(v.failures...)
+}
+
+// ValidateDistillationRules checks the librarian's distillation rules
+// against this meta-model's bibliography as the meta-model's own
+// entries are checked: every citation names a listed work, a tier 3
+// citation is marked illustrative, a cited rule is grounded by a tier 1
+// or 2 work, and every convention label quotes its rule; a rule id
+// recorded twice is a failure too.
+func (m MetaModel) ValidateDistillationRules(rules []DistillationRule) error {
+	v := &metaModelValidation{model: m}
+	seen := map[string]bool{}
+	for _, r := range rules {
+		subject := "distillation rule " + r.ID
+		switch {
+		case !rulePattern.MatchString(r.ID):
+			v.failf("distillation rules: id %q is not lowercase kebab case", r.ID)
+		case seen[r.ID]:
+			v.failf("distillation rules: id %q recorded twice", r.ID)
+		}
+		seen[r.ID] = true
+		v.citations(subject, r.Sources)
+		if len(r.Sources) > 0 {
+			v.grounded(subject, r.Sources, TierPublished)
+		}
+		v.conventions(subject, r.Rule, r.Conventions)
+	}
 	return errors.Join(v.failures...)
 }
 
@@ -594,6 +737,31 @@ func (v *metaModelValidation) works() {
 		}
 		if !slices.Contains(Tiers(), w.Tier) {
 			v.failf("works %q: tier %d is not 1, 2, or 3", w.Key, w.Tier)
+		}
+		if w.URL != "" {
+			v.workURL(w)
+		}
+	}
+}
+
+// excludedHosts are the excluded sources a work's URL identifies:
+// Goodreads and the Stack Exchange network, Stack Overflow among it.
+// The other excluded sources (an unknown Medium author, an AI summary,
+// a search snippet) are not decided by a URL.
+var excludedHosts = []string{"goodreads.com", "stackoverflow.com", "stackexchange.com"}
+
+// workURL checks that a work's URL is absolute and names no excluded
+// source.
+func (v *metaModelValidation) workURL(w Work) {
+	u, err := url.Parse(w.URL)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Hostname() == "" {
+		v.failf("works %q: url %q is not an absolute http or https URL", w.Key, w.URL)
+		return
+	}
+	host := strings.ToLower(u.Hostname())
+	for _, excluded := range excludedHosts {
+		if host == excluded || strings.HasSuffix(host, "."+excluded) {
+			v.failf("works %q: %s is an excluded source and is never cited", w.Key, host)
 		}
 	}
 }
@@ -666,16 +834,60 @@ func (v *metaModelValidation) meaning(subject string, d Meaning, cited bool) {
 		v.failf("%s: a structural term cites nothing, because arclint is its source", subject)
 	}
 	v.citations(subject, d.Sources)
+	if cited {
+		v.grounded(subject+": definition", d.Sources, TierPublished)
+	}
+	v.conventions(subject+" definition", d.Text, d.Conventions)
 }
 
 func (v *metaModelValidation) citations(subject string, cs []Citation) {
 	for _, c := range cs {
-		if _, ok := v.model.Work(c.Work); !ok {
+		w, ok := v.model.Work(c.Work)
+		if !ok {
 			v.failf("%s: cites work %q, which the bibliography does not list", subject, c.Work)
 		}
 		if c.Chapter < 0 {
 			v.failf("%s: cites a negative chapter of %q", subject, c.Work)
 		}
+		if ok && w.Tier == TierPractitioner && !c.Illustrative {
+			v.failf("%s: cites tier 3 work %q without marking the citation illustrative; a practitioner's blog only illustrates", subject, c.Work)
+		}
+	}
+}
+
+// grounded checks that at least one citation that does not merely
+// illustrate names a work of tier most or weightier: tier 1 grounds a
+// rule, and tier 1 or 2 grounds guidance and definitions.
+func (v *metaModelValidation) grounded(what string, cs []Citation, most Tier) {
+	for _, c := range cs {
+		if c.Illustrative {
+			continue
+		}
+		if w, ok := v.model.Work(c.Work); ok && slices.Contains(Tiers(), w.Tier) && w.Tier <= most {
+			return
+		}
+	}
+	if most == TierCanonical {
+		v.failf("%s must cite at least one tier 1 work that grounds it, not only illustrates it", what)
+		return
+	}
+	v.failf("%s must cite at least one tier 1 or tier 2 work that grounds it, not only illustrates it", what)
+}
+
+// conventions checks that every convention label quotes words of the
+// entry it labels, once.
+func (v *metaModelValidation) conventions(subject, text string, conventions []string) {
+	seen := map[string]bool{}
+	for _, c := range conventions {
+		switch {
+		case strings.TrimSpace(c) == "":
+			v.failf("%s: a convention label must quote the words that are arclint's convention", subject)
+		case !strings.Contains(text, c):
+			v.failf("%s: convention label %q does not quote the entry's text", subject, c)
+		case seen[c]:
+			v.failf("%s: convention label %q recorded twice", subject, c)
+		}
+		seen[c] = true
 	}
 }
 
@@ -711,6 +923,12 @@ func (v *metaModelValidation) blocks() {
 				v.failf("%s: guidance must cite at least one work", gsubject)
 			}
 			v.citations(gsubject, g.Sources)
+			if g.Fundamental {
+				v.grounded(gsubject+": a fundamental guidance", g.Sources, TierCanonical)
+			} else {
+				v.grounded(gsubject+": guidance", g.Sources, TierPublished)
+			}
+			v.conventions(gsubject, g.Text, g.Conventions)
 		}
 	}
 }
@@ -749,6 +967,7 @@ func (v *metaModelValidation) recording(subject string, r Recording) {
 			v.failf("%s: kind %q must cite at least one work", subject, k.Name)
 		}
 		v.citations(subject+" kind "+k.Name, k.Sources)
+		v.grounded(subject+" kind "+k.Name+": definition", k.Sources, TierPublished)
 	}
 }
 
@@ -772,6 +991,8 @@ func (v *metaModelValidation) invariant(b BuildingBlock, inv BlockInvariant) {
 		v.failf("%s: an invariant must cite at least one work", subject)
 	}
 	v.citations(subject, inv.Sources)
+	v.grounded(subject+": an invariant is a rule, and it", inv.Sources, TierCanonical)
+	v.conventions(subject, inv.Statement, inv.Conventions)
 	v.enforcement(subject, inv)
 }
 

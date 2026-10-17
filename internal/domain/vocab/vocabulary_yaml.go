@@ -8,10 +8,15 @@ import (
 // VocabularyYAML returns the domain-librarian VOCAB.yaml content for a
 // project, byte-exact to the litmus vocabulary file. The vocabulary is the
 // meta-model's building blocks, one term per block in meta-model order
-// with a comment naming each phase, followed by the context relation
-// kinds, the distillation rules, the source tiers, and the rules the
-// meta-model declines to enforce with their reasons and tiered basis. Hand-assembled so comments and flow-style lines match;
-// yaml.Marshal is never used.
+// with a comment naming each phase, each definition labelled where it
+// states arclint's convention; then every cited term's sources by
+// bibliography key with their tier and verification, the context
+// relation kinds, the distillation rules with their sources, the
+// source tiers, the rules the meta-model declines to enforce with
+// their reasons and basis, the clarification questions, the
+// bibliography those sources cite, and the library file.
+// Hand-assembled so comments and flow-style lines match; yaml.Marshal
+// is never used.
 func VocabularyYAML() string {
 	var b strings.Builder
 	b.WriteString(VOCABHeaderComment)
@@ -35,7 +40,22 @@ func VocabularyYAML() string {
 		b.WriteString("  ")
 		b.WriteString(block.Term)
 		b.WriteString(": ")
-		b.WriteString(yamlDoubleQuoted(block.Definition.Text))
+		b.WriteString(yamlDoubleQuoted(block.Definition.Labelled()))
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+
+	b.WriteString(vocabularySourcesComment)
+	b.WriteString("\n")
+	b.WriteString("vocabulary_sources:\n")
+	for _, block := range model.Blocks {
+		if len(block.Definition.Sources) == 0 {
+			continue
+		}
+		b.WriteString("  ")
+		b.WriteString(block.Term)
+		b.WriteString(": ")
+		b.WriteString(keyedSources(model, block.Definition.Sources))
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
@@ -55,9 +75,13 @@ func VocabularyYAML() string {
 		b.WriteString("  - {id: ")
 		b.WriteString(r.ID)
 		b.WriteString(", rule: ")
-		b.WriteString(yamlDoubleQuoted(r.Rule))
+		b.WriteString(yamlDoubleQuoted(r.Labelled()))
 		b.WriteString(", example: ")
 		b.WriteString(yamlDoubleQuoted(r.Example))
+		if len(r.Sources) > 0 {
+			b.WriteString(", sources: ")
+			b.WriteString(keyedSources(model, r.Sources))
+		}
 		b.WriteString("}\n")
 	}
 	b.WriteString("\n")
@@ -107,6 +131,22 @@ func VocabularyYAML() string {
 	b.WriteString(ClarificationPolicy)
 	b.WriteString("\n\n")
 
+	b.WriteString(bibliographyComment)
+	b.WriteString("\n")
+	b.WriteString("bibliography:\n")
+	for _, w := range model.Works {
+		b.WriteString("  ")
+		b.WriteString(w.Key)
+		b.WriteString(": {tier: ")
+		b.WriteString(strconv.Itoa(int(w.Tier)))
+		b.WriteString(", verification: ")
+		b.WriteString(string(w.Verification))
+		b.WriteString(", work: ")
+		b.WriteString(yamlDoubleQuoted(w.String()))
+		b.WriteString("}\n")
+	}
+	b.WriteString("\n")
+
 	lib := LibraryFileSpec()
 	b.WriteString("library_file:\n")
 	b.WriteString("  purpose: ")
@@ -128,8 +168,9 @@ func VocabularyYAML() string {
 }
 
 // declinedBasis spells a declined rule's basis for a reader who has
-// only VOCAB.yaml: every cited work in full with its page, labeled by
-// its tier, or the owner decision labeled as one with its issue link.
+// only VOCAB.yaml: every cited work in full with its page and its
+// standing, which names the tier and whether the page was read, or the
+// owner decision labeled as one with its issue link.
 func declinedBasis(m MetaModel, d DeclinedRule) string {
 	if d.Decision != "" {
 		return DecisionLabel + ": " + d.Decision
@@ -137,9 +178,26 @@ func declinedBasis(m MetaModel, d DeclinedRule) string {
 	refs := m.References(d.Sources)
 	spelled := make([]string, len(refs))
 	for i, r := range refs {
-		spelled[i] = r.Work.Tier.Label() + ": " + r.String()
+		spelled[i] = r.String()
 	}
 	return strings.Join(spelled, "; ")
+}
+
+// The comments that explain VOCAB.yaml's sources to the librarian.
+const (
+	vocabularySourcesComment = "# Each term's sources, by bibliography key: tier 1 may ground a rule, tier 2 may ground guidance, tier 3 only illustrates; read means the cited passage was checked, and an unverified page was carried without being checked."
+	bibliographyComment      = "# The works the sources cite, by key. Cite one of these, with its tier and whether its page was read, when a meaning rests on the literature; never Goodreads, an unknown Medium author, Stack Overflow, an AI summary, or a search snippet."
+)
+
+// keyedSources spells citations as a YAML flow sequence of keyed
+// references, each with its tier and verification.
+func keyedSources(model MetaModel, cs []Citation) string {
+	refs := model.References(cs)
+	quoted := make([]string, len(refs))
+	for i, r := range refs {
+		quoted[i] = yamlDoubleQuoted(r.Keyed())
+	}
+	return "[" + strings.Join(quoted, ", ") + "]"
 }
 
 // yamlDoubleQuoted emits a double-quoted YAML scalar, escaping \ and ".

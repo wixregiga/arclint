@@ -11,7 +11,8 @@ under `domain.file`, else the first of `domain.arclint.yaml`,
 [CML](/docs/cml/)) is a claim about the code, and arclint evaluates it.
 A recorded aggregate must have a root, spelled with its name wherever
 the repository declares it; a recorded invariant must be a method the
-root calls at every mutation; a recorded value object with an invariant
+root calls at every mutation, by ArcLint's own convention for how an
+invariant is enforced; a recorded value object with an invariant
 must be built through one constructor. Nothing is
 installed to get this: the rules are built into the binary, composed
 from the DDD meta-model that defines each building block, and they
@@ -274,6 +275,9 @@ its key, and every constructor and every command of the root calls it
 named `Assert` followed by its key, declared on its owner (the aggregate's
 root or the domain service) and called by the operation the assertion
 names (`assertion/checked-by-its-operation`).
+The `Ensure` and `Assert` method shapes are ArcLint's own convention,
+which no cited source states; the sources ask that invariants and
+post-conditions be stated explicitly, not what the methods are named.
 The statement is the guarantee in the domain expert's words; the code
 checks it, the recording never restates it as a post-condition.
 

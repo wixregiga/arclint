@@ -630,14 +630,19 @@ func explainJSONDoc(doc vocab.ConceptDoc) map[string]any {
 	}
 }
 
-// explainJSONSource is one resolved citation: the work it names and the
-// parts that narrow it, plus the readable spelling the text renderers
-// print.
+// explainJSONSource is one resolved citation: the work it names, the
+// parts that narrow it, the work's tier, how the cited pages were
+// checked and whether the citation only illustrates, plus the readable
+// spelling the text renderers print.
 func explainJSONSource(s vocab.Reference) map[string]any {
 	src := map[string]any{
-		"work":     s.Work.Key,
-		"title":    s.Work.Title,
-		"citation": s.String(),
+		"work":         s.Work.Key,
+		"title":        s.Work.Title,
+		"citation":     s.String(),
+		"tier":         int(s.Work.Tier),
+		"verification": string(s.Work.Verification),
+		"verified":     s.Verified(),
+		"illustrative": s.Illustrative,
 	}
 	if len(s.Work.Authors) > 0 {
 		src["authors"] = s.Work.Authors

@@ -60,7 +60,9 @@ description: >-
 # retrieved and the quoted sentences read; `carried` means the chapter
 # and page numbers were carried from the draft this file was made from
 # and have not been checked against the print edition, so treat them
-# as approximate until someone with the book confirms them.
+# as approximate until someone with the book confirms them; a carried
+# page still counts as cited, and every rendering shows it as an
+# unverified page.
 #
 # The source audit of 2026-10-17 lists these carried pages for the owner
 # to confirm against the print editions: Vernon 2013 pp. 174, 208, 266,
@@ -69,11 +71,25 @@ description: >-
 # 2013 chapter 10 page has a vernon-iddd-sample-pages citation beside it
 # wherever the sample's page states the entry.
 #
-# `tier` ranks a work as a basis: 1 for the canonical works (Evans 2003
-# and 2015, Vernon 2013 and his papers, Evans and Fowler 1997), 2 for
-# other published books and Fowler's bliki, 3 for practitioner blogs,
-# which may only illustrate. A canonical reference is never removed or
-# demoted.
+# `tier` says how much weight a work carries, by the owner's source
+# standard of 2026-10-17; a canonical reference is never removed or
+# demoted. Tier 1 is the canonical literature (Evans 2003
+# and 2015, Vernon 2013 and his papers and sample code, Evans and Fowler
+# 1997) and may ground a rule. Tier 2 is published authority (Fowler's
+# Patterns of Enterprise Application Architecture with Stafford's
+# patterns, Meyer's Object-Oriented Software Construction, Wlaschin's
+# book, Fowler's bliki) and may ground guidance. Tier 3 is a
+# practitioner's blog and only illustrates. Goodreads, unknown Medium
+# authors, Stack Overflow, AI summaries, and search snippets are never
+# cited. A citation marked `illustrative: true` illustrates its entry
+# and grounds nothing, and every citation of a tier 3 work carries the
+# mark. Every invariant and every fundamental guidance cites at least
+# one grounding tier 1 work; every other cited entry cites at least one
+# grounding tier 1 or 2 work.
+#
+# `conventions` on a definition, an invariant, or a guidance entry
+# quotes the words of it that are arclint's own convention rather than
+# a statement of the cited sources; every rendering labels them so.
 works:
   evans2015:
     title: "Domain-Driven Design Reference: Definitions and Pattern Summaries"
@@ -81,164 +97,164 @@ works:
     year: 2015
     url: https://www.domainlanguage.com/wp-content/uploads/2016/05/DDD_Reference_2015-03.pdf
     license: CC BY 4.0
-    verification: text
     tier: 1
+    verification: text
   evans2003:
     title: "Domain-Driven Design: Tackling Complexity in the Heart of Software"
     author: Eric Evans
     publisher: Addison-Wesley
     year: 2003
     isbn: "978-0321125217"
-    verification: carried
     tier: 1
+    verification: carried
   vernon2013:
     title: Implementing Domain-Driven Design
     author: Vaughn Vernon
     publisher: Addison-Wesley
     year: 2013
     isbn: "978-0321834577"
-    verification: carried
     tier: 1
+    verification: carried
   evans-fowler-1997:
     title: Specifications
     authors: [Eric Evans, Martin Fowler]
     year: 1997
     url: https://martinfowler.com/apsupp/spec.pdf
-    verification: text
     tier: 1
+    verification: text
   fowler-aggregate:
     title: DDD_Aggregate
     author: Martin Fowler
     date: 2013-04-23
     url: https://martinfowler.com/bliki/DDD_Aggregate.html
-    verification: fetched
     tier: 2
+    verification: fetched
   fowler-bounded-context:
     title: BoundedContext
     author: Martin Fowler
     date: 2014-01-15
     url: https://martinfowler.com/bliki/BoundedContext.html
-    verification: fetched
     tier: 2
+    verification: fetched
   fowler-ubiquitous-language:
     title: UbiquitousLanguage
     author: Martin Fowler
     date: 2006-10-31
     url: https://martinfowler.com/bliki/UbiquitousLanguage.html
-    verification: fetched
     tier: 2
+    verification: fetched
   fowler-evans-classification:
     title: EvansClassification
     author: Martin Fowler
     date: 2005-12-14
     url: https://martinfowler.com/bliki/EvansClassification.html
-    verification: fetched
     tier: 2
+    verification: fetched
   fowler-value-object:
     title: ValueObject
     author: Martin Fowler
     date: 2016-11-14
     url: https://martinfowler.com/bliki/ValueObject.html
-    verification: fetched
     tier: 2
+    verification: fetched
   fowler-domain-event:
     title: Domain Event
     author: Martin Fowler
     date: 2005-12-12
     url: https://martinfowler.com/eaaDev/DomainEvent.html
-    verification: fetched
     tier: 2
+    verification: fetched
   fowler-architecture:
     title: Software Architecture Guide
     author: Martin Fowler
     date: 2019-08-01
     url: https://martinfowler.com/architecture/
-    verification: fetched
     tier: 2
+    verification: fetched
   fowler-anemic-domain-model:
     title: AnemicDomainModel
     author: Martin Fowler
     date: 2003-11-25
     url: https://martinfowler.com/bliki/AnemicDomainModel.html
-    verification: fetched
     tier: 2
+    verification: fetched
   fowler-cqs:
     title: CommandQuerySeparation
     author: Martin Fowler
     date: 2005-12-05
     url: https://martinfowler.com/bliki/CommandQuerySeparation.html
-    verification: fetched
     tier: 2
+    verification: fetched
   fowler-function-length:
     title: FunctionLength
     author: Martin Fowler
     date: 2016-11-30
     url: https://martinfowler.com/bliki/FunctionLength.html
-    verification: fetched
     tier: 2
+    verification: fetched
   stafford-service-layer:
     title: Service Layer
     author: Randy Stafford
     year: 2002
     url: https://martinfowler.com/eaaCatalog/serviceLayer.html
-    verification: fetched
     tier: 2
+    verification: fetched
   stafford-business-logic:
     title: "Service Layer, Kinds of Business Logic (Patterns of Enterprise Application Architecture excerpt)"
     author: Randy Stafford
     year: 2002
     url: https://www.informit.com/articles/article.aspx?p=1398617&seqNum=4
-    verification: fetched
     tier: 2
+    verification: fetched
   vernon-iddd-ch1:
     title: "Getting Started with Domain-Driven Design (Implementing Domain-Driven Design, chapter 1 excerpt)"
     author: Vaughn Vernon
     year: 2013
     url: https://www.informit.com/articles/article.aspx?p=1944876&seqNum=3
-    verification: fetched
     tier: 1
+    verification: fetched
   vernon-iddd-sample-pages:
     title: "Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-388, index pp. 589-612)"
     author: Vaughn Vernon
     year: 2013
     url: https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf
-    verification: text
     tier: 1
+    verification: text
   vernon-effective-aggregate-design-1:
     title: "Effective Aggregate Design Part I: Modeling a Single Aggregate"
     author: Vaughn Vernon
     year: 2011
     url: https://www.dddcommunity.org/wp-content/uploads/files/pdf_articles/Vernon_2011_1.pdf
-    verification: text
     tier: 1
+    verification: text
   vernon-effective-aggregate-design-2:
     title: "Effective Aggregate Design Part II: Making Aggregates Work Together"
     author: Vaughn Vernon
     year: 2011
     url: https://www.dddcommunity.org/wp-content/uploads/files/pdf_articles/Vernon_2011_2.pdf
-    verification: text
     tier: 1
+    verification: text
   vernon-iddd-samples:
     title: "IDDD_Samples, identity and access context (commit 9b27b11)"
     author: Vaughn Vernon
     date: 2022-03-26
     url: https://github.com/VaughnVernon/IDDD_Samples
-    verification: fetched
     tier: 1
+    verification: fetched
   martin-screaming-architecture:
     title: Screaming Architecture
     author: Robert C. Martin
     date: 2011-09-30
     url: https://blog.cleancoder.com/uncle-bob/2011/09/30/Screaming-Architecture.html
-    verification: fetched
     tier: 3
+    verification: fetched
   bogard-vertical-slice:
     title: Vertical Slice Architecture
     author: Jimmy Bogard
     date: 2018-04-19
     url: https://www.jimmybogard.com/vertical-slice-architecture/
-    verification: fetched
     tier: 3
+    verification: fetched
 
 # The facts arclint observes in source today, one entry per Fact in
 # internal/domain/rule/enforcement.go. An invariant is enforceable across
@@ -873,6 +889,7 @@ building_blocks:
         sources:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: vernon2013, chapter: 10, page: 354}
+        conventions: ["calls the ensure method of the aggregate's invariant"]
         enforcement:
           by: domain
           facts: [file_tree, declarations, calls]
@@ -954,6 +971,7 @@ building_blocks:
         sources:
           - {work: evans2015, page: 14, section: Services}
           - {work: evans2015, page: 22, section: Assertions}
+        conventions: ["the checking method (assert followed by the key in the language's method case)"]
         enforcement:
           by: domain
           facts: [file_tree, declarations, calls, field_types]
@@ -1127,6 +1145,7 @@ building_blocks:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: evans2015, page: 20, section: Intention-Revealing Interfaces}
           - {work: vernon2013, chapter: 10, page: 354}
+        conventions: ["ensure followed by the key in the language's method case (EnsureLinesFrozen, ensureLinesFrozen, ensure_lines_frozen)"]
         enforcement: {by: domain, facts: [file_tree, declarations], languages: all}
       - id: aggregate/commands-named-for-behavior
         statement: The root declares no method whose name begins with set; a change of state is a command named for what it does in the ubiquitous language, and a root made of setters is an anemic model whose rules live somewhere else.
@@ -1359,6 +1378,7 @@ building_blocks:
         - {work: fowler-evans-classification}
         - {work: vernon2013, chapter: 7, page: 267}
         - {work: vernon-iddd-sample-pages, page: xxxix, section: "Guide to This Book"}
+      conventions: ["it never commits and never publishes"]
     records:
       section: services
       note: A map keyed by the service's name; its assertions are its contract, each on one operation of the service.
@@ -1446,6 +1466,7 @@ building_blocks:
         sources:
           - {work: vernon-iddd-ch1, section: How To Do DDD}
           - {work: fowler-cqs}
+        conventions: ["never with the word command"]
 
   - term: repository
     title: Repository
@@ -1473,6 +1494,7 @@ building_blocks:
         statement: A recorded repository is a declared type (interface, or class in a language without interfaces) spelled with the recorded name in the language's type case, declared in the context's code.
         sources:
           - {work: evans2015, page: 17, section: Repositories}
+        conventions: ["(interface, or class in a language without interfaces)"]
         enforcement: {by: domain, facts: [file_tree, declarations], languages: all}
       # Open question for the owner (source audit of 2026-10-17): this rule
       # says never, while Vernon's sample p. 387 says injecting a repository

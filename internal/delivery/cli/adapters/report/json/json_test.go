@@ -865,6 +865,26 @@ func TestJSONDomainExplainCarriesSources(t *testing.T) {
 	if want.Page != "" && first["page"] != want.Page {
 		t.Fatalf("page = %v, want %q", first["page"], want.Page)
 	}
+	// Every source carries its tier and verification, so a carried page
+	// is told apart from a checked one without parsing the citation.
+	sawCarried, sawVerified := false, false
+	for i, raw := range sources {
+		src, _ := raw.(map[string]any)
+		ref := concept.Sources[i]
+		if src["tier"] != float64(ref.Work.Tier) || src["verification"] != string(ref.Work.Verification) ||
+			src["verified"] != ref.Verified() || src["illustrative"] != ref.Illustrative {
+			t.Errorf("sources[%d] = %v, want tier %d verification %q verified %t illustrative %t",
+				i, src, ref.Work.Tier, ref.Work.Verification, ref.Verified(), ref.Illustrative)
+		}
+		if ref.Verified() {
+			sawVerified = true
+		} else {
+			sawCarried = true
+		}
+	}
+	if !sawCarried || !sawVerified {
+		t.Fatalf("aggregate's sources no longer mix carried and checked pages; the check above proves less than it claims")
+	}
 }
 
 func TestJSONContextIncludesOnlyRequestedObservedDependencies(t *testing.T) {
