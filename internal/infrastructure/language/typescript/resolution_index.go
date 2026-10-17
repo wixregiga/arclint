@@ -34,8 +34,9 @@ type resolutionFile struct {
 	calls   []*gotreesitter.Node
 	fields  map[string]*gotreesitter.Node
 	// operations maps each function and method the declarations name,
-	// by the same key as fields, to the node that writes its signature.
-	operations           map[string]*gotreesitter.Node
+	// by the same key as fields, to the nodes that write its signatures,
+	// in source order: overloads on one line share the key.
+	operations           map[string][]*gotreesitter.Node
 	types                map[string][]*gotreesitter.Node
 	ambient              bool
 	ambientModules       []string
@@ -161,7 +162,7 @@ func resolveFacts(root string, imports *resolver, facts map[string]conformance.L
 		if err != nil {
 			continue
 		}
-		f := &resolutionFile{path: rel, src: src, lang: p.Language(), tree: tree, scope: newScope(nil), exports: map[string][]exportBinding{}, nodes: map[*gotreesitter.Node]*lexicalScope{}, fields: map[string]*gotreesitter.Node{}, operations: map[string]*gotreesitter.Node{}, types: map[string][]*gotreesitter.Node{}}
+		f := &resolutionFile{path: rel, src: src, lang: p.Language(), tree: tree, scope: newScope(nil), exports: map[string][]exportBinding{}, nodes: map[*gotreesitter.Node]*lexicalScope{}, fields: map[string]*gotreesitter.Node{}, operations: map[string][]*gotreesitter.Node{}, types: map[string][]*gotreesitter.Node{}}
 		f.scope.function = true
 		f.index(tree.RootNode(), f.scope, "")
 		index.files[rel] = f
@@ -189,6 +190,8 @@ func resolveFacts(root string, imports *resolver, facts map[string]conformance.L
 		}
 		if fields && fa.DeclarationsAvailable {
 			fa.FieldTypesAvailable = true
+			// The nth declaration of a key is its nth signature.
+			nth := map[string]int{}
 			for i := range fa.Declarations {
 				d := &fa.Declarations[i]
 				switch d.Kind {
@@ -196,7 +199,9 @@ func resolveFacts(root string, imports *resolver, facts map[string]conformance.L
 					d.Holds = index.fieldHolds(f, *d)
 					d.Type = index.fieldType(f, *d)
 				case "func", "method":
-					d.Type = index.resultType(f, *d)
+					key := fieldKey(d.Owner, d.Name, d.StartLine)
+					d.Type = index.resultType(f, *d, nth[key])
+					nth[key]++
 				}
 			}
 		}
@@ -246,11 +251,12 @@ func (r *resolutionIndex) fieldType(f *resolutionFile, d conformance.Declaration
 // resultType names the declaration a function's or method's written
 // return type is, the way fieldType names a field's, and the type a
 // Promise settles to for an async operation.
-func (r *resolutionIndex) resultType(f *resolutionFile, d conformance.Declaration) conformance.Reference {
-	n := f.operations[fieldKey(d.Owner, d.Name, d.StartLine)]
-	if n == nil {
+func (r *resolutionIndex) resultType(f *resolutionFile, d conformance.Declaration, nth int) conformance.Reference {
+	nodes := f.operations[fieldKey(d.Owner, d.Name, d.StartLine)]
+	if nth >= len(nodes) {
 		return uncertain("operation syntax could not be indexed")
 	}
+	n := nodes[nth]
 	if reason := f.unsafeType(d.Owner); reason != "" {
 		return uncertain(reason)
 	}
@@ -259,6 +265,11 @@ func (r *resolutionIndex) resultType(f *resolutionFile, d conformance.Declaratio
 		return uncertain("operation has no written return type")
 	}
 	return r.settledType(f, ret.NamedChild(0), f.nodes[n])
+}
+
+// addOperation records one more signature under an operation's key.
+func (f *resolutionFile) addOperation(key string, n *gotreesitter.Node) {
+	f.operations[key] = append(f.operations[key], n)
 }
 
 // typeArgument is the type written for one type parameter of a generic
@@ -400,14 +411,14 @@ func (f *resolutionFile) index(n *gotreesitter.Node, scope *lexicalScope, owner 
 		owner = f.name(n)
 		scope = newScope(scope)
 	case tsFunctionDeclaration, tsGeneratorFunctionDeclaration:
-		f.operations[fieldKey(owner, f.name(n), int(n.StartPoint().Row)+1)] = n
+		f.addOperation(fieldKey(owner, f.name(n), int(n.StartPoint().Row)+1), n)
 		scope.add(f.name(n), sourceBinding{node: n})
 		scope = newScope(scope)
 		scope.function = true
 		owner = ""
 	case tsFunctionExpression, tsFunction, tsArrowFunction, tsMethodDefinition, tsMethodSignature, tsAbstractMethodSignature:
 		if kind == tsMethodDefinition || kind == tsMethodSignature || kind == tsAbstractMethodSignature {
-			f.operations[fieldKey(owner, f.name(n), int(n.StartPoint().Row)+1)] = n
+			f.addOperation(fieldKey(owner, f.name(n), int(n.StartPoint().Row)+1), n)
 		}
 		if defaultDeclaration(n, f.lang) {
 			scope.add(tsDefaultKeyword, sourceBinding{node: n})
@@ -434,7 +445,7 @@ func (f *resolutionFile) index(n *gotreesitter.Node, scope *lexicalScope, owner 
 		if v := f.child(n, tsValueField); v != nil {
 			switch f.kind(v) {
 			case tsArrowFunction, tsFunctionExpression, tsFunction:
-				f.operations[fieldKey(owner, name, int(n.StartPoint().Row)+1)] = v
+				f.addOperation(fieldKey(owner, name, int(n.StartPoint().Row)+1), v)
 			}
 		}
 		if f.kind(f.child(n, tsNameField)) != tsIdentifier {

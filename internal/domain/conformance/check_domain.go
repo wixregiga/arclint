@@ -1589,16 +1589,25 @@ func (cc contextCode) modelCheck(service locDecl, ops []locDecl, key string) (mo
 	if len(values) == 0 {
 		return modelCheckAt{}, nil
 	}
+	// One overload that returns something else decides it; an overload
+	// whose result cannot be followed leaves it open only when none does.
 	var returned *locDecl
+	open := ""
 	for _, op := range ops {
 		value, unresolved, found := returnedValue(op, values)
-		if unresolved != "" {
-			return modelCheckAt{unresolved: unresolved}, nil
-		}
-		if !found || returned != nil && !sameDecl(*returned, value) {
+		switch {
+		case unresolved != "":
+			if open == "" {
+				open = unresolved
+			}
+		case !found, returned != nil && !sameDecl(*returned, value):
 			return modelCheckAt{}, nil
+		default:
+			returned = &value
 		}
-		returned = &value
+	}
+	if open != "" {
+		return modelCheckAt{unresolved: open}, nil
 	}
 	return modelCheckAt{found: true, shape: checkedByValue, at: *returned}, nil
 }

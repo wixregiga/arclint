@@ -847,6 +847,10 @@ func TestAbstractMarkReachesTheLibrary(t *testing.T) {
 		"pkgattr/abstract.py":  "from abc import ABC\n",
 		"uses_pkgattr.py":      "import pkgattr\n\n\nclass Encrypter(pkgattr.abstract.ABC):\n    pass\n",
 		"uses_pkgsub.py":       "import pkgattr.abstract\n\n\nclass Encrypter(pkgattr.abstract.ABC):\n    pass\n",
+		"late_submodule.py":    "import pkgattr as p\n\n\nclass Encrypter(p.abstract.ABC):\n    pass\n\n\nimport pkgattr.abstract\n",
+		"rebound_after.py":     "from abc import ABC\n\n\nclass Encrypter(ABC):\n    pass\n\n\nABC = object\n",
+		"rebound_before.py":    "from abc import ABC\n\nABC = object\n\n\nclass Encrypter(ABC):\n    pass\n",
+		"rebound_if.py":        "from abc import ABC\n\nif FLAG:\n    ABC = object\n\n\nclass Encrypter(ABC):\n    pass\n",
 		"exported_replaced.py": "from exporter import abstract\n\n\nclass Encrypter(abstract.ABC):\n    pass\n",
 		"pkg/__init__.py":      "",
 		"pkg/facade.py":        "from abc import ABC\n",
@@ -864,6 +868,7 @@ func TestAbstractMarkReachesTheLibrary(t *testing.T) {
 			"spaced_replaced.py": false, "setattr_replaced.py": false, "setattr_any.py": false, "setattr_other.py": true,
 			"captured_first.py": true, "uses_early.py": true, "annotated_only.py": true, "written_after.py": true,
 			"dormant.py": true, "called.py": false, "concatenated.py": false, "uses_pkgattr.py": false, "uses_pkgsub.py": true,
+			"late_submodule.py": false, "rebound_after.py": true, "rebound_before.py": false, "rebound_if.py": false,
 		} {
 			for _, d := range facts[file].Declarations {
 				if d.Kind == declClass && d.Name == "Encrypter" && d.Abstract != want {

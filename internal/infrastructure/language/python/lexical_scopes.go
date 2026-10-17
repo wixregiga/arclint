@@ -75,6 +75,9 @@ type pyScope struct {
 	// classBody marks the namespace of a class body, which the scopes
 	// nested inside it do not see.
 	classBody bool
+	// history keeps every binding of a name in source order, where
+	// bindings keeps one, or the competition between several.
+	history map[string][]*pyBinding
 }
 
 // lexical is the scope a scope nested here looks names up in: this
@@ -176,6 +179,10 @@ type resolutionIndex struct {
 }
 
 func (s *pyScope) bind(b *pyBinding) {
+	if s.history == nil {
+		s.history = map[string][]*pyBinding{}
+	}
+	s.history[b.name] = append(s.history[b.name], b)
 	if old := s.bindings[b.name]; old != nil {
 		// Assigning a typed variable keeps its declared type. Competing
 		// declarations/imports are ambiguous; do not pick the last spelling.
@@ -299,7 +306,7 @@ func (m *pyModule) collect(n *gotreesitter.Node, s *pyScope, owner *pyClass, inF
 				m.bindPattern(ch, s)
 			}
 		}
-	case "for_statement", nodeForInClause:
+	case nodeForStatement, nodeForInClause:
 		if left := n.ChildByFieldName("left", w.lang); left != nil {
 			m.bindPattern(left, s)
 		}
@@ -530,7 +537,19 @@ func decoratorName(s *pyScope, n *gotreesitter.Node, w *pyWalker) string {
 // else.
 func qualifiedTarget(s *pyScope, text string, w *pyWalker, depth int) string {
 	head, tail, dotted := strings.Cut(text, ".")
-	b := s.lookup(head)
+	return qualifiedFrom(s.lookup(head), head, tail, dotted, w, depth)
+}
+
+// qualifiedTargetAt names what a dotted name refers to when a statement
+// at offset reads it in the scope: a name the scope binds more than
+// once means the binding that ran last before the statement.
+func qualifiedTargetAt(s *pyScope, text string, w *pyWalker, offset uint32) string {
+	head, tail, dotted := strings.Cut(text, ".")
+	return qualifiedFrom(s.lookupAt(head, offset, w), head, tail, dotted, w, 0)
+}
+
+// qualifiedFrom qualifies a dotted name through the binding of its head.
+func qualifiedFrom(b *pyBinding, head, tail string, dotted bool, w *pyWalker, depth int) string {
 	if b == nil {
 		if !dotted && (head == builtinStaticmethod || head == builtinClassmethod) {
 			return head
@@ -565,6 +584,57 @@ func qualifiedTarget(s *pyScope, text string, w *pyWalker, depth int) string {
 		return builtinClassmethod
 	}
 	return qualified
+}
+
+// lookupAt finds the binding a statement at offset reads. A scope that
+// runs top to bottom, a module or a class body, holds for a name it
+// binds several times the last unconditional binding before the
+// statement, nothing known when that binding is conditional, and
+// otherwise what encloses it; every other scope reads as lookup does.
+func (s *pyScope) lookupAt(name string, offset uint32, w *pyWalker) *pyBinding {
+	for scope := s; scope != nil; scope = scope.parent {
+		bindings := scope.history[name]
+		if len(bindings) < 2 || scope.module == nil || scope != scope.module.scope && !scope.classBody {
+			if scope.bindings[name] != nil || scope.star || scope.uncertain != "" {
+				return scope.lookup(name)
+			}
+			continue
+		}
+		var last *pyBinding
+		for _, b := range bindings {
+			if b.node == nil {
+				// A binding with no statement to place, such as a
+				// destructured or captured name, leaves the order unknown.
+				return scope.lookup(name)
+			}
+			if b.node.StartByte() < offset {
+				last = b
+			}
+		}
+		if last == nil {
+			continue
+		}
+		if conditional(last.node, w) {
+			return &pyBinding{kind: bindingUnknown, name: name, scope: scope, reason: name + " is bound conditionally"}
+		}
+		return last
+	}
+	return nil
+}
+
+// conditional reports whether a statement sits in a branch, a loop, or
+// a handler of the scope that runs it, so it may not have run.
+func conditional(n *gotreesitter.Node, w *pyWalker) bool {
+	for p := n.Parent(); p != nil; p = p.Parent() {
+		switch p.Type(w.lang) {
+		case nodeClass, nodeFunction, "module":
+			return false
+		case "if_statement", "elif_clause", "else_clause", "try_statement", "except_clause", "finally_clause",
+			nodeForStatement, "while_statement", "match_statement", "case_clause":
+			return true
+		}
+	}
+	return false
 }
 
 // maxAliasHops bounds following one plain alias to another.
