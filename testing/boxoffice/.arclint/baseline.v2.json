@@ -21,6 +21,7 @@
     "domain_event/declared",
     "domain_event/no-setters",
     "domain_isolation/model-imports-nothing-outside-itself",
+    "domain_recording/text-within-word-limit",
     "domain_service/declared",
     "domain_service/not-held-by-aggregates",
     "entities/aggregate-slices",
@@ -111,6 +112,30 @@
       "ruleId": "aggregate/invariants-enforced-by-root",
       "subject": "ordering",
       "message": "aggregate Order: invariant published-tiers-only is not enforced by a method of the root; expected EnsurePublishedTiersOnly (go)",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.cml",
+      "message": "aggregate \"Capacity\" in context \"capacity\": the definition has 77 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.cml",
+      "message": "aggregate \"Event\" in context \"catalog\": the definition has 53 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.cml",
+      "message": "aggregate \"Order\" in context \"ordering\": the definition has 113 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.cml",
+      "message": "value object \"Refund\" in context \"ordering\": the definition has 57 words, and a definition holds at most 40",
       "count": 1
     },
     {

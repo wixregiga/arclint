@@ -101,7 +101,7 @@ func TestLipglossRuleListMutesTheBuiltInOrigin(t *testing.T) {
 	err := ansiRenderer().Render(&buf, cli.RuleListReport{
 		Rules: []application.RuleSummary{{
 			ID: "aggregate/root-declared", Type: "domain", Severity: "error",
-			Proposition: "composed", Assurance: "exact", AssuranceLabel: "exact", BuiltIn: true,
+			Proposition: "composed", Assurance: "exact", AssuranceLabel: "exact", BuiltIn: true, Origin: "built in from the DDD meta-model",
 		}},
 	})
 	if err != nil {

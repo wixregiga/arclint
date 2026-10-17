@@ -54,8 +54,63 @@ func TestBuiltInRulesComposeOnePerCheckLevelInvariant(t *testing.T) {
 			t.Errorf("%s: BlockInvariant = %v, %v", inv.ID, got.ID, err)
 		}
 	}
-	if len(rules) != checkLevel {
-		t.Errorf("BuiltIn composed %d rules for %d check-level invariants", len(rules), checkLevel)
+	if len(rules) != checkLevel+1 {
+		t.Errorf("BuiltIn composed %d rules for %d check-level invariants and the word limit", len(rules), checkLevel)
+	}
+}
+
+func TestBuiltInWordLimitRuleIsTheVocabularysWordLimits(t *testing.T) {
+	rules, err := rule.BuiltIn()
+	if err != nil {
+		t.Fatalf("BuiltIn: %v", err)
+	}
+	var found []rule.Rule
+	for _, r := range rules {
+		if r.Type() == rule.ConstraintKindWordLimit {
+			found = append(found, r)
+		}
+	}
+	if len(found) != 1 {
+		t.Fatalf("BuiltIn composed %d word-limit rules, want 1", len(found))
+	}
+	r := found[0]
+	if r.ID().Qualified() != rule.WordLimitRuleID || r.ID().Qualifier() != "" {
+		t.Errorf("id %s, want the unqualified %s", r.ID(), rule.WordLimitRuleID)
+	}
+	if r.Severity() != rule.SeverityError {
+		t.Errorf("severity %s, want error: over-limit text fails the gate", r.Severity())
+	}
+	if !r.Scope().EntireRepository() {
+		t.Errorf("applies to %v, want the whole repository", r.Scope().Zones())
+	}
+	if r.Proposition() != vocab.WordLimitsStatement() {
+		t.Errorf("proposition %q, want the vocabulary's statement of its limits", r.Proposition())
+	}
+	if !r.BuiltIn() || !rule.BuiltInID(r.ID()) {
+		t.Error("the word-limit rule is built in and its id reserved")
+	}
+	if source, ok := r.BuiltInSource(); !ok || source != rule.SourceWordLimits {
+		t.Errorf("BuiltInSource = %q, %v; want %q", source, ok, rule.SourceWordLimits)
+	}
+	if _, inMetaModel := vocab.DDD().Invariant(rule.WordLimitRuleID); inMetaModel {
+		t.Error("the word limit is arclint's own, never a block invariant of the meta-model")
+	}
+}
+
+func TestWordLimitIsCarriedUnderItsOwnIDAlone(t *testing.T) {
+	scope, err := rule.RepositoryScope()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := rule.New(rule.Spec{ID: "local/limits", Severity: "error", Scope: scope, Constraint: rule.WordLimitConstraint{}}); err == nil ||
+		!strings.Contains(err.Error(), rule.WordLimitRuleID) {
+		t.Errorf("a word-limit constraint under another id must be refused naming %s; err = %v", rule.WordLimitRuleID, err)
+	}
+	if _, err := rule.New(rule.Spec{ID: rule.WordLimitRuleID, Severity: "error", Scope: scope, Constraint: rule.ContentConstraint{Forbid: "x"}}); err == nil {
+		t.Error("another constraint under the word limit's id must be refused")
+	}
+	if _, err := rule.New(rule.Spec{ID: rule.WordLimitRuleID, Severity: "warning", Scope: scope, Constraint: rule.WordLimitConstraint{}}); err != nil {
+		t.Errorf("an override may change the word limit's severity: %v", err)
 	}
 }
 

@@ -83,6 +83,7 @@ func project(file *syntax.File, recording vocab.DomainRecording) (vocab.Ubiquito
 		d := file.Domains[0]
 		raw.Project = declarationName(file, d.Name, &d.Node)
 		raw.Description = d.DomainVisionStatement
+		raw.DescriptionLine = d.Pos.Line
 	} else if file.Map != nil {
 		raw.Project = declarationName(file, file.Map.Name, &file.Map.Node)
 	}
@@ -125,6 +126,7 @@ func project(file *syntax.File, recording vocab.DomainRecording) (vocab.Ubiquito
 		return vocab.UbiquitousLanguage{}, p, fmt.Errorf("CML domain mapping:\n%s", strings.Join(uniqueStrings(p.problems), "\n"))
 	}
 	lang.Recording = recording
+	lang.DescriptionLine = raw.DescriptionLine
 	return lang, p, nil
 }
 

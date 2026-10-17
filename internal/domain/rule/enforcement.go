@@ -283,6 +283,12 @@ func BuiltinEnforcement(t Type) Enforcement {
 			"line matching against the forbidden pattern over file bytes", AssuranceExact, nil, true)
 		e.patternBound = true
 		return e
+	case ConstraintKindWordLimit:
+		// The texts are read from the recorded domain; the file tree is
+		// the one fact every check observes.
+		e, _ := NewEnforcement(nil, []Fact{FactFileTree},
+			"word count of every recorded text against the word limit of its kind", AssuranceExact, nil, true)
+		return e
 	case TypeExtension:
 		e, _ := NewEnforcement(nil, []Fact{FactFileTree, FactImports, FactDeclarations, FactCalls, FactResolvedCalls, FactFieldTypes},
 			"TypeScript extension executed in the sandboxed SDK runtime",

@@ -317,6 +317,7 @@ type ruleSummaryDoc struct {
 	AssuranceLabel string `json:"assuranceLabel"`
 	Provenance     string `json:"provenance,omitempty"`
 	BuiltIn        bool   `json:"builtIn,omitempty"`
+	Origin         string `json:"origin,omitempty"`
 	Disabled       bool   `json:"disabled,omitempty"`
 	DisabledReason string `json:"disabledReason,omitempty"`
 }
@@ -332,6 +333,7 @@ func ruleSummaryDocOf(s application.RuleSummary) ruleSummaryDoc {
 		AssuranceLabel: s.AssuranceLabel,
 		Provenance:     s.Provenance,
 		BuiltIn:        s.BuiltIn,
+		Origin:         s.Origin,
 		Disabled:       s.Disabled,
 		DisabledReason: s.DisabledReason,
 	}
@@ -507,6 +509,7 @@ type ruleSummaryPassthrough struct {
 	AssuranceLabel string `json:"AssuranceLabel"`
 	Provenance     string `json:"Provenance"`
 	BuiltIn        bool   `json:"BuiltIn"`
+	Origin         string `json:"Origin,omitempty"`
 	Disabled       bool   `json:"Disabled"`
 	DisabledReason string `json:"DisabledReason"`
 }
@@ -614,6 +617,7 @@ func contextDoc(c application.ArchitecturalContext) contextJSON {
 				AssuranceLabel: r.Summary.AssuranceLabel,
 				Provenance:     r.Summary.Provenance,
 				BuiltIn:        r.Summary.BuiltIn,
+				Origin:         r.Summary.Origin,
 				Disabled:       r.Summary.Disabled,
 				DisabledReason: r.Summary.DisabledReason,
 			},

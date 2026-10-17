@@ -138,6 +138,7 @@ func ticketing(t *testing.T) vocab.UbiquitousLanguage {
 // withoutLines is the language with every Line zeroed, so a parsed
 // language compares equal to one built in memory.
 func withoutLines(l vocab.UbiquitousLanguage) vocab.UbiquitousLanguage {
+	l.DescriptionLine = 0
 	for i := range l.Contexts {
 		c := &l.Contexts[i]
 		c.Line = 0
@@ -374,12 +375,14 @@ func TestLoadCarriesLines(t *testing.T) {
 		"question refund-window":   sales.Questions[0].Line,
 		"context catalog":          lang.Contexts[1].Line,
 		"relation":                 lang.Relations[0].Line,
+		"description":              lang.DescriptionLine,
 	}
 	want := map[string]int{
 		"context sales": 6, "aggregate Order": 9, "entity OrderLine": 14, "invariant total-is-sum": 18,
 		"assertion lines-priced": 20, "value object Money": 25, "invariant never-negative": 28,
 		"event OrderConfirmed": 30, "service Pricing": 34, "assertion tiers-on-sale": 37,
 		"spec PreferredCustomer": 41, "question refund-window": 44, "context catalog": 45, "relation": 52,
+		"description": 4,
 	}
 	for what, line := range want {
 		if lines[what] != line {

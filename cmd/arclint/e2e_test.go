@@ -14,7 +14,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 )
 
@@ -198,7 +197,7 @@ func TestRulesListsRuleset(t *testing.T) {
 	}
 	marked := 0
 	for _, line := range lines {
-		if strings.HasSuffix(line, "  "+application.BuiltInOrigin) {
+		if strings.HasSuffix(line, "  built in from the DDD meta-model") || strings.HasSuffix(line, "  built in from the word limits of the domain file") {
 			marked++
 		}
 	}

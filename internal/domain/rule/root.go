@@ -204,7 +204,7 @@ func (r Rule) EnsureConstraintAcceptsScope() error {
 func deriveProposition(a Scope, p Constraint) string {
 	proposition := p.Proposition()
 	switch p.Kind() {
-	case TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic, TypeDomain:
+	case TypeLayers, TypeProtected, TypeIndependence, TypeAcyclic, TypeDomain, ConstraintKindWordLimit:
 		return proposition
 	case TypeConsumes, TypeStructure, TypeNaming, TypeContent, TypeExtension:
 		// Zone-scoped Types: the proposition carries the Zones below.
@@ -274,12 +274,22 @@ func (r Rule) Suppressions() []Suppression {
 // Tests returns the Rule's deterministic scenarios.
 func (r Rule) Tests() []Test { return append([]Test(nil), r.tests...) }
 
-// BuiltIn reports whether arclint composes this Rule from the
-// Domain-Driven Design meta-model rather than a ruleset spelling it:
-// its id is a check-level block invariant (see BuiltIn).
-func (r Rule) BuiltIn() bool {
-	_, ok := builtInInvariant(r.id)
-	return ok
+// BuiltIn reports whether arclint composes this Rule rather than a
+// ruleset spelling it: its id is a check-level block invariant of the
+// Domain-Driven Design meta-model or the word limit's (see BuiltIn).
+func (r Rule) BuiltIn() bool { return BuiltInID(r.id) }
+
+// BuiltInSource says what arclint composes a built-in Rule from; false
+// for a Rule a ruleset or a Pattern spells.
+func (r Rule) BuiltInSource() (BuiltInSource, bool) {
+	switch {
+	case r.id.Qualified() == WordLimitRuleID:
+		return SourceWordLimits, true
+	case BuiltInID(r.id):
+		return SourceMetaModel, true
+	default:
+		return "", false
+	}
 }
 
 // Provenance returns the distributing Pattern reference, when any.

@@ -122,6 +122,9 @@ func summarize(r rule.Rule) RuleSummary {
 		AssuranceLabel: r.Enforcement().AssuranceLabel(),
 		BuiltIn:        r.BuiltIn(),
 	}
+	if source, ok := r.BuiltInSource(); ok {
+		s.Origin = builtInOrigin(source)
+	}
 	if ref, ok := r.Provenance(); ok {
 		s.Provenance = ref.String()
 	}

@@ -32,7 +32,8 @@ func TestPlainRuleListNamesTheOrigin(t *testing.T) {
 	err := New().Render(&buf, cli.RuleListReport{
 		Rules: []application.RuleSummary{
 			{ID: "ns/n:x", Type: "structure", Severity: "error", Proposition: "distributed", Assurance: "exact", AssuranceLabel: "exact", Provenance: "ns/n@1"},
-			{ID: "aggregate/root-declared", Type: "domain", Severity: "error", Proposition: "composed", Assurance: "exact", AssuranceLabel: "exact", BuiltIn: true},
+			{ID: "aggregate/root-declared", Type: "domain", Severity: "error", Proposition: "composed", Assurance: "exact", AssuranceLabel: "exact", BuiltIn: true, Origin: "built in from the DDD meta-model"},
+			{ID: "domain_recording/text-within-word-limit", Type: "word_limit", Severity: "error", Proposition: "limited", Assurance: "exact", AssuranceLabel: "exact", BuiltIn: true, Origin: "built in from the word limits of the domain file"},
 			{ID: "local/own", Type: "content", Severity: "warning", Proposition: "written here", Assurance: "exact", AssuranceLabel: "exact for its pattern; rationale not checked"},
 		},
 	})
@@ -41,6 +42,7 @@ func TestPlainRuleListNamesTheOrigin(t *testing.T) {
 	}
 	want := "ns/n:x  [structure/error/exact]  distributed  from ns/n@1\n" +
 		"aggregate/root-declared  [domain/error/exact]  composed  built in from the DDD meta-model\n" +
+		"domain_recording/text-within-word-limit  [word_limit/error/exact]  limited  built in from the word limits of the domain file\n" +
 		"local/own  [content/warning/exact for its pattern; rationale not checked]  written here\n"
 	if buf.String() != want {
 		t.Fatalf("bytes = %q, want %q", buf.String(), want)
@@ -50,7 +52,7 @@ func TestPlainRuleListNamesTheOrigin(t *testing.T) {
 func TestPlainRuleDetailOfABuiltInSaysHowToAdoptIt(t *testing.T) {
 	var buf bytes.Buffer
 	err := New().Render(&buf, cli.RuleDetailReport{Detail: application.RuleDetail{
-		Summary:          application.RuleSummary{ID: "aggregate/root-declared", Type: "domain", Severity: "error", Proposition: "composed", Assurance: "exact", AssuranceLabel: "exact", BuiltIn: true},
+		Summary:          application.RuleSummary{ID: "aggregate/root-declared", Type: "domain", Severity: "error", Proposition: "composed", Assurance: "exact", AssuranceLabel: "exact", BuiltIn: true, Origin: "built in from the DDD meta-model"},
 		EntireRepository: true,
 		Schema:           "schema",
 	}})

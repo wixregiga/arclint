@@ -72,6 +72,9 @@ const (
 	propRaisedBy   = "raised_by"
 	propName       = "name"
 	propKey        = "key"
+	// propDescription is the project's description, recorded at the top
+	// of the domain file rather than on an entry.
+	propDescription = "description"
 )
 
 // set lists the properties the change sets, in meta-model order.
@@ -209,11 +212,15 @@ func (l UbiquitousLanguage) Define(c Concept, at Locator, ch Change) (Ubiquitous
 	if err != nil {
 		return UbiquitousLanguage{}, DefineResult{}, err
 	}
+	if err := changeWithinWordLimit(c, at, res.Owner, ch); err != nil {
+		return UbiquitousLanguage{}, DefineResult{}, err
+	}
 	validated, err := NewUbiquitousLanguage(next.Project, next.Description, next.Contexts, next.Relations)
 	if err != nil {
 		return UbiquitousLanguage{}, DefineResult{}, err
 	}
 	validated.Recording = l.Recording
+	validated.DescriptionLine = l.DescriptionLine
 	res.Concept = c
 	return validated, res, nil
 }
@@ -256,6 +263,7 @@ func (l UbiquitousLanguage) Remove(c Concept, at Locator) (UbiquitousLanguage, R
 		return UbiquitousLanguage{}, RemoveResult{}, err
 	}
 	validated.Recording = l.Recording
+	validated.DescriptionLine = l.DescriptionLine
 	return validated, res, nil
 }
 
@@ -304,11 +312,12 @@ func (at Locator) ownerFits(c Concept) error {
 
 func (l UbiquitousLanguage) clone() UbiquitousLanguage {
 	return UbiquitousLanguage{
-		Project:     l.Project,
-		Description: l.Description,
-		Contexts:    cloneContexts(l.Contexts),
-		Relations:   cloneRelations(l.Relations),
-		Recording:   l.Recording,
+		Project:         l.Project,
+		Description:     l.Description,
+		Contexts:        cloneContexts(l.Contexts),
+		Relations:       cloneRelations(l.Relations),
+		Recording:       l.Recording,
+		DescriptionLine: l.DescriptionLine,
 	}
 }
 

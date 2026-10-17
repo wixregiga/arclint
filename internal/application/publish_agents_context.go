@@ -431,25 +431,38 @@ func importsLine(p ZonePolicy) string {
 	return strings.Join(parts, "; ")
 }
 
-// writeBuiltInRules lists the Rules arclint composes from the DDD
-// meta-model once a domain is recorded: they judge the recorded domain
-// against the code without any Pattern, and a ruleset adopts one the
-// way it adopts a distributed Rule, with an Override under its id.
+// writeBuiltInRules lists the Rules arclint composes once a domain is
+// recorded: those from the DDD meta-model judge the recorded domain
+// against the code, and the word limit judges the recorded text itself.
+// No Pattern distributes them, and a ruleset adopts one the way it
+// adopts a distributed Rule, with an Override under its id.
 func writeBuiltInRules(b *strings.Builder, cfg rule.Configured) {
 	var lines []string
+	count := map[rule.BuiltInSource]int{}
 	for _, r := range cfg.Rules {
-		if !r.BuiltIn() {
+		source, ok := r.BuiltInSource()
+		if !ok {
 			continue
 		}
+		count[source]++
 		lines = append(lines, "- "+ruleLine(ruleName(r, false), r, r.Proposition()))
 	}
 	if len(lines) == 0 {
 		return
 	}
+	var judged []string
+	if n := count[rule.SourceMetaModel]; n > 0 {
+		judged = append(judged, fmt.Sprintf("%d %s %s %s the recorded domain against the code",
+			n, plural(n, "rule", "rules"), builtInOrigin(rule.SourceMetaModel), plural(n, "judges", "judge")))
+	}
+	if n := count[rule.SourceWordLimits]; n > 0 {
+		judged = append(judged, fmt.Sprintf("%d %s %s %s the recorded text",
+			n, plural(n, "rule", "rules"), builtInOrigin(rule.SourceWordLimits), plural(n, "judges", "judge")))
+	}
 	b.WriteString("### Built-in rules\n\n")
-	fmt.Fprintf(b, "%d rules %s judge the recorded domain against the code; no Pattern distributes them. "+
+	fmt.Fprintf(b, "%s; no Pattern distributes them. "+
 		"Change one through an Override under its id in %s (severity, or disable with a reason).\n\n",
-		len(lines), BuiltInOrigin, rule.RulesetFileName)
+		strings.Join(judged, ", and "), rule.RulesetFileName)
 	for _, l := range lines {
 		b.WriteString(l + "\n")
 	}
@@ -573,4 +586,12 @@ func formatParamValue(v any) string {
 	default:
 		return fmt.Sprint(val)
 	}
+}
+
+// plural chooses the singular or the plural form for a count.
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }

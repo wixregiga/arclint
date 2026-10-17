@@ -461,6 +461,32 @@ func describeEnforcement(inv vocab.BlockInvariant) string {
 	return string(inv.Enforcement.By)
 }
 
+// WordLimitConstraint holds every text the recorded domain holds within
+// the WordLimit of its kind. It names nothing: the limits are the
+// vocabulary's, and the one Rule that carries it is built in.
+type WordLimitConstraint struct{}
+
+// Kind returns the discriminator ConstraintKindWordLimit.
+func (p WordLimitConstraint) Kind() Type { return ConstraintKindWordLimit }
+
+// Key returns the authored constraint key; the built-in word limit has none.
+func (p WordLimitConstraint) Key() string { return "" }
+
+// AcceptsScope reports whether this Constraint can evaluate the selected code.
+func (p WordLimitConstraint) AcceptsScope(s Scope) bool {
+	return s.entireRepository && len(s.files) == 0
+}
+
+// AcceptsFiles reports whether file globs may narrow scope.
+func (p WordLimitConstraint) AcceptsFiles() bool { return false }
+
+// Validate rejects an invalid constraint configuration; there is nothing
+// to configure.
+func (p WordLimitConstraint) Validate() error { return nil }
+
+// Proposition states every published WordLimit.
+func (p WordLimitConstraint) Proposition() string { return vocab.WordLimitsStatement() }
+
 // ContentConstraint configure a content Rule: no line of any selected file
 // may match the forbidden regular expression (Go RE2 syntax).
 type ContentConstraint struct {

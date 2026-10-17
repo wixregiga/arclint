@@ -23,13 +23,15 @@ const UbiquitousLanguageVersion = 1
 // read it sets the DomainRecording of the file it read, or of the file the
 // language would be written in when that file does not exist yet.
 // Constructors leave it zero, the DomainRecording of a language that was not
-// read from a file.
+// read from a file. DescriptionLine is where the description is written
+// down, 0 when it is not written down yet.
 type UbiquitousLanguage struct {
-	Project     string
-	Description string
-	Contexts    []BoundedContext
-	Relations   []ContextRelation
-	Recording   DomainRecording
+	Project         string
+	Description     string
+	Contexts        []BoundedContext
+	Relations       []ContextRelation
+	Recording       DomainRecording
+	DescriptionLine int
 }
 
 // ErrDefinitionNotFound is returned by lookups and mutations that name

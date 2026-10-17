@@ -20,7 +20,7 @@ func writeRuleRows(p *out.Printer, th Theme, rows []application.RuleSummary) {
 		case row.Provenance != "":
 			provenance = th.Muted.Render("  from " + row.Provenance)
 		case row.BuiltIn:
-			provenance = th.Muted.Render("  " + application.BuiltInOrigin)
+			provenance = th.Muted.Render("  " + row.Origin)
 		}
 		meta := th.Muted.Render("[") +
 			th.Muted.Render(row.Type+"/") +
@@ -65,7 +65,7 @@ func writeRuleDetail(p *out.Printer, th Theme, d application.RuleDetail) {
 	write("limitations", strings.Join(d.Limitations, "; "))
 	write("provenance", th.Muted.Render(d.Summary.Provenance))
 	if d.Summary.BuiltIn {
-		write("origin", th.Muted.Render(application.BuiltInOrigin+"; adopt it with an override under its id"))
+		write("origin", th.Muted.Render(d.Summary.Origin+"; adopt it with an override under its id"))
 	}
 	for _, e := range d.Exclusions {
 		write("excluded", fmt.Sprintf("%s (%s)", strings.Join(e.Selectors, ", "), e.Reason))

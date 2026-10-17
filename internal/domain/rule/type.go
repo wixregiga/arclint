@@ -44,6 +44,11 @@ const (
 	// the sandboxed SDK; parameters are validated host-side against the
 	// extension's published schema before any extension code runs.
 	ConstraintKindExtension ConstraintKind = "extension"
+	// ConstraintKindWordLimit holds every text the recorded domain holds
+	// within the WordLimit of its kind. Its one Rule is built in: arclint
+	// composes it the moment a domain is recorded (see BuiltIn), and a
+	// ruleset adopts it through an Override only.
+	ConstraintKindWordLimit ConstraintKind = "word_limit"
 )
 
 // Backward-compatibility aliases for legacy Type* identifiers.
@@ -75,7 +80,7 @@ func ConstraintKinds() []ConstraintKind {
 	return []ConstraintKind{
 		ConstraintKindConsumes, ConstraintKindStructure, ConstraintKindNaming,
 		ConstraintKindLayers, ConstraintKindProtected, ConstraintKindIndependence, ConstraintKindAcyclic, ConstraintKindDomain,
-		ConstraintKindContent, ConstraintKindExtension,
+		ConstraintKindContent, ConstraintKindExtension, ConstraintKindWordLimit,
 	}
 }
 
@@ -129,6 +134,8 @@ var constraintForms = map[Type]Constraint{
 	TypeDomain:       DomainConstraint{},
 	TypeContent:      ContentConstraint{},
 	TypeExtension:    ExtensionConstraint{},
+
+	ConstraintKindWordLimit: WordLimitConstraint{},
 }
 
 var typeMeanings = map[Type]string{
@@ -142,6 +149,8 @@ var typeMeanings = map[Type]string{
 	TypeDomain:       "evaluates one invariant of a Domain-Driven Design building block against every instance the recorded domain holds",
 	TypeContent:      "forbids lines matching a regular expression in the selected files",
 	TypeExtension:    "delegates enforcement to a named Extension through the sandboxed SDK",
+
+	ConstraintKindWordLimit: "holds every text the recorded domain holds within the word limit of its kind",
 }
 
 // ConstraintKey returns the authored key of the concrete constraint form.

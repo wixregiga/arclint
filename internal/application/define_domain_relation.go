@@ -1,6 +1,7 @@
 package application
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -86,7 +87,9 @@ func (uc DefineDomainDefinition) ExecuteRelation(req DefineRelationRequest) (Dom
 	return out, nil
 }
 
-// ExecuteDescription records the project's top-level description.
+// ExecuteDescription records the project's top-level description. A
+// description over its WordLimit is refused as the recorded language
+// refuses it, never as a usage error.
 func (uc DefineDomainDefinition) ExecuteDescription(description string) (DomainDefineResult, error) {
 	lang, found, err := uc.knowledge.RecordedLanguage()
 	if err != nil {
@@ -100,9 +103,9 @@ func (uc DefineDomainDefinition) ExecuteDescription(description string) (DomainD
 	if description == lang.Description {
 		return out, nil
 	}
-	next, err := vocab.NewUbiquitousLanguage(lang.Project, description, lang.Contexts, lang.Relations)
+	next, err := lang.Describe(description)
 	if err != nil {
-		return DomainDefineResult{}, fmt.Errorf("%w: %w", ErrDomainUsage, err)
+		return DomainDefineResult{}, domainDescriptionError(err)
 	}
 	out.Outcome = vocab.OutcomeUpdated
 	out.Changed = []string{domainDescription}
@@ -111,4 +114,15 @@ func (uc DefineDomainDefinition) ExecuteDescription(description string) (DomainD
 		return DomainDefineResult{}, fmt.Errorf("save domain model: %w", err)
 	}
 	return out, nil
+}
+
+// domainDescriptionError classifies a refused description: over its
+// WordLimit, the recorded language refuses it; otherwise the request
+// is unusable as spelled.
+func domainDescriptionError(err error) error {
+	var over vocab.OverlongText
+	if errors.As(err, &over) {
+		return err
+	}
+	return fmt.Errorf("%w: %w", ErrDomainUsage, err)
 }

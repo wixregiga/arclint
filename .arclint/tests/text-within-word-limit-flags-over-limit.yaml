@@ -1,0 +1,21 @@
+# Violating case: a definition one word over its limit is reported at
+# the line of its entry in the domain file; a question's text carries
+# no limit.
+rule: "domain_recording/text-within-word-limit"
+files:
+  domain.arclint.yaml: |
+    version: 1
+    project: fixture
+    contexts:
+      rule:
+        definition: The rules an architecture is held to.
+        value_objects:
+          Severity:
+            definition: word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word
+        questions:
+          open-ended: word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word
+expect:
+  - kind: violation
+    path: domain.arclint.yaml
+    line: 7
+    message: 'value object "Severity" in context "rule": the definition has 41 words, and a definition holds at most 40'

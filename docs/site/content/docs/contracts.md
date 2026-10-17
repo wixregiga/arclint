@@ -177,9 +177,11 @@ completion.
 
 ## What each recording demands
 
-Every built-in rule is listed by `arclint rules` with the origin `built
-in from the DDD meta-model`; `arclint rules <id>` prints one in full.
-The claims below are the rules' own words, shortened.
+Every built-in rule is listed by `arclint rules` with its origin: `built
+in from the DDD meta-model` for the rules below, and `built in from the
+word limits of the domain file` for the one that judges the recorded
+text itself. `arclint rules <id>` prints one in full. The claims below
+are the rules' own words, shortened.
 
 **A bounded context's code** is located from its recorded terms: the
 declarations that spell them, found anywhere in the repository. A Zone
@@ -225,6 +227,32 @@ a specification carries `SatisfiedBy`, `satisfiedBy`, or `satisfied_by`
 
 In Go the package name completes a type name: in package `order`, `type
 ID` spells `OrderID`, and `type OrderID` is accepted as well.
+
+**Every recorded text** stays within its word limit
+(`domain_recording/text-within-word-limit`): 40 words for the definition
+of an aggregate, entity, value object, domain event, domain service, or
+specification; 60 for a bounded context's definition; 40 for an
+invariant's or assertion's statement; 100 for the project description.
+A definition says what the word means. The rules a long definition
+would carry belong in invariants and assertions, where arclint checks
+them, and promises that are not domain rules belong in tests. `arclint
+domain define` refuses longer text and writes nothing; `arclint check`
+reports text already recorded over its limit as an error at the line
+of its entry:
+
+```console
+$ arclint domain define value_object Client --definition "…385 words…"
+arclint: word limit: value object "Client" in context "skill": the definition has 385 words, and a definition holds at most 40. Keep what the word means; record each rule it states with arclint domain define invariant or arclint domain define assertion; put promises that are not domain rules in tests.
+$ arclint check .
+domain.arclint.yaml:113: [error] domain_recording/text-within-word-limit value object "Client" in context "skill": the definition has 385 words, and a definition holds at most 40
+  remediation: Keep what the word means; record each rule it states with arclint domain define invariant or arclint domain define assertion; put promises that are not domain rules in tests
+```
+
+The limits are arclint's own, not a rule of Domain-Driven Design: no
+cited work states a word count, so they are not in the meta-model.
+Words are the runs of text between spaces and line breaks, so
+reflowing a text never changes its count. A question's text and a
+relation's description carry no limit.
 
 ## The code the model above asks for
 

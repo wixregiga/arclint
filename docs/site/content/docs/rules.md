@@ -239,6 +239,27 @@ rules:
     disable: "the legacy Order.Fulfill(Shipment) signature predates this rule; tracked in ISSUE-142"
 ```
 
+## built-in word limit
+
+Composed once the domain file records a context, never spelled.
+
+- constraint key: none; the id is `domain_recording/text-within-word-limit`
+- Rule Type: `word_limit`
+- Severity: `error`
+- Assurance: `exact`
+- `on`: none; the Subject is the domain file
+
+Every recorded text stays within its word limit: 40 words for the
+definition of an aggregate, entity, value object, domain event, domain
+service, or specification; 60 for a bounded context's definition; 40
+for an invariant's or assertion's statement; 100 for the project
+description. Each text over its limit is one finding at the line of
+its entry in the domain file. `arclint domain define` refuses longer
+text before it is written. `arclint rules` lists the rule with the
+origin `built in from the word limits of the domain file`, and an entry
+under its id adopts it the way it adopts a built-in domain rule. See
+[Domain Contracts](/docs/contracts/).
+
 ## uses
 
 Delegate enforcement to a named Extension.

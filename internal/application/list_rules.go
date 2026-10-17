@@ -25,10 +25,11 @@ type RuleSummary struct {
 	// unchecked.
 	AssuranceLabel string
 	Provenance     string // "namespace/name@version", or "" for repository-local Rules
-	// BuiltIn marks a Rule arclint composes from the Domain-Driven
-	// Design meta-model for the recorded domain; no ruleset spells it,
-	// and a ruleset adopts it with an Override under its id.
+	// BuiltIn marks a Rule arclint composes for the recorded domain; no
+	// ruleset spells it, and a ruleset adopts it with an Override under
+	// its id. Origin says what it is composed from.
 	BuiltIn        bool
+	Origin         string
 	Disabled       bool
 	DisabledReason string
 }
@@ -42,10 +43,12 @@ func (s RuleSummary) Text() string {
 	return s.Proposition
 }
 
-// BuiltInOrigin is how a listing says a Rule is built in: the phrase
+// builtInOrigin is how a listing says a Rule is built in: the phrase
 // every renderer prints beside a built-in Rule where a distributed Rule
-// names its Pattern.
-const BuiltInOrigin = "built in from the DDD meta-model"
+// names its Pattern, naming what arclint composes the Rule from.
+func builtInOrigin(source rule.BuiltInSource) string {
+	return "built in from " + string(source)
+}
 
 // ListRules lists the repository's configured Rules through the
 // domain-owned read port.
