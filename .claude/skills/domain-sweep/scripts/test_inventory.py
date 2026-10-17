@@ -715,6 +715,43 @@ class InventoryTest(unittest.TestCase):
             "web/script.ts:4": "comment", "tools/test_identity.py:1": "test",
         })
 
+    def test_round_ten_cases(self):
+        self.repo.write("web/a.test.ts", textwrap.dedent("""\
+            type Box<T> = number; const value = 4; const half = value as Box<number> / 2; // Never round.
+            function identity(await) { return await; }
+            async function check() { return await /[`]/.test("x"); }
+            // Never overwrite.
+            const h = (yield) => yield / 2; // Only half.
+            const f = +function(n = {}) { return 4; } / 2; // Not a number.
+            """))
+        self.repo.write("tools/test_identity.py", textwrap.dedent("""\
+            def test_deep[T: tuple[list[tuple[int, str]], str]](): pass
+            def test_split[
+                T,
+            ](): pass
+            """))
+        self.repo.write("pkg/x_test.go", "package p\n\nimport \"testing\"\n\nfunc /* ownership */ TestNeverOverwrites(t *testing.T) {}\n")
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {
+            "web/a.test.ts:1": "comment", "web/a.test.ts:4": "comment", "web/a.test.ts:5": "comment",
+            "web/a.test.ts:6": "comment", "tools/test_identity.py:1": "test", "tools/test_identity.py:2": "test",
+            "pkg/x_test.go:5": "test",
+        })
+
+    def test_a_reused_path_keeps_its_own_hunks(self):
+        self.repo.git("checkout", "-q", "main")
+        self.repo.write("old.md", "Old rule.\n")
+        self.repo.commit("old")
+        self.repo.git("checkout", "-q", "change")
+        self.repo.git("reset", "-q", "--hard", "main")
+        self.repo.git("mv", "old.md", "new.md")
+        self.repo.write("old.md/replacement.md", "New rule.\n")
+        self.repo.commit("rename and reuse")
+        rows = self.repo.rows("--base", "main", "--head", "HEAD", "--scope", "changed")
+        self.assertEqual(sorted((row[0], row[3]) for row in rows), [("added", "old.md/replacement.md:1")])
+        rows = self.repo.rows("--base", "main", "--scope", "changed")
+        self.assertEqual(sorted((row[0], row[3]) for row in rows), [("added", "old.md/replacement.md:1")])
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")

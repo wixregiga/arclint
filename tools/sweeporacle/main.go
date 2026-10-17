@@ -98,6 +98,9 @@ func classify(path string, w *bufio.Writer) error {
 			// a generic function, not a test.
 			add(testName, "test")
 		}
+		if tok == token.COMMENT {
+			continue // func /* note */ TestX( is still a declaration
+		}
 		testName = 0
 		if tok == token.IDENT && afterFunc && strings.HasPrefix(lit, "Test") {
 			testName = start

@@ -66,11 +66,13 @@ for `arclint context`.
 """
 
 import argparse
+import copy
 import fnmatch
 import os
 import re
 import subprocess
 import sys
+import tempfile
 
 DEFAULT_PATHS = ["*.md", "*.go", "*.ts", "*.tsx", "*.mts", "*.cts", "*.py"]
 
@@ -109,11 +111,30 @@ WORDS = re.compile(r"[A-Za-z]{2,}[ \t]+[A-Za-z]{2,}")
 GO_TEST = re.compile(r"^\s*func\s+Test\w*\s*\(")
 GO_TEST_NAME = re.compile(r"^\s*Test\w*\s*\(")
 GO_FUNC_END = re.compile(r"^\s*func\s*$")
-PY_TEST = re.compile(
-    r"^\s*(?:async\s+)?def\s+test\w*\s*"
-    r"(?:\[(?:[^\[\]]|\[[^\[\]]*\])*\]\s*)?"  # PEP 695 type parameters: def test_x[T](
-    r"\(|^\s*class\s+Test\w*\b"
-)
+PY_TEST_CLASS = re.compile(r"^\s*class\s+Test\w*\b")
+PY_TEST_DEF = re.compile(r"^\s*(?:async\s+)?def\s+test\w*\s*")
+
+
+def py_test_declaration(statement):
+    """Whether a Python statement's code declares a test: class Test..., or
+    def test_...( with any PEP 695 type parameters, def test_x[T](, before
+    the parenthesis."""
+    if PY_TEST_CLASS.match(statement):
+        return True
+    head = PY_TEST_DEF.match(statement)
+    if not head:
+        return False
+    i = head.end()
+    if statement[i:i + 1] == "[":
+        level = 0
+        while i < len(statement):
+            level += {"[": 1, "]": -1}.get(statement[i], 0)
+            i += 1
+            if level == 0:
+                break
+        while i < len(statement) and statement[i].isspace():
+            i += 1
+    return statement[i:i + 1] == "("
 LITERAL = '""'
 
 TS_SUFFIXES = (".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs")
@@ -157,42 +178,80 @@ def matches(path, globs):
 TEST_FILE = re.compile(r"(_test\.go|\.(test|spec)\.[cm]?[jt]sx?|_test\.py)$|(^|/)test_[^/]*\.py$")
 
 
+# A file the inventory reads: a regular file, executable or not. Links and
+# submodules hold no prose.
+REGULAR_MODES = ("100644", "100755")
+NULL_OID = re.compile(r"^0+$")
+
+# Settings that would move hunk positions off the files' own lines are
+# turned off: text conversion, external diff, joined hunks, and an
+# attribute that calls a text file binary.
+HUNK_OPTIONS = ("-U0", "--inter-hunk-context=0", "--no-color", "--text", "--no-ext-diff", "--no-textconv")
+
+
+class Entry:
+    """One file the change touches, from git diff --raw: its path, blob and
+    mode on each side. old is None for an added file, new for a deleted
+    one; a rename carries both paths."""
+
+    def __init__(self, old, new, old_blob=None, new_blob=None, old_mode="000000", new_mode="000000"):
+        self.old, self.new = old, new
+        self.old_blob, self.new_blob = old_blob, new_blob
+        self.old_regular = old is not None and old_mode in REGULAR_MODES
+        self.new_regular = new is not None and new_mode in REGULAR_MODES
+
+
 def touched_entries(repo, base, head):
-    """The files the change touches, as (old path, new path): old is None
-    for an added file, new is None for a deleted one, and a rename carries
-    both. Paths come from -z output, never from a diff header."""
+    """The files the change touches. Paths and blobs come from -z raw
+    output, never from a diff header or a pathspec."""
     target = [head] if head else []
-    fields = git_paths(repo, "diff", "-z", "--name-status", "--no-relative", "-M", base, *target, "--")
+    fields = git_paths(repo, "diff", "--raw", "-z", "--no-abbrev", "--no-relative", "-M", base, *target, "--")
     entries = []
     i = 0
     while i < len(fields):
-        status = fields[i]
+        old_mode, new_mode, old_blob, new_blob, status = fields[i].lstrip(":").split(" ")
         if status[0] in "RC":
-            entries.append((fields[i + 1] if status[0] == "R" else None, fields[i + 2]))
+            old, new = (fields[i + 1] if status[0] == "R" else None), fields[i + 2]
             i += 3
-            continue
-        path = fields[i + 1]
-        entries.append((path if status[0] != "A" else None, path if status[0] != "D" else None))
-        i += 2
+        else:
+            path = fields[i + 1]
+            old, new = (path if status[0] != "A" else None), (path if status[0] != "D" else None)
+            i += 2
+        if status[0] == "C":
+            old_blob, old_mode = None, "000000"
+        entries.append(Entry(
+            old, new, None if NULL_OID.match(old_blob) else old_blob,
+            None if NULL_OID.match(new_blob) else new_blob, old_mode, new_mode,
+        ))
     if not head:
         for path in git_paths(repo, "ls-files", "-z", "--others", "--exclude-standard"):
-            entries.append((None, path))
+            entries.append(Entry(None, path, new_mode="100644"))
     return entries
 
 
-def changed_lines(repo, base, head, old, new):
-    """The line numbers the change adds to new, in the head, and removes
-    from old, in the merge base. Settings that would move hunk positions
-    off the files' own lines are turned off: text conversion, external
-    diff, joined hunks, and an attribute that calls a text file binary.
-    Context lines a configuration still adds advance
-    both sides."""
-    target = [head] if head else []
-    paths = [p for p in (old, new) if p is not None]
-    out = git_text(
-        repo, "--literal-pathspecs", "diff", "-U0", "--inter-hunk-context=0", "--no-color", "--text",
-        "--no-ext-diff", "--no-textconv", "--no-relative", "-M", base, *target, "--", *dict.fromkeys(paths),
-    )
+def changed_lines(repo, entry):
+    """The line numbers the change adds to the new file and removes from
+    the old one, from a diff of exactly these two files: blob against blob,
+    or the old blob against the file in the working tree."""
+    if entry.old_blob is None or entry.new is None:
+        return None, None  # every line is added, or every line removed
+    if entry.new_blob is not None:
+        out = git_text(repo, "diff", *HUNK_OPTIONS, entry.old_blob, entry.new_blob)
+    else:
+        with tempfile.TemporaryDirectory() as tmp:
+            old_copy = os.path.join(tmp, "old")
+            with open(old_copy, "wb") as handle:
+                handle.write(git(repo, "cat-file", "blob", entry.old_blob))
+            result = subprocess.run(
+                ["git", "-C", repo, "diff", "--no-index", *HUNK_OPTIONS, "--", old_copy,
+                 os.path.join(repo, entry.new)],
+                capture_output=True,
+            )
+            # --no-index exits 1 when the files differ.
+            if result.returncode not in (0, 1):
+                sys.stderr.write(result.stderr.decode("utf-8", "replace"))
+                sys.exit(1)
+            out = result.stdout.decode("utf-8", "replace")
     added, removed = set(), set()
     old_line = new_line = 0
     in_hunk = False
@@ -214,8 +273,8 @@ def changed_lines(repo, base, head, old, new):
             removed.add(old_line)
             old_line += 1
         elif not raw.startswith("\\"):
-            # A context line; "\\ No newline at end of file" advances
-            # neither side.
+            # A context line a configuration still adds advances both
+            # sides; "\ No newline at end of file" advances neither.
             old_line += 1
             new_line += 1
     return added, removed
@@ -432,8 +491,18 @@ def in_expression(prev, last_op, after_label_colon):
     return last_op not in BLOCK_AFTER
 
 
-def skip_regex(text, i):
-    """Return the index past the regular expression literal at text[i]."""
+TEST_CALLEES = {"it", "test", "describe"}
+
+# A line whose reading opened a literal it never closed is read again with
+# one slash decision reversed, at most this many, from the last.
+MAX_SLASH_RETRIES = 16
+
+
+def regex_extent(text, i):
+    """Read a regular expression literal opening at text[i]. Return the
+    index past it, flags included, and whether it closes on the line with a
+    closing slash that no / or * follows; a slash that does not is no
+    regular expression's end but a comment's start."""
     j = i + 1
     in_class = False
     while j < len(text):
@@ -446,65 +515,109 @@ def skip_regex(text, i):
         elif char == "]":
             in_class = False
         elif char == "/" and not in_class:
+            plausible = j > i + 1 and text[j + 1:j + 2] not in ("/", "*")
             j += 1
             while j < len(text) and (text[j].isalnum() or text[j] == "_"):
                 j += 1
-            return j
+            return j, plausible
         j += 1
-    return len(text)
+    return len(text), False
 
 
-TEST_CALLEES = {"it", "test", "describe"}
+class TypeScriptLexer:
+    """Reads a TypeScript or JavaScript file line by line and says which
+    lines are comments, literal text or test declarations.
 
-
-def ts_sources(lines):
-    """Map line number to source for a TypeScript or JavaScript file.
     Template literals may nest code in ${ }, which may nest literals; a
     stack keeps the brace depth of each open substitution.
+
+    A slash starts a regular expression or divides, by the token before it
+    (see ends_operand). Where that rule cannot see enough, the reading
+    fails safe: a regular expression that cannot end where a regular
+    expression may is read as a division, and a line whose reading opens a
+    string or template it never closes is read again with one slash
+    decision reversed, keeping the first reading that leaves no literal
+    open.
 
     A test declaration is followed token by token: a callee (it, test or
     describe, with .only, .each and the like), any type arguments, any
     table it takes in parentheses or as a tagged template, then a call
-    whose first argument
-    is a literal: that literal is the test's name, and every line it spans
-    is a test row."""
-    found = {}
-    state = "code"  # code, block, template, or string (a quoted literal continued past a line)
-    quote = None  # the quote of a continued string
-    stack = []  # brace depth in each enclosing ${ } substitution
-    depth = 0
-    parens = []  # for each open parenthesis: (whether it opened a condition, whether a for header)
-    braces = []  # for each open brace: "object" or "block"
-    prev = "operator"  # the previous token, as ends_operand reads it
-    before = "operator"  # the token before prev
-    last_op = None  # the text of the last operator token
-    last_op_before = None  # last_op as it was one token earlier
-    case_label = False  # a case or default waits for its colon
-    after_case_colon = False  # the last token is the colon of a case label
-    jump_line = 0  # the line a break or continue was read on
-    prev_line = 0  # the line the previous token was read on
-    bound = set()  # keyword spellings the file binds as names: const await, function f(yield)
-    expression_body = False  # a function or class in an expression waits for its body
-    after_dot = False  # prev was a member access dot: the next word is a property
-    # The test declaration being read: None; "callee"; ("open", n), just
-    # after the call's parenthesis, the n-th open; ("args", n), inside a
-    # call whose first argument is no literal; ("tagged", t), inside a
-    # tagged template table, the t-th open template; ("generic", n), inside
-    # type arguments, it.each<Row>(...), n angle brackets deep;
-    # ("name", "string") or ("name", t), inside the name literal.
-    test_call = None
-    callee_line = 0  # the line the test callee began on
+    whose first argument is a literal: that literal is the test's name,
+    and every line it spans is a test row."""
 
-    def templates_open():
-        return len(stack) + (1 if state == "template" else 0)
+    def __init__(self):
+        self.state = "code"  # code, block, template, or string (a quoted literal continued past a line)
+        self.quote = None  # the quote of a continued string
+        self.stack = []  # brace depth in each enclosing ${ } substitution
+        self.depth = 0
+        self.parens = []  # per open parenthesis: [condition, for header, header had a ;, function parameters]
+        self.braces = []  # per open brace: "object", "body" (of a function in an expression) or "block"
+        self.prev = "operator"  # the previous token, as ends_operand reads it
+        self.before = "operator"  # the token before prev
+        self.last_op = None  # the text of the last operator token
+        self.last_op_before = None  # last_op as it was one token earlier
+        self.case_label = False  # a case or default waits for its colon
+        self.after_case_colon = False  # the last token is the colon of a case or statement label
+        self.jump_line = 0  # the line a break or continue was read on
+        self.prev_line = 0  # the line the previous token was read on
+        self.bound = set()  # keyword spellings the file binds as names: const await, function f(yield)
+        self.expression_body = False  # a function or class in an expression waits for its body
+        self.after_dot = False  # prev was a member access dot: the next word is a property
+        # The test declaration being read: None; "callee"; ("open", n), just
+        # after the call's parenthesis, the n-th open; ("args", n), inside a
+        # call whose first argument is no literal; ("tagged", t), inside a
+        # tagged template table, the t-th open template; ("generic", n),
+        # inside type arguments, it.each<Row>(...), n angle brackets deep;
+        # ("name", "string") or ("name", t), inside the name literal.
+        self.test_call = None
+        self.callee_line = 0  # the line the test callee began on
 
-    for number, text in enumerate(lines, start=1):
+    def snapshot(self):
+        return copy.deepcopy(self.__dict__)
+
+    def restore(self, snapshot):
+        self.__dict__.update(copy.deepcopy(snapshot))
+
+    def literals_open(self):
+        """How many literals are open: templates, and a continued string."""
+        return len(self.stack) + (1 if self.state in ("template", "string") else 0)
+
+    def sources(self, lines):
+        """Map line number to source."""
+        found = {}
+        for number, text in enumerate(lines, start=1):
+            # Only a line with a slash has a decision to reverse.
+            start = self.snapshot() if "/" in text else None
+            kinds, marks, slashes, unclosed = self.read(number, text, frozenset())
+            if slashes and (unclosed or self.literals_open() > _literals_open(start)):
+                for position in reversed(slashes[-MAX_SLASH_RETRIES:]):
+                    self.restore(start)
+                    retry = self.read(number, text, frozenset([position]))
+                    if not retry[3] and self.literals_open() <= _literals_open(start):
+                        kinds, marks = retry[0], retry[1]
+                        break
+                else:
+                    self.restore(start)
+                    kinds, marks, _, _ = self.read(number, text, frozenset())
+            for line in marks:
+                found[line] = "test"
+            if kinds and text.strip():
+                found[number] = pick(kinds)
+        return found
+
+    def read(self, number, text, reversed_slashes):
+        """Read one line. Return its kinds, the earlier lines it marks as
+        test rows, the positions of its slash decisions that could have
+        gone the other way, and whether a quoted string was left open."""
         kinds = set()
-        if state in ("template", "string"):
+        marks = []
+        slashes = []
+        unclosed = False
+        if self.state in ("template", "string"):
             kinds.add("text")
-        elif state == "block":
+        elif self.state == "block":
             kinds.add("comment")
-        if isinstance(test_call, tuple) and test_call[0] == "name":
+        if isinstance(self.test_call, tuple) and self.test_call[0] == "name":
             kinds.add("test")
         segment = []  # the template characters read on this line
 
@@ -514,63 +627,62 @@ def ts_sources(lines):
             segment.clear()
 
         def token(kind, op=None):
-            nonlocal prev, before, after_dot, last_op, last_op_before, after_case_colon, prev_line
-            before, prev, after_dot, prev_line = prev, kind, False, number
-            last_op_before, last_op = last_op, (op if kind == "operator" else None)
-            after_case_colon = False
+            self.before, self.prev, self.after_dot, self.prev_line = self.prev, kind, False, number
+            self.last_op_before, self.last_op = self.last_op, (op if kind == "operator" else None)
+            self.after_case_colon = False
+
+        def templates_open():
+            return len(self.stack) + (1 if self.state == "template" else 0)
 
         def literal_starts(continues):
             """A string or template opens in code; continues names how the
             literal is followed: "string" or the template's open count."""
-            nonlocal test_call
-            if isinstance(test_call, tuple) and test_call[0] == "open":
-                test_call = ("name", continues)
+            if isinstance(self.test_call, tuple) and self.test_call[0] == "open":
+                self.test_call = ("name", continues)
                 kinds.add("test")
-                if callee_line != number:
-                    found[callee_line] = "test"
-            elif test_call == "callee" and continues != "string":
-                test_call = ("tagged", continues)
-            elif test_call == "callee":
-                test_call = None
+                if self.callee_line != number:
+                    marks.append(self.callee_line)
+            elif self.test_call == "callee" and continues != "string":
+                self.test_call = ("tagged", continues)
+            elif self.test_call == "callee":
+                self.test_call = None
 
         def literal_ends(closed):
             """A string or template closed; closed is "string" or the open
             count it had."""
-            nonlocal test_call
-            if test_call == ("name", closed):
-                test_call = None
-            elif test_call == ("tagged", closed):
-                test_call = "callee"
+            if self.test_call == ("name", closed):
+                self.test_call = None
+            elif self.test_call == ("tagged", closed):
+                self.test_call = "callee"
 
         def other_token():
             """Any token that is not part of a test declaration's shape."""
-            nonlocal test_call
-            if test_call == "callee":
-                test_call = None
-            elif isinstance(test_call, tuple) and test_call[0] == "open":
-                test_call = ("args", test_call[1])
+            if self.test_call == "callee":
+                self.test_call = None
+            elif isinstance(self.test_call, tuple) and self.test_call[0] == "open":
+                self.test_call = ("args", self.test_call[1])
 
         i = 0
         while i < len(text):
             char = text[i]
-            if state == "block":
+            if self.state == "block":
                 end = text.find("*/", i)
                 if end < 0:
                     break
-                state, i = "code", end + 2
+                self.state, i = "code", end + 2
                 continue
-            if state == "string":
-                i, _, how = scan_quoted(text, i, quote)
+            if self.state == "string":
+                i, _, how = scan_quoted(text, i, self.quote)
                 if how != "closed":
                     if how == "open":
-                        state = "code"
+                        self.state = "code"
                         literal_ends("string")
                     break
-                state = "code"
+                self.state = "code"
                 literal_ends("string")
                 token("operand")
                 continue
-            if state == "template":
+            if self.state == "template":
                 if char == "\\":
                     segment.append(text[i:i + 2])
                     i += 2
@@ -578,15 +690,15 @@ def ts_sources(lines):
                 if char == "`":
                     end_segment()
                     closed = templates_open()
-                    state = "code"
+                    self.state = "code"
                     literal_ends(closed)
                     token("operand")
                     i += 1
                     continue
                 if text[i:i + 2] == "${":
                     end_segment()
-                    stack.append(depth)
-                    depth, state = 0, "code"
+                    self.stack.append(self.depth)
+                    self.depth, self.state = 0, "code"
                     token("operator")
                     i += 2
                     continue
@@ -598,7 +710,7 @@ def ts_sources(lines):
                 kinds.add("comment")
                 break
             if pair == "/*":
-                state = "block"
+                self.state = "block"
                 kinds.add("comment")
                 i += 2
                 continue
@@ -620,49 +732,7 @@ def ts_sources(lines):
                 j = i
                 while j < len(text) and (text[j].isalnum() or text[j] in "_$"):
                     j += 1
-                word = text[i:j]
-                if after_dot:
-                    # A property: counts.in is an operand, and test.each
-                    # stays a test callee.
-                    if test_call != "callee":
-                        other_token()
-                    token("operand")
-                else:
-                    if word in TEST_CALLEES and test_call in (None, "callee"):
-                        test_call, callee_line = "callee", number
-                    else:
-                        other_token()
-                    if prev in (("word", "break"), ("word", "continue")) and jump_line == number:
-                        # A label: the statement ends after it, as after
-                        # the break or continue itself.
-                        token(("keyword", prev[1]))
-                    elif word in ("await", "yield") and (
-                        word in bound or prev in (("word", "const"), ("word", "let"), ("word", "var"))
-                        or (parens and parens[-1][3])
-                    ):
-                        # Outside an async function or a generator, a
-                        # script may name a variable or parameter so.
-                        bound.add(word)
-                        token(("ident", word))
-                    elif word == "of":
-                        # of is a keyword only where a for header's binding
-                        # ends: for (const x of xs), never for (i = of / 2;).
-                        binding = (isinstance(prev, tuple) and prev[0] in ("word", "ident")
-                                   and prev[1] not in ("let", "const", "var")) or prev == "operand"
-                        header = parens and parens[-1][1] and not parens[-1][2]
-                        token(("keyword" if header and binding else "word", word))
-                    else:
-                        if word in ("break", "continue"):
-                            jump_line = number
-                        elif word in ("case", "default"):
-                            case_label = True
-                        elif word in ("function", "class") and (
-                            in_expression(prev, last_op, after_case_colon) if prev != ("word", "async")
-                            else in_expression(before, last_op_before, False)
-                        ):
-                            # In an expression its body, once closed, is an operand.
-                            expression_body = True
-                        token(("word", word))
+                self.word(text[i:j], number, token, other_token)
                 i = j
                 continue
             if char.isdigit():
@@ -674,7 +744,7 @@ def ts_sources(lines):
                 i = j
                 continue
             if char == "`":
-                state = "template"
+                self.state = "template"
                 literal_starts(templates_open())
                 i += 1
                 continue
@@ -684,16 +754,29 @@ def ts_sources(lines):
                 if WORDS.search(content):
                     kinds.add("text")
                 if how == "continued":
-                    state, quote = "string", char
+                    self.state, self.quote = "string", char
                     kinds.add("text")
                     break
+                if how == "open":
+                    unclosed = True
                 literal_ends("string")
                 token("operand")
                 continue
-            if char == "/" and not ends_operand(prev):
+            if char == "/":
+                end, plausible = regex_extent(text, i)
+                regex = not ends_operand(self.prev) and plausible
+                if plausible:
+                    # Either reading could be meant: note the decision.
+                    slashes.append(i)
+                    if i in reversed_slashes:
+                        regex = not regex
                 other_token()
-                i = skip_regex(text, i)
-                token("operand")
+                if regex:
+                    token("operand")
+                    i = end
+                else:
+                    token("operator", "/")
+                    i += 1
                 continue
             if pair == "=>":
                 other_token()
@@ -706,113 +789,175 @@ def ts_sources(lines):
                 i += 3
                 continue
             if char == "." or pair == "?.":
-                if test_call != "callee":
+                if self.test_call != "callee":
                     other_token()
                 i += 1 if char == "." else 2
-                before, prev, after_dot = prev, "operator", True
+                self.before, self.prev, self.after_dot = self.prev, "operator", True
                 continue
             if pair in ("++", "--"):
                 # After an operand on the same line, ++ and -- are postfix
                 # and end it; before one, or after a line break, prefix.
                 other_token()
-                token("operand" if ends_operand(prev) and prev_line == number else "operator")
+                token("operand" if ends_operand(self.prev) and self.prev_line == number else "operator")
                 i += 2
                 continue
-            if char == "!" and ends_operand(prev) and prev_line == number and text[i + 1:i + 2] != "=":
+            if char == "!" and ends_operand(self.prev) and self.prev_line == number and text[i + 1:i + 2] != "=":
                 # A non-null assertion, count!, ends an operand; it takes no
                 # line break before it.
                 other_token()
                 token("operand")
                 i += 1
                 continue
-            if char == "(":
-                header = isinstance(prev, tuple) and prev[1] == "for" or (
-                    prev == ("word", "await") and before == ("word", "for")
-                )
-                condition = header or (isinstance(prev, tuple) and prev[1] in CONTROL_KEYWORDS)
-                # The parameters of a function declaration or expression.
-                params = prev == ("word", "function") or (
-                    isinstance(prev, tuple) and prev[0] == "word" and before == ("word", "function")
-                )
-                parens.append([condition, header, False, params])
-                if test_call == "callee":
-                    test_call = ("open", len(parens))
-                else:
-                    other_token()
-                token("operator", "(")
-            elif char == ")":
-                opened = len(parens)
-                closes_condition = parens.pop()[0] if parens else False
-                if isinstance(test_call, tuple) and test_call[0] in ("open", "args") and test_call[1] == opened:
-                    test_call = "callee"
-                else:
-                    other_token()
-                if closes_condition:
-                    token("operator", ")")
-                else:
-                    token("operand")
-            elif char == "]":
-                other_token()
-                token("operand")
-            elif char == "{":
-                if expression_body:
-                    opens, expression_body = "body", False
-                elif parens and parens[-1][1]:
-                    opens = "object"  # a destructuring pattern in a for header
-                elif isinstance(prev, tuple):
-                    opens = "object" if prev[0] != "ident" and prev[1] in OBJECT_AFTER_WORDS else "block"
-                elif prev == "operand" or after_case_colon:
-                    opens = "block"
-                else:
-                    opens = "block" if last_op in BLOCK_AFTER else "object"
-                braces.append(opens)
-                other_token()
-                depth += 1
-                token("operator", "{")
-            elif char == "}":
-                if depth == 0 and stack:
-                    depth = stack.pop()
-                    state = "template"
-                    i += 1
-                    continue
-                other_token()
-                depth -= 1
-                closes = braces.pop() if braces else "block"
-                if closes in ("object", "body"):
-                    token("operand")
-                else:
-                    token("operator", "}")
-            elif char == "<" and test_call == "callee":
-                test_call = ("generic", 1)
-                token("operator")
-            elif char in "<>" and isinstance(test_call, tuple) and test_call[0] == "generic":
-                level = test_call[1] + (1 if char == "<" else -1)
-                test_call = ("generic", level) if level else "callee"
-                token("operator")
-            elif char == ":" and (case_label or (
-                isinstance(prev, tuple) and prev[0] in ("word", "ident") and (not braces or braces[-1] != "object")
-                and before == "operator" and last_op_before in BLOCK_AFTER
-            )):
-                # The colon of a case label or of a statement label: a
-                # brace after it opens a block.
-                other_token()
-                token("operator", ":")
-                case_label, after_case_colon = False, True
-            elif char == ";" and parens and parens[-1][1]:
-                parens[-1][2] = True  # for (init; test; update): no for-of
-                other_token()
-                token("operator", ";")
-            else:
-                other_token()
-                token("operator", char)
+            self.punctuation(char, text, i, token, other_token, templates_open)
+            if self.state == "template":
+                i += 1
+                continue
             i += 1
-        if state == "template":
+        if self.state == "template":
             # The literal goes on past this line: every line it spans is text.
             kinds.add("text")
         end_segment()
-        if kinds and text.strip():
-            found[number] = pick(kinds)
-    return found
+        return kinds, marks, slashes, unclosed
+
+    def word(self, word, number, token, other_token):
+        """Read a name, a keyword or a property."""
+        prev = self.prev
+        if self.after_dot:
+            # A property: counts.in is an operand, and test.each stays a
+            # test callee.
+            if self.test_call != "callee":
+                other_token()
+            token("operand")
+            return
+        if word in TEST_CALLEES and self.test_call in (None, "callee"):
+            self.test_call, self.callee_line = "callee", number
+        else:
+            other_token()
+        if prev in (("word", "break"), ("word", "continue")) and self.jump_line == number:
+            # A label: the statement ends after it, as after the break or
+            # continue itself.
+            token(("keyword", prev[1]))
+        elif word in ("await", "yield") and (
+            word in self.bound or prev in (("word", "const"), ("word", "let"), ("word", "var"))
+            or (self.parens and self.parens[-1][3])
+        ):
+            # Outside an async function or a generator, a script may name a
+            # variable or parameter so.
+            self.bound.add(word)
+            token(("ident", word))
+        elif word == "of":
+            # of is a keyword only where a for header's binding ends:
+            # for (const x of xs), never for (i = of / 2;).
+            binding = (isinstance(prev, tuple) and prev[0] in ("word", "ident")
+                       and prev[1] not in ("let", "const", "var")) or prev == "operand"
+            header = self.parens and self.parens[-1][1] and not self.parens[-1][2]
+            token(("keyword" if header and binding else "word", word))
+        else:
+            if word in ("break", "continue"):
+                self.jump_line = number
+            elif word in ("case", "default"):
+                self.case_label = True
+            elif word in ("function", "class") and (
+                in_expression(prev, self.last_op, self.after_case_colon) if prev != ("word", "async")
+                else in_expression(self.before, self.last_op_before, False)
+            ):
+                # In an expression its body, once closed, is an operand.
+                self.expression_body = True
+            token(("word", word))
+
+    def punctuation(self, char, text, i, token, other_token, templates_open):
+        """Read one bracket or operator character."""
+        prev = self.prev
+        if char == "(":
+            header = isinstance(prev, tuple) and prev[1] == "for" or (
+                prev == ("word", "await") and self.before == ("word", "for")
+            )
+            condition = header or (isinstance(prev, tuple) and prev[1] in CONTROL_KEYWORDS)
+            # The parameters of a function declaration or expression.
+            params = prev == ("word", "function") or (
+                isinstance(prev, tuple) and prev[0] == "word" and self.before == ("word", "function")
+            )
+            self.parens.append([condition, header, False, params])
+            if self.test_call == "callee":
+                self.test_call = ("open", len(self.parens))
+            else:
+                other_token()
+            token("operator", "(")
+        elif char == ")":
+            opened = len(self.parens)
+            closes_condition = self.parens.pop()[0] if self.parens else False
+            call = self.test_call
+            if isinstance(call, tuple) and call[0] in ("open", "args") and call[1] == opened:
+                self.test_call = "callee"
+            else:
+                other_token()
+            if closes_condition:
+                token("operator", ")")
+            else:
+                token("operand")
+        elif char == "]":
+            other_token()
+            token("operand")
+        elif char == "{":
+            if self.expression_body:
+                opens, self.expression_body = "body", False
+            elif self.parens and self.parens[-1][1]:
+                opens = "object"  # a destructuring pattern in a for header
+            elif isinstance(prev, tuple):
+                opens = "object" if prev[0] != "ident" and prev[1] in OBJECT_AFTER_WORDS else "block"
+            elif prev == "operand" or self.after_case_colon:
+                opens = "block"
+            else:
+                opens = "block" if self.last_op in BLOCK_AFTER else "object"
+            self.braces.append(opens)
+            other_token()
+            self.depth += 1
+            token("operator", "{")
+        elif char == "}":
+            if self.depth == 0 and self.stack:
+                self.depth = self.stack.pop()
+                self.state = "template"
+                return
+            other_token()
+            self.depth -= 1
+            closes = self.braces.pop() if self.braces else "block"
+            if closes in ("object", "body"):
+                token("operand")
+            else:
+                token("operator", "}")
+        elif char == "<" and self.test_call == "callee":
+            self.test_call = ("generic", 1)
+            token("operator")
+        elif char in "<>" and isinstance(self.test_call, tuple) and self.test_call[0] == "generic":
+            level = self.test_call[1] + (1 if char == "<" else -1)
+            self.test_call = ("generic", level) if level else "callee"
+            token("operator")
+        elif char == ":" and (self.case_label or (
+            isinstance(prev, tuple) and prev[0] in ("word", "ident")
+            and (not self.braces or self.braces[-1] != "object")
+            and self.before == "operator" and self.last_op_before in BLOCK_AFTER
+        )):
+            # The colon of a case label or of a statement label: a brace
+            # after it opens a block.
+            other_token()
+            token("operator", ":")
+            self.case_label, self.after_case_colon = False, True
+        elif char == ";" and self.parens and self.parens[-1][1]:
+            self.parens[-1][2] = True  # for (init; test; update): no for-of
+            other_token()
+            token("operator", ";")
+        else:
+            other_token()
+            token("operator", char)
+
+
+def _literals_open(snapshot):
+    return len(snapshot["stack"]) + (1 if snapshot["state"] in ("template", "string") else 0)
+
+
+def ts_sources(lines):
+    """Map line number to source for a TypeScript or JavaScript file."""
+    return TypeScriptLexer().sources(lines)
 
 
 PY_STRING = re.compile(r"([rRbBuUfF]{0,2})('\'\'|\"\"\"|'|\")")
@@ -830,8 +975,9 @@ def python_sources(lines):
     field, with its bracket depth) and ["spec"] (a format spec)."""
     found = {}
     stack = []
-    joined = []  # code of lines a backslash joins to the next
+    joined = []  # code of the lines of a statement that goes on
     joined_start = 0  # the first of those lines
+    brackets = 0  # brackets the statement's code leaves open
     for number, text in enumerate(lines, start=1):
         kinds = set()
         code = []  # the line's code outside every literal, for declarations
@@ -948,14 +1094,15 @@ def python_sources(lines):
         while stack and stack[-1][0] in ("string", "fstring") and len(stack[-1][1]) == 1 and not continued:
             stack.pop()
         line_code = "".join(code)
-        if not stack and line_code.rstrip().endswith("\\"):
-            # An explicit line join: the statement goes on on the next line.
-            joined.append(line_code.rstrip()[:-1])
-            joined_start = joined_start or number
-        else:
-            statement = " ".join(joined + [line_code])
-            if PY_TEST.search(statement):
-                if joined_start and joined_start != number:
+        brackets = max(0, brackets + sum(line_code.count(c) for c in PY_OPEN) - sum(line_code.count(c) for c in PY_CLOSE))
+        explicit = not stack and line_code.rstrip().endswith("\\")
+        joined.append(line_code.rstrip()[:-1] if explicit else line_code)
+        joined_start = joined_start or number
+        if not (explicit or stack or brackets):
+            # The statement ends with this line: a backslash, an open
+            # literal or an open bracket would carry it on.
+            if py_test_declaration(" ".join(joined)):
+                if joined_start != number:
                     found[joined_start] = "test"
                 else:
                     kinds.add("test")
@@ -1022,7 +1169,6 @@ def find_merge_base(repo, base, head):
 def collect(repo, base, head, scope, globs, exclude, recordings, hint):
     hint_word = re.compile(hint, re.IGNORECASE)
     merge_base = find_merge_base(repo, base, head or "HEAD")
-    untracked = set() if head else set(git_paths(repo, "ls-files", "-z", "--others", "--exclude-standard"))
 
     def wanted(path):
         return path is not None and (matches(path, globs) or is_recording(path, recordings)) and not matches(path, exclude)
@@ -1048,28 +1194,25 @@ def collect(repo, base, head, scope, globs, exclude, recordings, hint):
             hint_text = found.group(0).lower() if found else "-"
             rows.append((kind, sources[number], hint_text, path, number, text.replace("\t", " ")))
 
-    for old, new in touched_entries(repo, merge_base, head):
+    for entry in touched_entries(repo, merge_base, head):
+        old, new = entry.old, entry.new
         old_wanted, new_wanted = wanted(old), wanted(new)
         if not (old_wanted or new_wanted):
             continue
         files.update(p for p, w in ((old, old_wanted), (new, new_wanted)) if w)
-        if new in untracked:
-            lines = read_worktree(repo, new)
-            if lines is not None and new_wanted:
-                emit("added", new, lines, set(range(1, len(lines) + 1)))
-            continue
-        added, removed = changed_lines(repo, merge_base, head, old, new)
-        if new_wanted:
+        added, removed = changed_lines(repo, entry) if entry.old_regular and entry.new_regular else (None, None)
+        if new_wanted and entry.new_regular:
             lines = read_head(new)
             if lines is not None:
                 every = set(range(1, len(lines) + 1))
-                emit("added", new, lines, added)
+                chosen = every if added is None else added
+                emit("added", new, lines, chosen)
                 if scope == "touched":
-                    emit("existing", new, lines, every - added)
-        if old_wanted and removed:
+                    emit("existing", new, lines, every - chosen)
+        if old_wanted and entry.old_regular and (removed is None or removed):
             lines = read_commit(repo, merge_base, old)
             if lines is not None:
-                emit("deleted", old, lines, removed)
+                emit("deleted", old, lines, set(range(1, len(lines) + 1)) if removed is None else removed)
 
     hinted = {}
     for kind, _, hint_text, path, _, _ in rows:
