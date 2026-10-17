@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -449,7 +450,7 @@ func TestStatusNamesMissingChangedAndUnrunnableHooks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if silence := strings.Join(status.Silence, "\n"); strings.Contains(silence, "still run") || !strings.Contains(silence, "the binary the listed hooks run cannot run") {
+	if silence := strings.Join(status.Silence, "\n"); strings.Contains(silence, "still run") || !strings.Contains(silence, "whether a host runs them here is not established") {
 		t.Fatalf("silence for a partial file whose binary is gone:\n%s", silence)
 	}
 }
@@ -495,8 +496,29 @@ func TestStatusNamesTheHooksAPartialFileStillRuns(t *testing.T) {
 		t.Fatalf("problems %q, want %q", claude.Problems, want)
 	}
 	silence := strings.Join(status.Silence, "\n")
-	if strings.Contains(silence, "no host runs them") || !strings.Contains(silence, "the hooks a file lists still run") {
+	if strings.Contains(silence, "no host runs them") || !strings.Contains(silence, "the hooks install wrote into a file still run") {
 		t.Fatalf("silence for a partial file:\n%s", silence)
+	}
+	// A hook install did not write may name a binary that is gone or a
+	// matcher that selects nothing, so status does not say it runs.
+	hooks := document["hooks"].(map[string]any)
+	hooks[stopEvent] = []any{map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "/gone/arclint " + eventArgs}}}}
+	delete(hooks, postToolUseEvent)
+	data, err = json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, settings, string(data))
+	claude = statusOf(t, installer)["claude user"]
+	if want := "SessionStart and Stop are installed, and SessionStart still runs; UserPromptSubmit and PostToolUse are missing. Run `arclint agents hooks install` to add them."; !slices.Contains(claude.Problems, want) {
+		t.Fatalf("problems %q lack %q", claude.Problems, want)
+	}
+	status, err = installer.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if silence := strings.Join(status.Silence, "\n"); !strings.Contains(silence, "the hooks install wrote into a file still run") {
+		t.Fatalf("silence with one hook install wrote:\n%s", silence)
 	}
 }
 
