@@ -19,7 +19,7 @@ Pass them as `key=value` in the invocation argument or in plain words. Each has 
 |---|---|---|
 | `base` | `main` | The change starts at the merge base of this ref and the head. |
 | `head` | working tree | A commit to sweep instead of the working tree. Without it, the change is committed and uncommitted work together, plus untracked files. |
-| `pr` | none | A pull request number. Sets `base` and `head`: for an open one, `gh pr view N --json baseRefOid,headRefOid`; for a merged one, `head` is its merge commit (`mergeCommit.oid`) and `base` that commit's first parent (`<oid>^`). |
+| `pr` | none | A pull request number. Sets `base` and `head`. For an open one, `gh pr view N --json baseRefOid,headRefOid`. For a merged one, `head` is its merge commit (`gh pr view N --json mergeCommit,commits`), and `base` depends on how it merged: a merge commit has two parents, and `base` is `<oid>^1`; a rebase put the pull request's `n` commits on the base branch, ending at `<oid>`, and `base` is `<oid>~n`; a squash put one commit there, and `base` is `<oid>^`. Tell a rebase from a squash by comparing `git log --format=%s -n <n> <oid>` with the pull request's commit headlines. |
 | `scope` | `touched` | `changed`: lines the change adds or removes. `touched`: also the unchanged lines of touched files, for statements whose meaning the change moved or made enforceable. |
 | `paths` | `*.md *.go *.ts *.tsx *.mts *.cts *.py` | Where statements live: Markdown docs, and Go, TypeScript and Python comments, help text, messages and test names. Domain recordings are always included. |
 | `exclude` | the script's defaults | Files that state nothing of their own: `.claude/skills` copies, `testdata` directories, and the root `domain.arclint.cml` export. |

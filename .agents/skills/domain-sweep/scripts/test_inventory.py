@@ -598,6 +598,53 @@ class InventoryTest(unittest.TestCase):
         self.assertEqual(rows["web/a.ts:1"][1], "comment")
         self.assertEqual(rows["web/a.ts:2"][1], "comment")
 
+    def test_test_names_after_tables_and_type_arguments(self):
+        self.repo.write("web/a.test.ts", textwrap.dedent("""\
+            test.each([
+              [1, 2],
+            ])("never %s twice", () => {});
+            test.each`
+              a | b
+            `("refuses $a", () => {});
+            it.each<Row>(["mac", "win"])("binds on %s", () => {});
+            test("closes", () => { const f = `
+            fixture`; });
+            test(`spans ${kind}
+            lines`, () => {});
+            """))
+        rows = self.located(self.repo.rows("--base", "main"))
+        sources = {loc: row[1] for loc, row in rows.items()}
+        self.assertEqual(sources, {
+            "web/a.test.ts:1": "test", "web/a.test.ts:3": "test",
+            "web/a.test.ts:4": "test", "web/a.test.ts:6": "test",
+            "web/a.test.ts:7": "test", "web/a.test.ts:8": "test",
+            "web/a.test.ts:10": "test", "web/a.test.ts:11": "test",
+        })
+
+    def test_keyword_properties_and_for_await(self):
+        self.repo.write("web/a.ts", textwrap.dedent("""\
+            const ratio = counts.in / 2; // Never round.
+            async function f(xs: AsyncIterable<string>) { for await (const x of xs) /[`]/.test(x); }
+            // Only the owner writes.
+            """))
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual({loc: row[1] for loc, row in rows.items()},
+                         {"web/a.ts:1": "comment", "web/a.ts:3": "comment"})
+
+    def test_comments_inside_f_string_fields(self):
+        self.repo.write("tools/test_payload.py", textwrap.dedent('''\
+            payload = f"""{
+                value  # never logged
+            } and {other!r:>10}"""
+            message = f"{a["key"]} two words"
+            '''))
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {"tools/test_payload.py:2": "comment"})
+        self.repo.write("tools/payload.py", 'f"{x} spans two {y}"\nf"{x}{y}"\n')
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual(rows["tools/payload.py:1"][1], "text")
+        self.assertNotIn("tools/payload.py:2", rows)
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
@@ -634,28 +681,59 @@ def read_source(path):
         return handle.read()
 
 
+# Python 3.12 tokenizes an f-string into its parts; earlier versions give
+# one STRING token, which says nothing of its fields.
+FSTRING_PARTS = hasattr(tokenize, "FSTRING_MIDDLE")
+
+
+def is_fstring(tok):
+    return tok.type == tokenize.STRING and "f" in tok.string[:2].lower().replace('"', "").replace("'", "")
+
+
 def tokenize_sources(text):
     """The line sources Python's own tokenizer implies, by the rules the
-    inventory documents: comments, strings that span lines or hold two
-    words, and test declarations at the start of a statement."""
+    inventory documents: comments, literal text that spans lines or holds
+    two words, and test declarations at the start of a statement. Returns
+    them with the lines it cannot judge: before Python 3.12, the lines an
+    f-string spans."""
     kinds = {}
+    unjudged = set()
 
     def add(line, kind):
         kinds.setdefault(line, set()).add(kind)
 
+    def literal(start, end, body):
+        if end > start:
+            for line in range(start, end + 1):
+                add(line, "text")
+        elif inventory.WORDS.search(body):
+            add(start, "text")
+
     tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    piece = None  # consecutive FSTRING_MIDDLE tokens: [start line, end line, text]
     for i, tok in enumerate(tokens):
+        if FSTRING_PARTS and tok.type == tokenize.FSTRING_MIDDLE:
+            if piece is None:
+                piece = [tok.start[0], tok.end[0], tok.string]
+            else:
+                piece[1], piece[2] = tok.end[0], piece[2] + tok.string
+            continue
+        if piece is not None:
+            literal(*piece)
+            piece = None
+        if FSTRING_PARTS and tok.type in (tokenize.FSTRING_START, tokenize.FSTRING_END):
+            # A literal part that runs past a line is one FSTRING_MIDDLE
+            # run across those lines; the delimiters add nothing.
+            continue
         if tok.type == tokenize.COMMENT:
             add(tok.start[0], "comment")
         elif tok.type == tokenize.STRING:
-            if tok.end[0] > tok.start[0]:
-                for line in range(tok.start[0], tok.end[0] + 1):
-                    add(line, "text")
-            else:
-                body = tok.string.lstrip("rRbBuUfF")
-                quote = 3 if body[:3] in ('"""', "'''") else 1
-                if inventory.WORDS.search(body[quote:-quote]):
-                    add(tok.start[0], "text")
+            if is_fstring(tok):
+                unjudged.update(range(tok.start[0], tok.end[0] + 1))
+                continue
+            body = tok.string.lstrip("rRbBuU")
+            quote = 3 if body[:3] in ('"""', "'''") else 1
+            literal(tok.start[0], tok.end[0], body[quote:-quote])
         elif tok.type == tokenize.NAME and tok.string in ("def", "class"):
             j = i - 1
             while j >= 0 and tokens[j].type in (tokenize.INDENT, tokenize.DEDENT):
@@ -671,11 +749,12 @@ def tokenize_sources(text):
             if tok.string == "class" and name.string.startswith("Test"):
                 add(tok.start[0], "test")
     lines = text.split("\n")
-    return {
-        line: inventory.pick(found)
-        for line, found in kinds.items()
+    found = {
+        line: inventory.pick(kind)
+        for line, kind in kinds.items()
         if line - 1 < len(lines) and lines[line - 1].strip()
     }
+    return found, unjudged
 
 
 class LexerOracleTest(unittest.TestCase):
@@ -717,8 +796,11 @@ class LexerOracleTest(unittest.TestCase):
         lines = 0
         for path in tracked(root, "*.py") + sample(stdlib):
             text = read_source(path)
+            want, unjudged = tokenize_sources(text)
             got = inventory.python_sources(inventory.split_lines(text))
-            self.assertEqual(got, tokenize_sources(text), path)
+            got = {line: kind for line, kind in got.items() if line not in unjudged}
+            want = {line: kind for line, kind in want.items() if line not in unjudged}
+            self.assertEqual(got, want, path)
             lines += len(got)
         self.assertGreater(lines, 1000, "the oracle compared too little to mean anything")
 
