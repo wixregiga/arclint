@@ -93,10 +93,10 @@ func usedKnowledge(dk, declaredHere *DomainKnowledge, uses conformance.TermUses)
 	}
 	undetermined := make([]UndeterminedUseRef, 0, len(uses.Undetermined))
 	for _, u := range uses.Undetermined {
-		if u.Term != "" && declared[key{u.Context, u.Term}] {
+		if u.Term() != "" && declared[key{u.Context(), u.Term()}] {
 			continue
 		}
-		undetermined = append(undetermined, UndeterminedUseRef{Path: u.Path, Line: u.Line, What: u.What, Reason: u.Reason, Context: u.Context, Term: u.Term})
+		undetermined = append(undetermined, UndeterminedUseRef{Path: u.Path(), Line: u.Line(), What: u.What(), Reason: u.Reason(), Context: u.Context(), Term: u.Term()})
 	}
 	return used, undetermined
 }
