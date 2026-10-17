@@ -186,7 +186,8 @@ func orderedSplits(q string, lead int, explicit map[string]bool) []int {
 // explicitModulesBefore lists the module paths a file imports by name
 // in statements that run before offset, each with the packages above
 // it: import a.b.c imports a, a.b, and a.b.c, and from a.b import c
-// imports a and a.b. An import inside a function or class runs later.
+// imports a and a.b. A class body runs where it stands, so its imports
+// count; an import inside a function runs when it is called.
 func explicitModulesBefore(w *pyWalker, root *gotreesitter.Node, offset uint32) map[string]bool {
 	out := map[string]bool{}
 	var walk func(n *gotreesitter.Node)
@@ -195,7 +196,7 @@ func explicitModulesBefore(w *pyWalker, root *gotreesitter.Node, offset uint32) 
 			return
 		}
 		switch n.Type(w.lang) {
-		case nodeClass, nodeFunction:
+		case nodeFunction:
 			return
 		case nodeImport, nodeImportFrom:
 			for _, imp := range importBindings(w, n) {
@@ -284,7 +285,7 @@ func mutatesBefore(m *pyModule, q string, limit uint32) bool {
 		if !runs(mutation.node, mutation.scope) || !assigns(mutation.node, w) {
 			continue
 		}
-		if covers(qualifiedTarget(mutation.scope, w.dottedName(mutation.node), w, 0)) {
+		if covers(qualifiedTargetAt(mutation.scope, w.dottedName(mutation.node), w, mutation.node.StartByte())) {
 			return true
 		}
 	}
@@ -296,7 +297,7 @@ func mutatesBefore(m *pyModule, q string, limit uint32) bool {
 		if !ok {
 			continue
 		}
-		target := qualifiedTarget(call.scope, object, w, 0)
+		target := qualifiedTargetAt(call.scope, object, w, call.node.StartByte())
 		if target == "" {
 			continue
 		}

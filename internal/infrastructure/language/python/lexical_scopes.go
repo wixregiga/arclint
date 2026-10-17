@@ -541,15 +541,25 @@ func qualifiedTarget(s *pyScope, text string, w *pyWalker, depth int) string {
 }
 
 // qualifiedTargetAt names what a dotted name refers to when a statement
-// at offset reads it in the scope: a name the scope binds more than
-// once means the binding that ran last before the statement.
+// at offset reads it in the scope, reading every binding on the way as
+// of the statement that reads it: an alias as of its own assignment.
 func qualifiedTargetAt(s *pyScope, text string, w *pyWalker, offset uint32) string {
+	return qualifiedTargetAtDepth(s, text, w, offset, 0)
+}
+
+func qualifiedTargetAtDepth(s *pyScope, text string, w *pyWalker, offset uint32, depth int) string {
 	head, tail, dotted := strings.Cut(text, ".")
-	return qualifiedFrom(s.lookupAt(head, offset, w), head, tail, dotted, w, 0)
+	return qualifiedFromAt(s.lookupAt(head, offset, w), head, tail, dotted, w, depth, true)
 }
 
 // qualifiedFrom qualifies a dotted name through the binding of its head.
 func qualifiedFrom(b *pyBinding, head, tail string, dotted bool, w *pyWalker, depth int) string {
+	return qualifiedFromAt(b, head, tail, dotted, w, depth, false)
+}
+
+// qualifiedFromAt is qualifiedFrom; ordered reads an alias's right-hand
+// side as of the alias's own assignment.
+func qualifiedFromAt(b *pyBinding, head, tail string, dotted bool, w *pyWalker, depth int, ordered bool) string {
 	if b == nil {
 		if !dotted && (head == builtinStaticmethod || head == builtinClassmethod) {
 			return head
@@ -563,6 +573,9 @@ func qualifiedFrom(b *pyBinding, head, tail string, dotted bool, w *pyWalker, de
 		}
 		if dotted {
 			right += "." + tail
+		}
+		if ordered && b.node != nil {
+			return qualifiedTargetAtDepth(b.scope, right, w, b.node.StartByte(), depth+1)
 		}
 		return qualifiedTarget(b.scope, right, w, depth+1)
 	}
@@ -587,21 +600,25 @@ func qualifiedFrom(b *pyBinding, head, tail string, dotted bool, w *pyWalker, de
 }
 
 // lookupAt finds the binding a statement at offset reads. A scope that
-// runs top to bottom, a module or a class body, holds for a name it
-// binds several times the last unconditional binding before the
-// statement, nothing known when that binding is conditional, and
-// otherwise what encloses it; every other scope reads as lookup does.
+// runs top to bottom, a module or a class body, holds the last
+// unconditional binding of the name before the statement, nothing known
+// when that binding is conditional, and otherwise defers to what
+// encloses it. A function body runs when it is called, after everything
+// around it, so past one the enclosing scopes hold their final
+// bindings.
 func (s *pyScope) lookupAt(name string, offset uint32, w *pyWalker) *pyBinding {
 	for scope := s; scope != nil; scope = scope.parent {
-		bindings := scope.history[name]
-		if len(bindings) < 2 || scope.module == nil || scope != scope.module.scope && !scope.classBody {
-			if scope.bindings[name] != nil || scope.star || scope.uncertain != "" {
+		if scope.star || scope.uncertain != "" {
+			return scope.lookup(name)
+		}
+		if scope.module == nil || scope != scope.module.scope && !scope.classBody {
+			if scope.bindings[name] != nil || scope.parent == nil {
 				return scope.lookup(name)
 			}
-			continue
+			return scope.parent.lookup(name)
 		}
 		var last *pyBinding
-		for _, b := range bindings {
+		for _, b := range scope.history[name] {
 			if b.node == nil {
 				// A binding with no statement to place, such as a
 				// destructured or captured name, leaves the order unknown.

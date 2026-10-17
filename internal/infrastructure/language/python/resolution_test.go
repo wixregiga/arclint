@@ -851,6 +851,12 @@ func TestAbstractMarkReachesTheLibrary(t *testing.T) {
 		"rebound_after.py":     "from abc import ABC\n\n\nclass Encrypter(ABC):\n    pass\n\n\nABC = object\n",
 		"rebound_before.py":    "from abc import ABC\n\nABC = object\n\n\nclass Encrypter(ABC):\n    pass\n",
 		"rebound_if.py":        "from abc import ABC\n\nif FLAG:\n    ABC = object\n\n\nclass Encrypter(ABC):\n    pass\n",
+		"write_then_rebind.py": "import abc\n\nabc.ABC = object\n\n\nclass Encrypter(abc.ABC):\n    pass\n\n\nabc = object\n",
+		"alias_captured.py":    "import abc\n\nABC = abc.ABC\nabc = object\n\n\nclass Encrypter(ABC):\n    pass\n",
+		"nested_first.py":      "from abc import ABC\n\n\nclass Container:\n    class Encrypter(ABC):\n        pass\n\n    ABC = object\n",
+		"pkgmod/__init__.py":   "import abc as abstract\n",
+		"pkgmod/abstract.py":   "ABC = object\n",
+		"classbody_import.py":  "import pkgmod\n\n\nclass Loader:\n    import pkgmod.abstract\n\n\nclass Encrypter(pkgmod.abstract.ABC):\n    pass\n",
 		"exported_replaced.py": "from exporter import abstract\n\n\nclass Encrypter(abstract.ABC):\n    pass\n",
 		"pkg/__init__.py":      "",
 		"pkg/facade.py":        "from abc import ABC\n",
@@ -869,6 +875,7 @@ func TestAbstractMarkReachesTheLibrary(t *testing.T) {
 			"captured_first.py": true, "uses_early.py": true, "annotated_only.py": true, "written_after.py": true,
 			"dormant.py": true, "called.py": false, "concatenated.py": false, "uses_pkgattr.py": false, "uses_pkgsub.py": true,
 			"late_submodule.py": false, "rebound_after.py": true, "rebound_before.py": false, "rebound_if.py": false,
+			"write_then_rebind.py": false, "alias_captured.py": true, "nested_first.py": true, "classbody_import.py": false,
 		} {
 			for _, d := range facts[file].Declarations {
 				if d.Kind == declClass && d.Name == "Encrypter" && d.Abstract != want {
