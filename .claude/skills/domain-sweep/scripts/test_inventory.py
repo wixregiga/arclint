@@ -1153,6 +1153,13 @@ class InventoryTest(unittest.TestCase):
         self.assertNotIn("pkg/rules_test.go:6", rows)
         self.assertEqual(rows["test_rules.py:1"][1], "test")
 
+    def test_round_forty_four_cases(self):
+        self.repo.write("web/quota.test.ts", "const value: any = 8; const ratio = value satisfies void / `requests/second\npending`.length;\n"
+                        "// Never count refused requests.\n")
+        self.repo.write("pkg/message.go", 'package p\n\nvar help = "\u041d\u0435\u043b\u044c\u0437\u044f \u043f\u0435\u0440\u0435\u0437\u0430\u043f\u0438\u0441\u044b\u0432\u0430\u0442\u044c"\n')
+        rows = self.located(self.repo.rows("--base", "main", "--scope", "changed"))
+        self.assertRowsInclude(rows, {"web/quota.test.ts:3": "comment", "pkg/message.go:3": "text"})
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
