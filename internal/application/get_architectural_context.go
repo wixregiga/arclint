@@ -325,11 +325,21 @@ func (uc GetArchitecturalContext) inspectContext(out *ArchitecturalContext, cfg 
 		return conformance.Carriers{}, nil
 	}
 	var required []rule.Fact
-	if found {
-		// The carriers read imports too, so dependencies need nothing more.
-		required = append(required, carrierFacts(lang)...)
-	} else if dependencies {
+	if dependencies || found {
+		// A Go test carrying an assertion takes testing's T under the
+		// name its file imports testing by.
 		required = append(required, rule.FactImports)
+	}
+	var referencesFor func(string) bool
+	if found {
+		required = append(required, rule.FactDeclarations)
+		if scope != nil {
+			required = append(required, rule.FactCalls, rule.FactResolvedCalls, rule.FactFieldTypes)
+			referencesFor = scope.contains
+		}
+		// A declared service's guarantee may be the value its
+		// operation returns, read through resolved result types.
+		required = withFacts(required, carrierFacts(lang)...)
 	}
 	if len(required) == 0 {
 		return conformance.Carriers{}, nil
@@ -685,7 +695,7 @@ func unanchoredContracts(dk *DomainKnowledge, languages []rule.Language) []Unanc
 			if a.Anchor == AnchorMissing {
 				found = append(found, UnanchoredContract{
 					Kind: ContractAssertion, Context: context, Owner: a.Owner, Key: a.Key,
-					Statement: a.Statement, Expected: expectedAssertionCarrier(a.Key, a.Owner, a.BodilessOwner, languages),
+					Statement: a.Statement, Expected: expectedAssertionCarrier(a.Key, a.Owner, a.OwnerConcept, a.BodilessOwner, languages),
 				})
 			}
 		}
@@ -705,32 +715,12 @@ func unanchoredContracts(dk *DomainKnowledge, languages []rule.Language) []Unanc
 		}
 	}
 	for _, ctx := range dk.Contexts {
-		for _, inv := range ctx.Invariants {
-			if inv.Anchor != AnchorMissing {
-				continue
-			}
-			out = append(out, UnanchoredContract{
-				Kind: ContractInvariant, Context: ctx.Name, Owner: inv.Owner, Key: inv.Key,
-				Statement: inv.Statement, Expected: expectedInvariantCarrier(inv, languages),
-			})
-		}
-		for _, a := range ctx.Assertions {
-			if a.Anchor != AnchorMissing {
-				continue
-			}
-			out = append(out, UnanchoredContract{
-				Kind: ContractAssertion, Context: ctx.Name, Owner: a.Owner, Key: a.Key,
-				Statement: a.Statement, Expected: expectedAssertionCarrier(a.Key, a.Owner, a.OwnerConcept, a.BodilessOwner, languages),
-			})
-		}
-		for _, s := range ctx.Specifications {
-			if s.Anchor != AnchorMissing {
-				continue
-			}
-			out = append(out, UnanchoredContract{
-				Kind: ContractSpecification, Context: ctx.Name, Name: s.Name,
-				Expected: fmt.Sprintf("satisfaction method on %s", s.Name),
-			})
+		add(ctx.Name, ctx.Invariants, ctx.Assertions, ctx.Specifications)
+	}
+	for _, u := range dk.Used {
+		var specs []DomainSpecificationRef
+		if u.Specification != nil {
+			specs = append(specs, *u.Specification)
 		}
 		add(u.Context, u.Invariants, u.Assertions, specs)
 	}
