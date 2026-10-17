@@ -2,7 +2,6 @@ package conformance
 
 import (
 	"fmt"
-	"path"
 	"slices"
 	"sort"
 
@@ -176,7 +175,7 @@ func writtenResult(fn, decl locDecl) (string, bool) {
 	}
 	beside := fn.file.path == decl.file.path
 	if fn.file.lang == rule.LanguageGo {
-		beside = path.Dir(fn.file.path) == path.Dir(decl.file.path)
+		beside = samePackage(fn.file, decl.file)
 	}
 	if !beside {
 		return "", false

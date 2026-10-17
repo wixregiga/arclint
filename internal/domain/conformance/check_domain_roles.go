@@ -25,15 +25,23 @@ func (d locDecl) declaredBy(ref Reference) bool {
 // to the located type: in Go a method or field belongs to the type of
 // its name in the same package, elsewhere to the class of its name in
 // the same file. A member never belongs to a type of another language,
-// even one of the same name in the same directory.
+// even one of the same name in the same directory, and in Go never to
+// a type of another package in the same directory, such as an external
+// test package.
 func (d locDecl) owns(f fileFacts, owner string) bool {
 	if owner != d.decl.Name || f.lang != d.file.lang {
 		return false
 	}
 	if f.lang == rule.LanguageGo {
-		return path.Dir(f.path) == path.Dir(d.file.path)
+		return samePackage(f, d.file)
 	}
 	return f.path == d.file.path
+}
+
+// samePackage reports whether two Go files are of one package: the same
+// directory and the same package clause.
+func samePackage(a, b fileFacts) bool {
+	return path.Dir(a.path) == path.Dir(b.path) && a.pkg == b.pkg
 }
 
 // aggregateTypes lists the located types of one aggregate: its root
