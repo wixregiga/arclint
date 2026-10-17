@@ -1160,6 +1160,14 @@ class InventoryTest(unittest.TestCase):
         rows = self.located(self.repo.rows("--base", "main", "--scope", "changed"))
         self.assertRowsInclude(rows, {"web/quota.test.ts:3": "comment", "pkg/message.go:3": "text"})
 
+    def test_a_cut_off_keeps_pending_callee_lines(self):
+        p = '8 as import("./u").T<0> / `a/b`.length'
+        self.repo.write("web/quota.test.ts", "test.each([\n" + " / ".join([p] * 10) + " / `c/d\n`.length\n])(\n"
+                        '"never overwrites", () => {});\n')
+        rows = self.located(self.repo.rows("--base", "main", "--scope", "changed"))
+        self.assertIn("web/quota.test.ts:1", rows)
+        self.assertIn("web/quota.test.ts:5", rows)
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")

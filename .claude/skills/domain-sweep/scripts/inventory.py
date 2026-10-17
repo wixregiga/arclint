@@ -830,9 +830,20 @@ class TypeScriptLexer:
                     cut_off = True  # readings left unexplored
             readers = sorted(following.values(), key=lambda pair: pair[0])
             if len(readers) > MAX_FOLLOWED:
-                readers, cut_off = readers[:MAX_FOLLOWED], True
+                cut_off = True
             if cut_off:
                 kinds.add("uncertain")
+                # A reading dropped or left unexplored may have been reading
+                # a test call that marks its callee's line once its name
+                # comes: keep every pending callee line, of every reading.
+                for _, lexer in readers:
+                    pending = [line for _, line in lexer.test_outer]
+                    if lexer.test_call is not None:
+                        pending.append(lexer.callee_line)
+                    for line in pending:
+                        if line and line != number:
+                            found[line] = pick({found[line], "uncertain"}) if line in found else "uncertain"
+            readers = readers[:MAX_FOLLOWED]
             for line in marks:
                 found[line] = "test"
             if kinds and text.strip():
