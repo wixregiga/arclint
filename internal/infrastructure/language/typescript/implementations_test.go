@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
@@ -102,5 +103,64 @@ func TestImplementationsNotRequested(t *testing.T) {
 	f = resolutionFixture(t, sources, rule.FactDeclarations, rule.FactImplementations)["a.ts"]
 	if !f.Supports(rule.FactImplementations) || len(spellImplementations(f)) != 1 {
 		t.Errorf("implementations not supplied: %q", spellImplementations(f))
+	}
+}
+
+// A clause naming a type alias of an interface names the interface, and
+// a static method is marked, so it is never taken for the instance
+// operation of the same name.
+func TestImplementationsFollowAliasesAndMarkStatics(t *testing.T) {
+	sources := map[string]string{
+		"src/port.ts": `export interface Encrypter { encrypt(s: string): string; }
+export type Alias = Encrypter;
+export type Again = Alias;
+`,
+		"src/adapter.ts": `import { type Again } from "./port.js";
+
+export class Adapter implements Again {
+  encrypt(s: string): string { return s; }
+  static encrypt(s: string): string { return s; }
+}
+`,
+	}
+	f := resolutionFixture(t, sources, rule.FactDeclarations, rule.FactImplementations)["src/adapter.ts"]
+	got := spellImplementations(f)
+	want := []string{"Adapter -> Encrypter@src/port.ts [exact] Adapter.encrypt@src/adapter.ts"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("implementations:\n got %q\nwant %q", got, want)
+	}
+	var statics []bool
+	for _, d := range f.Declarations {
+		if d.Kind == "method" && d.Name == "encrypt" {
+			statics = append(statics, d.Static)
+		}
+	}
+	if len(statics) != 2 || statics[0] || !statics[1] {
+		t.Errorf("static marks of encrypt: %v, want [false true]", statics)
+	}
+}
+
+// Each interface an inheritance graph reaches is visited once, so a
+// graph whose paths multiply at every level is read in time linear in
+// its edges.
+func TestImplementationsVisitEachBaseOnce(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("export interface I0 { run(): void; }\nexport interface I1 extends I0 {}\n")
+	const depth = 40
+	for i := 2; i <= depth; i++ {
+		fmt.Fprintf(&b, "export interface I%d extends I%d, I%d {}\n", i, i-1, i-2)
+	}
+	fmt.Fprintf(&b, "export class Runner implements I%d { run(): void {} }\n", depth)
+	done := make(chan []string, 1)
+	go func() {
+		done <- spellImplementations(resolutionFixture(t, map[string]string{"src/graph.ts": b.String()}, rule.FactDeclarations, rule.FactImplementations)["src/graph.ts"])
+	}()
+	select {
+	case got := <-done:
+		if len(got) != depth+1 {
+			t.Errorf("Runner implements %d interfaces, want %d: %q", len(got), depth+1, got)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("reading the inheritance graph did not finish in 20s")
 	}
 }

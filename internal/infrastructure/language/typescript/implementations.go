@@ -48,39 +48,37 @@ func (r *resolutionIndex) classImplementations(f *resolutionFile, n *gotreesitte
 	}
 	var out []conformance.Implementation
 	exact := map[string]bool{}
-	var follow func(f *resolutionFile, n *gotreesitter.Node, depth int)
-	follow = func(f *resolutionFile, n *gotreesitter.Node, depth int) {
-		if depth > maxAliasDepth {
-			return
-		}
+	// Each declaration is visited once, however many paths of the
+	// inheritance graph reach it.
+	visited := map[string]bool{f.path + "#" + class.Name: true}
+	var follow func(f *resolutionFile, n *gotreesitter.Node)
+	follow = func(f *resolutionFile, n *gotreesitter.Node) {
 		for _, base := range f.heritage(n) {
-			ref := r.receiverType(f, base, f.nodes[n])
+			ref, bf, bn := r.base(f, base, f.nodes[n])
 			if ref.Resolution == conformance.ResolutionUndetermined {
 				written := uncertain(ref.Reason)
 				written.Name = normalizeType(f.text(base))
 				out = append(out, conformance.Implementation{Abstraction: written, Evidence: conformance.ImplementationUndetermined, Reason: ref.Reason})
 				continue
 			}
-			if ref.Resolution != conformance.ResolutionDeclared {
+			if bn == nil {
 				// A library's interface or class is no abstraction of the
 				// repository.
 				continue
 			}
-			bf, bn := r.typeNode(ref)
-			if bn == nil {
+			key := ref.File + "#" + ref.Name
+			if visited[key] {
 				continue
 			}
+			visited[key] = true
 			if bf.abstract(bn) {
-				key := ref.File + "#" + ref.Name
-				if !exact[key] {
-					exact[key] = true
-					out = append(out, r.implementation(class, abstraction{f: bf, n: bn, ref: ref}, conformance.ImplementationExact, ""))
-				}
+				exact[key] = true
+				out = append(out, r.implementation(class, abstraction{f: bf, n: bn, ref: ref}, conformance.ImplementationExact, ""))
 			}
-			follow(bf, bn, depth+1)
+			follow(bf, bn)
 		}
 	}
-	follow(f, n, 0)
+	follow(f, n)
 	names := r.memberNames(f, n, map[string]bool{})
 	for _, a := range interfaces {
 		if exact[a.ref.File+"#"+a.ref.Name] {
@@ -118,6 +116,28 @@ func (r *resolutionIndex) implementation(class conformance.Reference, a abstract
 		}
 	}
 	return impl
+}
+
+// base resolves one type a heritage clause names to the repository
+// declaration it reaches, through the repository's type aliases: the
+// reference, and the declaration with its file. A library's type
+// reaches no declaration; a name resolution cannot follow, or an alias
+// of something other than one declared type, is undetermined.
+func (r *resolutionIndex) base(f *resolutionFile, n *gotreesitter.Node, s *lexicalScope) (conformance.Reference, *resolutionFile, *gotreesitter.Node) {
+	ref := r.receiverType(f, n, s)
+	for depth := 0; ; depth++ {
+		if ref.Resolution != conformance.ResolutionDeclared {
+			return ref, nil, nil
+		}
+		bf, bn := r.typeNode(ref)
+		if bn == nil || bf.kind(bn) != tsTypeAliasDeclaration {
+			return ref, bf, bn
+		}
+		if depth >= maxAliasDepth {
+			return uncertain("cyclic type alias cannot be resolved"), nil, nil
+		}
+		ref = r.receiverType(bf, bf.child(bn, tsValueField), bf.nodes[bn])
+	}
 }
 
 // heritage lists the type expressions a class or interface names as
@@ -192,11 +212,7 @@ func (r *resolutionIndex) methodNames(f *resolutionFile, n *gotreesitter.Node, s
 		}
 	}
 	for _, base := range f.heritage(n) {
-		ref := r.receiverType(f, base, f.nodes[n])
-		if ref.Resolution != conformance.ResolutionDeclared {
-			continue
-		}
-		if bf, bn := r.typeNode(ref); bn != nil && bf.abstract(bn) {
+		if _, bf, bn := r.base(f, base, f.nodes[n]); bn != nil && bf.abstract(bn) {
 			for _, name := range r.methodNames(bf, bn, seen) {
 				add(name)
 			}
@@ -225,13 +241,9 @@ func (r *resolutionIndex) memberNames(f *resolutionFile, n *gotreesitter.Node, s
 		}
 	}
 	for _, base := range f.heritage(n) {
-		ref := r.receiverType(f, base, f.nodes[n])
-		if ref.Resolution != conformance.ResolutionDeclared {
-			continue
-		}
 		// A base class's members are inherited; an interface's are only
 		// promised.
-		if bf, bn := r.typeNode(ref); bn != nil && bf.isClass(bn) {
+		if _, bf, bn := r.base(f, base, f.nodes[n]); bn != nil && bf.isClass(bn) {
 			for name := range r.memberNames(bf, bn, seen) {
 				out[name] = true
 			}

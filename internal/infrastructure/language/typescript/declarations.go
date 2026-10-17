@@ -284,6 +284,7 @@ func (w *tsWalker) walk(n *gotreesitter.Node, owner string, exported bool) {
 		// abstract method is declared without a body.
 		if d := w.add("method", w.name(n), owner, w.memberPublic(n), n); d != nil {
 			d.Params, d.Results = w.signature(n)
+			d.Static = hasToken(n, w.lang, "static")
 		}
 		if w.name(n) == tsConstructor {
 			if params := n.ChildByFieldName(tsParametersField, w.lang); params != nil {

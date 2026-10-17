@@ -130,7 +130,11 @@ type Declaration struct {
 	// parameters: Go's func F[T any] or type List[T any], TypeScript's
 	// function f<T>() or class Box<T>, Python's def f[T]() or
 	// class Box[T]. False for every other declaration.
-	Generic   bool
+	Generic bool
+	// Static marks a method or field the class itself holds rather than
+	// each instance: TypeScript's static members. False for every other
+	// declaration.
+	Static    bool
 	StartLine int
 	EndLine   int
 	// Params and Results carry the syntactic signature of func and
@@ -530,6 +534,9 @@ func NewObservations(files []ObservedFile, facts map[string]LanguageFacts) (Obse
 			}
 			if d.Abstract && d.Kind != declKindClass {
 				return Observations{}, fmt.Errorf("observations: %s: %s %s is marked abstract; only a class carries the mark", path, d.Kind, d.Name)
+			}
+			if d.Static && d.Kind != declKindMethod && d.Kind != declKindField {
+				return Observations{}, fmt.Errorf("observations: %s: %s %s is marked static; only a method or field belongs to its class", path, d.Kind, d.Name)
 			}
 			if d.Generic && !genericKinds[d.Kind] {
 				return Observations{}, fmt.Errorf("observations: %s: %s %s is marked generic; only a func, method, or type declares type parameters", path, d.Kind, d.Name)

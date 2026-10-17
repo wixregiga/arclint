@@ -71,7 +71,11 @@ type DeclInfo struct {
 	Abstract bool `json:"abstract"`
 	// Generic marks a func, method, or type that declares its own type
 	// parameters. False for every other declaration.
-	Generic   bool `json:"generic"`
+	Generic bool `json:"generic"`
+	// Static marks a method the class itself holds rather than each
+	// instance: TypeScript's static members. False for every other
+	// declaration.
+	Static    bool `json:"static"`
 	StartLine int  `json:"startLine"`
 	EndLine   int  `json:"endLine"`
 	// Params and Results carry the syntactic signature of func and

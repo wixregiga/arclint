@@ -109,6 +109,12 @@ export interface DeclInfo {
    * parameters. False for every other declaration.
    */
   generic: boolean;
+  /**
+   * Static marks a method the class itself holds rather than each
+   * instance: TypeScript's static members. False for every other
+   * declaration.
+   */
+  static: boolean;
   startLine: number /* int */;
   endLine: number /* int */;
   /**
