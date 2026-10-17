@@ -1033,6 +1033,20 @@ class InventoryTest(unittest.TestCase):
         self.assertEqual(located.get(("added", "test_rules.py:2")), "test")
         self.assertEqual(located.get(("deleted", "test_rules.py:2")), "test")
 
+    def test_a_clean_filter_does_not_move_lines(self):
+        self.repo.git("checkout", "-q", "main")
+        self.repo.write(".gitattributes", "*.md filter=strip\n")
+        self.repo.git("config", "filter.strip.clean", "sed 1d")
+        self.repo.write("README.md", "Local metadata\nFirst rule.\nOld guarantee.\n")
+        self.repo.commit("filtered")
+        self.repo.git("checkout", "-q", "change")
+        self.repo.git("reset", "-q", "--hard", "main")
+        self.repo.write("README.md", "Local metadata\nFirst rule.\nNew guarantee.\n")
+        rows = self.repo.rows("--base", "main", "--scope", "changed")
+        added = {(row[3], row[4]) for row in rows if row[0] == "added"}
+        self.assertIn(("README.md:3", "New guarantee."), added)
+        self.assertNotIn(("README.md:2", "First rule."), added)
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
