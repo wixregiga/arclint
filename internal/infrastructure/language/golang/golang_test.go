@@ -95,3 +95,43 @@ var _ = fmt.Sprint(util.V, errors.New(""), zzz.X)
 		t.Errorf("cgo facts = %+v, want the C pseudo-import", cgo.Imports)
 	}
 }
+
+// An import carries the local name its spec writes, an alias, a dot or
+// a blank, so a reader can tell which name a file uses a package by;
+// a spec that writes none carries no name.
+func TestFactsCarryTheImportName(t *testing.T) {
+	root := t.TempDir()
+	files := []conformance.ObservedFile{
+		write(t, root, "go.mod", "module example.com/x\n\ngo 1.22\n"),
+		write(t, root, "a/a_test.go", `package a
+
+import (
+	"fmt"
+	tst "testing"
+	. "strings"
+	_ "embed"
+)
+
+var _ = fmt.Sprint(ToUpper(""))
+
+func TestA(t *tst.T) {}
+`),
+	}
+	facts, err := golang.NewProducer().Facts(root, files, nil)
+	if err != nil {
+		t.Fatalf("Facts: %v", err)
+	}
+	got := map[string]string{}
+	for _, imp := range facts["a/a_test.go"].Imports {
+		got[imp.Path] = imp.Name
+	}
+	want := map[string]string{"fmt": "", "testing": "tst", "strings": ".", "embed": "_"}
+	if len(got) != len(want) {
+		t.Fatalf("imports = %v, want %v", got, want)
+	}
+	for path, name := range want {
+		if got[path] != name {
+			t.Errorf("import %q name = %q, want %q", path, got[path], name)
+		}
+	}
+}

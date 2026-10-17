@@ -41,6 +41,10 @@ func (c ImportClass) Valid() bool {
 type Import struct {
 	// Path is the specifier as written.
 	Path string
+	// Name is the local name a Go import spec writes before its path:
+	// an alias, . for a dot import, or _ for a blank one. Empty when the
+	// spec writes none, and for every other language.
+	Name string
 	Line int
 	// Class is the exact classification.
 	Class ImportClass

@@ -1049,13 +1049,13 @@ func ddd() MetaModel {
 					},
 					{
 						ID:        "invariant/verifying-tests-declared",
-						Statement: "Every test an invariant's verified_by names is declared in the file it names; a Go test is a func Test in a _test.go file, a Python test is a def test function, or a method spelled Class.test_name, and a TypeScript test, which is a call, is its name written in the file. The test's existence is checked; whether it proves the invariant is not.",
+						Statement: "Every test an invariant's verified_by names is declared in the file it names; a Go test is a func Test in a _test.go file that takes one *testing.T and returns nothing, a Python test is a def test function, or a method spelled Class.test_name, and a TypeScript test, which is a call, is its name written in the file. The test's existence is checked; whether it proves the invariant is not.",
 						Sources: []Citation{
 							{Work: "evans2015", Page: "22", Section: "Assertions"},
 						},
 						Enforcement: Enforcement{
 							By:          EvaluatorDomain,
-							Facts:       []string{"file_tree", "declarations"},
+							Facts:       []string{"file_tree", "imports", "declarations"},
 							Languages:   Languages{All: true},
 							Severity:    severityError,
 							Limitations: []string{"a TypeScript test name is matched as text anywhere in its file, so a comment or a string that repeats the name is taken for the test"},
@@ -1169,13 +1169,13 @@ func ddd() MetaModel {
 					},
 					{
 						ID:        "assertion/verifying-tests-declared",
-						Statement: "Every test an assertion's verified_by names is declared in the file it names; a Go test is a func Test in a _test.go file, a Python test is a def test function, or a method spelled Class.test_name, and a TypeScript test, which is a call, is its name written in the file. The test's existence is checked; whether it proves the guarantee is not.",
+						Statement: "Every test an assertion's verified_by names is declared in the file it names; a Go test is a func Test in a _test.go file that takes one *testing.T and returns nothing, a Python test is a def test function, or a method spelled Class.test_name, and a TypeScript test, which is a call, is its name written in the file. The test's existence is checked; whether it proves the guarantee is not.",
 						Sources: []Citation{
 							{Work: "evans2015", Page: "22", Section: "Assertions"},
 						},
 						Enforcement: Enforcement{
 							By:          EvaluatorDomain,
-							Facts:       []string{"file_tree", "declarations"},
+							Facts:       []string{"file_tree", "imports", "declarations"},
 							Languages:   Languages{All: true},
 							Severity:    severityError,
 							Limitations: []string{"a TypeScript test name is matched as text anywhere in its file, so a comment or a string that repeats the name is taken for the test"},

@@ -42,6 +42,15 @@ func runWithContent(t *testing.T, r rule.Rule, files []conformance.ObservedFile,
 	return a
 }
 
+// goTestFile is one parsed Go test file importing testing, under name
+// when the spec writes one.
+func goTestFile(pkg, name string, decls []conformance.Declaration) conformance.LanguageFacts {
+	f := goDecls(pkg, decls)
+	f.ImportsAvailable = true
+	f.Imports = []conformance.Import{{Path: "testing", Name: name, Line: 3, Class: conformance.ImportStdlib}}
+	return f
+}
+
 func messagesOf(a conformance.Assessment) []string {
 	var out []string
 	for _, v := range a.Violations() {
@@ -130,21 +139,34 @@ func TestVerifyingTestsAreDeclared(t *testing.T) {
 	pyTest := "tests/test_discounter.py"
 	tsTest := "src/pricing/discounter.test.ts"
 	testingT := []conformance.DeclarationParam{{Name: "t", Type: "*testing.T"}}
-	files := observed(goTest, pyTest, tsTest, "internal/pricing/discounter.go", "docs/discounter.md")
+	dotTest := "internal/pricing/dot_test.go"
+	aliasTest := "internal/pricing/alias_test.go"
+	files := observed(goTest, dotTest, aliasTest, pyTest, tsTest, "internal/pricing/discounter.go", "docs/discounter.md")
 	facts := map[string]conformance.LanguageFacts{
-		goTest: goDecls("pricing", []conformance.Declaration{
+		goTest: goTestFile("pricing", "", []conformance.Declaration{
 			{Kind: "func", Name: "TestDiscountNeverExceedsTotal", Exported: true, StartLine: 5, Params: testingT},
 			{Kind: "func", Name: "Testdiscount", Exported: true, StartLine: 9, Params: testingT},
 			{Kind: "func", Name: "TestHelper", Exported: true, StartLine: 12, Params: []conformance.DeclarationParam{{Name: "b", Type: "*testing.B"}}},
+			{Kind: "func", Name: "TestOtherT", Exported: true, StartLine: 15, Params: []conformance.DeclarationParam{{Name: "t", Type: "*other.T"}}},
+			{Kind: "func", Name: "TestReturns", Exported: true, StartLine: 18, Params: testingT, Results: []string{"int"}},
 		}),
-		"internal/pricing/discounter.go": goDecls("pricing", []conformance.Declaration{
+		dotTest: goTestFile("pricing", ".", []conformance.Declaration{
+			{Kind: "func", Name: "TestCapped", Exported: true, StartLine: 5, Params: []conformance.DeclarationParam{{Name: "t", Type: "*T"}}},
+			{Kind: "func", Name: "TestQualified", Exported: true, StartLine: 6, Params: testingT},
+		}),
+		aliasTest: goTestFile("pricing", "tst", []conformance.Declaration{
+			{Kind: "func", Name: "TestCapped", Exported: true, StartLine: 5, Params: []conformance.DeclarationParam{{Name: "t", Type: "*tst.T"}}},
+		}),
+		"internal/pricing/discounter.go": goTestFile("pricing", "", []conformance.Declaration{
 			{Kind: "func", Name: "TestLike", Exported: true, StartLine: 3, Params: testingT},
 		}),
 		pyTest: {Language: rule.LanguagePython, DeclarationsAvailable: true, Declarations: []conformance.Declaration{
-			{Kind: "func", Name: "test_never_exceeds_total", Exported: true, StartLine: 1},
-			{Kind: "class", Name: "TestDiscounter", Exported: true, StartLine: 4},
-			{Kind: "method", Name: "test_caps_at_total", Owner: "TestDiscounter", Exported: true, StartLine: 5},
-			{Kind: "func", Name: "helper", Exported: true, StartLine: 8},
+			{Kind: "class", Name: "TestCapping", Exported: true, StartLine: 1},
+			{Kind: "method", Name: "test_never_exceeds_total", Owner: "TestCapping", Exported: true, StartLine: 2},
+			{Kind: "func", Name: "test_never_exceeds_total", Exported: true, StartLine: 4},
+			{Kind: "class", Name: "TestDiscounter", Exported: true, StartLine: 6},
+			{Kind: "method", Name: "test_caps_at_total", Owner: "TestDiscounter", Exported: true, StartLine: 7},
+			{Kind: "func", Name: "helper", Exported: true, StartLine: 9},
 		}},
 	}
 	content := map[string]string{tsTest: `test("never exceeds the order total: 100%", () => {});`}
@@ -155,6 +177,8 @@ func TestVerifyingTestsAreDeclared(t *testing.T) {
 
 	for _, ok := range []string{
 		goTest + ":TestDiscountNeverExceedsTotal",
+		dotTest + ":TestCapped",
+		aliasTest + ":TestCapped",
 		pyTest + ":test_never_exceeds_total",
 		pyTest + ":TestDiscounter.test_caps_at_total",
 		tsTest + ":never exceeds the order total: 100%",
@@ -170,6 +194,9 @@ func TestVerifyingTestsAreDeclared(t *testing.T) {
 		{"internal/pricing/gone_test.go:TestA", prefix + "internal/pricing/gone_test.go:TestA, but no file internal/pricing/gone_test.go is in the repository"},
 		{goTest + ":Testdiscount", "func Testdiscount is not named as a test"},
 		{goTest + ":TestHelper", "func TestHelper does not take one *testing.T"},
+		{goTest + ":TestOtherT", "func TestOtherT does not take one *testing.T"},
+		{dotTest + ":TestQualified", "func TestQualified does not take one *testing.T"},
+		{goTest + ":TestReturns", "func TestReturns returns a value"},
 		{"internal/pricing/discounter.go:TestLike", "go test runs tests only from _test.go files"},
 		{pyTest + ":helper", "helper is not named as a test, beginning with test"},
 		{pyTest + ":test_caps_at_total", "test_caps_at_total is a method of TestDiscounter; name it TestDiscounter.test_caps_at_total"},
@@ -183,12 +210,17 @@ func TestVerifyingTestsAreDeclared(t *testing.T) {
 		}
 	}
 
-	// A test file whose declarations are not available leaves the
-	// test's existence undetermined, never conforming.
-	unparsed := map[string]conformance.LanguageFacts{goTest: {Language: rule.LanguageGo, ParseFailure: "expected declaration"}}
-	a := runWithContent(t, r, files, unparsed, content, discounterContext(t, goTest+":TestDiscountNeverExceedsTotal"))
-	if got := outcomesOf(a)[id+"|context:pricing"]; got != conformance.OutcomeUndetermined {
-		t.Errorf("unparsed test file: outcome %s, want undetermined", got)
+	// A test file whose declarations or, in Go, imports are not
+	// available leaves the test's existence undetermined, never
+	// conforming.
+	for name, f := range map[string]conformance.LanguageFacts{
+		"unparsed":        {Language: rule.LanguageGo, ParseFailure: "expected declaration"},
+		"without imports": goDecls("pricing", facts[goTest].Declarations),
+	} {
+		a := runWithContent(t, r, files, map[string]conformance.LanguageFacts{goTest: f}, content, discounterContext(t, goTest+":TestDiscountNeverExceedsTotal"))
+		if got := outcomesOf(a)[id+"|context:pricing"]; got != conformance.OutcomeUndetermined {
+			t.Errorf("%s test file: outcome %s, want undetermined", name, got)
+		}
 	}
 }
 
@@ -205,7 +237,7 @@ func TestInvariantVerifyingTestsAreDeclared(t *testing.T) {
 				Invariants: []vocab.Invariant{{Key: "never-negative", Statement: "Money is never negative.", VerifiedBy: tests, Line: 4}}}},
 		})
 	}
-	facts := map[string]conformance.LanguageFacts{goTest: goDecls("money", []conformance.Declaration{
+	facts := map[string]conformance.LanguageFacts{goTest: goTestFile("money", "", []conformance.Declaration{
 		{Kind: "func", Name: "TestNeverNegative", Exported: true, StartLine: 3, Params: []conformance.DeclarationParam{{Name: "t", Type: "*testing.T"}}},
 	})}
 	for _, c := range []struct {
@@ -234,7 +266,7 @@ func TestContractCoverageIncludesTheVerifyingTests(t *testing.T) {
 			{Kind: "interface", Name: "Discounter", Exported: true, StartLine: 3},
 			{Kind: "method", Name: "Discount", Owner: "Discounter", Exported: true, StartLine: 4},
 		}),
-		goTest: goDecls("pricing", []conformance.Declaration{
+		goTest: goTestFile("pricing", "", []conformance.Declaration{
 			{Kind: "func", Name: "TestDiscountNeverExceedsTotal", Exported: true, StartLine: 5, Params: []conformance.DeclarationParam{{Name: "t", Type: "*testing.T"}}},
 		}),
 	}
