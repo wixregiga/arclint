@@ -18,7 +18,7 @@ import (
 )
 
 // words matches a literal holding two words, as the inventory's WORDS does.
-var words = regexp.MustCompile(`[A-Za-z]{2,}[ \t]+[A-Za-z]{2,}`)
+var words = regexp.MustCompile(`[A-Za-z]{2,}[ \t]+[A-Za-z]+|[A-Za-z]+[ \t]+[A-Za-z]{2,}`)
 
 // precedence is the order in which one line's sources win, as the
 // inventory's pick does.

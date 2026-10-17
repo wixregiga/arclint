@@ -25,6 +25,7 @@ these sources is a row, whole:
              where CLI help text lives; TypeScript template literals; Python
              triple-quoted strings and docstrings), or a line holding a
              one-line literal with two words in it, such as an error message
+             (two adjacent words, one of two letters or more: "not a file")
   test       a test declaration: Go func Test..., Python def test_... and
              class Test..., a TypeScript it(, test( or describe( call
   uncertain  a line of a TypeScript file after the lexer's budget for an
@@ -113,7 +114,7 @@ GENERATED = re.compile(r"Code generated .* DO NOT EDIT\.?")
 
 # Two words in a one-line literal: a message or a sentence, not an import
 # path, a key, a format verb or a struct tag.
-WORDS = re.compile(r"[A-Za-z]{2,}[ \t]+[A-Za-z]{2,}")
+WORDS = re.compile(r"[A-Za-z]{2,}[ \t]+[A-Za-z]+|[A-Za-z]+[ \t]+[A-Za-z]{2,}")
 
 # Go and Python test declarations, matched against a line's code alone:
 # every literal on the line reads "", so a declaration written inside a
@@ -1422,7 +1423,8 @@ def python_sources(lines):
                 continue
             if top is not None and top[0] == "spec":
                 raw = next(frame[2] for frame in reversed(stack) if frame[0] == "fstring")
-                if char == "\\" and not raw:
+                if char == "\\" and not raw and text[i + 1:i + 2] not in ("{", "}"):
+                    # A backslash escapes no brace: \} still closes the field.
                     if text[i + 1:i + 3] == "N{":
                         # A named escape, \N{EM DASH}, is literal text here too.
                         end = text.find("}", i + 3)

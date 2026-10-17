@@ -1136,6 +1136,14 @@ class InventoryTest(unittest.TestCase):
         self.assertIn("README.md:3", rows)
         self.assertEqual(rows["tools/test_format.py:3"][1], "comment")
 
+    def test_round_forty_two_cases(self):
+        self.repo.write("tools/test_width.py", 'message = f"{value:\\}"\n# Never overwrite.\n')
+        self.repo.write("pkg/err.go", 'package p\n\nimport "errors"\n\nvar err = errors.New("not a directory")\nvar pair = "x y"\n')
+        rows = self.located(self.repo.rows("--base", "main", "--scope", "changed"))
+        self.assertEqual(rows["tools/test_width.py:2"][1], "comment")
+        self.assertEqual(rows["pkg/err.go:5"][1], "text")
+        self.assertNotIn("pkg/err.go:6", rows)
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")

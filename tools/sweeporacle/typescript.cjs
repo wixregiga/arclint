@@ -9,7 +9,7 @@
 const ts = require(process.env.TYPESCRIPT || "typescript");
 const fs = require("fs");
 
-const WORDS = /[A-Za-z]{2,}[ \t]+[A-Za-z]{2,}/;
+const WORDS = /[A-Za-z]{2,}[ \t]+[A-Za-z]+|[A-Za-z]+[ \t]+[A-Za-z]{2,}/;
 const PRECEDENCE = ["test", "comment", "text"];
 
 function scriptKind(path) {
