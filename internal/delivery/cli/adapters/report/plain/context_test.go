@@ -254,3 +254,21 @@ func TestPlainDomainOverviewSourcePhrases(t *testing.T) {
 		}
 	}
 }
+
+// A value object names every aggregate whose identity it is.
+func TestPlainContextNamesEveryAggregateAnIdentityIdentifies(t *testing.T) {
+	d := &application.DomainKnowledge{
+		Source: "domain.arclint.yaml", Counts: vocab.Counts{Contexts: 1}, Scoped: true, Located: true, UsesLocated: true,
+		Used: []application.DomainUseRef{{
+			Context: "skill", Name: "ItemAddress", Role: conformance.UsedValueObject, Identifies: []string{"Artifact", "Skill"},
+			Sites: []application.DomainUseSite{{Path: "app/uninstall.go", Line: 14, Way: conformance.UseByField, Via: "UninstallItem.Address"}},
+		}},
+	}
+	var buf bytes.Buffer
+	if err := New().Render(&buf, cli.ContextReport{Context: application.ArchitecturalContext{Scope: "app/uninstall.go", Domain: d}}); err != nil {
+		t.Fatal(err)
+	}
+	if want := "    value object ItemAddress, identity of Artifact and Skill: app/uninstall.go:14\n"; !strings.Contains(buf.String(), want) {
+		t.Fatalf("output lacks %q:\n%s", want, buf.String())
+	}
+}

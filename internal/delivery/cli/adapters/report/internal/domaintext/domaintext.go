@@ -924,8 +924,8 @@ func usedLabel(u application.DomainUseRef) string {
 	case conformance.UsedFactory:
 		return fmt.Sprintf("factory %s of aggregate %s", u.Name, u.Aggregate)
 	case conformance.UsedValueObject:
-		if u.Aggregate != "" {
-			return fmt.Sprintf("value object %s, identity of %s", u.Name, u.Aggregate)
+		if len(u.Identifies) > 0 {
+			return fmt.Sprintf("value object %s, identity of %s", u.Name, andList(u.Identifies))
 		}
 		return "value object " + u.Name
 	case conformance.UsedDomainEvent:
@@ -938,6 +938,14 @@ func usedLabel(u application.DomainUseRef) string {
 		return "aggregate " + u.Name
 	}
 	return string(u.Role) + " " + u.Name
+}
+
+// andList joins names as prose: A, A and B, A, B and C.
+func andList(names []string) string {
+	if len(names) < 2 {
+		return strings.Join(names, "")
+	}
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
 }
 
 // siteLines spells the sites reaching one entry as each file once with
