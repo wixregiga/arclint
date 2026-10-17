@@ -98,15 +98,15 @@ export default defineRule({
     assert(go.importsAvailable && go.declarationsAvailable, "Go availability");
     equal(go.zones, ["source", "src"], "source Zones");
     equal(go.imports, [{path: "example.test/m/pkg", line: 2, class: "internal",
-      targetDir: "pkg", targetFile: "", targetZones: ["package-a", "package-b"], targetObserved: true, alias: "_"}], "package import");
+      targetDir: "pkg", targetFile: "", targetZones: ["package-a", "package-b"], targetObserved: true}], "package import");
     assert(go.decls.some(d => d.name === "Kept"), "declarations still present");
     const ts = ctx.facts("src/kept.ts");
     assert(ts.importsAvailable && ts.declarationsAvailable, "TypeScript availability");
     equal(ts.imports, [
       {path: "../dep/target", line: 1, class: "internal", targetDir: "dep",
-       targetFile: "dep/target.ts", targetZones: ["dependency", "target"], targetObserved: true, alias: ""},
+       targetFile: "dep/target.ts", targetZones: ["dependency", "target"], targetObserved: true},
       {path: "./excluded", line: 2, class: "internal", targetDir: "src",
-       targetFile: "src/excluded.ts", targetZones: ["source", "src"], targetObserved: true, alias: ""}
+       targetFile: "src/excluded.ts", targetZones: ["source", "src"], targetObserved: true}
     ], "exact targets do not inherit sibling Zones");
     const empty = ctx.facts("src/empty.go");
     assert(empty.importsAvailable && empty.imports.length === 0, "observed empty imports");

@@ -169,8 +169,8 @@ func (c Carriers) modelCarrier(cc contextCode, service locDecl, owner, key strin
 			operation = &op
 		}
 	}
-	check, found, err := cc.modelCheck(service, operation, key)
-	if err != nil || !found {
+	check, err := cc.modelCheck(service, operation, key)
+	if err != nil || !check.found {
 		return Carrier{}, false, err
 	}
 	if check.shape == checkedByValue {

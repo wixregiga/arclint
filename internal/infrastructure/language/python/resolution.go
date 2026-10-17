@@ -113,7 +113,7 @@ func (idx *resolutionIndex) symbol(s *pyScope, name string, seen map[*pyBinding]
 	switch b.kind {
 	case bindingSelf:
 		return pyValue{ref: declared(b.class.scope.module.file, "", b.class.name), class: b.class, instance: true}
-	case "class":
+	case declClass:
 		if b.class.scope.owner != nil {
 			return pyValue{ref: unknown("nested class " + b.name + " has no unambiguous top-level declaration")}
 		}

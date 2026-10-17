@@ -14,6 +14,7 @@ type resolution interface {
 	call(c *ast.CallExpr) (target, receiver conformance.Reference)
 	holds(typeExpr ast.Expr) []conformance.Reference
 	fieldType(typeExpr ast.Expr) conformance.Reference
+	resultType(typeExpr ast.Expr) conformance.Reference
 }
 
 // unresolvedFile answers for a file the toolchain did not type-check:
@@ -33,6 +34,8 @@ func (u unresolvedFile) holds(ast.Expr) []conformance.Reference {
 }
 
 func (u unresolvedFile) fieldType(ast.Expr) conformance.Reference { return u.undetermined() }
+
+func (u unresolvedFile) resultType(ast.Expr) conformance.Reference { return u.undetermined() }
 
 // typedResolution answers from the type information arclint computed
 // for the file's package.
@@ -259,9 +262,22 @@ func (t typedResolution) holds(typeExpr ast.Expr) []conformance.Reference {
 // repository is named as written; arclint knows such a package by name
 // only.
 func (t typedResolution) fieldType(typeExpr ast.Expr) conformance.Reference {
+	return t.ownType(typeExpr, "the field's type ")
+}
+
+// resultType names the declaration a result's type is, the way
+// fieldType names a field's: the type of the value a function returns.
+func (t typedResolution) resultType(typeExpr ast.Expr) conformance.Reference {
+	return t.ownType(typeExpr, "the result type ")
+}
+
+// ownType names the declaration a written type is, through pointers and
+// the repository's own aliases of repository types; what prefixes the
+// written type in a reason.
+func (t typedResolution) ownType(typeExpr ast.Expr, what string) conformance.Reference {
 	tv, ok := t.info.Types[typeExpr]
 	if !ok || tv.Type == nil {
-		return t.invalid("the field's type " + types.ExprString(typeExpr))
+		return t.invalid(what + types.ExprString(typeExpr))
 	}
 	typ := tv.Type
 	for {
@@ -279,7 +295,7 @@ func (t typedResolution) fieldType(typeExpr ast.Expr) conformance.Reference {
 			}
 			// An alias of a type that does not resolve proves nothing.
 			if invalidType(types.Unalias(x)) {
-				return t.invalid("the field's type " + types.ExprString(typeExpr))
+				return t.invalid(what + types.ExprString(typeExpr))
 			}
 		}
 		break

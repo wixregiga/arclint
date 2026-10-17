@@ -79,9 +79,7 @@ func TestExtensionContractAcrossExecutionPaths(t *testing.T) {
 	for _, language := range []struct {
 		name, ext, content, empty, importer, excluded, outside, declaration string
 		specifier, targetKind, target, outgoingSpecifier, outgoingTarget    string
-		// alias is the name the outgoing import binds: Go's blank import.
-		alias string
-		line  int
+		line                                                                int
 	}{
 		{
 			name: "ts", ext: "ts", declaration: "order", line: 1,
@@ -97,7 +95,7 @@ func TestExtensionContractAcrossExecutionPaths(t *testing.T) {
 			importer: "package adapter\nimport _ \"example.test/contract/src\"\nimport _ \"example.test/contract/outside\"\n",
 			excluded: "package src\nimport _ \"example.test/contract/src\"\n", outside: "package outside\n",
 			specifier: "example.test/contract/src", targetKind: "directory", target: "src",
-			outgoingSpecifier: "example.test/contract/outside", outgoingTarget: "outside", alias: "_",
+			outgoingSpecifier: "example.test/contract/outside", outgoingTarget: "outside",
 		},
 		{
 			name: "py", ext: "py", declaration: "order", line: 1,
@@ -128,7 +126,7 @@ func TestExtensionContractAcrossExecutionPaths(t *testing.T) {
 			"content": language.content, "declaration": language.declaration, "empty": empty,
 			"outgoingImport": map[string]any{"path": language.outgoingSpecifier, "line": language.line,
 				"class": "internal", "targetDir": "outside", "targetFile": targetFile,
-				"targetZones": []string{}, "targetObserved": true, "alias": language.alias},
+				"targetZones": []string{}, "targetObserved": true},
 			"outgoing": map[string]any{"sourcePath": subject, "targetPath": language.outgoingTarget,
 				"targetKind": language.targetKind, "specifier": language.outgoingSpecifier, "line": language.line,
 				"classification": "internal", "sourceZones": []string{"selected"},

@@ -303,6 +303,15 @@ def unshadowed():
     class Inner(ABC):
         pass
     return Inner
+
+
+class Holder:
+    ABC = object
+
+    def build(self):
+        class InMethod(ABC):
+            pass
+        return InMethod
 `)
 	got := extractDeclarations(newParsers(), src)
 	if got.ParseError != "" {
@@ -314,8 +323,24 @@ def unshadowed():
 			abstract[d.Name] = d.Abstract
 		}
 	}
-	want := map[string]bool{"Outer": false, "ABC": false, "Encrypter": false, "ByParameter": false, "ByAssignment": false, "Inner": true}
+	// A method's scope skips its class's namespace, so Holder.ABC does
+	// not shadow the import inside build.
+	want := map[string]bool{"Outer": false, "ABC": false, "Encrypter": false, "ByParameter": false, "ByAssignment": false, "Inner": true, "Holder": false, "InMethod": true}
 	if !reflect.DeepEqual(abstract, want) {
 		t.Fatalf("abstract classes:\n got %v\nwant %v", abstract, want)
+	}
+}
+
+// TestPythonAbstractClassAfterADestructuringRebinding leaves a class
+// unmarked when the module rebinds the imported name by destructuring.
+func TestPythonAbstractClassAfterADestructuringRebinding(t *testing.T) {
+	got := extractDeclarations(newParsers(), []byte("from abc import ABC\n\nABC, other = object, None\n\n\nclass Encrypter(ABC):\n    pass\n"))
+	if got.ParseError != "" {
+		t.Fatal(got.ParseError)
+	}
+	for _, d := range got.Decls {
+		if d.Abstract {
+			t.Fatalf("a rebound ABC declares nothing abstract: %+v", d)
+		}
 	}
 }
