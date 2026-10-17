@@ -825,7 +825,6 @@ func ddd() MetaModel {
 						Sources: []Citation{
 							{Work: "evans2015", Page: "11", Section: "Entities"},
 							{Work: "vernon2013", Chapter: 10, Page: "382"},
-							{Work: "vernon-iddd-sample-pages", Page: "382", Section: "Favor Value Object Parts"},
 						},
 					},
 					{
@@ -998,7 +997,6 @@ func ddd() MetaModel {
 						Sources: []Citation{
 							{Work: "evans2015", Page: "16", Section: "Aggregates"},
 							{Work: "vernon2013", Chapter: 10, Page: "354"},
-							{Work: "vernon-iddd-sample-pages", Page: "354", Section: "Rule: Model True Invariants in Consistency Boundaries"},
 						},
 						Enforcement: Enforcement{
 							By:          EvaluatorDomain,
@@ -1312,7 +1310,6 @@ func ddd() MetaModel {
 							{Work: "evans2015", Page: "16", Section: "Aggregates"},
 							{Work: "fowler-aggregate"},
 							{Work: "vernon2013", Chapter: 10, Page: "359"},
-							{Work: "vernon-iddd-sample-pages", Page: "359", Section: "Rule: Reference Other Aggregates by Identity"},
 							{Work: "vernon-iddd-sample-pages", Page: "361", Section: "Making Aggregates Work Together through Identity References"},
 							{Work: "vernon-effective-aggregate-design-2", Page: "8", Section: "Rule: Reference Other Aggregates By Identity"},
 						},
@@ -1376,7 +1373,6 @@ func ddd() MetaModel {
 						Fundamental: true,
 						Sources: []Citation{
 							{Work: "vernon2013", Chapter: 10, Page: "359"},
-							{Work: "vernon-iddd-sample-pages", Page: "359", Section: "Rule: Reference Other Aggregates by Identity"},
 							{Work: "vernon-iddd-sample-pages", Page: "361", Section: "Making Aggregates Work Together through Identity References"},
 							{Work: "vernon-effective-aggregate-design-2", Page: "8", Section: "Rule: Reference Other Aggregates By Identity"},
 							{Work: "fowler-aggregate"},

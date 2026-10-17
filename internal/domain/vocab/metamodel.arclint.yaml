@@ -712,11 +712,14 @@ building_blocks:
         fundamental: true
         sources:
           - {work: evans2015, page: 11, section: Entities}
+      # Owner check (source audit of 2026-10-17): Vernon's sample p. 382
+      # favors value object parts of an aggregate; it does not say to move
+      # an entity's descriptive attributes out, so no sample citation sits
+      # beside the carried one here.
       - text: Move descriptive attributes and their logic into value objects, so the entity is left with identity and life cycle.
         sources:
           - {work: evans2015, page: 11, section: Entities}
           - {work: vernon2013, chapter: 10, page: 382}
-          - {work: vernon-iddd-sample-pages, page: 382, section: Favor Value Object Parts}
       - text: An entity inside an aggregate has a local identity that needs to be distinguishable only within the aggregate; only the root carries a global one.
         sources:
           - {work: evans2003, chapter: 6, page: 127}
@@ -826,12 +829,15 @@ building_blocks:
           - {work: evans2015, page: 20, section: Intention-Revealing Interfaces}
           - {work: evans2015, page: 4, section: Ubiquitous Language}
         enforcement: {by: loader, languages: all}
+      # Owner check (source audit of 2026-10-17): Vernon's sample p. 354 says
+      # the boundary holds its invariants no matter what operations are
+      # performed, not that every constructor and command calls an ensure
+      # method, so no sample citation sits beside the carried one here.
       - id: invariant/enforced-at-every-mutation
         statement: Every constructor and every command of the root calls the ensure method of the aggregate's invariant, so the invariant is evaluated at the completion of every state-mutating operation and a violation fails the operation; a root with no constructor has no door at which to enforce it.
         sources:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: vernon2013, chapter: 10, page: 354}
-          - {work: vernon-iddd-sample-pages, page: 354, section: "Rule: Model True Invariants in Consistency Boundaries"}
         enforcement:
           by: domain
           facts: [file_tree, declarations, calls]
@@ -1060,7 +1066,6 @@ building_blocks:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: fowler-aggregate}
           - {work: vernon2013, chapter: 10, page: 359}
-          - {work: vernon-iddd-sample-pages, page: 359, section: "Rule: Reference Other Aggregates by Identity"}
           - {work: vernon-iddd-sample-pages, page: 361, section: Making Aggregates Work Together through Identity References}
           - {work: vernon-effective-aggregate-design-2, page: 8, section: "Rule: Reference Other Aggregates By Identity"}
         enforcement: {by: domain, facts: [file_tree, declarations, imports], languages: all}
@@ -1095,7 +1100,6 @@ building_blocks:
         fundamental: true
         sources:
           - {work: vernon2013, chapter: 10, page: 359}
-          - {work: vernon-iddd-sample-pages, page: 359, section: "Rule: Reference Other Aggregates by Identity"}
           - {work: vernon-iddd-sample-pages, page: 361, section: Making Aggregates Work Together through Identity References}
           - {work: vernon-effective-aggregate-design-2, page: 8, section: "Rule: Reference Other Aggregates By Identity"}
           - {work: fowler-aggregate}
