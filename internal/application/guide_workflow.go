@@ -87,29 +87,21 @@ func (uc GuideWorkflow) zones() func() []rule.Zone {
 	}
 }
 
-// modelCode names the Zones that hold a bounded context's code; the
-// model's code may lie anywhere when anywhere is true.
-type modelCode struct {
-	zones    map[string]bool
-	anywhere bool
-}
-
 // model returns a function that reads, on first use, where the recorded
 // model's code lies. When the domain recording cannot be read, records no
 // context yet, or records a context no Zone is named for, the model's code
 // may lie anywhere, as the check reads it.
-func (uc GuideWorkflow) model(zones func() []rule.Zone) func() modelCode {
-	var code modelCode
+func (uc GuideWorkflow) model(zones func() []rule.Zone) func() agent.ModelCode {
+	var code agent.ModelCode
 	read := false
-	return func() modelCode {
+	return func() agent.ModelCode {
 		if read {
 			return code
 		}
 		read = true
-		code.zones = map[string]bool{}
 		language, _, err := uc.knowledge.RecordedLanguage()
 		if err != nil || len(language.Contexts) == 0 {
-			code.anywhere = true
+			code.Anywhere = true
 			return code
 		}
 		var names []rule.ZoneName
@@ -118,43 +110,28 @@ func (uc GuideWorkflow) model(zones func() []rule.Zone) func() modelCode {
 		}
 		for _, context := range language.Contexts {
 			holding := conformance.ZonesNamedFor(context.Name, names)
-			code.anywhere = code.anywhere || len(holding) == 0
+			code.Anywhere = code.Anywhere || len(holding) == 0
 			for _, zone := range holding {
-				code.zones[string(zone)] = true
+				code.Zones = append(code.Zones, string(zone))
 			}
 		}
 		return code
 	}
 }
 
-// bearsDomain reports whether a changed file owned by zones bears domain
-// meaning: it is not a test and lies in the model's code.
-func bearsDomain(path string, zones []string, model modelCode, tests TestFiles) bool {
-	if tests.Test(path) {
-		return false
-	}
-	return model.anywhere || slices.ContainsFunc(zones, func(zone string) bool { return model.zones[zone] })
-}
-
-// owned gives each activity the Zones it concerns: context shows the Zones
-// that own the paths it named besides the Zones it named, and a change is
-// split into one Activity for each file, carrying the Zones that own it
-// and whether it bears domain meaning.
-func owned(activities []agent.Activity, zones func() []rule.Zone, model func() modelCode, tests TestFiles) []agent.Activity {
+// owned resolves each activity through the agent context's constructors:
+// context with the Zones that own the paths it named, and a change split
+// into one Activity for each file, with the Zones that own it, whether it
+// is a test, and where the model's code lies.
+func owned(activities []agent.Activity, zones func() []rule.Zone, model func() agent.ModelCode, tests TestFiles) []agent.Activity {
 	var result []agent.Activity
 	for _, activity := range activities {
 		switch activity.Kind {
 		case agent.ContextObtained:
-			shown := slices.Clone(activity.Zones)
-			for _, path := range activity.Paths {
-				shown = append(shown, owners(zones(), path)...)
-			}
-			slices.Sort(shown)
-			result = append(result, agent.Activity{Kind: activity.Kind, Paths: activity.Paths, Zones: slices.Compact(shown)})
+			result = append(result, agent.ObtainedContext(activity.Paths, activity.Zones, func(path string) []string { return owners(zones(), path) }))
 		case agent.FilesChanged:
 			for _, path := range activity.Paths {
-				owning := owners(zones(), path)
-				result = append(result, agent.Activity{Kind: agent.FilesChanged, Paths: []string{path}, Zones: owning, BearsDomain: bearsDomain(path, owning, model(), tests)})
+				result = append(result, agent.ChangedFile(path, owners(zones(), path), tests.Test(path), model()))
 			}
 		default:
 			result = append(result, activity)

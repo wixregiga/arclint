@@ -184,12 +184,6 @@
     {
       "ruleId": "domain_recording/text-within-word-limit",
       "subject": "domain.arclint.yaml",
-      "message": "value object \"Activity\" in context \"agent\": the definition has 52 words, and a definition holds at most 40",
-      "count": 1
-    },
-    {
-      "ruleId": "domain_recording/text-within-word-limit",
-      "subject": "domain.arclint.yaml",
       "message": "value object \"Assurance\" in context \"rule\": the definition has 74 words, and a definition holds at most 40",
       "count": 1
     },
