@@ -47,8 +47,8 @@ comment before its content) repeats its generator's text and has no rows;
 Rows are: kind, source, hint, file:line, text. A file name that holds a
 control character or a backslash, or starts with a double quote, is printed
 in double quotes with C escapes, as Git prints it. In the text, a tab reads
-as a space and any other control character as a two-digit hex
-escape, backslash x then the code.
+as a space, and any other control character, U+0085, U+2028 or U+2029 as
+an escape: backslash x or backslash u, then the code in hex.
   kind    added (the change adds the line), deleted (the change removes it;
           file:line is the line in the merge base) or existing (an unchanged
           line of a file the change touches)
@@ -914,6 +914,9 @@ class TypeScriptLexer:
             char = text[i]
             if self.state == "block":
                 end = text.find("*/", i)
+                inside = text[i:] if end < 0 else text[i:end]
+                # A terminator inside the comment ends the logical line too.
+                self.logical += sum(inside.count(c) for c in "\r\u2028\u2029")
                 if end < 0:
                     break
                 self.state, i = "code", end + 2
@@ -976,7 +979,13 @@ class TypeScriptLexer:
                 i += 1
                 continue
             if number == 1 and i == 0 and pair == "#!":
-                break  # a hashbang line
+                # A hashbang runs to the first line terminator.
+                ends = [k for k in (text.find(c, 2) for c in "\r\u2028\u2029") if k >= 0]
+                if not ends:
+                    break
+                self.logical += 1
+                i = min(ends) + 1
+                continue
             if char == "#" and i + 1 < len(text) and (starts_ts_name(text[i + 1]) or text.startswith("\\u", i + 1)):
                 # A private name, #count or #\\u0069n, is a member: an operand.
                 j, _ = ts_name(text, i + 1)
@@ -1617,22 +1626,36 @@ def collect(repo, base, head, scope, globs, exclude, recordings, hint):
     return merge_base, sorted(files), sorted(generated), rows
 
 
+# Characters that break a line for some reader of the output: C0 controls,
+# DEL, and the Unicode next-line, line and paragraph separators.
+LINE_BREAKERS = {"\x7f", "\x85", "\u2028", "\u2029"}
+
+
+def breaks_line(char):
+    return ord(char) < 0x20 or char in LINE_BREAKERS
+
+
+def escape(char):
+    return f"\\x{ord(char):02x}" if ord(char) < 0x100 else f"\\u{ord(char):04x}"
+
+
 def printable(text):
     """A line's text for one output cell: a tab reads as a space, and any
-    other control character, a lone carriage return among them, as a C
-    escape, so a row stays one line of one cell."""
+    other character that breaks a line for some reader, a lone carriage
+    return or U+2028 among them, as an escape, so a row stays one line of
+    one cell."""
     text = text.replace("\t", " ")
-    return "".join(f"\\x{ord(c):02x}" if ord(c) < 0x20 or c == "\x7f" else c for c in text)
+    return "".join(escape(c) if breaks_line(c) else c for c in text)
 
 
 def spell(path):
     """A path as the output prints it: as is, or, when it holds a control
-    character, a backslash or starts with a quote, in double quotes with C
-    escapes, the way Git quotes a name."""
-    if not any(ord(c) < 0x20 or c in '\\\x7f' for c in path) and not path.startswith('"'):
+    or line-breaking character, a backslash or starts with a quote, in
+    double quotes with escapes, the way Git quotes a name."""
+    if not any(breaks_line(c) or c == "\\" for c in path) and not path.startswith('"'):
         return path
     escapes = {"\t": "\\t", "\n": "\\n", "\r": "\\r", "\\": "\\\\", '"': '\\"'}
-    body = "".join(escapes.get(c, f"\\{ord(c):03o}" if ord(c) < 0x20 or c == "\x7f" else c) for c in path)
+    body = "".join(escapes.get(c, escape(c) if breaks_line(c) else c) for c in path)
     return f'"{body}"'
 
 
