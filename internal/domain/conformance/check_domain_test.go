@@ -1065,7 +1065,7 @@ func TestServiceWithoutAssertionIsAFinding(t *testing.T) {
 	if want := "domain service Encrypter of context identityaccess records no assertion: what does its operation guarantee?"; v.Message() != want {
 		t.Errorf("message:\n got %q\nwant %q", v.Message(), want)
 	}
-	if want := `record the guarantee as an assertion on its operation: arclint domain define assertion <key> --owner Encrypter --on <operation> --statement "<the guarantee>" --context identityaccess`; v.Remediation() != want {
+	if want := `record the guarantee in the domain expert's words, through the domain-librarian skill: arclint domain define assertion <key> --owner Encrypter --on <operation> --statement "<the guarantee>" --context identityaccess`; v.Remediation() != want {
 		t.Errorf("remediation:\n got %q\nwant %q", v.Remediation(), want)
 	}
 	if !v.FailsGate() {
