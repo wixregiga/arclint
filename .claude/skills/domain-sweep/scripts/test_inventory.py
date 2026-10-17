@@ -645,6 +645,30 @@ class InventoryTest(unittest.TestCase):
         self.assertEqual(rows["tools/payload.py:1"][1], "text")
         self.assertNotIn("tools/payload.py:2", rows)
 
+    def test_round_six_lexer_cases(self):
+        self.repo.write("web/callbacks.test.ts", 'test.each<[() => void]>([[() => {}]])("never writes twice", (write) => {});\n')
+        self.repo.write("web/debug.ts", 'debugger\n/[`]/.test("x");\n// Never overwrite.\n')
+        self.repo.write("web/counts.ts", "class Counts { #in = 4; half() { return this.#in / 2; /* Never round. */ } }\n")
+        self.repo.write("web/cli.ts", "#!/usr/bin/env node\n// Only the owner runs it.\n")
+        self.repo.write("pkg/split_test.go", 'package p\n\nimport "testing"\n\nfunc\nTestNeverOverwrites(t *testing.T) {}\n')
+        self.repo.write("tools/test_payload.py", 'payload = rf"""\\{(\n    1 + 2  # Never log the secret.\n)}"""\n')
+        self.repo.write("tools/joined.py", "def \\\n    test_joined():\n    pass\n")
+        self.repo.write("tools/named.py", 'x = f"\\N{EM DASH} {value} two words"\n')
+        self.repo.write("guide.md", "# Code generated files: DO NOT EDIT\n\nAlways run the generator.\n")
+        rows = self.located(self.repo.rows("--base", "main"))
+        sources = {loc: row[1] for loc, row in rows.items()}
+        self.assertEqual(sources.get("web/callbacks.test.ts:1"), "test")
+        self.assertEqual(sources.get("web/debug.ts:3"), "comment")
+        self.assertNotIn("web/debug.ts:2", sources)
+        self.assertEqual(sources.get("web/counts.ts:1"), "comment")
+        self.assertNotIn("web/cli.ts:1", sources)
+        self.assertEqual(sources.get("web/cli.ts:2"), "comment")
+        self.assertEqual(sources.get("pkg/split_test.go:6"), "test")
+        self.assertEqual(sources.get("tools/test_payload.py:2"), "comment")
+        self.assertEqual(sources.get("tools/joined.py:1"), "test")
+        self.assertEqual(sources.get("tools/named.py:1"), "text")
+        self.assertEqual(sources.get("guide.md:3"), "doc", "a Markdown heading declares nothing generated")
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
