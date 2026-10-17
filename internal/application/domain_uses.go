@@ -34,20 +34,26 @@ type DomainUseSite struct {
 	Via  string             `json:"via"`
 }
 
-// UndeterminedUseRef is one reference of the worksite that resolution
-// could not follow, so whether it uses a recorded entry is not known.
-// Line is 0 when the whole file could not be read.
+// UndeterminedUseRef is one reference of the worksite that may be a use
+// resolution cannot confirm. Context and Term name the recorded entry
+// it may reach, when one is known; Line is 0 when the whole file could
+// not be read.
 type UndeterminedUseRef struct {
-	Path   string `json:"path"`
-	Line   int    `json:"line,omitempty"`
-	What   string `json:"what"`
-	Reason string `json:"reason"`
+	Path    string `json:"path"`
+	Line    int    `json:"line,omitempty"`
+	What    string `json:"what"`
+	Reason  string `json:"reason"`
+	Context string `json:"context,omitempty"`
+	Term    string `json:"term,omitempty"`
 }
 
 // usedKnowledge groups the worksite's uses into one entry per recorded
 // term, in order of the first site reaching each, with the contracts
 // the located listing carries for it. A term the declared listing
-// keeps is declared here and is not listed again as used.
+// shows is declared here: neither its uses nor the references that may
+// reach it are listed again. Every other term, a repository or factory
+// the listing has no place for included, is listed wherever the
+// worksite reaches it.
 func usedKnowledge(dk, declaredHere *DomainKnowledge, uses conformance.TermUses) ([]DomainUseRef, []UndeterminedUseRef) {
 	type key struct{ context, name string }
 	declared := map[key]bool{}
@@ -87,7 +93,10 @@ func usedKnowledge(dk, declaredHere *DomainKnowledge, uses conformance.TermUses)
 	}
 	undetermined := make([]UndeterminedUseRef, 0, len(uses.Undetermined))
 	for _, u := range uses.Undetermined {
-		undetermined = append(undetermined, UndeterminedUseRef{Path: u.Path, Line: u.Line, What: u.What, Reason: u.Reason})
+		if u.Term != "" && declared[key{u.Context, u.Term}] {
+			continue
+		}
+		undetermined = append(undetermined, UndeterminedUseRef{Path: u.Path, Line: u.Line, What: u.What, Reason: u.Reason, Context: u.Context, Term: u.Term})
 	}
 	return used, undetermined
 }

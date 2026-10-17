@@ -116,20 +116,24 @@ func (u TermUse) Way() UseWay { return u.way }
 // the field.
 func (u TermUse) Via() string { return u.via }
 
-// UndeterminedUse is one reference of a worksite file that resolution
-// could not follow, or that reaches a declaration two candidates of a
-// term spell: it may be a use, and nothing says it is not. Line is 0
-// when the whole file could not be read.
+// UndeterminedUse is one reference of a worksite file that may be a use
+// resolution cannot confirm: one resolution could not follow, one that
+// reaches a declaration two candidates of a term spell, or a call to a
+// function whose written result names a term. Nothing says it is not a
+// use. Context and Term name the term the reference may reach, when one
+// is known; Line is 0 when the whole file could not be read.
 type UndeterminedUse struct {
-	Path   string
-	Line   int
-	What   string
-	Reason string
+	Path    string
+	Line    int
+	What    string
+	Reason  string
+	Context string
+	Term    string
 }
 
 // TermUses is what the code of a worksite reaches of the recorded
-// domain: every use of a term declared outside the worksite, and every
-// reference that cannot be told to be one or not.
+// domain: every use of a term, and every reference that cannot be told
+// to be one or not.
 type TermUses struct {
 	Uses         []TermUse
 	Undetermined []UndeterminedUse
@@ -224,12 +228,13 @@ var termRoles = map[vocab.Concept]UsedRole{
 // Uses finds what the code of the worksite reaches of the recorded
 // domain: for every file the worksite holds, each call whose target or
 // receiver, and each field whose held types, the language resolved to
-// a term located outside the worksite or a member of it. A term
-// declared inside the worksite is declared here, not used. A reference
-// resolution could not follow, one that reaches a term two
-// declarations spell, a call to a function beside a term whose written
-// result names it, and a file of one of the languages whose calls or
-// field types could not be read are undetermined, with the reason.
+// a located term or a member of it, wherever the term is declared;
+// which of them a listing shows as declared here is the listing's
+// decision. A reference resolution could not follow, one that reaches
+// a term two declarations spell, a call to a function beside a term
+// whose written result names it, and a file of one of the languages
+// whose calls or field types could not be read are undetermined, with
+// the reason.
 func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Language) (TermUses, error) {
 	var out TermUses
 	seenUse := map[TermUse]bool{}
@@ -283,11 +288,9 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 			if len(term.candidates) > 1 {
 				undetermined(UndeterminedUse{
 					Path: site.path, Line: site.line, What: string(site.way) + " " + site.via,
-					Reason: fmt.Sprintf("it reaches %s in %s, one of %s spelling %s, so which is the model's cannot be told", referenceName(ref), ref.File, candidateList(term.candidates), term.name),
+					Reason:  fmt.Sprintf("it reaches %s in %s, one of %s spelling %s, so which is the model's cannot be told", referenceName(ref), ref.File, candidateList(term.candidates), term.name),
+					Context: term.context, Term: term.name,
 				})
-				continue
-			}
-			if inWorksite(term.candidates[0].file.path) {
 				continue
 			}
 			use, err := newTermUse(ref, reached, term, site)
@@ -302,12 +305,13 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 		for _, term := range c.terms {
 			for _, d := range term.candidates {
 				result, written := writtenResult(reached, d)
-				if !written || inWorksite(d.file.path) {
+				if !written {
 					continue
 				}
 				undetermined(UndeterminedUse{
 					Path: site.path, Line: site.line, What: string(site.way) + " " + site.via,
-					Reason: fmt.Sprintf("%s returns %s as written; result types are not resolved", referenceName(ref), result),
+					Reason:  fmt.Sprintf("%s returns %s as written; result types are not resolved", referenceName(ref), result),
+					Context: term.context, Term: term.name,
 				})
 				break
 			}

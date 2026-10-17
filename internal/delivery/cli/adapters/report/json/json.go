@@ -575,10 +575,12 @@ type domainUseSiteJSON struct {
 }
 
 type undeterminedUseJSON struct {
-	Path   string `json:"path"`
-	Line   int    `json:"line,omitempty"`
-	What   string `json:"what"`
-	Reason string `json:"reason"`
+	Path    string `json:"path"`
+	Line    int    `json:"line,omitempty"`
+	What    string `json:"what"`
+	Reason  string `json:"reason"`
+	Context string `json:"context,omitempty"`
+	Term    string `json:"term,omitempty"`
 }
 
 type domainAggregateKnowJSON struct {
@@ -738,7 +740,7 @@ func domainKnowledgeDoc(d *application.DomainKnowledge) *domainKnowledgeJSON {
 		dk.Used = append(dk.Used, use)
 	}
 	for _, u := range d.Undetermined {
-		dk.Undetermined = append(dk.Undetermined, undeterminedUseJSON{Path: u.Path, Line: u.Line, What: u.What, Reason: u.Reason})
+		dk.Undetermined = append(dk.Undetermined, undeterminedUseJSON{Path: u.Path, Line: u.Line, What: u.What, Reason: u.Reason, Context: u.Context, Term: u.Term})
 	}
 	for _, rel := range d.Relations {
 		dk.Relations = append(dk.Relations, domainRelationKnowJSON{From: rel.From, To: rel.To, Kind: rel.Kind})
