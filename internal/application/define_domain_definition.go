@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/wixregiga/arclint/internal/domain/conformance"
+	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
@@ -37,13 +39,19 @@ type DomainDefineResult struct {
 	// Target and Values describe edits to the context map or project description.
 	Target string
 	Values map[string]string
+	// Check says where a recorded assertion is checked, chosen by how
+	// its owner is declared in the code; nil for every other concept
+	// and when no observations were lent.
+	Check *conformance.AssertionHome
 }
 
 // DefineDomainDefinition records or updates one entry of the project's
 // Ubiquitous Language through the repository port.
 type DefineDomainDefinition struct {
-	knowledge vocab.Repository
-	project   string
+	knowledge    vocab.Repository
+	project      string
+	rules        rule.Repository
+	observations ObservationSource
 }
 
 // NewDefineDomainDefinition requires the Ubiquitous Language repository
@@ -59,6 +67,15 @@ func NewDefineDomainDefinition(knowledge vocab.Repository, project string) (Defi
 		return DefineDomainDefinition{}, fmt.Errorf("define domain definition: missing project name")
 	}
 	return DefineDomainDefinition{knowledge: knowledge, project: project}, nil
+}
+
+// WithObservations lends rules and observations so that defining an
+// assertion says where its guarantee is checked, chosen by how its
+// owner is declared in the code.
+func (uc DefineDomainDefinition) WithObservations(rules rule.Repository, observations ObservationSource) DefineDomainDefinition {
+	uc.rules = rules
+	uc.observations = observations
+	return uc
 }
 
 // Execute records the entry. A request that cannot be carried out as
@@ -107,6 +124,14 @@ func (uc DefineDomainDefinition) Execute(req DefineDomainRequest) (DomainDefineR
 	if res.Concept == vocab.ConceptBoundedContext {
 		out.Context = name
 	}
+	if res.Concept == vocab.ConceptAssertion {
+		// Located before the write, so a repository that cannot be
+		// observed leaves the recording as it was.
+		out.Check, err = uc.assertionHome(next, at.Context, res.Owner, name)
+		if err != nil {
+			return DomainDefineResult{}, err
+		}
+	}
 	if res.Outcome == vocab.OutcomeUnchanged {
 		return out, nil
 	}
@@ -114,4 +139,36 @@ func (uc DefineDomainDefinition) Execute(req DefineDomainRequest) (DomainDefineR
 		return DomainDefineResult{}, fmt.Errorf("save domain model: %w", err)
 	}
 	return out, nil
+}
+
+// assertionHome locates the owner of the assertion in the code and says
+// where its guarantee is checked; nil without observations.
+func (uc DefineDomainDefinition) assertionHome(lang vocab.UbiquitousLanguage, context, owner, key string) (*conformance.AssertionHome, error) {
+	if uc.rules == nil || uc.observations == nil {
+		return nil, nil
+	}
+	cfg, err := uc.rules.ConfiguredRules()
+	if err != nil {
+		return nil, fmt.Errorf("load configured rules: %w", err)
+	}
+	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, []rule.Fact{rule.FactDeclarations, rule.FactImports})
+	if err != nil {
+		return nil, fmt.Errorf("observe the assertion's owner: %w", err)
+	}
+	facts, err := conformance.NewInspectionFacts(cfg.Zones, obs, rule.FactDeclarations, rule.FactImports)
+	if err != nil {
+		return nil, fmt.Errorf("prepare domain facts: %w", err)
+	}
+	carriers, err := conformance.NewCarriers(facts, lang)
+	if err != nil {
+		return nil, fmt.Errorf("locate the assertion's owner: %w", err)
+	}
+	home, found, err := carriers.AssertionHome(context, owner, key, cfg.Languages)
+	if err != nil {
+		return nil, fmt.Errorf("locate the assertion's owner: %w", err)
+	}
+	if !found {
+		return nil, fmt.Errorf("assertion %s of %s is not recorded in context %s after it was defined", key, owner, context)
+	}
+	return &home, nil
 }

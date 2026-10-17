@@ -273,6 +273,46 @@ names (`assertion/checked-by-its-operation`).
 The statement is the guarantee in the domain expert's words; the code
 checks it, the recording never restates it as a post-condition.
 
+**A domain service declared as an abstraction** (an interface in Go or
+TypeScript, an abstract class in TypeScript, a class whose own bases
+name `ABC` or `Protocol` in Python) has no body for a check, so its
+guarantee is checked once, in the model, in one of two shapes:
+
+- a function of the context spelled `Assert` followed by the key
+  (`AssertNotEmpty`, `assertNotEmpty`, `assert_not_empty`);
+- the value object the operation returns, when that value records an
+  invariant under the same key: its constructor already enforces it
+  (`value_object/constructed-through-one-door`).
+
+```yaml
+    value_objects:
+      EncryptedPassword:
+        definition: The protected form of a Password.
+        invariants:
+          not-empty: An encrypted password is never empty.
+    services:
+      Encrypter:
+        definition: Protects a Password.
+        assertions:
+          not-empty:
+            on: Encrypt
+            statement: An encrypted password is never empty.
+```
+
+```go
+// Encrypter protects a Password; it returns the value that keeps not-empty.
+type Encrypter interface {
+	Encrypt(p Password) (EncryptedPassword, error)
+}
+```
+
+With neither shape the finding is on the model, never a request for a
+method the interface cannot hold: `declared service Encrypter: not-empty
+has no check in context identity`. Whether each implementation of the
+service reaches the check is not yet observed. `arclint domain define
+assertion` prints where the guarantee it records is checked, chosen by
+how the owner is declared.
+
 **A value object** with an invariant declares one constructor (`New`,
 `New<Name>`, `Parse<Name>`, `constructor`, or `__init__`) so a value
 that violates it never exists (`value_object/constructed-through-one-door`),

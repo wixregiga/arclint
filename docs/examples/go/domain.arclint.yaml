@@ -134,8 +134,16 @@ contexts:
     services:
       Encrypter:
         definition: Protects a Password and tells whether a Password matches its protected form.
+        assertions:
+          not-empty:
+            on: Encrypt
+            statement: An encrypted password is never empty.
       PasswordGenerator:
         definition: Proposes a strong Password for a user who has not chosen one.
+        assertions:
+          not-weak:
+            on: GenerateStrongPassword
+            statement: A proposed password is never weak.
       # ANCHOR: service-recording
       TenantProvisioningService:
         definition: >-

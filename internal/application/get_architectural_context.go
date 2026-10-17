@@ -332,10 +332,11 @@ func (uc GetArchitecturalContext) inspectContext(out *ArchitecturalContext, cfg 
 	}
 	var referencesFor func(string) bool
 	if found {
+		// Imports tell a result naming a value object of another package
+		// from a type that only shares its name.
 		required = append(required, rule.FactDeclarations)
-		if scope != nil {
-			required = append(required, rule.FactCalls, rule.FactResolvedCalls, rule.FactFieldTypes)
-			referencesFor = scope.contains
+		if !dependencies {
+			required = append(required, rule.FactImports)
 		}
 	}
 	if len(required) == 0 {

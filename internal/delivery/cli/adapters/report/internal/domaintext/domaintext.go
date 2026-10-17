@@ -728,6 +728,29 @@ func Define(p *out.Printer, st Style, result application.DomainDefineResult, cha
 	default:
 		p.Printf("Unchanged %s%s.\n", subject, where)
 	}
+	if result.Check != nil {
+		p.Printf("  %s %s\n", st.Muted("check:"), checkLine(*result.Check, result))
+	}
+}
+
+// checkLine says where the guarantee of a defined assertion is checked,
+// in one sentence chosen by how its owner is declared in the code.
+func checkLine(h conformance.AssertionHome, result application.DomainDefineResult) string {
+	check := h.Check
+	if check == "" {
+		check = conformance.AssertKey(result.Name) + " (spelled in the language's method case)"
+	}
+	inModel := fmt.Sprintf("the function %s of context %s, or the invariant %s of a value object %s returns", check, result.Context, result.Name, h.Operation)
+	switch h.Home {
+	case conformance.CheckHomeRoot:
+		return fmt.Sprintf("the root of %s declares %s, and %s calls it.", result.Owner, check, h.Operation)
+	case conformance.CheckHomeService:
+		return fmt.Sprintf("%s declares %s, and %s calls it.", result.Owner, check, h.Operation)
+	case conformance.CheckHomeModel:
+		return fmt.Sprintf("%s is declared as an %s, so the check is in the model: %s.", result.Owner, h.Declared, inModel)
+	default:
+		return fmt.Sprintf("%s is not declared yet. As an interface, an abstract class, an ABC, or a Protocol, it is checked in the model: %s. As a concrete type, it declares %s, and %s calls it.", result.Owner, inModel, check, h.Operation)
+	}
 }
 
 func defineValue(property string, result application.DomainDefineResult, change vocab.Change) string {

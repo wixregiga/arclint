@@ -114,6 +114,10 @@ func (c recordedContract) isolate(cc contextCode) contextCode {
 		s, _ := cc.ctx.Service(c.spec.Owner)
 		s.Assertions = []vocab.Assertion{c.assertion}
 		narrow.Services = []vocab.DomainService{s}
+		// A declared service's guarantee may be the invariant of the
+		// value its operation returns; the assertion check reads the
+		// recorded values and reports nothing about them.
+		narrow.ValueObjects = cc.ctx.ValueObjects
 	default:
 		// recordedContracts only supplies the three legal contract owners.
 	}
@@ -259,9 +263,19 @@ func evaluateRecordedContract(r rule.Rule, contract recordedContract, cc context
 	}
 	// Partial analysis cannot establish coverage for an individual contract.
 	for _, fact := range inv.Enforcement.Facts {
-		if available := cc.scopeIdx.available(rule.Fact(fact)); fact != string(rule.FactFileTree) && available < cc.scopeAnalysisFiles {
-			return undeterminedEvaluation(r, subject, fmt.Sprintf("%d of %d analyzed files in %s yield %s facts",
-				available, cc.scopeAnalysisFiles, cc.searched(), fact))
+		switch rule.Fact(fact) {
+		case rule.FactFileTree:
+			continue
+		case rule.FactImports:
+			if cc.scopeImportFiles < cc.scopeAnalysisFiles {
+				return undeterminedEvaluation(r, subject, fmt.Sprintf("%d of %d analyzed files in %s yield %s facts",
+					cc.scopeImportFiles, cc.scopeAnalysisFiles, cc.searched(), fact))
+			}
+		default:
+			if available := cc.scopeIdx.available(rule.Fact(fact)); available < cc.scopeAnalysisFiles {
+				return undeterminedEvaluation(r, subject, fmt.Sprintf("%d of %d analyzed files in %s yield %s facts",
+					available, cc.scopeAnalysisFiles, cc.searched(), fact))
+			}
 		}
 	}
 	if !contract.ownerLocated(cc) {

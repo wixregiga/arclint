@@ -78,9 +78,9 @@ func DistillationRules() []DistillationRule {
 			Example: "RetirementPolicy.Decide(installations) carries no-installation-left and returns the verdict; the RetireRelease use case lists the installations, asks for the verdict, and deletes the files only when it allows; never a service that deletes them through callbacks",
 		},
 		{
-			ID:      "verified-by-tests",
-			Rule:    "An invariant or assertion the code cannot state in a body (an operation of a service declared as an interface or an abstract class, an effect the model cannot see) -> its verified_by, each test as path:name from the repository root; arclint checks the test exists, never that it proves the statement.",
-			Example: "Discounter.assertions.never-exceeds-total on Discount, verified_by internal/pricing/discounter_test.go:TestDiscountNeverExceedsTotal",
+			ID:      "guarantee-has-one-checked-home",
+			Rule:    "A guarantee of a domain service declared as an interface, an abstract class, an ABC, or a Protocol is checked once, in the model: by a function of the context named assert followed by the key, or, when the operation returns a value the business names, by that value's invariant recorded under the same key. Never as a method of the interface, a callback, or prose (Evans, DDD Reference: Services, Side-Effect-Free Functions, Assertions; Vernon's IDDD_Samples MD5EncryptionService checks its argument through the shared AssertionConcern).",
+			Example: "Encrypter.assertions.not-empty on Encrypt holds because Encrypt returns EncryptedPassword, whose constructor enforces EncryptedPassword.invariants.not-empty; never an AssertNotEmpty on the Encrypter interface",
 		},
 		{
 			ID:      "precondition-as-assertion",

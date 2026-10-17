@@ -296,6 +296,13 @@ func (w *tsWalker) walk(n *gotreesitter.Node, owner string, exported bool) {
 			}
 		}
 		return
+	case tsAbstractMethodSignature:
+		// An abstract member is declared without a body; its signature is
+		// the operation every subclass completes.
+		if d := w.add("method", w.name(n), owner, w.memberPublic(n), n); d != nil {
+			d.Params, d.Results = w.signature(n)
+		}
+		return
 	case tsPublicFieldDefinition, tsFieldDefinition:
 		// A field is storage each instance holds; a static property
 		// belongs to the class, the way Python's ClassVar does.

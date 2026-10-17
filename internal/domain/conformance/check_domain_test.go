@@ -338,7 +338,7 @@ func observed(paths ...string) []conformance.ObservedFile {
 
 // goDecls is one parsed Go file of declarations and calls.
 func goDecls(pkg string, decls []conformance.Declaration, calls ...conformance.Call) conformance.LanguageFacts {
-	return conformance.LanguageFacts{Language: rule.LanguageGo, Package: pkg, DeclarationsAvailable: true, CallsAvailable: true, FieldTypesAvailable: true, Declarations: decls, Calls: calls}
+	return conformance.LanguageFacts{Language: rule.LanguageGo, Package: pkg, ImportsAvailable: true, DeclarationsAvailable: true, CallsAvailable: true, FieldTypesAvailable: true, Declarations: decls, Calls: calls}
 }
 
 func TestDomainRuleIsUnsupportedWhenNoFileYieldsItsFacts(t *testing.T) {
@@ -938,7 +938,7 @@ func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 
 	tsFile := "src/identity/tenant-provisioning-service.ts"
 	facts := map[string]conformance.LanguageFacts{
-		tsFile: {Language: rule.LanguageTypeScript, DeclarationsAvailable: true, CallsAvailable: true, Declarations: []conformance.Declaration{
+		tsFile: {Language: rule.LanguageTypeScript, ImportsAvailable: true, DeclarationsAvailable: true, CallsAvailable: true, Declarations: []conformance.Declaration{
 			{Kind: "class", Name: "TenantProvisioningService", Exported: true, StartLine: 1},
 			{Kind: "method", Name: "provisionTenant", Owner: "TenantProvisioningService", Exported: true, StartLine: 5},
 			{Kind: "method", Name: "assertTenantNameUnique", Owner: "TenantProvisioningService", Exported: true, StartLine: 15},

@@ -254,6 +254,7 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
+	defineDomainDefinition = defineDomainDefinition.WithObservations(repository, observations)
 	removeDomainDefinition, err := application.NewRemoveDomainDefinition(knowledge)
 	if err != nil {
 		return configError(err)
