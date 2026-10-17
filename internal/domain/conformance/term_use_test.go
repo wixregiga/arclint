@@ -83,16 +83,12 @@ func specOf(u conformance.UndeterminedUse) conformance.UndeterminedUseSpec {
 	return conformance.UndeterminedUseSpec{Path: u.Path(), Line: u.Line(), What: u.What(), Reason: u.Reason(), Context: u.Context(), Term: u.Term()}
 }
 
-// spelled renders each use as term role owner way via path:line, in
-// order; the owner is the aggregate, or the aggregates a value object
-// identifies joined by +.
+// spelled renders each use as term role aggregates way via path:line,
+// in order, the aggregates joined by +.
 func spelled(uses []conformance.TermUse) []string {
 	out := make([]string, len(uses))
 	for i, u := range uses {
-		owner := u.Aggregate()
-		if ids := u.Identifies(); len(ids) > 0 {
-			owner = strings.Join(ids, "+")
-		}
+		owner := strings.Join(u.Aggregates(), "+")
 		out[i] = strings.Join([]string{u.Term(), string(u.Role()), owner, string(u.Way()), u.Via(), u.Path() + ":" + strconv.Itoa(u.Line())}, " ")
 	}
 	return out
@@ -550,6 +546,25 @@ func TestUsesNameEveryAggregateAnIdentityIdentifies(t *testing.T) {
 	}, nil)
 	uses := usesOf(t, []vocab.BoundedContext{ctx}, files, "app")
 	if got := spelled(uses.Uses); len(got) != 1 || got[0] != "OrderID value_object Order+Invoice field PlaceOrder.id app/place.go:3" {
+		t.Fatalf("uses = %v", got)
+	}
+}
+
+// A repository two aggregates name serves both, and one use lists them.
+func TestUsesNameEveryAggregateARepositoryServes(t *testing.T) {
+	ctx := orderingContext()
+	invoice := aggregateOf("Invoice", "InvoiceID", []string{"totals-match"}, nil)
+	invoice.Repository = "OrderRepository"
+	ctx.Aggregates = append(ctx.Aggregates, invoice)
+	files := goOrdering()
+	files["ordering/invoice.go"] = resolvedFile(rule.LanguageGo, "ordering", []conformance.Declaration{
+		{Kind: "struct", Name: "Invoice", Exported: true, StartLine: 3},
+	}, nil)
+	files["app/place.go"] = resolvedFile(rule.LanguageGo, "app", nil, []conformance.Call{
+		{Callee: "Save", Line: 4, Target: declared("ordering/repository.go", "OrderRepository", "Save")},
+	})
+	uses := usesOf(t, []vocab.BoundedContext{ctx}, files, "app")
+	if got := spelled(uses.Uses); len(got) != 1 || got[0] != "OrderRepository repository Order+Invoice call Save app/place.go:4" {
 		t.Fatalf("uses = %v", got)
 	}
 }

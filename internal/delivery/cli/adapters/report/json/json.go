@@ -559,8 +559,7 @@ type domainUseJSON struct {
 	Context       string                       `json:"context"`
 	Name          string                       `json:"name"`
 	Role          string                       `json:"role"`
-	Aggregate     string                       `json:"aggregate,omitempty"`
-	Identifies    []string                     `json:"identifies,omitempty"`
+	Aggregates    []string                     `json:"aggregates,omitempty"`
 	Sites         []domainUseSiteJSON          `json:"sites"`
 	Invariants    []domainInvariantKnowJSON    `json:"invariants,omitempty"`
 	Assertions    []domainAssertionKnowJSON    `json:"assertions,omitempty"`
@@ -727,7 +726,7 @@ func domainKnowledgeDoc(d *application.DomainKnowledge) *domainKnowledgeJSON {
 	dk.UsesLocated = d.UsesLocated
 	for _, u := range d.Used {
 		use := domainUseJSON{
-			Context: u.Context, Name: u.Name, Role: string(u.Role), Aggregate: u.Aggregate, Identifies: append([]string(nil), u.Identifies...),
+			Context: u.Context, Name: u.Name, Role: string(u.Role), Aggregates: append([]string(nil), u.Aggregates...),
 			Invariants: invariantsDoc(u.Invariants), Assertions: assertionsDoc(u.Assertions),
 		}
 		for _, site := range u.Sites {
