@@ -285,6 +285,10 @@ func assessmentFindings(a conformance.Assessment) []rule.Finding {
 		case conformance.DiagnosticOperational:
 			f.Kind = rule.FindingOperational
 		case conformance.DiagnosticCoverage:
+			if d.NearTimeLimit() {
+				// How long a fixture ran is not a finding it can expect.
+				continue
+			}
 			f.Kind = rule.FindingCoverage
 		case conformance.DiagnosticNotEvaluated:
 			// Execute reports a stopped Rule as the test's error.

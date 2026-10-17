@@ -74,6 +74,19 @@ func TestLoadRejectsMisplacedOrInvalidTimeLimit(t *testing.T) {
     uses: acme/check
     time_limit: 10
 `, "time_limit: expected a string"},
+		"empty on a uses rule": {`  core/slow:
+    on: core
+    uses: acme/check
+    time_limit: ""
+`, `time_limit: time limit "": not a duration`},
+		"empty on a native rule": {`  core/snake:
+    on: core
+    naming: snake_case
+    time_limit: ""
+`, `time_limit: time limit "": not a duration`},
+		"empty on an override": {`  acme/hexagonal:core/checked:
+    time_limit: ""
+`, `time_limit: time limit "": not a duration`},
 		"zero": {`  acme/hexagonal:core/checked:
     time_limit: 0s
 `, "must be a positive duration"},

@@ -342,6 +342,51 @@ func TestRunRuleTestsReportsStoppedExtensionAsTheTestsError(t *testing.T) {
 	}
 }
 
+// slowExtensions finishes with no findings after most of its limit.
+type slowExtensions struct{ elapsed time.Duration }
+
+func (s slowExtensions) Evaluate(string, map[string]any, rule.TimeLimit, conformance.Facts,
+	vocab.UbiquitousLanguage,
+) (conformance.ExtensionRun, error) {
+	return conformance.ExtensionRun{Elapsed: s.elapsed}, nil
+}
+
+// How long a fixture's check ran is not a finding: a clean check that
+// used most of its limit still matches an empty expectation.
+func TestRunRuleTestsIgnoresTheNearTimeLimitNote(t *testing.T) {
+	cfg := ruleTestConfig(t)
+	extScope, err := rule.ZoneScope([]rule.ZoneName{"m"})
+	if err != nil {
+		t.Fatalf("ZoneScope: %v", err)
+	}
+	extRule, err := rule.New(rule.Spec{
+		ID: "t/p:m/ext", Type: rule.TypeExtension,
+		Params: rule.ExtensionParams{Uses: "slow"}, Scope: extScope,
+	})
+	if err != nil {
+		t.Fatalf("extension rule.New: %v", err)
+	}
+	cfg.Rules = append(cfg.Rules, extRule)
+	uc, err := application.NewRunRuleTests(
+		ruleTestRepository{cfg},
+		fakeRuleTestSource{tests: []rule.Test{mustRuleTest(t, "slow-but-clean", "t/p:m/ext", []rule.TestFile{{Path: "m/all_good.go"}}, nil)}},
+		&fakeFixtureObserver{},
+		slowExtensions{elapsed: 4 * time.Second},
+		&fakeVocabularySource{},
+		&fakeRecordingSource{},
+	)
+	if err != nil {
+		t.Fatalf("NewRunRuleTests: %v", err)
+	}
+	results, err := uc.Execute()
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(results) != 1 || !results[0].Passed() {
+		t.Fatalf("results = %+v, want a pass despite 4s of the 5s limit", results)
+	}
+}
+
 // recordingExtensions captures the vocabulary each evaluation received
 // so tests can prove fixture knowledge reaches ctx.domain().
 type recordingExtensions struct {

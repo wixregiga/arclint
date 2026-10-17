@@ -493,9 +493,10 @@ coverage: rule src/slow: extension "slow" took 3.1s of its 5s time limit; a run 
 A machine under load runs the same check slower, so a check past half
 its limit is at risk of not being evaluated in CI or while tests run.
 Run `arclint check --only <rule>` on the real repository to see where a
-Rule stands. `arclint rules test` does not report durations: fixtures
-are a few files, and a check that takes milliseconds on them can take
-seconds on the repository. `arclint rules <id>` prints the Rule's
+Rule stands. `arclint rules test` does not report durations, and its
+expectations never include the near-limit line: fixtures are a few
+files, and a check that takes milliseconds on them can take seconds on
+the repository. `arclint rules <id>` prints the Rule's
 `time limit`.
 
 `arclint baseline capture` and `baseline refresh` refuse while a Rule
@@ -504,8 +505,9 @@ Baseline's entries for that Rule are not reported as stale.
 
 Errors outside running extension code stay configuration errors (exit
 `2`): a Rule naming no registered extension, params that do not match
-the extension's schema, an extension that does not bundle, or a
-default export that is not a `defineRule(...)` result.
+the extension's schema, an extension that does not bundle, a default
+export that is not a `defineRule(...)` result, a `defineRule` call
+the SDK rejects, or a `params` declaration not built with `s`.
 
 During `arclint rules test`, a Rule that was not evaluated is that
 test's error; later tests still run.

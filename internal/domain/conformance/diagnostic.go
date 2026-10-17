@@ -3,6 +3,7 @@ package conformance
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
 )
@@ -42,6 +43,7 @@ type Diagnostic struct {
 	suppressionReason string
 	extension         string           // not-evaluated kind only
 	failure           ExtensionFailure // not-evaluated kind only
+	nearTimeLimit     bool             // coverage of a check that ran past half its TimeLimit
 }
 
 // NewOperational reports an operational problem. Severity states its
@@ -93,6 +95,29 @@ func NewNotEvaluated(ruleID, extension string, failure ExtensionFailure) (Diagno
 		failure:   failure,
 	}, nil
 }
+
+// NewNearTimeLimit reports an Extension check that finished but ran
+// longer than half its TimeLimit: a run twice as slow would stop it.
+// The note depends on how long the check ran, so it is coverage, and
+// never a finding a Rule Test expects.
+func NewNearTimeLimit(ruleID, extension string, elapsed, limit time.Duration) (Diagnostic, error) {
+	if strings.TrimSpace(ruleID) == "" || strings.TrimSpace(extension) == "" {
+		return Diagnostic{}, fmt.Errorf("near-time-limit diagnostic: missing rule or extension")
+	}
+	if limit <= 0 || 2*elapsed <= limit {
+		return Diagnostic{}, fmt.Errorf("near-time-limit diagnostic: %s is not past half of %s", elapsed, limit)
+	}
+	return Diagnostic{
+		kind: DiagnosticCoverage, ruleID: ruleID, nearTimeLimit: true,
+		message: fmt.Sprintf(
+			"rule %s: extension %q took %s of its %s time limit; a run twice as slow would not be evaluated, so make the check faster or raise time_limit",
+			ruleID, extension, elapsed.Round(time.Millisecond), limit),
+	}, nil
+}
+
+// NearTimeLimit reports whether the Diagnostic is the note on a check
+// that ran past half its TimeLimit.
+func (d Diagnostic) NearTimeLimit() bool { return d.nearTimeLimit }
 
 // Diagnostic lifts a Violation into the unified Diagnostic view.
 func (v Violation) Diagnostic() Diagnostic {

@@ -23,6 +23,32 @@ interface RuntimeSchema extends Schema {
   readonly __state: SchemaState;
 }
 
+// DefinitionError marks a malformed declaration: a defineRule(...) call or
+// a params schema built from something that is not a schema. The host
+// reports it as a configuration error, never as extension code that
+// failed while running. Each one is handed to the host as it is created,
+// so the host recognizes it by identity without running extension code.
+class DefinitionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ArclintDefinitionError";
+    const report = (globalThis as { __arclintDefinitionError?: (e: Error, m: string) => void })
+      .__arclintDefinitionError;
+    if (typeof report === "function") {
+      report(this, message);
+    }
+  }
+}
+
+// schemaOf accepts only a schema built with s, so a malformed params
+// declaration fails as a definition error rather than a TypeError.
+function schemaOf(value: unknown, where: string): RuntimeSchema {
+  if (!value || (value as RuntimeSchema).__schema !== true) {
+    throw new DefinitionError(`${where} must be a schema built with s`);
+  }
+  return value as RuntimeSchema;
+}
+
 function node(base: Record<string, unknown>): RuntimeSchema {
   const state: SchemaState = { schema: { ...base }, optional: false, hasDefault: false };
   const api: RuntimeSchema = {
@@ -55,12 +81,12 @@ export const s: typeof API.s = {
   integer: () => node({ type: "integer" }),
   boolean: () => node({ type: "boolean" }),
   enum: (...values: string[]) => node({ type: "string", enum: values }),
-  array: (items: Schema) => node({ type: "array", items: items.toJSON() }),
+  array: (items: Schema) => node({ type: "array", items: schemaOf(items, "s.array: items").toJSON() }),
   object: (props: Record<string, Schema>) => {
     const properties: Record<string, unknown> = {};
     const required: string[] = [];
     for (const key of Object.keys(props)) {
-      const child = props[key] as RuntimeSchema;
+      const child = schemaOf(props[key], `s.object: property "${key}"`);
       properties[key] = child.toJSON();
       if (!child.__state.optional && !child.__state.hasDefault) {
         required.push(key);
@@ -77,16 +103,6 @@ export const s: typeof API.s = {
     return node(schema);
   },
 };
-
-// DefinitionError marks a malformed defineRule(...) call. The host reports
-// it as a configuration error, never as extension code that failed while
-// running.
-class DefinitionError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ArclintDefinitionError";
-  }
-}
 
 export const defineRule: typeof API.defineRule = (def: RuleDef) => {
   if (!def || typeof def.type !== "string" || def.type.length === 0) {
@@ -107,8 +123,8 @@ export const defineRule: typeof API.defineRule = (def: RuleDef) => {
   ) {
     throw new DefinitionError(`defineRule: invalid capability "${capability}"`);
   }
-  const paramsSchema = def.params
-    ? def.params.toJSON()
+  const paramsSchema = def.params != null
+    ? schemaOf(def.params, "defineRule: params").toJSON()
     : { type: "object", properties: {}, additionalProperties: false };
   return {
     __arclintRule: true,
