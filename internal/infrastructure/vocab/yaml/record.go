@@ -55,20 +55,22 @@ func syncDocument(body *yaml.Node, m vocab.UbiquitousLanguage) {
 	settleAliases(body)
 }
 
-// settleAliases keeps every alias of the edited tree pointing at an
-// anchor written before it. An edit can drop the anchored node an alias
-// names, or move it after the alias; such an alias becomes a copy of
-// the value it named, keeping its own comments, so the file still loads
-// and still records the same values.
+// settleAliases keeps every alias of the edited tree naming the value
+// it named when the file was read. A reader resolves an alias to the
+// latest anchor of its name written before it, so an edit that drops
+// the anchored node, moves it after the alias, or puts another anchor
+// of the same name between them would change what the alias reads as.
+// Such an alias becomes a copy of the value it named, keeping its own
+// comments, so the file still loads and records the same values.
 func settleAliases(root *yaml.Node) {
-	anchored := map[*yaml.Node]bool{}
+	bound := map[string]*yaml.Node{}
 	var walk func(n, key *yaml.Node)
 	walk = func(n, key *yaml.Node) {
 		if n == nil {
 			return
 		}
 		if n.Kind == yaml.AliasNode {
-			if n.Alias != nil && anchored[n.Alias] {
+			if n.Alias != nil && bound[n.Value] == n.Alias {
 				return
 			}
 			copied := copyWithoutAnchors(n.Alias)
@@ -82,7 +84,7 @@ func settleAliases(root *yaml.Node) {
 			keepLineComment(key, n)
 		}
 		if n.Anchor != "" {
-			anchored[n] = true
+			bound[n.Anchor] = n
 		}
 		for i, c := range n.Content {
 			var k *yaml.Node

@@ -117,7 +117,12 @@ func evaluateDomain(r rule.Rule, facts Facts, knowledge vocab.UbiquitousLanguage
 		}
 		outcome, undecided := cc.undecidable(inv.Enforcement.Facts)
 		if check.readsTests {
+			// The tests are read where they are, so only an exclusion of
+			// the recording that names them keeps the rule from judging.
 			outcome, undecided = "", false
+			if r.Scope().ExcludedFile(cc.recording) {
+				outcome, undecided = OutcomeNotApplicable, true
+			}
 		}
 		if check.needsZones && len(facts.zoneNames()) == 0 {
 			outcome, undecided = OutcomeNotApplicable, true
