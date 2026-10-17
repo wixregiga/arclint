@@ -681,6 +681,8 @@ func binaryProblem(binary string) string {
 	switch {
 	case err != nil:
 		return "The hooks run " + binary + ", which does not exist."
+	case !info.Mode().IsRegular():
+		return "The hooks run " + binary + ", which is not a file."
 	case runtime.GOOS != "windows" && info.Mode().Perm()&0o111 == 0:
 		return "The hooks run " + binary + ", which is not executable."
 	}
