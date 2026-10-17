@@ -91,6 +91,21 @@ func (r *Registry) registerProgram(sourcePath string, prog *sobek.Program, opts 
 	vm := sobek.New()
 	vm.SetFieldNameMapper(sobek.TagFieldNameMapper("json", true))
 
+	// The SDK hands every definition error it creates to the host, which
+	// then recognizes the thrown value by identity and never runs
+	// extension code to classify it.
+	declarations := map[*sobek.Object]string{}
+	if err := vm.Set("__arclintDefinitionError", func(call sobek.FunctionCall) sobek.Value {
+		thrown, isObject := call.Argument(0).(*sobek.Object)
+		message, isText := call.Argument(1).Export().(string)
+		if isObject && isText {
+			declarations[thrown] = message
+		}
+		return sobek.Undefined()
+	}); err != nil {
+		return fmt.Errorf("extension %s: sandbox init: %w", sourcePath, err)
+	}
+
 	// Deterministic, host-controlled values: a fixed epoch and seed. The
 	// point is that no wall clock or entropy reaches rules.
 	if _, err := vm.RunString(fmt.Sprintf(sandboxJS, int64(1_600_000_000_000), 42)); err != nil {
@@ -98,14 +113,19 @@ func (r *Registry) registerProgram(sourcePath string, prog *sobek.Program, opts 
 	}
 
 	started := time.Now()
-	stopped := func(err error) error {
-		if message, ok := definitionError(err); ok {
-			return fmt.Errorf("extension %s: %s", sourcePath, message)
+	stopped := func(context string, err error) error {
+		var exception *sobek.Exception
+		if errors.As(err, &exception) {
+			if thrown, isObject := exception.Value().(*sobek.Object); isObject {
+				if message, declared := declarations[thrown]; declared {
+					return fmt.Errorf("extension %s: %s", sourcePath, message)
+				}
+			}
 		}
-		return &CodeFailure{
+		return newCodeFailure(vm, CodeFailure{
 			Source: sourcePath, Phase: conformance.PhaseRegistration,
-			Limit: opts.RegisterTimeout, Elapsed: time.Since(started), err: err,
-		}
+			Limit: opts.RegisterTimeout, Elapsed: time.Since(started),
+		}, context, err)
 	}
 	timer := time.AfterFunc(opts.RegisterTimeout, func() {
 		vm.Interrupt(timeLimit{phase: conformance.PhaseRegistration, limit: opts.RegisterTimeout})
@@ -115,7 +135,7 @@ func (r *Registry) registerProgram(sourcePath string, prog *sobek.Program, opts 
 
 	wrapper, err := vm.RunProgram(prog)
 	if err != nil {
-		return stopped(err)
+		return stopped("", err)
 	}
 	call, ok := sobek.AssertFunction(wrapper)
 	if !ok {
@@ -127,7 +147,7 @@ func (r *Registry) registerProgram(sourcePath string, prog *sobek.Program, opts 
 		return fmt.Errorf("extension %s: %w", sourcePath, err)
 	}
 	if _, err := call(sobek.Undefined(), module, exports); err != nil {
-		return stopped(fmt.Errorf("registration phase: %w", err))
+		return stopped("registration phase: ", err)
 	}
 
 	moduleExports := module.Get("exports")
@@ -413,10 +433,10 @@ func (rt *RuleType) checkWithHost(host Host, params map[string]any, limit time.D
 
 	if _, err := rt.check(sobek.Undefined(), ctx, vm.ToValue(params)); err != nil {
 		elapsed := time.Since(started)
-		return reported, elapsed, &CodeFailure{
+		return reported, elapsed, newCodeFailure(vm, CodeFailure{
 			Source: rt.SourcePath, Phase: conformance.PhaseCheck, Limit: limit,
-			Elapsed: elapsed, File: lastFile, err: fmt.Errorf("rule %q: %w", rt.Name, err),
-		}
+			Elapsed: elapsed, File: lastFile,
+		}, fmt.Sprintf("rule %q: ", rt.Name), err)
 	}
 	return reported, time.Since(started), nil
 }
@@ -433,27 +453,6 @@ func (t timeLimit) String() string {
 	return fmt.Sprintf("%s exceeded the %s timeout", t.phase, t.limit)
 }
 
-// definitionErrorName is the name the SDK gives the error a malformed
-// defineRule(...) call throws.
-const definitionErrorName = "ArclintDefinitionError"
-
-// definitionError returns the message of a malformed definition the SDK
-// rejected: a configuration error, not code that failed while running.
-func definitionError(err error) (string, bool) {
-	var exception *sobek.Exception
-	if !errors.As(err, &exception) {
-		return "", false
-	}
-	thrown, ok := exception.Value().(*sobek.Object)
-	if !ok {
-		return "", false
-	}
-	if name := thrown.Get("name"); name == nil || name.String() != definitionErrorName {
-		return "", false
-	}
-	return thrown.Get("message").String(), true
-}
-
 // CodeFailure is extension code that did not complete: it ran past its
 // time limit or raised an error while running, in one phase. Errors
 // outside running code (bundling, a malformed definition, invalid
@@ -467,37 +466,78 @@ type CodeFailure struct {
 	Elapsed time.Duration
 	// File is the subject the check last asked the host about, "" when
 	// none is known.
-	File string
-	err  error
+	File     string
+	timedOut bool
+	raised   string
+	cause    error
 }
 
-func (f *CodeFailure) Error() string { return fmt.Sprintf("extension %s: %v", f.Source, f.err) }
+// newCodeFailure completes a failure from what the code raised. Its
+// text is read once, here, while the runtime's interrupt is still armed.
+func newCodeFailure(vm *sobek.Runtime, failure CodeFailure, context string, err error) *CodeFailure {
+	failure.cause = err
+	var interrupted *sobek.InterruptedError
+	if errors.As(err, &interrupted) {
+		if _, ok := interrupted.Value().(timeLimit); ok {
+			failure.timedOut = true
+			return &failure
+		}
+	}
+	text := describe(vm, err)
+	if text == "" {
+		text = "a thrown value with no message"
+	}
+	failure.raised = context + text
+	return &failure
+}
 
-func (f *CodeFailure) Unwrap() error { return f.err }
+// unreadable stands for a thrown value whose text cannot be read.
+const unreadable = "a thrown value whose message could not be read"
+
+// describe renders what extension code raised on one line. A thrown
+// object's text comes from its own toString, which may throw or never
+// return; either leaves a placeholder instead of reaching the host.
+func describe(vm *sobek.Runtime, err error) (text string) {
+	var exception *sobek.Exception
+	if !errors.As(err, &exception) {
+		return strings.Join(strings.Fields(err.Error()), " ")
+	}
+	if _, isObject := exception.Value().(*sobek.Object); !isObject {
+		return strings.Join(strings.Fields(exception.Error()), " ")
+	}
+	// An interrupt inside toString is not a JS exception: Try re-panics
+	// it, so the recover below is what keeps it from the host.
+	defer func() {
+		if recover() != nil {
+			text = unreadable
+		}
+	}()
+	if thrown := vm.Try(func() { text = exception.Error() }); thrown != nil {
+		return unreadable
+	}
+	return strings.Join(strings.Fields(text), " ")
+}
+
+func (f *CodeFailure) Error() string {
+	if f.timedOut {
+		return fmt.Sprintf("extension %s: %s", f.Source, timeLimit{phase: f.Phase, limit: f.Limit})
+	}
+	return fmt.Sprintf("extension %s: %s", f.Source, f.raised)
+}
+
+func (f *CodeFailure) Unwrap() error { return f.cause }
 
 // TimedOut reports whether the code was stopped at its time limit.
-func (f *CodeFailure) TimedOut() bool {
-	var interrupted *sobek.InterruptedError
-	if !errors.As(f.err, &interrupted) {
-		return false
-	}
-	_, ok := interrupted.Value().(timeLimit)
-	return ok
-}
+func (f *CodeFailure) TimedOut() bool { return f.timedOut }
 
 // Raised is the error the code raised, on one line; "" for a timeout.
-func (f *CodeFailure) Raised() string {
-	if f.TimedOut() {
-		return ""
-	}
-	return strings.Join(strings.Fields(f.err.Error()), " ")
-}
+func (f *CodeFailure) Raised() string { return f.raised }
 
 // ExtensionFailure translates the failure into the domain's terms.
 func (f *CodeFailure) ExtensionFailure() (conformance.ExtensionFailure, error) {
 	failure, err := conformance.NewExtensionFailure(conformance.ExtensionFailureSpec{
 		Source: f.Source, Phase: f.Phase, Limit: f.Limit, Elapsed: f.Elapsed,
-		TimedOut: f.TimedOut(), Raised: f.Raised(), File: f.File,
+		TimedOut: f.timedOut, Raised: f.raised, File: f.File,
 	})
 	if err != nil {
 		return conformance.ExtensionFailure{}, fmt.Errorf("extension %s: %w", f.Source, err)

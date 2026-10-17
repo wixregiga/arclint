@@ -249,7 +249,7 @@ type ruleEntry struct {
 	id             string
 	rationale      string
 	severity       string
-	timeLimit      string
+	timeLimit      *string
 	on             []rule.ZoneName
 	onPresent      bool
 	files          []rule.Glob
@@ -664,9 +664,11 @@ func parseRule(id, where string, n *yaml.Node) (ruleEntry, error) {
 		}
 	}
 	if v := m.get(keyTimeLimit); v != nil {
-		if entry.timeLimit, err = scalarString(v, where+".time_limit"); err != nil {
+		limit, err := scalarString(v, where+".time_limit")
+		if err != nil {
 			return ruleEntry{}, err
 		}
+		entry.timeLimit = &limit
 	}
 	if v := m.get(keyOn); v != nil {
 		names, err := stringOrList(v, where+".on")
@@ -1107,8 +1109,8 @@ func (e ruleEntry) decodeAdoption() (adoptionValues, error) {
 		}
 		values.severity = s
 	}
-	if e.timeLimit != "" {
-		t, err := rule.ParseTimeLimit(e.timeLimit)
+	if e.timeLimit != nil {
+		t, err := rule.ParseTimeLimit(*e.timeLimit)
 		if err != nil {
 			return adoptionValues{}, fmt.Errorf("%s.time_limit: %v", e.where, err)
 		}

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"time"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
@@ -58,9 +57,7 @@ func evaluateExtensionRule(r rule.Rule, facts Facts,
 
 	var near []Diagnostic
 	if limit.Near(run.Elapsed) {
-		d, err := NewCoverage(r.ID().Qualified(), fmt.Sprintf(
-			"rule %s: extension %q took %s of its %s time limit; a run twice as slow would not be evaluated, so make the check faster or raise time_limit",
-			r.ID(), params.Uses, run.Elapsed.Round(time.Millisecond), limit))
+		d, err := NewNearTimeLimit(r.ID().Qualified(), params.Uses, run.Elapsed, limit.Duration())
 		if err != nil {
 			return nil, nil, err
 		}

@@ -230,3 +230,68 @@ export default defineRule({ type: "fine", check() {} });
 		t.Errorf("RegisteredExtensionRules error = %v (%T), want the same ExtensionFailure", err, err)
 	}
 }
+
+// Classifying what registration threw never runs extension code: a
+// thrown object with a throwing name accessor, or a toString that throws
+// or never returns, is still a CodeFailure with a readable cause.
+func TestHostileThrownValuesAreCodeFailures(t *testing.T) {
+	for name, tc := range map[string]struct{ throw, raised string }{
+		"name accessor throws": {
+			throw:  `throw Object.defineProperty({ toString() { return "plain" } }, "name", { get() { throw new Error("no name") } });`,
+			raised: "registration phase: plain",
+		},
+		"toString throws": {
+			throw:  `throw { toString() { throw new Error("no text") } };`,
+			raised: "registration phase: a thrown value whose message could not be read",
+		},
+		"toString never returns": {
+			throw:  `throw { toString() { for (;;) {} } };`,
+			raised: "registration phase: a thrown value whose message could not be read",
+		},
+		"empty string": {
+			throw:  `throw "";`,
+			raised: "registration phase: at .arclint/extensions/hostile.ts:",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := writeExtensions(t, map[string]string{"hostile.ts": `
+import { defineRule } from "arclint";
+` + tc.throw + `
+export default defineRule({ type: "hostile", check() {} });
+`})
+			_, err := sobekextension.LoadDir(root, sobekextension.Options{RegisterTimeout: 300 * time.Millisecond})
+			var failed *sobekextension.CodeFailure
+			if !errors.As(err, &failed) {
+				t.Fatalf("LoadDir error = %v (%T), want a CodeFailure", err, err)
+			}
+			if failed.TimedOut() || !strings.HasPrefix(failed.Raised(), tc.raised) {
+				t.Errorf("Raised = %q (timed out %v), want it to start with %q", failed.Raised(), failed.TimedOut(), tc.raised)
+			}
+			if _, err := failed.ExtensionFailure(); err != nil {
+				t.Errorf("ExtensionFailure: %v", err)
+			}
+		})
+	}
+}
+
+// A params declaration that is not built with s is a malformed
+// definition, not code that failed while running.
+func TestMalformedParamsAreDefinitionErrors(t *testing.T) {
+	for name, tc := range map[string]struct{ source, want string }{
+		"params not a schema": {`defineRule({ type: "p", params: {} as any, check() {} })`, "defineRule: params must be a schema built with s"},
+		"object property not a schema": {`defineRule({ type: "p", params: s.object({ depth: 2 as any }), check() {} })`, `s.object: property "depth" must be a schema built with s`},
+		"array items not a schema": {`defineRule({ type: "p", params: s.object({ list: s.array("x" as any) }), check() {} })`, "s.array: items must be a schema built with s"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := writeExtensions(t, map[string]string{"params.ts": `
+import { defineRule, s } from "arclint";
+export default ` + tc.source + `;
+`})
+			_, err := sobekextension.LoadDir(root, sobekextension.Options{})
+			var failed *sobekextension.CodeFailure
+			if err == nil || errors.As(err, &failed) || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("LoadDir error = %v, want a configuration error naming %q", err, tc.want)
+			}
+		})
+	}
+}
