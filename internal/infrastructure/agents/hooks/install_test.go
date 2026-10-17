@@ -650,6 +650,36 @@ func TestAnUnknownWindowsProfileIsNotEvidenceThatHooksRun(t *testing.T) {
 	}
 }
 
+// What status cannot read is unknown, never absent or turned off.
+func TestUnknownSettingsAreNeitherAbsentNorOff(t *testing.T) {
+	root, h := t.TempDir(), newHomes(t)
+	binary := testBinary(t, t.TempDir(), "native")
+	unlocated := func() ([]UserConfiguration, error) {
+		return []UserConfiguration{h.native, {Windows: true, Unreadable: "cmd.exe is missing"}}, nil
+	}
+	status, err := NewInstaller(root, "Ubuntu", binary, unlocated).Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if silence := strings.Join(status.Silence, "\n"); strings.Contains(silence, "no host runs them here") || !strings.Contains(silence, "cannot be read or located, so whether a host runs them from it is unknown") {
+		t.Fatalf("silence with an unlocated Windows profile:\n%s", silence)
+	}
+	installer := NewInstaller(root, "", binary, h.users(""))
+	if _, err := installer.Install([]string{"claude"}, false); err != nil {
+		t.Fatal(err)
+	}
+	user, err := os.ReadFile(h.file(false, "claude"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(root, ".claude", "settings.local.json"), string(user))
+	writeTestFile(t, filepath.Join(root, ".claude", "settings.json"), `{`)
+	problems := strings.Join(statusOf(t, installer)["claude project"].Problems, "\n")
+	if strings.Contains(problems, "turned back on") || !strings.Contains(problems, "runs each event twice here whenever it runs hooks") {
+		t.Fatalf("duplicates beside an unreadable shared file:\n%s", problems)
+	}
+}
+
 // Only the commands install writes are workflow hooks. A hook that merely
 // mentions the same words is someone else's, and install and the duplicate
 // cleanup keep it.

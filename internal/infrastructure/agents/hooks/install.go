@@ -372,17 +372,36 @@ func (installer *Installer) Status() (status application.HooksStatus, err error)
 			unknown[windowsForm] = true
 		}
 		disabled = disabled || off[nativeForm] || off[windowsForm]
-		readerOff := func(form commandForm) bool { return off[form] || unknown[form] }
-		// This project's file runs while any of its readers runs hooks.
-		readersOff := func(file target) bool {
-			if file.scope == scopeUser {
-				return readerOff(file.form)
+		reader := func(form commandForm) hooksState {
+			switch {
+			case off[form]:
+				return hooksOff
+			case unknown[form]:
+				return hooksUnknown
 			}
-			return readerOff(nativeForm) && (local.form != sharedForm || readerOff(windowsForm))
+			return hooksOn
+		}
+		// This project's file runs while any of its readers runs hooks, and
+		// is off only while every one of them is.
+		readers := func(file target) hooksState {
+			if file.scope == scopeUser {
+				return reader(file.form)
+			}
+			if local.form != sharedForm {
+				return reader(nativeForm)
+			}
+			native, windows := reader(nativeForm), reader(windowsForm)
+			switch {
+			case native == hooksOn || windows == hooksOn:
+				return hooksOn
+			case native == hooksOff && windows == hooksOff:
+				return hooksOff
+			}
+			return hooksUnknown
 		}
 		entries := make([]application.HookFileStatus, 0, len(users)+1)
 		for _, file := range append(slices.Clone(users), local) {
-			entry, runs := installer.inspect(file, readersOff(file))
+			entry, runs := installer.inspect(file, readers(file) != hooksOn)
 			if sets, _ := disablesHooks(host, file.path); sets {
 				entry.Problems = append(entry.Problems, "This file sets "+host.disable+", so the host runs none of the hooks it reads where this file applies; remove the setting to run them.")
 			}
@@ -400,14 +419,14 @@ func (installer *Installer) Status() (status application.HooksStatus, err error)
 			sees := user.form == nativeForm || local.form == sharedForm
 			userListed, _ := listsArclintHooks(user.path)
 			if userListed && localListed && sees {
-				localEntry.Problems = append(localEntry.Problems, duplicateProblem(user.path+" already lists the hooks for every project; with both, the host", readerOff(user.form)))
+				localEntry.Problems = append(localEntry.Problems, duplicateProblem(user.path+" already lists the hooks for every project; with both, the host", reader(user.form)))
 			}
 			if entry.Installation == application.HooksAbsent && (localEntry.Installation != application.HooksComplete || !sees) {
 				entry.Problems = append(entry.Problems, "Workflow hooks are not installed.")
 			}
 		}
 		if shared != "" {
-			localEntry.Problems = append(localEntry.Problems, sharedProblems(host, shared, readersOff(local))...)
+			localEntry.Problems = append(localEntry.Problems, sharedProblems(host, shared, readers(local))...)
 		}
 
 		// A user file that cannot be located is listed with the other user
@@ -461,6 +480,8 @@ func (installer *Installer) silence(files []application.HookFileStatus, running,
 		reasons = append(reasons, "No configuration file lists every workflow hook, but the hooks install wrote into a file still run, and record an event each time one fires while rules.arclint.yaml exists; each file below names the hooks it lists, those that still run, and those it lacks. Run `arclint agents hooks install` to add the missing ones.")
 	case installed(application.HooksPartial):
 		reasons = append(reasons, "No configuration file lists every workflow hook, and no hook a file lists is established to run here; each file below says why. Run `arclint agents hooks install`.")
+	case installed(application.HooksUnknown):
+		reasons = append(reasons, "No configuration file status can read lists the workflow hooks, and a file below cannot be read or located, so whether a host runs them from it is unknown; run `arclint agents hooks install` from a shell that can reach it.")
 	default:
 		reasons = append(reasons, "No configuration file lists the workflow hooks, so no host runs them here; run `arclint agents hooks install`.")
 	}
@@ -573,7 +594,7 @@ func englishList(names []string) string {
 // writes, does to the hooks: a read failure leaves unknown whether it turns
 // them off, the setting turns them off, and the hooks it lists run beside
 // every other file's, or would once hooks are turned back on.
-func sharedProblems(host hookHost, shared string, off bool) []string {
+func sharedProblems(host hookHost, shared string, state hooksState) []string {
 	var problems []string
 	if _, _, err := readConfiguration(shared); err != nil && host.disable != "" {
 		problems = append(problems, host.shared+" cannot be read, so whether it sets "+host.disable+" and turns the host's hooks off here is unknown: "+err.Error())
@@ -582,21 +603,33 @@ func sharedProblems(host hookHost, shared string, off bool) []string {
 		problems = append(problems, host.shared+" sets "+host.disable+", so the host runs no hooks in this project; remove the setting to run them.")
 	}
 	if listed, err := listsArclintHooks(shared); err == nil && listed {
-		if off {
-			problems = append(problems, host.shared+" also lists the workflow hooks; once hooks are turned back on, every file that lists them runs each event.")
-		} else {
-			problems = append(problems, host.shared+" also lists the workflow hooks; every file that lists them runs each event.")
-		}
+		when := map[hooksState]string{hooksOn: "", hooksOff: "once hooks are turned back on, ", hooksUnknown: "whenever the host runs hooks here, "}[state]
+		problems = append(problems, host.shared+" also lists the workflow hooks; "+when+"every file that lists them runs each event.")
 	}
 	return problems
 }
 
+// hooksState is whether a reader of a configuration runs its hooks: on,
+// turned off by a setting a file it reads sets, or unknown because a file
+// it reads cannot be read or located.
+type hooksState int
+
+const (
+	hooksOn hooksState = iota
+	hooksOff
+	hooksUnknown
+)
+
 // duplicateProblem completes a sentence about hooks two files list: the
-// host runs each event twice, or would once the setting that turns its
-// hooks off is removed.
-func duplicateProblem(subject string, off bool) string {
-	if off {
+// host runs each event twice, would once the setting that turns its hooks
+// off is removed, or does whenever it runs hooks when that is unknown.
+func duplicateProblem(subject string, state hooksState) string {
+	switch state {
+	case hooksOff:
 		return subject + " would run each event twice here once its hooks are turned back on, and ArcLint would answer the first."
+	case hooksUnknown:
+		return subject + " runs each event twice here whenever it runs hooks, and ArcLint answers the first."
+	case hooksOn:
 	}
 	return subject + " runs each event twice here and ArcLint answers the first."
 }
