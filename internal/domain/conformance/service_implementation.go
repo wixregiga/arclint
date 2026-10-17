@@ -2,6 +2,7 @@ package conformance
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -96,8 +97,11 @@ func (c Carriers) Implementations(ctx, owner, key string) ([]ServiceImplementati
 // function of the context spelled assert followed by the key, or return
 // the value object whose invariant of the same key checks it.
 type modelReach struct {
-	fn, value       locDecl
-	hasFn, hasValue bool
+	// fns are every function of the context that checks the
+	// guarantee; an implementation may call any of them.
+	fns      []locDecl
+	value    locDecl
+	hasValue bool
 }
 
 // reachOf finds the checks of a guarantee in the model that an
@@ -105,7 +109,7 @@ type modelReach struct {
 // operation.
 func (cc contextCode) reachOf(service locDecl, ops []locDecl, key string) modelReach {
 	var reach modelReach
-	reach.fn, reach.hasFn = cc.contextFunction(service, assertKey(key))
+	reach.fns = cc.contextFunctions(service, assertKey(key))
 	if v := cc.valueCheck(ops, key); v.found {
 		reach.value, reach.hasValue = v.at, true
 	}
@@ -116,10 +120,10 @@ func (cc contextCode) reachOf(service locDecl, ops []locDecl, key string) modelR
 // check.
 func (r modelReach) must() string {
 	switch {
-	case r.hasFn && r.hasValue:
-		return fmt.Sprintf("call %s or return %s", r.fn.decl.Name, r.value.decl.Name)
-	case r.hasFn:
-		return "call " + r.fn.decl.Name
+	case len(r.fns) > 0 && r.hasValue:
+		return fmt.Sprintf("call %s or return %s", r.fns[0].decl.Name, r.value.decl.Name)
+	case len(r.fns) > 0:
+		return "call " + r.fns[0].decl.Name
 	default:
 		return "return " + r.value.decl.Name
 	}
@@ -216,7 +220,7 @@ func (code domainCode) judgeImplementation(typ locDecl, impl Implementation, ser
 		return undetermined(fmt.Sprintf("%s of %s is declared outside the repository", op.decl.Name, typ.decl.Name))
 	case ResolutionDeclared:
 	}
-	f, decls, holder := code.all.operation(reached)
+	f, decls, twins, holder := code.all.operation(reached)
 	if len(decls) == 0 {
 		return undetermined(fmt.Sprintf("%s of %s is declared in %s, whose declarations are not supplied", op.decl.Name, typ.decl.Name, reached.File))
 	}
@@ -224,7 +228,7 @@ func (code domainCode) judgeImplementation(typ locDecl, impl Implementation, ser
 	if holder.Kind == declKindInterface {
 		return undetermined(fmt.Sprintf("%s of %s is promoted from the interface %s it embeds, and the implementation that value holds is not declared", op.decl.Name, typ.decl.Name, holder.Name))
 	}
-	reaches, open := reach.reachedBy(f, decls, reached)
+	reaches, open := reach.reachedBy(f, decls, twins, reached)
 	switch {
 	case reaches:
 		j.Outcome = OutcomeConforms
@@ -244,7 +248,7 @@ func (code domainCode) judgeImplementation(typ locDecl, impl Implementation, ser
 // a result every declaration of it names as the value object. The
 // second result says why it may reach the check unseen: a call or a
 // result resolution could not follow.
-func (r modelReach) reachedBy(f fileFacts, decls []locDecl, op Reference) (bool, string) {
+func (r modelReach) reachedBy(f fileFacts, decls, twins []locDecl, op Reference) (bool, string) {
 	open := ""
 	note := func(reason string) {
 		if open == "" {
@@ -267,7 +271,7 @@ func (r modelReach) reachedBy(f fileFacts, decls []locDecl, op Reference) (bool,
 			return true, ""
 		}
 	}
-	if !r.hasFn {
+	if len(r.fns) == 0 {
 		return false, open
 	}
 	if !f.resolvedCalls {
@@ -281,7 +285,13 @@ func (r modelReach) reachedBy(f fileFacts, decls []locDecl, op Reference) (bool,
 			continue
 		}
 		t := c.Target
-		if t.Resolution == ResolutionDeclared && t.Owner == "" && t.File == r.fn.file.path && t.Name == r.fn.decl.Name {
+		if t.Resolution == ResolutionDeclared && t.Owner == "" && slices.ContainsFunc(r.fns, func(fn locDecl) bool { return t.File == fn.file.path && t.Name == fn.decl.Name }) {
+			if withinAny(c.Line, twins) {
+				// Line numbers alone cannot tell this operation's call
+				// from one of the static method sharing its line.
+				note(fmt.Sprintf("%s:%d: call %s: %s shares the line with a static method of its name, so the call cannot be told apart", f.path, c.Line, c.Callee, qualified(op)))
+				continue
+			}
 			return true, ""
 		}
 		if t.Resolution == ResolutionUndetermined {
@@ -294,24 +304,26 @@ func (r modelReach) reachedBy(f fileFacts, decls []locDecl, op Reference) (bool,
 // operation finds the declarations of the instance method a reference
 // reaches, overloads included, with the file holding them and the declaration
 // of the type that declares them.
-func (idx contractIndex) operation(ref Reference) (fileFacts, []locDecl, Declaration) {
+func (idx contractIndex) operation(ref Reference) (fileFacts, []locDecl, []locDecl, Declaration) {
 	for _, f := range idx.files {
 		if f.path != ref.File {
 			continue
 		}
-		var decls []locDecl
+		var decls, twins []locDecl
 		var holder Declaration
 		for _, d := range f.decls {
 			switch {
-			case d.Kind == declKindMethod && !d.Static && d.Owner == ref.Owner && d.Name == ref.Name:
+			case d.Kind == declKindMethod && d.Owner == ref.Owner && d.Name == ref.Name && d.Static:
+				twins = append(twins, locDecl{file: f, decl: d})
+			case d.Kind == declKindMethod && d.Owner == ref.Owner && d.Name == ref.Name:
 				decls = append(decls, locDecl{file: f, decl: d})
 			case d.Owner == "" && d.Name == ref.Owner && isTypeKind(d.Kind):
 				holder = d
 			}
 		}
-		return f, decls, holder
+		return f, decls, twins, holder
 	}
-	return fileFacts{}, nil, Declaration{}
+	return fileFacts{}, nil, nil, Declaration{}
 }
 
 // qualified spells a method as Owner.Name.

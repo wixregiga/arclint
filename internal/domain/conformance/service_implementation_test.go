@@ -251,3 +251,60 @@ func TestImplementationsStateTheirEvidence(t *testing.T) {
 		t.Error("supplied implementations are not supported")
 	}
 }
+
+// Every function of the context spelled from the key checks the
+// guarantee: two services of one context, each with the check in its
+// own package, are each reached by an implementation calling its own.
+func TestAnyCheckOfTheContextIsReached(t *testing.T) {
+	knowledge := oneContext(t, vocab.BoundedContext{
+		Name: "identity", Definition: "d", Line: 1,
+		Services: []vocab.DomainService{
+			{Name: "Encrypter", Definition: "d", Line: 2, Assertions: []vocab.Assertion{{Key: "not-empty", On: "Encrypt", Statement: "s", Line: 3}}},
+			{Name: "TokenIssuer", Definition: "d", Line: 4, Assertions: []vocab.Assertion{{Key: "not-empty", On: "Issue", Statement: "s", Line: 5}}},
+		},
+	})
+	text := external("", "", "string")
+	tokenFile := "token/token.go"
+	token := goDecls("token", []conformance.Declaration{
+		{Kind: "interface", Name: "TokenIssuer", Exported: true, StartLine: 3},
+		{Kind: "method", Name: "Issue", Owner: "TokenIssuer", Exported: true, StartLine: 4, Type: text},
+		{Kind: "func", Name: "AssertNotEmpty", Exported: true, StartLine: 8, Type: external("", "", "error")},
+	})
+	token.ImplementationsAvailable, token.ResolvedCallsAvailable = true, true
+	issuerFile := "adapters/issuer.go"
+	issuer := goDecls("adapters", []conformance.Declaration{
+		{Kind: "struct", Name: "Issuer", Exported: true, StartLine: 3, Implements: []conformance.Implementation{{
+			Abstraction: declared(tokenFile, "", "TokenIssuer"), Evidence: conformance.ImplementationExact,
+			Operations: []conformance.Reference{declared(issuerFile, "Issuer", "Issue")},
+		}}},
+		{Kind: "method", Name: "Issue", Owner: "Issuer", Exported: true, StartLine: 5, EndLine: 7, Type: text},
+	}, conformance.Call{Callee: "AssertNotEmpty", Line: 6, Enclosing: "Issue", EnclosingOwner: "Issuer", Target: declared(tokenFile, "", "AssertNotEmpty")})
+	issuer.ImplementationsAvailable, issuer.ResolvedCallsAvailable = true, true
+	facts := map[string]conformance.LanguageFacts{
+		implModelFile:   implementationModel(text, true),
+		implAdapterFile: implementationAdapter(text, conformance.ImplementationExact, "", callTo(declared(implModelFile, "", "AssertNotEmpty"))),
+		tokenFile:       token,
+		issuerFile:      issuer,
+	}
+	outcome, findings, reasons, _ := judgedImplementations(t, facts, knowledge)
+	if outcome != conformance.OutcomeConforms || len(findings) != 0 {
+		t.Errorf("outcome %s findings %q reasons %q", outcome, findings, reasons)
+	}
+}
+
+// A static method of the operation's name written on the operation's
+// own line leaves a call there unattributable, so a call to the check
+// on that line proves nothing.
+func TestACallSharingALineWithAStaticTwinIsUndetermined(t *testing.T) {
+	text := external("", "", "string")
+	check := declared(implModelFile, "", "AssertNotEmpty")
+	adapter := implementationAdapter(text, conformance.ImplementationExact, "",
+		conformance.Call{Callee: "AssertNotEmpty", Line: 5, Enclosing: "Encrypt", EnclosingOwner: "Plain", Target: check})
+	adapter.Declarations[1].EndLine = 5
+	adapter.Declarations = append(adapter.Declarations, conformance.Declaration{Kind: "method", Name: "Encrypt", Owner: "Plain", Exported: true, Static: true, StartLine: 5, EndLine: 5, Type: text})
+	facts := map[string]conformance.LanguageFacts{implModelFile: implementationModel(text, true), implAdapterFile: adapter}
+	outcome, findings, reasons, _ := judgedImplementations(t, facts, implementationKnowledge(t))
+	if outcome != conformance.OutcomeUndetermined || len(findings) != 0 || !strings.Contains(strings.Join(reasons, "\n"), "shares the line with a static method") {
+		t.Errorf("outcome %s findings %q reasons %q", outcome, findings, reasons)
+	}
+}

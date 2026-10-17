@@ -1739,6 +1739,19 @@ func recordsInvariant(vo vocab.ValueObject, key string) bool {
 // another is that function's helper, and a test file's is the test's;
 // neither is the model's.
 func (cc contextCode) contextFunction(service locDecl, key string) (locDecl, bool) {
+	fns := cc.contextFunctions(service, key)
+	if len(fns) == 0 {
+		return locDecl{}, false
+	}
+	return fns[0], true
+}
+
+// contextFunctions lists every function of the context spelling a key
+// in its language's method case, in the order contextFunction looks:
+// each one is a check of the model, and an implementation may reach any
+// of them.
+func (cc contextCode) contextFunctions(service locDecl, key string) []locDecl {
+	var out []locDecl
 	seen := map[string]bool{}
 	for _, idx := range []contractIndex{cc.idx, cc.unitIdx(service)} {
 		for _, f := range idx.files {
@@ -1748,12 +1761,12 @@ func (cc contextCode) contextFunction(service locDecl, key string) (locDecl, boo
 			seen[f.path] = true
 			for _, d := range f.decls {
 				if d.Kind == declKindFunc && d.Owner == "" && methodSpelled(d.Name, key, f.lang) {
-					return locDecl{file: f, decl: d}, true
+					out = append(out, locDecl{file: f, decl: d})
 				}
 			}
 		}
 	}
-	return locDecl{}, false
+	return out
 }
 
 // assertionOwner is the declared type that owns a set of assertions:
