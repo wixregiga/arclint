@@ -84,13 +84,13 @@ func TestProgressStoreLeavesAPartialLineForLater(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = file.Close() }()
-	if _, err := file.WriteString(`{"kind":"check","at":"2026-10-17T10:00:00Z"}` + "\n" + `{"kind":"con`); err != nil {
+	if _, err := file.WriteString(`{"kind":"check","at":"2026-10-16T10:00:00Z"}` + "\n" + `{"kind":"con`); err != nil {
 		t.Fatal(err)
 	}
 	if seen := observe(t, store, "s"); !reflect.DeepEqual(seen.recorded, []agent.Activity{{Kind: agent.CheckRan}}) {
 		t.Fatalf("complete lines: %+v", seen.recorded)
 	}
-	if _, err := file.WriteString(`text","at":"2026-10-17T10:00:01Z"}` + "\n"); err != nil {
+	if _, err := file.WriteString(`text","at":"2026-10-16T10:00:01Z"}` + "\n"); err != nil {
 		t.Fatal(err)
 	}
 	if seen := observe(t, store, "s"); !reflect.DeepEqual(seen.recorded, []agent.Activity{{Kind: agent.ContextObtained}}) {

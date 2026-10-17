@@ -38,10 +38,10 @@ type sessionRecord struct {
 	// BetweenTurns is true from the end of a turn, or the session's start,
 	// until the user's next prompt.
 	BetweenTurns bool `json:",omitempty"`
-	// Unattributed is true from a prompt that followed a finished turn
-	// until the next update, which sees the checkout afresh: what changed
-	// between the turns is not the agent's work.
-	Unattributed bool `json:",omitempty"`
+	// AttributedFrom is when the agent's work began after a time between
+	// turns, zero once a snapshot has been taken since: a file that changed
+	// before it is not the agent's work.
+	AttributedFrom time.Time `json:",omitzero"`
 }
 
 // ProgressStore keeps each session's workflow Progress in the project's
@@ -94,7 +94,9 @@ func (store *ProgressStore) StartSession(session string) error {
 		if err != nil {
 			return err
 		}
-		record.Unattributed = record.Unattributed || record.BetweenTurns
+		if record.BetweenTurns {
+			record.AttributedFrom = store.checkout.now()
+		}
 		return writeRecord(project, name, record)
 	})
 }
@@ -111,7 +113,9 @@ func (store *ProgressStore) StartTurn(session string) error {
 		if err != nil {
 			return err
 		}
-		record.Unattributed = record.Unattributed || record.BetweenTurns
+		if record.BetweenTurns {
+			record.AttributedFrom = store.checkout.now()
+		}
 		record.BetweenTurns = false
 		return writeRecord(project, name, record)
 	})
@@ -145,15 +149,17 @@ func (store *ProgressStore) current(project *os.Root, name string) (sessionRecor
 		return record, false, err
 	}
 	record.Cursor = &end
-	record.Snapshot, record.Observed = store.look()
+	record.Snapshot, _, record.Observed = store.look()
 	record.BetweenTurns = true
 	return record, true, nil
 }
 
-// look takes a snapshot of the checkout, and reports whether it could.
-func (store *ProgressStore) look() (snapshot, bool) {
+// look takes a snapshot of the checkout and reports when it began and
+// whether it could.
+func (store *ProgressStore) look() (snapshot, time.Time, bool) {
+	began := store.checkout.now()
 	taken, err := store.sample()
-	return taken, err == nil
+	return taken, began, err == nil
 }
 
 // observe returns the activities since the record's last update, in the
@@ -161,28 +167,43 @@ func (store *ProgressStore) look() (snapshot, bool) {
 // started just now has seen the checkout already. When the checkout cannot
 // be read this time, the record keeps its snapshot, so a later update
 // reports the files changed meanwhile.
+//
+// An update covers what happened before its sample of the checkout began.
+// Whatever a parallel tool call does while the sample runs may or may not
+// show in it, so a log line whose command finished then, and a file that
+// changed then, wait for the next update; the record keeps the file's
+// earlier fingerprint, so that update finds the change again and puts both
+// in the order they happened.
 func (store *ProgressStore) observe(project *os.Root, record *sessionRecord, started bool) ([]agent.Activity, error) {
-	// The checkout is seen before the log is read, so every file change it
-	// shows comes with the ArcLint activities that ran before it, even
-	// while a parallel tool call is still running commands.
 	var now snapshot
+	var began time.Time
 	seen := false
 	if !started {
-		now, seen = store.look()
+		now, began, seen = store.look()
 	}
-	logged, cursor, err := readActivities(project, *record.Cursor)
+	logged, cursor, err := readActivities(project, *record.Cursor, began)
 	if err != nil {
 		return nil, err
 	}
 	record.Cursor = &cursor
 	timed := logged
 	if seen {
-		if record.Observed && !record.Unattributed {
+		if record.Observed {
 			for _, file := range store.checkout.changes(record.Snapshot, now) {
-				timed = append(timed, timedActivity{activity: store.changeOf(file.path), at: file.at})
+				switch {
+				case file.at.After(began):
+					if was, known := record.Snapshot[file.path]; known {
+						now[file.path] = was
+					} else {
+						delete(now, file.path)
+					}
+				case file.at.Before(record.AttributedFrom):
+				default:
+					timed = append(timed, timedActivity{activity: store.changeOf(file.path), at: file.at})
+				}
 			}
 		}
-		record.Snapshot, record.Observed, record.Unattributed = now, true, false
+		record.Snapshot, record.Observed, record.AttributedFrom = now, true, time.Time{}
 	}
 	return untimed(timed), nil
 }

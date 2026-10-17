@@ -1,6 +1,7 @@
 package hooks
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -237,9 +238,9 @@ func TestAShellRemovalBeforeTheCheckIsVerified(t *testing.T) {
 }
 
 // A parallel tool call can run `arclint context` and then change a file
-// while the hooks sample the checkout. The sample comes first and the log
-// is read after it, so the change arrives with the context that preceded
-// it.
+// while the hooks sample the checkout. Both happened after the sample
+// began, so both wait for the next update, which puts the change after the
+// context that preceded it.
 func TestContextRecordedWhileTheCheckoutIsSampledIsCredited(t *testing.T) {
 	root := gitRepository(t, map[string]string{"rules.arclint.yaml": "zones:\n  app: internal/**\n", "internal/a.go": "package a\n"})
 	store := NewProgressStore(root, recording)
@@ -251,9 +252,67 @@ func TestContextRecordedWhileTheCheckoutIsSampledIsCredited(t *testing.T) {
 		writeFile(t, root, "internal/a.go", "package a // changed in parallel\n")
 		return sample()
 	}
-	seen := observe(t, store, "s")
+	if seen := observe(t, store, "s"); len(seen.recorded) != 0 {
+		t.Fatalf("the update reported what happened during its sample: %+v", seen.recorded)
+	}
+	store.sample = sample
 	want := []agent.Activity{{Kind: agent.ContextObtained, Paths: []string{"internal"}}, {Kind: agent.FilesChanged, Paths: []string{"internal/a.go"}}}
-	if !reflect.DeepEqual(seen.recorded, want) {
+	if seen := observe(t, store, "s"); !reflect.DeepEqual(seen.recorded, want) {
+		t.Fatalf("recorded %+v, want %+v", seen.recorded, want)
+	}
+}
+
+// A check that finishes while the checkout is sampled, after a parallel
+// tool call changed a file the sample missed, is read at the next update,
+// together with that change, and keeps its place after it.
+func TestACheckFinishingDuringTheSampleWaitsForTheNextUpdate(t *testing.T) {
+	root := gitRepository(t, map[string]string{"rules.arclint.yaml": "zones:\n  app: internal/**\n", "internal/a.go": "package a\n"})
+	store := NewProgressStore(root, recording)
+	observe(t, store, "s")
+	sample := store.sample
+	store.sample = func() (snapshot, error) {
+		taken, err := sample()
+		pause()
+		writeFile(t, root, "internal/a.go", "package a // changed after the sample\n")
+		pause()
+		record(t, root, agent.Activity{Kind: agent.CheckRan})
+		return taken, err
+	}
+	if seen := observe(t, store, "s"); len(seen.recorded) != 0 {
+		t.Fatalf("the update read a check that finished during its sample: %+v", seen.recorded)
+	}
+	store.sample = sample
+	want := []agent.Activity{{Kind: agent.FilesChanged, Paths: []string{"internal/a.go"}}, {Kind: agent.CheckRan}}
+	if seen := observe(t, store, "s"); !reflect.DeepEqual(seen.recorded, want) {
+		t.Fatalf("recorded %+v, want %+v", seen.recorded, want)
+	}
+}
+
+// When the checkout cannot be read at the prompt, the next sample still
+// reports the agent's work in the turn and leaves out what changed before
+// the prompt.
+func TestAFailedSampleAtThePromptKeepsTheTurnsWork(t *testing.T) {
+	root := gitRepository(t, map[string]string{"rules.arclint.yaml": "zones:\n  app: internal/**\n", "internal/a.go": "package a\n"})
+	store := NewProgressStore(root, recording)
+	observe(t, store, "s")
+	if err := store.FinishTurn("s"); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, root, "internal/users.go", "package a // the user's edit between turns\n")
+	pause()
+	if err := store.StartTurn("s"); err != nil {
+		t.Fatal(err)
+	}
+	sample := store.sample
+	store.sample = func() (snapshot, error) { return nil, errors.New("git status timed out") }
+	if seen := observe(t, store, "s"); len(seen.recorded) != 0 {
+		t.Fatalf("an update without a sample reported %+v", seen.recorded)
+	}
+	store.sample = sample
+	pause()
+	writeFile(t, root, "internal/agents.go", "package a // the agent's edit in the turn\n")
+	want := []agent.Activity{{Kind: agent.FilesChanged, Paths: []string{"internal/agents.go"}}}
+	if seen := observe(t, store, "s"); !reflect.DeepEqual(seen.recorded, want) {
 		t.Fatalf("recorded %+v, want %+v", seen.recorded, want)
 	}
 }

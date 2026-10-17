@@ -134,8 +134,9 @@ func logSize(project *os.Root) (int64, error) {
 // readActivities returns the self-reported activities in the complete log
 // lines after cursor, and the cursor after them. A line still being written
 // is left for a later read; a line without the time its command finished
-// is not one ArcLint wrote.
-func readActivities(project *os.Root, cursor int64) ([]timedActivity, int64, error) {
+// is not one ArcLint wrote. When until is not zero, reading stops at the
+// first line whose command finished after it, which a later read returns.
+func readActivities(project *os.Root, cursor int64, until time.Time) ([]timedActivity, int64, error) {
 	size, err := logSize(project)
 	if err != nil || cursor >= size {
 		return nil, min(cursor, size), err
@@ -152,14 +153,22 @@ func readActivities(project *os.Root, cursor int64) ([]timedActivity, int64, err
 	if err != nil {
 		return nil, cursor, fmt.Errorf("workflow activity log: %w", err)
 	}
-	complete := bytes.LastIndexByte(data, '\n') + 1
 	var activities []timedActivity
-	for _, line := range bytes.Split(data[:complete], []byte("\n")) {
-		var logged loggedActivity
-		if len(line) == 0 || json.Unmarshal(line, &logged) != nil || !selfReported[agent.Kind(logged.Kind)] || logged.At.IsZero() {
-			continue
+	read := 0
+	for {
+		end := bytes.IndexByte(data[read:], '\n')
+		if end < 0 {
+			break
 		}
-		activities = append(activities, timedActivity{activity: agent.Activity{Kind: agent.Kind(logged.Kind), Paths: logged.Paths, Zones: logged.Zones}, at: logged.At})
+		line := data[read : read+end]
+		var logged loggedActivity
+		if len(line) > 0 && json.Unmarshal(line, &logged) == nil && selfReported[agent.Kind(logged.Kind)] && !logged.At.IsZero() {
+			if !until.IsZero() && logged.At.After(until) {
+				break
+			}
+			activities = append(activities, timedActivity{activity: agent.Activity{Kind: agent.Kind(logged.Kind), Paths: logged.Paths, Zones: logged.Zones}, at: logged.At})
+		}
+		read += end + 1
 	}
-	return activities, cursor + int64(complete), nil
+	return activities, cursor + int64(read), nil
 }

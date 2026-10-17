@@ -207,6 +207,10 @@ refreshes the index.
   another session in the same checkout, counts as the agent's change.
 - A shell change after `arclint context` or `arclint check` in the same shell
   command, within a few milliseconds, may take its place before them.
+- Order comes from file modification times and this machine's clock. What a
+  parallel tool call does while an event samples the checkout waits for the
+  next event. A file system whose clock runs ahead of the machine's, as some
+  network file systems do, delays changes until the clock catches up.
 - A removed file takes the time its directory last changed, which is later
   than the removal when another file of that directory changed after it.
 - On Windows, which records no change time, a copy that keeps a file's size,
