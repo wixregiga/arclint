@@ -292,15 +292,15 @@ func (w *pyWalker) abstractClass(n *gotreesitter.Node) bool {
 		return false
 	}
 	for i := 0; i < bases.NamedChildCount(); i++ {
-		b := bases.NamedChild(i)
+		b := w.unparenthesized(bases.NamedChild(i))
 		switch b.Type(w.lang) {
 		case "keyword_argument":
-			key, value := b.ChildByFieldName("name", w.lang), b.ChildByFieldName("value", w.lang)
+			key, value := b.ChildByFieldName("name", w.lang), w.unparenthesized(b.ChildByFieldName("value", w.lang))
 			if key != nil && value != nil && key.Text(w.src) == "metaclass" && slices.Contains(abstractMetaclasses, value.Text(w.src)) {
 				return true
 			}
 		case nodeSubscript:
-			if value := b.ChildByFieldName("value", w.lang); value != nil && slices.Contains(abstractBases, value.Text(w.src)) {
+			if value := w.unparenthesized(b.ChildByFieldName("value", w.lang)); value != nil && slices.Contains(abstractBases, value.Text(w.src)) {
 				return true
 			}
 		default:
@@ -310,6 +310,15 @@ func (w *pyWalker) abstractClass(n *gotreesitter.Node) bool {
 		}
 	}
 	return false
+}
+
+// unparenthesized is the expression inside any parentheses written
+// around it: (ABC) names ABC.
+func (w *pyWalker) unparenthesized(n *gotreesitter.Node) *gotreesitter.Node {
+	for n != nil && n.Type(w.lang) == "parenthesized_expression" && n.NamedChildCount() == 1 {
+		n = n.NamedChild(0)
+	}
+	return n
 }
 
 // walkCalls records every call with the function it runs in and the
