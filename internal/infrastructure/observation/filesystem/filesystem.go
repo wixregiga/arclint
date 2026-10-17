@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
@@ -183,14 +184,29 @@ func (r rootContent) Read(path string) (string, error) {
 }
 
 // Holds reports whether the root holds a regular file at the
-// repo-relative path, without following a link; a path that is not
-// repo-relative, or that leaves the root, is held by nothing.
+// repo-relative path, reached without following a link at any part of
+// it: a path that is not repo-relative, one that leaves the root, and
+// one through a linked directory are held by nothing.
 func (r rootContent) Holds(path string) bool {
 	if path == "" || filepath.IsAbs(path) || !filepath.IsLocal(filepath.FromSlash(path)) {
 		return false
 	}
-	info, err := os.Lstat(filepath.Join(r.root, filepath.FromSlash(path)))
-	return err == nil && info.Mode().IsRegular()
+	at := r.root
+	parts := strings.Split(path, "/")
+	for i, part := range parts {
+		at = filepath.Join(at, part)
+		info, err := os.Lstat(at)
+		if err != nil || info.Mode()&fs.ModeSymlink != 0 {
+			return false
+		}
+		if i < len(parts)-1 && !info.IsDir() {
+			return false
+		}
+		if i == len(parts)-1 {
+			return info.Mode().IsRegular()
+		}
+	}
+	return false
 }
 
 // holdsFileOf reports whether a selected file is written in the
