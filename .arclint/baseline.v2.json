@@ -190,6 +190,12 @@
     {
       "ruleId": "domain_recording/text-within-word-limit",
       "subject": "domain.arclint.yaml",
+      "message": "value object \"Assurance\" in context \"rule\": the definition has 74 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
       "message": "value object \"Binding\" in context \"adoption\": the definition has 45 words, and a definition holds at most 40",
       "count": 1
     },
@@ -257,6 +263,12 @@
       "ruleId": "domain_recording/text-within-word-limit",
       "subject": "domain.arclint.yaml",
       "message": "value object \"RuleID\" in context \"rule\": the definition has 72 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "value object \"RuleTest\" in context \"rule\": the definition has 76 words, and a definition holds at most 40",
       "count": 1
     },
     {
