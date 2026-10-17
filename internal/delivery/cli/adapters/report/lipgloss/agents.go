@@ -25,7 +25,7 @@ func writeHooksStatus(p *out.Printer, th Theme, r cli.HooksStatusReport) {
 		p.Println("  " + th.Info.Render(reason))
 	}
 	for _, host := range s.Files {
-		p.Printf("%s %s: %s (installed: %t)\n", host.Host, out.HookScope(host), th.Path.Render(host.Path), host.Installed)
+		p.Printf("%s %s: %s (installed: %s)\n", host.Host, out.HookScope(host), th.Path.Render(host.Path), host.Installation)
 		for _, problem := range host.Problems {
 			p.Println("  " + th.Warning.Render(problem))
 		}

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/wixregiga/arclint/internal/application"
 )
 
 type configuration struct {
@@ -132,7 +134,7 @@ func TestUserInstallWritesEachHostsUserConfiguration(t *testing.T) {
 		t.Fatalf("status: %+v", status)
 	}
 	for _, entry := range status.Files {
-		if entry.Installed != (entry.Scope == scopeUser) || len(entry.Problems) != 0 {
+		if want := map[bool]application.HookInstallation{true: application.HooksComplete, false: application.HooksAbsent}[entry.Scope == scopeUser]; entry.Installation != want || len(entry.Problems) != 0 {
 			t.Fatalf("status entry after install: %+v", entry)
 		}
 	}
@@ -425,10 +427,10 @@ func TestStatusNamesMissingChangedAndUnrunnableHooks(t *testing.T) {
 	}
 	writeTestFile(t, hooks, strings.Replace(string(data), `"timeout": 30`, `"timeout": 31`, 1))
 	entries := statusOf(t, installer)
-	if claude := entries["claude user"]; claude.Installed || !reflect.DeepEqual(claude.Problems, []string{"Workflow hooks are not installed."}) {
+	if claude := entries["claude user"]; claude.Installation != application.HooksAbsent || !reflect.DeepEqual(claude.Problems, []string{"Workflow hooks are not installed."}) {
 		t.Fatalf("claude: %+v", claude)
 	}
-	if codex := entries["codex user"]; !codex.Installed || len(codex.Problems) != 1 || !strings.Contains(codex.Problems[0], "differs from the one install writes here") {
+	if codex := entries["codex user"]; codex.Installation != application.HooksComplete || len(codex.Problems) != 1 || !strings.Contains(codex.Problems[0], "differs from the one install writes here") {
 		t.Fatalf("changed codex hook: %+v", codex)
 	}
 	if err := os.Remove(binary); err != nil {
@@ -440,8 +442,54 @@ func TestStatusNamesMissingChangedAndUnrunnableHooks(t *testing.T) {
 	writeTestFile(t, hooks, `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"/gone/arclint `+eventArgs+`"}]}]}}`)
 	codex := statusOf(t, installer)["codex user"]
 	problems := strings.Join(codex.Problems, "\n")
-	if codex.Installed || !strings.Contains(problems, "The Stop hook is missing.") || !strings.Contains(problems, "The hooks run /gone/arclint, which does not exist.") {
+	if codex.Installation != application.HooksPartial || !strings.Contains(problems, "SessionStart is installed; UserPromptSubmit, PostToolUse and Stop are missing. Run `arclint agents hooks install` to add them.") || !strings.Contains(problems, "The hooks run /gone/arclint, which does not exist.") {
 		t.Fatalf("partial install of a removed binary: %+v", codex)
+	}
+}
+
+// A file installed before UserPromptSubmit existed still runs its other
+// hooks: status names the hooks it lists and the one it lacks, and does
+// not say that no host runs them.
+func TestStatusNamesTheHooksAPartialFileStillRuns(t *testing.T) {
+	root, h := t.TempDir(), newHomes(t)
+	installer := NewInstaller(root, "", testBinary(t, t.TempDir(), "native"), h.users(""))
+	if _, err := installer.Install([]string{"claude"}, false); err != nil {
+		t.Fatal(err)
+	}
+	settings := h.file(false, "claude")
+	var document map[string]any
+	data, err := os.ReadFile(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	delete(document["hooks"].(map[string]any), promptEvent)
+	data, err = json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, settings, string(data))
+	status, err := installer.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var claude application.HookFileStatus
+	for _, entry := range status.Files {
+		if entry.Host == claudeHost && entry.Scope == scopeUser {
+			claude = entry
+		}
+	}
+	if claude.Installation != application.HooksPartial || !reflect.DeepEqual(claude.Listed, []string{sessionStartEvent, postToolUseEvent, stopEvent}) || !reflect.DeepEqual(claude.Missing, []string{promptEvent}) {
+		t.Fatalf("partial claude file: %+v", claude)
+	}
+	if want := []string{"SessionStart, PostToolUse and Stop are installed and still run; UserPromptSubmit is missing. Run `arclint agents hooks install` to add it."}; !reflect.DeepEqual(claude.Problems, want) {
+		t.Fatalf("problems %q, want %q", claude.Problems, want)
+	}
+	silence := strings.Join(status.Silence, "\n")
+	if strings.Contains(silence, "no host runs them") || !strings.Contains(silence, "the hooks a file lists still run") {
+		t.Fatalf("silence for a partial file:\n%s", silence)
 	}
 }
 
@@ -535,7 +583,7 @@ func TestStatusNamesDuplicateFilesAndTheLastEvent(t *testing.T) {
 	}
 	project := statusOf(t, installer)["claude project"]
 	problems := strings.Join(project.Problems, "\n")
-	if !project.Installed || !strings.Contains(problems, h.file(false, "claude")+" already runs the hooks in every project") || !strings.Contains(problems, ".claude/settings.json also lists the workflow hooks") {
+	if project.Installation != application.HooksComplete || !strings.Contains(problems, h.file(false, "claude")+" already runs the hooks in every project") || !strings.Contains(problems, ".claude/settings.json also lists the workflow hooks") {
 		t.Fatalf("duplicates: %+v", project)
 	}
 }
@@ -551,7 +599,7 @@ func TestStatusNamesADuplicateFromAPartialUserFile(t *testing.T) {
 	}
 	writeTestFile(t, h.file(false, "codex"), `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"`+binary+` `+eventArgs+`"}]}]}}`)
 	entries := statusOf(t, installer)
-	if user := entries["codex user"]; user.Installed {
+	if user := entries["codex user"]; user.Installation != application.HooksPartial {
 		t.Fatalf("a partial user file reported installed: %+v", user)
 	}
 	if problems := strings.Join(entries["codex project"].Problems, "\n"); !strings.Contains(problems, h.file(false, "codex")+" already runs the hooks in every project") {
@@ -574,28 +622,19 @@ func TestInstallKeepsOtherHandlersOfAMixedGroup(t *testing.T) {
 }
 
 // statusOf keys each status entry by host and scope.
-func statusOf(t *testing.T, installer *Installer) map[string]struct {
-	Installed bool
-	Problems  []string
-} {
+func statusOf(t *testing.T, installer *Installer) map[string]application.HookFileStatus {
 	t.Helper()
 	status, err := installer.Status()
 	if err != nil {
 		t.Fatal(err)
 	}
-	entries := map[string]struct {
-		Installed bool
-		Problems  []string
-	}{}
+	entries := map[string]application.HookFileStatus{}
 	for _, entry := range status.Files {
 		key := entry.Host + " " + entry.Scope
 		if entry.Windows {
 			key += " windows"
 		}
-		entries[key] = struct {
-			Installed bool
-			Problems  []string
-		}{entry.Installed, entry.Problems}
+		entries[key] = entry
 	}
 	return entries
 }
@@ -616,11 +655,11 @@ func TestAnUnreachableWindowsProfileIsAProblemOfItsFilesOnly(t *testing.T) {
 	installer := NewInstaller(root, "Ubuntu", binary, users)
 	entries := statusOf(t, installer)
 	for _, host := range []string{"claude", "codex"} {
-		if native := entries[host+" user"]; !native.Installed || len(native.Problems) != 0 {
+		if native := entries[host+" user"]; native.Installation != application.HooksComplete || len(native.Problems) != 0 {
 			t.Fatalf("%s native file: %+v", host, native)
 		}
 		windows := entries[host+" user windows"]
-		if windows.Installed || len(windows.Problems) != 1 || !strings.Contains(windows.Problems[0], reason) {
+		if windows.Installation != application.HooksUnknown || len(windows.Problems) != 1 || !strings.Contains(windows.Problems[0], reason) {
 			t.Fatalf("%s Windows file: %+v", host, windows)
 		}
 	}
@@ -639,7 +678,7 @@ func TestStatusExplainsWhyNoEventArrived(t *testing.T) {
 		t.Fatal(err)
 	}
 	silence := strings.Join(status.Silence, "\n")
-	for _, want := range []string{"No configuration file lists every workflow hook", "This directory holds no rules.arclint.yaml", "working directory", "started after they were installed"} {
+	for _, want := range []string{"No configuration file lists the workflow hooks, so no host runs them here", "This directory holds no rules.arclint.yaml", "working directory", "started after they were installed"} {
 		if !strings.Contains(silence, want) {
 			t.Fatalf("silence lacks %q:\n%s", want, silence)
 		}

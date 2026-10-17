@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -23,9 +24,9 @@ func TestAgentReportsPreserveFactsAcrossRenderers(t *testing.T) {
 	workflow.Status.Binary = "/home/me/.local/bin/arclint"
 	workflow.Status.LastEvent = time.Date(2026, 10, 9, 20, 15, 3, 0, time.UTC)
 	workflow.Status.Files = []application.HookFileStatus{
-		{Host: "claude", Scope: "user", Path: "/home/me/.claude/settings.json", Installed: true},
-		{Host: "claude", Scope: "user", Windows: true, Path: "/mnt/c/Users/me/.claude/settings.json", Installed: true},
-		{Host: "codex", Scope: "project", Path: "/project/.codex/hooks.json", Problems: []string{"Missing or changed Stop hook."}},
+		{Host: "claude", Scope: "user", Path: "/home/me/.claude/settings.json", Installation: application.HooksComplete},
+		{Host: "claude", Scope: "user", Windows: true, Path: "/mnt/c/Users/me/.claude/settings.json", Installation: application.HooksComplete},
+		{Host: "codex", Scope: "project", Path: "/project/.codex/hooks.json", Installation: application.HooksPartial, Listed: []string{"SessionStart", "PostToolUse", "Stop"}, Missing: []string{"UserPromptSubmit"}, Problems: []string{"SessionStart, PostToolUse and Stop are installed and still run; UserPromptSubmit is missing."}},
 	}
 	cases := []struct {
 		name    string
@@ -34,7 +35,7 @@ func TestAgentReportsPreserveFactsAcrossRenderers(t *testing.T) {
 		jsonKey string
 	}{
 		{"workflow install", cli.AgentInstallReport{Operation: "hooks", Host: "claude", Paths: []string{"/home/me/.claude/settings.json"}, Removed: []string{"/project/.claude/settings.local.json"}, Orientation: "Work in this order:\n1. Run context.", Activation: "Start a new session."}, []string{"/home/me/.claude/settings.json", "removed the duplicate hooks from /project/.claude/settings.local.json", "Work in this order:\n1. Run context.", "Start a new session."}, "orientation"},
-		{"workflow status", workflow, []string{"/project", "Binary: /home/me/.local/bin/arclint", "Last event: 2026-10-09 20:15:03 +0000", "claude user: /home/me/.claude/settings.json (installed: true)", "claude user (Windows): /mnt/c/Users/me/.claude/settings.json (installed: true)", "codex project: /project/.codex/hooks.json (installed: false)", "Missing or changed Stop hook.", "trust them in /hooks"}, "lastEvent"},
+		{"workflow status", workflow, []string{"/project", "Binary: /home/me/.local/bin/arclint", "Last event: 2026-10-09 20:15:03 +0000", "claude user: /home/me/.claude/settings.json (installed: complete)", "claude user (Windows): /mnt/c/Users/me/.claude/settings.json (installed: complete)", "codex project: /project/.codex/hooks.json (installed: partial)", "SessionStart, PostToolUse and Stop are installed and still run; UserPromptSubmit is missing.", "trust them in /hooks"}, "lastEvent"},
 	}
 	ansi := regexp.MustCompile(`\x1b\[[0-9;]*m`)
 	for _, tc := range cases {
@@ -81,6 +82,51 @@ func TestAgentReportsPreserveFactsAcrossRenderers(t *testing.T) {
 // A finding's remediation reaches the reader whichever renderer runs:
 // both human renderers print it under the finding, identically once
 // styling is removed, and JSON carries the same text.
+// A JSON reader tells a partly installed file from a missing one by its
+// installation and the hooks it lists and lacks.
+func TestHooksStatusJSONNamesListedAndMissingHooks(t *testing.T) {
+	report := cli.HooksStatusReport{}
+	report.Status.Files = []application.HookFileStatus{
+		{Host: "claude", Scope: "user", Path: "/home/me/.claude/settings.json", Installation: application.HooksPartial, Listed: []string{"SessionStart", "PostToolUse", "Stop"}, Missing: []string{"UserPromptSubmit"}},
+		{Host: "codex", Scope: "user", Path: "/home/me/.codex/hooks.json", Installation: application.HooksAbsent, Missing: []string{"SessionStart", "UserPromptSubmit", "PostToolUse", "Stop"}},
+		{Host: "codex", Scope: "user", Windows: true, Path: `%USERPROFILE%\.codex\hooks.json`, Installation: application.HooksUnknown},
+	}
+	render, err := reportfactory.Select(cli.RendererJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	if err := render.Render(&buf, report); err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Files []struct {
+			Installed string   `json:"installed"`
+			Listed    []string `json:"listed"`
+			Missing   []string `json:"missing"`
+		} `json:"files"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	want := []struct {
+		installed       string
+		listed, missing []string
+	}{
+		{"partial", []string{"SessionStart", "PostToolUse", "Stop"}, []string{"UserPromptSubmit"}},
+		{"absent", []string{}, []string{"SessionStart", "UserPromptSubmit", "PostToolUse", "Stop"}},
+		{"unknown", []string{}, []string{}},
+	}
+	if len(doc.Files) != len(want) {
+		t.Fatalf("files: %s", buf.String())
+	}
+	for index, file := range doc.Files {
+		if file.Installed != want[index].installed || !slices.Equal(file.Listed, want[index].listed) || !slices.Equal(file.Missing, want[index].missing) || file.Listed == nil || file.Missing == nil {
+			t.Fatalf("file %d: %+v, want %+v", index, file, want[index])
+		}
+	}
+}
+
 func TestCheckRemediationAcrossRenderers(t *testing.T) {
 	const remediation = "RoleID includes RoleName, which is not an identity. If RoleName can change while the Role stays the same, it is not part of the identity; change the identity before adding a field. If it cannot change, declare a field of type RoleID on Role."
 	id, err := rule.NewID("entity/identity")
