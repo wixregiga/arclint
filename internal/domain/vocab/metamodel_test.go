@@ -412,6 +412,7 @@ func TestDDDKeepsCanonicalWorksAtTierOne(t *testing.T) {
 	for _, key := range []string{
 		"evans2003", "evans2015", "vernon2013", "evans-fowler-1997",
 		"vernon-effective-aggregate-design-1", "vernon-effective-aggregate-design-2",
+		"vernon-iddd-ch1", "vernon-iddd-sample-pages", "vernon-iddd-samples",
 	} {
 		w, ok := m.Work(key)
 		if !ok {
