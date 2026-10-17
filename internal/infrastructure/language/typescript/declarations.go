@@ -237,7 +237,9 @@ func (w *tsWalker) walk(n *gotreesitter.Node, owner string, exported bool) {
 		return
 	case tsClassDeclaration, tsAbstractClassDeclaration, tsClassExpression:
 		name := w.name(n)
-		w.add("class", name, owner, exported, n)
+		if d := w.add("class", name, owner, exported, n); d != nil {
+			d.Abstract = n.Type(w.lang) == tsAbstractClassDeclaration
+		}
 		if body := n.ChildByFieldName(tsBodyField, w.lang); body != nil {
 			for i := 0; i < body.NamedChildCount(); i++ {
 				w.walk(body.NamedChild(i), name, exported)
@@ -275,9 +277,10 @@ func (w *tsWalker) walk(n *gotreesitter.Node, owner string, exported bool) {
 			d.Params, d.Results = w.signature(n)
 		}
 		return
-	case tsMethodDefinition:
+	case tsMethodDefinition, tsAbstractMethodSignature:
 		// Member visibility is the member's own: private/protected/#name
-		// make it unexported regardless of the class's export.
+		// make it unexported regardless of the class's export. An
+		// abstract method is declared without a body.
 		if d := w.add("method", w.name(n), owner, w.memberPublic(n), n); d != nil {
 			d.Params, d.Results = w.signature(n)
 		}

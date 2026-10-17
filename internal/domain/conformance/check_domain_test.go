@@ -201,11 +201,11 @@ func TestBuiltInRulesJudgeEveryContextOfTheRecordedDomain(t *testing.T) {
 			}
 		}
 	}
-	if domainRules != 24 {
-		t.Fatalf("built-in domain rules = %d, want 24", domainRules)
+	if domainRules != 26 {
+		t.Fatalf("built-in domain rules = %d, want 26", domainRules)
 	}
-	if got := len(a.AppliedRules()); got != 25 {
-		t.Errorf("applied rules = %d, want the 24 domain rules and the word limit", got)
+	if got := len(a.AppliedRules()); got != 27 {
+		t.Errorf("applied rules = %d, want the 26 domain rules and the word limit", got)
 	}
 
 	want := map[string][]string{

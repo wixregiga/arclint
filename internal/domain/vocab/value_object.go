@@ -41,6 +41,6 @@ func (v ValueObject) validate(c BoundedContext) error {
 func (v ValueObject) clone() ValueObject {
 	out := v
 	out.Aliases = cloneStrings(v.Aliases)
-	out.Invariants = cloneSlice(v.Invariants)
+	out.Invariants = cloneInvariants(v.Invariants)
 	return out
 }

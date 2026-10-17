@@ -8,7 +8,7 @@ it drifts). Add hand-written guidance outside the markers.
 <!-- arclint:agents:begin -->
 ## Architecture contracts (arclint)
 
-Enforced from rules.arclint.yaml: 65 rules over languages [go, typescript].
+Enforced from rules.arclint.yaml: 67 rules over languages [go, typescript].
 
 ### Workflow
 
@@ -120,7 +120,7 @@ Relations: vocabulary → rule (conformist); vocabulary → conformance (conform
 
 ### Built-in rules
 
-24 rules built in from the DDD meta-model judge the recorded domain against the code, and 1 rule built in from the word limits of the domain file judges the recorded text; no Pattern distributes them. Change one through an Override under its id in rules.arclint.yaml (severity, or disable with a reason).
+26 rules built in from the DDD meta-model judge the recorded domain against the code, and 1 rule built in from the word limits of the domain file judges the recorded text; no Pattern distributes them. Change one through an Override under its id in rules.arclint.yaml (severity, or disable with a reason).
 
 - ubiquitous_language/terms-declared-in-code: Every recorded member entity, value object, and identity names one type declaration in the context's code, spelled with the recorded name in the language's type case (in Go, a name the package's own name completes, so rule.ID spells RuleID); a name no declaration spells, or one that two declarations spell with nothing to choose between them, is a finding. Aggregates, events, services, specifications, repositories, and factories state the same for themselves.
 - bounded_context/code-held-by-one-context: A file of a bounded context's code belongs to no other context; two contexts hold the same code only under a recorded shared_kernel relation between them, because a boundary two models straddle is not a boundary.
@@ -131,7 +131,9 @@ Relations: vocabulary → rule (conformist); vocabulary → conformance (conform
 - value_object/constructed-through-one-door: A value object with a recorded invariant declares a constructor: a function of its module that returns it, or a constructor or __init__ of its class, or a factory method on it named create, from, of, parse, new, or build; the invariant is enforced there, so a value that violates it never exists.
 - value_object/no-setters: A value object declares no method whose name begins with set; nothing changes a value after construction.
 - invariant/enforced-at-every-mutation: Every constructor and every command of the root calls the ensure method of the aggregate's invariant, so the invariant is evaluated at the completion of every state-mutating operation and a violation fails the operation; a root with no constructor has no door at which to enforce it.
+- invariant/verifying-tests-declared: Every test an invariant's verified_by names is declared in the file it names; a Go test is a func Test in a _test.go file, a Python test is a def test function, or a method spelled Class.test_name, and a TypeScript test, which is a call, is its name written in the file. The test's existence is checked; whether it proves the invariant is not.
 - assertion/checked-by-its-operation: The owner of an assertion, the aggregate's root or the domain service, declares both the operation the assertion names and the checking method (assert followed by the key in the language's method case), and the operation calls the checking method.
+- assertion/verifying-tests-declared: Every test an assertion's verified_by names is declared in the file it names; a Go test is a func Test in a _test.go file, a Python test is a def test function, or a method spelled Class.test_name, and a TypeScript test, which is a call, is its name written in the file. The test's existence is checked; whether it proves the guarantee is not.
 - specification/satisfaction-method: A specification is a declared type carrying a satisfaction method (SatisfiedBy, satisfiedBy, or satisfied_by).
 - aggregate/protects-an-invariant (warning): An aggregate records at least one invariant; a boundary drawn around nothing that must stay consistent is not yet justified, and the finding asks whether the entry is an aggregate or a value.
 - aggregate/root-declared: The root is one declared type spelled with the aggregate's name in the language's type case, found in the context's code; a type that can carry behaviour (a struct or named type in Go, a class in TypeScript and Python) is the root ahead of an interface or alias of the same name, two such declarations with nothing to choose between them are a finding, and none is a finding at the recording.

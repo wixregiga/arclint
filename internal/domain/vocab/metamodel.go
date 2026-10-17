@@ -305,10 +305,13 @@ func Sections() []Section {
 }
 
 // Property is one recorded property of a building block instance.
+// Sources cite the works a property comes from when the block's own
+// definition does not already state it.
 type Property struct {
 	Name       string
 	Required   bool
 	Definition string
+	Sources    []Citation
 }
 
 // KindDefinition is one published value of a block's kind property,
@@ -728,6 +731,7 @@ func (v *metaModelValidation) recording(subject string, r Recording) {
 		if strings.TrimSpace(p.Definition) == "" {
 			v.failf("%s: property %q must carry a definition", subject, p.Name)
 		}
+		v.citations(subject+" property "+p.Name, p.Sources)
 	}
 	seenKinds := map[string]bool{}
 	for _, k := range r.Kinds {

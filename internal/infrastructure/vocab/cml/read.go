@@ -396,9 +396,9 @@ func (p *projection) operations(ops []*syntax.DomainObjectOperation) ([]vocab.In
 			continue
 		}
 		if kind == invariantPrefix {
-			inv = append(inv, vocab.Invariant{Key: key, Statement: op.Doc, Line: op.Pos.Line})
+			inv = append(inv, vocab.Invariant{Key: key, Statement: op.Doc, VerifiedBy: hints(op.Hint, verifiedByHint), Line: op.Pos.Line})
 		} else {
-			assertions = append(assertions, vocab.Assertion{Key: key, On: hintOne(op.Hint, "on"), Statement: op.Doc, Line: op.Pos.Line})
+			assertions = append(assertions, vocab.Assertion{Key: key, On: hintOne(op.Hint, "on"), Statement: op.Doc, VerifiedBy: hints(op.Hint, verifiedByHint), Line: op.Pos.Line})
 		}
 	}
 	return inv, assertions
@@ -409,7 +409,7 @@ func (p *projection) serviceAssertions(ops []*syntax.ServiceOperation) []vocab.A
 	for _, op := range ops {
 		kind, key, ok := ownedOperation(op.Name, op.Doc, op.Hint, &op.Node)
 		if ok && kind == assertionPrefix {
-			out = append(out, vocab.Assertion{Key: key, On: hintOne(op.Hint, "on"), Statement: op.Doc, Line: op.Pos.Line})
+			out = append(out, vocab.Assertion{Key: key, On: hintOne(op.Hint, "on"), Statement: op.Doc, VerifiedBy: hints(op.Hint, verifiedByHint), Line: op.Pos.Line})
 		}
 	}
 	return out

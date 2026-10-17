@@ -162,9 +162,10 @@ type recording struct {
 }
 
 type property struct {
-	Name       string `yaml:"name"`
-	Required   bool   `yaml:"required"`
-	Definition string `yaml:"definition"`
+	Name       string     `yaml:"name"`
+	Required   bool       `yaml:"required"`
+	Definition string     `yaml:"definition"`
+	Sources    []citation `yaml:"sources"`
 }
 
 type kind struct {
@@ -517,7 +518,14 @@ func (e emitter) recording(r recording) {
 	if len(r.Properties) > 0 {
 		e.printf("Properties: []Property{\n")
 		for _, p := range r.Properties {
-			e.printf("{Name: %q, Required: %t, Definition: %q},\n", p.Name, p.Required, p.Definition)
+			if len(p.Sources) == 0 {
+				e.printf("{Name: %q, Required: %t, Definition: %q},\n", p.Name, p.Required, p.Definition)
+				continue
+			}
+			e.printf("{\n")
+			e.printf("Name: %q, Required: %t, Definition: %q,\n", p.Name, p.Required, p.Definition)
+			e.citations(p.Sources)
+			e.printf("},\n")
 		}
 		e.printf("},\n")
 	}

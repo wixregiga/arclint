@@ -108,6 +108,7 @@ func TestDomainCommandFamily(t *testing.T) {
 	t.Run("extensionAccess", testDomainExtensionAccess)
 	t.Run("builtInRules", testDomainBuiltInRules)
 	t.Run("serviceContract", testDomainServiceContract)
+	t.Run("interfaceServiceVerifiedByTests", testDomainInterfaceServiceVerifiedByTests)
 	t.Run("context", testDomainContext)
 	t.Run("ambiguity", testDomainAmbiguity)
 }
@@ -746,6 +747,35 @@ func testDomainGuided(t *testing.T) {
 	}
 	if !strings.Contains(string(data), "        entities:\n          OrderLine:\n            definition: One product on the order.\n            aliases: [Line, Item]\n") {
 		t.Fatalf("guided file content:\n%s", data)
+	}
+
+	// An invariant asks for the tests that verify it, one a line,
+	// until an empty line.
+	stdin = strings.Join([]string{
+		"Invariant",
+		"ordering",
+		"Order",
+		"total-never-negative",
+		"An Order's total is never negative.",
+		"src/order_test.go:TestTotalNeverNegative",
+		"web/order.test.ts:total, never negative",
+		"",
+		"y",
+		"",
+	}, "\n")
+	stdout, stderr, code = runBinStdin(t, root, os.Environ(), stdin, "domain", "define", "--guided")
+	if code != 0 {
+		t.Fatalf("guided invariant: exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "  Verified by: src/order_test.go:TestTotalNeverNegative\n  Verified by: web/order.test.ts:total, never negative\n") {
+		t.Fatalf("guided invariant does not propose its tests:\n%s", stdout)
+	}
+	data, err = os.ReadFile(filepath.Join(root, "domain.arclint.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "          total-never-negative:\n            statement: An Order's total is never negative.\n            verified_by:\n              - src/order_test.go:TestTotalNeverNegative\n              - web/order.test.ts:total, never negative\n") {
+		t.Fatalf("guided invariant file content:\n%s", data)
 	}
 
 	// The concept may be named instead of numbered; a decline writes
@@ -1461,5 +1491,83 @@ func testDomainServiceContract(t *testing.T) {
 	stdout = mustRunDomain(t, root, "domain", "overview")
 	if !strings.Contains(stdout, "tenant-name-unique") || !strings.Contains(stdout, "source: src/tenancy/provisioning.go:") {
 		t.Fatalf("overview does not anchor the service assertion at its check:\n%s", stdout)
+	}
+}
+
+// discounterInterface is the service of issue #143, declared as Evans
+// states a service, a standalone interface: no body can call its check.
+const discounterInterface = `package pricing
+
+// Discounter takes a discount off an order's total.
+type Discounter interface {
+	Discount(total int) int
+}
+`
+
+// testDomainInterfaceServiceVerifiedByTests holds a service declared
+// as an interface to the tests its assertion names: without them the
+// finding says how to record them, with an existing test the check is
+// clean, and a renamed test is a finding at the recorded assertion.
+// The tests show in domain show and in arclint context.
+func testDomainInterfaceServiceVerifiedByTests(t *testing.T) {
+	root := domainFixture(t)
+	write(t, root, "src/pricing/discounter.go", discounterInterface)
+	write(t, root, "src/pricing/discounter_test.go", "package pricing\n\nimport \"testing\"\n\nfunc TestDiscountNeverExceedsTotal(t *testing.T) {}\n")
+	for _, args := range [][]string{
+		{"domain", "define", "bounded_context", "pricing", "--definition", "Pricing orders."},
+		{"domain", "define", "domain_service", "Discounter", "--definition", "Takes a discount off an order's total."},
+		{"domain", "define", "assertion", "never-exceeds-total", "--owner", "Discounter", "--on", "Discount", "--statement", "A discount never exceeds the order total."},
+	} {
+		if out := mustRunDomain(t, root, args...); !strings.HasPrefix(out, "Defined ") {
+			t.Fatalf("%v: got %q", args, out)
+		}
+	}
+	findings := func(wantCode int) []diagnosticDoc {
+		t.Helper()
+		stdout, stderr, code := runBin(t, root, os.Environ(), "check", "--format", "json")
+		if code != wantCode {
+			t.Fatalf("check: exit %d, want %d\nstdout: %s\nstderr: %s", code, wantCode, stdout, stderr)
+		}
+		var diagnostics []diagnosticDoc
+		if err := json.Unmarshal([]byte(stdout), &diagnostics); err != nil {
+			t.Fatalf("check json: %v\n%s", err, stdout)
+		}
+		var out []diagnosticDoc
+		for _, d := range diagnostics {
+			if d.Kind == "violation" {
+				out = append(out, d)
+			}
+		}
+		return out
+	}
+
+	d := findings(1)
+	if len(d) != 1 || d[0].RuleID != "assertion/checked-by-its-operation" ||
+		!strings.Contains(d[0].Message, "Discounter is declared as an interface, which has no body to call AssertNeverExceedsTotal") {
+		t.Fatalf("interface without tests: %+v", d)
+	}
+
+	test := "src/pricing/discounter_test.go:TestDiscountNeverExceedsTotal"
+	out := mustRunDomain(t, root, "domain", "define", "assertion", "never-exceeds-total", "--context", "pricing", "--verified-by", test)
+	if !strings.Contains(out, "verified_by: "+test) {
+		t.Fatalf("define does not report the recorded test:\n%s", out)
+	}
+	if d := findings(0); len(d) != 0 {
+		t.Fatalf("interface with an existing test: %+v", d)
+	}
+	out = mustRunDomain(t, root, "domain", "show", "assertion", "never-exceeds-total")
+	if !strings.Contains(out, "verified by: "+test+" (arclint checks that each test exists, not what it proves)") {
+		t.Fatalf("show lacks the verifying test:\n%s", out)
+	}
+	out = mustRunDomain(t, root, "context", "src/pricing/discounter.go")
+	if !strings.Contains(out, "verified by: "+test) {
+		t.Fatalf("context lacks the verifying test:\n%s", out)
+	}
+
+	write(t, root, "src/pricing/discounter_test.go", "package pricing\n\nimport \"testing\"\n\nfunc TestDiscountCapped(t *testing.T) {}\n")
+	d = findings(1)
+	if len(d) != 1 || d[0].RuleID != "assertion/verifying-tests-declared" || d[0].Path != "domain.arclint.yaml" ||
+		!strings.Contains(d[0].Message, "declares no test TestDiscountNeverExceedsTotal") {
+		t.Fatalf("renamed test: %+v", d)
 	}
 }

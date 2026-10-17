@@ -23,6 +23,9 @@ const (
 	satisfactionOperation = "satisfiedBy"
 	assertionPrefix       = "assert"
 	nodeField             = "Node"
+	// verifiedByHint names the hint entries that carry the tests an
+	// invariant or assertion names under verified_by, one entry a test.
+	verifiedByHint = "verified_by"
 )
 
 var (

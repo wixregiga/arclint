@@ -181,6 +181,16 @@ func (f Facts) Read(path string) (string, error) {
 	return data, nil
 }
 
+// observed reports whether the walked repository holds path, selected
+// or not; it lends nothing of the file.
+func (f Facts) observed(path string) bool {
+	if f.source == nil {
+		return false
+	}
+	_, ok := f.source.files[path]
+	return ok
+}
+
 // ZoneOf returns memberships of a selected file only. Other endpoint
 // memberships are carried by DependencyImport, never an unrestricted lookup.
 func (f Facts) ZoneOf(path string) []rule.ZoneName {

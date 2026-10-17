@@ -968,10 +968,16 @@ func ddd() MetaModel {
 				},
 				Records: Recording{
 					Section: SectionInvariants,
-					Note:    "A map from key to statement, recorded under the aggregate or value object that owns it; the owner is the nesting, never a reference.",
+					Note:    "A map from key to statement, or from key to the statement and verified_by when the invariant names the tests that verify it, recorded under the aggregate or value object that owns it; the owner is the nesting, never a reference.",
 					Properties: []Property{
 						{Name: "key", Required: true, Definition: "The rule's name in kebab-case, unique within its owner and stable across edits: it is how a finding, a suppression, and a baseline refer to the rule. For an aggregate's invariant it also names the root method that enforces it: ensure followed by the key, spelled in the language's method case, so lines-frozen is enforced by EnsureLinesFrozen in Go, ensureLinesFrozen in TypeScript, and ensure_lines_frozen in Python."},
 						{Name: "statement", Required: true, Definition: "The rule in the ubiquitous language, as a domain expert would state it."},
+						{
+							Name: "verified_by", Required: false, Definition: "The automated tests that verify the rule, each spelled as the test file's path from the repository root, a colon, and the test's name (internal/order/order_test.go:TestLinesFrozen). Record them where the rule cannot be stated in the code alone; the check reads that each test exists, not whether it proves the rule.",
+							Sources: []Citation{
+								{Work: "evans2015", Page: "22", Section: "Assertions"},
+							},
+						},
 					},
 				},
 				Invariants: []BlockInvariant{
@@ -1029,6 +1035,32 @@ func ddd() MetaModel {
 							Limitations: []string{"a command is an exported method of the root whose result carries an error; a TypeScript or Python command that throws is not seen"},
 						},
 					},
+					{
+						ID:        "invariant/verified-by-names-tests",
+						Statement: "Every entry of an invariant's verified_by names one test as the path of its file from the repository root, a colon, and the test's name; an entry missing either part, a path that is absolute or leaves the repository, and a test named twice are rejected.",
+						Sources: []Citation{
+							{Work: "evans2015", Page: "22", Section: "Assertions"},
+						},
+						Enforcement: Enforcement{
+							By:        EvaluatorLoader,
+							Languages: Languages{All: true},
+							Severity:  severityError,
+						},
+					},
+					{
+						ID:        "invariant/verifying-tests-declared",
+						Statement: "Every test an invariant's verified_by names is declared in the file it names; a Go test is a func Test in a _test.go file, a Python test is a def test function, or a method spelled Class.test_name, and a TypeScript test, which is a call, is its name written in the file. The test's existence is checked; whether it proves the invariant is not.",
+						Sources: []Citation{
+							{Work: "evans2015", Page: "22", Section: "Assertions"},
+						},
+						Enforcement: Enforcement{
+							By:          EvaluatorDomain,
+							Facts:       []string{"file_tree", "declarations"},
+							Languages:   Languages{All: true},
+							Severity:    severityError,
+							Limitations: []string{"a TypeScript test name is matched as text anywhere in its file, so a comment or a string that repeats the name is taken for the test"},
+						},
+					},
 				},
 				Guidance: []Guidance{
 					{
@@ -1074,6 +1106,13 @@ func ddd() MetaModel {
 						{Name: "key", Required: true, Definition: "The assertion's name in kebab-case, unique within its owner; the owner's method that checks it is assert followed by the key, spelled in the language's method case (AssertHasLines, assertHasLines, assert_has_lines)."},
 						{Name: "on", Required: true, Definition: "The operation the guarantee belongs to: a command of the root, or an operation of the service."},
 						{Name: "statement", Required: true, Definition: "The guarantee as the domain expert states it, in the ubiquitous language (Only an active tenant offers an invitation); it is recorded in the expert's words and never rewritten into a post-condition, because on already names the operation."},
+						{
+							Name: "verified_by", Required: false, Definition: "The automated tests that verify the guarantee, each spelled as the test file's path from the repository root, a colon, and the test's name (internal/pricing/discount_test.go:TestDiscountNeverExceedsTotal). An owner declared as an interface or an abstract class has no body to call the check from, so its assertions name their tests here; the check reads that each test exists, not whether it proves the guarantee.",
+							Sources: []Citation{
+								{Work: "evans2015", Page: "22", Section: "Assertions"},
+								{Work: "evans2015", Page: "14", Section: "Services"},
+							},
+						},
 					},
 				},
 				Invariants: []BlockInvariant{
@@ -1109,10 +1148,37 @@ func ddd() MetaModel {
 							{Work: "evans2015", Page: "22", Section: "Assertions"},
 						},
 						Enforcement: Enforcement{
-							By:        EvaluatorDomain,
-							Facts:     []string{"file_tree", "declarations", "calls"},
+							By:          EvaluatorDomain,
+							Facts:       []string{"file_tree", "declarations", "calls"},
+							Languages:   Languages{All: true},
+							Severity:    severityError,
+							Limitations: []string{"an owner declared as an interface or an abstract class has no body to call a checking method from; for its assertion the rule asks instead for the tests under verified_by, and assertion/verifying-tests-declared checks that they exist", "a Python class is abstract when it derives ABC or Protocol, or names ABCMeta as its metaclass, by the name written in the class statement; a base imported under another name is not seen"},
+						},
+					},
+					{
+						ID:        "assertion/verified-by-names-tests",
+						Statement: "Every entry of an assertion's verified_by names one test as the path of its file from the repository root, a colon, and the test's name; an entry missing either part, a path that is absolute or leaves the repository, and a test named twice are rejected.",
+						Sources: []Citation{
+							{Work: "evans2015", Page: "22", Section: "Assertions"},
+						},
+						Enforcement: Enforcement{
+							By:        EvaluatorLoader,
 							Languages: Languages{All: true},
 							Severity:  severityError,
+						},
+					},
+					{
+						ID:        "assertion/verifying-tests-declared",
+						Statement: "Every test an assertion's verified_by names is declared in the file it names; a Go test is a func Test in a _test.go file, a Python test is a def test function, or a method spelled Class.test_name, and a TypeScript test, which is a call, is its name written in the file. The test's existence is checked; whether it proves the guarantee is not.",
+						Sources: []Citation{
+							{Work: "evans2015", Page: "22", Section: "Assertions"},
+						},
+						Enforcement: Enforcement{
+							By:          EvaluatorDomain,
+							Facts:       []string{"file_tree", "declarations"},
+							Languages:   Languages{All: true},
+							Severity:    severityError,
+							Limitations: []string{"a TypeScript test name is matched as text anywhere in its file, so a comment or a string that repeats the name is taken for the test"},
 						},
 					},
 				},

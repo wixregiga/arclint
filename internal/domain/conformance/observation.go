@@ -108,7 +108,14 @@ type Declaration struct {
 	// type, interface, class), else "".
 	Owner string
 	// Exported follows the language's own visibility convention.
-	Exported  bool
+	Exported bool
+	// Abstract marks a class the language declares abstract, which
+	// cannot be instantiated and may leave its methods without a body:
+	// a TypeScript abstract class, or a Python class deriving ABC or
+	// Protocol, or naming ABCMeta as its metaclass, by the name the
+	// class statement writes. False for every other kind; an interface
+	// is abstract by its kind.
+	Abstract  bool
 	StartLine int
 	EndLine   int
 	// Params and Results carry the syntactic signature of func and
@@ -394,6 +401,9 @@ func NewObservations(files []ObservedFile, facts map[string]LanguageFacts) (Obse
 		for _, d := range f.Declarations {
 			if !declarationKinds[d.Kind] {
 				return Observations{}, fmt.Errorf("observations: %s: declaration kind %q is outside the closed cross-language vocabulary", path, d.Kind)
+			}
+			if d.Abstract && d.Kind != declKindClass {
+				return Observations{}, fmt.Errorf("observations: %s: %s %s is marked abstract; only a class carries the mark", path, d.Kind, d.Name)
 			}
 		}
 		if err := validResolution(f, seen); err != nil {

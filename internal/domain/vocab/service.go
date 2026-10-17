@@ -109,6 +109,6 @@ func (s DomainService) validate(c BoundedContext) error {
 
 func (s DomainService) clone() DomainService {
 	out := s
-	out.Assertions = cloneSlice(s.Assertions)
+	out.Assertions = cloneAssertions(s.Assertions)
 	return out
 }

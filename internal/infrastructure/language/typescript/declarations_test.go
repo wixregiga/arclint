@@ -217,3 +217,42 @@ func diffDecls(t *testing.T, got, want []conformance.Declaration) {
 	}
 	t.Fail()
 }
+
+// An abstract class carries the abstract mark, and its abstract
+// methods, which have no body, are declared as its methods like the
+// ones that do; a class that is not abstract carries no mark.
+func TestTypeScriptMarksAbstractClasses(t *testing.T) {
+	src := []byte(`export abstract class Discounter {
+  abstract discount(total: number): number;
+  protected abstract audit(): void;
+  describe(): string { return "discounter"; }
+}
+
+export class FlatDiscount extends Discounter {
+  discount(total: number): number { return total - 1; }
+  protected audit(): void {}
+}
+`)
+	got := extractDeclarations(newParsers(), "src/pricing/discount.ts", src)
+	if got.ParseError != "" {
+		t.Fatal(got.ParseError)
+	}
+	want := []conformance.Declaration{
+		{Kind: "class", Name: "Discounter", Exported: true, Abstract: true, StartLine: 1, EndLine: 5},
+		{
+			Kind: "method", Name: "discount", Owner: "Discounter", Exported: true, StartLine: 2, EndLine: 2,
+			Params: []conformance.DeclarationParam{{Name: "total", Type: "number"}}, Results: []string{"number"},
+		},
+		{Kind: "method", Name: "audit", Owner: "Discounter", StartLine: 3, EndLine: 3, Results: []string{"void"}},
+		{Kind: "method", Name: "describe", Owner: "Discounter", Exported: true, StartLine: 4, EndLine: 4, Results: []string{"string"}},
+		{Kind: "class", Name: "FlatDiscount", Exported: true, StartLine: 7, EndLine: 10},
+		{
+			Kind: "method", Name: "discount", Owner: "FlatDiscount", Exported: true, StartLine: 8, EndLine: 8,
+			Params: []conformance.DeclarationParam{{Name: "total", Type: "number"}}, Results: []string{"number"},
+		},
+		{Kind: "method", Name: "audit", Owner: "FlatDiscount", StartLine: 9, EndLine: 9, Results: []string{"void"}},
+	}
+	if !reflect.DeepEqual(got.Decls, want) {
+		t.Fatalf("declarations:\n got %+v\nwant %+v", got.Decls, want)
+	}
+}

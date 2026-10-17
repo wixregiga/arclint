@@ -47,6 +47,10 @@ type domainCheck struct {
 	// which leaves an evaluation without a violation undetermined.
 	judge      func(r rule.Rule, subject rule.Subject, cc contextCode, code domainCode) ([]Violation, []string, error)
 	needsZones bool
+	// readsTests marks a check that reads the test files verified_by
+	// names, wherever they are: what the context's own code supplies
+	// does not decide whether it can judge.
+	readsTests bool
 }
 
 // domainChecks maps every block invariant the domain evaluator carries
@@ -63,6 +67,8 @@ var domainChecks = map[string]domainCheck{
 	"value_object/no-setters":                               {run: checkValueObjectNoSetters},
 	"invariant/enforced-at-every-mutation":                  {run: checkInvariantEnforcedAtMutation},
 	"assertion/checked-by-its-operation":                    {run: checkAssertionChecked},
+	"invariant/verifying-tests-declared":                    {judge: checkInvariantTestsDeclared, readsTests: true},
+	"assertion/verifying-tests-declared":                    {judge: checkAssertionTestsDeclared, readsTests: true},
 	"specification/satisfaction-method":                     {run: checkSpecificationSatisfaction},
 	"aggregate/protects-an-invariant":                       {run: checkAggregateProtectsInvariant},
 	"aggregate/root-declared":                               {run: checkAggregateRootDeclared},
@@ -110,6 +116,9 @@ func evaluateDomain(r rule.Rule, facts Facts, knowledge vocab.UbiquitousLanguage
 			return nil, fmt.Errorf("domain: %w", err)
 		}
 		outcome, undecided := cc.undecidable(inv.Enforcement.Facts)
+		if check.readsTests {
+			outcome, undecided = "", false
+		}
 		if check.needsZones && len(facts.zoneNames()) == 0 {
 			outcome, undecided = OutcomeNotApplicable, true
 		}
@@ -151,6 +160,9 @@ type domainCode struct {
 	// all is the facts of every supplied file, for a check that looks
 	// for holders of a context's terms wherever they are declared.
 	all contractIndex
+	// facts is the Rule's input itself, for a check that reads a file
+	// the recording names, such as a test under verified_by.
+	facts Facts
 }
 
 // aggregateRoot is one located root with the aggregate and context it
@@ -242,7 +254,7 @@ type fileImport struct {
 // supplied code. The Facts view applies the Rule's Exclusions when a
 // Rule is judged and supplies inspection facts when the domain is listed.
 func resolveDomain(facts Facts, knowledge vocab.UbiquitousLanguage) (domainCode, error) {
-	code := domainCode{knowledge: knowledge, holders: map[string][]string{}, all: buildContractIndex(facts.paths(), facts)}
+	code := domainCode{knowledge: knowledge, holders: map[string][]string{}, all: buildContractIndex(facts.paths(), facts), facts: facts}
 	for _, ctx := range knowledge.Contexts {
 		cc, err := resolveContext(ctx, knowledge.Recording.Path(), facts)
 		if err != nil {
@@ -1390,8 +1402,10 @@ func checkInvariantEnforcedAtMutation(r rule.Rule, subject rule.Subject, cc cont
 // checkAssertionChecked judges every recorded assertion against its
 // owner: an aggregate's root or a domain service declares the operation
 // and the checking method, and the operation calls the check. An owner
-// whose type is not located is left to aggregate/root-declared or
-// domain_service/declared.
+// declared as an interface or an abstract class has no body to call a
+// check from, so its assertion names the tests that verify it instead.
+// An owner whose type is not located is left to aggregate/root-declared
+// or domain_service/declared.
 func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ domainCode) ([]Violation, error) {
 	var vs []Violation
 	for _, agg := range cc.ctx.Aggregates {
@@ -1400,7 +1414,7 @@ func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ 
 			continue
 		}
 		more, err := assertionsChecked(r, subject, assertionOwner{
-			label: "aggregate " + agg.Name, holder: "the root", decl: ac.root(), idx: ac.idx,
+			label: "aggregate " + agg.Name, holder: "the root", context: cc.ctx.Name, decl: ac.root(), idx: ac.idx,
 		}, agg.Assertions)
 		if err != nil {
 			return nil, err
@@ -1414,7 +1428,7 @@ func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ 
 		}
 		decl := loc.decl()
 		more, err := assertionsChecked(r, subject, assertionOwner{
-			label: "service " + s.Name, holder: "the service", decl: decl, idx: cc.unitIdx(decl),
+			label: "service " + s.Name, holder: "the service", context: cc.ctx.Name, decl: decl, idx: cc.unitIdx(decl),
 			decision: vocab.DecideThenCarryOut(),
 		}, s.Assertions)
 		if err != nil {
@@ -1427,13 +1441,15 @@ func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ 
 
 // assertionOwner is the declared type that owns a set of assertions:
 // an aggregate's root or a domain service. label names the owner in a
-// finding, holder names the declaring type in prose. decision is what
-// a finding adds to its remediation about where the decision lives and
-// where its change is made; a root's command changes its own aggregate,
-// so a root adds nothing.
+// finding, holder names the declaring type in prose, and context is the
+// bounded context the owner is recorded in. decision is what a finding
+// adds to its remediation about where the decision lives and where its
+// change is made; a root's command changes its own aggregate, so a root
+// adds nothing.
 type assertionOwner struct {
 	label    string
 	holder   string
+	context  string
 	decl     locDecl
 	idx      contractIndex
 	decision string
@@ -1447,10 +1463,26 @@ func (o assertionOwner) remediation(repair string) string {
 	return repair + ". " + o.decision
 }
 
+// bodiless names how the owner is declared when it has no body to call
+// a checking method from, or "" when it has one.
+func (o assertionOwner) bodiless() string {
+	switch {
+	case o.decl.decl.Kind == declKindInterface:
+		return "an interface"
+	case o.decl.decl.Kind == declKindClass && o.decl.decl.Abstract:
+		return "an abstract class"
+	}
+	return ""
+}
+
 // assertionsChecked applies the one shape both owners share: the owner
 // declares the operation and assert followed by the key, and the
-// operation calls the check.
+// operation calls the check. An owner without a body declares the
+// operation, and the assertion names its tests under verified_by.
 func assertionsChecked(r rule.Rule, subject rule.Subject, owner assertionOwner, assertions []vocab.Assertion) ([]Violation, error) {
+	if declared := owner.bodiless(); declared != "" {
+		return assertionsVerifiedByTests(r, subject, owner, declared, assertions)
+	}
 	var vs []Violation
 	name := owner.decl.decl.Name
 	for _, as := range assertions {
@@ -1490,6 +1522,44 @@ func assertionsChecked(r rule.Rule, subject rule.Subject, owner assertionOwner, 
 		v, err := newViolation(r, subject, op.file.path, op.decl.StartLine,
 			fmt.Sprintf("%s: operation %s does not call %s, so assertion %s is not checked when it completes", owner.label, op.decl.Name, check.decl.Name, as.Key),
 			owner.remediation(fmt.Sprintf("call %s from %s and fail the operation when it fails", check.decl.Name, op.decl.Name)))
+		if err != nil {
+			return nil, err
+		}
+		vs = append(vs, v)
+	}
+	return vs, nil
+}
+
+// assertionsVerifiedByTests judges the assertions of an owner declared
+// as an interface or an abstract class: the owner declares the
+// operation, and the assertion names the tests that verify it, since
+// no body can call a checking method. assertion/verifying-tests-declared
+// judges that the tests exist.
+func assertionsVerifiedByTests(r rule.Rule, subject rule.Subject, owner assertionOwner, declared string, assertions []vocab.Assertion) ([]Violation, error) {
+	var vs []Violation
+	name := owner.decl.decl.Name
+	for _, as := range assertions {
+		_, hasOp, err := owner.idx.methodNamed(name, as.On)
+		if err != nil {
+			return nil, err
+		}
+		if !hasOp {
+			v, err := newViolation(r, subject, owner.decl.file.path, owner.decl.decl.StartLine,
+				fmt.Sprintf("%s: assertion %s constrains operation %s, which %s does not declare", owner.label, as.Key, as.On, owner.holder),
+				owner.remediation(fmt.Sprintf("declare %s on %s", methodSpellings(owner.idx, as.On), name)))
+			if err != nil {
+				return nil, err
+			}
+			vs = append(vs, v)
+		}
+		if len(as.VerifiedBy) > 0 {
+			continue
+		}
+		v, err := newViolation(r, subject, owner.decl.file.path, owner.decl.decl.StartLine,
+			fmt.Sprintf("%s: %s is declared as %s, which has no body to call %s from, and assertion %s names no tests that verify it",
+				owner.label, name, declared, methodSpellings(owner.idx, assertKey(as.Key)), as.Key),
+			owner.remediation(fmt.Sprintf("write a test of %s that checks the assertion and record it: arclint domain define assertion %s --context %s --verified-by <test file>:<test name>",
+				as.On, as.Key, owner.context)))
 		if err != nil {
 			return nil, err
 		}

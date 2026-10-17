@@ -162,3 +162,64 @@ func diffDecls(t *testing.T, got, want []conformance.Declaration) {
 	}
 	t.Fail()
 }
+
+// A class deriving ABC or Protocol, or naming ABCMeta as its metaclass,
+// carries the abstract mark, whether it writes the base bare, through
+// its module, or with type arguments; any other class carries none.
+func TestPythonMarksAbstractClasses(t *testing.T) {
+	src := []byte(`import abc
+import typing
+from abc import ABC, ABCMeta
+from typing import Protocol, Generic, TypeVar
+
+class Discounter(ABC):
+    pass
+
+class Pricing(abc.ABC):
+    pass
+
+class Ledger(Protocol):
+    pass
+
+class Store(Protocol[T]):
+    pass
+
+class Typed(typing.Protocol):
+    pass
+
+class Meta(Base, metaclass=ABCMeta):
+    pass
+
+class QualifiedMeta(metaclass=abc.ABCMeta):
+    pass
+
+class Concrete(Discounter):
+    pass
+
+class Plain:
+    pass
+
+class Generic2(Generic[T]):
+    pass
+`)
+	got := extractDeclarations(newParsers(), src)
+	if got.ParseError != "" {
+		t.Fatal(got.ParseError)
+	}
+	abstract := map[string]bool{}
+	for _, d := range got.Decls {
+		if d.Kind != "class" {
+			t.Errorf("unexpected %s %s", d.Kind, d.Name)
+			continue
+		}
+		abstract[d.Name] = d.Abstract
+	}
+	want := map[string]bool{
+		"Discounter": true, "Pricing": true, "Ledger": true, "Store": true, "Typed": true,
+		"Meta": true, "QualifiedMeta": true,
+		"Concrete": false, "Plain": false, "Generic2": false,
+	}
+	if !reflect.DeepEqual(abstract, want) {
+		t.Fatalf("abstract marks:\n got %v\nwant %v", abstract, want)
+	}
+}

@@ -60,6 +60,62 @@ analysis produces `undetermined`; parse failure produces `failed`. Findings
 remain findings even when suppressed or baselined. A context with no named
 invariants or assertions explicitly reports that no coverage is established.
 
+## Contracts verified by tests
+
+Evans gives the answer for a contract the code cannot state: "If assertions
+cannot be coded directly in your programming language, write automated unit
+tests for them" (DDD Reference 2015, p. 22). An invariant or an assertion
+names those tests under `verified_by`, each as the test file's path from the
+repository root, a colon, and the test's name:
+
+```sh
+arclint domain define assertion never-exceeds-total --context pricing \
+  --verified-by internal/pricing/discounter_test.go:TestDiscountNeverExceedsTotal
+```
+
+Repeat `--verified-by` to name several tests; together they replace the
+recorded ones, and `--clear-verified-by` records none. In YAML the tests sit
+under the entry:
+
+```yaml
+services:
+  Discounter:
+    definition: Takes a discount off an order's total.
+    assertions:
+      never-exceeds-total:
+        on: Discount
+        statement: A discount never exceeds the order total.
+        verified_by:
+          - internal/pricing/discounter_test.go:TestDiscountNeverExceedsTotal
+```
+
+An invariant that names tests is written as a mapping of `statement` and
+`verified_by`; one that names none stays its statement alone. In CML each
+test is an `arclint.verified_by` entry of the operation's hint.
+
+`invariant/verifying-tests-declared` and `assertion/verifying-tests-declared`
+check that each named test exists:
+
+| Language | A test is |
+|---|---|
+| Go | a `func Test...(t *testing.T)` in a `_test.go` file, named as `go test` runs it |
+| Python | a module-level `def test...`, or a `test...` method spelled `Class.test_name` |
+| TypeScript | its name written in the file, since a test is a call such as `test("...")` |
+
+A missing file, a renamed test, or a function that is not a test is a
+finding at the recorded entry. The check says only that the test exists;
+whether the test proves the statement is not checked. In TypeScript a comment
+or a string that repeats the name passes for the test.
+
+A domain service declared as an interface, as Evans states one ("a
+standalone interface declared as a service", p. 14), has no body to call an
+`Assert...` method from. When the owner of an assertion is an interface or an
+abstract class (a TypeScript `abstract class`, or a Python class deriving
+`ABC` or `Protocol`, or naming `ABCMeta` as its metaclass),
+`assertion/checked-by-its-operation` asks for `verified_by` instead of the
+call, and still asks the owner to declare the operation. A concrete owner
+calls its check whether or not the assertion also names tests.
+
 ## Rules that follow calls and field types
 
 Some built-in rules judge the role a type plays: an aggregate never calls a

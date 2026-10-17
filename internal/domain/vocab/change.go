@@ -45,6 +45,8 @@ type Change struct {
 	Statement     string
 	SetOn         bool
 	On            string
+	SetVerifiedBy bool
+	VerifiedBy    []string
 	SetText       bool
 	Text          string
 	SetIdentity   bool
@@ -64,6 +66,7 @@ const (
 	propDefinition = "definition"
 	propStatement  = "statement"
 	propOn         = "on"
+	propVerifiedBy = "verified_by"
 	propText       = "text"
 	propIdentity   = "identity"
 	propAliases    = "aliases"
@@ -93,6 +96,7 @@ func (ch Change) set() []string {
 	add(ch.SetRaisedBy, propRaisedBy)
 	add(ch.SetOn, propOn)
 	add(ch.SetStatement, propStatement)
+	add(ch.SetVerifiedBy, propVerifiedBy)
 	add(ch.SetText, propText)
 	return out
 }
@@ -513,6 +517,7 @@ func (c *BoundedContext) defineInvariant(at Locator, ch Change) (DefineResult, e
 	inv := &(*invs)[i]
 	var changed []string
 	setString(&inv.Statement, ch.SetStatement, ch.Statement, propStatement, &changed)
+	setStrings(&inv.VerifiedBy, ch.SetVerifiedBy, ch.VerifiedBy, propVerifiedBy, &changed)
 	res := outcome(created, changed)
 	res.Owner = owner
 	return res, nil
@@ -547,6 +552,7 @@ func (c *BoundedContext) defineAssertion(at Locator, ch Change) (DefineResult, e
 	var changed []string
 	setString(&as.On, ch.SetOn, ch.On, propOn, &changed)
 	setString(&as.Statement, ch.SetStatement, ch.Statement, propStatement, &changed)
+	setStrings(&as.VerifiedBy, ch.SetVerifiedBy, ch.VerifiedBy, propVerifiedBy, &changed)
 	res := outcome(created, changed)
 	res.Owner = owner
 	return res, nil

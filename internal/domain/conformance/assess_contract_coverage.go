@@ -56,23 +56,39 @@ const (
 	ruleValueObjectConstructor  = "value_object/constructed-through-one-door"
 	ruleInvariantsEnforcedRoot  = "aggregate/invariants-enforced-by-root"
 	ruleInvariantEnforcedMutate = "invariant/enforced-at-every-mutation"
+	ruleInvariantTestsDeclared  = "invariant/verifying-tests-declared"
+	ruleAssertionTestsDeclared  = "assertion/verifying-tests-declared"
 )
 
 // ContractRuleIDs names every built-in Rule whose evaluation decides
 // the coverage of a recorded invariant or assertion; a check limited
 // to them still covers every recorded contract.
 func ContractRuleIDs() []string {
-	return []string{ruleAssertionChecked, ruleValueObjectConstructor, ruleInvariantsEnforcedRoot, ruleInvariantEnforcedMutate}
+	return []string{
+		ruleAssertionChecked, ruleValueObjectConstructor, ruleInvariantsEnforcedRoot, ruleInvariantEnforcedMutate,
+		ruleInvariantTestsDeclared, ruleAssertionTestsDeclared,
+	}
 }
 
+// ruleIDs lists the Rules that check the contract: those that judge
+// its code, and, when it names tests under verified_by, the one that
+// judges those tests exist.
 func (c recordedContract) ruleIDs() []string {
 	if c.spec.Kind == vocab.ConceptAssertion {
-		return []string{ruleAssertionChecked}
+		ids := []string{ruleAssertionChecked}
+		if len(c.assertion.VerifiedBy) > 0 {
+			ids = append(ids, ruleAssertionTestsDeclared)
+		}
+		return ids
 	}
+	ids := []string{ruleInvariantsEnforcedRoot, ruleInvariantEnforcedMutate}
 	if c.ownerConcept == vocab.ConceptValueObject {
-		return []string{ruleValueObjectConstructor}
+		ids = []string{ruleValueObjectConstructor}
 	}
-	return []string{ruleInvariantsEnforcedRoot, ruleInvariantEnforcedMutate}
+	if len(c.invariant.VerifiedBy) > 0 {
+		ids = append(ids, ruleInvariantTestsDeclared)
+	}
+	return ids
 }
 
 // isolate retains the located code but passes only this contract to the
@@ -206,6 +222,19 @@ func evaluateRecordedContract(r rule.Rule, contract recordedContract, cc context
 	if r.Scope().ExcludedFile(cc.recording) {
 		return simpleEvaluation(r, subject, OutcomeNotApplicable)
 	}
+	check, exists := domainChecks[r.ID().Local()]
+	if !exists {
+		return Evaluation{}, fmt.Errorf("contract coverage: no check for %s", r.ID())
+	}
+	if check.readsTests {
+		// The tests are judged where they are; neither the context's
+		// code nor the owner's location decides whether they exist.
+		violations, unresolved, err := check.judge(r, subject, contract.isolate(cc), code)
+		if err != nil {
+			return Evaluation{}, fmt.Errorf("contract coverage: %w", err)
+		}
+		return judgedEvaluation(r, subject, violations, unresolved)
+	}
 	if cc.scopeParseFailures > 0 {
 		return simpleEvaluation(r, subject, OutcomeFailed)
 	}
@@ -222,10 +251,6 @@ func evaluateRecordedContract(r rule.Rule, contract recordedContract, cc context
 	if !contract.ownerLocated(cc) {
 		return undeterminedEvaluation(r, subject, fmt.Sprintf("no single declaration of %s is located in %s",
 			contract.spec.Owner, cc.searched()))
-	}
-	check, exists := domainChecks[r.ID().Local()]
-	if !exists {
-		return Evaluation{}, fmt.Errorf("contract coverage: no check for %s", r.ID())
 	}
 	violations, err := check.run(r, subject, contract.isolate(cc), code)
 	if err != nil {
