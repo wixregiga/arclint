@@ -1039,9 +1039,11 @@ class TypeScriptLexer:
             token("operand")
             return
         call = self.test_call
-        if word in TEST_CALLEES and (call in (None, "callee") or (isinstance(call, tuple) and call[0] == "args")):
+        if word in TEST_CALLEES and (call in (None, "callee") or (isinstance(call, tuple) and call[0] in ("open", "args"))):
             if isinstance(call, tuple):
-                self.test_outer.append((call, self.callee_line))  # a test inside another call's arguments
+                # A test inside another call's arguments, its first one
+                # included: describe(it("...").title, ...).
+                self.test_outer.append((("args", call[1]), self.callee_line))
             self.test_call, self.callee_line = "callee", number
         else:
             other_token()
