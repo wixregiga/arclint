@@ -1700,8 +1700,9 @@ func ddd() MetaModel {
 						},
 					},
 					{
-						Text: "When an operation would change something outside the model, such as a file, a store or another system, the service decides and the application service carries out the change; the service's operation takes what the decision needs as values, returns its verdict, and changes nothing, and the application service gathers those values and makes the change only when the verdict allows it.",
+						Text: "When an operation would change something outside the model, such as a file, a store or another system, the service decides and the application service carries out the change. The service's operation takes what the decision needs as values, changes nothing, and returns its verdict as a value, a value object when the verdict carries a rule; the application service gathers those values and makes the change only with a verdict that allows it in hand, and an automated test proves what the domain cannot see.",
 						Sources: []Citation{
+							{Work: "evans2015", Page: "12", Section: "Value Objects"},
 							{Work: "evans2015", Page: "21", Section: "Side-Effect-Free Functions"},
 							{Work: "evans2015", Page: "22", Section: "Assertions"},
 							{Work: "khorikov-purity-completeness"},

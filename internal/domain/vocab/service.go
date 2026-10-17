@@ -41,16 +41,25 @@ func DecideThenCarryOut() string {
 
 // ServiceDecides applies DomainDecides to a domain service whose
 // operation would change something outside the model: the assertion
-// goes on the operation that decides, and the application service makes
-// the change the verdict allows.
+// goes on the operation that decides, its verdict is a value, the
+// application service makes the change only with a verdict that allows
+// it, and a test proves what the domain cannot see. It names no
+// operation or type, and it guides without adding a rule.
 func ServiceDecides() SourcedStatement {
 	return SourcedStatement{
 		Text: "When an operation of a domain service would change something outside the model, such as a file, a store or another system, " +
 			"its assertion goes on the operation that decides. " +
-			"That operation takes what the decision needs as values, returns its verdict, and changes nothing. " +
-			"The application service gathers those values, asks for the verdict, and makes the change only when the verdict allows it.",
-		Sources: "Evans, DDD Reference 2015, p. 14, Services, p. 21, Side-Effect-Free Functions, and p. 22, Assertions; " +
-			"Khorikov, Domain model purity vs. domain model completeness (2020), read-decide-act",
+			"That operation takes what the decision needs as values, changes nothing, and returns its verdict as a value; " +
+			"a verdict that carries a rule, such as approving only when no participant refused, is recorded as a value object whose invariant states that rule, so `value_object/constructed-through-one-door` requires it to declare a constructor. " +
+			"The application service gathers those values, asks for the verdict, and makes the change only with a verdict that allows it in hand. " +
+			"Go makes that verdict hard to forge with unexported fields and a zero value that allows nothing, " +
+			"TypeScript with a private constructor and a private field, and Python only by convention, with an underscore-prefixed name. " +
+			"An automated test proves what the domain cannot see, such as a refusal changing nothing on disk.",
+		Sources: "Evans, DDD Reference 2015, p. 12, Value Objects, p. 14, Services, p. 21, Side-Effect-Free Functions, and p. 22, Assertions; " +
+			"Khorikov, Domain model purity vs. domain model completeness (2020), read-decide-act; " +
+			"The Go Programming Language Specification, Exported identifiers and Struct literals; " +
+			"TypeScript 2.0 release notes, Private and Protected Constructors, and TypeScript Handbook, Type Compatibility; " +
+			"The Python Tutorial, 9.6 Private Variables",
 	}
 }
 
