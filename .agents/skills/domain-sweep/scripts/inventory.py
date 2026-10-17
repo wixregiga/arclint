@@ -493,6 +493,8 @@ def in_expression(prev, last_op, after_label_colon):
 
 TEST_CALLEES = {"it", "test", "describe"}
 
+QUOTED = re.compile(r"""(["'])(.*?)\1""")
+
 # A line whose reading opened a literal it never closed is read again with
 # one slash decision reversed, at most this many, from the last.
 MAX_SLASH_RETRIES = 16
@@ -551,7 +553,10 @@ class TypeScriptLexer:
         self.stack = []  # brace depth in each enclosing ${ } substitution
         self.depth = 0
         self.parens = []  # per open parenthesis: [condition, for header, header had a ;, function parameters]
-        self.braces = []  # per open brace: "object", "body" (of a function in an expression) or "block"
+        # Per open brace: [role, names]. The role is "object", "body" (of a
+        # function in an expression), "type" (a type alias's literal) or
+        # "block"; names are the keyword spellings bound as names inside it.
+        self.braces = []
         self.prev = "operator"  # the previous token, as ends_operand reads it
         self.before = "operator"  # the token before prev
         self.last_op = None  # the text of the last operator token
@@ -560,8 +565,14 @@ class TypeScriptLexer:
         self.after_case_colon = False  # the last token is the colon of a case or statement label
         self.jump_line = 0  # the line a break or continue was read on
         self.prev_line = 0  # the line the previous token was read on
-        self.bound = set()  # keyword spellings the file binds as names: const await, function f(yield)
-        self.expression_body = False  # a function or class in an expression waits for its body
+        self.bound = set()  # keyword spellings bound as names outside every brace: const await
+        self.parameter_names = set()  # names a function's parameters bind, for its body
+        # A function or class in an expression: False; "params", waiting for
+        # its parameter list; ("paren", n), inside it, the n-th open; or
+        # "body", waiting for the body brace.
+        self.expression_body = False
+        self.type_alias = False  # a type alias declaration is being read
+        self.type_arguments = 0  # angle brackets open after as or satisfies
         self.after_dot = False  # prev was a member access dot: the next word is a property
         # The test declaration being read: None; "callee"; ("open", n), just
         # after the call's parenthesis, the n-th open; ("args", n), inside a
@@ -772,6 +783,10 @@ class TypeScriptLexer:
                         regex = not regex
                 other_token()
                 if regex:
+                    if any(WORDS.search(m.group(2)) for m in QUOTED.finditer(text[i + 1:end])):
+                        # A quoted phrase inside a regular expression may be
+                        # a string the slash rule misread: read the line.
+                        kinds.add("text")
                     token("operand")
                     i = end
                 else:
@@ -838,12 +853,16 @@ class TypeScriptLexer:
             # continue itself.
             token(("keyword", prev[1]))
         elif word in ("await", "yield") and (
-            word in self.bound or prev in (("word", "const"), ("word", "let"), ("word", "var"))
+            word in self.bound or any(word in names for _, names in self.braces)
+            or prev in (("word", "const"), ("word", "let"), ("word", "var"))
             or (self.parens and self.parens[-1][3])
         ):
             # Outside an async function or a generator, a script may name a
-            # variable or parameter so.
-            self.bound.add(word)
+            # variable or parameter so; the name lives in its own scope.
+            if self.parens and self.parens[-1][3]:
+                self.parens[-1][4].add(word)
+            elif prev in (("word", "const"), ("word", "let"), ("word", "var")):
+                (self.braces[-1][1] if self.braces else self.bound).add(word)
             token(("ident", word))
         elif word == "of":
             # of is a keyword only where a for header's binding ends:
@@ -861,8 +880,13 @@ class TypeScriptLexer:
                 in_expression(prev, self.last_op, self.after_case_colon) if prev != ("word", "async")
                 else in_expression(self.before, self.last_op_before, False)
             ):
-                # In an expression its body, once closed, is an operand.
-                self.expression_body = True
+                # In an expression its body, once closed, is an operand; a
+                # function's body follows its parameter list.
+                self.expression_body = "params" if word == "function" else "body"
+            elif word == "type" and not ends_operand(prev) and not in_expression(
+                prev, self.last_op, self.after_case_colon
+            ):
+                self.type_alias = True
             token(("word", word))
 
     def punctuation(self, char, text, i, token, other_token, templates_open):
@@ -877,7 +901,9 @@ class TypeScriptLexer:
             params = prev == ("word", "function") or (
                 isinstance(prev, tuple) and prev[0] == "word" and self.before == ("word", "function")
             )
-            self.parens.append([condition, header, False, params])
+            self.parens.append([condition, header, False, params, set()])
+            if self.expression_body == "params":
+                self.expression_body = ("paren", len(self.parens))
             if self.test_call == "callee":
                 self.test_call = ("open", len(self.parens))
             else:
@@ -885,7 +911,12 @@ class TypeScriptLexer:
             token("operator", "(")
         elif char == ")":
             opened = len(self.parens)
-            closes_condition = self.parens.pop()[0] if self.parens else False
+            closed = self.parens.pop() if self.parens else [False, False, False, False, set()]
+            closes_condition = closed[0]
+            if closed[3]:
+                self.parameter_names = closed[4]
+            if self.expression_body == ("paren", opened):
+                self.expression_body = "body"
             call = self.test_call
             if isinstance(call, tuple) and call[0] in ("open", "args") and call[1] == opened:
                 self.test_call = "callee"
@@ -899,8 +930,10 @@ class TypeScriptLexer:
             other_token()
             token("operand")
         elif char == "{":
-            if self.expression_body:
+            if self.expression_body == "body":
                 opens, self.expression_body = "body", False
+            elif self.type_alias:
+                opens = "type"
             elif self.parens and self.parens[-1][1]:
                 opens = "object"  # a destructuring pattern in a for header
             elif isinstance(prev, tuple):
@@ -909,7 +942,8 @@ class TypeScriptLexer:
                 opens = "block"
             else:
                 opens = "block" if self.last_op in BLOCK_AFTER else "object"
-            self.braces.append(opens)
+            self.braces.append([opens, self.parameter_names])
+            self.parameter_names = set()
             other_token()
             self.depth += 1
             token("operator", "{")
@@ -920,8 +954,12 @@ class TypeScriptLexer:
                 return
             other_token()
             self.depth -= 1
-            closes = self.braces.pop() if self.braces else "block"
-            if closes in ("object", "body"):
+            closes = self.braces.pop()[0] if self.braces else "block"
+            if closes == "type" and not any(role == "type" for role, _ in self.braces):
+                # The type alias ends with its literal, as a statement.
+                self.type_alias = False
+                token("operator", "}")
+            elif closes in ("object", "body", "type"):
                 token("operand")
             else:
                 token("operator", "}")
@@ -934,7 +972,7 @@ class TypeScriptLexer:
             token("operator")
         elif char == ":" and (self.case_label or (
             isinstance(prev, tuple) and prev[0] in ("word", "ident")
-            and (not self.braces or self.braces[-1] != "object")
+            and (not self.braces or self.braces[-1][0] != "object")
             and self.before == "operator" and self.last_op_before in BLOCK_AFTER
         )):
             # The colon of a case label or of a statement label: a brace
@@ -942,6 +980,21 @@ class TypeScriptLexer:
             other_token()
             token("operator", ":")
             self.case_label, self.after_case_colon = False, True
+        elif char == "<" and isinstance(prev, tuple) and (
+            self.type_arguments or self.before in (("word", "as"), ("word", "satisfies"))
+        ):
+            # Type arguments after as or satisfies: Box<number>.
+            self.type_arguments += 1
+            other_token()
+            token("operator", "<")
+        elif char == ">" and self.type_arguments:
+            self.type_arguments -= 1
+            other_token()
+            token("operand" if not self.type_arguments else "operator", ">")
+        elif char == ";" and self.type_alias and not any(role == "type" for role, _ in self.braces):
+            self.type_alias = False
+            other_token()
+            token("operator", ";")
         elif char == ";" and self.parens and self.parens[-1][1]:
             self.parens[-1][2] = True  # for (init; test; update): no for-of
             other_token()
