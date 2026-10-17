@@ -45,7 +45,7 @@ func (Renderer) Render(w io.Writer, r cli.Report) error {
 	case cli.RuleDetailReport:
 		return writeRuleDetail(w, v.Detail)
 	case cli.RuleTestReport:
-		return writeRuleTestResults(w, v.Results)
+		return writeRuleTestResults(w, v.Run)
 	case cli.InitReport:
 		return writeInit(w, v)
 	case cli.ContextReport:

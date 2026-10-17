@@ -441,3 +441,62 @@ func TestViolationCarriesRuleProvenance(t *testing.T) {
 		t.Error("unconstructed provenance accepted")
 	}
 }
+
+// TestRunNamesThePatternBoundRules proves the Assessment names every
+// applied content Rule as exact for its pattern only, leaves disabled
+// and other Rules out, and adds no Diagnostic a Rule Test would see.
+func TestRunNamesThePatternBoundRules(t *testing.T) {
+	disablement, err := rule.NewDisablement("retired here")
+	if err != nil {
+		t.Fatalf("NewDisablement: %v", err)
+	}
+	snake, err := rule.NewCaseSpec("snake_case")
+	if err != nil {
+		t.Fatalf("NewCaseSpec: %v", err)
+	}
+	content := func(id string) rule.Rule {
+		return mustRule(t, rule.Spec{
+			ID: id, Type: rule.TypeContent,
+			Params: rule.ContentParams{Forbid: `\bpanic\(`},
+			Scope:  zoneScope(t, "alpha"),
+		})
+	}
+	obs, err := conformance.NewObservations([]conformance.ObservedFile{{Path: "alpha/a.go"}}, nil)
+	if err != nil {
+		t.Fatalf("NewObservations: %v", err)
+	}
+	obs = obs.WithContent(conformance.NewMapContent(map[string]string{"alpha/a.go": "package alpha\n"}))
+	a, err := conformance.Run(conformance.Request{
+		Rules: []rule.Rule{
+			content("alpha/no-panic"),
+			content("alpha/retired").Disable(disablement),
+			mustRule(t, rule.Spec{
+				ID: "alpha/snake", Type: rule.TypeNaming,
+				Params: rule.NamingParams{Case: snake},
+				Scope:  zoneScope(t, "alpha"),
+			}),
+		},
+		Zones:        []rule.Zone{mustZone(t, "alpha", "alpha/**")},
+		Observations: obs,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := a.PatternBoundRules(); len(got) != 1 || got[0] != "alpha/no-panic" {
+		t.Fatalf("PatternBoundRules() = %v, want [alpha/no-panic]", got)
+	}
+	for _, d := range a.Diagnostics() {
+		if d.RuleID() == "alpha/no-panic" {
+			t.Errorf("a pattern-bound Rule adds no Diagnostic: %s", d.Message())
+		}
+	}
+	relabeled, err := a.RelabelViolations(func(conformance.Violation) (conformance.Status, string, bool) {
+		return "", "", false
+	})
+	if err != nil {
+		t.Fatalf("RelabelViolations: %v", err)
+	}
+	if got := relabeled.PatternBoundRules(); len(got) != 1 || got[0] != "alpha/no-panic" {
+		t.Errorf("relabeling keeps the pattern-bound Rules: %v", got)
+	}
+}

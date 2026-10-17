@@ -1,0 +1,17 @@
+# Violating case drawn from the rationale: a use case rolls dice to pick
+# a seat, so the content rule must report the import line.
+rule: "features/deterministic"
+files:
+  internal/features/comptickets/comptickets.go: |
+    package comptickets
+
+    import "math/rand"
+
+    func PickSeat(free []string) string {
+        return free[rand.Intn(len(free))]
+    }
+expect:
+  - kind: violation
+    path: internal/features/comptickets/comptickets.go
+    line: 3
+    message: "forbidden content matching /time\\.Now\\(|math/rand/"

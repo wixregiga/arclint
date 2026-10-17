@@ -45,11 +45,11 @@ IMPORTANT: work in this order on every change.
 
 ### The recorded domain
 
-6 contexts, 1 aggregates, 36 value objects, 44 invariants.
+6 contexts, 1 aggregates, 38 value objects, 44 invariants.
 
 - **agent**: value objects Activity, Guidance, Progress; services WorkflowGuide
 - **vocabulary**: value objects DomainRecording
-- **rule**: aggregates Rule (Zone, Pattern); value objects RuleID, ZoneName, Rationale, Constraint, Scope, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec, DomainFile
+- **rule**: aggregates Rule (Zone, Pattern); value objects RuleID, ZoneName, Rationale, Constraint, Scope, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec, DomainFile, Assurance, RuleTest
 - **adoption**: value objects Binding, Override, Disablement, Exclusion, Suppression, Installation
 - **conformance**: value objects ContractCoverage, DependencyImport, Facts, Violation
 - **distribution**: value objects Catalog, Digest, Index, Manifest, PatternFile, PatternSource, Registry, Selection, VendoredPattern
@@ -61,9 +61,9 @@ Relations: vocabulary → rule (conformist); vocabulary → conformance (conform
 - **domain**: Rule aggregate and domain values; stdlib-only. (paths internal/domain/**)
   - imports no other zone; external imports forbidden
   - rule-is-sole-aggregate: contains files matching ["internal/domain/rule/root.go"] and contains no files matching ["internal/domain/architecture/**", "internal/domain/pattern/**", "internal/domain/baseline/root.go", "internal/domain/conformance/root.go", "internal/domain/distribution/root.go"] Rationale: Rule is the only aggregate: it has a root, and no other aggregate root exists.
-  - no-panic: contains no line matching /\bpanic\(/ Rationale: Domain code never panics; a representation that cannot become a value is an error.
+  - no-panic (exact for its pattern; rationale not checked): contains no line matching /\bpanic\(/ Rationale: Domain code never panics; a representation that cannot become a value is an error.
   - files-speak-the-vocabulary: contains no files matching ["internal/domain/**/model.go", "internal/domain/**/types.go", "internal/domain/**/util.go", "internal/domain/**/utils.go", "internal/domain/**/helpers.go", "internal/domain/**/common.go"] Rationale: Domain files are named for the concept they hold, never for a generic container.
-  - errors-name-their-subject: contains no line matching /\bErr(NotFound|Invalid|Failed|Exists)\b/ Rationale: Domain errors name their subject; a bare ErrNotFound or ErrInvalid is forbidden.
+  - errors-name-their-subject (exact for its pattern; rationale not checked): contains no line matching /\bErr(NotFound|Invalid|Failed|Exists)\b/ Rationale: Domain errors name their subject; a bare ErrNotFound or ErrInvalid is forbidden.
   - aggregate-skeleton (warning): contains files matching ["internal/domain/rule/root.go", "internal/domain/rule/repository.go"] (derived from each recorded domain.aggregates) Rationale: Every recorded aggregate owns a home declaring its root and its Repository.
 - **application**: Action-named use cases coordinating domain objects through ports. (paths internal/application/**)
   - imports only: domain; external imports forbidden
@@ -107,7 +107,7 @@ Relations: vocabulary → rule (conformist); vocabulary → conformance (conform
   - public-interfaces: satisfies extension rule "web-public-interfaces" Rationale: Other modules depend on a slice or Shared module's explicit public entry, while its own implementation imports local files directly.
   - files-speak-their-purpose: contains no files matching ["web/src/**/model.ts", "web/src/**/model.tsx", "web/src/**/types.ts", "web/src/**/types.tsx", "web/src/**/util.ts", "web/src/**/util.tsx", "web/src/**/utils.ts", "web/src/**/utils.tsx", "web/src/**/helper.ts", "web/src/**/helper.tsx", "web/src/**/helpers.ts", "web/src/**/helpers.tsx", "web/src/**/common.ts", "web/src/**/common.tsx", "web/src/**/constants.ts", "web/src/**/constants.tsx", "web/src/**/data.ts", "web/src/**/data.tsx", "web/src/**/service.ts", "web/src/**/service.tsx", "web/src/**/services.ts", "web/src/**/services.tsx", "web/src/**/component.ts", "web/src/**/component.tsx", "web/src/**/components.ts", "web/src/**/components.tsx", "web/src/**/hooks.ts", "web/src/**/hooks.tsx", "web/src/**/components/**", "web/src/**/hooks/**", "web/src/**/types/**", "web/src/**/utils/**", "web/src/**/helpers/**", "web/src/**/common/**", "web/src/**/services/**", "web/src/**/index.tsx", "web/src/**/index.test.ts", "web/src/**/index.spec.ts"] Rationale: Implementation filenames identify the concept or action they hold; index.ts is reserved for a public interface, and model remains a segment name rather than a generic file.
   - typescript-source: contains no files matching ["web/src/**/*.js", "web/src/**/*.jsx", "web/src/**/*.mjs", "web/src/**/*.cjs", "web/src/**/*.mts", "web/src/**/*.cts"] Rationale: Web executable source uses the TypeScript and TSX files ArcLint observes; JavaScript and alternate module extensions must not silently escape dependency checks.
-  - explicit-public-exports: contains no line matching /^\s*export\s+(type\s+)?\*/ Rationale: A public interface names its exports explicitly. This line check catches wildcard export statements; it does not judge semantic cohesion.
+  - explicit-public-exports (exact for its pattern; rationale not checked): contains no line matching /^\s*export\s+(type\s+)?\*/ Rationale: A public interface names its exports explicitly. This line check catches wildcard export statements; it does not judge semantic cohesion.
 - **web_app**: Web composition, routes, providers, host adapters, and explicit launch entrypoints. (paths web/src/app/**)
 - **web_pages**: Screen slices owning their presentation and screen-specific behavior. (paths web/src/pages/**)
 - **web_widgets**: Optional reusable screen compositions; introduce only when pages or features do not own them. (paths web/src/widgets/**)

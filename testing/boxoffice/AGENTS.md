@@ -72,21 +72,21 @@ Relations: catalog → ordering (conformist); catalog → capacity (conformist);
 - **features**: FSD features layer: use cases that change the world, one slice per use case, technology-free. (paths internal/features/**)
   - imports only: entities; external imports forbidden
   - use-cases-tested: satisfies extension rule "slice-files" (require: [{slice}.go, {slice}_test.go], root: internal/features) Rationale: Every use-case slice carries its named file and its tests.
-  - technology-free: contains no line matching /"net/http"|"log/slog"|"encoding/json"/ Rationale: Use cases name no transport, logging, or JSON package.
-  - deterministic: contains no line matching /time\.Now\(|math/rand/ Rationale: Use cases never read the clock or roll dice.
+  - technology-free (exact for its pattern; rationale not checked): contains no line matching /"net/http"|"log/slog"|"encoding/json"/ Rationale: Use cases name no transport, logging, or JSON package.
+  - deterministic (exact for its pattern; rationale not checked): contains no line matching /time\.Now\(|math/rand/ Rationale: Use cases never read the clock or roll dice.
 - **entities**: FSD entities layer: the domain aggregates. Domain logic only, enforced. (paths internal/entities/**)
   - imports no other zone; external imports forbidden
   - aggregate-slices (warning): contains files matching ["internal/entities/event/event.go", "internal/entities/event/repository.go", "internal/entities/event/event_test.go", "internal/entities/order/order.go", "internal/entities/order/repository.go", "internal/entities/order/order_test.go", "internal/entities/capacity/capacity.go", "internal/entities/capacity/repository.go", "internal/entities/capacity/capacity_test.go"] (derived from each recorded domain.aggregates) Rationale: Every recorded aggregate owns a slice with its file, its repository interface, and its tests.
-  - technology-free: contains no line matching /"net/http"|"log/slog"|"encoding/json"/ Rationale: The entities layer names no transport, logging, or JSON package.
-  - no-panic: contains no line matching /\bpanic\(/ Rationale: The entities layer never panics.
-  - errors-name-their-subject: contains no line matching /\bErr(NotFound|Invalid|Failed|Exists)\b/ Rationale: Entity errors name their subject; a bare ErrNotFound or ErrInvalid is forbidden.
-  - deterministic: contains no line matching /time\.Now\(|math/rand/ Rationale: The entities layer never reads the clock or rolls dice.
+  - technology-free (exact for its pattern; rationale not checked): contains no line matching /"net/http"|"log/slog"|"encoding/json"/ Rationale: The entities layer names no transport, logging, or JSON package.
+  - no-panic (exact for its pattern; rationale not checked): contains no line matching /\bpanic\(/ Rationale: The entities layer never panics.
+  - errors-name-their-subject (exact for its pattern; rationale not checked): contains no line matching /\bErr(NotFound|Invalid|Failed|Exists)\b/ Rationale: Entity errors name their subject; a bare ErrNotFound or ErrInvalid is forbidden.
+  - deterministic (exact for its pattern; rationale not checked): contains no line matching /time\.Now\(|math/rand/ Rationale: The entities layer never reads the clock or rolls dice.
   - aggregates-encapsulate: satisfies extension rule "aggregate-encapsulation" (root: internal/entities) Rationale: The struct of every recorded aggregate has no exported fields.
-  - no-store-machinery: contains no line matching /"sync"/ Rationale: The entities layer imports no sync machinery.
+  - no-store-machinery (exact for its pattern; rationale not checked): contains no line matching /"sync"/ Rationale: The entities layer imports no sync machinery.
 - **shared**: FSD shared layer: kit the app layer builds on. (paths internal/shared/**)
   - imports no other zone; external imports forbidden
 - **server_source**: Source-wide invariants for the Go server. (paths internal/**)
-  - slog-only: contains no line matching /\bfmt\.Print|\blog\.(Print|Fatal|Panic)/ Rationale: The server logs through slog only.
+  - slog-only (exact for its pattern; rationale not checked): contains no line matching /\bfmt\.Print|\blog\.(Print|Fatal|Panic)/ Rationale: The server logs through slog only.
   - snake-case: file names use snake_case Rationale: Go file names use snake_case.
 - **web_embed**: The built web app carried into the single binary behind the embedweb tag. (paths web/*.go)
   - imports no other zone; external imports forbidden

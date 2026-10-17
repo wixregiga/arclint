@@ -81,7 +81,7 @@ func writeContext(w io.Writer, c application.ArchitecturalContext) error {
 			if len(r.Via) > 0 {
 				via = " (via " + strings.Join(r.Via, ", ") + ")"
 			}
-			p.Printf("  %s [%s/%s]: %s%s\n", r.Summary.ID, r.Summary.Type, r.Summary.Severity, r.Reason, via)
+			p.Printf("  %s [%s/%s/%s]: %s%s\n", r.Summary.ID, r.Summary.Type, r.Summary.Severity, r.Summary.AssuranceLabel, r.Reason, via)
 		}
 	}
 	return p.Err

@@ -305,19 +305,27 @@ func TestJSONRuleDetailLowerCamel(t *testing.T) {
 
 func TestJSONRuleTestLowerCamel(t *testing.T) {
 	var buf bytes.Buffer
-	err := New().Render(&buf, cli.RuleTestReport{
+	err := New().Render(&buf, cli.RuleTestReport{Run: application.RuleTestRun{
 		Results: []application.RuleTestResult{{
 			Name: "t1", RuleID: "r1",
 			Missing: []rule.ExpectedFinding{{Kind: rule.FindingViolation, Path: "a.go", Line: 2, Message: "m"}},
 		}},
-	})
+		WithoutFailingCase: []string{"domain/no-panic"},
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var docs []map[string]any
-	if err := json.Unmarshal(buf.Bytes(), &docs); err != nil {
+	var run struct {
+		Results            []map[string]any `json:"results"`
+		WithoutFailingCase []string         `json:"withoutFailingCase"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &run); err != nil {
 		t.Fatal(err)
 	}
+	if len(run.WithoutFailingCase) != 1 || run.WithoutFailingCase[0] != "domain/no-panic" {
+		t.Fatalf("withoutFailingCase = %v", run.WithoutFailingCase)
+	}
+	docs := run.Results
 	if docs[0]["name"] != "t1" || docs[0]["ruleId"] != "r1" || docs[0]["passed"] != false {
 		t.Fatalf("doc = %v", docs[0])
 	}

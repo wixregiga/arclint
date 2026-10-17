@@ -133,21 +133,24 @@ const ruleSchemaExample = `  arclint rules schema
   arclint rules schema --write --dir docs/schemas`
 
 // newRuleTestCommand runs the repository's authored Rule Tests; an
-// optional argument selects one test by name. Any failing test exits
-// with the findings code.
+// optional argument selects one test by name. A full run also names
+// every pattern-bound Rule without a failing case. Any failing test, or
+// any such Rule, exits with the findings code.
 func newRuleTestCommand(runTests application.RunRuleTests, render Renderer) Command {
 	return Command{
 		Name:    "test",
 		Short:   "run the Rule Tests under .arclint/tests",
 		MaxArgs: 1,
 		Run: func(ctx Context) error {
-			results, err := runTests.Execute()
+			run, err := runTests.Execute()
 			if err != nil {
 				return ConfigError(err)
 			}
 			if len(ctx.Args) == 1 {
+				// One selected test says nothing of the suite, so the
+				// Rules without a failing case are not reported.
 				var kept []application.RuleTestResult
-				for _, r := range results {
+				for _, r := range run.Results {
 					if r.Name == ctx.Args[0] {
 						kept = append(kept, r)
 					}
@@ -158,15 +161,13 @@ func newRuleTestCommand(runTests application.RunRuleTests, render Renderer) Comm
 						Message: fmt.Sprintf("no rule test named %q under .arclint/tests", ctx.Args[0]),
 					}
 				}
-				results = kept
+				run = application.RuleTestRun{Results: kept}
 			}
-			if err := render.Render(ctx.Stdout, RuleTestReport{Results: results}); err != nil {
+			if err := render.Render(ctx.Stdout, RuleTestReport{Run: run}); err != nil {
 				return fmt.Errorf("write output: %w", err)
 			}
-			for _, r := range results {
-				if !r.Passed() {
-					return ViolationsExit()
-				}
+			if !run.Passed() {
+				return ViolationsExit()
 			}
 			return nil
 		},

@@ -107,13 +107,14 @@ func findRule(rules rule.Repository, id string) (rule.Rule, error) {
 // summarize is the shared Rule-to-summary projection.
 func summarize(r rule.Rule) RuleSummary {
 	s := RuleSummary{
-		ID:          r.ID().Qualified(),
-		Type:        string(r.Type()),
-		Severity:    string(r.Severity()),
-		Proposition: r.Proposition(),
-		Rationale:   r.Rationale().String(),
-		Assurance:   string(r.Enforcement().Assurance()),
-		BuiltIn:     r.BuiltIn(),
+		ID:             r.ID().Qualified(),
+		Type:           string(r.Type()),
+		Severity:       string(r.Severity()),
+		Proposition:    r.Proposition(),
+		Rationale:      r.Rationale().String(),
+		Assurance:      string(r.Enforcement().Assurance()),
+		AssuranceLabel: r.Enforcement().AssuranceLabel(),
+		BuiltIn:        r.BuiltIn(),
 	}
 	if ref, ok := r.Provenance(); ok {
 		s.Provenance = ref.String()

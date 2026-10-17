@@ -451,6 +451,9 @@ func ruleLine(name string, r rule.Rule, proposition string) string {
 	if r.Severity() != rule.DefaultSeverity {
 		notes = append(notes, string(r.Severity()))
 	}
+	if r.Enforcement().PatternBound() {
+		notes = append(notes, r.Enforcement().AssuranceLabel())
+	}
 	if d, ok := r.Disablement(); ok {
 		notes = append(notes, "disabled: "+d.Reason())
 	}

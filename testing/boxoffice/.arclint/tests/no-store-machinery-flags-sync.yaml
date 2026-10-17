@@ -1,0 +1,21 @@
+# Violating case drawn from the rationale: an in-memory repository in
+# the entities layer guards its map with sync, so the content rule must
+# report the import line.
+rule: "entities/no-store-machinery"
+files:
+  internal/entities/event/memory.go: |
+    package event
+
+    import "sync"
+
+    type memoryRepository struct {
+        mu     sync.Mutex
+        events map[string]Event
+    }
+
+    type Event struct{}
+expect:
+  - kind: violation
+    path: internal/entities/event/memory.go
+    line: 3
+    message: "forbidden content matching /\"sync\"/"

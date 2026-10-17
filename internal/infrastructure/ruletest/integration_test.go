@@ -85,7 +85,8 @@ func TestRunRuleTestsEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
-	results, err := uc.Execute()
+	run, err := uc.Execute()
+	results := run.Results
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -212,7 +213,8 @@ func TestRuleTestExtensionReadsFixtureContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRunRuleTests: %v", err)
 	}
-	results, err := uc.Execute()
+	run, err := uc.Execute()
+	results := run.Results
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -348,7 +350,8 @@ func TestVocabularyFindingAnchorsAtTheRecordedTerm(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewRunRuleTests: %v", err)
 			}
-			results, err := uc.Execute()
+			run, err := uc.Execute()
+			results := run.Results
 			if err != nil {
 				t.Fatalf("Execute: %v", err)
 			}

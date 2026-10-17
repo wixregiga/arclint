@@ -25,7 +25,7 @@ func writeRuleRows(p *out.Printer, th Theme, rows []application.RuleSummary) {
 		meta := th.Muted.Render("[") +
 			th.Muted.Render(row.Type+"/") +
 			th.severity(row.Severity).Render(row.Severity) +
-			th.Muted.Render("/"+row.Assurance+"]")
+			th.Muted.Render("/"+row.AssuranceLabel+"]")
 		p.Printf("%s  %s  %s%s%s\n", th.Muted.Render(row.ID), meta, row.Text(), provenance, marker)
 	}
 }
@@ -53,7 +53,7 @@ func writeRuleDetail(p *out.Printer, th Theme, d application.RuleDetail) {
 		write("files", strings.Join(d.Files, ", "))
 	}
 	write("evidence", d.Evidence)
-	write("assurance", d.Summary.Assurance)
+	write("assurance", d.Summary.AssuranceLabel)
 	if d.Summary.Severity == "error" {
 		write("when violated", "fails the gate")
 	} else {
@@ -78,10 +78,10 @@ func writeRuleDetail(p *out.Printer, th Theme, d application.RuleDetail) {
 	p.Printf("\n%s", d.Schema)
 }
 
-func writeRuleTestResults(p *out.Printer, th Theme, results []application.RuleTestResult) {
+func writeRuleTestResults(p *out.Printer, th Theme, run application.RuleTestRun) {
+	results := run.Results
 	if len(results) == 0 {
 		p.Println(th.Muted.Render("no rule tests under .arclint/tests"))
-		return
 	}
 	passed := 0
 	for _, r := range results {
@@ -107,6 +107,15 @@ func writeRuleTestResults(p *out.Printer, th Theme, results []application.RuleTe
 			}
 		}
 	}
+	if len(run.WithoutFailingCase) > 0 {
+		p.Println(th.Fail.Render(out.WithoutFailingCaseHeading))
+		for _, id := range run.WithoutFailingCase {
+			p.Printf("  %s\n", id)
+		}
+	}
+	if len(results) == 0 && len(run.WithoutFailingCase) == 0 {
+		return
+	}
 	failed := len(results) - passed
 	passTok := th.OK.Render(itoa(passed))
 	failTok := itoa(failed)
@@ -115,7 +124,11 @@ func writeRuleTestResults(p *out.Printer, th Theme, results []application.RuleTe
 	} else {
 		failTok = th.Muted.Render(failTok)
 	}
-	p.Printf("%s passed · %s failed\n", passTok, failTok)
+	p.Printf("%s passed · %s failed", passTok, failTok)
+	if n := len(run.WithoutFailingCase); n > 0 {
+		p.Printf(" · %s content rule(s) without a failing case", th.Error.Render(itoa(n)))
+	}
+	p.Println()
 }
 
 func writeExpectEntry(p *out.Printer, kind rule.FindingKind, path string, line int, message string) {

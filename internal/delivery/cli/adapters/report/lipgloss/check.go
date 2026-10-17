@@ -35,6 +35,9 @@ func writeCheck(p *out.Printer, th Theme, a conformance.Assessment, agentsContex
 			// Violations are rendered from ActiveViolations above.
 		}
 	}
+	if summary := out.PatternBoundSummary(a); summary != "" {
+		p.Printf("%s: %s\n", th.Muted.Render("coverage"), summary)
+	}
 	if agentsContext != "" {
 		p.Printf("%s: %s\n", th.Muted.Render("agents"), agentsContext)
 	}

@@ -35,7 +35,7 @@ func (renderer) Render(w io.Writer, r cli.Report) error {
 	case cli.RuleDetailReport:
 		doc = ruleDetailDoc(x.Detail)
 	case cli.RuleTestReport:
-		doc = ruleTestDocs(x.Results)
+		doc = ruleTestRunDoc(x.Run)
 	case cli.InitReport:
 		doc = initDoc{Path: x.Path}
 	case cli.ContextReport:
@@ -148,6 +148,11 @@ func checkDocs(a conformance.Assessment) []diagnosticDoc {
 			Status:      string(d.Status()),
 			Message:     d.Message(),
 			Remediation: d.Remediation(),
+		})
+	}
+	for _, id := range a.PatternBoundRules() {
+		docs = append(docs, diagnosticDoc{
+			Kind: string(conformance.DiagnosticCoverage), RuleID: id, Message: out.PatternBoundMessage(id),
 		})
 	}
 	named := map[string]bool{}
@@ -278,6 +283,7 @@ type ruleSummaryDoc struct {
 	Proposition    string `json:"proposition"`
 	Rationale      string `json:"rationale,omitempty"`
 	Assurance      string `json:"assurance"`
+	AssuranceLabel string `json:"assuranceLabel"`
 	Provenance     string `json:"provenance,omitempty"`
 	BuiltIn        bool   `json:"builtIn,omitempty"`
 	Disabled       bool   `json:"disabled,omitempty"`
@@ -292,6 +298,7 @@ func ruleSummaryDocOf(s application.RuleSummary) ruleSummaryDoc {
 		Proposition:    s.Proposition,
 		Rationale:      s.Rationale,
 		Assurance:      s.Assurance,
+		AssuranceLabel: s.AssuranceLabel,
 		Provenance:     s.Provenance,
 		BuiltIn:        s.BuiltIn,
 		Disabled:       s.Disabled,
@@ -367,6 +374,20 @@ type ruleTestDoc struct {
 	Missing    []findingDoc `json:"missing,omitempty"`
 	Unexpected []findingDoc `json:"unexpected,omitempty"`
 	Err        string       `json:"error,omitempty"`
+}
+
+// ruleTestRunJSON is a Rule Test run: every test result, and the
+// content Rules no test exercises with a failing case.
+type ruleTestRunJSON struct {
+	Results            []ruleTestDoc `json:"results"`
+	WithoutFailingCase []string      `json:"withoutFailingCase"`
+}
+
+func ruleTestRunDoc(run application.RuleTestRun) ruleTestRunJSON {
+	return ruleTestRunJSON{
+		Results:            ruleTestDocs(run.Results),
+		WithoutFailingCase: append([]string{}, run.WithoutFailingCase...),
+	}
 }
 
 func ruleTestDocs(results []application.RuleTestResult) []ruleTestDoc {
@@ -450,6 +471,7 @@ type ruleSummaryPassthrough struct {
 	Proposition    string `json:"Proposition"`
 	Rationale      string `json:"Rationale,omitempty"`
 	Assurance      string `json:"Assurance"`
+	AssuranceLabel string `json:"AssuranceLabel"`
 	Provenance     string `json:"Provenance"`
 	BuiltIn        bool   `json:"BuiltIn"`
 	Disabled       bool   `json:"Disabled"`
@@ -556,6 +578,7 @@ func contextDoc(c application.ArchitecturalContext) contextJSON {
 				Proposition:    r.Summary.Proposition,
 				Rationale:      r.Summary.Rationale,
 				Assurance:      r.Summary.Assurance,
+				AssuranceLabel: r.Summary.AssuranceLabel,
 				Provenance:     r.Summary.Provenance,
 				BuiltIn:        r.Summary.BuiltIn,
 				Disabled:       r.Summary.Disabled,

@@ -153,6 +153,9 @@ type Enforcement struct {
 	assurance   Assurance
 	limitations []string
 	implemented bool
+	// patternBound marks an Assurance that holds for the pattern the
+	// Constraint spells and says nothing of what the Rationale explains.
+	patternBound bool
 }
 
 // NewEnforcement requires fact requirements, a named evidence method,
@@ -210,6 +213,22 @@ func (e Enforcement) Evidence() EvidenceMethod { return e.evidence }
 // Assurance returns the declared conclusion strength.
 func (e Enforcement) Assurance() Assurance { return e.assurance }
 
+// PatternBound reports whether the Assurance holds only for the pattern
+// the Constraint spells. A content Rule's check finds every line its
+// pattern matches; nothing checks that the pattern covers what the
+// Rule's Rationale explains.
+func (e Enforcement) PatternBound() bool { return e.patternBound }
+
+// AssuranceLabel is the Assurance as every listing shows it: the bare
+// value, or for a pattern-bound Enforcement the value with what it
+// holds for and that the Rationale is not checked.
+func (e Enforcement) AssuranceLabel() string {
+	if e.patternBound {
+		return string(e.assurance) + " for its pattern; rationale not checked"
+	}
+	return string(e.assurance)
+}
+
 // Limitations returns the documented analysis limits.
 func (e Enforcement) Limitations() []string { return append([]string(nil), e.limitations...) }
 
@@ -262,6 +281,7 @@ func BuiltinEnforcement(t Type) Enforcement {
 	case TypeContent:
 		e, _ := NewEnforcement(nil, []Fact{FactFileTree},
 			"line matching against the forbidden pattern over file bytes", AssuranceExact, nil, true)
+		e.patternBound = true
 		return e
 	case TypeExtension:
 		e, _ := NewEnforcement(nil, []Fact{FactFileTree, FactImports, FactDeclarations, FactCalls, FactResolvedCalls, FactFieldTypes},

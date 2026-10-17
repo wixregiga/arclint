@@ -1,0 +1,21 @@
+# Violating case drawn from the rationale: a representation that cannot
+# become a value panics instead of returning an error, so the content
+# rule must report the line.
+rule: "domain/no-panic"
+files:
+  internal/domain/rule/severity.go: |
+    package rule
+
+    type Severity string
+
+    func MustSeverity(s string) Severity {
+        if s != "error" && s != "warning" && s != "info" {
+            panic("severity " + s + " invalid")
+        }
+        return Severity(s)
+    }
+expect:
+  - kind: violation
+    path: internal/domain/rule/severity.go
+    line: 7
+    message: "forbidden content matching /\\bpanic\\(/"

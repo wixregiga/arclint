@@ -31,9 +31,9 @@ func TestPlainRuleListNamesTheOrigin(t *testing.T) {
 	var buf bytes.Buffer
 	err := New().Render(&buf, cli.RuleListReport{
 		Rules: []application.RuleSummary{
-			{ID: "ns/n:x", Type: "structure", Severity: "error", Proposition: "distributed", Assurance: "exact", Provenance: "ns/n@1"},
-			{ID: "aggregate/root-declared", Type: "domain", Severity: "error", Proposition: "composed", Assurance: "exact", BuiltIn: true},
-			{ID: "local/own", Type: "content", Severity: "warning", Proposition: "written here", Assurance: "exact"},
+			{ID: "ns/n:x", Type: "structure", Severity: "error", Proposition: "distributed", Assurance: "exact", AssuranceLabel: "exact", Provenance: "ns/n@1"},
+			{ID: "aggregate/root-declared", Type: "domain", Severity: "error", Proposition: "composed", Assurance: "exact", AssuranceLabel: "exact", BuiltIn: true},
+			{ID: "local/own", Type: "content", Severity: "warning", Proposition: "written here", Assurance: "exact", AssuranceLabel: "exact for its pattern; rationale not checked"},
 		},
 	})
 	if err != nil {
@@ -41,7 +41,7 @@ func TestPlainRuleListNamesTheOrigin(t *testing.T) {
 	}
 	want := "ns/n:x  [structure/error/exact]  distributed  from ns/n@1\n" +
 		"aggregate/root-declared  [domain/error/exact]  composed  built in from the DDD meta-model\n" +
-		"local/own  [content/warning/exact]  written here\n"
+		"local/own  [content/warning/exact for its pattern; rationale not checked]  written here\n"
 	if buf.String() != want {
 		t.Fatalf("bytes = %q, want %q", buf.String(), want)
 	}
@@ -50,7 +50,7 @@ func TestPlainRuleListNamesTheOrigin(t *testing.T) {
 func TestPlainRuleDetailOfABuiltInSaysHowToAdoptIt(t *testing.T) {
 	var buf bytes.Buffer
 	err := New().Render(&buf, cli.RuleDetailReport{Detail: application.RuleDetail{
-		Summary:          application.RuleSummary{ID: "aggregate/root-declared", Type: "domain", Severity: "error", Proposition: "composed", Assurance: "exact", BuiltIn: true},
+		Summary:          application.RuleSummary{ID: "aggregate/root-declared", Type: "domain", Severity: "error", Proposition: "composed", Assurance: "exact", AssuranceLabel: "exact", BuiltIn: true},
 		EntireRepository: true,
 		Schema:           "schema",
 	}})

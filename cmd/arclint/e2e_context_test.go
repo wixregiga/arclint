@@ -274,7 +274,7 @@ func TestContextZoneNamedForContextKeepsItWhole(t *testing.T) {
 	if len(ruleCtx.Aggregates) != 1 || ruleCtx.Aggregates[0].Name != "Rule" || ruleCtx.Aggregates[0].Identity != "RuleID" || len(ruleCtx.Aggregates[0].Entities) != 2 {
 		t.Fatalf("context rule is not whole: %+v", *ruleCtx)
 	}
-	if len(ruleCtx.ValueObjects) != 13 || len(ruleCtx.Invariants) != 11 {
+	if len(ruleCtx.ValueObjects) != 15 || len(ruleCtx.Invariants) != 11 {
 		t.Fatalf("context rule is not whole: %d value objects, %d invariants in %+v", len(ruleCtx.ValueObjects), len(ruleCtx.Invariants), *ruleCtx)
 	}
 }

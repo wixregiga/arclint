@@ -155,6 +155,12 @@ BoundedContext rule {
       "A project's domain file is never rules.arclint.yaml, not even through a link."
       def void ensureNeverTheRuleset();
     }
+
+    "How strongly a Rule's enforcement decides its Constraint: exact, partial, heuristic, or advisory. Assurance is independent from Severity. It speaks for the Constraint as written, never for the Rationale. A content Rule is exact for its pattern: a line the pattern matches is found, and nothing checks that the pattern covers what the Rationale explains. So wherever a content Rule's Assurance is shown, it reads exact for its pattern, with its rationale not checked."
+    ValueObject Assurance
+
+    "One fixture scenario for one Rule, kept under .arclint/tests: fixture files and the complete result the Rule must produce on them. A RuleTest whose expected result holds at least one violation is a failing case; it shows a bad example the Rule catches. Since a content Rule's check decides only its pattern, every enabled content Rule needs at least one failing case drawn from its Rationale, and arclint rules test names each one that has none."
+    ValueObject RuleTest
   }
   // @arclint question "pattern-holds-rules" "In code a Pattern carries the Rules it distributes, which reads like a boundary of its own, while rules.arclint.yaml keeps Rule the sole aggregate and forbids a pattern home. Is Pattern a member of the Rule aggregate, as recorded here, or an aggregate whose members are Rules?"
 }

@@ -1,0 +1,18 @@
+# Violating case drawn from the rationale: the server reports a failure
+# with fmt.Println instead of slog, so the content rule must report the
+# line.
+rule: "source/slog-only"
+files:
+  internal/app/server.go: |
+    package app
+
+    import "fmt"
+
+    func report(err error) {
+        fmt.Println("place order failed:", err)
+    }
+expect:
+  - kind: violation
+    path: internal/app/server.go
+    line: 6
+    message: "forbidden content matching /\\bfmt\\.Print|\\blog\\.(Print|Fatal|Panic)/"

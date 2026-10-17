@@ -1,0 +1,20 @@
+# Violating case drawn from the rationale: an entity marshals itself to
+# JSON, so the entities layer names a JSON package and the content rule
+# must report the import line.
+rule: "entities/technology-free"
+files:
+  internal/entities/event/event.go: |
+    package event
+
+    import "encoding/json"
+
+    type Event struct{ title string }
+
+    func (e Event) Encode() ([]byte, error) {
+        return json.Marshal(map[string]string{"title": e.title})
+    }
+expect:
+  - kind: violation
+    path: internal/entities/event/event.go
+    line: 3
+    message: "forbidden content matching /\"net/http\"|\"log/slog\"|\"encoding/json\"/"
