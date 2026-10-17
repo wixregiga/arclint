@@ -48,7 +48,7 @@ func (r renderer) Render(w io.Writer, rep cli.Report) error {
 
 	switch x := rep.(type) {
 	case cli.AssessmentReport:
-		writeCheck(p, th, x.Assessment, x.AgentsContext)
+		writeCheck(p, th, x.Assessment, x.AgentsContext, x.AgentsContextUnchecked)
 	case cli.RuleListReport:
 		writeRuleRows(p, th, x.Rules)
 	case cli.RuleDetailReport:

@@ -3,7 +3,6 @@ package sobekextension
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -28,6 +27,9 @@ type RuleType struct {
 	check           sobek.Callable
 	program         *sobek.Program
 	registerTimeout time.Duration
+	// declarations are the definition errors the SDK handed to this
+	// runtime, keyed by the thrown value.
+	declarations map[*sobek.Object]string
 }
 
 // Host is the read-only surface the engine lends to a rule during one
@@ -114,13 +116,8 @@ func (r *Registry) registerProgram(sourcePath string, prog *sobek.Program, opts 
 
 	started := time.Now()
 	stopped := func(context string, err error) error {
-		var exception *sobek.Exception
-		if errors.As(err, &exception) {
-			if thrown, isObject := exception.Value().(*sobek.Object); isObject {
-				if message, declared := declarations[thrown]; declared {
-					return fmt.Errorf("extension %s: %s", sourcePath, message)
-				}
-			}
+		if message, declared := definitionError(declarations, err); declared {
+			return fmt.Errorf("extension %s: %s", sourcePath, message)
 		}
 		return newCodeFailure(vm, CodeFailure{
 			Source: sourcePath, Phase: conformance.PhaseRegistration,
@@ -206,6 +203,7 @@ func (r *Registry) registerProgram(sourcePath string, prog *sobek.Program, opts 
 			RawSchema:       rawSchema,
 			schema:          schema,
 			vm:              vm,
+			declarations:    declarations,
 			check:           checkFn,
 			program:         prog,
 			registerTimeout: opts.RegisterTimeout,
@@ -432,6 +430,9 @@ func (rt *RuleType) checkWithHost(host Host, params map[string]any, limit time.D
 	defer vm.ClearInterrupt()
 
 	if _, err := rt.check(sobek.Undefined(), ctx, vm.ToValue(params)); err != nil {
+		if message, declared := definitionError(rt.declarations, err); declared {
+			return reported, time.Since(started), fmt.Errorf("extension %s: rule %q: %s", rt.SourcePath, rt.Name, message)
+		}
 		elapsed := time.Since(started)
 		return reported, elapsed, newCodeFailure(vm, CodeFailure{
 			Source: rt.SourcePath, Phase: conformance.PhaseCheck, Limit: limit,
@@ -453,6 +454,24 @@ func (t timeLimit) String() string {
 	return fmt.Sprintf("%s exceeded the %s timeout", t.phase, t.limit)
 }
 
+// definitionError returns the message of a definition error the SDK
+// handed to the host, recognized by the thrown value's identity. It runs
+// no extension code: errors.As would call the exception's Unwrap, which
+// walks the thrown object's prototype chain, so the error's own type is
+// asserted instead.
+func definitionError(declarations map[*sobek.Object]string, err error) (string, bool) {
+	exception, ok := err.(*sobek.Exception)
+	if !ok {
+		return "", false
+	}
+	thrown, isObject := exception.Value().(*sobek.Object)
+	if !isObject {
+		return "", false
+	}
+	message, declared := declarations[thrown]
+	return message, declared
+}
+
 // CodeFailure is extension code that did not complete: it ran past its
 // time limit or raised an error while running, in one phase. Errors
 // outside running code (bundling, a malformed definition, invalid
@@ -469,15 +488,14 @@ type CodeFailure struct {
 	File     string
 	timedOut bool
 	raised   string
-	cause    error
 }
 
 // newCodeFailure completes a failure from what the code raised. Its
 // text is read once, here, while the runtime's interrupt is still armed.
+// The failure keeps no reference to the raised value: unwrapping a
+// sobek exception may run extension code.
 func newCodeFailure(vm *sobek.Runtime, failure CodeFailure, context string, err error) *CodeFailure {
-	failure.cause = err
-	var interrupted *sobek.InterruptedError
-	if errors.As(err, &interrupted) {
+	if interrupted, ok := err.(*sobek.InterruptedError); ok {
 		if _, ok := interrupted.Value().(timeLimit); ok {
 			failure.timedOut = true
 			return &failure
@@ -498,8 +516,8 @@ const unreadable = "a thrown value whose message could not be read"
 // object's text comes from its own toString, which may throw or never
 // return; either leaves a placeholder instead of reaching the host.
 func describe(vm *sobek.Runtime, err error) (text string) {
-	var exception *sobek.Exception
-	if !errors.As(err, &exception) {
+	exception, ok := err.(*sobek.Exception)
+	if !ok {
 		return strings.Join(strings.Fields(err.Error()), " ")
 	}
 	if _, isObject := exception.Value().(*sobek.Object); !isObject {
@@ -524,8 +542,6 @@ func (f *CodeFailure) Error() string {
 	}
 	return fmt.Sprintf("extension %s: %s", f.Source, f.raised)
 }
-
-func (f *CodeFailure) Unwrap() error { return f.cause }
 
 // TimedOut reports whether the code was stopped at its time limit.
 func (f *CodeFailure) TimedOut() bool { return f.timedOut }

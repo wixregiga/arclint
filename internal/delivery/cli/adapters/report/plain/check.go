@@ -8,7 +8,7 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 )
 
-func writeCheck(w io.Writer, a conformance.Assessment, agentsContext string) error {
+func writeCheck(w io.Writer, a conformance.Assessment, agentsContext, agentsUnchecked string) error {
 	p := &out.Printer{W: w}
 	for _, v := range a.ActiveViolations() {
 		anchor := v.Path()
@@ -37,6 +37,9 @@ func writeCheck(w io.Writer, a conformance.Assessment, agentsContext string) err
 	}
 	if agentsContext != "" {
 		p.Printf("agents: %s\n", agentsContext)
+	}
+	if agentsUnchecked != "" {
+		p.Printf("agents: %s\n", agentsUnchecked)
 	}
 	out.ContractCoverage(p, a)
 	p.Printf("%d active finding(s) · %d suppressed · %d baselined · %d rule(s) applied\n",

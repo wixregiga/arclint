@@ -186,6 +186,46 @@ export default defineRule({ type: "spin", check() {} });
 	}
 }
 
+// A check narrowed to native Rules keeps its report when an extension
+// fails while registering: the AGENTS.md comparison, which needs the
+// extension inventory, says it did not run instead of discarding the
+// findings.
+func TestRegistrationErrorKeepsANativeOnlyReport(t *testing.T) {
+	root := spinRepository(t, "")
+	write(t, root, ".arclint/extensions/spin.ts", `
+import { defineRule } from "arclint";
+export default defineRule({ type: "spin", check() {} });
+`)
+	if stdout, stderr, code := runBin(t, root, os.Environ(), "agents", "md", "--write"); code != 0 {
+		t.Fatalf("agents md --write: exit %d\n%s\n%s", code, stdout, stderr)
+	}
+	write(t, root, ".arclint/extensions/spin.ts", `
+import { defineRule } from "arclint";
+throw new Error("broken at load");
+export default defineRule({ type: "spin", check() {} });
+`)
+	stdout, stderr, code := runBin(t, root, os.Environ(), "check", "--only", "src/snake", "--format", "json")
+	if code != 1 {
+		t.Fatalf("exit %d, want 1 for the snake finding\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	var docs []notEvaluatedDoc
+	if err := json.Unmarshal([]byte(stdout), &docs); err != nil {
+		t.Fatalf("complete JSON report required: %v\n%q", err, stdout)
+	}
+	if len(kindOf(docs, "violation")) != 1 {
+		t.Errorf("the snake finding is missing: %+v", docs)
+	}
+	var unchecked bool
+	for _, d := range kindOf(docs, "coverage") {
+		if d.Path == "AGENTS.md" && strings.Contains(d.Message, "was not compared") && strings.Contains(d.Message, "broken at load") {
+			unchecked = true
+		}
+	}
+	if !unchecked {
+		t.Errorf("no coverage entry says the AGENTS.md block was not compared: %+v", docs)
+	}
+}
+
 // A malformed definition is the author's configuration error, not code
 // that failed while running: check exits 2 and names it.
 func TestMalformedExtensionDefinitionIsAConfigurationError(t *testing.T) {
