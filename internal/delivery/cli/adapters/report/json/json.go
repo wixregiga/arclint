@@ -553,6 +553,20 @@ type domainKnowledgeJSON struct {
 	UsesLocated  bool                  `json:"usesLocated,omitempty"`
 	Used         []domainUseJSON       `json:"used,omitempty"`
 	Undetermined []undeterminedUseJSON `json:"undetermined,omitempty"`
+	// Implemented lists the implementations of declared domain services
+	// in the worksite, each with the check its operation must reach.
+	Implemented []domainImplementedJSON `json:"implemented,omitempty"`
+}
+
+type domainImplementedJSON struct {
+	Context   string `json:"context"`
+	Service   string `json:"service"`
+	Assertion string `json:"assertion"`
+	Type      string `json:"type"`
+	Operation string `json:"operation"`
+	Evidence  string `json:"evidence"`
+	Must      string `json:"must"`
+	Source    string `json:"source"`
 }
 
 type domainUseJSON struct {
@@ -742,6 +756,12 @@ func domainKnowledgeDoc(d *application.DomainKnowledge) *domainKnowledgeJSON {
 	}
 	for _, u := range d.Undetermined {
 		dk.Undetermined = append(dk.Undetermined, undeterminedUseJSON{Path: u.Path, Line: u.Line, What: u.What, Reason: u.Reason, Context: u.Context, Term: u.Term, Role: string(u.Role)})
+	}
+	for _, impl := range d.Implemented {
+		dk.Implemented = append(dk.Implemented, domainImplementedJSON{
+			Context: impl.Context, Service: impl.Service, Assertion: impl.Assertion, Type: impl.Type,
+			Operation: impl.Operation, Evidence: impl.Evidence, Must: impl.Must, Source: impl.Source,
+		})
 	}
 	for _, rel := range d.Relations {
 		dk.Relations = append(dk.Relations, domainRelationKnowJSON{From: rel.From, To: rel.To, Kind: rel.Kind})

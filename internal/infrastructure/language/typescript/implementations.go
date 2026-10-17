@@ -20,6 +20,9 @@ type abstraction struct {
 	f   *resolutionFile
 	n   *gotreesitter.Node
 	ref conformance.Reference
+	// methods are the operations it declares, read once for every class
+	// matched against it.
+	methods []string
 }
 
 // classImplementations lists what one class implements. Its implements
@@ -83,8 +86,7 @@ func (r *resolutionIndex) classImplementations(f *resolutionFile, n *gotreesitte
 		if exact[a.ref.File+"#"+a.ref.Name] {
 			continue
 		}
-		methods := r.methodNames(a.f, a.n, map[string]bool{})
-		if len(methods) == 0 || !subset(methods, names) {
+		if len(a.methods) == 0 || !subset(a.methods, names) {
 			continue
 		}
 		out = append(out, r.implementation(class, a, conformance.ImplementationHeuristic,
@@ -258,7 +260,7 @@ func (r *resolutionIndex) repositoryInterfaces() []abstraction {
 		}
 		for name, ns := range f.types {
 			if len(ns) == 1 && f.kind(ns[0]) == tsInterfaceDeclaration {
-				out = append(out, abstraction{f: f, n: ns[0], ref: declared(f.path, "", name)})
+				out = append(out, abstraction{f: f, n: ns[0], ref: declared(f.path, "", name), methods: r.methodNames(f, ns[0], map[string]bool{})})
 			}
 		}
 	}

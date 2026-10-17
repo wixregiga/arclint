@@ -563,6 +563,20 @@ func TestDeclaredServiceImplementationSkipsTheCheck(t *testing.T) {
 	if strings.Contains(stdout, "Checked.Encrypt") {
 		t.Fatalf("context lists an implementation outside the worksite:\n%s", stdout)
 	}
+	stdout = mustRunDomain(t, root, "context", "src/adapters/skipping.go", "--format", "json")
+	var context struct {
+		Domain struct {
+			Implemented []struct {
+				Context, Service, Assertion, Type, Operation, Evidence, Must, Source string
+			} `json:"implemented"`
+		} `json:"domain"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &context); err != nil {
+		t.Fatalf("context json: %v\n%s", err, stdout)
+	}
+	if got := context.Domain.Implemented; len(got) != 1 || got[0].Type != "Skipping" || got[0].Must != "call AssertNotEmpty" || got[0].Source != "src/adapters/skipping.go:7" || got[0].Evidence != "exact" {
+		t.Fatalf("context json implementations: %+v", got)
+	}
 
 	stdout = mustRunDomain(t, root, "domain", "show", "Encrypter")
 	for _, want := range []string{
