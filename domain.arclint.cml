@@ -165,7 +165,7 @@ BoundedContext rule {
     "One fixture scenario for one Rule, kept under .arclint/tests: fixture files and the complete result the Rule must produce on them. A RuleTest whose expected result holds at least one violation is a failing case; it shows a bad example the Rule catches. Since a content Rule's check decides only its pattern, every enabled content Rule needs at least one failing case drawn from its Rationale, and arclint rules test names each one that has none."
     ValueObject RuleTest
 
-    "How long the check of one Extension Rule may run before it is stopped and the Rule is reported as not evaluated. Only an Extension Rule carries one. The Rule sets it with time_limit, and an Override sets it for an Extension Rule a Pattern distributes; without either the default of 5 seconds applies. An Extension's registration always runs under the default. A check that runs longer than half its TimeLimit is reported as near the limit, because a run twice as slow would stop it."
+    "How long one Extension Rule's check may run before it stops and the Rule is reported as not evaluated. The Rule or an Override sets it; otherwise the 5-second default applies, as it always does to registration."
     ValueObject TimeLimit {
       "A TimeLimit is a positive duration; zero or a negative duration is rejected at load."
       def void ensurePositive();
@@ -185,7 +185,7 @@ BoundedContext adoption {
       def void ensureEveryZoneBound();
     }
 
-    "One adopting repository's decision applied onto a Rule an extended Pattern distributes or a built-in Rule, keyed by the Rule's RuleID. An Override is not a second Rule: it only disables the Rule, changes its Severity, excludes subjects from it, suppresses its findings, or changes the TimeLimit of an Extension Rule."
+    "One adopting repository's decision on a distributed or built-in Rule, keyed by its RuleID. It is not a second Rule: it only disables the Rule, changes its Severity or TimeLimit, excludes subjects, or suppresses findings."
     ValueObject Override {
       "An Override names a distributed or built-in Rule; an Override whose RuleID matches neither is rejected at load."
       def void ensureNamesADistributedRule();
@@ -267,7 +267,7 @@ BoundedContext conformance {
     "One suspected breach of a Rule, anchored at a file and line and carrying the PatternReference of the Pattern that distributed the Rule when one did. It has no lifecycle: every assessment derives its Violations fresh, and two Violations with the same values are the same finding."
     ValueObject Violation
 
-    "The reason an Extension Rule was not evaluated: its Extension ran past its time limit, or its code failed while running. It names the Extension's source, the phase it stopped in (registration, or the Rule's check), the time limit in force and the time the Extension ran before it stopped, the file the check last read when one is known, and the error the Extension raised when it did not time out. The Rule it stops is reported as not evaluated, never as conforming, and every other Rule of the same check is still evaluated and reported. Two ExtensionFailures with the same values are the same reason."
+    "Why an Extension Rule was not evaluated: its Extension ran past its TimeLimit, or its code failed. It names its source, phase, the TimeLimit in force, how long it ran, the file last read when known, and any error raised."
     ValueObject ExtensionFailure {
       "ExtensionFailure always states its cause: the time limit its Extension exceeded, or the error its Extension raised while running."
       def void ensureStatesItsCause();
