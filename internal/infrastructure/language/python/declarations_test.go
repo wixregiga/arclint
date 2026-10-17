@@ -174,9 +174,12 @@ import typing as t
 from abc import ABC, ABCMeta
 from typing import Generic, Protocol, TypeVar
 from typing_extensions import Protocol as ExtProtocol
+from typing import TypeAlias
 
 T = TypeVar("T")
 Base = ABC
+module = abc
+Declared: TypeAlias = ABC
 
 
 class ByABC(ABC):
@@ -215,6 +218,14 @@ class ByAlias(Base):
     pass
 
 
+class ByModuleAlias(module.ABC):
+    pass
+
+
+class ByTypeAlias(Declared):
+    pass
+
+
 class Concrete(ByABC):
     pass
 
@@ -235,7 +246,7 @@ class Plain(Generic[T]):
 	want := map[string]bool{
 		"ByABC": true, "ByModule": true, "ByMetaclass": true, "ByModuleMetaclass": true,
 		"ByProtocol": true, "ByGenericProtocol": true, "ByAliasedModule": true, "ByExtension": true,
-		"ByAlias": true, "Concrete": false, "Plain": false,
+		"ByAlias": true, "ByModuleAlias": true, "ByTypeAlias": true, "Concrete": false, "Plain": false,
 	}
 	if !reflect.DeepEqual(abstract, want) {
 		t.Fatalf("abstract classes:\n got %v\nwant %v", abstract, want)

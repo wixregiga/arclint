@@ -49,7 +49,7 @@ func declaresAbstract(w *pyWalker, c *pyClass) bool {
 			name := arg.ChildByFieldName("name", w.lang)
 			value := arg.ChildByFieldName("value", w.lang)
 			if name != nil && value != nil && name.Text(w.src) == "metaclass" &&
-				qualifiedTarget(c.scope, value.Text(w.src), w, 0) == abstractMetaclass {
+				qualifiedTarget(c.header, value.Text(w.src), w, 0) == abstractMetaclass {
 				return true
 			}
 			continue
@@ -61,7 +61,7 @@ func declaresAbstract(w *pyWalker, c *pyClass) bool {
 		}
 		switch arg.Type(w.lang) {
 		case nodeIdentifier, nodeAttribute:
-			if abstractBases[qualifiedTarget(c.scope, arg.Text(w.src), w, 0)] {
+			if abstractBases[qualifiedTarget(c.header, arg.Text(w.src), w, 0)] {
 				return true
 			}
 		}
