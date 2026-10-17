@@ -33,7 +33,20 @@ function classify(path) {
   const text = fs.readFileSync(path, "utf8");
   const sf = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, scriptKind(path));
   const kinds = new Map();
-  const line = (pos) => sf.getLineAndCharacterOfPosition(pos).line + 1;
+  // Git numbers lines at LF alone; TypeScript also breaks at a lone CR,
+  // U+2028 and U+2029, so positions are mapped to LF lines here.
+  const breaks = [];
+  for (let k = text.indexOf("\n"); k >= 0; k = text.indexOf("\n", k + 1)) breaks.push(k);
+  const line = (pos) => {
+    let low = 0;
+    let high = breaks.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (breaks[mid] < pos) low = mid + 1;
+      else high = mid;
+    }
+    return low + 1;
+  };
   const add = (n, kind) => {
     if (!kinds.has(n)) kinds.set(n, new Set());
     kinds.get(n).add(kind);

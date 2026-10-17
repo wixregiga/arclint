@@ -1091,6 +1091,13 @@ class InventoryTest(unittest.TestCase):
         self.assertIn("domain.arclint.yaml", result.stderr)
         self.assertFalse(any(row[3].startswith("domain.arclint.yaml") for row in rows))
 
+    def test_language_line_terminators_end_a_typescript_line(self):
+        for terminator in (b"\r", "\u2028".encode(), "\u2029".encode()):
+            with open(os.path.join(self.repo.root, "missed.test.ts"), "wb") as handle:
+                handle.write(b"type Count = number" + terminator + b'/[`]/.test("x");\n// Never overwrite.\ntest("rejects", () => {});\n')
+            located = self.located(self.repo.rows("--base", "main", "--scope", "changed"))
+            self.assertRowsInclude(located, {"missed.test.ts:2": "comment", "missed.test.ts:3": "test"})
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
