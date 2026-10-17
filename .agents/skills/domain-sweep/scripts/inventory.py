@@ -359,26 +359,24 @@ def is_generated(path, lines):
         stripped = text.strip()
         if (closing or (openers and stripped.startswith(openers))) and declares(stripped):
             return True
-        rest = None  # what follows a block comment that closes on this line
+        rest = stripped
         if closing:
-            if closing in stripped:
-                rest = stripped[stripped.index(closing) + len(closing):].strip()
-                closing = None
-        elif not stripped or (line_openers and stripped.startswith(line_openers)):
-            continue
-        else:
+            if closing not in rest:
+                continue
+            rest = rest[rest.index(closing) + len(closing):].strip()
+            closing = None
+        # Read the rest of the line comment by comment: content after any of
+        # them means the file's content has begun.
+        while rest and not (line_openers and rest.startswith(line_openers)):
             for opening, end in blocks:
-                if stripped.startswith(opening):
-                    if end in stripped[len(opening):]:
-                        after = stripped.index(end, len(opening))
-                        rest = stripped[after + len(end):].strip()
+                if rest.startswith(opening):
+                    if end in rest[len(opening):]:
+                        rest = rest[rest.index(end, len(opening)) + len(end):].strip()
                     else:
-                        closing = end
+                        closing, rest = end, ""
                     break
             else:
                 return False
-        if rest and not (openers and rest.startswith(openers)):
-            return False  # code follows the comment: the file's content has begun
     return False
 
 
@@ -519,7 +517,7 @@ def in_expression(prev, last_op, after_label_colon):
 
 TEST_CALLEES = {"it", "test", "describe"}
 
-QUOTED = re.compile(r"""(["'`])(.*?)\1""")
+QUOTED = re.compile(r"""(["'`])((?:\\.|(?!\1).)*)\1""")
 
 # A line whose reading opened a literal it never closed is read again with
 # one slash decision reversed, at most this many, from the last.
@@ -617,7 +615,10 @@ class TypeScriptLexer:
     def drop_call(self):
         """The test call being read turned out to be none, or ended: resume
         the call it interrupted, if any."""
-        self.test_call = self.test_outer.pop() if self.test_outer else None
+        if self.test_outer:
+            self.test_call, self.callee_line = self.test_outer.pop()
+        else:
+            self.test_call = None
 
     def snapshot(self):
         return copy.deepcopy(self.__dict__)
@@ -885,7 +886,7 @@ class TypeScriptLexer:
         call = self.test_call
         if word in TEST_CALLEES and (call in (None, "callee") or (isinstance(call, tuple) and call[0] == "args")):
             if isinstance(call, tuple):
-                self.test_outer.append(call)  # a test inside another call's arguments
+                self.test_outer.append((call, self.callee_line))  # a test inside another call's arguments
             self.test_call, self.callee_line = "callee", number
         else:
             other_token()
@@ -965,11 +966,11 @@ class TypeScriptLexer:
             call = self.test_call
             if isinstance(call, tuple) and call[0] in ("open", "args") and call[1] == opened:
                 self.test_call = "callee"
-            elif any(outer[1] == opened for outer in self.test_outer):
+            elif any(outer[1] == opened for outer, _ in self.test_outer):
                 # The interrupted call closes around an unfinished one.
-                while self.test_outer and self.test_outer[-1][1] != opened:
+                while self.test_outer and self.test_outer[-1][0][1] != opened:
                     self.test_outer.pop()
-                self.test_outer.pop()
+                _, self.callee_line = self.test_outer.pop()
                 self.test_call = "callee"
             else:
                 other_token()
