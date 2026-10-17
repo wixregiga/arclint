@@ -1047,6 +1047,28 @@ class InventoryTest(unittest.TestCase):
         self.assertIn(("README.md:3", "New guarantee."), added)
         self.assertNotIn(("README.md:2", "First rule."), added)
 
+    def test_round_thirty_four_cases(self):
+        self.repo.git("checkout", "-q", "main")
+        self.repo.write("old.md", "Header\nKeep first rule.\nKeep second rule.\nKeep third rule.\nOld guarantee.\n")
+        self.repo.write("lang/language.yaml", "contexts:\n  money:\n    definition: Amounts.\ninvariants:\n  positive: An amount is always positive.\n  whole: An amount counts whole cents.\n")
+        self.repo.commit("old")
+        self.repo.git("checkout", "-q", "change")
+        self.repo.git("reset", "-q", "--hard", "main")
+        self.repo.git("mv", "old.md", "new.md")
+        self.repo.write("new.md", "Header\nKeep first rule.\nKeep second rule.\nKeep third rule.\nNew guarantee.\n")
+        rows = self.repo.rows("--base", "main", "--scope", "changed")
+        self.assertIn(("added", "doc", "guarantee", "new.md:5", "New guarantee."), rows)
+        self.repo.git("mv", "lang/language.yaml", "lang/vocabulary.yaml")
+        self.repo.write("lang/vocabulary.yaml", "contexts:\n  money:\n    definition: Amounts.\ninvariants:\n  positive: An amount is never negative.\n  whole: An amount counts whole cents.\n")
+        self.repo.commit("rename")
+        rows = self.repo.rows("--base", "main", "--head", "HEAD", "--scope", "changed", "--recording", "lang/vocabulary.yaml")
+        kinds = {(row[0], row[3]) for row in rows}
+        self.assertIn(("added", "lang/vocabulary.yaml:5"), kinds)
+        self.assertIn(("deleted", "lang/language.yaml:5"), kinds)
+        self.repo.write("web/quota.ts", "const \u309b = 8; const ratio = \u309b / `requests/second\nNever count refused requests.\n`.length;\n// End.\n")
+        located = self.located(self.repo.rows("--base", "main"))
+        self.assertRowsInclude(located, {"web/quota.ts:1": "text", "web/quota.ts:2": "text", "web/quota.ts:3": "text", "web/quota.ts:4": "comment"})
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
