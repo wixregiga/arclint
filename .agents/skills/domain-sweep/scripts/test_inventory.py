@@ -972,6 +972,14 @@ class InventoryTest(unittest.TestCase):
             "web/suite.test.ts:1": "test", "web/suite.test.ts:2": "test",
         })
 
+    def test_a_regex_multiplied_or_divided(self):
+        self.repo.write("web/sample.test.ts", 'const result = /[`]/*2;\ntest("never overwrites", () => {});\n// Never overwrite user files.\n'
+                        'const other = /[`]//2;\ntest("keeps", () => {});\n')
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertRowsInclude(rows, {
+            "web/sample.test.ts:2": "test", "web/sample.test.ts:3": "comment", "web/sample.test.ts:5": "test",
+        })
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")

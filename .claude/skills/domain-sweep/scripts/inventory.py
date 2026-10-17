@@ -590,9 +590,10 @@ MAX_SHADOWS = 64
 
 def regex_extent(text, i):
     """Read a regular expression literal opening at text[i]. Return the
-    index past it, flags included, and whether it closes on the line with a
-    closing slash that no / or * follows; a slash that does not is no
-    regular expression's end but a comment's start."""
+    index past it, flags included; whether it closes on the line, with a
+    body; and whether / or * follows the closing slash. That closing slash
+    may be a comment's start that a misread slash ran into, though
+    /re/*2 is a valid product."""
     j = i + 1
     in_class = False
     while j < len(text):
@@ -605,13 +606,14 @@ def regex_extent(text, i):
         elif char == "]":
             in_class = False
         elif char == "/" and not in_class:
-            plausible = j > i + 1 and text[j + 1:j + 2] not in ("/", "*")
+            closes = j > i + 1
+            suspicious = text[j + 1:j + 2] in ("/", "*")
             j += 1
             while j < len(text) and (text[j].isalnum() or text[j] == "_"):
                 j += 1
-            return j, plausible
+            return j, closes, suspicious
         j += 1
-    return len(text), False
+    return len(text), False, False
 
 
 class TypeScriptLexer:
@@ -623,9 +625,10 @@ class TypeScriptLexer:
 
     A slash starts a regular expression or divides, by the token before it
     (see ends_operand). Where that rule cannot see enough, the reading
-    fails safe. A regular expression that cannot end where a regular
-    expression may is read as a division. A slash whose token cannot settle
-    it (see token) is read both ways, each reading carried over the next
+    fails safe. A regular expression that does not close on its line is
+    read as a division; one whose closing slash a / or * follows is read
+    as a division first, since that slash may open a comment. Such a slash,
+    and one whose token cannot settle it (see token), is read both ways, each reading carried over the next
     lines: the inventory goes on from the reading that leaves the fewest of
     them inside a literal or a comment, and keeps the rows every reading
     gives, so an ambiguous slash makes it read more lines, never fewer.
@@ -959,11 +962,15 @@ class TypeScriptLexer:
                 token("operand", sure=True)
                 continue
             if char == "/":
-                end, plausible = regex_extent(text, i)
-                regex = not ends_operand(self.prev) and plausible
-                if plausible and not (self.prev_sure and self.prev_line == number):
-                    # Either reading could be meant, and the token before
-                    # cannot settle it: note the decision.
+                end, closes, suspicious = regex_extent(text, i)
+                wanted = not ends_operand(self.prev)
+                plausible = closes and not suspicious
+                regex = wanted and plausible
+                if closes and ((wanted and suspicious) or not (self.prev_sure and self.prev_line == number)):
+                    # Either reading could be meant, and neither the token
+                    # before nor the literal's end settles it: note the
+                    # decision. A regular expression that a comment opener
+                    # would end reads as a division first.
                     slashes.append(i)
                     if i in reversed_slashes:
                         regex = not regex
