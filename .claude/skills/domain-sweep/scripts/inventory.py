@@ -70,11 +70,13 @@ for `arclint context`.
 import argparse
 import copy
 import fnmatch
+import io
 import os
 import re
 import subprocess
 import sys
 import tempfile
+import tokenize
 
 DEFAULT_PATHS = ["*.md", "*.go", "*.ts", "*.tsx", "*.mts", "*.cts", "*.py"]
 
@@ -292,9 +294,22 @@ def read_worktree(repo, path):
     full = os.path.join(repo, path)
     if os.path.islink(full) or not os.path.isfile(full):
         return None
-    # newline="" keeps a lone carriage return inside its line, as Git does.
-    with open(full, "r", encoding="utf-8", errors="replace", newline="") as handle:
-        return split_lines(handle.read())
+    # Read bytes: no newline translation, so a lone carriage return stays
+    # inside its line, as Git keeps it.
+    with open(full, "rb") as handle:
+        return split_lines(decode_source(path, handle.read()))
+
+
+def decode_source(path, data):
+    """A file's text: UTF-8, except a Python file, which may declare its
+    encoding in its first two lines (PEP 263)."""
+    if path.endswith(".py"):
+        try:
+            encoding, _ = tokenize.detect_encoding(io.BytesIO(data).readline)
+            return data.decode(encoding, "replace")
+        except (SyntaxError, LookupError):
+            pass
+    return data.decode("utf-8", "replace")
 
 
 def read_commit(repo, commit, path):
@@ -306,7 +321,7 @@ def read_commit(repo, commit, path):
     result = subprocess.run(["git", "-C", repo, "cat-file", "blob", f"{commit}:{path}"], capture_output=True)
     if result.returncode != 0:
         return None
-    return split_lines(result.stdout.decode("utf-8", "replace"))
+    return split_lines(decode_source(path, result.stdout))
 
 
 def split_lines(text):
@@ -450,6 +465,7 @@ def go_sources(lines):
             if pair == "/*":
                 state = "block"
                 kinds.add("comment")
+                code.append(" ")  # a comment separates tokens: func/* c */TestX(
                 i += 2
                 continue
             char = text[i]
@@ -535,6 +551,9 @@ def in_expression(prev, last_op, after_label_colon):
 
 
 TEST_CALLEES = {"it", "test", "describe"}
+# Beyond Unicode XID_Continue, a JavaScript identifier continues with $,
+# ZWNJ and ZWJ.
+TS_NAME_EXTRA = "$\u200c\u200d"
 TS_ESCAPE = re.compile(r"\\u(?:([0-9A-Fa-f]{4})|\{([0-9A-Fa-f]+)\})")
 
 
@@ -550,7 +569,7 @@ def ts_name(text, i):
             code = int(escape.group(1) or escape.group(2), 16)
             word.append(chr(code) if code <= 0x10FFFF else "\ufffd")
             j = escape.end()
-        elif j == i or continues_name(text[j], "$"):
+        elif j == i or continues_name(text[j], TS_NAME_EXTRA):
             word.append(text[j])
             j += 1
         else:
@@ -878,7 +897,7 @@ class TypeScriptLexer:
                 break  # a hashbang line
             if char == "#" and i + 1 < len(text) and (text[i + 1].isalpha() or text[i + 1] in "_$"):
                 # A private name, #count, is a member: an operand.
-                j = name_end(text, i + 1, "$")
+                j = name_end(text, i + 1, TS_NAME_EXTRA)
                 other_token()
                 token("operand", sure=True)
                 i = j
@@ -1429,7 +1448,7 @@ def collect(repo, base, head, scope, globs, exclude, recordings, hint):
         if lines is None and entry.new_blob is not None:
             # A file a sparse checkout leaves out of the working tree: its
             # content is the blob the index holds.
-            lines = split_lines(git(repo, "cat-file", "blob", entry.new_blob).decode("utf-8", "replace"))
+            lines = split_lines(decode_source(entry.new, git(repo, "cat-file", "blob", entry.new_blob)))
         return lines
 
     files = set()

@@ -939,6 +939,21 @@ class InventoryTest(unittest.TestCase):
             "web/escaped.test.ts:1": "test", "web/escaped.test.ts:2": "comment",
         })
 
+    def test_round_twenty_four_cases(self):
+        self.repo.write("web/quota.test.ts", 'const n\u200c = 8;\nconst ratio = n\u200c / `requests/second\npending`.length;\n'
+                        '// Never overwrite.\ntest("rejects", () => {});\n')
+        with open(os.path.join(self.repo.root, "test_rules.py"), "wb") as handle:
+            handle.write(b"# coding: latin-1\ndef test_caf\xe9():\n    pass\n")
+        self.repo.write("pkg/a_test.go", 'package p\nimport "testing"\nfunc/* contract */TestNeverOverwrites(t *testing.T) {}\n')
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertRowsInclude(rows, {
+            "web/quota.test.ts:4": "comment", "web/quota.test.ts:5": "test",
+            "test_rules.py:1": "comment", "test_rules.py:2": "test", "pkg/a_test.go:3": "test",
+        })
+        self.repo.commit("head")
+        rows = self.located(self.repo.rows("--base", "main", "--head", "HEAD"))
+        self.assertEqual(rows["test_rules.py:2"][1], "test", "a committed Python file keeps its declared encoding")
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
