@@ -95,7 +95,7 @@ class InventoryTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    PRECEDENCE = {"text": 0, "comment": 1, "test": 2}
+    PRECEDENCE = {"text": 0, "uncertain": 1, "comment": 2, "test": 3}
 
     def assertRowsInclude(self, rows, required):
         """Every required row is there, with its source or one that ranks
@@ -1107,6 +1107,16 @@ class InventoryTest(unittest.TestCase):
                 handle.write(b"#!/usr/bin/env node" + terminator + b'test("never overwrites user files", () => {});\n')
             located = self.located(self.repo.rows("--base", "main", "--scope", "changed"))
             self.assertRowsInclude(located, {"quota.test.ts:2": "comment", "quota.test.ts:3": "test", "cli.test.ts:1": "test"})
+
+    def test_round_thirty_eight_cases(self):
+        self.repo.write("web/a.test.ts", 'test\ufeff("never overwrites", () => {});\n')
+        p = '8 as import("./u").T<0> / `a/b`.length'
+        self.repo.write("web/quota.test.ts", "const q = " + " / ".join([p] * 10) + " / `c/d\nNever lose this.\n`.length;\n"
+                        '// Never overwrite.\ntest("rejects", () => {});\n')
+        located = self.located(self.repo.rows("--base", "main", "--scope", "changed"))
+        self.assertRowsInclude(located, {"web/a.test.ts:1": "test"})
+        self.assertIn("web/quota.test.ts:4", located)
+        self.assertIn("web/quota.test.ts:5", located)
 
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")

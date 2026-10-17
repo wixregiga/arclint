@@ -27,6 +27,9 @@ these sources is a row, whole:
              one-line literal with two words in it, such as an error message
   test       a test declaration: Go func Test..., Python def test_... and
              class Test..., a TypeScript it(, test( or describe( call
+  uncertain  a line of a TypeScript file after the lexer's budget for an
+             ambiguous slash ran out; it cannot say what the line is, so the
+             line is read
 
 Other lines of code are not rows: code is enforcement evidence, not a
 statement. In a test file (Go *_test.go, TypeScript *.test.ts and *.spec.ts,
@@ -778,6 +781,9 @@ class TypeScriptLexer:
         comment, or damaged, are dropped."""
         found = {}
         readers = [(0, self)]  # (window cost when it branched, lexer)
+        # Once a reading is cut off by MAX_READINGS or MAX_FOLLOWED, no one
+        # knows what it would have found: every later line is uncertain.
+        cut_off = False
         for number, text in enumerate(lines, start=1):
             kinds, marks = set(), []
             following = {}  # signature -> (cost, lexer)
@@ -810,7 +816,13 @@ class TypeScriptLexer:
                     reading_cost = reading.window_cost(lines, number, result[3])
                     reading.restore(after)
                     keep(following, reading, reading_cost)
-            readers = sorted(following.values(), key=lambda pair: pair[0])[:MAX_FOLLOWED]
+                if queue:
+                    cut_off = True  # readings left unexplored
+            readers = sorted(following.values(), key=lambda pair: pair[0])
+            if len(readers) > MAX_FOLLOWED:
+                readers, cut_off = readers[:MAX_FOLLOWED], True
+            if cut_off:
+                kinds.add("uncertain")
             for line in marks:
                 found[line] = "test"
             if kinds and text.strip():
@@ -973,7 +985,7 @@ class TypeScriptLexer:
                 kinds.add("comment")
                 i += 2
                 continue
-            if char.isspace():
+            if char.isspace() or char == "\ufeff":  # U+FEFF is ECMAScript whitespace
                 if char in "\r\u2028\u2029":
                     self.logical += 1
                 i += 1
@@ -1509,8 +1521,8 @@ def python_sources(lines):
 
 def pick(kinds):
     """One source per line: a test declaration first, then a comment, then
-    text."""
-    for kind in ("test", "comment", "text"):
+    uncertain, which a test file keeps, then text."""
+    for kind in ("test", "comment", "uncertain", "text"):
         if kind in kinds:
             return kind
     raise ValueError(kinds)
