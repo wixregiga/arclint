@@ -98,7 +98,10 @@ DEFAULT_HINT = (
 
 HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 
-GENERATED = re.compile(r"Code generated .* DO NOT EDIT")
+# The whole of a comment that declares its file generated, after the Go
+# convention: "Code generated <by what> DO NOT EDIT." A comment that only
+# mentions the phrase declares nothing.
+GENERATED = re.compile(r"Code generated .* DO NOT EDIT\.?")
 
 # Two words in a one-line literal: a message or a sentence, not an import
 # path, a key, a format verb or a struct tag.
@@ -108,9 +111,10 @@ WORDS = re.compile(r"[A-Za-z]{2,}[ \t]+[A-Za-z]{2,}")
 # every literal on the line reads "", so a declaration written inside a
 # fixture string is not one. ts_sources follows TypeScript test calls token
 # by token.
-GO_TEST = re.compile(r"^\s*func\s+Test\w*\s*\(")
+# A Go declaration starts a line or follows a semicolon: func helper() {}; func TestX(.
+GO_TEST = re.compile(r"(?:^|;)\s*func\s+Test\w*\s*\(")
 GO_TEST_NAME = re.compile(r"^\s*Test\w*\s*\(")
-GO_FUNC_END = re.compile(r"^\s*func\s*$")
+GO_FUNC_END = re.compile(r"(?:^|;)\s*func\s*$")
 PY_TEST_CLASS = re.compile(r"^\s*class\s+Test\w*\b")
 PY_TEST_DEF = re.compile(r"^\s*(?:async\s+)?def\s+test\w*\s*")
 
@@ -335,10 +339,23 @@ def is_generated(path, lines):
             i += 1
         i += 1
     openers = line_openers + tuple(opening for opening, _ in blocks)
+    closers = tuple(end for _, end in blocks)
+
+    def declares(stripped):
+        body = stripped
+        for opener in sorted(openers + ("*",), key=len, reverse=True):
+            if body.startswith(opener):
+                body = body[len(opener):]
+                break
+        for closer in closers:
+            if body.endswith(closer):
+                body = body[:-len(closer)]
+        return bool(GENERATED.fullmatch(body.strip()))
+
     closing = None  # the token that ends the comment block being read
     for text in lines[i:]:
         stripped = text.strip()
-        if GENERATED.search(stripped) and (closing or (openers and stripped.startswith(openers))):
+        if (closing or (openers and stripped.startswith(openers))) and declares(stripped):
             return True
         if closing:
             if closing in stripped:
@@ -573,6 +590,7 @@ class TypeScriptLexer:
         self.expression_body = False
         self.type_alias = False  # a type alias declaration is being read
         self.type_arguments = 0  # angle brackets open after as or satisfies
+        self.type_context = False  # a type follows as or satisfies: Units.Count<number>
         self.after_dot = False  # prev was a member access dot: the next word is a property
         # The test declaration being read: None; "callee"; ("open", n), just
         # after the call's parenthesis, the n-th open; ("args", n), inside a
@@ -837,6 +855,8 @@ class TypeScriptLexer:
     def word(self, word, number, token, other_token):
         """Read a name, a keyword or a property."""
         prev = self.prev
+        if word in ("as", "satisfies") and not self.after_dot:
+            self.type_context = True
         if self.after_dot:
             # A property: counts.in is an operand, and test.each stays a
             # test callee.
@@ -892,6 +912,9 @@ class TypeScriptLexer:
     def punctuation(self, char, text, i, token, other_token, templates_open):
         """Read one bracket or operator character."""
         prev = self.prev
+        if char != "<" and not self.type_arguments:
+            # A type after as or satisfies is names and dots up to <.
+            self.type_context = False
         if char == "(":
             header = isinstance(prev, tuple) and prev[1] == "for" or (
                 prev == ("word", "await") and self.before == ("word", "for")
@@ -980,8 +1003,8 @@ class TypeScriptLexer:
             other_token()
             token("operator", ":")
             self.case_label, self.after_case_colon = False, True
-        elif char == "<" and isinstance(prev, tuple) and (
-            self.type_arguments or self.before in (("word", "as"), ("word", "satisfies"))
+        elif char == "<" and (isinstance(prev, tuple) or prev == "operand") and (
+            self.type_arguments or self.type_context
         ):
             # Type arguments after as or satisfies: Box<number>.
             self.type_arguments += 1
@@ -989,6 +1012,8 @@ class TypeScriptLexer:
             token("operator", "<")
         elif char == ">" and self.type_arguments:
             self.type_arguments -= 1
+            if not self.type_arguments:
+                self.type_context = False
             other_token()
             token("operand" if not self.type_arguments else "operator", ">")
         elif char == ";" and self.type_alias and not any(role == "type" for role, _ in self.braces):
@@ -1093,6 +1118,14 @@ def python_sources(lines):
                 i += 1
                 continue
             if top is not None and top[0] == "spec":
+                raw = next(frame[2] for frame in reversed(stack) if frame[0] == "fstring")
+                if char == "\\" and not raw and text[i + 1:i + 3] == "N{":
+                    # A named escape, \N{EM DASH}, is literal text here too.
+                    end = text.find("}", i + 3)
+                    end = len(text) if end < 0 else end + 1
+                    segment.append(text[i:end])
+                    i = end
+                    continue
                 if char == "{":
                     end_segment()
                     stack.append(["field", 0])
