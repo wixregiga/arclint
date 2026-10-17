@@ -610,6 +610,7 @@ class TypeScriptLexer:
         self.after_case_colon = False  # the last token is the colon of a case or statement label
         self.jump_line = 0  # the line a break or continue was read on
         self.prev_line = 0  # the line the previous token was read on
+        self.prev_sure = True  # a slash after the previous token is surely read right (see token)
         self.bound = set()  # keyword spellings bound as names outside every brace: const await
         self.parameter_names = set()  # names a function's parameters bind, for its body
         # A function or class in an expression: False; "params", waiting for
@@ -699,8 +700,22 @@ class TypeScriptLexer:
                 kinds.add("text")
             segment.clear()
 
-        def token(kind, op=None):
+        def token(kind, op=None, sure=None):
+            """Record a token. sure says whether a slash after it is surely
+            read right: after a literal, a number or a plain name it
+            divides, after most operators it starts a regular expression;
+            after a closing bracket, >, a postfix operator or a name spelled
+            like a keyword, the token's role decides, and the rule may
+            guess wrong."""
+            if sure is None:
+                if kind == "operator":
+                    sure = op not in (")", "]", "}", ">")
+                elif isinstance(kind, tuple):
+                    sure = kind[0] == "word" and kind[1] not in ("await", "yield", "of")
+                else:
+                    sure = False
             self.before, self.prev, self.after_dot, self.prev_line = self.prev, kind, False, number
+            self.prev_sure = sure
             self.last_op_before, self.last_op = self.last_op, (op if kind == "operator" else None)
             self.after_case_colon = False
 
@@ -753,7 +768,7 @@ class TypeScriptLexer:
                     break
                 self.state = "code"
                 literal_ends("string")
-                token("operand")
+                token("operand", sure=True)
                 continue
             if self.state == "template":
                 if char == "\\":
@@ -765,7 +780,7 @@ class TypeScriptLexer:
                     closed = templates_open()
                     self.state = "code"
                     literal_ends(closed)
-                    token("operand")
+                    token("operand", sure=True)
                     i += 1
                     continue
                 if text[i:i + 2] == "${":
@@ -798,11 +813,11 @@ class TypeScriptLexer:
                 # A private name, #count, is a member: an operand.
                 j = name_end(text, i + 1, "$")
                 other_token()
-                token("operand")
+                token("operand", sure=True)
                 i = j
                 continue
             if char.isalpha() or char in "_$":
-                j = name_end(text, i, "$")
+                j = name_end(text, i + 1, "$")
                 self.word(text[i:j], number, token, other_token)
                 i = j
                 continue
@@ -811,7 +826,7 @@ class TypeScriptLexer:
                 while j < len(text) and (text[j].isalnum() or text[j] in "_."):
                     j += 1
                 other_token()
-                token("operand")
+                token("operand", sure=True)
                 i = j
                 continue
             if char == "`":
@@ -831,13 +846,14 @@ class TypeScriptLexer:
                 if how == "open":
                     damaged = True
                 literal_ends("string")
-                token("operand")
+                token("operand", sure=True)
                 continue
             if char == "/":
                 end, plausible = regex_extent(text, i)
                 regex = not ends_operand(self.prev) and plausible
-                if plausible:
-                    # Either reading could be meant: note the decision.
+                if plausible and not (self.prev_sure and self.prev_line == number):
+                    # Either reading could be meant, and the token before
+                    # cannot settle it: note the decision.
                     slashes.append(i)
                     if i in reversed_slashes:
                         regex = not regex
@@ -851,7 +867,7 @@ class TypeScriptLexer:
                     elif any(WORDS.search(m.group(2)) for m in QUOTED.finditer(body)):
                         # So is a quoted phrase, likely a string: read the line.
                         kinds.add("text")
-                    token("operand")
+                    token("operand", sure=True)
                     i = end
                 else:
                     if plausible:
@@ -1235,7 +1251,7 @@ def python_sources(lines):
                 i += 1
                 continue
             if char.isalnum() or char == "_":
-                j = name_end(text, i)
+                j = name_end(text, i + 1)
                 code.append(text[i:j])
                 i = j
                 continue
