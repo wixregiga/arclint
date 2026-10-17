@@ -752,6 +752,18 @@ class InventoryTest(unittest.TestCase):
         rows = self.repo.rows("--base", "main", "--scope", "changed")
         self.assertEqual(sorted((row[0], row[3]) for row in rows), [("added", "old.md/replacement.md:1")])
 
+    def test_round_eleven_cases(self):
+        self.repo.write("web/assertion.ts", 'type Box<T> = T; const ratio = 4 as Box<number> / Math.max("never round".length, 1) / 2;\n')
+        self.repo.write("web/binding.ts", 'function identity(await: number) { return await; }\n'
+                        'async function check() { return await /[/*]/.test("x"); }\nconst n = 1;\n// Never overwrite.\n')
+        self.repo.write("web/defaults.ts", 'const half = +function(n = {}) { return 4; } / Math.max("never round".length, 1) / 2;\n')
+        self.repo.write("web/alias.ts", 'type Props = { value: string }\n/[/*]/.test("x");\nconst n = 1;\n// Never overwrite.\n')
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {
+            "web/assertion.ts:1": "text", "web/binding.ts:4": "comment",
+            "web/defaults.ts:1": "text", "web/alias.ts:4": "comment",
+        })
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
