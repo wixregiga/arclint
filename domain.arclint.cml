@@ -257,6 +257,12 @@ BoundedContext conformance {
 
     "One suspected breach of a Rule, anchored at a file and line and carrying the PatternReference of the Pattern that distributed the Rule when one did. It has no lifecycle: every assessment derives its Violations fresh, and two Violations with the same values are the same finding."
     ValueObject Violation
+
+    "The reason an Extension Rule was not evaluated: its Extension ran past its time limit, or its code failed while running. The Rule it stops is reported as not evaluated, never as conforming, and every other Rule of the same check is still evaluated and reported. Two ExtensionFailures with the same cause are the same reason."
+    ValueObject ExtensionFailure {
+      "ExtensionFailure always states its cause: the time limit its Extension exceeded, or the error its Extension raised while running."
+      def void ensureStatesItsCause();
+    }
   }
 }
 

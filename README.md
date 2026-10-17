@@ -348,7 +348,8 @@ These questions are answered on every run, for every rule. Severity
 and assurance are independent.
 
 Exit codes: `0` clean, `1` error-severity findings, `2` configuration
-or usage error.
+or usage error, `3` when `check` printed its report but an extension
+rule timed out or failed and was not evaluated. `3` wins over `1`.
 
 ## Baseline
 

@@ -186,7 +186,8 @@ Diagnostics, then a summary line:
 
 Exit codes: `0` clean, `1` when the gate fails (an active error-severity
 Violation or an error-severity operational Diagnostic), `2`
-configuration or usage error.
+configuration or usage error, `3` when an extension Rule timed out or
+failed and was not evaluated (the rest of the report still prints).
 
 Optional flags: `--only` / `--exclude` (Rule ids, prefixes, or patterns)
 and `--no-baseline` to evaluate without subtracting the committed

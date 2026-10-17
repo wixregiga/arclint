@@ -1,6 +1,7 @@
 package sobekextension
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -86,7 +87,7 @@ func (e *Evaluator) Evaluate(extension string, params map[string]any, facts conf
 ) ([]conformance.ExtensionFinding, error) {
 	e.load()
 	if e.loadErr != nil {
-		return nil, e.loadErr
+		return nil, extensionFailure(e.loadErr)
 	}
 	ruleType := e.registry.Get(extension)
 	if ruleType == nil {
@@ -99,7 +100,7 @@ func (e *Evaluator) Evaluate(extension string, params map[string]any, facts conf
 	}
 	reported, err := ruleType.Check(e.host(facts, knowledge), validated)
 	if err != nil {
-		return nil, err
+		return nil, extensionFailure(err)
 	}
 	findings := make([]conformance.ExtensionFinding, 0, len(reported))
 	for _, v := range reported {
@@ -112,6 +113,28 @@ func (e *Evaluator) Evaluate(extension string, params map[string]any, facts conf
 		})
 	}
 	return findings, nil
+}
+
+// extensionFailure translates extension code that did not complete into
+// the domain's ExtensionFailure, so the check reports the Rule as not
+// evaluated and goes on. Every other error stays a configuration error.
+func extensionFailure(err error) error {
+	var failed *CodeFailure
+	if !errors.As(err, &failed) {
+		return err
+	}
+	if limit, ok := failed.TimeLimit(); ok {
+		failure, ferr := conformance.NewExtensionTimeout(failed.Source, limit)
+		if ferr != nil {
+			return fmt.Errorf("%w: %w", err, ferr)
+		}
+		return failure
+	}
+	failure, ferr := conformance.NewExtensionFault(failed.Source, failed.Cause())
+	if ferr != nil {
+		return fmt.Errorf("%w: %w", err, ferr)
+	}
+	return failure
 }
 
 // RegisteredExtensionRules implements the application's

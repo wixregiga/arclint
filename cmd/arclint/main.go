@@ -1,6 +1,7 @@
 // Command arclint enforces architecture contracts over a repository.
 // Exit codes: 0 clean, 1 error-severity findings, 2 configuration or
-// usage error.
+// usage error, 3 a check whose report names a Rule that was not
+// evaluated.
 package main
 
 import (

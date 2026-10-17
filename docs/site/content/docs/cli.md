@@ -46,9 +46,11 @@ plain renderer. Raw schema and generated markdown commands are unchanged.
 
 Exit codes are `0` for a clean command, `1` when the gate fails, a
 Rule Test does not match its expectation, or a content Rule has no
-failing case, and `2` for configuration or
-usage errors. A gate failure can come from an active error-severity
-Violation or an error-severity operational Diagnostic.
+failing case, `2` for configuration or usage errors, and `3` when
+`check` printed its report but an extension Rule was not evaluated. A
+gate failure can come from an active error-severity Violation or an
+error-severity operational Diagnostic. `3` wins over `1`: the report
+still lists every finding, but it is incomplete.
 
 A complete Rule (`arclint rules <id>`) prints `constraint`: the canonical
 proposition derived from the Rule's Constraint and scope. It names the
@@ -333,9 +335,20 @@ in the complete Conformance Assessment. The stable shape is:
 ]
 ```
 
-`kind` is `violation`, `operational`, or `coverage`. Fields that do not
-apply are omitted: coverage Diagnostics have no Severity, operational
-Diagnostics may have no Rule ID, and only Violation Diagnostics have a
+`kind` is `violation`, `operational`, `coverage`, or `not_evaluated`.
+A `not_evaluated` entry names an extension Rule whose extension timed
+out or failed, with the extension's source and the cause in `message`:
+
+```json
+{
+  "kind": "not_evaluated",
+  "ruleId": "src/spin",
+  "message": "rule src/spin: extension \"spin\": .arclint/extensions/spin.ts exceeded its 5s time limit"
+}
+```
+
+Fields that do not apply are omitted: coverage and not-evaluated
+entries have no Severity, operational Diagnostics may have no Rule ID, and only Violation Diagnostics have a
 status. `ruleId` is the qualified id, and `pattern` names the Pattern
 that distributed the Rule; a local Rule has an unqualified `ruleId` and
 no `pattern`. `line` is omitted when the Diagnostic is not line-anchored, and
@@ -346,8 +359,9 @@ the message `rule <id> is exact for its pattern; its rationale is not
 checked`. Human output states the same on one `coverage:` line that
 lists those Rules.
 
-The default human output prints active Violations and operational or
-coverage Diagnostics, followed by counts for active, suppressed, and
+The default human output prints active Violations, operational and
+coverage Diagnostics, and one `not evaluated:` line per Rule that was
+not evaluated, followed by counts for active, suppressed, and
 baselined findings and applied Rules. Suppressed and baselined
 Violations remain part of the Assessment and JSON output but do not
 appear as active findings.

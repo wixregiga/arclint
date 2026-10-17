@@ -36,7 +36,8 @@ type Request struct {
 }
 
 // Run evaluates every applicable enabled Rule or records why it could
-// not, applies Exclusions before evaluation and Suppressions after,
+// not, reports a Rule its Extension stopped as not evaluated while
+// every other Rule still reports, applies Exclusions before evaluation and Suppressions after,
 // and produces one complete Conformance Assessment with deterministic
 // ordering. It never writes or refactors application source code.
 func Run(req Request) (Assessment, error) {
@@ -72,10 +73,6 @@ func Run(req Request) (Assessment, error) {
 			diags = append(diags, diag)
 			continue
 		}
-		applied = append(applied, r.ID().Qualified())
-		if r.Enforcement().PatternBound() {
-			patternBound = append(patternBound, r.ID().Qualified())
-		}
 		facts := source.forRule(r)
 		var es []Evaluation
 		var ruleDiags []Diagnostic
@@ -101,6 +98,12 @@ func Run(req Request) (Assessment, error) {
 		}
 		if err != nil {
 			return Assessment{}, err
+		}
+		if !stoppedByExtension(ruleDiags) {
+			applied = append(applied, r.ID().Qualified())
+			if r.Enforcement().PatternBound() {
+				patternBound = append(patternBound, r.ID().Qualified())
+			}
 		}
 		evals = append(evals, es...)
 		diags = append(diags, ruleDiags...)
@@ -134,6 +137,17 @@ func Run(req Request) (Assessment, error) {
 	}
 	sort.Strings(a.contractContexts)
 	return a, nil
+}
+
+// stoppedByExtension reports whether a Rule's Diagnostics say its
+// Extension stopped it, so the Rule was not applied.
+func stoppedByExtension(ds []Diagnostic) bool {
+	for _, d := range ds {
+		if d.Kind() == DiagnosticNotEvaluated {
+			return true
+		}
+	}
+	return false
 }
 
 // validRules re-proves every Rule, rejects duplicate identities, and

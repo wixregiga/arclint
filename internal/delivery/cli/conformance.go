@@ -48,6 +48,9 @@ func NewCheckCommand(assess application.AssessConformance, list application.List
 			if err := render.Render(ctx.Stdout, AssessmentReport{Assessment: assessment, AgentsContext: agentsContext}); err != nil {
 				return fmt.Errorf("write output: %w", err)
 			}
+			if !assessment.Complete() {
+				return NotEvaluatedExit()
+			}
 			if assessment.HasErrors() {
 				return ViolationsExit()
 			}
