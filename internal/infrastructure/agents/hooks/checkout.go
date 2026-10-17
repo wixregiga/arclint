@@ -134,8 +134,8 @@ func (c checkout) fingerprint(path string) fingerprint {
 // later. Without such a directory it is now, a time on the file clock.
 func (c checkout) removedAt(path string, now time.Time) time.Time {
 	for directory := filepath.Dir(filepath.Join(c.root, filepath.FromSlash(path))); ; directory = filepath.Dir(directory) {
-		if stamped := fingerprintOf(directory); !stamped.Absent {
-			return stamped.at()
+		if stamped, exists := directoryStamp(directory); exists {
+			return stamped
 		}
 		if directory == c.root || directory == filepath.Dir(directory) {
 			return now
