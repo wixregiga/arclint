@@ -112,7 +112,7 @@ func TestPlainContextScopedDomainBytes(t *testing.T) {
 		"      invariant totals-match (Invoice): An Invoice total matches its lines. billing/invoice.go:40",
 		"      assertion issued-once (Invoice, on Issue): An Invoice is issued once. missing",
 		"    entity InvoiceLine of aggregate Invoice: m/event.go:22",
-		"  undetermined here: 3 references resolution could not follow, so a use may go unlisted",
+		"  undetermined here: 3 references may be uses that resolution cannot confirm",
 		"    m/broken.go: the file does not parse: unexpected EOF",
 		"    m/event.go:30,31: run has no declared type",
 		"  unanchored contracts: 3 missing",

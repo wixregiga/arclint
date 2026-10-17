@@ -961,14 +961,18 @@ func siteLines(sites []application.DomainUseSite) string {
 	return strings.Join(parts, "; ")
 }
 
-// writeUndetermined prints the references of the worksite resolution
-// could not follow, grouped by file and reason with their lines, so a
-// reader knows where a use may go unlisted.
+// writeUndetermined prints the references of the worksite that may be
+// uses resolution cannot confirm, grouped by file and reason with their
+// lines, so a reader knows where a use may go unlisted.
 func writeUndetermined(p *out.Printer, st Style, d *application.DomainKnowledge) {
 	if len(d.Undetermined) == 0 {
 		return
 	}
-	p.Printf("  %s %s resolution could not follow, so a use may go unlisted\n", st.Bold("undetermined here:"), countPhrase(len(d.Undetermined), "reference", "references"))
+	phrase := "1 reference may be a use that resolution cannot confirm"
+	if n := len(d.Undetermined); n != 1 {
+		phrase = fmt.Sprintf("%d references may be uses that resolution cannot confirm", n)
+	}
+	p.Printf("  %s %s\n", st.Bold("undetermined here:"), phrase)
 	type group struct{ path, reason string }
 	var order []group
 	lines := map[group][]string{}

@@ -104,8 +104,8 @@ func domainFixture(t *testing.T) (rule.Configured, *fakeKnowledge, *fakeObservat
 					{Kind: "struct", Name: "LateOrder", Exported: true, StartLine: 50},
 				},
 			},
-			// m/sell.go uses the catalog: it builds a Price through its
-			// constructor, publishes an Event, holds a Venue, and calls
+			// m/sell.go uses the catalog: it calls the Price constructor
+			// function, publishes an Event, holds a Venue, and calls
 			// through a value resolution cannot follow.
 			"m/sell.go": {
 				Language:               rule.LanguageGo,
@@ -358,8 +358,10 @@ func TestArchitecturalContextWithoutObservationsIsNeverScoped(t *testing.T) {
 // A worksite asks for the calls and field types of its own files and
 // lists what they reach apart from what it declares: each used entry
 // with its sites and contracts, a member entity under its used
-// aggregate without repeating the aggregate's contracts, and the call
-// resolution could not follow.
+// aggregate without repeating the aggregate's contracts, and the calls
+// that may be uses resolution cannot confirm: one through a function
+// value, and one to a constructor function, whose result type is not
+// resolved.
 func TestArchitecturalContextListsUsesApartFromDeclarations(t *testing.T) {
 	cfg, knowledge, obs := domainFixture(t)
 	uc, err := application.NewGetArchitecturalContext(fakeRepository{cfg}, knowledge)
@@ -398,13 +400,16 @@ func TestArchitecturalContextListsUsesApartFromDeclarations(t *testing.T) {
 	}
 	want := []string{
 		"catalog entity Venue m/sell.go:4/field/Sale.hall",
-		"catalog value_object Price m/sell.go:8/call/NewPrice inv:never-negative@found",
 		"catalog aggregate Event m/sell.go:9/call/Publish inv:published-frozen@found inv:one-venue@missing assert:tiers-priced@found",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("used =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
-	if len(dk.Undetermined) != 1 || dk.Undetermined[0] != (application.UndeterminedUseRef{Path: "m/sell.go", Line: 10, What: "call notify", Reason: "notify is a function value"}) {
+	wantUndetermined := []application.UndeterminedUseRef{
+		{Path: "m/sell.go", Line: 8, What: "call NewPrice", Reason: "NewPrice returns Price as written; result types are not resolved"},
+		{Path: "m/sell.go", Line: 10, What: "call notify", Reason: "notify is a function value"},
+	}
+	if !slices.Equal(dk.Undetermined, wantUndetermined) {
 		t.Fatalf("undetermined = %+v", dk.Undetermined)
 	}
 }
@@ -433,7 +438,7 @@ func TestArchitecturalContextRepositoryAsksForNoReferences(t *testing.T) {
 // uses.
 func TestArchitecturalContextFullStillListsUses(t *testing.T) {
 	ctx := domainContext(t, application.ContextRequest{Paths: []string{"m/sell.go"}, Full: true})
-	if ctx.Domain.Scoped || len(ctx.Domain.Used) != 3 {
+	if ctx.Domain.Scoped || len(ctx.Domain.Used) != 2 {
 		t.Fatalf("full listing with uses: scoped %t, used %+v", ctx.Domain.Scoped, ctx.Domain.Used)
 	}
 }

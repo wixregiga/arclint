@@ -7,6 +7,7 @@ package main
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"strings"
 	"testing"
@@ -44,6 +45,8 @@ func TestContextListsUsedEntriesInEveryLanguage(t *testing.T) {
 		name         string
 		files        map[string]string
 		worksite     string
+		headline     string
+		roles        map[string]string
 		used         []string
 		undetermined []string
 	}{
@@ -134,16 +137,22 @@ zones:
 `,
 			},
 			worksite: "app/place_order.go",
+			headline: "nothing recorded is declared here; 2 entries used here, 3 references undetermined;",
+			roles:    map[string]string{"Order": "aggregate", "Pricing": "domain_service"},
 			used: []string{
 				"  used here, context ordering:\n",
 				"    service Pricing: app/place_order.go:7,22\n",
 				"      assertion quote-positive (Pricing, on Quote): A quote is positive. ordering/pricing.go:15\n",
-				"    value object Money: app/place_order.go:13\n",
-				"      invariant not-negative (Money): Money is never negative. ordering/money.go:9\n",
-				"    aggregate Order: app/place_order.go:17,18\n",
+				"    aggregate Order: app/place_order.go:18\n",
 				"      invariant has-total (Order): An Order carries a total. ordering/order.go:7\n",
 			},
-			undetermined: []string{"    app/place_order.go:21: notify is a field of function type; the function it holds is not declared\n"},
+			// A Go constructor is a function: the call resolves to it, not
+			// to the type it returns, and result types are not resolved.
+			undetermined: []string{
+				"    app/place_order.go:13: NewMoney returns Money as written; result types are not resolved\n",
+				"    app/place_order.go:17: NewOrder returns *Order as written; result types are not resolved\n",
+				"    app/place_order.go:21: notify is a field of function type; the function it holds is not declared\n",
+			},
 		},
 		{
 			name: "typescript",
@@ -200,6 +209,8 @@ export class Pricing {
 `,
 			},
 			worksite: "src/app/place-order.ts",
+			headline: "nothing recorded is declared here; 3 entries used here, 1 reference undetermined;",
+			roles:    map[string]string{"Order": "aggregate", "Money": "value_object", "Pricing": "domain_service"},
 			used: []string{
 				"  used here, context ordering:\n",
 				"    service Pricing: src/app/place-order.ts:5,11\n",
@@ -266,6 +277,8 @@ zones:
 `,
 			},
 			worksite: "ordering/app/place_order.py",
+			headline: "nothing recorded is declared here; 3 entries used here, 2 references undetermined;",
+			roles:    map[string]string{"Order": "aggregate", "Money": "value_object", "Pricing": "domain_service"},
 			used: []string{
 				"  used here, context ordering:\n",
 				"    service Pricing: ordering/app/place_order.py:6,12\n",
@@ -291,8 +304,8 @@ zones:
 			if code != 0 {
 				t.Fatalf("context: exit %d\nstderr: %s", code, stderr)
 			}
-			if !strings.Contains(stdout, "nothing recorded is declared here; 3 entries used here, ") {
-				t.Errorf("headline does not separate declared from used:\n%s", stdout)
+			if !strings.Contains(stdout, tc.headline) {
+				t.Errorf("headline does not separate declared from used:\n%s\nwant %q", stdout, tc.headline)
 			}
 			if !strings.Contains(stdout, strings.Join(tc.used, "")) {
 				t.Errorf("used block missing:\n%s\nwant\n%s", stdout, strings.Join(tc.used, ""))
@@ -338,8 +351,8 @@ zones:
 					}
 				}
 			}
-			if len(doc.Domain.Contexts) != 0 || roles["Order"] != "aggregate" || roles["Money"] != "value_object" || roles["Pricing"] != "domain_service" || len(roles) != 3 {
-				t.Errorf("json keeps used apart from declared: contexts %d, used roles %v", len(doc.Domain.Contexts), roles)
+			if len(doc.Domain.Contexts) != 0 || !maps.Equal(roles, tc.roles) {
+				t.Errorf("json keeps used apart from declared: contexts %d, used roles %v, want %v", len(doc.Domain.Contexts), roles, tc.roles)
 			}
 			if len(doc.Domain.Undetermined) != len(tc.undetermined) {
 				t.Errorf("undetermined = %+v", doc.Domain.Undetermined)

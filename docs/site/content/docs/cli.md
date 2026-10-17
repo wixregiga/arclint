@@ -236,18 +236,21 @@ A worksite also lists, under `used here`, the recorded entries its code
 reaches without declaring them: the aggregates, entities, value
 objects, domain services, events, specifications, repositories, and
 factories that a call's resolved target or receiver, or a field's
-resolved type, reaches, through the entry's declaration, a member of
-it, or a constructor of it. Each entry names the lines that reach it
-and the invariants and assertions that bind the code calling it, with
-their anchors; a member entity carries its aggregate's contracts when
-the aggregate itself is not listed. Only the language's own resolution
-makes a use; a name that only matches never does. A reference
-resolution could not follow, one that reaches an entry two
-declarations spell, and a file whose calls or field types could not be
-read are listed under `undetermined here` with the reason, because a
-use may go unlisted there. Construction that is not a call, a Go
-composite literal or a TypeScript `new` expression, is not a use. Each
-invariant, assertion, and specification line ends with its anchor: the
+resolved type, reaches, through the entry's declaration (a Python
+`Money(...)` call included) or a member of it (a static factory such as
+`Money.of` included). Each entry
+names the lines that reach it and the invariants and assertions that
+bind the code calling it, with their anchors; a member entity carries
+its aggregate's contracts when the aggregate itself is not listed. Only
+the language's own resolution makes a use; a name that only matches
+never does. Under `undetermined here`, with the reason, are the
+references that may be uses resolution cannot confirm: one resolution
+could not follow, one that reaches an entry two declarations spell, a
+call to a function beside an entry whose written result names it (a Go
+`NewMoney`, say, since result types are not resolved), and a file whose
+calls or field types could not be read. Construction that is not a
+call, a Go composite literal or a TypeScript `new` expression, is not a
+use. Each invariant, assertion, and specification line ends with its anchor: the
 `file:line` of the declaration that carries it, `missing` when the
 declaration the recorded shape names (a value object's constructor, an
 aggregate method named for the invariant id, a specification's

@@ -2,6 +2,7 @@ package conformance_test
 
 import (
 	"path"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -127,11 +128,12 @@ func goOrdering() map[string]conformance.LanguageFacts {
 }
 
 // A use case reaches the root through a command declared in another
-// file of its package, a value object through its constructor
-// function, a service through its receiver, and a repository through
-// a field; a call that only spells a recorded name, an external call,
-// and a collection-returning function make no use, and an
-// unresolvable call is undetermined with its reason.
+// file of its package, a service through its receiver, and a
+// repository through a field; a call that only spells a recorded name
+// and an external call make no use. An unresolvable call is
+// undetermined with its reason, and so is a call to a function beside
+// Money whose written result names it, since result types are not
+// resolved.
 func TestUsesFollowResolutionInGo(t *testing.T) {
 	files := goOrdering()
 	files["app/place.go"] = resolvedFile(rule.LanguageGo, "app", []conformance.Declaration{
@@ -152,18 +154,19 @@ func TestUsesFollowResolutionInGo(t *testing.T) {
 	uses := usesOf(t, []vocab.BoundedContext{orderingContext()}, files, "app")
 	want := []string{
 		"OrderRepository repository Order field PlaceOrder.orders app/place.go:6",
-		"Money value_object  call NewMoney app/place.go:11",
 		"Order aggregate  call Place app/place.go:12",
 		"Pricing domain_service  call Quote app/place.go:13",
 	}
 	if got := spelled(uses.Uses); strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("uses =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
-	if u := uses.Uses[2]; u.Context() != "ordering" {
+	if u := uses.Uses[1]; u.Context() != "ordering" {
 		t.Fatalf("use context = %q", u.Context())
 	}
 	wantUndetermined := []conformance.UndeterminedUse{
 		{Path: "app/place.go", Line: 7, What: "field PlaceOrder.events", Reason: "the package bus does not type-check"},
+		{Path: "app/place.go", Line: 11, What: "call NewMoney", Reason: "NewMoney returns Money as written; result types are not resolved"},
+		{Path: "app/place.go", Line: 16, What: "call Sum", Reason: "Sum returns []Money as written; result types are not resolved"},
 		{Path: "app/place.go", Line: 17, What: "call handle", Reason: "a call through a function value is not followed"},
 	}
 	if len(uses.Undetermined) != len(wantUndetermined) {
@@ -238,17 +241,17 @@ func TestUsesSkipTheWorksiteAndNeverPickATwin(t *testing.T) {
 	for _, p := range []string{"billing/currency.go", "legacy/currency.go"} {
 		files[p] = resolvedFile(rule.LanguageGo, path.Base(path.Dir(p)), []conformance.Declaration{
 			{Kind: "struct", Name: "Currency", Exported: true, StartLine: 2},
-			{Kind: "func", Name: "NewCurrency", Exported: true, StartLine: 5, Results: []string{"Currency"}},
+			{Kind: "method", Name: "Code", Owner: "Currency", Exported: true, StartLine: 5},
 		}, nil)
 	}
 	files["app/place.go"] = resolvedFile(rule.LanguageGo, "app", nil, []conformance.Call{
 		{Callee: "Place", Line: 4, Target: declared("ordering/order_commands.go", "Order", "Place")},
-		{Callee: "NewMoney", Line: 5, Target: declared("ordering/money.go", "", "NewMoney")},
-		{Callee: "NewCurrency", Line: 6, Target: declared("billing/currency.go", "", "NewCurrency")},
+		{Callee: "Quote", Line: 5, Target: declared("ordering/pricing.go", "Pricing", "Quote")},
+		{Callee: "Code", Line: 6, Target: declared("billing/currency.go", "Currency", "Code")},
 	})
 	uses := usesOf(t, []vocab.BoundedContext{ctx}, files, "app", "ordering/order.go")
-	if got := spelled(uses.Uses); len(got) != 1 || got[0] != "Money value_object  call NewMoney app/place.go:5" {
-		t.Fatalf("the root declared in the worksite is no use, Money is: %v", got)
+	if got := spelled(uses.Uses); len(got) != 1 || got[0] != "Pricing domain_service  call Quote app/place.go:5" {
+		t.Fatalf("the root declared in the worksite is no use, Pricing is: %v", got)
 	}
 	if len(uses.Undetermined) != 1 {
 		t.Fatalf("undetermined = %+v", uses.Undetermined)
@@ -292,29 +295,43 @@ func TestUsesReportFilesTheirLanguageDidNotRead(t *testing.T) {
 	}
 }
 
-// A function makes a use of a type only when it returns the type
-// itself where the name can mean nothing else: in Go a function of the
-// type's package returning it unqualified, in TypeScript and Python a
-// function of the type's file. A qualified, wrapped, or sibling-file
-// result is no use.
-func TestUsesRecognizeConstructorsOnlyByTheirOwnType(t *testing.T) {
+// A function never makes a use: the language resolves the call to the
+// function, not to the type it returns, and result types are not
+// resolved. A call to a function beside a term whose written result
+// names it is undetermined, whatever wraps or qualifies the name, since
+// a type parameter or an import can spell it too; a function whose
+// result names no term, or one away from the term, is a call to a
+// declaration that is no recorded entry.
+func TestUsesLeaveFunctionResultsUndetermined(t *testing.T) {
 	files := goOrdering()
 	files["ordering/legacy.go"] = resolvedFile(rule.LanguageGo, "ordering", []conformance.Declaration{
 		{Kind: "func", Name: "LegacyMoney", Exported: true, StartLine: 3, Results: []string{"legacy.Money"}},
-		{Kind: "func", Name: "MaybeMoney", Exported: true, StartLine: 6, Results: []string{"Option[Money]"}},
-		{Kind: "func", Name: "MoneyRef", Exported: true, StartLine: 9, Results: []string{"*Money"}},
+		{Kind: "func", Name: "Echo", Exported: true, StartLine: 6, Results: []string{"Money"}},
+		{Kind: "func", Name: "Generic", Exported: true, StartLine: 9, Results: []string{"Money[T]"}},
+		{Kind: "func", Name: "Count", Exported: true, StartLine: 12, Results: []string{"int"}},
 	}, nil)
 	files["ordering/pricing_helpers.py"] = resolvedFile(rule.LanguagePython, "", []conformance.Declaration{
 		{Kind: "func", Name: "make_order", StartLine: 1, Results: []string{"Order"}},
 	}, nil)
 	files["app/place.go"] = resolvedFile(rule.LanguageGo, "app", nil, []conformance.Call{
 		{Callee: "LegacyMoney", Line: 3, Target: declared("ordering/legacy.go", "", "LegacyMoney")},
-		{Callee: "MaybeMoney", Line: 4, Target: declared("ordering/legacy.go", "", "MaybeMoney")},
-		{Callee: "MoneyRef", Line: 5, Target: declared("ordering/legacy.go", "", "MoneyRef")},
-		{Callee: "make_order", Line: 6, Target: declared("ordering/pricing_helpers.py", "", "make_order")},
+		{Callee: "Echo", Line: 4, Target: declared("ordering/legacy.go", "", "Echo")},
+		{Callee: "Generic", Line: 5, Target: declared("ordering/legacy.go", "", "Generic")},
+		{Callee: "Count", Line: 6, Target: declared("ordering/legacy.go", "", "Count")},
+		{Callee: "make_order", Line: 7, Target: declared("ordering/pricing_helpers.py", "", "make_order")},
 	})
 	uses := usesOf(t, []vocab.BoundedContext{orderingContext()}, files, "app")
-	if got := spelled(uses.Uses); len(got) != 1 || got[0] != "Money value_object  call MoneyRef app/place.go:5" {
-		t.Fatalf("uses = %v", got)
+	if len(uses.Uses) != 0 {
+		t.Fatalf("a function made a use: %v", spelled(uses.Uses))
+	}
+	var lines []int
+	for _, u := range uses.Undetermined {
+		lines = append(lines, u.Line)
+		if !strings.Contains(u.Reason, "Money") && strings.HasSuffix(u.Reason, " as written; result types are not resolved") {
+			t.Errorf("undetermined reason = %q", u.Reason)
+		}
+	}
+	if !slices.Equal(lines, []int{3, 4, 5}) {
+		t.Fatalf("undetermined lines = %v: %+v", lines, uses.Undetermined)
 	}
 }

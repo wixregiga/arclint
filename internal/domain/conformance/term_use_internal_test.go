@@ -7,8 +7,8 @@ import (
 )
 
 // The one door enforces reached-through-resolution: only a reference
-// the language resolved to the term's located declaration, a member of
-// it, or a constructor of it becomes a TermUse.
+// the language resolved to the term's located declaration or a member
+// of it becomes a TermUse.
 func TestTermUseIsReachedThroughResolution(t *testing.T) {
 	money := fileFacts{path: "ordering/money.go", lang: rule.LanguageGo, decls: []Declaration{
 		{Kind: declKindStruct, Name: "Money", StartLine: 3},
@@ -30,7 +30,6 @@ func TestTermUseIsReachedThroughResolution(t *testing.T) {
 	}{
 		{"the declaration", Reference{Resolution: ResolutionDeclared, File: money.path, Name: "Money"}, reached(money, 0)},
 		{"a member", Reference{Resolution: ResolutionDeclared, File: money.path, Owner: "Money", Name: "Add"}, reached(money, 1)},
-		{"a constructor", Reference{Resolution: ResolutionDeclared, File: money.path, Name: "NewMoney"}, reached(money, 2)},
 	} {
 		use, err := newTermUse(ok.ref, ok.reached, term, site)
 		if err != nil {
@@ -52,6 +51,7 @@ func TestTermUseIsReachedThroughResolution(t *testing.T) {
 		{"an external reference", Reference{Resolution: ResolutionExternal, Package: "fmt", Name: "Money"}, reached(money, 0), term},
 		{"a same-named type elsewhere", Reference{Resolution: ResolutionDeclared, File: elsewhere.path, Name: "Money"}, reached(elsewhere, 0), term},
 		{"a reference that reaches another declaration", Reference{Resolution: ResolutionDeclared, File: money.path, Name: "Add", Owner: "Money"}, reached(money, 0), term},
+		{"a function returning it, whose result type is not resolved", Reference{Resolution: ResolutionDeclared, File: money.path, Name: "NewMoney"}, reached(money, 2), term},
 		{"a function of the unit that does not build it", Reference{Resolution: ResolutionDeclared, File: money.path, Name: "Zero"}, reached(money, 3), term},
 		{"a term two declarations spell", Reference{Resolution: ResolutionDeclared, File: money.path, Name: "Money"}, reached(money, 0),
 			usedTerm{context: "ordering", name: "Money", role: UsedValueObject, candidates: []locDecl{reached(money, 0), reached(elsewhere, 0)}}},
