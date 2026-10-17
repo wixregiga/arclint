@@ -357,6 +357,12 @@ func TestValidateRejects(t *testing.T) {
 		{"convention that quotes nothing of the entry", func(m *MetaModel) {
 			m.Blocks[0].Invariants[0].Conventions = []string{"its identity is a UUID"}
 		}, `convention label "its identity is a UUID" does not quote the entry's text`},
+		{"cited property only illustrated", func(m *MetaModel) {
+			m.Blocks[0].Records.Properties[0].Sources = []Citation{{Work: "a-blog", Illustrative: true}}
+		}, `property identity: definition must cite at least one tier 1 or tier 2 work`},
+		{"cited property grounded only by an illustrative page", func(m *MetaModel) {
+			m.Blocks[0].Records.Properties[0].Sources = []Citation{{Work: "evans2015", Page: "16", Illustrative: true}}
+		}, `property identity: definition must cite at least one tier 1 or tier 2 work`},
 		{"declined rule cites an unmarked blog", func(m *MetaModel) {
 			m.Declined[0].Sources = append(m.Declined[0].Sources, Citation{Work: "a-blog"})
 		}, `cites tier 3 work "a-blog" without marking the citation illustrative`},

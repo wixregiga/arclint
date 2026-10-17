@@ -1019,6 +1019,9 @@ func (v *metaModelValidation) recording(subject string, r Recording) {
 			v.failf("%s: property %q must carry a definition", subject, p.Name)
 		}
 		v.citations(subject+" property "+p.Name, p.Sources)
+		if len(p.Sources) > 0 {
+			v.grounded(subject+" property "+p.Name+": definition", p.Sources, TierPublished)
+		}
 	}
 	seenKinds := map[string]bool{}
 	for _, k := range r.Kinds {

@@ -43,6 +43,13 @@ func TestDistillationRulesLabelTheMetaModelsConventions(t *testing.T) {
 				t.Errorf("distillation rule %s repeats %q without labelling it as ArcLint's convention", r.ID, c)
 			}
 		}
+		// The method naming shapes are ArcLint's convention however a
+		// rule words them.
+		for _, shape := range []string{"assert followed by the key", "ensure followed by the key"} {
+			if strings.Contains(r.Rule, shape) && !slices.ContainsFunc(r.Conventions, func(c string) bool { return strings.Contains(c, shape) }) {
+				t.Errorf("distillation rule %s states %q without labelling it as ArcLint's convention", r.ID, shape)
+			}
+		}
 	}
 }
 
