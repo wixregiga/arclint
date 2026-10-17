@@ -1415,6 +1415,7 @@ func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ 
 		decl := loc.decl()
 		more, err := assertionsChecked(r, subject, assertionOwner{
 			label: "service " + s.Name, holder: "the service", decl: decl, idx: cc.unitIdx(decl),
+			decision: vocab.DecideThenCarryOut(),
 		}, s.Assertions)
 		if err != nil {
 			return nil, err
@@ -1426,12 +1427,24 @@ func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ 
 
 // assertionOwner is the declared type that owns a set of assertions:
 // an aggregate's root or a domain service. label names the owner in a
-// finding, holder names the declaring type in prose.
+// finding, holder names the declaring type in prose. decision is what
+// a finding adds to its remediation about where the decision lives and
+// where its change is made; a root's command changes its own aggregate,
+// so a root adds nothing.
 type assertionOwner struct {
-	label  string
-	holder string
-	decl   locDecl
-	idx    contractIndex
+	label    string
+	holder   string
+	decl     locDecl
+	idx      contractIndex
+	decision string
+}
+
+// remediation completes a repair with the owner's decision statement.
+func (o assertionOwner) remediation(repair string) string {
+	if o.decision == "" {
+		return repair
+	}
+	return repair + ". " + o.decision
 }
 
 // assertionsChecked applies the one shape both owners share: the owner
@@ -1453,7 +1466,7 @@ func assertionsChecked(r rule.Rule, subject rule.Subject, owner assertionOwner, 
 		if !hasOp {
 			v, err := newViolation(r, subject, owner.decl.file.path, owner.decl.decl.StartLine,
 				fmt.Sprintf("%s: assertion %s constrains operation %s, which %s does not declare", owner.label, as.Key, as.On, owner.holder),
-				fmt.Sprintf("declare %s on %s and call %s from it", methodSpellings(owner.idx, as.On), name, methodSpellings(owner.idx, key)))
+				owner.remediation(fmt.Sprintf("declare %s on %s and call %s from it", methodSpellings(owner.idx, as.On), name, methodSpellings(owner.idx, key))))
 			if err != nil {
 				return nil, err
 			}
@@ -1462,7 +1475,7 @@ func assertionsChecked(r rule.Rule, subject rule.Subject, owner assertionOwner, 
 		if !hasCheck {
 			v, err := newViolation(r, subject, owner.decl.file.path, owner.decl.decl.StartLine,
 				fmt.Sprintf("%s: assertion %s names no checking method on %s; expected %s", owner.label, as.Key, owner.holder, methodSpellings(owner.idx, key)),
-				fmt.Sprintf("declare %s on %s and call it from %s", methodSpellings(owner.idx, key), name, as.On))
+				owner.remediation(fmt.Sprintf("declare %s on %s and call it from %s", methodSpellings(owner.idx, key), name, as.On)))
 			if err != nil {
 				return nil, err
 			}
@@ -1476,7 +1489,7 @@ func assertionsChecked(r rule.Rule, subject rule.Subject, owner assertionOwner, 
 		}
 		v, err := newViolation(r, subject, op.file.path, op.decl.StartLine,
 			fmt.Sprintf("%s: operation %s does not call %s, so assertion %s is not checked when it completes", owner.label, op.decl.Name, check.decl.Name, as.Key),
-			fmt.Sprintf("call %s from %s and fail the operation when it fails", check.decl.Name, op.decl.Name))
+			owner.remediation(fmt.Sprintf("call %s from %s and fail the operation when it fails", check.decl.Name, op.decl.Name)))
 		if err != nil {
 			return nil, err
 		}

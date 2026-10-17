@@ -73,6 +73,11 @@ func DistillationRules() []DistillationRule {
 			Example: "TenantProvisioningService.assertions.tenant-name-unique on ProvisionTenant",
 		},
 		{
+			ID:      "decide-then-carry-out",
+			Rule:    DecideThenCarryOut(),
+			Example: "RetirementPolicy.Decide(installations) carries no-installation-left and returns the verdict; the RetireRelease use case lists the installations, asks for the verdict, and deletes the files only when it allows; never a service that deletes them through callbacks",
+		},
+		{
 			ID:      "precondition-as-assertion",
 			Rule:    "A rule that holds only when one named command runs, not at every instant -> the owner's assertions with on that command; the statement stays as the expert said it and is never rewritten into a post-condition.",
 			Example: "Tenant.assertions.invites-only-while-active on OfferRegistrationInvitation, not a Tenant invariant, because a deactivated tenant is legal",

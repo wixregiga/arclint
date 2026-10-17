@@ -168,6 +168,12 @@ works:
     year: 2002
     url: https://www.informit.com/articles/article.aspx?p=1398617&seqNum=4
     verification: fetched
+  khorikov-purity-completeness:
+    title: "Domain model purity vs. domain model completeness (DDD Trilemma)"
+    author: Vladimir Khorikov
+    date: 2020-08-04
+    url: https://enterprisecraftsmanship.com/posts/domain-model-purity-completeness/
+    verification: fetched
   vernon-iddd-ch1:
     title: "Getting Started with Domain-Driven Design (Implementing Domain-Driven Design, chapter 1 excerpt)"
     author: Vaughn Vernon
@@ -1316,6 +1322,12 @@ building_blocks:
         sources:
           - {work: vernon2013, chapter: 7, page: 268}
           - {work: vernon-iddd-sample-pages, page: 362, section: "Rule: Reference Other Aggregates by Identity"}
+      - text: When an operation would change something outside the model, such as a file, a store or another system, the service decides and the application service carries out the change; the service's operation takes what the decision needs as values, returns its verdict, and changes nothing, and the application service gathers those values and makes the change only when the verdict allows it.
+        sources:
+          - {work: evans2015, page: 21, section: Side-Effect-Free Functions}
+          - {work: evans2015, page: 22, section: Assertions}
+          - {work: khorikov-purity-completeness}
+          - {work: stafford-business-logic}
 
   - term: application_service
     title: Application Service

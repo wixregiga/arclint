@@ -92,7 +92,8 @@ func AgentWorkflow() []string {
 		"Implement one complete behavior path through the zones `arclint context` reported, " +
 			"keeping existing behavior intact unless the task changes it. " +
 			"Keep names and files understandable from their responsibilities: callers use contracts, " +
-			"and implementations own their specific decisions.",
+			"and implementations own their specific decisions. " +
+			vocab.DomainDecides().String(),
 		"Verify the changed behavior through those contracts, then run `arclint check .` and the project's tests before finishing. " +
 			"Fix the findings in the code you changed, including baseline findings there; " +
 			"never weaken rules, baselines or exclusions to clear a finding. " +
