@@ -764,6 +764,20 @@ class InventoryTest(unittest.TestCase):
             "web/defaults.ts:1": "text", "web/alias.ts:4": "comment",
         })
 
+    def test_round_twelve_cases(self):
+        self.repo.write("handwritten.go", '// Recognize "Code generated ... DO NOT EDIT" headers.\npackage p\n// Never overwrite handwritten files.\n')
+        self.repo.write("web/qualified.ts", "namespace Units { export type Count<T> = number; }\n"
+                        "const ratio = 4 as Units.Count<number> / `never overwrite`.length / 2;\n")
+        self.repo.write("pkg/inline_test.go", 'package p\n\nimport "testing"\n\nfunc helper() {}; func TestNeverOverwrites(t *testing.T) {}\n')
+        self.repo.write("tools/message.py", 'message = f"{1:\\N{EM DASH}>10}"\n')
+        result = self.repo.run("--base", "main")
+        rows = self.located([tuple(line.split("\t")) for line in result.stdout.splitlines()])
+        self.assertNotIn("generated files", result.stderr)
+        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {
+            "handwritten.go:1": "comment", "handwritten.go:3": "comment", "web/qualified.ts:2": "text",
+            "pkg/inline_test.go:5": "test", "tools/message.py:1": "text",
+        })
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
