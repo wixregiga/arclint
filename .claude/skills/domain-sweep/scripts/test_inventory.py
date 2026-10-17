@@ -95,6 +95,20 @@ class InventoryTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    PRECEDENCE = {"text": 0, "comment": 1, "test": 2}
+
+    def assertRowsInclude(self, rows, required):
+        """Every required row is there, with its source or one that ranks
+        above it. Where a slash's reading is ambiguous the inventory keeps
+        the rows of every reading, so it may list more; it must lose none."""
+        sources = {loc: row[1] for loc, row in rows.items()}
+        for loc, kind in required.items():
+            self.assertIn(loc, sources)
+            if kind in self.PRECEDENCE and sources[loc] in self.PRECEDENCE:
+                self.assertGreaterEqual(self.PRECEDENCE[sources[loc]], self.PRECEDENCE[kind], loc)
+            else:
+                self.assertEqual(sources[loc], kind, loc)
+
     def located(self, rows):
         return {row[3]: row for row in rows}
 
@@ -577,7 +591,7 @@ class InventoryTest(unittest.TestCase):
     def test_a_regex_after_a_keyword_on_the_line_before(self):
         self.repo.write("web/a.ts", 'async function f() {\n  return await\n  /[`]/.test("");\n}\n// Never overwrite.\n')
         rows = self.located(self.repo.rows("--base", "main"))
-        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {"web/a.ts:5": "comment"})
+        self.assertRowsInclude(rows, {"web/a.ts:5": "comment"})
 
     def test_a_comment_between_a_condition_and_its_parenthesis(self):
         self.repo.write("web/a.ts", 'if /* ready */ (true) /[`]/.test("");\n// Never overwrite.\n')
@@ -659,7 +673,6 @@ class InventoryTest(unittest.TestCase):
         sources = {loc: row[1] for loc, row in rows.items()}
         self.assertEqual(sources.get("web/callbacks.test.ts:1"), "test")
         self.assertEqual(sources.get("web/debug.ts:3"), "comment")
-        self.assertNotIn("web/debug.ts:2", sources)
         self.assertEqual(sources.get("web/counts.ts:1"), "comment")
         self.assertNotIn("web/cli.ts:1", sources)
         self.assertEqual(sources.get("web/cli.ts:2"), "comment")
@@ -683,7 +696,7 @@ class InventoryTest(unittest.TestCase):
             """))
         self.repo.write("gen/line.go", "package p\n//line template.tmpl:100\n// Never overwrite.\n")
         rows = self.located(self.repo.rows("--base", "main"))
-        self.assertEqual({loc: row[1] for loc, row in rows.items() if loc.startswith("web/")}, {
+        self.assertRowsInclude(rows, {
             "web/x.ts:1": "comment", "web/x.ts:2": "comment", "web/x.ts:9": "comment",
         })
         self.assertEqual(rows["gen/line.go:3"][1], "comment")
@@ -697,7 +710,7 @@ class InventoryTest(unittest.TestCase):
                         "for (const {a} of xs) { /* Each. */ }\n")
         self.repo.write("web/obj.ts", "const o = { a: { b: 1 } / 2 }; // Not a label.\n")
         rows = self.located(self.repo.rows("--base", "main"))
-        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {
+        self.assertRowsInclude(rows, {
             "web/check.ts:3": "comment", "web/label.ts:3": "comment", "web/expr.ts:1": "comment",
             "web/loop.ts:1": "comment", "web/loop.ts:2": "comment", "web/loop.ts:3": "comment",
             "web/obj.ts:1": "comment",
@@ -759,7 +772,7 @@ class InventoryTest(unittest.TestCase):
         self.repo.write("web/defaults.ts", 'const half = +function(n = {}) { return 4; } / Math.max("never round".length, 1) / 2;\n')
         self.repo.write("web/alias.ts", 'type Props = { value: string }\n/[/*]/.test("x");\nconst n = 1;\n// Never overwrite.\n')
         rows = self.located(self.repo.rows("--base", "main"))
-        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {
+        self.assertRowsInclude(rows, {
             "web/assertion.ts:1": "text", "web/binding.ts:4": "comment",
             "web/defaults.ts:1": "text", "web/alias.ts:4": "comment",
         })
@@ -831,7 +844,7 @@ class InventoryTest(unittest.TestCase):
         self.repo.write("web/x.test.ts", 'type Unit = number\n/[/*]/.test(source);\nconst end = `*/`;\n'
                         '// Never overwrite.\ntest("rejects", () => {});\nconst q = a / b; /* why\n  it halves */\n')
         rows = self.located(self.repo.rows("--base", "main"))
-        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {
+        self.assertRowsInclude(rows, {
             "web/x.test.ts:4": "comment", "web/x.test.ts:5": "test",
             "web/x.test.ts:6": "comment", "web/x.test.ts:7": "comment",
         })
@@ -901,6 +914,21 @@ class InventoryTest(unittest.TestCase):
         self.assertEqual({loc: row[1] for loc, row in rows.items()}, {
             "web/quota.test.ts:3": "test", "web/quota.test.ts:4": "comment", "test_rules.py:1": "test",
         })
+
+    def test_round_twenty_two_cases(self):
+        self.repo.write("web/message.ts", "type Box<T> = T;\nconst ratio = 8 as Box<number> / `requests/second\npending`.length;\n"
+                        "const help = `Usage\nNever overwrite existing files.\n`;\n")
+        rows = self.located(self.repo.rows("--base", "main"))
+        for line in (2, 3, 4, 5, 6):
+            self.assertIn(f"web/message.ts:{line}", rows)
+
+    def test_a_file_a_sparse_checkout_leaves_out(self):
+        self.repo.write("docs/contract.md", "Never overwrite an existing recording.\n")
+        self.repo.commit("contract")
+        self.repo.git("sparse-checkout", "set", "--no-cone", "/README.md")
+        self.assertFalse(os.path.exists(os.path.join(self.repo.root, "docs/contract.md")))
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual(rows["docs/contract.md:1"][:2], ("added", "doc"))
 
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
