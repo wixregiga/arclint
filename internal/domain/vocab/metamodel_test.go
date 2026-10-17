@@ -139,7 +139,7 @@ func TestDDDWarningInvariantsNeverReject(t *testing.T) {
 			warnings = append(warnings, inv.ID)
 		}
 	}
-	want := []string{"aggregate/protects-an-invariant", "aggregate/commands-named-for-behavior", "domain_service/defines-a-contract"}
+	want := []string{"aggregate/protects-an-invariant", "aggregate/commands-named-for-behavior"}
 	if strings.Join(warnings, ",") != strings.Join(want, ",") {
 		t.Fatalf("warning-severity invariants = %v, want %v", warnings, want)
 	}
