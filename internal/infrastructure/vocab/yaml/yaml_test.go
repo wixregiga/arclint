@@ -1127,3 +1127,90 @@ contexts:
 		t.Fatalf("the aliased test lost its alias or comment:\n%s", written)
 	}
 }
+
+// An edit that drops the anchor another entry's alias names leaves that
+// entry a copy of the value, so the file still loads and records the
+// same tests; a verified_by list written as an alias stays an alias
+// while it names the same tests, and becomes its own list, comment
+// kept, when its tests change.
+func TestRecordSettlesAliasesOfVerifyingTests(t *testing.T) {
+	const aliased = `version: 1
+project: ticketing
+contexts:
+  sales:
+    definition: Selling seats for events.
+    value_objects:
+      Money:
+        definition: An amount in one currency.
+        invariants:
+          never-negative:
+            statement: Money is never negative.
+            verified_by: &money
+              - &one internal/money/money_test.go:TestMoney
+    services:
+      Pricing:
+        definition: Prices an order against the event's tiers.
+        assertions:
+          tiers-on-sale:
+            on: Price
+            statement: Only a tier on sale prices an order.
+            verified_by:
+              - *one # the same property test
+          one-currency:
+            on: Price
+            statement: An order is priced in one currency.
+            verified_by: *money # shares the money tests
+`
+	repo, _ := repository(t, aliased)
+	edit := func(change func(*vocab.BoundedContext)) (string, vocab.UbiquitousLanguage) {
+		t.Helper()
+		lang, _, err := repo.RecordedLanguage()
+		if err != nil {
+			t.Fatalf("load: %v", err)
+		}
+		change(&lang.Contexts[0])
+		edited, err := vocab.NewUbiquitousLanguage(lang.Project, lang.Description, lang.Contexts, lang.Relations)
+		if err != nil {
+			t.Fatalf("edit: %v", err)
+		}
+		edited.Recording = lang.Recording
+		if err := repo.Record(edited); err != nil {
+			t.Fatalf("Record: %v", err)
+		}
+		again, _, err := repo.RecordedLanguage()
+		if err != nil {
+			written, _ := os.ReadFile(repo.Path())
+			t.Fatalf("the recorded file does not load: %v\n%s", err, written)
+		}
+		if d := edited.Difference(again); d != "" {
+			t.Fatalf("language changed across Record: %s", d)
+		}
+		written, _ := os.ReadFile(repo.Path())
+		return string(written), again
+	}
+
+	text, _ := edit(func(c *vocab.BoundedContext) { c.Definition = "Selling seats." })
+	if !strings.Contains(text, "            verified_by: *money # shares the money tests\n") {
+		t.Fatalf("an unchanged aliased list did not stay an alias:\n%s", text)
+	}
+
+	text, lang := edit(func(c *vocab.BoundedContext) { c.ValueObjects[0].Invariants[0].VerifiedBy = nil })
+	for _, want := range []string{
+		"              - internal/money/money_test.go:TestMoney # the same property test\n",
+		"            verified_by: # shares the money tests\n              - internal/money/money_test.go:TestMoney\n",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("dropping the anchors did not settle the aliases; lacks:\n%s\nfile:\n%s", want, text)
+		}
+	}
+	if got := lang.Contexts[0].Services[0].Assertions; len(got[0].VerifiedBy) != 1 || len(got[1].VerifiedBy) != 1 {
+		t.Errorf("the aliased tests changed: %+v", got)
+	}
+
+	text, _ = edit(func(c *vocab.BoundedContext) {
+		c.Services[0].Assertions[1].VerifiedBy = []string{"internal/pricing/pricing_test.go:TestOneCurrency"}
+	})
+	if !strings.Contains(text, "            verified_by: # shares the money tests\n              - internal/pricing/pricing_test.go:TestOneCurrency\n") {
+		t.Errorf("a changed list lost its comment:\n%s", text)
+	}
+}
