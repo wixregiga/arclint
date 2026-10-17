@@ -549,7 +549,11 @@ func qualifiedTarget(s *pyScope, text string, w *pyWalker, depth int) string {
 	}
 	qualified := b.imp.module
 	if b.imp.member != "" {
-		qualified += "." + b.imp.member
+		// from . import facade names .facade, not ..facade.
+		if !strings.HasSuffix(qualified, ".") {
+			qualified += "."
+		}
+		qualified += b.imp.member
 	}
 	if dotted {
 		qualified += "." + tail
@@ -584,6 +588,9 @@ func aliasValue(b *pyBinding, w *pyWalker, depth int) string {
 		return ""
 	}
 	right := b.node.ChildByFieldName("right", w.lang)
+	if right != nil {
+		right = unparenthesized(right, w)
+	}
 	if right == nil {
 		return ""
 	}

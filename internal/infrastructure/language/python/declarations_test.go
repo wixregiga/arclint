@@ -180,6 +180,7 @@ T = TypeVar("T")
 Base = ABC
 module = abc
 Declared: TypeAlias = ABC
+Parenthesized = (ABC)
 
 
 class ByABC(ABC):
@@ -226,6 +227,10 @@ class ByTypeAlias(Declared):
     pass
 
 
+class ByParenthesizedAlias(Parenthesized):
+    pass
+
+
 class Concrete(ByABC):
     pass
 
@@ -246,7 +251,7 @@ class Plain(Generic[T]):
 	want := map[string]bool{
 		"ByABC": true, "ByModule": true, "ByMetaclass": true, "ByModuleMetaclass": true,
 		"ByProtocol": true, "ByGenericProtocol": true, "ByAliasedModule": true, "ByExtension": true,
-		"ByAlias": true, "ByModuleAlias": true, "ByTypeAlias": true, "Concrete": false, "Plain": false,
+		"ByAlias": true, "ByModuleAlias": true, "ByTypeAlias": true, "ByParenthesizedAlias": true, "Concrete": false, "Plain": false,
 	}
 	if !reflect.DeepEqual(abstract, want) {
 		t.Fatalf("abstract classes:\n got %v\nwant %v", abstract, want)
