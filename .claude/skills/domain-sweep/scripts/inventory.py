@@ -384,14 +384,24 @@ def is_generated(path, lines):
                 continue
             rest = rest[rest.index(closing) + len(closing):].strip()
             closing = None
-        # Read the rest of the line comment by comment: content after any of
-        # them means the file's content has begun.
-        while rest and not (line_openers and rest.startswith(line_openers)):
+        # Read the rest of the line comment by comment, each one a place the
+        # marker may stand: content after any of them means the file's
+        # content has begun.
+        while rest:
+            if line_openers and rest.startswith(line_openers):
+                if declares(rest):
+                    return True
+                break
             for opening, end in blocks:
                 if rest.startswith(opening):
                     if end in rest[len(opening):]:
-                        rest = rest[rest.index(end, len(opening)) + len(end):].strip()
+                        close = rest.index(end, len(opening)) + len(end)
+                        if declares(rest[:close]):
+                            return True
+                        rest = rest[close:].strip()
                     else:
+                        if declares(rest):
+                            return True
                         closing, rest = end, ""
                     break
             else:
