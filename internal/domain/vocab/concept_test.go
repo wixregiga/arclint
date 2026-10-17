@@ -270,11 +270,22 @@ func TestParseRelationKindRoundTrip(t *testing.T) {
 func TestLibrarianSaysTheDomainDecides(t *testing.T) {
 	const question = "Does <operation> change anything outside the model, such as a file, a store or another system? Then record the assertion on the operation that decides, and let the application service make the change."
 	const service = "When an operation of a domain service would change something outside the model, such as a file, a store or another system, its assertion goes on the operation that decides. " +
-		"That operation takes what the decision needs as values, returns its verdict, and changes nothing. " +
-		"The application service gathers those values, asks for the verdict, and makes the change only when the verdict allows it " +
-		"(Evans, DDD Reference 2015, p. 14, Services, p. 21, Side-Effect-Free Functions, and p. 22, Assertions; Khorikov, Domain model purity vs. domain model completeness (2020), read-decide-act)."
+		"That operation takes what the decision needs as values, changes nothing, and returns its verdict as a value; " +
+		"a verdict that carries a rule, such as approving only when no participant refused, is recorded as a value object whose invariant states that rule, so `value_object/constructed-through-one-door` requires it to declare a constructor. " +
+		"The application service gathers those values, asks for the verdict, and makes the change only with a verdict that allows it in hand. " +
+		"Go makes that verdict hard to forge with unexported fields and a zero value that allows nothing, " +
+		"TypeScript with a private constructor and a private field, and Python only by convention, with an underscore-prefixed name. " +
+		"An automated test proves what the domain cannot see, such as a refusal changing nothing on disk " +
+		"(Evans, DDD Reference 2015, p. 12, Value Objects, p. 14, Services, p. 21, Side-Effect-Free Functions, and p. 22, Assertions; " +
+		"Khorikov, Domain model purity vs. domain model completeness (2020), read-decide-act; " +
+		"The Go Programming Language Specification, Exported identifiers and Struct literals; " +
+		"TypeScript 2.0 release notes, Private and Protected Constructors, and TypeScript Handbook, Type Compatibility; " +
+		"The Python Tutorial, 9.6 Private Variables)."
 	if got := vocab.ServiceDecides().String(); got != service {
 		t.Errorf("ServiceDecides:\n got %q\nwant %q", got, service)
+	}
+	if _, ok := vocab.DDD().Invariant("value_object/constructed-through-one-door"); !ok {
+		t.Error("ServiceDecides names value_object/constructed-through-one-door, which is no meta-model invariant")
 	}
 
 	var asked bool
