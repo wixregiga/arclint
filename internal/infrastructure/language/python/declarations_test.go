@@ -333,6 +333,7 @@ Base = ABC
 module = abc
 Declared: TypeAlias = ABC
 Parenthesized = (ABC)
+Dotted = (abc) . ABC
 
 
 class ByABC(ABC):
@@ -383,6 +384,10 @@ class ByParenthesizedAlias(Parenthesized):
     pass
 
 
+class ByDottedAlias(Dotted):
+    pass
+
+
 class Concrete(ByABC):
     pass
 
@@ -403,7 +408,7 @@ class Plain(Generic[T]):
 	want := map[string]bool{
 		"ByABC": true, "ByModule": true, "ByMetaclass": true, "ByModuleMetaclass": true,
 		"ByProtocol": true, "ByGenericProtocol": true, "ByAliasedModule": true, "ByExtension": true,
-		"ByAlias": true, "ByModuleAlias": true, "ByTypeAlias": true, "ByParenthesizedAlias": true, "Concrete": false, "Plain": false,
+		"ByAlias": true, "ByModuleAlias": true, "ByTypeAlias": true, "ByParenthesizedAlias": true, "ByDottedAlias": true, "Concrete": false, "Plain": false,
 	}
 	if !reflect.DeepEqual(abstract, want) {
 		t.Fatalf("abstract classes:\n got %v\nwant %v", abstract, want)

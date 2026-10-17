@@ -746,6 +746,8 @@ func checkLine(h conformance.AssertionHome, result application.DomainDefineResul
 		return fmt.Sprintf("the root of %s declares %s, and %s calls it.", result.Owner, check, h.Operation)
 	case conformance.CheckHomeService:
 		return fmt.Sprintf("%s declares %s, and %s calls it.", result.Owner, check, h.Operation)
+	case conformance.CheckHomeTests:
+		return fmt.Sprintf("the root of %s is declared as an %s, with no body to call %s from, so the tests named with --verified-by verify it, and %s is declared on it.", result.Owner, h.Declared, check, h.Operation)
 	case conformance.CheckHomeModel:
 		return fmt.Sprintf("%s is declared as an %s, so the check is in the model: %s.", result.Owner, h.Declared, inModel)
 	default:

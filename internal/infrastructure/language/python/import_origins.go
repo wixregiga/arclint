@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
@@ -35,7 +36,7 @@ func (o origins) repository(dir, module string) bool {
 	return false
 }
 
-func (o origins) follow(dir, module, name string) (string, string) {
+func (o origins) follow(dir, module, dotted string) (string, string) {
 	file := o.moduleFile(dir, module)
 	if file == "" {
 		return "", ""
@@ -44,10 +45,17 @@ func (o origins) follow(dir, module, name string) (string, string) {
 	if m == nil {
 		return "", ""
 	}
+	name, attributes, _ := strings.Cut(dotted, ".")
 	q := qualifiedTarget(m.scope, name, m.facts.walker, 0)
-	if q == "" || mutates(m, q) {
-		// A module that replaces what it re-exports exports the
-		// replacement.
+	if q == "" {
+		return "", ""
+	}
+	if attributes != "" {
+		q += "." + attributes
+	}
+	if mutates(m, q) {
+		// A module that replaces what it re-exports, or an attribute of
+		// it, exports the replacement.
 		return "", ""
 	}
 	return q, path.Dir(file)

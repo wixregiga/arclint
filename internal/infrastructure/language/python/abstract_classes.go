@@ -53,11 +53,12 @@ type importOrigin interface {
 	// repository reports whether a module imported from a file of the
 	// directory is a module of the repository.
 	repository(dir, module string) bool
-	// follow names what a module of the repository binds under a name,
-	// qualified by that module's own imports, with the module's
-	// directory; "" when the module defines the name itself or does
-	// not resolve to one file.
-	follow(dir, module, name string) (string, string)
+	// follow names what a dotted path reaches in a module of the
+	// repository, its first name qualified by that module's own imports
+	// and the attributes after it kept, with the module's directory; ""
+	// when the module defines the first name itself, replaces what the
+	// path reaches, or does not resolve to one file.
+	follow(dir, module, path string) (string, string)
 }
 
 // declaresAbstract reports whether a class's base list names an
@@ -135,15 +136,11 @@ func libraryChain(q string, from importOrigin, dir string) []string {
 			if at < lead {
 				module, rest = q[:lead], q[lead:]
 			}
-			name, attributes, _ := strings.Cut(rest, ".")
-			followed, moduleDir := from.follow(dir, module, name)
+			followed, moduleDir := from.follow(dir, module, rest)
 			if followed == "" {
 				continue
 			}
 			next, dir = followed, moduleDir
-			if attributes != "" {
-				next += "." + attributes
-			}
 			break
 		}
 		q = next
