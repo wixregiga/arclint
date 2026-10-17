@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -134,21 +133,38 @@ func TestOtherExtensionErrorsStillAbort(t *testing.T) {
 }
 
 // The check runs under the Rule's TimeLimit, and a check that used more
-// than half of it says so: a run twice as slow would stop.
+// than half of it says so: a run twice as slow would stop. The note names
+// the Extension, its source, the limit and the time spent, and where to
+// raise the limit: on a local Rule, or on the Override of a distributed one.
 func TestExtensionNearItsTimeLimitIsReported(t *testing.T) {
 	limit, err := rule.NewTimeLimit(4 * time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
+	ref, err := rule.NewPatternReference("t", "p", "1.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, tc := range []struct {
-		elapsed time.Duration
-		near    bool
+		elapsed     time.Duration
+		provenance  *rule.PatternReference
+		near        bool
+		remediation string
 	}{
 		{elapsed: 2 * time.Second, near: false},
-		{elapsed: 2001 * time.Millisecond, near: true},
+		{elapsed: 2001 * time.Millisecond, near: true, remediation: "raise time_limit above 4s on rule t/p:m/no-panic in rules.arclint.yaml, or make the check do less work"},
+		{elapsed: 3 * time.Second, provenance: &ref, near: true, remediation: "raise time_limit above 4s in an Override of rule t/p:m/no-panic in rules.arclint.yaml, or make the check do less work"},
 	} {
-		evaluator := &fakeExtensions{elapsed: tc.elapsed}
+		evaluator := &fakeExtensions{elapsed: tc.elapsed, source: ".arclint/extensions/forbid.ts"}
 		req := extensionRequest(t, evaluator)
+		if tc.provenance != nil {
+			req.Rules[0] = mustRule(t, rule.Spec{
+				ID: "t/p:m/no-panic", Type: rule.TypeExtension,
+				Params:     rule.ExtensionParams{Uses: "forbid-content", With: map[string]any{"pattern": `\bpanic\(`}},
+				Scope:      zoneScope(t, "m"),
+				Provenance: tc.provenance,
+			})
+		}
 		req.Rules[0], err = req.Rules[0].WithTimeLimit(limit)
 		if err != nil {
 			t.Fatal(err)
@@ -160,10 +176,10 @@ func TestExtensionNearItsTimeLimitIsReported(t *testing.T) {
 		if evaluator.saw.limit != limit {
 			t.Errorf("evaluator ran under %s, want the Rule's %s", evaluator.saw.limit, limit)
 		}
-		var warned []string
+		var warned []conformance.Diagnostic
 		for _, d := range a.Diagnostics() {
-			if d.Kind() == conformance.DiagnosticCoverage && strings.Contains(d.Message(), "time limit") {
-				warned = append(warned, d.Message())
+			if _, near := d.NearTimeLimit(); near {
+				warned = append(warned, d)
 			}
 		}
 		if !tc.near {
@@ -172,13 +188,48 @@ func TestExtensionNearItsTimeLimitIsReported(t *testing.T) {
 			}
 			continue
 		}
-		want := `rule t/p:m/no-panic: extension "forbid-content" took 2.001s of its 4s time limit; a run twice as slow would not be evaluated, so make the check faster or raise time_limit`
-		if len(warned) != 1 || warned[0] != want {
-			t.Errorf("warnings = %v\nwant %q", warned, want)
+		if len(warned) != 1 {
+			t.Fatalf("warnings = %v, want one", warned)
 		}
-		if !a.Complete() {
-			t.Error("a check near its limit still evaluated its Rule")
+		d := warned[0]
+		want := fmt.Sprintf(`rule t/p:m/no-panic: extension "forbid-content" took %s of its 4s time limit; a run twice as slow would not be evaluated`, tc.elapsed)
+		if d.Kind() != conformance.DiagnosticCoverage || d.Message() != want || d.Remediation() != tc.remediation || d.Severity() != "" {
+			t.Errorf("note = %s %q, remediation %q\nwant %q, remediation %q", d.Kind(), d.Message(), d.Remediation(), want, tc.remediation)
 		}
+		near, _ := d.NearTimeLimit()
+		if wantNear := (conformance.NearLimit{Extension: "forbid-content", Source: ".arclint/extensions/forbid.ts", Limit: 4 * time.Second, Elapsed: tc.elapsed}); near != wantNear {
+			t.Errorf("near = %+v, want %+v", near, wantNear)
+		}
+		if wantPattern := map[bool]string{true: "t/p@1.0.0", false: ""}[tc.provenance != nil]; d.Pattern() != wantPattern {
+			t.Errorf("pattern = %q, want %q", d.Pattern(), wantPattern)
+		}
+		if !a.Complete() || a.HasErrors() {
+			t.Error("a check near its limit still evaluated its Rule and does not fail")
+		}
+	}
+}
+
+// A near-limit note without its Extension's source, or under half the
+// limit, is not constructed.
+func TestNearTimeLimitNeedsItsCircumstances(t *testing.T) {
+	valid := conformance.NearLimit{Extension: "slow", Source: "a.ts", Limit: 4 * time.Second, Elapsed: 3 * time.Second}
+	if _, err := conformance.NewNearTimeLimit("src/slow", "", valid); err != nil {
+		t.Fatalf("valid note: %v", err)
+	}
+	for name, change := range map[string]func(*conformance.NearLimit){
+		"no extension": func(n *conformance.NearLimit) { n.Extension = " " },
+		"no source":    func(n *conformance.NearLimit) { n.Source = "" },
+		"no limit":     func(n *conformance.NearLimit) { n.Limit = 0 },
+		"exactly half": func(n *conformance.NearLimit) { n.Elapsed = 2 * time.Second },
+	} {
+		near := valid
+		change(&near)
+		if _, err := conformance.NewNearTimeLimit("src/slow", "", near); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+	if _, err := conformance.NewNearTimeLimit(" ", "", valid); err == nil {
+		t.Error("no rule: accepted")
 	}
 }
 

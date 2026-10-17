@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/delivery/cli"
@@ -133,6 +134,25 @@ type diagnosticDoc struct {
 	Remediation  string           `json:"remediation,omitempty"`
 	Contract     *contractDoc     `json:"contract,omitempty"`
 	NotEvaluated *notEvaluatedDoc `json:"notEvaluated,omitempty"`
+	NearLimit    *nearLimitDoc    `json:"nearTimeLimit,omitempty"`
+}
+
+// nearLimitDoc states a finished Extension check that ran longer than
+// half its time limit: which Extension, from where, against which limit,
+// after how long.
+type nearLimitDoc struct {
+	Extension string `json:"extension"`
+	Source    string `json:"source"`
+	LimitMs   int64  `json:"limitMs"`
+	ElapsedMs int64  `json:"elapsedMs"`
+}
+
+func nearLimitDocOf(d conformance.Diagnostic) *nearLimitDoc {
+	near, ok := d.NearTimeLimit()
+	if !ok {
+		return nil
+	}
+	return &nearLimitDoc{Extension: near.Extension, Source: near.Source, LimitMs: near.Limit.Milliseconds(), ElapsedMs: near.Elapsed.Round(time.Millisecond).Milliseconds()}
 }
 
 // notEvaluatedDoc states the circumstances of a Rule its Extension
@@ -179,6 +199,7 @@ func checkDocs(a conformance.Assessment) []diagnosticDoc {
 			Message:      d.Message(),
 			Remediation:  d.Remediation(),
 			NotEvaluated: notEvaluatedDocOf(d),
+			NearLimit:    nearLimitDocOf(d),
 		})
 	}
 	for _, id := range a.PatternBoundRules() {

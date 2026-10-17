@@ -14,6 +14,7 @@ import (
 type fakeExtensions struct {
 	findings []conformance.ExtensionFinding
 	elapsed  time.Duration
+	source   string
 	err      error
 	saw      struct {
 		extension string
@@ -33,7 +34,7 @@ func (f *fakeExtensions) Evaluate(extension string, params map[string]any, limit
 	for _, file := range facts.Files() {
 		f.saw.subjects = append(f.saw.subjects, file.Path)
 	}
-	return conformance.ExtensionRun{Findings: f.findings, Elapsed: f.elapsed}, f.err
+	return conformance.ExtensionRun{Findings: f.findings, Elapsed: f.elapsed, Source: f.source}, f.err
 }
 
 func extensionRequest(t *testing.T, evaluator conformance.ExtensionEvaluator) conformance.Request {

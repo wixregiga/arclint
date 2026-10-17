@@ -487,11 +487,18 @@ Registration always runs under `5s`: a module only calls `defineRule`
 there, and the runtime API is not available yet.
 
 When a check finishes but used more than half its limit, `check` adds a
-coverage line, for example:
+coverage line and the setting that raises the limit, for example:
 
 ```
-coverage: rule src/slow: extension "slow" took 3.1s of its 5s time limit; a run twice as slow would not be evaluated, so make the check faster or raise time_limit
+coverage: rule src/slow: extension "slow" took 3.1s of its 5s time limit; a run twice as slow would not be evaluated
+  remediation: raise time_limit above 5s on rule src/slow in rules.arclint.yaml, or make the check do less work
 ```
+
+For a Rule a Pattern distributes, the remediation names the Override of
+that Rule instead. In `--format json` the entry keeps kind `coverage`
+and carries `remediation` and a `nearTimeLimit` object with
+`extension`, `source`, `limitMs` and `elapsedMs`. The note never fails
+the check.
 
 A machine under load runs the same check slower, so a check past half
 its limit is at risk of not being evaluated in CI or while tests run.

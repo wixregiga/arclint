@@ -112,7 +112,7 @@ func (e *Evaluator) Evaluate(extension string, params map[string]any, limit rule
 			Remediation: v.FixHint,
 		})
 	}
-	return conformance.ExtensionRun{Findings: findings, Elapsed: elapsed}, nil
+	return conformance.ExtensionRun{Findings: findings, Elapsed: elapsed, Source: ruleType.SourcePath}, nil
 }
 
 // extensionFailure translates extension code that did not complete into

@@ -348,7 +348,7 @@ type slowExtensions struct{ elapsed time.Duration }
 func (s slowExtensions) Evaluate(string, map[string]any, rule.TimeLimit, conformance.Facts,
 	vocab.UbiquitousLanguage,
 ) (conformance.ExtensionRun, error) {
-	return conformance.ExtensionRun{Elapsed: s.elapsed}, nil
+	return conformance.ExtensionRun{Elapsed: s.elapsed, Source: ".arclint/extensions/slow.ts"}, nil
 }
 
 // How long a fixture's check ran is not a finding: a clean check that

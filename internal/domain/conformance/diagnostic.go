@@ -43,7 +43,17 @@ type Diagnostic struct {
 	suppressionReason string
 	extension         string           // not-evaluated kind only
 	failure           ExtensionFailure // not-evaluated kind only
-	nearTimeLimit     bool             // coverage of a check that ran past half its TimeLimit
+	near              NearLimit        // coverage of a check that ran past half its TimeLimit
+}
+
+// NearLimit is an Extension check that finished but ran longer than half
+// its TimeLimit: the Extension, its source file, the TimeLimit in force
+// and how long the check ran.
+type NearLimit struct {
+	Extension string
+	Source    string
+	Limit     time.Duration
+	Elapsed   time.Duration
 }
 
 // NewOperational reports an operational problem. Severity states its
@@ -99,25 +109,33 @@ func NewNotEvaluated(ruleID, extension string, failure ExtensionFailure) (Diagno
 // NewNearTimeLimit reports an Extension check that finished but ran
 // longer than half its TimeLimit: a run twice as slow would stop it.
 // The note depends on how long the check ran, so it is coverage, and
-// never a finding a Rule Test expects.
-func NewNearTimeLimit(ruleID, extension string, elapsed, limit time.Duration) (Diagnostic, error) {
-	if strings.TrimSpace(ruleID) == "" || strings.TrimSpace(extension) == "" {
-		return Diagnostic{}, fmt.Errorf("near-time-limit diagnostic: missing rule or extension")
+// never a finding a Rule Test expects. Its remediation names where the
+// TimeLimit is raised: on the Rule, or for a Rule the Pattern pattern
+// distributes, on its Override; pattern is empty for a local Rule.
+func NewNearTimeLimit(ruleID, pattern string, near NearLimit) (Diagnostic, error) {
+	if strings.TrimSpace(ruleID) == "" || strings.TrimSpace(near.Extension) == "" || strings.TrimSpace(near.Source) == "" {
+		return Diagnostic{}, fmt.Errorf("near-time-limit diagnostic: missing rule, extension or source")
 	}
-	if limit <= 0 || 2*elapsed <= limit {
-		return Diagnostic{}, fmt.Errorf("near-time-limit diagnostic: %s is not past half of %s", elapsed, limit)
+	if near.Limit <= 0 || 2*near.Elapsed <= near.Limit {
+		return Diagnostic{}, fmt.Errorf("near-time-limit diagnostic: %s is not past half of %s", near.Elapsed, near.Limit)
+	}
+	setting := "on rule " + ruleID
+	if pattern != "" {
+		setting = "in an Override of rule " + ruleID
 	}
 	return Diagnostic{
-		kind: DiagnosticCoverage, ruleID: ruleID, nearTimeLimit: true,
+		kind: DiagnosticCoverage, ruleID: ruleID, pattern: pattern, near: near,
 		message: fmt.Sprintf(
-			"rule %s: extension %q took %s of its %s time limit; a run twice as slow would not be evaluated, so make the check faster or raise time_limit",
-			ruleID, extension, elapsed.Round(time.Millisecond), limit),
+			"rule %s: extension %q took %s of its %s time limit; a run twice as slow would not be evaluated",
+			ruleID, near.Extension, near.Elapsed.Round(time.Millisecond), near.Limit),
+		remediation: fmt.Sprintf("raise time_limit above %s %s in %s, or make the check do less work",
+			near.Limit, setting, rule.RulesetFileName),
 	}, nil
 }
 
-// NearTimeLimit reports whether the Diagnostic is the note on a check
-// that ran past half its TimeLimit.
-func (d Diagnostic) NearTimeLimit() bool { return d.nearTimeLimit }
+// NearTimeLimit returns the check of a Diagnostic that notes a check
+// that ran past half its TimeLimit; false for every other Diagnostic.
+func (d Diagnostic) NearTimeLimit() (NearLimit, bool) { return d.near, d.near != NearLimit{} }
 
 // Diagnostic lifts a Violation into the unified Diagnostic view.
 func (v Violation) Diagnostic() Diagnostic {
