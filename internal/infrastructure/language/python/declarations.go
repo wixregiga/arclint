@@ -334,10 +334,24 @@ func (w *pyWalker) dottedName(n *gotreesitter.Node) string {
 }
 
 // unparenthesized is the expression inside any parentheses written
-// around it: (ABC) names ABC.
+// around it, whatever comments sit beside it: (ABC) names ABC.
 func (w *pyWalker) unparenthesized(n *gotreesitter.Node) *gotreesitter.Node {
-	for n != nil && n.Type(w.lang) == "parenthesized_expression" && n.NamedChildCount() == 1 {
-		n = n.NamedChild(0)
+	for n != nil && n.Type(w.lang) == "parenthesized_expression" {
+		var inner *gotreesitter.Node
+		for i := 0; i < n.NamedChildCount(); i++ {
+			c := n.NamedChild(i)
+			if c.Type(w.lang) == "comment" {
+				continue
+			}
+			if inner != nil {
+				return n
+			}
+			inner = c
+		}
+		if inner == nil {
+			return n
+		}
+		n = inner
 	}
 	return n
 }
