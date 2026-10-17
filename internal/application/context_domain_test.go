@@ -1,6 +1,8 @@
 package application_test
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -70,7 +72,7 @@ func domainFixture(t *testing.T) (rule.Configured, *fakeKnowledge, *fakeObservat
 		t.Fatalf("NewUbiquitousLanguage: %v", err)
 	}
 	obs, err := conformance.NewObservations(
-		[]conformance.ObservedFile{{Path: "catalog/event/event.go"}, {Path: "catalog/event/venue.go"}, {Path: "catalog/spec/spec.go"}, {Path: "m/money.go"}},
+		[]conformance.ObservedFile{{Path: "catalog/event/event.go"}, {Path: "catalog/event/venue.go"}, {Path: "catalog/spec/spec.go"}, {Path: "m/money.go"}, {Path: "m/sell.go"}},
 		map[string]conformance.LanguageFacts{
 			"catalog/event/event.go": {
 				Language:              rule.LanguageGo,
@@ -83,6 +85,7 @@ func domainFixture(t *testing.T) (rule.Configured, *fakeKnowledge, *fakeObservat
 					{Kind: "func", Name: "NewPrice", Results: []string{"Price", "error"}, StartLine: 8},
 					{Kind: "method", Name: "EnsurePublishedFrozen", Owner: "Event", Exported: true, StartLine: 90},
 					{Kind: "method", Name: "AssertTiersPriced", Owner: "Event", Exported: true, StartLine: 120},
+					{Kind: "method", Name: "Publish", Owner: "Event", Exported: true, StartLine: 130},
 				},
 			},
 			"catalog/event/venue.go": {
@@ -99,6 +102,34 @@ func domainFixture(t *testing.T) (rule.Configured, *fakeKnowledge, *fakeObservat
 					{Kind: "struct", Name: "HighValueOrder", Exported: true, StartLine: 10},
 					{Kind: "method", Name: "SatisfiedBy", Owner: "HighValueOrder", Exported: true, StartLine: 34},
 					{Kind: "struct", Name: "LateOrder", Exported: true, StartLine: 50},
+				},
+			},
+			// m/sell.go uses the catalog: it builds a Price through its
+			// constructor, publishes an Event, holds a Venue, and calls
+			// through a value resolution cannot follow.
+			"m/sell.go": {
+				Language:               rule.LanguageGo,
+				Package:                "m",
+				DeclarationsAvailable:  true,
+				CallsAvailable:         true,
+				ResolvedCallsAvailable: true,
+				FieldTypesAvailable:    true,
+				Declarations: []conformance.Declaration{
+					{Kind: "struct", Name: "Sale", Exported: true, StartLine: 3},
+					{
+						Kind: "field", Name: "hall", Owner: "Sale", StartLine: 4,
+						Holds: []conformance.Reference{{Resolution: conformance.ResolutionDeclared, File: "catalog/event/venue.go", Name: "Venue"}},
+						Type:  conformance.Reference{Resolution: conformance.ResolutionDeclared, File: "catalog/event/venue.go", Name: "Venue"},
+					},
+				},
+				Calls: []conformance.Call{
+					{Callee: "NewPrice", Line: 8, Target: conformance.Reference{Resolution: conformance.ResolutionDeclared, File: "catalog/event/event.go", Name: "NewPrice"}},
+					{
+						Callee: "Publish", Line: 9,
+						Target:   conformance.Reference{Resolution: conformance.ResolutionDeclared, File: "catalog/event/event.go", Owner: "Event", Name: "Publish"},
+						Receiver: conformance.Reference{Resolution: conformance.ResolutionDeclared, File: "catalog/event/event.go", Name: "Event"},
+					},
+					{Callee: "notify", Line: 10, Target: conformance.Reference{Resolution: conformance.ResolutionUndetermined, Reason: "notify is a function value"}},
 				},
 			},
 			"m/money.go": {
@@ -321,5 +352,88 @@ func TestArchitecturalContextWithoutObservationsIsNeverScoped(t *testing.T) {
 				t.Errorf("invariant %+v carries an anchor without observations", inv)
 			}
 		}
+	}
+}
+
+// A worksite asks for the calls and field types of its own files and
+// lists what they reach apart from what it declares: each used entry
+// with its sites and contracts, a member entity under its used
+// aggregate without repeating the aggregate's contracts, and the call
+// resolution could not follow.
+func TestArchitecturalContextListsUsesApartFromDeclarations(t *testing.T) {
+	cfg, knowledge, obs := domainFixture(t)
+	uc, err := application.NewGetArchitecturalContext(fakeRepository{cfg}, knowledge)
+	if err != nil {
+		t.Fatalf("NewGetArchitecturalContext: %v", err)
+	}
+	ctx, err := uc.WithObservations(obs).Execute(application.ContextRequest{Paths: []string{"m/sell.go"}})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, f := range []rule.Fact{rule.FactCalls, rule.FactResolvedCalls, rule.FactFieldTypes} {
+		if !slices.Contains(obs.facts, f) {
+			t.Errorf("a worksite must ask for %s: %v", f, obs.facts)
+		}
+	}
+	if obs.referencesFor == nil || !obs.referencesFor("m/sell.go") || obs.referencesFor("catalog/event/event.go") {
+		t.Fatalf("the reference facts must be asked for the worksite's files alone")
+	}
+	dk := ctx.Domain
+	if !dk.UsesLocated || len(dk.Contexts) != 0 {
+		t.Fatalf("m/sell.go declares nothing and its uses are located: %+v", dk)
+	}
+	var got []string
+	for _, u := range dk.Used {
+		entry := fmt.Sprintf("%s %s %s", u.Context, u.Role, u.Name)
+		for _, s := range u.Sites {
+			entry += fmt.Sprintf(" %s:%d/%s/%s", s.Path, s.Line, s.Way, s.Via)
+		}
+		for _, inv := range u.Invariants {
+			entry += fmt.Sprintf(" inv:%s@%s", inv.Key, inv.Anchor)
+		}
+		for _, a := range u.Assertions {
+			entry += fmt.Sprintf(" assert:%s@%s", a.Key, a.Anchor)
+		}
+		got = append(got, entry)
+	}
+	want := []string{
+		"catalog entity Venue m/sell.go:4/field/Sale.hall",
+		"catalog value_object Price m/sell.go:8/call/NewPrice inv:never-negative@found",
+		"catalog aggregate Event m/sell.go:9/call/Publish inv:published-frozen@found inv:one-venue@missing assert:tiers-priced@found",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("used =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	if len(dk.Undetermined) != 1 || dk.Undetermined[0] != (application.UndeterminedUseRef{Path: "m/sell.go", Line: 10, What: "call notify", Reason: "notify is a function value"}) {
+		t.Fatalf("undetermined = %+v", dk.Undetermined)
+	}
+}
+
+// The repository answer lists the whole model and asks for no
+// reference facts: there is no worksite whose uses to find.
+func TestArchitecturalContextRepositoryAsksForNoReferences(t *testing.T) {
+	cfg, knowledge, obs := domainFixture(t)
+	uc, err := application.NewGetArchitecturalContext(fakeRepository{cfg}, knowledge)
+	if err != nil {
+		t.Fatalf("NewGetArchitecturalContext: %v", err)
+	}
+	ctx, err := uc.WithObservations(obs).Execute(application.ContextRequest{})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if slices.Contains(obs.facts, rule.FactResolvedCalls) || obs.referencesFor != nil {
+		t.Fatalf("repository scope asked for references: %v", obs.facts)
+	}
+	if ctx.Domain.UsesLocated || len(ctx.Domain.Used) != 0 {
+		t.Fatalf("repository scope lists no uses: %+v", ctx.Domain)
+	}
+}
+
+// --full keeps the whole listing and still names what the worksite
+// uses.
+func TestArchitecturalContextFullStillListsUses(t *testing.T) {
+	ctx := domainContext(t, application.ContextRequest{Paths: []string{"m/sell.go"}, Full: true})
+	if ctx.Domain.Scoped || len(ctx.Domain.Used) != 3 {
+		t.Fatalf("full listing with uses: scoped %t, used %+v", ctx.Domain.Scoped, ctx.Domain.Used)
 	}
 }

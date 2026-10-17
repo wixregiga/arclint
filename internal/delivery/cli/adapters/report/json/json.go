@@ -547,6 +547,38 @@ type domainKnowledgeJSON struct {
 	Contexts   []domainContextKnowJSON  `json:"contexts,omitempty"`
 	Relations  []domainRelationKnowJSON `json:"relations,omitempty"`
 	Unanchored []unanchoredKnowJSON     `json:"unanchored,omitempty"`
+	// Used lists the recorded entries the worksite's code reaches
+	// without declaring them, apart from the declared listing in
+	// Contexts; Undetermined lists the references resolution could not
+	// follow.
+	UsesLocated  bool                  `json:"usesLocated,omitempty"`
+	Used         []domainUseJSON       `json:"used,omitempty"`
+	Undetermined []undeterminedUseJSON `json:"undetermined,omitempty"`
+}
+
+type domainUseJSON struct {
+	Context       string                       `json:"context"`
+	Name          string                       `json:"name"`
+	Role          string                       `json:"role"`
+	Aggregate     string                       `json:"aggregate,omitempty"`
+	Sites         []domainUseSiteJSON          `json:"sites"`
+	Invariants    []domainInvariantKnowJSON    `json:"invariants,omitempty"`
+	Assertions    []domainAssertionKnowJSON    `json:"assertions,omitempty"`
+	Specification *domainSpecificationKnowJSON `json:"specification,omitempty"`
+}
+
+type domainUseSiteJSON struct {
+	Path string `json:"path"`
+	Line int    `json:"line"`
+	Way  string `json:"way"`
+	Via  string `json:"via"`
+}
+
+type undeterminedUseJSON struct {
+	Path   string `json:"path"`
+	Line   int    `json:"line,omitempty"`
+	What   string `json:"what"`
+	Reason string `json:"reason"`
 }
 
 type domainAggregateKnowJSON struct {
@@ -683,24 +715,30 @@ func domainKnowledgeDoc(d *application.DomainKnowledge) *domainKnowledgeJSON {
 				Name: a.Name, Identity: a.Identity, Entities: append([]string(nil), a.Entities...),
 			})
 		}
-		for _, inv := range ctx.Invariants {
-			entry.Invariants = append(entry.Invariants, domainInvariantKnowJSON{
-				Key: inv.Key, Statement: inv.Statement, Owner: inv.Owner, OwnerConcept: string(inv.OwnerConcept),
-				VerifiedBy: inv.VerifiedBy, Source: inv.Source, Anchor: string(inv.Anchor),
-			})
-		}
-		for _, a := range ctx.Assertions {
-			entry.Assertions = append(entry.Assertions, domainAssertionKnowJSON{
-				Key: a.Key, Statement: a.Statement, Owner: a.Owner, OwnerConcept: string(a.OwnerConcept), On: a.On,
-				VerifiedBy: a.VerifiedBy, Source: a.Source, Anchor: string(a.Anchor),
-			})
-		}
+		entry.Invariants = invariantsDoc(ctx.Invariants)
+		entry.Assertions = assertionsDoc(ctx.Assertions)
 		for _, s := range ctx.Specifications {
-			entry.Specifications = append(entry.Specifications, domainSpecificationKnowJSON{
-				Name: s.Name, Source: s.Source, Anchor: string(s.Anchor),
-			})
+			entry.Specifications = append(entry.Specifications, specificationDoc(s))
 		}
 		dk.Contexts = append(dk.Contexts, entry)
+	}
+	dk.UsesLocated = d.UsesLocated
+	for _, u := range d.Used {
+		use := domainUseJSON{
+			Context: u.Context, Name: u.Name, Role: string(u.Role), Aggregate: u.Aggregate,
+			Invariants: invariantsDoc(u.Invariants), Assertions: assertionsDoc(u.Assertions),
+		}
+		for _, site := range u.Sites {
+			use.Sites = append(use.Sites, domainUseSiteJSON{Path: site.Path, Line: site.Line, Way: string(site.Way), Via: site.Via})
+		}
+		if u.Specification != nil {
+			spec := specificationDoc(*u.Specification)
+			use.Specification = &spec
+		}
+		dk.Used = append(dk.Used, use)
+	}
+	for _, u := range d.Undetermined {
+		dk.Undetermined = append(dk.Undetermined, undeterminedUseJSON{Path: u.Path, Line: u.Line, What: u.What, Reason: u.Reason})
 	}
 	for _, rel := range d.Relations {
 		dk.Relations = append(dk.Relations, domainRelationKnowJSON{From: rel.From, To: rel.To, Kind: rel.Kind})
@@ -712,4 +750,30 @@ func domainKnowledgeDoc(d *application.DomainKnowledge) *domainKnowledgeJSON {
 		})
 	}
 	return dk
+}
+
+func invariantsDoc(invariants []application.DomainInvariantRef) []domainInvariantKnowJSON {
+	out := make([]domainInvariantKnowJSON, 0, len(invariants))
+	for _, inv := range invariants {
+		out = append(out, domainInvariantKnowJSON{
+			Key: inv.Key, Statement: inv.Statement, Owner: inv.Owner, OwnerConcept: string(inv.OwnerConcept),
+			VerifiedBy: inv.VerifiedBy, Source: inv.Source, Anchor: string(inv.Anchor),
+		})
+	}
+	return out
+}
+
+func assertionsDoc(assertions []application.DomainAssertionRef) []domainAssertionKnowJSON {
+	out := make([]domainAssertionKnowJSON, 0, len(assertions))
+	for _, a := range assertions {
+		out = append(out, domainAssertionKnowJSON{
+			Key: a.Key, Statement: a.Statement, Owner: a.Owner, OwnerConcept: string(a.OwnerConcept), On: a.On,
+			VerifiedBy: a.VerifiedBy, Source: a.Source, Anchor: string(a.Anchor),
+		})
+	}
+	return out
+}
+
+func specificationDoc(s application.DomainSpecificationRef) domainSpecificationKnowJSON {
+	return domainSpecificationKnowJSON{Name: s.Name, Source: s.Source, Anchor: string(s.Anchor)}
 }

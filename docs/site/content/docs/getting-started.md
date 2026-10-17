@@ -237,10 +237,11 @@ paths and import allow-list, and the Rules that apply. With a domain
 file present (the one `rules.arclint.yaml` names under `domain.file`, else
 the first of `domain.arclint.yaml`, `domain.arclint.yml` and
 `domain.arclint.cml` that exists) it also lists the part of the recorded
-domain that anchors into the scope, each contract ending with the
+domain declared in the scope, each contract ending with the
 declaration that carries it or the word `missing` or `unanchorable`,
-and closes with the unanchored contracts grouped by owner and cause;
-`--full` lists the whole model. Re-run `arclint check .` when the
+then, under `used here`, the recorded entries the scope's code calls or
+holds with the lines that reach them, and closes with the unanchored
+contracts grouped by owner and cause; `--full` lists the whole model. Re-run `arclint check .` when the
 Zones look right.
 
 ## Inspect Rules and schema

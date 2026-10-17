@@ -3,6 +3,7 @@ package filesystemobservation_test
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
@@ -55,7 +56,7 @@ func TestObserveWalksDeterministically(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSource: %v", err)
 	}
-	obs, err := source.Observe([]rule.Language{rule.LanguageGo}, rule.Scan{Exclude: exclude}, nil)
+	obs, err := source.Observe([]rule.Language{rule.LanguageGo}, rule.Scan{Exclude: exclude}, nil, nil)
 	if err != nil {
 		t.Fatalf("Observe: %v", err)
 	}
@@ -84,7 +85,7 @@ func TestObserveAttachesLazyRepositoryContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSource: %v", err)
 	}
-	obs, err := source.Observe(nil, rule.Scan{}, nil)
+	obs, err := source.Observe(nil, rule.Scan{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Observe: %v", err)
 	}
@@ -118,7 +119,7 @@ func TestObserveSkipsUnrequestedLanguages(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSource: %v", err)
 	}
-	obs, err := source.Observe(nil, rule.Scan{}, nil)
+	obs, err := source.Observe(nil, rule.Scan{}, nil, nil)
 	if err != nil {
 		t.Fatalf("Observe: %v", err)
 	}
@@ -156,7 +157,7 @@ func TestContentHoldsFilesTheScanLeavesOut(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSource: %v", err)
 	}
-	obs, err := source.Observe(nil, rule.Scan{Exclude: exclude}, nil)
+	obs, err := source.Observe(nil, rule.Scan{Exclude: exclude}, nil, nil)
 	if err != nil {
 		t.Fatalf("Observe: %v", err)
 	}
@@ -174,5 +175,52 @@ func TestContentHoldsFilesTheScanLeavesOut(t *testing.T) {
 		if got := content.Holds(path); got != want {
 			t.Errorf("Holds(%q) = %v, want %v", path, got, want)
 		}
+	}
+}
+
+// requestRecorder records the fact classes its language was asked for.
+type requestRecorder struct {
+	language  rule.Language
+	requested *[]rule.Fact
+}
+
+func (r requestRecorder) Language() rule.Language { return r.language }
+
+func (r requestRecorder) Facts(root string, files []conformance.ObservedFile, requested []rule.Fact) (map[string]conformance.LanguageFacts, error) {
+	*r.requested = append([]rule.Fact(nil), requested...)
+	return map[string]conformance.LanguageFacts{}, nil
+}
+
+// The reference facts go only to a language holding a file they are
+// needed for; the other languages keep every other class, and no
+// selection keeps them for every language.
+func TestObserveNarrowsReferenceFactsToTheSelectedLanguages(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "app/uninstall.go", "package app")
+	write(t, root, "web/src/main.ts", "export {}")
+	var goFacts, tsFacts []rule.Fact
+	source, err := filesystemobservation.NewSource(root,
+		requestRecorder{language: rule.LanguageGo, requested: &goFacts},
+		requestRecorder{language: rule.LanguageTypeScript, requested: &tsFacts})
+	if err != nil {
+		t.Fatalf("NewSource: %v", err)
+	}
+	languages := []rule.Language{rule.LanguageGo, rule.LanguageTypeScript}
+	all := []rule.Fact{rule.FactDeclarations, rule.FactCalls, rule.FactResolvedCalls, rule.FactFieldTypes}
+	inApp := func(p string) bool { return p == "app/uninstall.go" }
+	if _, err := source.Observe(languages, rule.Scan{}, all, inApp); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if !slices.Equal(goFacts, all) {
+		t.Errorf("go asked for %v, want %v", goFacts, all)
+	}
+	if want := []rule.Fact{rule.FactDeclarations}; !slices.Equal(tsFacts, want) {
+		t.Errorf("typescript asked for %v, want %v", tsFacts, want)
+	}
+	if _, err := source.Observe(languages, rule.Scan{}, all, nil); err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if !slices.Equal(goFacts, all) || !slices.Equal(tsFacts, all) {
+		t.Errorf("without a selection every language is asked for every class: go %v, typescript %v", goFacts, tsFacts)
 	}
 }

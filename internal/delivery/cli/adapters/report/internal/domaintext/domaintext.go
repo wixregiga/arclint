@@ -10,6 +10,7 @@ import (
 
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/delivery/cli/adapters/report/internal/out"
+	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
@@ -815,12 +816,18 @@ func Subject(c vocab.Concept, name string) string {
 // Knowledge prints the domain block of `arclint context`: the counts
 // line (a scoped listing counts against the whole model), each context
 // with its aggregates, value objects, contracts with their anchors,
-// events, and services, the relations, and last the contracts no
-// declaration carries so they cannot be skimmed past.
+// events, and services, declared here when the listing is scoped, the
+// relations, the entries the worksite uses with the lines that reach
+// them, the references resolution could not follow, and last the
+// contracts no declaration carries so they cannot be skimmed past.
 func Knowledge(p *out.Printer, st Style, d *application.DomainKnowledge) {
 	p.Printf("\n%s (%s): %s\n", st.Bold("project domain"), d.Source, headline(d))
+	heading := "context"
+	if d.Scoped {
+		heading = "declared here, context"
+	}
 	for _, ctx := range d.Contexts {
-		p.Printf("  %s %s:\n", st.Bold("context"), st.Bold(ctx.Name))
+		p.Printf("  %s %s:\n", st.Bold(heading), st.Bold(ctx.Name))
 		if len(ctx.Aggregates) > 0 {
 			names := make([]string, len(ctx.Aggregates))
 			for i, a := range ctx.Aggregates {
@@ -861,6 +868,8 @@ func Knowledge(p *out.Printer, st Style, d *application.DomainKnowledge) {
 	for _, rel := range d.Relations {
 		p.Printf("  relation: %s -[%s]-> %s\n", rel.From, rel.Kind, rel.To)
 	}
+	writeUsed(p, st, d)
+	writeUndetermined(p, st, d)
 	writeUnanchored(p, st, d)
 }
 
@@ -873,6 +882,113 @@ func writeVerifiedBy(p *out.Printer, st Style, indent string, tests []string) {
 	}
 	p.Printf("%s%s %s %s\n", indent, st.Muted("verified by:"), strings.Join(tests, ", "),
 		st.Muted("(arclint checks that each test exists, not what it proves)"))
+}
+
+// writeUsed prints the entries the worksite uses, context by context:
+// each entry with the lines that reach it and the contracts that bind
+// the code reaching it.
+func writeUsed(p *out.Printer, st Style, d *application.DomainKnowledge) {
+	var contexts []string
+	byContext := map[string][]application.DomainUseRef{}
+	for _, u := range d.Used {
+		if _, seen := byContext[u.Context]; !seen {
+			contexts = append(contexts, u.Context)
+		}
+		byContext[u.Context] = append(byContext[u.Context], u)
+	}
+	for _, name := range contexts {
+		p.Printf("  %s %s:\n", st.Bold("used here, context"), st.Bold(name))
+		for _, u := range byContext[name] {
+			p.Printf("    %s: %s\n", usedLabel(u), st.Path(siteLines(u.Sites)))
+			for _, inv := range u.Invariants {
+				p.Printf("      invariant %s (%s): %s%s\n", inv.Key, inv.Owner, inv.Statement, anchorSuffix(st, inv.Source, inv.Anchor))
+			}
+			for _, a := range u.Assertions {
+				p.Printf("      assertion %s (%s, on %s): %s%s\n", a.Key, a.Owner, a.On, a.Statement, anchorSuffix(st, a.Source, a.Anchor))
+			}
+			if s := u.Specification; s != nil {
+				p.Printf("      satisfaction method%s\n", anchorSuffix(st, s.Source, s.Anchor))
+			}
+		}
+	}
+}
+
+// usedLabel names a used entry by its role, with the aggregate it
+// belongs to or serves.
+func usedLabel(u application.DomainUseRef) string {
+	switch u.Role {
+	case conformance.UsedEntity:
+		return fmt.Sprintf("entity %s of aggregate %s", u.Name, u.Aggregate)
+	case conformance.UsedRepository:
+		return fmt.Sprintf("repository %s of aggregate %s", u.Name, u.Aggregate)
+	case conformance.UsedFactory:
+		return fmt.Sprintf("factory %s of aggregate %s", u.Name, u.Aggregate)
+	case conformance.UsedValueObject:
+		if u.Aggregate != "" {
+			return fmt.Sprintf("value object %s, identity of %s", u.Name, u.Aggregate)
+		}
+		return "value object " + u.Name
+	case conformance.UsedDomainEvent:
+		return "event " + u.Name
+	case conformance.UsedDomainService:
+		return "service " + u.Name
+	case conformance.UsedSpecification:
+		return "specification " + u.Name
+	case conformance.UsedAggregate:
+		return "aggregate " + u.Name
+	}
+	return string(u.Role) + " " + u.Name
+}
+
+// siteLines spells the sites reaching one entry as each file once with
+// its lines: a.go:3,9; b.go:4.
+func siteLines(sites []application.DomainUseSite) string {
+	var files []string
+	lines := map[string][]string{}
+	for _, s := range sites {
+		if _, seen := lines[s.Path]; !seen {
+			files = append(files, s.Path)
+		}
+		l := fmt.Sprint(s.Line)
+		if n := len(lines[s.Path]); n == 0 || lines[s.Path][n-1] != l {
+			lines[s.Path] = append(lines[s.Path], l)
+		}
+	}
+	parts := make([]string, len(files))
+	for i, f := range files {
+		parts[i] = f + ":" + strings.Join(lines[f], ",")
+	}
+	return strings.Join(parts, "; ")
+}
+
+// writeUndetermined prints the references of the worksite resolution
+// could not follow, grouped by file and reason with their lines, so a
+// reader knows where a use may go unlisted.
+func writeUndetermined(p *out.Printer, st Style, d *application.DomainKnowledge) {
+	if len(d.Undetermined) == 0 {
+		return
+	}
+	p.Printf("  %s %s resolution could not follow, so a use may go unlisted\n", st.Bold("undetermined here:"), countPhrase(len(d.Undetermined), "reference", "references"))
+	type group struct{ path, reason string }
+	var order []group
+	lines := map[group][]string{}
+	for _, u := range d.Undetermined {
+		g := group{u.Path, u.Reason}
+		if _, seen := lines[g]; !seen {
+			order = append(order, g)
+			lines[g] = nil
+		}
+		if u.Line > 0 {
+			lines[g] = append(lines[g], fmt.Sprint(u.Line))
+		}
+	}
+	for _, g := range order {
+		at := g.path
+		if len(lines[g]) > 0 {
+			at += ":" + strings.Join(lines[g], ",")
+		}
+		p.Printf("    %s: %s\n", st.Path(at), g.reason)
+	}
 }
 
 func aggregateRef(a application.DomainAggregateRef) string {
@@ -896,13 +1012,43 @@ func aggregateRef(a application.DomainAggregateRef) string {
 // listing, the shown-of-recorded tallies for a scoped one, and the
 // pointer to --full whenever the listing is scoped.
 func headline(d *application.DomainKnowledge) string {
+	uses := usesPhrase(d)
 	if !d.Scoped {
-		return CountsLine(d.Counts)
+		if uses == "" {
+			return CountsLine(d.Counts)
+		}
+		return CountsLine(d.Counts) + "; " + uses
 	}
 	if d.Shown.Contexts == 0 {
-		return fmt.Sprintf("nothing recorded anchors into this scope; --full shows the whole model (%s)", CountsLine(d.Counts))
+		switch {
+		case uses == "":
+			return fmt.Sprintf("nothing recorded is declared here; --full shows the whole model (%s)", CountsLine(d.Counts))
+		case len(d.Used) == 0 && len(d.Undetermined) == 0:
+			return fmt.Sprintf("nothing recorded is declared or used here; --full shows the whole model (%s)", CountsLine(d.Counts))
+		}
+		return fmt.Sprintf("nothing recorded is declared here; %s; --full shows the whole model (%s)", uses, CountsLine(d.Counts))
 	}
-	return fmt.Sprintf("%s anchor into this scope; --full shows the whole model", shownPhrase(d))
+	declared := shownPhrase(d) + " declared here"
+	if uses != "" {
+		declared += "; " + uses
+	}
+	return declared + "; --full shows the whole model"
+}
+
+// usesPhrase counts the entries the worksite uses and the references
+// left undetermined; empty when the uses were not looked for.
+func usesPhrase(d *application.DomainKnowledge) string {
+	if !d.UsesLocated {
+		return ""
+	}
+	phrase := countPhrase(len(d.Used), "entry", "entries") + " used here"
+	if len(d.Used) == 0 {
+		phrase = "no entry used here"
+	}
+	if n := len(d.Undetermined); n > 0 {
+		phrase += ", " + countPhrase(n, "reference", "references") + " undetermined"
+	}
+	return phrase
 }
 
 func shownPhrase(d *application.DomainKnowledge) string {

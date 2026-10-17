@@ -68,12 +68,15 @@ type fakeObservations struct {
 	obs       conformance.Observations
 	languages []rule.Language
 	facts     []rule.Fact
+	// referencesFor is the selection the last observation passed.
+	referencesFor func(string) bool
 }
 
-func (f *fakeObservations) Observe(languages []rule.Language, scan rule.Scan, facts []rule.Fact) (conformance.Observations, error) {
+func (f *fakeObservations) Observe(languages []rule.Language, scan rule.Scan, facts []rule.Fact, referencesFor func(string) bool) (conformance.Observations, error) {
 	f.calls++
 	f.languages = languages
 	f.facts = facts
+	f.referencesFor = referencesFor
 	return f.obs, nil
 }
 

@@ -116,9 +116,9 @@ func TestContextRepositoryTeaches(t *testing.T) {
 }
 
 // TestContextWorksiteScopesDomain pins the progressive disclosure of
-// the recorded domain: a worksite lists only what anchors into it,
-// says so in the headline, and reports the unanchored contracts
-// loudly; --full restores the whole model.
+// the recorded domain: a worksite lists what is declared in it apart
+// from what it uses, says so in the headline, and reports the
+// unanchored contracts loudly; --full restores the whole model.
 func TestContextWorksiteScopesDomain(t *testing.T) {
 	stdout, stderr, code := runBin(t, repoRoot(t), os.Environ(), "context", "internal/domain/rule/root.go")
 	if code != 0 {
@@ -126,8 +126,12 @@ func TestContextWorksiteScopesDomain(t *testing.T) {
 	}
 	for _, want := range []string{
 		"project domain (domain.arclint.yaml): 1 of 6 contexts,",
-		"anchor into this scope; --full shows the whole model\n",
-		"  context rule:\n",
+		" declared here; ",
+		" entries used here, ",
+		"  declared here, context rule:\n",
+		"  used here, context rule:\n",
+		"    value object RuleID: internal/domain/rule/root.go:",
+		"  undetermined here: ",
 		"    aggregates: Rule (RuleID; Zone, Pattern)\n",
 		"    invariants:\n",
 		"  unanchored contracts: 5 missing\n",
@@ -139,7 +143,7 @@ func TestContextWorksiteScopesDomain(t *testing.T) {
 			t.Errorf("scoped context missing %q:\n%s", want, stdout)
 		}
 	}
-	for _, absent := range []string{"context agent:", "context vocabulary:", "context adoption:", "context conformance:", "context distribution:"} {
+	for _, absent := range []string{"declared here, context agent:", "declared here, context vocabulary:", "declared here, context adoption:", "declared here, context conformance:", "declared here, context distribution:"} {
 		if strings.Contains(stdout, absent) {
 			t.Errorf("scoped context leaks %q:\n%s", absent, stdout)
 		}
@@ -217,14 +221,14 @@ func TestContextWorksiteScopesDomain(t *testing.T) {
 }
 
 // TestContextOutsideDomainSaysSo pins the empty-scope headline: a path
-// nothing recorded anchors into still names the whole model and the
-// flag that shows it.
+// that declares and uses nothing recorded still names the whole model
+// and the flag that shows it.
 func TestContextOutsideDomainSaysSo(t *testing.T) {
 	stdout, stderr, code := runBin(t, repoRoot(t), os.Environ(), "context", "cmd/arclint/main.go")
 	if code != 0 {
 		t.Fatalf("context main.go: exit %d\nstderr: %s", code, stderr)
 	}
-	if !strings.Contains(stdout, "project domain (domain.arclint.yaml): nothing recorded anchors into this scope; --full shows the whole model (6 contexts ·") {
+	if !strings.Contains(stdout, "project domain (domain.arclint.yaml): nothing recorded is declared or used here; --full shows the whole model (6 contexts ·") {
 		t.Fatalf("empty-scope headline missing:\n%s", stdout)
 	}
 	if strings.Contains(stdout, "  context ") || strings.Contains(stdout, "unanchored contracts:") {

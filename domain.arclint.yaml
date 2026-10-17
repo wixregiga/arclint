@@ -514,6 +514,22 @@ contexts:
             A NearLimit always names the Extension that ran the check and the
             Extension's source file, beside the TimeLimit in force and how long
             the check ran.
+      TermUse:
+        definition: >-
+          One place where a file's code reaches a recorded term the file does
+          not declare: the file and line, the term with its bounded context, and
+          how the code reaches it, by a call to the term's declaration or to a
+          member of it, or by a field whose type holds it. arclint context lists
+          the TermUses of a worksite as used here, apart from what is declared
+          here, so whoever edits a file sees the contracts that bind the code it
+          calls. A reference the language's resolution could not follow is
+          reported as undetermined with the reason, so a missing use is never
+          read as no use. Two TermUses with the same values are the same use.
+        invariants:
+          reached-through-resolution: >-
+            A TermUse exists only where the language's own resolution reached
+            the one declaration located for its term, a member of it, or a
+            constructor of it; a matching name alone never makes one.
   distribution:
     definition: >-
       Moving published Patterns between repositories without changing them: what

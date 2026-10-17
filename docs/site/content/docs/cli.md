@@ -14,7 +14,7 @@ weight = 6
 | `arclint check [path]` | evaluate configured Rules; accepts `--no-baseline` and `--only` / `--exclude` Rule selectors |
 | `arclint baseline capture` | replace `.arclint/baseline.v2.json` with the active findings from one complete assessment |
 | `arclint baseline refresh` | reassess and replace the Baseline, dropping stale entries |
-| `arclint context [paths...]` | explain the repository or everything binding the selected paths; `--zone` adds named Zones, `--full` lists the whole recorded domain instead of the part anchored into the scope; `--dependencies` adds observed imports at repository scope |
+| `arclint context [paths...]` | explain the repository or everything binding the selected paths; `--zone` adds named Zones, `--full` lists the whole recorded domain instead of the part declared in the scope; `--dependencies` adds observed imports at repository scope |
 | `arclint domain` | shorthand for `arclint domain overview`; inspect and maintain the project's ubiquitous language |
 | `arclint domain init` | create an empty, schema-hinted domain file (the file `rules.arclint.yaml` names under `domain.file`, else the first of `domain.arclint.yaml`, `domain.arclint.yml` and `domain.arclint.cml` that exists, else `domain.arclint.yaml`); leave an existing file unchanged |
 | `arclint domain overview` | summarize the project's ubiquitous language for understanding |
@@ -223,14 +223,30 @@ resolve; an exact zone name wins when both match. `--format json`
 emits the machine shape for coding agents.
 
 When the domain file is present, `context` also carries the
-recorded domain, disclosed progressively. A worksite lists only what
-anchors into it: a term whose type declaration lies under a selected
+recorded domain, disclosed progressively. A worksite lists what is
+declared here: a term whose type declaration lies under a selected
 path or inside a selected Zone, an invariant or assertion whose
 carrying declaration lies there, and a whole bounded context whenever a
 selected Zone is named for it. The headline counts the listing
-against the whole model (`1 of 4 contexts, 3 of 25 invariants anchor
-into this scope`) and names `--full`, which lists the whole recorded
-model instead; bare `arclint context` always lists it whole. Each
+against the whole model (`1 of 4 contexts, 3 of 25 invariants declared
+here`) and names `--full`, which lists the whole recorded model
+instead; bare `arclint context` always lists it whole.
+
+A worksite also lists, under `used here`, the recorded entries its code
+reaches without declaring them: the aggregates, entities, value
+objects, domain services, events, specifications, repositories, and
+factories that a call's resolved target or receiver, or a field's
+resolved type, reaches, through the entry's declaration, a member of
+it, or a constructor of it. Each entry names the lines that reach it
+and the invariants and assertions that bind the code calling it, with
+their anchors; a member entity carries its aggregate's contracts when
+the aggregate itself is not listed. Only the language's own resolution
+makes a use; a name that only matches never does. A reference
+resolution could not follow, one that reaches an entry two
+declarations spell, and a file whose calls or field types could not be
+read are listed under `undetermined here` with the reason, because a
+use may go unlisted there. Construction that is not a call, a Go
+composite literal or a TypeScript `new` expression, is not a use. Each
 invariant, assertion, and specification line ends with its anchor: the
 `file:line` of the declaration that carries it, `missing` when the
 declaration the recorded shape names (a value object's constructor, an
@@ -244,7 +260,11 @@ source can carry it, and an `invariants` Rule on the owning Zone
 turns each missing contract into a Violation under `arclint check`.
 The JSON shape carries the same facts under `domain.scoped`,
 `domain.shown`, `domain.located`, per-contract `anchor` and `reason`,
-and `domain.unanchored`.
+and `domain.unanchored`; the used entries travel apart from the
+declared `domain.contexts`, under `domain.used` with each `sites` entry
+(`path`, `line`, `way` as `call` or `field`, and `via`), and the
+references resolution could not follow under `domain.undetermined`.
+`domain.usesLocated` says the worksite's uses were looked for.
 
 `arclint context --dependencies --format json` adds a `dependencies` block
 with observed files, direct import edges, overlapping Zone memberships,

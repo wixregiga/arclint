@@ -7,6 +7,7 @@ import (
 
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/delivery/cli"
+	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
@@ -41,6 +42,33 @@ func scopedKnowledge() *application.DomainKnowledge {
 			{Kind: application.ContractInvariant, Context: "catalog", Owner: "Price", Key: "never-negative", Statement: "A Price is never negative.", Expected: "constructor of Price"},
 			{Kind: application.ContractSpecification, Context: "catalog", Name: "LateOrder", Expected: "satisfaction method on LateOrder"},
 		},
+		UsesLocated: true,
+		Used: []application.DomainUseRef{
+			{
+				Context: "billing", Name: "Invoice", Role: conformance.UsedAggregate,
+				Sites: []application.DomainUseSite{
+					{Path: "m/event.go", Line: 14, Way: conformance.UseByCall, Via: "Bill"},
+					{Path: "m/event.go", Line: 14, Way: conformance.UseByCall, Via: "Total"},
+					{Path: "m/event.go", Line: 20, Way: conformance.UseByCall, Via: "Bill"},
+					{Path: "m/other.go", Line: 3, Way: conformance.UseByField, Via: "field Ledger.Invoice"},
+				},
+				Invariants: []application.DomainInvariantRef{
+					{Key: "totals-match", Statement: "An Invoice total matches its lines.", Owner: "Invoice", OwnerConcept: vocab.ConceptAggregate, Source: "billing/invoice.go:40", Anchor: application.AnchorFound},
+				},
+				Assertions: []application.DomainAssertionRef{
+					{Key: "issued-once", Statement: "An Invoice is issued once.", Owner: "Invoice", On: "Issue", Anchor: application.AnchorMissing},
+				},
+			},
+			{
+				Context: "billing", Name: "InvoiceLine", Role: conformance.UsedEntity, Aggregate: "Invoice",
+				Sites: []application.DomainUseSite{{Path: "m/event.go", Line: 22, Way: conformance.UseByCall, Via: "Amount"}},
+			},
+		},
+		Undetermined: []application.UndeterminedUseRef{
+			{Path: "m/broken.go", What: "file", Reason: "the file does not parse: unexpected EOF"},
+			{Path: "m/event.go", Line: 30, What: "call run", Reason: "run has no declared type"},
+			{Path: "m/event.go", Line: 31, What: "call run", Reason: "run has no declared type"},
+		},
 	}
 }
 
@@ -66,8 +94,8 @@ func TestPlainContextScopedDomainBytes(t *testing.T) {
 		"zone m",
 		"  paths: m/**",
 		"",
-		"project domain (domain.arclint.yaml): 1 of 2 contexts, 1 of 2 aggregates, 1 of 1 entity, 1 of 3 value objects, 3 of 5 invariants, 1 of 1 assertion, 1 of 1 specification anchor into this scope; --full shows the whole model",
-		"  context catalog:",
+		"project domain (domain.arclint.yaml): 1 of 2 contexts, 1 of 2 aggregates, 1 of 1 entity, 1 of 3 value objects, 3 of 5 invariants, 1 of 1 assertion, 1 of 1 specification declared here; 2 entries used here, 3 references undetermined; --full shows the whole model",
+		"  declared here, context catalog:",
 		"    aggregates: Event (EventID; Organizer)",
 		"    value objects: Price",
 		"    invariants:",
@@ -79,6 +107,14 @@ func TestPlainContextScopedDomainBytes(t *testing.T) {
 		"    specifications:",
 		"      LateOrder missing",
 		"  relation: catalog -[conformist]-> billing",
+		"  used here, context billing:",
+		"    aggregate Invoice: m/event.go:14,20; m/other.go:3",
+		"      invariant totals-match (Invoice): An Invoice total matches its lines. billing/invoice.go:40",
+		"      assertion issued-once (Invoice, on Issue): An Invoice is issued once. missing",
+		"    entity InvoiceLine of aggregate Invoice: m/event.go:22",
+		"  undetermined here: 3 references resolution could not follow, so a use may go unlisted",
+		"    m/broken.go: the file does not parse: unexpected EOF",
+		"    m/event.go:30,31: run has no declared type",
 		"  unanchored contracts: 3 missing",
 		"    missing: invariant one-venue of Event (context catalog)",
 		"      expected method OneVenue on Event",
@@ -98,21 +134,42 @@ func TestPlainContextEmptyScopeAndWholeModelHeadlines(t *testing.T) {
 	empty := &application.DomainKnowledge{
 		Source:  "domain.arclint.yaml",
 		Counts:  vocab.Counts{Contexts: 2, Aggregates: 1, Entities: 2, ValueObjects: 3, Invariants: 5},
-		Scoped:  true,
-		Located: true,
+		Scoped:      true,
+		Located:     true,
+		UsesLocated: true,
 	}
 	var buf bytes.Buffer
 	if err := New().Render(&buf, cli.ContextReport{Context: application.ArchitecturalContext{Scope: "elsewhere.go", Domain: empty}}); err != nil {
 		t.Fatal(err)
 	}
-	want := "project domain (domain.arclint.yaml): nothing recorded anchors into this scope; --full shows the whole model (2 contexts · 1 aggregate · 2 entities · 3 value objects · 5 invariants)\n"
+	want := "project domain (domain.arclint.yaml): nothing recorded is declared or used here; --full shows the whole model (2 contexts · 1 aggregate · 2 entities · 3 value objects · 5 invariants)\n"
 	if !strings.Contains(buf.String(), want) {
 		t.Fatalf("empty-scope headline absent from %q", buf.String())
+	}
+
+	// A worksite declaring nothing still names what it uses, apart
+	// from the declared listing it has none of.
+	usesOnly := scopedKnowledge()
+	usesOnly.Shown, usesOnly.Contexts, usesOnly.Relations, usesOnly.Unanchored = vocab.Counts{}, nil, nil, nil
+	usesOnly.Used, usesOnly.Undetermined = usesOnly.Used[:1], nil
+	buf.Reset()
+	if err := New().Render(&buf, cli.ContextReport{Context: application.ArchitecturalContext{Scope: "m/event.go", Domain: usesOnly}}); err != nil {
+		t.Fatal(err)
+	}
+	want = "project domain (domain.arclint.yaml): nothing recorded is declared here; 1 entry used here; --full shows the whole model (2 contexts · 2 aggregates · 1 entity · 3 value objects · 5 invariants · 1 assertion · 1 specification · 1 relation)\n" +
+		"  used here, context billing:\n" +
+		"    aggregate Invoice: m/event.go:14,20; m/other.go:3\n"
+	if !strings.Contains(buf.String(), want) {
+		t.Fatalf("uses-only listing absent from %q", buf.String())
+	}
+	if strings.Contains(buf.String(), "declared here, context") {
+		t.Fatalf("a worksite declaring nothing lists no declared context: %q", buf.String())
 	}
 
 	whole := scopedKnowledge()
 	whole.Scoped = false
 	whole.Shown = whole.Counts
+	whole.UsesLocated, whole.Used, whole.Undetermined = false, nil, nil
 	buf.Reset()
 	if err := New().Render(&buf, cli.ContextReport{Context: application.ArchitecturalContext{Scope: "repository", Domain: whole}}); err != nil {
 		t.Fatal(err)

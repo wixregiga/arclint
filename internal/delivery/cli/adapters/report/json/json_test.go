@@ -10,6 +10,7 @@ import (
 
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/delivery/cli"
+	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/distribution"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
@@ -687,6 +688,99 @@ func TestJSONContextCarriesScopeAndAnchors(t *testing.T) {
 		if strings.Contains(raw, absent) {
 			t.Fatalf("empty %s should be omitted:\n%s", absent, raw)
 		}
+	}
+}
+
+// The used entries travel apart from the declared listing: under
+// domain.used with their sites and contracts, and the references
+// resolution could not follow under domain.undetermined.
+func TestJSONContextSeparatesUsedFromDeclared(t *testing.T) {
+	var buf bytes.Buffer
+	err := New().Render(&buf, cli.ContextReport{
+		Context: application.ArchitecturalContext{
+			Scope: "app/uninstall.go",
+			Domain: &application.DomainKnowledge{
+				Source:      "domain.arclint.yaml",
+				Counts:      vocab.Counts{Contexts: 1, Services: 1, Assertions: 1},
+				Scoped:      true,
+				Located:     true,
+				UsesLocated: true,
+				Used: []application.DomainUseRef{{
+					Context: "skill", Name: "Uninstall", Role: conformance.UsedDomainService,
+					Sites: []application.DomainUseSite{{Path: "app/uninstall.go", Line: 238, Way: conformance.UseByCall, Via: "Select"}},
+					Assertions: []application.DomainAssertionRef{
+						{Key: "selected-items-installed", Statement: "Only installed items are selected.", Owner: "Uninstall", OwnerConcept: vocab.ConceptDomainService, On: "Select", Source: "skill/uninstall.go:54", Anchor: application.AnchorFound},
+					},
+				}},
+				Undetermined: []application.UndeterminedUseRef{
+					{Path: "app/uninstall.go", Line: 12, What: "call run", Reason: "run has no declared type"},
+					{Path: "app/broken.go", What: "file", Reason: "the file does not parse"},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Domain struct {
+			Contexts    []json.RawMessage `json:"contexts"`
+			UsesLocated bool              `json:"usesLocated"`
+			Used        []struct {
+				Context string `json:"context"`
+				Name    string `json:"name"`
+				Role    string `json:"role"`
+				Sites   []struct {
+					Path string `json:"path"`
+					Line int    `json:"line"`
+					Way  string `json:"way"`
+					Via  string `json:"via"`
+				} `json:"sites"`
+				Assertions []struct {
+					Key    string `json:"key"`
+					On     string `json:"on"`
+					Source string `json:"source"`
+					Anchor string `json:"anchor"`
+				} `json:"assertions"`
+			} `json:"used"`
+			Undetermined []struct {
+				Path   string `json:"path"`
+				Line   int    `json:"line"`
+				What   string `json:"what"`
+				Reason string `json:"reason"`
+			} `json:"undetermined"`
+		} `json:"domain"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
+		t.Fatalf("unmarshal: %v\n%s", err, buf.String())
+	}
+	d := doc.Domain
+	if len(d.Contexts) != 0 || !d.UsesLocated {
+		t.Fatalf("declared listing must stay empty and uses located: %+v", d)
+	}
+	if len(d.Used) != 1 {
+		t.Fatalf("used = %+v", d.Used)
+	}
+	u := d.Used[0]
+	if u.Context != "skill" || u.Name != "Uninstall" || u.Role != "domain_service" {
+		t.Fatalf("used entry = %+v", u)
+	}
+	if len(u.Sites) != 1 || u.Sites[0] != (struct {
+		Path string `json:"path"`
+		Line int    `json:"line"`
+		Way  string `json:"way"`
+		Via  string `json:"via"`
+	}{"app/uninstall.go", 238, "call", "Select"}) {
+		t.Fatalf("sites = %+v", u.Sites)
+	}
+	if len(u.Assertions) != 1 || u.Assertions[0].Key != "selected-items-installed" || u.Assertions[0].On != "Select" || u.Assertions[0].Anchor != "found" || u.Assertions[0].Source != "skill/uninstall.go:54" {
+		t.Fatalf("assertions = %+v", u.Assertions)
+	}
+	if len(d.Undetermined) != 2 || d.Undetermined[0].Line != 12 || d.Undetermined[0].Reason != "run has no declared type" || d.Undetermined[1].Line != 0 || d.Undetermined[1].What != "file" {
+		t.Fatalf("undetermined = %+v", d.Undetermined)
+	}
+	if strings.Contains(buf.String(), `"line": 0`) {
+		t.Fatalf("a file-wide undetermined entry omits its line:\n%s", buf.String())
 	}
 }
 
