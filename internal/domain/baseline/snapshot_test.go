@@ -1,11 +1,14 @@
 package baseline_test
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/wixregiga/arclint/internal/domain/baseline"
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
+	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
 // assess runs a one-rule naming check over the given file names.
@@ -117,5 +120,90 @@ func TestAmbiguousIdentitiesRejected(t *testing.T) {
 	}
 	if _, err := baseline.NewEntry("t/p:m/snake", "", "broken", 1); err == nil {
 		t.Errorf("partial finding identity must be rejected")
+	}
+}
+
+// stopper is an Extension mechanism whose Extension runs past its limit.
+type stopper struct{ failure conformance.ExtensionFailure }
+
+func (s stopper) Evaluate(string, map[string]any, conformance.Facts, vocab.UbiquitousLanguage) ([]conformance.ExtensionFinding, error) {
+	return nil, s.failure
+}
+
+// assessStopped runs the snake Rule plus an extension Rule its
+// Extension stops.
+func assessStopped(t *testing.T, paths ...string) conformance.Assessment {
+	t.Helper()
+	glob, err := rule.NewGlob("m/**")
+	if err != nil {
+		t.Fatal(err)
+	}
+	zone, err := rule.NewZone("m", "", []rule.Glob{glob})
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := make([]conformance.ObservedFile, 0, len(paths))
+	for _, p := range paths {
+		files = append(files, conformance.ObservedFile{Path: p})
+	}
+	obs, err := conformance.NewObservations(files, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snake, err := rule.NewCaseSpec("snake_case")
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope, err := rule.ZoneScope([]rule.ZoneName{"m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	naming, err := rule.New(rule.Spec{ID: "t/p:m/snake", Type: rule.TypeNaming, Params: rule.NamingParams{Case: snake}, Scope: scope})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spin, err := rule.New(rule.Spec{ID: "m/spin", Type: rule.TypeExtension, Params: rule.ExtensionParams{Uses: "spin"}, Scope: scope})
+	if err != nil {
+		t.Fatal(err)
+	}
+	failure, err := conformance.NewExtensionTimeout(".arclint/extensions/spin.ts", 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := conformance.Run(conformance.Request{
+		Rules: []rule.Rule{naming, spin}, Zones: []rule.Zone{zone},
+		Observations: obs, Extensions: stopper{failure},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	return a
+}
+
+// A Rule that was not evaluated has unknown findings: its adopted
+// entries are not stale, and no Baseline is captured over the gap.
+func TestNotEvaluatedRuleKeepsItsBaseline(t *testing.T) {
+	spinEntry, err := baseline.NewEntry("m/spin", "m/a.go", "spun", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	goneEntry, err := baseline.NewEntry("t/p:m/snake", "m/Gone.go", "file name \"Gone.go\" violates naming rule snake_case", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap, err := baseline.New([]string{"m/spin", "t/p:m/snake"}, []baseline.Entry{spinEntry, goneEntry}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopped := assessStopped(t, "m/a.go")
+	stale, err := snap.StaleEntries(stopped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stale) != 1 || stale[0].RuleID() != "t/p:m/snake" {
+		t.Errorf("stale = %v, want only the evaluated Rule's absent finding", stale)
+	}
+	if _, err := baseline.Capture(stopped, ""); err == nil || !strings.Contains(err.Error(), "m/spin") {
+		t.Errorf("Capture over a Rule not evaluated = %v, want a refusal naming m/spin", err)
 	}
 }

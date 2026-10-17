@@ -7,11 +7,14 @@ package cli
 import "io"
 
 // Exit codes are the CLI contract: 0 clean, 1 error-severity findings,
-// 2 configuration or usage error.
+// 2 configuration or usage error, 3 a check that printed its report
+// but could not evaluate every Rule. 3 wins over 1: an incomplete
+// check still lists every finding it has.
 const (
-	ExitClean       = 0
-	ExitViolations  = 1
-	ExitConfigError = 2
+	ExitClean        = 0
+	ExitViolations   = 1
+	ExitConfigError  = 2
+	ExitNotEvaluated = 3
 )
 
 // Invocation is one CLI run request.

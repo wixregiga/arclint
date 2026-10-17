@@ -432,9 +432,26 @@ Extensions run on a bare ES runtime:
   designed error. Import the SDK as `"arclint"`.
 - Transpile results cache under `<root>/.arclint/cache/extensions/`.
 
-A crashing or timed-out extension fails the Conformance Check with an
-error (check exits 2). It does not become a Violation and is not
-silently skipped. During `arclint rules test`, the same failure is that
+An extension that times out, or throws while registering or running
+`check`, stops only its Rule. `check` reports that Rule as not
+evaluated: a `not_evaluated` entry in JSON and one `not evaluated:`
+line in human output, naming the extension's source and the time limit
+or the error. Every other Rule is still evaluated and reported, and
+`check` exits `3`. The Rule does not become a Violation, is not counted
+as applied, and is not silently skipped. When one extension fails while
+registering, no extension can run, so every extension Rule names that
+extension as the cause.
+
+`arclint baseline capture` and `baseline refresh` refuse while a Rule
+is not evaluated, because its findings are unknown. A committed
+Baseline's entries for that Rule are not reported as stale.
+
+Errors outside running extension code stay configuration errors (exit
+`2`): a Rule naming no registered extension, params that do not match
+the extension's schema, an extension that does not bundle, or a
+default export that is not a `defineRule(...)` result.
+
+During `arclint rules test`, a Rule that was not evaluated is that
 test's error; later tests still run.
 
 ## Scope breaches

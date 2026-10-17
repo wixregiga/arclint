@@ -245,4 +245,8 @@ extension code executes.
 `0` is a clean command. `1` means the gate failed: an active
 error-severity Violation or an error-severity operational Diagnostic
 (or a Rule Test expectation mismatch). `2` is configuration or usage
-error.
+error. `3` means `check` printed its full report, but at least one
+extension Rule was not evaluated because its extension timed out or
+failed. The report names each such Rule in a `not_evaluated` entry.
+`3` wins over `1`, because the report is incomplete; its findings are
+still listed.

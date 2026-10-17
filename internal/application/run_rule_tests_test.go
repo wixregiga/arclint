@@ -5,6 +5,7 @@ import (
 	"path"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/domain/conformance"
@@ -293,6 +294,48 @@ func TestRunRuleTestsContainsConformanceErrorAndContinues(t *testing.T) {
 	}
 	if !second.Passed() {
 		t.Errorf("second = %+v, want a pass after the contained failure", second)
+	}
+}
+
+// A Rule its Extension stopped has no result to compare: the stop is
+// that test's failure, never an empty result that passes.
+func TestRunRuleTestsReportsStoppedExtensionAsTheTestsError(t *testing.T) {
+	cfg := ruleTestConfig(t)
+	extScope, err := rule.ZoneScope([]rule.ZoneName{"m"})
+	if err != nil {
+		t.Fatalf("ZoneScope: %v", err)
+	}
+	extRule, err := rule.New(rule.Spec{
+		ID: "t/p:m/ext", Type: rule.TypeExtension,
+		Params: rule.ExtensionParams{Uses: "spin"}, Scope: extScope,
+	})
+	if err != nil {
+		t.Fatalf("extension rule.New: %v", err)
+	}
+	cfg.Rules = append(cfg.Rules, extRule)
+	failure, err := conformance.NewExtensionTimeout(".arclint/extensions/spin.ts", 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := []rule.TestFile{{Path: "m/all_good.go"}}
+	uc, err := application.NewRunRuleTests(
+		ruleTestRepository{cfg},
+		fakeRuleTestSource{tests: []rule.Test{mustRuleTest(t, "spins", "t/p:m/ext", files, nil)}},
+		&fakeFixtureObserver{},
+		failingExtensions{err: failure},
+		&fakeVocabularySource{},
+		&fakeRecordingSource{},
+	)
+	if err != nil {
+		t.Fatalf("NewRunRuleTests: %v", err)
+	}
+	results, err := uc.Execute()
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	want := `not evaluated: rule t/p:m/ext: extension "spin": .arclint/extensions/spin.ts exceeded its 5s time limit`
+	if len(results) != 1 || results[0].Passed() || results[0].Err != want {
+		t.Fatalf("results = %+v, want one failed test with Err %q", results, want)
 	}
 }
 

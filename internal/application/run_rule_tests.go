@@ -3,6 +3,7 @@ package application
 import (
 	"fmt"
 	"path"
+	"strings"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
@@ -194,6 +195,13 @@ func (uc RunRuleTests) Execute() (RuleTestRun, error) {
 			results = append(results, result)
 			continue
 		}
+		// A Rule its Extension stopped has no result to compare: the
+		// stop is this test's failure, as an aborted check is.
+		if stopped := notEvaluated(assessment); stopped != "" {
+			result.Err = stopped
+			results = append(results, result)
+			continue
+		}
 		comparison := t.Compare(assessmentFindings(assessment))
 		result.Missing = comparison.Missing
 		result.Unexpected = comparison.Unexpected
@@ -278,8 +286,23 @@ func assessmentFindings(a conformance.Assessment) []rule.Finding {
 			f.Kind = rule.FindingOperational
 		case conformance.DiagnosticCoverage:
 			f.Kind = rule.FindingCoverage
+		case conformance.DiagnosticNotEvaluated:
+			// Execute reports a stopped Rule as the test's error.
+			continue
 		}
 		out = append(out, f)
 	}
 	return out
+}
+
+// notEvaluated states why the Assessment's Rules were not evaluated,
+// "" when every Rule was.
+func notEvaluated(a conformance.Assessment) string {
+	var reasons []string
+	for _, d := range a.Diagnostics() {
+		if d.Kind() == conformance.DiagnosticNotEvaluated {
+			reasons = append(reasons, "not evaluated: "+d.Message())
+		}
+	}
+	return strings.Join(reasons, "; ")
 }

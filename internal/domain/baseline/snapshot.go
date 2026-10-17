@@ -8,6 +8,7 @@ package baseline
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 )
@@ -45,8 +46,14 @@ func New(capturedRules []string, entries []Entry, identity string) (Snapshot, er
 }
 
 // Capture records the applied Rule identities and the active
-// Violations of one completed Conformance Assessment together.
+// Violations of one completed Conformance Assessment together. It
+// refuses an incomplete Assessment: a Rule that was not evaluated has
+// unknown findings, and capturing now would drop the ones it adopted.
 func Capture(a conformance.Assessment, identity string) (Snapshot, error) {
+	if !a.Complete() {
+		return Snapshot{}, fmt.Errorf("baseline: rule(s) %s were not evaluated; capture after every rule evaluates",
+			strings.Join(a.NotEvaluatedRules(), ", "))
+	}
 	counts := map[string]int{}
 	specs := map[string]conformance.Violation{}
 	for _, v := range a.ActiveViolations() {
@@ -105,10 +112,19 @@ func (s Snapshot) Covers(v conformance.Violation) bool {
 // snapshot as baselined, consuming each entry's count so extra
 // occurrences of an identical finding stay reported. It returns the
 // new Assessment and the stale entries: captured findings absent from
-// this assessment, the signal to refresh the Baseline.
+// this assessment, the signal to refresh the Baseline. An entry of a
+// Rule the assessment did not evaluate is never stale: its findings
+// are unknown, not absent.
 func (s Snapshot) Apply(a conformance.Assessment) (conformance.Assessment, []Entry, error) {
+	notEvaluated := map[string]bool{}
+	for _, id := range a.NotEvaluatedRules() {
+		notEvaluated[id] = true
+	}
 	remaining := make(map[string]int, len(s.entries))
 	for fp, e := range s.entries {
+		if notEvaluated[e.ruleID] {
+			continue
+		}
 		remaining[fp] = e.count
 	}
 	relabeled, err := a.RelabelViolations(func(v conformance.Violation) (conformance.Status, string, bool) {

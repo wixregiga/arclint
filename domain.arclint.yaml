@@ -462,6 +462,17 @@ contexts:
           when one did. It has no lifecycle: every assessment derives its
           Violations fresh, and two Violations with the same values are the same
           finding.
+      ExtensionFailure:
+        definition: >-
+          The reason an Extension Rule was not evaluated: its Extension ran past
+          its time limit, or its code failed while running. The Rule it stops is
+          reported as not evaluated, never as conforming, and every other Rule
+          of the same check is still evaluated and reported. Two
+          ExtensionFailures with the same cause are the same reason.
+        invariants:
+          states-its-cause: >-
+            ExtensionFailure always states its cause: the time limit its
+            Extension exceeded, or the error its Extension raised while running.
   distribution:
     definition: >-
       Moving published Patterns between repositories without changing them: what

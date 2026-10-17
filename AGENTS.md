@@ -45,13 +45,13 @@ IMPORTANT: work in this order on every change.
 
 ### The recorded domain
 
-6 contexts, 1 aggregates, 38 value objects, 44 invariants.
+6 contexts, 1 aggregates, 39 value objects, 45 invariants.
 
 - **agent**: value objects Activity, Guidance, Progress; services WorkflowGuide
 - **vocabulary**: value objects DomainRecording
 - **rule**: aggregates Rule (Zone, Pattern); value objects RuleID, ZoneName, Rationale, Constraint, Scope, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec, DomainFile, Assurance, RuleTest
 - **adoption**: value objects Binding, Override, Disablement, Exclusion, Suppression, Installation
-- **conformance**: value objects ContractCoverage, DependencyImport, Facts, Violation
+- **conformance**: value objects ContractCoverage, DependencyImport, Facts, Violation, ExtensionFailure
 - **distribution**: value objects Catalog, Digest, Index, Manifest, PatternFile, PatternSource, Registry, Selection, VendoredPattern
 
 Relations: vocabulary → rule (conformist); vocabulary → conformance (conformist); rule → conformance (conformist); rule → adoption (conformist); rule → distribution (conformist); distribution → adoption (conformist); adoption → conformance (conformist); rule → agent (conformist). Full text: `arclint domain`.

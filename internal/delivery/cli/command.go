@@ -113,6 +113,10 @@ func ConfigError(err error) error {
 // ViolationsExit is the silent exit for gating findings.
 func ViolationsExit() error { return &ExitError{Code: ExitViolations} }
 
+// NotEvaluatedExit is the silent exit for a report that names Rules
+// that were not evaluated.
+func NotEvaluatedExit() error { return &ExitError{Code: ExitNotEvaluated} }
+
 // Root assembles the arclint command tree. Process-level presentation
 // flags (--format, --no-color) are declared here so help and completion
 // advertise them; the composition root peels them before the adapter

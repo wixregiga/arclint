@@ -12,7 +12,7 @@ import (
 // Rule conformed. Ordering is deterministic.
 type Assessment struct {
 	evaluations      []Evaluation
-	diagnostics      []Diagnostic // operational and coverage; violations live in evaluations
+	diagnostics      []Diagnostic // operational, coverage and not evaluated; violations live in evaluations
 	appliedRules     []string     // qualified Rule identities, sorted unique
 	patternBound     []string     // applied Rules whose Assurance holds only for their pattern
 	contracts        []ContractCoverage
@@ -23,12 +23,22 @@ type Assessment struct {
 func NewAssessment(evaluations []Evaluation, diagnostics []Diagnostic, appliedRules []string) (Assessment, error) {
 	for _, d := range diagnostics {
 		switch d.Kind() {
-		case DiagnosticOperational, DiagnosticCoverage:
+		case DiagnosticOperational, DiagnosticCoverage, DiagnosticNotEvaluated:
 		case DiagnosticViolation:
 			return Assessment{}, fmt.Errorf("assessment: violation diagnostics belong to their evaluations")
 		default:
 			return Assessment{}, fmt.Errorf("assessment: diagnostic kind %q invalid", d.Kind())
 		}
+	}
+	notEvaluated := map[string]bool{}
+	for _, d := range diagnostics {
+		if d.Kind() != DiagnosticNotEvaluated {
+			continue
+		}
+		if notEvaluated[d.RuleID()] {
+			return Assessment{}, fmt.Errorf("assessment: rule %q is not evaluated twice", d.RuleID())
+		}
+		notEvaluated[d.RuleID()] = true
 	}
 	seen := map[string]bool{}
 	applied := make([]string, 0, len(appliedRules))
@@ -39,10 +49,18 @@ func NewAssessment(evaluations []Evaluation, diagnostics []Diagnostic, appliedRu
 		if seen[id] {
 			return Assessment{}, fmt.Errorf("assessment: duplicate applied rule %q", id)
 		}
+		if notEvaluated[id] {
+			return Assessment{}, fmt.Errorf("assessment: rule %q is both applied and not evaluated", id)
+		}
 		seen[id] = true
 		applied = append(applied, id)
 	}
 	sort.Strings(applied)
+	for _, e := range evaluations {
+		if notEvaluated[e.Rule().Qualified()] {
+			return Assessment{}, fmt.Errorf("assessment: rule %q is not evaluated but has an evaluation", e.Rule().Qualified())
+		}
+	}
 
 	evals := append([]Evaluation(nil), evaluations...)
 	sort.SliceStable(evals, func(i, j int) bool {
@@ -92,7 +110,7 @@ func (a Assessment) ContractContexts() []string {
 }
 
 // AppliedRules returns the qualified identities of the Rules that were
-// evaluated.
+// evaluated. A Rule its Extension stopped is not among them.
 func (a Assessment) AppliedRules() []string {
 	return append([]string(nil), a.appliedRules...)
 }
@@ -166,6 +184,25 @@ func (a Assessment) Diagnostics() []Diagnostic {
 	sortDiagnostics(out)
 	return out
 }
+
+// NotEvaluatedRules returns the qualified identities of the Rules an
+// ExtensionFailure stopped, sorted. Their results are unknown: the
+// Assessment is incomplete and neither conformance nor the absence of
+// their findings may be read from it.
+func (a Assessment) NotEvaluatedRules() []string {
+	var out []string
+	for _, d := range a.diagnostics {
+		if d.Kind() == DiagnosticNotEvaluated {
+			out = append(out, d.RuleID())
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Complete reports whether every applied Rule produced a result: no
+// Rule was stopped by its Extension.
+func (a Assessment) Complete() bool { return len(a.NotEvaluatedRules()) == 0 }
 
 // HasErrors decides whether the gate fails: an active error-severity
 // Violation, or an error-severity operational Diagnostic (a policy

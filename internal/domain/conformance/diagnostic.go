@@ -19,6 +19,10 @@ const (
 	// DiagnosticCoverage reports what was not evaluated and why:
 	// disabled Rules, unsupported enforcement, stale Baseline entries.
 	DiagnosticCoverage DiagnosticKind = "coverage"
+	// DiagnosticNotEvaluated reports a Rule its Extension stopped: the
+	// Extension ran past its time limit or failed, so the Rule has no
+	// result and the Assessment is incomplete.
+	DiagnosticNotEvaluated DiagnosticKind = "not_evaluated"
 )
 
 // Diagnostic is one user-visible result produced while loading,
@@ -64,6 +68,26 @@ func NewCoverage(ruleID, message string) (Diagnostic, error) {
 		return Diagnostic{}, fmt.Errorf("coverage diagnostic: missing message")
 	}
 	return Diagnostic{kind: DiagnosticCoverage, ruleID: ruleID, message: message}, nil
+}
+
+// NewNotEvaluated reports the Rule an ExtensionFailure stopped, naming
+// the Extension and the cause.
+func NewNotEvaluated(ruleID, extension string, failure ExtensionFailure) (Diagnostic, error) {
+	if strings.TrimSpace(ruleID) == "" {
+		return Diagnostic{}, fmt.Errorf("not-evaluated diagnostic: missing rule")
+	}
+	if strings.TrimSpace(extension) == "" {
+		return Diagnostic{}, fmt.Errorf("not-evaluated diagnostic: missing extension")
+	}
+	if failure == (ExtensionFailure{}) {
+		return Diagnostic{}, fmt.Errorf("not-evaluated diagnostic: missing failure")
+	}
+	return Diagnostic{
+		kind:   DiagnosticNotEvaluated,
+		ruleID: ruleID,
+		message: fmt.Sprintf("rule %s: extension %q: %s %s",
+			ruleID, extension, failure.Source(), failure.Cause()),
+	}, nil
 }
 
 // Diagnostic lifts a Violation into the unified Diagnostic view.

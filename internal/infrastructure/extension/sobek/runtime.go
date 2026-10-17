@@ -3,7 +3,9 @@ package sobekextension
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/grafana/sobek"
@@ -95,14 +97,14 @@ func (r *Registry) registerProgram(sourcePath string, prog *sobek.Program, opts 
 	}
 
 	timer := time.AfterFunc(opts.RegisterTimeout, func() {
-		vm.Interrupt(fmt.Sprintf("registration exceeded %s", opts.RegisterTimeout))
+		vm.Interrupt(timeLimit{phase: "registration", limit: opts.RegisterTimeout})
 	})
 	defer timer.Stop()
 	defer vm.ClearInterrupt()
 
 	wrapper, err := vm.RunProgram(prog)
 	if err != nil {
-		return fmt.Errorf("extension %s: %w", sourcePath, err)
+		return &CodeFailure{Source: sourcePath, err: err}
 	}
 	call, ok := sobek.AssertFunction(wrapper)
 	if !ok {
@@ -114,7 +116,7 @@ func (r *Registry) registerProgram(sourcePath string, prog *sobek.Program, opts 
 		return fmt.Errorf("extension %s: %w", sourcePath, err)
 	}
 	if _, err := call(sobek.Undefined(), module, exports); err != nil {
-		return fmt.Errorf("extension %s: registration phase: %w", sourcePath, err)
+		return &CodeFailure{Source: sourcePath, err: fmt.Errorf("registration phase: %w", err)}
 	}
 
 	moduleExports := module.Get("exports")
@@ -383,13 +385,52 @@ func (rt *RuleType) checkWithHost(host Host, params map[string]any) ([]Violation
 	})
 
 	timer := time.AfterFunc(rt.timeout, func() {
-		vm.Interrupt(fmt.Sprintf("rule %q exceeded the %s timeout", rt.Name, rt.timeout))
+		vm.Interrupt(timeLimit{phase: fmt.Sprintf("rule %q", rt.Name), limit: rt.timeout})
 	})
 	defer timer.Stop()
 	defer vm.ClearInterrupt()
 
 	if _, err := rt.check(sobek.Undefined(), ctx, vm.ToValue(params)); err != nil {
-		return reported, fmt.Errorf("rule %q: %w", rt.Name, err)
+		return reported, &CodeFailure{Source: rt.SourcePath, err: fmt.Errorf("rule %q: %w", rt.Name, err)}
 	}
 	return reported, nil
 }
+
+// timeLimit is the value a runtime is interrupted with when extension
+// code runs past its limit, so the interruption is told apart from an
+// error the code raised.
+type timeLimit struct {
+	phase string
+	limit time.Duration
+}
+
+func (t timeLimit) String() string {
+	return fmt.Sprintf("%s exceeded the %s timeout", t.phase, t.limit)
+}
+
+// CodeFailure is extension code that did not complete: it ran past its
+// time limit or raised an error while running. Errors outside running
+// code (bundling, a malformed definition, invalid params) are not
+// CodeFailures.
+type CodeFailure struct {
+	// Source is the extension the code came from.
+	Source string
+	err    error
+}
+
+func (f *CodeFailure) Error() string { return fmt.Sprintf("extension %s: %v", f.Source, f.err) }
+
+func (f *CodeFailure) Unwrap() error { return f.err }
+
+// TimeLimit returns the limit the code exceeded, when it timed out.
+func (f *CodeFailure) TimeLimit() (time.Duration, bool) {
+	var interrupted *sobek.InterruptedError
+	if !errors.As(f.err, &interrupted) {
+		return 0, false
+	}
+	limit, ok := interrupted.Value().(timeLimit)
+	return limit.limit, ok
+}
+
+// Cause is the error the code raised, on one line.
+func (f *CodeFailure) Cause() string { return strings.Join(strings.Fields(f.err.Error()), " ") }

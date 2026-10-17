@@ -1,6 +1,7 @@
 package conformance
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 
@@ -21,6 +22,11 @@ import (
 // excluded subjects stay not-applicable, and error-severity
 // operational Diagnostics identify the breach. The check still returns
 // a complete Assessment (no error) so other Rules keep reporting.
+//
+// An Extension that runs past its time limit or fails while running
+// returns an ExtensionFailure: the Rule gets no Evaluation and one
+// not-evaluated Diagnostic, and the check goes on with the other
+// Rules. Any other error aborts the check as a configuration error.
 func evaluateExtensionRule(r rule.Rule, facts Facts,
 	evaluator ExtensionEvaluator, knowledge vocab.UbiquitousLanguage,
 ) ([]Evaluation, []Diagnostic, error) {
@@ -34,8 +40,16 @@ func evaluateExtensionRule(r rule.Rule, facts Facts,
 	}
 	selected, excluded := facts.selectedFiles()
 	findings, err := evaluator.Evaluate(params.Uses, params.With, facts, knowledge)
+	var failure ExtensionFailure
+	if errors.As(err, &failure) {
+		d, err := NewNotEvaluated(r.ID().Qualified(), params.Uses, failure)
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, []Diagnostic{d}, nil
+	}
 	if err != nil {
-		return nil, nil, fmt.Errorf("rule %s: %v", r.ID(), err)
+		return nil, nil, fmt.Errorf("rule %s: %w", r.ID(), err)
 	}
 
 	var breaches []ExtensionFinding
