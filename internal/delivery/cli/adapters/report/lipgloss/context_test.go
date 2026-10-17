@@ -49,7 +49,7 @@ func TestLipglossContextScopedDomainGrammarAndAnchorColors(t *testing.T) {
 	}
 	out := stripANSI(raw)
 	for _, want := range []string{
-		"project domain (domain.arclint.yaml): 1 of 2 contexts, 1 of 1 aggregate, 1 of 1 entity, 1 of 2 value objects, 3 of 3 invariants anchor into this scope; --full shows the whole model\n",
+		"project domain (domain.arclint.yaml): 1 of 2 contexts, 1 of 1 aggregate, 1 of 1 entity, 1 of 2 value objects, 3 of 3 invariants declared here; --full shows the whole model\n",
 		"    aggregates: Event (EventID; Organizer)\n",
 		"      published-frozen (Event): A published Event never changes. event/event.go:90\n",
 		"      one-venue (Event): An Event has one Venue. missing\n",

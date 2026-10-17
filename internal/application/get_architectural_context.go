@@ -200,6 +200,14 @@ type DomainKnowledge struct {
 	Relations []DomainRelationRef      `json:"relations,omitempty"`
 	// Unanchored lists every listed contract whose Anchor is missing.
 	Unanchored []UnanchoredContract `json:"unanchored,omitempty"`
+	// Used lists, for a worksite, every recorded entry its code reaches
+	// that is declared outside it, apart from the declared listing in
+	// Contexts; Undetermined lists the references of the worksite that
+	// resolution could not follow, so a use may go unlisted.
+	// UsesLocated is true when the worksite's uses were looked for.
+	UsesLocated  bool                 `json:"usesLocated,omitempty"`
+	Used         []DomainUseRef       `json:"used,omitempty"`
+	Undetermined []UndeterminedUseRef `json:"undetermined,omitempty"`
 }
 
 // GetArchitecturalContext projects Rules, Zones, and reasons each Rule
@@ -246,11 +254,17 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 	for _, l := range cfg.Languages {
 		out.Languages = append(out.Languages, string(l))
 	}
-	carriers, err := uc.inspectContext(&out, cfg, req.Dependencies)
+	atWorksite := len(req.Paths) > 0 || len(req.Zones) > 0
+	var scope *domainScope
+	if atWorksite {
+		s := worksiteScope(cfg, req)
+		scope = &s
+	}
+	carriers, err := uc.inspectContext(&out, cfg, req.Dependencies, scope)
 	if err != nil {
 		return ArchitecturalContext{}, err
 	}
-	if len(req.Paths) == 0 && len(req.Zones) == 0 {
+	if !atWorksite {
 		for _, m := range cfg.Zones {
 			out.Zones = append(out.Zones, zonePolicy(m, cfg.Rules))
 		}
@@ -270,9 +284,20 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 		return ArchitecturalContext{}, err
 	}
 	if out.Domain != nil {
-		if !req.Full {
-			out.Domain = scopeDomainKnowledge(out.Domain, carriers, worksiteScope(cfg, req))
+		var used []DomainUseRef
+		var undetermined []UndeterminedUseRef
+		if out.Domain.Located {
+			uses, err := carriers.Uses(scope.contains)
+			if err != nil {
+				return ArchitecturalContext{}, fmt.Errorf("locate uses: %w", err)
+			}
+			used, undetermined = usedKnowledge(out.Domain, uses)
 		}
+		if !req.Full {
+			out.Domain = scopeDomainKnowledge(out.Domain, carriers, *scope)
+		}
+		out.Domain.UsesLocated = out.Domain.Located
+		out.Domain.Used, out.Domain.Undetermined = used, undetermined
 		out.Domain.Unanchored = unanchoredContracts(out.Domain, cfg.Languages)
 	}
 	return out, nil
@@ -280,7 +305,9 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 
 // inspectContext collects the union of this request's fact requirements once.
 // Recorded contracts and dependency reporting consume the same prepared Facts.
-func (uc GetArchitecturalContext) inspectContext(out *ArchitecturalContext, cfg rule.Configured, dependencies bool) (conformance.Carriers, error) {
+// A worksite scope also needs the calls and field types of its own files,
+// resolved, to find the recorded terms its code uses.
+func (uc GetArchitecturalContext) inspectContext(out *ArchitecturalContext, cfg rule.Configured, dependencies bool, scope *domainScope) (conformance.Carriers, error) {
 	lang, found, err := uc.knowledge.RecordedLanguage()
 	if err != nil {
 		return conformance.Carriers{}, fmt.Errorf("load domain model: %w", err)
@@ -300,13 +327,18 @@ func (uc GetArchitecturalContext) inspectContext(out *ArchitecturalContext, cfg 
 		// name its file imports testing by.
 		required = append(required, rule.FactImports)
 	}
+	var referencesFor func(string) bool
 	if found {
 		required = append(required, rule.FactDeclarations)
+		if scope != nil {
+			required = append(required, rule.FactCalls, rule.FactResolvedCalls, rule.FactFieldTypes)
+			referencesFor = scope.contains
+		}
 	}
 	if len(required) == 0 {
 		return conformance.Carriers{}, nil
 	}
-	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, required)
+	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, required, referencesFor)
 	if err != nil {
 		return conformance.Carriers{}, fmt.Errorf("observe context: %w", err)
 	}

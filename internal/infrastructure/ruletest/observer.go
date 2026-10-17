@@ -60,7 +60,7 @@ func (o Observer) Observe(files []rule.TestFile, languages []rule.Language,
 	if err != nil {
 		return conformance.Observations{}, fmt.Errorf("fixture observation: %w", err)
 	}
-	obs, err = source.Observe(languages, scan, facts)
+	obs, err = source.Observe(languages, scan, facts, nil)
 	if err != nil {
 		return conformance.Observations{}, fmt.Errorf("fixture observation: %w", err)
 	}

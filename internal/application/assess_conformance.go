@@ -13,9 +13,12 @@ import (
 // ObservationSource is the port through which the use case requests
 // normalized Observations for the configured languages and exactly
 // the fact classes the Rules' Enforcement declares, without selecting
-// parser technology.
+// parser technology. referencesFor, when not nil, selects the files
+// the reference facts (calls, resolved calls, field types) are needed
+// for; a language holding none of them may be observed without them.
+// Nil needs them for every file.
 type ObservationSource interface {
-	Observe(languages []rule.Language, scan rule.Scan, facts []rule.Fact) (conformance.Observations, error)
+	Observe(languages []rule.Language, scan rule.Scan, facts []rule.Fact, referencesFor func(path string) bool) (conformance.Observations, error)
 }
 
 // BaselineSource loads the repository's committed Baseline. Absence is
@@ -87,7 +90,7 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 			return conformance.Assessment{}, err
 		}
 	}
-	observations, err := uc.observations.Observe(cfg.Languages, cfg.Scan, requiredFacts(rules))
+	observations, err := uc.observations.Observe(cfg.Languages, cfg.Scan, requiredFacts(rules), nil)
 	if err != nil {
 		return conformance.Assessment{}, fmt.Errorf("observe repository: %w", err)
 	}

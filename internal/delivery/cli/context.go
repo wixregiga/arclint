@@ -11,8 +11,9 @@ import (
 // scope it explains the repository: every Zone, the Rule kinds in
 // use, the enforcement posture, the whole recorded domain; with paths
 // or named Zones it is the worksite call, answering in one payload
-// what governs the given set and the part of the recorded domain that
-// anchors into it, the whole domain behind --full.
+// what governs the given set, the part of the recorded domain declared
+// in it apart from the entries its code uses, the whole domain behind
+// --full.
 func NewContextCommand(context application.GetArchitecturalContext, render Renderer) Command {
 	return Command{
 		Name:    contextCommand,
@@ -28,7 +29,7 @@ func NewContextCommand(context application.GetArchitecturalContext, render Rende
 			{
 				Name: "full",
 				Bool: true,
-				Doc:  "list the whole recorded domain instead of the part anchored into the scope",
+				Doc:  "list the whole recorded domain instead of the part declared in the scope",
 			},
 		},
 		Run: func(ctx Context) error {

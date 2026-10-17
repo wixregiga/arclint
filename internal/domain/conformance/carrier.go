@@ -27,6 +27,11 @@ type Carrier struct {
 type Carriers struct {
 	contexts map[string]contextCode
 	code     domainCode
+	// all is the facts of every inspected file, where the uses of the
+	// located terms are read; terms is every term as located, in
+	// recording order.
+	all   contractIndex
+	terms []usedTerm
 }
 
 // NewCarriers locates recorded language through the same prepared Facts queries
@@ -42,9 +47,10 @@ func NewCarriers(facts Facts, knowledge vocab.UbiquitousLanguage) (Carriers, err
 	return carriersOf(code), nil
 }
 
-// carriersOf indexes the contexts of resolved domain code by name.
+// carriersOf indexes the contexts of resolved domain code by name, and
+// every located term with the facts its uses are read from.
 func carriersOf(code domainCode) Carriers {
-	c := Carriers{contexts: map[string]contextCode{}, code: code}
+	c := Carriers{contexts: map[string]contextCode{}, code: code, all: code.all, terms: usedTerms(code.contexts)}
 	for _, cc := range code.contexts {
 		c.contexts[cc.ctx.Name] = cc
 	}

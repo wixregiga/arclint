@@ -62,8 +62,11 @@ func NewSource(root string, producers ...FactProducer) (Source, error) {
 // union of what the configured Rules' Enforcement declares, the seam
 // Extension enforcement will discriminate through; the builtin fact
 // classes (file_tree, imports) are gathered whenever their language is
-// requested.
-func (s Source) Observe(languages []rule.Language, scan rule.Scan, facts []rule.Fact) (conformance.Observations, error) {
+// requested. referencesFor, when not nil, selects the files the
+// reference facts (calls, resolved calls, field types) are needed for:
+// a language holding none of them is observed without those facts, so
+// it never pays for a resolution nobody reads.
+func (s Source) Observe(languages []rule.Language, scan rule.Scan, facts []rule.Fact, referencesFor func(path string) bool) (conformance.Observations, error) {
 	files, err := walk(s.root, scan)
 	if err != nil {
 		return conformance.Observations{}, err
@@ -77,8 +80,12 @@ func (s Source) Observe(languages []rule.Language, scan rule.Scan, facts []rule.
 		if !languageRequested(languages, p.Language()) {
 			continue
 		}
+		requested := facts
+		if referencesFor != nil && !holdsFileOf(files, p.Language(), referencesFor) {
+			requested = withoutReferences(facts)
+		}
 		wg.Go(func() {
-			supplied[i], failed[i] = p.Facts(s.root, files, facts)
+			supplied[i], failed[i] = p.Facts(s.root, files, requested)
 		})
 	}
 	wg.Wait()
@@ -124,6 +131,30 @@ func (r rootContent) Holds(path string) bool {
 	}
 	info, err := os.Lstat(filepath.Join(r.root, filepath.FromSlash(path)))
 	return err == nil && info.Mode().IsRegular()
+}
+
+// holdsFileOf reports whether a selected file is written in the
+// language.
+func holdsFileOf(files []conformance.ObservedFile, language rule.Language, selected func(string) bool) bool {
+	for _, f := range files {
+		if rule.LanguageOf(f.Path) == language && selected(f.Path) {
+			return true
+		}
+	}
+	return false
+}
+
+// withoutReferences drops the reference fact classes from a request.
+func withoutReferences(facts []rule.Fact) []rule.Fact {
+	out := make([]rule.Fact, 0, len(facts))
+	for _, f := range facts {
+		switch f {
+		case rule.FactCalls, rule.FactResolvedCalls, rule.FactFieldTypes:
+		default:
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 func languageRequested(languages []rule.Language, l rule.Language) bool {
