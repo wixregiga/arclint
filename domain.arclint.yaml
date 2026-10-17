@@ -517,23 +517,23 @@ contexts:
       TermUse:
         definition: >-
           One place where a file's code reaches a recorded term: the file and
-          line, the term with its bounded context, and how the code reaches it,
-          by a call whose target or receiver is the term's declaration or a
-          member of it, or by a field whose type holds it. arclint context lists
-          the TermUses of a worksite as used here, apart from what its declared
-          listing shows as declared here, so whoever edits a file sees the
-          contracts that bind the code it calls; a term the declared listing has
-          no place for, such as a repository, stays listed as used. A reference
-          the language's resolution could not follow is reported as undetermined
-          with the reason, and so is a call to a function beside the term whose
-          written result names it, because the function's result type is not
-          resolved; a missing use is never read as no use. Two TermUses with the
-          same values are the same use.
+          line, the term with its bounded context and role, and the call or
+          field that reaches it. Two TermUses with the same values are the same
+          use.
         invariants:
           reached-through-resolution: >-
             A TermUse exists only where the language's own resolution reached
             the one declaration located for its term or a member of it; a
             matching name alone never makes one.
+      UndeterminedUse:
+        definition: >-
+          One reference of a worksite file that may reach a recorded term but
+          that resolution cannot confirm, with the reason and, when known, the
+          term, so a missing use is never read as no use.
+        invariants:
+          states-its-reason: >-
+            An UndeterminedUse always states why resolution cannot confirm
+            whether its reference reaches a recorded term.
   distribution:
     definition: >-
       Moving published Patterns between repositories without changing them: what

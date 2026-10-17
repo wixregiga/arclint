@@ -1,9 +1,11 @@
 package conformance
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
@@ -119,9 +121,17 @@ func (u TermUse) Via() string { return u.via }
 // resolution cannot confirm: one resolution could not follow, one that
 // reaches a declaration two candidates of a term spell, or a call to a
 // function whose written result names a term. Nothing says it is not a
-// use. Context and Term name the term the reference may reach, when one
-// is known; Line is 0 when the whole file could not be read.
+// use. Two UndeterminedUses with the same values are the same.
 type UndeterminedUse struct {
+	path, what, reason string
+	line               int
+	context, term      string
+}
+
+// UndeterminedUseSpec is the input to the validated UndeterminedUse.
+// Context and Term name the term the reference may reach, when one is
+// known; Line is 0 when the whole file could not be read.
+type UndeterminedUseSpec struct {
 	Path    string
 	Line    int
 	What    string
@@ -129,6 +139,42 @@ type UndeterminedUse struct {
 	Context string
 	Term    string
 }
+
+// NewUndeterminedUse is the one door an UndeterminedUse is built
+// through: it states why resolution cannot confirm whether the
+// reference is a use, and where the reference is.
+func NewUndeterminedUse(s UndeterminedUseSpec) (UndeterminedUse, error) {
+	if strings.TrimSpace(s.Reason) == "" {
+		return UndeterminedUse{}, fmt.Errorf("undetermined use at %s:%d: a reason is required", s.Path, s.Line)
+	}
+	if s.Path == "" || s.Line < 0 || strings.TrimSpace(s.What) == "" {
+		return UndeterminedUse{}, fmt.Errorf("undetermined use: a path, a nonnegative line, and what is written there are required")
+	}
+	if s.Term != "" && s.Context == "" {
+		return UndeterminedUse{}, fmt.Errorf("undetermined use of %s at %s:%d: the term needs its bounded context", s.Term, s.Path, s.Line)
+	}
+	return UndeterminedUse{path: s.Path, line: s.Line, what: s.What, reason: s.Reason, context: s.Context, term: s.Term}, nil
+}
+
+// Path is the worksite file holding the reference.
+func (u UndeterminedUse) Path() string { return u.path }
+
+// Line is the line of the reference, 0 for the whole file.
+func (u UndeterminedUse) Line() int { return u.line }
+
+// What is the reference as the code spells it: the call or field, or
+// the file.
+func (u UndeterminedUse) What() string { return u.what }
+
+// Reason says why resolution cannot confirm whether it is a use.
+func (u UndeterminedUse) Reason() string { return u.reason }
+
+// Context names the bounded context of the term the reference may
+// reach, "" when no term is known.
+func (u UndeterminedUse) Context() string { return u.context }
+
+// Term names the term the reference may reach, "" when none is known.
+func (u UndeterminedUse) Term() string { return u.term }
 
 // TermUses is what the code of a worksite reaches of the recorded
 // domain: every use of a term, and every reference that cannot be told
@@ -249,7 +295,13 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 	var out TermUses
 	seenUse := map[TermUse]bool{}
 	seenUndetermined := map[UndeterminedUse]bool{}
-	undetermined := func(u UndeterminedUse) {
+	var invalid error
+	undetermined := func(spec UndeterminedUseSpec) {
+		u, err := NewUndeterminedUse(spec)
+		if err != nil {
+			invalid = errors.Join(invalid, err)
+			return
+		}
 		if !seenUndetermined[u] {
 			seenUndetermined[u] = true
 			out.Undetermined = append(out.Undetermined, u)
@@ -257,7 +309,7 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 	}
 	for _, gap := range c.all.failed {
 		if inWorksite(gap.path) {
-			undetermined(UndeterminedUse{Path: gap.path, What: "file", Reason: gap.reason})
+			undetermined(UndeterminedUseSpec{Path: gap.path, What: "file", Reason: gap.reason})
 		}
 	}
 	files := map[string]fileFacts{}
@@ -272,12 +324,12 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 		if _, read := files[p]; read || failed[p] || !inWorksite(p) || !slices.Contains(languages, rule.LanguageOf(p)) {
 			continue
 		}
-		undetermined(UndeterminedUse{Path: p, What: "file", Reason: "its language supplies no declarations or calls for this file, so its references are not known"})
+		undetermined(UndeterminedUseSpec{Path: p, What: "file", Reason: "its language supplies no declarations or calls for this file, so its references are not known"})
 	}
 	reach := func(ref Reference, site useSite) error {
 		switch ref.Resolution {
 		case ResolutionUndetermined:
-			undetermined(UndeterminedUse{Path: site.path, Line: site.line, What: string(site.way) + " " + site.via, Reason: ref.Reason})
+			undetermined(UndeterminedUseSpec{Path: site.path, Line: site.line, What: string(site.way) + " " + site.via, Reason: ref.Reason})
 			return nil
 		case ResolutionDeclared:
 		default:
@@ -285,7 +337,7 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 		}
 		spelled := files[ref.File].declarations(ref)
 		if len(spelled) == 0 {
-			undetermined(UndeterminedUse{
+			undetermined(UndeterminedUseSpec{
 				Path: site.path, Line: site.line, What: string(site.way) + " " + site.via,
 				Reason: fmt.Sprintf("it reaches %s in %s, whose declarations were not read", referenceName(ref), ref.File),
 			})
@@ -304,14 +356,14 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 			case len(reaching) < len(spelled):
 				// The file declares the name twice and the reference does
 				// not say which one it reaches.
-				undetermined(UndeterminedUse{
+				undetermined(UndeterminedUseSpec{
 					Path: site.path, Line: site.line, What: string(site.way) + " " + site.via,
 					Reason:  fmt.Sprintf("it reaches %s in %s, which %d declarations spell, and not all of them are %s", referenceName(ref), ref.File, len(spelled), term.name),
 					Context: term.context, Term: term.name,
 				})
 				continue
 			case len(term.candidates) > 1:
-				undetermined(UndeterminedUse{
+				undetermined(UndeterminedUseSpec{
 					Path: site.path, Line: site.line, What: string(site.way) + " " + site.via,
 					Reason:  fmt.Sprintf("it reaches %s in %s, one of %s spelling %s, so which is the model's cannot be told", referenceName(ref), ref.File, candidateList(term.candidates), term.name),
 					Context: term.context, Term: term.name,
@@ -335,7 +387,7 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 					if !ok {
 						continue
 					}
-					undetermined(UndeterminedUse{
+					undetermined(UndeterminedUseSpec{
 						Path: site.path, Line: site.line, What: string(site.way) + " " + site.via,
 						Reason:  fmt.Sprintf("%s returns %s as written; result types are not resolved", referenceName(ref), result),
 						Context: term.context, Term: term.name,
@@ -351,7 +403,7 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 			continue
 		}
 		if !f.resolvedCalls {
-			undetermined(UndeterminedUse{Path: f.path, What: "calls", Reason: "the file's resolved calls are not available"})
+			undetermined(UndeterminedUseSpec{Path: f.path, What: "calls", Reason: "the file's resolved calls are not available"})
 		} else {
 			for _, call := range f.calls {
 				site := useSite{path: f.path, line: call.Line, way: UseByCall, via: call.Callee}
@@ -364,7 +416,7 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 			}
 		}
 		if !f.fieldTypes {
-			undetermined(UndeterminedUse{Path: f.path, What: "fields", Reason: "the file's field types are not available"})
+			undetermined(UndeterminedUseSpec{Path: f.path, What: "fields", Reason: "the file's field types are not available"})
 			continue
 		}
 		for _, d := range f.decls {
@@ -390,12 +442,15 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 		}
 		return a.line < b.line
 	})
+	if invalid != nil {
+		return TermUses{}, invalid
+	}
 	sort.SliceStable(out.Undetermined, func(i, j int) bool {
 		a, b := out.Undetermined[i], out.Undetermined[j]
-		if a.Path != b.Path {
-			return a.Path < b.Path
+		if a.path != b.path {
+			return a.path < b.path
 		}
-		return a.Line < b.Line
+		return a.line < b.line
 	})
 	return out, nil
 }

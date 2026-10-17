@@ -78,6 +78,11 @@ func usesObserving(t *testing.T, contexts []vocab.BoundedContext, zones []rule.Z
 	return uses
 }
 
+// specOf spells an undetermined use back as the spec it was built from.
+func specOf(u conformance.UndeterminedUse) conformance.UndeterminedUseSpec {
+	return conformance.UndeterminedUseSpec{Path: u.Path(), Line: u.Line(), What: u.What(), Reason: u.Reason(), Context: u.Context(), Term: u.Term()}
+}
+
 // spelled renders each use as term role way via path:line, in order.
 func spelled(uses []conformance.TermUse) []string {
 	out := make([]string, len(uses))
@@ -163,7 +168,7 @@ func TestUsesFollowResolutionInGo(t *testing.T) {
 	if u := uses.Uses[1]; u.Context() != "ordering" {
 		t.Fatalf("use context = %q", u.Context())
 	}
-	wantUndetermined := []conformance.UndeterminedUse{
+	wantUndetermined := []conformance.UndeterminedUseSpec{
 		{Path: "app/place.go", Line: 7, What: "field PlaceOrder.events", Reason: "the package bus does not type-check"},
 		{Path: "app/place.go", Line: 11, What: "call NewMoney", Reason: "NewMoney returns Money as written; result types are not resolved", Context: "ordering", Term: "Money"},
 		{Path: "app/place.go", Line: 16, What: "call Sum", Reason: "Sum returns []Money as written; result types are not resolved", Context: "ordering", Term: "Money"},
@@ -173,8 +178,8 @@ func TestUsesFollowResolutionInGo(t *testing.T) {
 		t.Fatalf("undetermined = %+v", uses.Undetermined)
 	}
 	for i, u := range wantUndetermined {
-		if uses.Undetermined[i] != u {
-			t.Fatalf("undetermined[%d] = %+v, want %+v", i, uses.Undetermined[i], u)
+		if got := specOf(uses.Undetermined[i]); got != u {
+			t.Fatalf("undetermined[%d] = %+v, want %+v", i, got, u)
 		}
 	}
 }
@@ -260,7 +265,7 @@ func TestUsesReportEveryTermAndNeverPickATwin(t *testing.T) {
 		t.Fatalf("undetermined = %+v", uses.Undetermined)
 	}
 	u := uses.Undetermined[0]
-	if u.Line != 6 || u.Context != "ordering" || u.Term != "Currency" || !strings.Contains(u.Reason, "spelling Currency") || !strings.Contains(u.Reason, "billing/currency.go") || !strings.Contains(u.Reason, "legacy/currency.go") {
+	if u.Line() != 6 || u.Context() != "ordering" || u.Term() != "Currency" || !strings.Contains(u.Reason(), "spelling Currency") || !strings.Contains(u.Reason(), "billing/currency.go") || !strings.Contains(u.Reason(), "legacy/currency.go") {
 		t.Fatalf("twin reference = %+v", u)
 	}
 }
@@ -275,7 +280,7 @@ func TestUsesReportUnreadableFiles(t *testing.T) {
 	uses := usesOf(t, []vocab.BoundedContext{orderingContext()}, files, "app")
 	got := map[string]string{}
 	for _, u := range uses.Undetermined {
-		got[u.Path+" "+u.What] = u.Reason
+		got[u.Path()+" "+u.What()] = u.Reason()
 	}
 	if !strings.Contains(got["app/broken.go file"], "does not parse") {
 		t.Fatalf("parse failure not undetermined: %+v", uses.Undetermined)
@@ -293,7 +298,7 @@ func TestUsesReportFilesTheirLanguageDidNotRead(t *testing.T) {
 	if len(uses.Undetermined) != 1 {
 		t.Fatalf("undetermined = %+v", uses.Undetermined)
 	}
-	if u := uses.Undetermined[0]; u.Path != "app/consumer.d.ts" || u.What != "file" || u.Line != 0 || u.Reason == "" {
+	if u := uses.Undetermined[0]; u.Path() != "app/consumer.d.ts" || u.What() != "file" || u.Line() != 0 || u.Reason() == "" {
 		t.Fatalf("unread file = %+v", u)
 	}
 }
@@ -329,9 +334,9 @@ func TestUsesLeaveFunctionResultsUndetermined(t *testing.T) {
 	}
 	var lines []int
 	for _, u := range uses.Undetermined {
-		lines = append(lines, u.Line)
-		if !strings.Contains(u.Reason, "Money") && strings.HasSuffix(u.Reason, " as written; result types are not resolved") {
-			t.Errorf("undetermined reason = %q", u.Reason)
+		lines = append(lines, u.Line())
+		if !strings.Contains(u.Reason(), "Money") || !strings.HasSuffix(u.Reason(), " as written; result types are not resolved") {
+			t.Errorf("undetermined reason = %q", u.Reason())
 		}
 	}
 	if !slices.Equal(lines, []int{3, 4, 5}) {
@@ -382,7 +387,7 @@ func TestUsesNeverCrossLanguages(t *testing.T) {
 	if want := []string{"gomodel Money Add"}; !slices.Equal(got, want) {
 		t.Fatalf("uses = %v, want %v", got, want)
 	}
-	if len(uses.Undetermined) != 1 || uses.Undetermined[0].Context != "gomodel" || uses.Undetermined[0].Line != 5 {
+	if len(uses.Undetermined) != 1 || uses.Undetermined[0].Context() != "gomodel" || uses.Undetermined[0].Line() != 5 {
 		t.Fatalf("undetermined = %+v", uses.Undetermined)
 	}
 }
@@ -427,7 +432,7 @@ func TestUsesKeepGoMembersInTheirPackage(t *testing.T) {
 	if want := []string{"model Money Add"}; !slices.Equal(got, want) {
 		t.Fatalf("uses = %v, want %v", got, want)
 	}
-	if len(uses.Undetermined) != 1 || uses.Undetermined[0].Context != "model" {
+	if len(uses.Undetermined) != 1 || uses.Undetermined[0].Context() != "model" {
 		t.Fatalf("undetermined = %+v", uses.Undetermined)
 	}
 }
@@ -474,7 +479,29 @@ func TestUsesWeighEveryDeclarationOfTheName(t *testing.T) {
 	if got := spelled(uses.Uses); len(got) != 1 || got[0] != "Money value_object  call cents app.py:3" {
 		t.Fatalf("uses = %v", got)
 	}
-	if len(uses.Undetermined) != 1 || uses.Undetermined[0].Line != 2 || !strings.Contains(uses.Undetermined[0].Reason, "which 2 declarations spell, and not all of them are Money") {
+	if len(uses.Undetermined) != 1 || uses.Undetermined[0].Line() != 2 || !strings.Contains(uses.Undetermined[0].Reason(), "which 2 declarations spell, and not all of them are Money") {
 		t.Fatalf("undetermined = %+v", uses.Undetermined)
+	}
+}
+
+// The one door enforces states-its-reason: an undetermined use always
+// says why resolution cannot confirm it, and where it is.
+func TestUndeterminedUseStatesItsReason(t *testing.T) {
+	ok := conformance.UndeterminedUseSpec{Path: "app/run.go", Line: 4, What: "call run", Reason: "run has no declared type", Context: "ordering", Term: "Money"}
+	u, err := conformance.NewUndeterminedUse(ok)
+	if err != nil || specOf(u) != ok {
+		t.Fatalf("NewUndeterminedUse(%+v) = %+v, %v", ok, u, err)
+	}
+	for name, bad := range map[string]conformance.UndeterminedUseSpec{
+		"no reason":                  {Path: "app/run.go", Line: 4, What: "call run"},
+		"a blank reason":             {Path: "app/run.go", Line: 4, What: "call run", Reason: "  "},
+		"no path":                    {Line: 4, What: "call run", Reason: "r"},
+		"a negative line":            {Path: "app/run.go", Line: -1, What: "call run", Reason: "r"},
+		"nothing written":            {Path: "app/run.go", Line: 4, Reason: "r"},
+		"a term without its context": {Path: "app/run.go", Line: 4, What: "call run", Reason: "r", Term: "Money"},
+	} {
+		if _, err := conformance.NewUndeterminedUse(bad); err == nil {
+			t.Errorf("%s became an UndeterminedUse", name)
+		}
 	}
 }
