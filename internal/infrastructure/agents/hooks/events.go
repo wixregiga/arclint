@@ -18,6 +18,7 @@ import (
 // Claude Code.
 const (
 	sessionStartEvent = "SessionStart"
+	promptEvent       = "UserPromptSubmit"
 	postToolUseEvent  = "PostToolUse"
 	stopEvent         = "Stop"
 	systemMessage     = "systemMessage"
@@ -55,19 +56,27 @@ func (event hostEvent) patch() string {
 // Events answers Agent Host hook events with workflow Guidance in the
 // host's native output. It never blocks the agent.
 type Events struct {
-	project    project
-	ruleset    string
-	recording  string
-	binary     string
-	guide      application.GuideWorkflow
-	deliveries Deliveries
+	project   project
+	ruleset   string
+	recording string
+	binary    string
+	guide     application.GuideWorkflow
+	sessions  Sessions
 }
 
-// Deliveries tells a session's first delivery of an event from a repeat.
-type Deliveries interface {
+// Sessions tells a session's first delivery of an event from a repeat, and
+// keeps where the agent's turns begin and end, so that files changed
+// between turns are not taken for the agent's work.
+type Sessions interface {
 	// Deliver reports whether event, a digest of one host event, differs
 	// from the event the session last received.
 	Deliver(session, event string) (bool, error)
+	// StartSession notes that the session started or resumed.
+	StartSession(session string) error
+	// StartTurn notes that the user's prompt started a turn.
+	StartTurn(session string) error
+	// FinishTurn notes that the agent's turn finished.
+	FinishTurn(session string) error
 }
 
 // NewEvents connects hook events for the project at root to guide. ruleset
@@ -75,12 +84,12 @@ type Deliveries interface {
 // path relative to root; distro names the WSL distribution this process
 // runs in, empty outside WSL; binary is this arclint's path, which a
 // workflow note names.
-func NewEvents(root, ruleset, recording, distro, binary string, guide application.GuideWorkflow, deliveries Deliveries) (*Events, error) {
+func NewEvents(root, ruleset, recording, distro, binary string, guide application.GuideWorkflow, sessions Sessions) (*Events, error) {
 	p, err := newProject(root, distro)
 	if err != nil {
 		return nil, err
 	}
-	return &Events{project: p, ruleset: ruleset, recording: recording, binary: binary, guide: guide, deliveries: deliveries}, nil
+	return &Events{project: p, ruleset: ruleset, recording: recording, binary: binary, guide: guide, sessions: sessions}, nil
 }
 
 // Handle answers one hook event read from the host. A session that cannot
@@ -106,17 +115,27 @@ func (events *Events) Handle(input []byte) ([]byte, error) {
 	// A host that lists the hooks in two configuration files delivers each
 	// event twice; the repeat is not answered again.
 	digest := sha256.Sum256(input)
-	if first, err := events.deliveries.Deliver(event.SessionID, hex.EncodeToString(digest[:])); err == nil && !first {
+	if first, err := events.sessions.Deliver(event.SessionID, hex.EncodeToString(digest[:])); err == nil && !first {
 		return nativeOutput(map[string]any{})
 	}
 	var observed []agent.Activity
 	switch event.HookEventName {
 	case sessionStartEvent:
-		output := map[string]any{"hookSpecificOutput": map[string]string{"hookEventName": sessionStartEvent, "additionalContext": events.orientation()}}
-		if _, err := events.guide.Execute(event.SessionID, nil); err != nil {
+		// A session that cannot keep its progress hears so just below.
+		_ = events.sessions.StartSession(event.SessionID)
+		text := events.orientation()
+		guidance, err := events.guide.Execute(event.SessionID, nil)
+		if len(guidance) > 0 {
+			text += "\n" + events.advice(guidance)
+		}
+		output := map[string]any{"hookSpecificOutput": map[string]string{"hookEventName": sessionStartEvent, "additionalContext": text}}
+		if err != nil {
 			output[systemMessage] = "ArcLint workflow guidance unavailable for this session: " + err.Error()
 		}
 		return nativeOutput(output)
+	case promptEvent:
+		// A session that cannot keep its progress said so at its start.
+		_ = events.sessions.StartTurn(event.SessionID)
 	case postToolUseEvent:
 		observed = events.toolActivities(cwd, event)
 	case stopEvent:
@@ -124,7 +143,12 @@ func (events *Events) Handle(input []byte) ([]byte, error) {
 	default:
 		return nativeOutput(map[string]any{})
 	}
+	// Every answered event also reports the files the agent changed
+	// through a shell since the session's last event.
 	guidance, err := events.guide.Execute(event.SessionID, observed)
+	if event.HookEventName == stopEvent {
+		_ = events.sessions.FinishTurn(event.SessionID)
+	}
 	if err != nil || len(guidance) == 0 {
 		return nativeOutput(map[string]any{})
 	}
@@ -132,7 +156,7 @@ func (events *Events) Handle(input []byte) ([]byte, error) {
 	if event.HookEventName == stopEvent {
 		return nativeOutput(map[string]any{systemMessage: text})
 	}
-	return nativeOutput(map[string]any{"hookSpecificOutput": map[string]string{"hookEventName": postToolUseEvent, "additionalContext": text}})
+	return nativeOutput(map[string]any{"hookSpecificOutput": map[string]string{"hookEventName": event.HookEventName, "additionalContext": text}})
 }
 
 // toolActivities reads the files a finished edit tool changed.

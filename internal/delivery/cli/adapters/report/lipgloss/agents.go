@@ -21,6 +21,9 @@ func writeAgentInstall(p *out.Printer, th Theme, r cli.AgentInstallReport) {
 func writeHooksStatus(p *out.Printer, th Theme, r cli.HooksStatusReport) {
 	s := r.Status
 	p.Printf("Project: %s\nBinary: %s\nLast event: %s\n", th.Path.Render(s.Project), th.Path.Render(s.Binary), out.LastHookEvent(s.LastEvent))
+	for _, reason := range s.Silence {
+		p.Println("  " + th.Info.Render(reason))
+	}
 	for _, host := range s.Files {
 		p.Printf("%s %s: %s (installed: %t)\n", host.Host, out.HookScope(host), th.Path.Render(host.Path), host.Installed)
 		for _, problem := range host.Problems {

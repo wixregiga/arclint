@@ -288,7 +288,8 @@ The hooks advise the agent when observed work skips a step of the workflow:
 `arclint context` before changing files, recording a new or changed meaning in
 the domain file before implementing it, and `arclint check .` before
 finishing. Each reminder is given once, and the hooks never block a tool call.
-Installation writes one command, which runs the installing `arclint` by its
+In a git work tree, files changed through the shell get the same advice at the
+next prompt, edit or turn end. Installation writes one command, which runs the installing `arclint` by its
 path, into the Claude Code and Codex user configuration, so the hooks run in
 every project and worktree, and keeps every other setting. Codex runs it after
 you trust it in `/hooks`. See

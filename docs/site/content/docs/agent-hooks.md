@@ -48,8 +48,11 @@ the hooks run in every project and worktree the host opens:
 
 | Host | File | Events |
 |---|---|---|
-| Claude Code | `~/.claude/settings.json`, or under `CLAUDE_CONFIG_DIR` | `SessionStart`; `PostToolUse` for Edit, Write, MultiEdit and NotebookEdit; `Stop` |
-| Codex | `~/.codex/hooks.json`, or under `CODEX_HOME` | `SessionStart`; `PostToolUse` for apply_patch; `Stop` |
+| Claude Code | `~/.claude/settings.json`, or under `CLAUDE_CONFIG_DIR` | `SessionStart`; `UserPromptSubmit`; `PostToolUse` for Edit, Write, MultiEdit and NotebookEdit; `Stop` |
+| Codex | `~/.codex/hooks.json`, or under `CODEX_HOME` | `SessionStart`; `UserPromptSubmit`; `PostToolUse` for apply_patch; `Stop` |
+
+No hook runs on shell commands. Files a shell command changes are found at
+the events above, as described under [how the hooks observe work](#how-the-hooks-observe-work).
 
 The command runs the `arclint` that installed it, by its absolute path, with
 `agents hooks event`. It does not depend on the hosts' `PATH` or on shell
@@ -85,9 +88,23 @@ or the same hooks in two files. It also shows
 when a hook event last reached the project. The files show what a host is
 configured to run; the last event shows that a host ran the hooks here.
 
+Until an event arrives, status says why none may have: no file lists every
+hook; the directory holds no `rules.arclint.yaml`; or it does, but a session
+started before it existed, as in a worktree made from an older commit, and
+reports here only at its next prompt, edit or turn end. It also notes that a
+session reports to the project holding its working directory, and that Claude
+Code runs the hooks only in sessions started after installation.
+
+Inside WSL, status reads the Windows profile through `cmd.exe`. When
+`cmd.exe` cannot run, the Windows files are listed with that problem, and the
+distribution's files are reported as usual. Install refuses in that case,
+because it cannot write the Windows files it promises.
+
 - Claude Code runs the hooks in sessions that start after installation.
 - Codex runs hooks only after you trust them. Open `/hooks` in Codex, trust the
-  ArcLint hooks, and start a new session.
+  ArcLint hooks, and start a new session. Codex trusts each hook definition by
+  its content, so a hook that install adds or changes, such as
+  `UserPromptSubmit`, needs trusting again.
 
 ### WSL projects opened from Windows
 
@@ -112,11 +129,11 @@ paths inside the distribution.
 |---|---|
 | A session starts | The workflow order above. When the project's `AGENTS.md` block states a different workflow, a note names the `arclint` the hooks run: that binary and the one that generated the block are different releases. |
 | A file changes before context showed every Zone that owns it | Run `arclint context <path>`. Each path is named once per session. Context shows the Zones that own the paths it names, the Zones named with `--zone`, or every Zone when it names neither. Context for a directory shows the Zones that own the directory, not narrower Zones nested inside it. A file no Zone owns needs no context. |
-| A file other than the domain recording changes before the recording changed in the session | Record a new or changed meaning first; otherwise continue. Given once per session. |
+| A file that bears domain meaning changes before the recording changed in the session | Record a new or changed meaning first; otherwise continue. Given once per session. A file bears domain meaning when it is not a test and lies in a Zone that holds a bounded context's code, the Zone named for the context. While a recorded context has no Zone named for it, or no context is recorded yet, every file other than a test qualifies, as `arclint check` reads the model's code. Tests and files outside the model's code receive no reminder and do not use it up. |
 | A turn finishes with changes no `arclint check` has verified | Run `arclint check .` and the tests. Given again only when a file no reminder has named changes. The user sees it as a system message. |
 
 Guidance during work arrives as hook additional context, which the agent reads
-with the tool result. When a host delivers the same event twice in a session,
+with the tool result or with the user's prompt. When a host delivers the same event twice in a session,
 as it does when two configuration files list the hooks, only the first
 delivery is answered. Domain decisions live in the recorded `WorkflowGuide`
 domain service; the hook adapter only reports what happened.
@@ -139,6 +156,21 @@ domain service; the hook adapter only reports what happened.
   to the project's domain file (the file `rules.arclint.yaml` names under
   `domain.file`, else the first of `domain.arclint.yaml`, `domain.arclint.yml`
   and `domain.arclint.cml` that exists) changes the domain recording.
+- The checkout shows the rest. At each event, the hooks compare the files
+  `git status` shows changed (modified, added, deleted, or untracked and not
+  ignored) with the snapshot the session took at its last event. A file that
+  appears, changes again, disappears, or is restored counts as changed, so
+  edits through `sed -i`, `>`, `cp`, a Python heredoc or a script get the same
+  advice as an edit tool's, once, at the next event. A commit changes no file.
+  Each change takes its place by its modification time among the activities
+  ArcLint recorded, so a shell edit after `arclint context` needs no context,
+  and one before `arclint check` is verified by it. A turn that changed
+  nothing prints nothing.
+- Files that change between turns are not the agent's work. The session sees
+  the checkout afresh when it starts or resumes and at the user's next prompt
+  after a finished turn. A turn that never finished, such as one the user
+  interrupted, is compared at the next prompt or when the session resumes, and
+  the agent receives the advice with that prompt or with the workflow order.
 - Each session keeps its progress in `.arclint/cache/hooks/`, keyed by the
   host's session id. A session starts reading the activity log where it ends
   when the session starts, so earlier work is not credited to it. Parallel tool
@@ -147,10 +179,34 @@ domain service; the hook adapter only reports what happened.
 - If a session cannot keep its progress, for example because `.arclint` is not
   writable, it says so once when it starts and then stays silent.
 
+## Cost
+
+Each event runs `git status` once, without git's optional index lock, so it
+never makes a git command the agent runs at the same moment fail. That run is
+the comparison's cost. Measured per edit event on one 16-core Linux machine
+under load, with 20 modified files, as the median of three rounds of 15
+events each, wall time:
+
+| Repository | Tracked files | Before | After |
+|---|---|---|---|
+| ArcLint | 1196 | 60 ms | 70 ms |
+| kubernetes | 31441 | 40 ms | 370 ms |
+| TypeScript | 67916 | 30 ms | 320 ms |
+| linux | 96080 | 30 ms | 450 ms |
+
+The time grows with the number of files git examines. Right after a clone or
+checkout, git may read every file again until a git command of your own
+refreshes the index.
+
 ## Limits
 
-- Files a shell command changes, such as through `>`, `sed -i`, `cp` or a
-  script, are not observed; only the hosts' edit tools are.
+- Shell changes are observed only in a git work tree, and only for files git
+  does not ignore. Submodules are not compared. Without git, only the hosts'
+  edit tools report changes.
+- Anything else that changes the checkout during a turn, such as your editor or
+  another session in the same checkout, counts as the agent's change.
+- A shell change after `arclint context` or `arclint check` in the same shell
+  command, within a few milliseconds, may take its place before them.
 - While `rules.arclint.yaml` cannot be read, the hooks cannot tell which Zones
   own a file and give no context reminder.
 - Everything that runs ArcLint in one checkout shares its activity log:

@@ -14,6 +14,9 @@ type HooksStatus struct {
 	// LastEvent is when a hook event last reached the project, zero when
 	// none has.
 	LastEvent time.Time
+	// Silence says why no hook event has reached the project, empty once
+	// one has.
+	Silence []string
 }
 
 // HookFileStatus is one host configuration file and what is wrong

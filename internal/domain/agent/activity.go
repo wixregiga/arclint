@@ -15,7 +15,8 @@ const (
 	// DomainChanged changed the domain recording at the Activity's paths.
 	DomainChanged Kind = "domain"
 	// FilesChanged changed the Activity's paths, none of them the domain
-	// recording; its Zones are the Zones that own them.
+	// recording, with an edit tool or through a shell command; its Zones
+	// are the Zones that own them.
 	FilesChanged Kind = "change"
 	// CheckRan ran the project's check.
 	CheckRan Kind = "check"
@@ -30,6 +31,10 @@ type Activity struct {
 	Kind  Kind
 	Paths []string
 	Zones []string
+	// BearsDomain marks changed files that bear domain meaning: files
+	// other than tests, in a Zone that holds a bounded context's code, or
+	// anywhere while the model's code has no Zone of its own.
+	BearsDomain bool
 }
 
 // showsEveryZone reports whether context showed every Zone because it

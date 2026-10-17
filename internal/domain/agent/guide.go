@@ -41,10 +41,12 @@ func (WorkflowGuide) AssertContextBeforeChange(progress Progress, activity Activ
 	return Guidance{Step: ContextStep, Paths: union(nil, uncovered...)}, true
 }
 
-// AssertDomainBeforeChange checks that changed files follow a change of
-// the domain recording. It reminds once in a session.
+// AssertDomainBeforeChange checks that changed files bearing domain
+// meaning follow a change of the domain recording. It reminds once in a
+// session; a test or a file outside the model's code neither receives nor
+// uses up the reminder.
 func (WorkflowGuide) AssertDomainBeforeChange(progress Progress, activity Activity) (Guidance, bool) {
-	if activity.Kind != FilesChanged || len(activity.Paths) == 0 || progress.DomainRecorded || progress.DomainAdvised {
+	if activity.Kind != FilesChanged || !activity.BearsDomain || len(activity.Paths) == 0 || progress.DomainRecorded || progress.DomainAdvised {
 		return Guidance{}, false
 	}
 	return Guidance{Step: DomainStep, Paths: union(nil, activity.Paths...)}, true

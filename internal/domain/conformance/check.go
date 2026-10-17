@@ -166,7 +166,7 @@ func validRules(rules []rule.Rule, mem membership) ([]rule.Rule, error) {
 		}
 		seen[q] = true
 		for _, m := range r.ReferencedZones() {
-			if _, ok := mem.zones[m]; !ok {
+			if !mem.declared[m] {
 				return nil, fmt.Errorf("conformance: rule %s references undeclared zone %q", r.ID(), m)
 			}
 		}

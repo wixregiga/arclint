@@ -40,12 +40,12 @@ BoundedContext agent {
     void assertCheckBeforeFinish() hint = "arclint.on=Advise";
     "WorkflowGuide advises obtaining context, once for each path, when a file changes before context has shown every Zone that owns it."
     void assertContextBeforeChange() hint = "arclint.on=Advise";
-    "WorkflowGuide advises recording new or changed meaning first, once in a session, when a file other than the domain recording changes before the domain recording has changed."
+    "WorkflowGuide advises recording new or changed meaning first, once in a session, when a file that bears domain meaning changes before the domain recording has changed."
     void assertDomainBeforeChange() hint = "arclint.on=Advise";
   }
 
   Module agent {
-    "One observed action of the agent: obtaining context, which shows the Zones that own the paths it names together with the Zones it names, or every Zone when it names neither; changing the domain recording; changing a file, with the Zones that own it; running the project's check; or finishing a turn."
+    "One observed action of the agent: obtaining context, which shows the Zones that own the paths it names together with the Zones it names, or every Zone when it names neither; changing the domain recording; changing a file, with the Zones that own it and whether it bears domain meaning; running the project's check; or finishing a turn. A change counts the same whether the agent made it with an edit tool or through a shell command. Files that change between the end of a turn and the user's next prompt are not the agent's work. A file bears domain meaning when it is not a test and lies in a Zone that holds a bounded context's code, the Zone named for the context. While a recorded context has no Zone named for it, or no context is recorded yet, the model's code may lie anywhere, and every file other than a test bears domain meaning."
     ValueObject Activity
 
     "Advice naming the workflow step an Activity skipped and the paths it concerns. Guidance carries no approval and no authority to block."
