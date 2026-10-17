@@ -1,6 +1,7 @@
 package yamlvocab
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -51,6 +52,76 @@ func syncDocument(body *yaml.Node, m vocab.UbiquitousLanguage) {
 	setText(body, keyDescription, m.Description, documentKeys)
 	contexts(m).sync(body, true)
 	syncRelations(body, m.Relations)
+	settleAliases(body)
+}
+
+// settleAliases keeps every alias of the edited tree pointing at an
+// anchor written before it. An edit can drop the anchored node an alias
+// names, or move it after the alias; such an alias becomes a copy of
+// the value it named, keeping its own comments, so the file still loads
+// and still records the same values.
+func settleAliases(root *yaml.Node) {
+	anchored := map[*yaml.Node]bool{}
+	var walk func(n, key *yaml.Node)
+	walk = func(n, key *yaml.Node) {
+		if n == nil {
+			return
+		}
+		if n.Kind == yaml.AliasNode {
+			if n.Alias != nil && anchored[n.Alias] {
+				return
+			}
+			copied := copyWithoutAnchors(n.Alias)
+			if copied == nil {
+				return
+			}
+			copied.HeadComment = joinComments(n.HeadComment, copied.HeadComment)
+			copied.LineComment = joinComments(n.LineComment, copied.LineComment)
+			copied.FootComment = joinComments(n.FootComment, copied.FootComment)
+			*n = *copied
+			keepLineComment(key, n)
+		}
+		if n.Anchor != "" {
+			anchored[n] = true
+		}
+		for i, c := range n.Content {
+			var k *yaml.Node
+			if n.Kind == yaml.MappingNode && i%2 == 1 {
+				k = n.Content[i-1]
+			}
+			walk(c, k)
+		}
+	}
+	walk(root, nil)
+}
+
+// keepLineComment moves a block collection's line comment onto the key
+// it is the value of, where a comment on the key's line is written; the
+// encoder writes no line comment for a block list or mapping itself.
+func keepLineComment(key, value *yaml.Node) {
+	if key == nil || value.LineComment == "" || value.Style&yaml.FlowStyle != 0 {
+		return
+	}
+	if value.Kind != yaml.SequenceNode && value.Kind != yaml.MappingNode {
+		return
+	}
+	key.LineComment = joinComments(key.LineComment, value.LineComment)
+	value.LineComment = ""
+}
+
+// copyWithoutAnchors copies a node tree, leaving out the anchors so the
+// copy never declares one the file already declares.
+func copyWithoutAnchors(n *yaml.Node) *yaml.Node {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Anchor = ""
+	out.Content = make([]*yaml.Node, len(n.Content))
+	for i, c := range n.Content {
+		out.Content[i] = copyWithoutAnchors(c)
+	}
+	return &out
 }
 
 func ensureVersion(body *yaml.Node) {
@@ -550,7 +621,20 @@ func setTests(mapping *yaml.Node, tests []string, order []string) {
 		removeField(mapping, keyVerifiedBy)
 		return
 	}
-	_, existing := mapEntry(mapping, keyVerifiedBy)
+	key, existing := mapEntry(mapping, keyVerifiedBy)
+	if existing != nil && existing.Kind == yaml.AliasNode {
+		// A list written as an alias of another stays one while it
+		// names the same tests; otherwise it becomes its own list,
+		// keeping the alias's comments.
+		if named := resolve(existing); named != nil && named.Kind == yaml.SequenceNode && slices.Equal(scalarValues(named), tests) {
+			return
+		}
+		list := testSequence(tests)
+		list.HeadComment, list.LineComment, list.FootComment = existing.HeadComment, existing.LineComment, existing.FootComment
+		*existing = *list
+		keepLineComment(key, existing)
+		return
+	}
 	if existing == nil || existing.Kind != yaml.SequenceNode {
 		setField(mapping, keyVerifiedBy, testSequence(tests), order)
 		return
@@ -577,6 +661,19 @@ func setTests(mapping *yaml.Node, tests []string, order []string) {
 		content = append(content, stringScalar(t))
 	}
 	existing.Content = content
+}
+
+// scalarValues lists the values a sequence names, through aliases.
+func scalarValues(seq *yaml.Node) []string {
+	out := make([]string, 0, len(seq.Content))
+	for _, item := range seq.Content {
+		named := resolve(item)
+		if named == nil || named.Kind != yaml.ScalarNode {
+			return nil
+		}
+		out = append(out, named.Value)
+	}
+	return out
 }
 
 func appendList(mapping *yaml.Node, key string, values []string) {

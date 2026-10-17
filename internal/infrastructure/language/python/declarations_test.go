@@ -226,7 +226,7 @@ class Generic2(Generic[T]):
 
 // A def or class with its own type parameters is generic; and a def in
 // the body of an elif, else, except, or finally clause, or of a loop,
-// is declared at the level the clause stands at.
+// or of a match case, is declared at the level the clause stands at.
 func TestPythonMarksGenericsAndReadsClauseBodies(t *testing.T) {
 	src := []byte(`def first[T](xs: list[T]) -> T:
     return xs[0]
@@ -258,6 +258,11 @@ finally:
 for _ in range(1):
     def test_loop():
         pass
+
+match MODE:
+    case "fast":
+        def test_match():
+            pass
 `)
 	got := extractDeclarations(newParsers(), src)
 	if got.ParseError != "" {
@@ -271,7 +276,7 @@ for _ in range(1):
 		generic[d.Name] = d.Generic
 	}
 	want := map[string]bool{"first": true, "Box": true, "plain": false,
-		"test_elif": false, "test_else": false, "test_except": false, "test_finally": false, "test_loop": false}
+		"test_elif": false, "test_else": false, "test_except": false, "test_finally": false, "test_loop": false, "test_match": false}
 	for name, g := range want {
 		if have, ok := generic[name]; !ok || have != g {
 			t.Errorf("%s generic = %v (declared %v), want %v", name, have, ok, g)

@@ -270,6 +270,9 @@ export interface Store<K> { get(key: K): string; }
 export type Pair<A, B> = [A, B];
 export function first<T>(xs: T[]): T { return xs[0]; }
 export function plain(x: number): number { return x; }
+export const pick = <T>(xs: T[]): T => xs[0];
+export const pickFn = function <T>(xs: T[]): T { return xs[0]; };
+export const double = (x: number): number => x * 2;
 `)
 	got := extractDeclarations(newParsers(), "src/box.ts", src)
 	if got.ParseError != "" {
@@ -279,7 +282,7 @@ export function plain(x: number): number { return x; }
 	for _, d := range got.Decls {
 		generic[d.Name] = d.Generic
 	}
-	want := map[string]bool{"Box": true, "map": true, "size": false, "Plain": false, "Store": true, "get": false, "Pair": true, "first": true, "plain": false}
+	want := map[string]bool{"Box": true, "map": true, "size": false, "Plain": false, "Store": true, "get": false, "Pair": true, "first": true, "plain": false, "pick": true, "pickFn": true, "double": false}
 	for name, g := range want {
 		if have, ok := generic[name]; !ok || have != g {
 			t.Errorf("%s generic = %v (declared %v), want %v", name, have, ok, g)

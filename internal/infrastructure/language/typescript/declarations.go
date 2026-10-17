@@ -324,7 +324,10 @@ func (w *tsWalker) walk(n *gotreesitter.Node, owner string, exported bool) {
 			}
 			decl := w.add(kind, name, owner, exported, d)
 			if decl != nil && fnNode != nil {
+				// The function, not the variable it is bound to, declares
+				// the signature and the type parameters.
 				decl.Params, decl.Results = w.signature(fnNode)
+				decl.Generic = fnNode.ChildByFieldName("type_parameters", w.lang) != nil
 			}
 			if v := d.ChildByFieldName(tsValueField, w.lang); v != nil && v.Type(w.lang) == tsClassExpression && w.name(v) != "" {
 				w.walk(v, owner, exported)

@@ -267,7 +267,7 @@ func (w *pyWalker) walk(n *gotreesitter.Node, owner string, inFunction bool) {
 		return
 	case "module", "block", "if_statement", "elif_clause", "else_clause",
 		"try_statement", "except_clause", "except_group_clause", "finally_clause",
-		"with_statement", "for_statement", "while_statement":
+		"with_statement", "for_statement", "while_statement", "match_statement", "case_clause":
 		for i := 0; i < n.NamedChildCount(); i++ {
 			w.walk(n.NamedChild(i), owner, inFunction)
 		}
