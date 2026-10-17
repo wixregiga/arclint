@@ -1,6 +1,6 @@
 # Placement gate
 
-Apply after the owner evidence is quoted. Rule ids are the protocol numbers in `.agents/skills/domain-librarian/SKILL.md` and the `distillation_rules` ids in its `VOCAB.yaml`. Each decision below names the issue that records it and, once arclint carries it, the rule or the `VOCAB.yaml` section that does. Issues #148 and #151 are still open: their decisions already bind placement, but arclint does not enforce them yet. Where a command or flag a decision describes does not exist in the arclint you built, say so in the report and do not write the command.
+Apply after the owner evidence is quoted. Rule ids are the protocol numbers in `.agents/skills/domain-librarian/SKILL.md` and the `distillation_rules` ids in its `VOCAB.yaml`. Each decision below names the issue that records it and, once arclint carries it, the rule or the `VOCAB.yaml` section that does. Issue #151 is still open: its decision already binds placement, but arclint does not enforce it yet. Where a command or flag a decision describes does not exist in the arclint you built, say so in the report and do not write the command.
 
 ## Order of checks
 
@@ -57,14 +57,14 @@ Recorded in issue #128, and in the librarian's rule 13 (Moves between layers). R
 
 ## Declared services
 
-Recorded in issue #148. A domain service declared the canonical way is "a standalone interface declared as a service" (Evans 2015, p. 14): a Go interface, a TypeScript interface or abstract class, a Python ABC or Protocol. Its assertion is checked once, in the model, by one of two shapes:
+Recorded in issue #148, carried by the distillation rule `guarantee-has-one-checked-home` and enforced by `assertion/checked-by-its-operation`. A domain service declared the canonical way is "a standalone interface declared as a service" (Evans 2015, p. 14): a Go interface, a TypeScript interface or abstract class, a Python ABC or Protocol. Its assertion is checked once, in the model, by one of two shapes:
 
 - **(a) a check in the model:** a function of the context spelled from the key (`AssertNeverExceedsTotal`, `assertNeverExceedsTotal`, `assert_never_exceeds_total`);
 - **(b) a value:** the operation returns a recorded value object of the same context whose invariant has the same key, enforced by its constructor (Evans 2015, p. 21: "moving complex logic into value objects").
 
-Never an interface method, a callback, or prose (proposed distillation rule `guarantee-has-one-checked-home`, issue #148). When neither shape exists, report the missing check on the model side. A concrete owner (struct, class) and an aggregate root keep `assertion/checked-by-its-operation` as it stands.
+Never an interface method, a callback, or prose. Only what neither shape can state is verified by the tests under its `verified_by`, which `assertion/verifying-tests-declared` checks exist. When neither shape exists and no test is named, report the missing check on the model side. An aggregate root declared as an interface or an abstract class needs those tests; a concrete owner (struct, class) keeps the checking method `assertion/checked-by-its-operation` asks for.
 
-Until issue #148 lands, arclint asks an owner declared as an interface or an abstract class for the tests under its assertion's `verified_by` instead of a checking method (`assertion/checked-by-its-operation`, and `assertion/verifying-tests-declared` checks that they exist). Name those tests for such an owner, and report which of the two shapes the guarantee would take.
+A recorded domain service records at least one assertion (`domain_service/records-an-assertion`). A statement that justifies a service but names no guarantee of its operations is a question for the expert's words, not a service without a contract.
 
 ## Proving tests
 
