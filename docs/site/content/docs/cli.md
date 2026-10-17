@@ -282,8 +282,10 @@ are requested together in one observation pass.
 ruleset, the recorded vocabulary, and the local extension registry into
 a generated block inside `AGENTS.md`: an ask-arclint-first directive,
 the full command surface with when-to-use guidance, a recorded-domain
-snapshot, every zone with its rule propositions, repository-wide rules, and
-the local extension inventory. Agents see the architecture before
+snapshot, every zone with its rule propositions, the rules several zones
+share, repository-wide rules, and the local extension inventory. Each rule's
+proposition and rationale appear once: a rule that selects several zones is
+stated under its own heading, and each zone it selects lists its id. Agents see the architecture before
 writing code. The block sits between markers; hand-written content
 around it survives regeneration, and the block never carries
 timestamps, so regeneration is idempotent for an unchanged ruleset and
