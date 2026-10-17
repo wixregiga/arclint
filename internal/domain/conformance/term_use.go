@@ -3,8 +3,11 @@ package conformance
 import (
 	"fmt"
 	"path"
+	"slices"
 	"sort"
+	"strings"
 
+	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
@@ -146,7 +149,8 @@ type usedTerm struct {
 
 // reachedThrough reports whether a reached declaration is the term's
 // located declaration, a member of it, or a constructor of it: a
-// function of its unit returning it.
+// function that returns it where the type's name can mean only the
+// term's declaration.
 func (t usedTerm) reachedThrough(reached locDecl) bool {
 	decl := t.candidates[0]
 	switch {
@@ -154,8 +158,43 @@ func (t usedTerm) reachedThrough(reached locDecl) bool {
 		return true
 	case reached.decl.Owner != "" && decl.owns(reached.file, reached.decl.Owner):
 		return true
-	case reached.decl.Kind == declKindFunc && reached.decl.Owner == "" && path.Dir(reached.file.path) == path.Dir(decl.file.path):
-		return isTypeKind(decl.decl.Kind) && isConstructor(reached.decl, decl.decl.Name)
+	case reached.decl.Kind == declKindFunc && reached.decl.Owner == "":
+		return isTypeKind(decl.decl.Kind) && buildsType(reached, decl)
+	}
+	return false
+}
+
+// buildsType reports whether a function returns the type declared by
+// decl itself, read from the result text where that text can name
+// nothing else. In Go the function is of the type's package and spells
+// the type unqualified, through at most one pointer: a package-level
+// name there is the package's own type, since a dot import of the same
+// name does not compile. In TypeScript and Python the function is of
+// the type's own file, whose module scope holds one binding of the
+// name. A qualified, wrapped, or collection result is not the type.
+func buildsType(fn, decl locDecl) bool {
+	switch fn.file.lang {
+	case rule.LanguageGo:
+		if path.Dir(fn.file.path) != path.Dir(decl.file.path) {
+			return false
+		}
+	default:
+		if fn.file.path != decl.file.path {
+			return false
+		}
+	}
+	for _, r := range fn.decl.Results {
+		text := strings.TrimSpace(r)
+		switch fn.file.lang {
+		case rule.LanguageGo:
+			text = strings.TrimPrefix(text, "*")
+		case rule.LanguagePython:
+			text = strings.Trim(text, `"'`)
+		case rule.LanguageTypeScript:
+		}
+		if text == decl.decl.Name {
+			return true
+		}
 	}
 	return false
 }
@@ -203,9 +242,10 @@ var termRoles = map[vocab.Concept]UsedRole{
 // a term located outside the worksite, a member of it, or a
 // constructor of it. A term declared inside the worksite is declared
 // here, not used. A reference resolution could not follow, one that
-// reaches a term two declarations spell, and a file whose calls or
-// field types could not be read are undetermined, with the reason.
-func (c Carriers) Uses(inWorksite func(path string) bool) (TermUses, error) {
+// reaches a term two declarations spell, and a file of one of the
+// languages whose calls or field types could not be read are
+// undetermined, with the reason.
+func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Language) (TermUses, error) {
 	var out TermUses
 	seenUse := map[TermUse]bool{}
 	seenUndetermined := map[UndeterminedUse]bool{}
@@ -223,6 +263,16 @@ func (c Carriers) Uses(inWorksite func(path string) bool) (TermUses, error) {
 	files := map[string]fileFacts{}
 	for _, f := range c.all.files {
 		files[f.path] = f
+	}
+	failed := map[string]bool{}
+	for _, gap := range c.all.failed {
+		failed[gap.path] = true
+	}
+	for _, p := range c.observed {
+		if _, read := files[p]; read || failed[p] || !inWorksite(p) || !slices.Contains(languages, rule.LanguageOf(p)) {
+			continue
+		}
+		undetermined(UndeterminedUse{Path: p, What: "file", Reason: "its language supplies no declarations or calls for this file, so its references are not known"})
 	}
 	reach := func(ref Reference, site useSite) error {
 		switch ref.Resolution {

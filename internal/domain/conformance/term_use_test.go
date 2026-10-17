@@ -32,8 +32,18 @@ func resolvedFile(lang rule.Language, pkg string, decls []conformance.Declaratio
 // prefixes.
 func usesOf(t *testing.T, contexts []vocab.BoundedContext, files map[string]conformance.LanguageFacts, worksite ...string) conformance.TermUses {
 	t.Helper()
-	observed := make([]conformance.ObservedFile, 0, len(files))
+	return usesObserving(t, contexts, files, nil, worksite...)
+}
+
+// usesObserving is usesOf over a walk that also observed files no
+// language supplied facts for.
+func usesObserving(t *testing.T, contexts []vocab.BoundedContext, files map[string]conformance.LanguageFacts, unread []string, worksite ...string) conformance.TermUses {
+	t.Helper()
+	observed := make([]conformance.ObservedFile, 0, len(files)+len(unread))
 	for p := range files {
+		observed = append(observed, conformance.ObservedFile{Path: p})
+	}
+	for _, p := range unread {
 		observed = append(observed, conformance.ObservedFile{Path: p})
 	}
 	sort.Slice(observed, func(i, j int) bool { return observed[i].Path < observed[j].Path })
@@ -45,7 +55,7 @@ func usesOf(t *testing.T, contexts []vocab.BoundedContext, files map[string]conf
 	if err != nil {
 		t.Fatalf("newRecordedLanguage: %v", err)
 	}
-	facts, err := conformance.NewInspectionFacts(nil, obs, rule.FactDeclarations, rule.FactCalls, rule.FactResolvedCalls, rule.FactFieldTypes)
+	facts, err := conformance.NewInspectionFacts(nil, obs, rule.FactFileTree, rule.FactDeclarations, rule.FactCalls, rule.FactResolvedCalls, rule.FactFieldTypes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +70,7 @@ func usesOf(t *testing.T, contexts []vocab.BoundedContext, files map[string]conf
 			}
 		}
 		return false
-	})
+	}, []rule.Language{rule.LanguageGo, rule.LanguageTypeScript, rule.LanguagePython})
 	if err != nil {
 		t.Fatalf("Uses: %v", err)
 	}
@@ -266,5 +276,45 @@ func TestUsesReportUnreadableFiles(t *testing.T) {
 	}
 	if got["app/plain.go calls"] == "" || got["app/plain.go fields"] == "" {
 		t.Fatalf("unresolved file not undetermined: %+v", uses.Undetermined)
+	}
+}
+
+// A worksite file of a configured language that its language supplied
+// no facts for, such as a TypeScript declaration file, is undetermined;
+// a file of no configured language is no code to read.
+func TestUsesReportFilesTheirLanguageDidNotRead(t *testing.T) {
+	uses := usesObserving(t, []vocab.BoundedContext{orderingContext()}, goOrdering(), []string{"app/consumer.d.ts", "app/README.md"}, "app")
+	if len(uses.Undetermined) != 1 {
+		t.Fatalf("undetermined = %+v", uses.Undetermined)
+	}
+	if u := uses.Undetermined[0]; u.Path != "app/consumer.d.ts" || u.What != "file" || u.Line != 0 || u.Reason == "" {
+		t.Fatalf("unread file = %+v", u)
+	}
+}
+
+// A function makes a use of a type only when it returns the type
+// itself where the name can mean nothing else: in Go a function of the
+// type's package returning it unqualified, in TypeScript and Python a
+// function of the type's file. A qualified, wrapped, or sibling-file
+// result is no use.
+func TestUsesRecognizeConstructorsOnlyByTheirOwnType(t *testing.T) {
+	files := goOrdering()
+	files["ordering/legacy.go"] = resolvedFile(rule.LanguageGo, "ordering", []conformance.Declaration{
+		{Kind: "func", Name: "LegacyMoney", Exported: true, StartLine: 3, Results: []string{"legacy.Money"}},
+		{Kind: "func", Name: "MaybeMoney", Exported: true, StartLine: 6, Results: []string{"Option[Money]"}},
+		{Kind: "func", Name: "MoneyRef", Exported: true, StartLine: 9, Results: []string{"*Money"}},
+	}, nil)
+	files["ordering/pricing_helpers.py"] = resolvedFile(rule.LanguagePython, "", []conformance.Declaration{
+		{Kind: "func", Name: "make_order", StartLine: 1, Results: []string{"Order"}},
+	}, nil)
+	files["app/place.go"] = resolvedFile(rule.LanguageGo, "app", nil, []conformance.Call{
+		{Callee: "LegacyMoney", Line: 3, Target: declared("ordering/legacy.go", "", "LegacyMoney")},
+		{Callee: "MaybeMoney", Line: 4, Target: declared("ordering/legacy.go", "", "MaybeMoney")},
+		{Callee: "MoneyRef", Line: 5, Target: declared("ordering/legacy.go", "", "MoneyRef")},
+		{Callee: "make_order", Line: 6, Target: declared("ordering/pricing_helpers.py", "", "make_order")},
+	})
+	uses := usesOf(t, []vocab.BoundedContext{orderingContext()}, files, "app")
+	if got := spelled(uses.Uses); len(got) != 1 || got[0] != "Money value_object  call MoneyRef app/place.go:5" {
+		t.Fatalf("uses = %v", got)
 	}
 }
