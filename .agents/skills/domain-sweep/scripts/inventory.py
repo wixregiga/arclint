@@ -156,7 +156,7 @@ def touched_entries(repo, base, head):
     for an added file, new is None for a deleted one, and a rename carries
     both. Paths come from -z output, never from a diff header."""
     target = [head] if head else []
-    fields = git_paths(repo, "diff", "-z", "--name-status", "--no-relative", "-M", base, *target)
+    fields = git_paths(repo, "diff", "-z", "--name-status", "--no-relative", "-M", base, *target, "--")
     entries = []
     i = 0
     while i < len(fields):
@@ -178,12 +178,13 @@ def changed_lines(repo, base, head, old, new):
     """The line numbers the change adds to new, in the head, and removes
     from old, in the merge base. Settings that would move hunk positions
     off the files' own lines are turned off: text conversion, external
-    diff, joined hunks. Context lines a configuration still adds advance
+    diff, joined hunks, and an attribute that calls a text file binary.
+    Context lines a configuration still adds advance
     both sides."""
     target = [head] if head else []
     paths = [p for p in (old, new) if p is not None]
     out = git_text(
-        repo, "--literal-pathspecs", "diff", "-U0", "--inter-hunk-context=0", "--no-color",
+        repo, "--literal-pathspecs", "diff", "-U0", "--inter-hunk-context=0", "--no-color", "--text",
         "--no-ext-diff", "--no-textconv", "--no-relative", "-M", base, *target, "--", *dict.fromkeys(paths),
     )
     added, removed = set(), set()
@@ -219,14 +220,24 @@ def read_worktree(repo, path):
     if os.path.islink(full) or not os.path.isfile(full):
         return None
     with open(full, "r", encoding="utf-8", errors="replace") as handle:
-        return handle.read().splitlines()
+        return split_lines(handle.read())
 
 
 def read_commit(repo, commit, path):
     result = subprocess.run(["git", "-C", repo, "cat-file", "blob", f"{commit}:{path}"], capture_output=True)
     if result.returncode != 0:
         return None
-    return result.stdout.decode("utf-8", "replace").splitlines()
+    return split_lines(result.stdout.decode("utf-8", "replace"))
+
+
+def split_lines(text):
+    """Split text into lines the way Git numbers them: at each newline and
+    nowhere else, so a form feed or U+2028 inside a line keeps the
+    numbering. A carriage return before the newline is dropped."""
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return [line[:-1] if line.endswith("\r") else line for line in lines]
 
 
 def is_generated(lines):
@@ -240,15 +251,24 @@ def is_generated(lines):
         while i < len(lines) and lines[i].strip() != fence:
             i += 1
         i += 1
+    closing = None  # the token that ends the comment block being read
     for text in lines[i:]:
         stripped = text.strip()
-        if not stripped:
+        if GENERATED.search(stripped) and (closing or stripped.startswith(("//", "#", "/*", "<!--"))):
+            return True
+        if closing:
+            if closing in stripped:
+                closing = None
             continue
-        if stripped.startswith(("//", "#", "/*", "*", "<!--")):
-            if GENERATED.search(stripped):
-                return True
+        if not stripped or stripped.startswith(("//", "#")):
             continue
-        return False
+        for opening, end in (("/*", "*/"), ("<!--", "-->")):
+            if stripped.startswith(opening):
+                if end not in stripped[len(opening):]:
+                    closing = end
+                break
+        else:
+            return False
     return False
 
 
@@ -458,6 +478,14 @@ def ts_sources(lines):
                     break
                 last = char
                 continue
+            if pair in ("++", "--"):
+                # After an operand, ++ and -- are postfix and a slash that
+                # follows divides; before one, they are prefix.
+                postfix = last is not None and (last.isalnum() or last in "_$)]")
+                code.append(pair)
+                last = "x" if postfix else pair[0]
+                i += 2
+                continue
             if char == "/" and regex_allowed(text, i, last):
                 i = skip_regex(text, i)
                 code.append(LITERAL)
@@ -493,7 +521,10 @@ def ts_sources(lines):
         declared = TS_TEST.search(line_code)
         if declared or (pending_test and line_code.lstrip().startswith(LITERAL)):
             kinds.add("test")
-        pending_test = bool(declared) and declared.group(1) == ""
+        if declared:
+            pending_test = declared.group(1) == ""
+        elif line_code.strip():
+            pending_test = False
         if kinds and text.strip():
             found[number] = pick(kinds)
     return found
@@ -609,8 +640,22 @@ def line_sources(path, lines, recordings):
     return found
 
 
+def resolve(repo, ref):
+    """The commit a ref names, as an object id."""
+    result = subprocess.run(
+        ["git", "-C", repo, "rev-parse", "--verify", "--quiet", "--end-of-options", ref + "^{commit}"],
+        capture_output=True, text=True, errors="replace",
+    )
+    if result.returncode != 0:
+        sys.stderr.write(f"inventory: {ref} names no commit\n")
+        sys.exit(1)
+    return result.stdout.strip()
+
+
 def find_merge_base(repo, base, head):
-    result = subprocess.run(["git", "-C", repo, "merge-base", base, head], capture_output=True, text=True, errors="replace")
+    result = subprocess.run(
+        ["git", "-C", repo, "merge-base", "--end-of-options", base, head], capture_output=True, text=True, errors="replace",
+    )
     if result.returncode != 0:
         sys.stderr.write(f"inventory: {base} and {head} have no merge base\n{result.stderr}")
         sys.exit(1)
@@ -693,7 +738,8 @@ def render(rows, fmt):
         out = ["| kind | source | hint | location | text |", "|---|---|---|---|---|"]
         for kind, source, hint_text, path, number, text in rows:
             cell = text.replace("|", "\\|")
-            out.append(f"| {kind} | {source} | {hint_text} | {spell(path)}:{number} | {cell} |")
+            location = f"{spell(path)}:{number}".replace("|", "\\|")
+            out.append(f"| {kind} | {source} | {hint_text} | {location} | {cell} |")
         return "\n".join(out) + "\n"
     return "".join(
         f"{kind}\t{source}\t{hint_text}\t{spell(path)}:{number}\t{text}\n"
@@ -716,13 +762,13 @@ def main():
     parser.add_argument("--files", action="store_true", help="print touched files only")
     args = parser.parse_args()
 
-    repo = os.path.abspath(args.repo)
-    for ref in (args.base, args.head):
-        if ref:
-            git(repo, "rev-parse", "--verify", "--quiet", ref + "^{commit}")
+    # Paths git prints are relative to the top of the work tree, wherever
+    # --repo points inside it; refs become object ids, so a ref that is
+    # also a file name stays a ref.
+    repo = git_text(os.path.abspath(args.repo), "rev-parse", "--show-toplevel").strip()
+    base, head = (resolve(repo, ref) if ref else None for ref in (args.base, args.head))
     merge_base, files, generated, rows = collect(
-        repo, args.base, args.head, args.scope, args.paths, args.exclude,
-        set(args.recording), args.hint,
+        repo, base, head, args.scope, args.paths, args.exclude, set(args.recording), args.hint,
     )
 
     # A path that is not UTF-8 is written back as the bytes it was read as.

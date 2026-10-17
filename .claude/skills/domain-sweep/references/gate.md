@@ -7,27 +7,37 @@ Apply after the owner evidence is quoted. Rule ids are the protocol numbers in `
 For each statement, in this order:
 
 1. **Declined rules.** Compare it with the declined list below. A match is placed `declined`, with the recorded reason and its basis. Do not propose the rule again.
-2. **Placement.** The first row of the placement table whose conditions hold decides.
-3. **Decide, then carry out.** For a guarantee of an operation, apply the section of that name before choosing the owner.
-4. **Declared services.** When the owner is a declared domain service, apply the shapes of that section.
-5. **Proving test.** Name the test that proves the entry, or `none`.
-6. **Word limits.** Count the words of every text you propose. Over the limit is not a proposal.
-7. **Sources.** Every literature citation states its tier, and a rule needs a tier 1 source or an owner decision.
+2. **Disagreement.** When two owner sources state it differently, it is a question, whatever row it would otherwise fit. Record the discrepancy with both sources.
+3. **Placement.** Otherwise the first row of the placement table whose conditions hold decides.
+4. **Decide, then carry out.** For a guarantee of an operation, apply the section of that name before choosing the owner.
+5. **Declared services.** When the owner is a declared domain service, apply the shapes of that section.
+6. **Proving test.** Name the test that proves the entry, or `none`.
+7. **Word limits.** Count the words of every text you propose. Over the limit is not a proposal.
+8. **Sources.** Every literature citation states its tier, and a rule needs a tier 1 source or an owner decision.
+
+## What counts as evidence
+
+- **The recorded language** is the recording at the merge base. What the change itself records is a candidate like any other row: its recording is a claim (Evidence, rule 1), and "already recorded" never applies to it.
+- **The owner's docs** are the docs as they stand at the merge base. Docs the change adds or edits are claims until the owner approves the change.
+- **The owner's words** are issue and pull request text the owner's account wrote. Text an agent generated is a claim, wherever it is posted: a body that ends "Generated with Claude Code", a bot's review, an issue title over a bot's body.
+- **An owner decision** for step 8 is the owner's words or the owner's docs above.
 
 ## Placement table
 
 | placement | conditions | deciding rules | example |
 |---|---|---|---|
 | declined | the statement matches a declined rule below | issue #144 | "every aggregate has a factory" (Evans 2015, p. 18) |
-| already recorded | the recorded language states it, under the right owner, in equivalent words | Evidence (rule 1) | PR #96: `context_map/one-relation-per-pair` was already in the meta-model; the CML adapter only duplicates it |
-| change to an existing entry | the recorded text is wrong, incomplete, or silent on a case the change now covers | Precedence (rule 9), Description style (rule 14) | PR #96: `inside-the-repository` said nothing about the file a symlink reaches |
-| invariant under a value object | value integrity, holds at every observable time, one violation, enforceable in the constructor, owner is the subject | Invariant gate (rule 10), invariant-ownership, value-test | PR #96: `DomainRecording / distinct-from-ruleset` |
+| already recorded | the project's recording at the merge base states it, under the right owner, in equivalent words | Evidence (rule 1) | a statement the change only repeats |
+| change to an existing entry | an entry recorded at the merge base is wrong, incomplete, over its word limit, or silent on a case the change now covers | Precedence (rule 9), Description style (rule 14), issue #125 | an entry that says nothing about the file a symlink reaches |
+| invariant under a value object | value integrity, holds at every observable time, one violation, enforceable in the constructor, owner is the subject | Invariant gate (rule 10), invariant-ownership, value-test | PR #96: `DomainRecording / spelled-with-slashes` (the owner's docs: a domain file path is "written with slashes") |
 | invariant under an aggregate | a cluster rule that must stay consistent in one transaction, owned by the root | rule 10, invariant-ownership, transaction-boundary | candidate `Rule / pattern never chooses the domain file` (needed the owner's decision) |
 | assertion | a guarantee of one named operation of the root or of a domain service, with `on`; the operation is the one that decides (see below) | precondition-as-assertion, contract-of-a-service, issue #128 | an assertion on the service operation that returns the verdict, never on the step that writes |
 | specification | experts pass the predicate around as a thing | specification-as-thing | none in the PR #96 run |
-| definition only | the meaning is established but it restates or orders facts, forbids nothing a naive implementation could do, or has no capable owner | rule 10 ("restating a definition is not an invariant"), Litmus first (rule 2) | PR #96: which file is the DomainRecording (named file, then yaml, yml, cml, then yaml) |
-| question | a product decision the evidence leaves open, or two sources that disagree | Ask or record (rule 8), minimal-evidence | PR #96: when does the ruleset carry `domain.file` |
-| no entry | one of the reasons below | the rule named beside the reason | PR #96: never overwrite an unreadable file (delivery promise of an adapter) |
+| definition only | the meaning is established but it restates or orders facts, forbids nothing a naive implementation could do, or has no capable owner; and the definition can hold it within its word limit | rule 10 ("restating a definition is not an invariant"), Litmus first (rule 2) | PR #96: a domain file the ruleset names is the project's own choice |
+| question | a product decision the evidence leaves open, two owner sources that disagree, or a meaning its owner's definition cannot hold within its limit | Ask or record (rule 8), minimal-evidence | PR #96: which file is the domain file when the ruleset names none (issue #95 and the docs disagree); when the ruleset carries `domain.file` |
+| no entry | one of the reasons below | the rule named beside the reason | PR #96: a translation target that cannot be read is never overwritten (delivery promise of an adapter) |
+
+Split an "and" of independently violable clauses into one candidate per clause before placing it; the split applies to entries, not to no-entry rows. A clause the owner cannot check, such as where a link on disk leads, keeps its entry, is labelled `split` under enforcement, and names the test that proves the rest.
 
 A rule found inside a recorded definition is a statement like any other. Wording alone does not make a rule: "must-always/must-never wording alone does not establish one" (invariant-ownership, `internal/domain/vocab/distillation.go:32`). A definition is read for what it forbids, whatever its words.
 
@@ -52,6 +62,7 @@ Recorded in issue #128. Record a service's assertion on the operation that makes
 
 - The verdict is a value. A verdict that carries a rule ("approves only when no participant refused") is a value object with that rule as its invariant, so `value_object/constructed-through-one-door` applies.
 - An effect the domain cannot see ("a refusal changes nothing on disk") is proved by an automated test (Evans 2015, p. 22), not by moving the workflow into the domain.
+- A fact the model cannot observe, such as whether a file exists or whether two paths are one file, is gathered by the application through a port and passed to the deciding operation as a value.
 - Before you recommend moving code between layers, for example a workflow into a domain service to satisfy `assertion/checked-by-its-operation`, state the strongest case against the move with sources from the meta-model's bibliography. Then recommend the placement where the decision goes to the domain and the execution stays in the application.
 - A business decision found in an application service is placed under its owner and reported as a finding. "No entry" is never the answer for a product decision.
 
@@ -66,7 +77,7 @@ Never an interface method, a callback, or prose (proposed distillation rule `gua
 
 ## Proving tests
 
-Recorded in issue #143. For every entry, name the test that proves it as `path:TestName` (Go `func Test...`, Python `def test_...`, the TypeScript `test("...")` name). Read the test before you name it. A test that exists shows the behavior is pinned; whether it proves the statement is your judgment, and you say which. Issue #143 records the name through `--verified-by`; write that flag only when `arclint domain define --help` lists it. For an owner declared as an interface, the proving test is the expected evidence, not an empty `Assert` method.
+Recorded in issue #143. For every entry, name the test that proves it as `path:TestName` (Go `func Test...`, Python `def test_...`, the TypeScript `test("...")` name). Read the test before you name it. This is verification of enforcement, not classification, so the librarian's Economy section does not limit it. A test that exists shows the behavior is pinned; whether it proves the statement is your judgment, and you say which. Issue #143 records the name through `--verified-by`; write that flag only when `arclint domain define --help` lists it. For an owner declared as an interface, the proving test is the expected evidence, not an empty `Assert` method.
 
 Tests pin behavior; they do not approve it. A rule only tests state, with no doc and no owner's words, needs the owner's yes before it is recorded.
 
@@ -81,7 +92,7 @@ Recorded in issue #125. Every text you propose fits:
 | an invariant's or assertion's statement | 40 words |
 | the project description | 100 words |
 
-A definition says what a word means. When the meaning will not fit, keep what the word means, record each rule it states as an invariant or assertion, and put promises that are not domain rules in tests. An existing recorded text over its limit is a discrepancy to report, with its word count.
+A definition says what a word means. When the meaning will not fit, keep what the word means, record each rule it states as an invariant or assertion, and put promises that are not domain rules in tests. A fact that is neither, such as an order of discovery, and that the definition cannot hold within its limit, is a question for the owner. An entry recorded at the merge base over its limit is a change to an existing entry, with its word count. No limit is recorded for a question's text; keep each to one decision.
 
 ## Sources
 
@@ -103,12 +114,13 @@ Write the reason in these words so reports compare.
 | reason | rule | test |
 |---|---|---|
 | programming guard | language-not-guards | you would not say it to an expert who never saw the code (a nil check, a parse error) |
-| delivery promise of an adapter or port | not-a-domain-rule | it describes how one format or one adapter writes, retries, formats, or warns |
+| delivery promise of an adapter or port | not-a-domain-rule | it describes how one format or one adapter writes, retries, formats, or warns, or how a command controls its transaction (all or nothing) |
 | application precondition | not-a-domain-rule, application-service-holds-no-rule | it holds only when one use case runs and no business decision is lost by deleting the step |
+| application coordination | Behavior (rule 11), application-service-holds-no-rule | it loads, invokes, commits, publishes, notifies or translates, and deleting it loses no business decision |
 | delivery validation | not-a-domain-rule | the software proves its own output (read back, round trip) |
-| contributor duty | rule 12 (Completeness sweep) | it tells a contributor what to do, not what the domain holds |
+| contributor duty | rule 12 (Completeness sweep) | it tells a contributor what to do, or what a contributor's tool (a skill, a script, a make target) promises, not what the domain holds |
 | presentation | rule 14 | it is wording of help, warnings or docs |
-| decision already recorded elsewhere | Evidence (rule 1) | the meta-model or another context already records it |
+| decision already recorded elsewhere | Evidence (rule 1) | the meta-model, another context, or an owner decision that placed it outside the domain already records it (PR #96: `context_map/one-relation-per-pair` is in the meta-model; the CML adapter repeats it) |
 
 A no-entry statement that is still a promise names the test that pins it, or `none`.
 
@@ -120,6 +132,8 @@ A no-entry statement that is still a promise names the test that pins it, or `no
 | `none` | nothing enforces it; prose or a test only |
 | `misplaced: where` | enforced, but outside the owner's constructor or root, or spread over several callers |
 | `split: a / b` | the owner enforces the shape and an adapter enforces the rest (name both) |
+| `adapter: file:line` | for a no-entry promise or a rule recorded elsewhere: the adapter or port that keeps it |
+| `hollow: file:line` | the code arclint reports as the check, which checks nothing; report it as a finding |
 
 ## Pitfalls seen
 
