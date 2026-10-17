@@ -554,6 +554,43 @@ func TestStatusNamesTheHooksAPartialFileStillRuns(t *testing.T) {
 	}
 }
 
+// Each side of WSL reads its own user configuration: disableAllHooks in
+// the Windows profile turns off the Windows host apps' hooks, not the
+// distribution's.
+func TestDisabledHooksBelongToTheSideThatReadsThem(t *testing.T) {
+	root, h := t.TempDir(), newHomes(t)
+	installer := NewInstaller(root, "Ubuntu", testBinary(t, t.TempDir(), "native"), h.users("Ubuntu"))
+	if _, err := installer.Install([]string{"claude"}, false); err != nil {
+		t.Fatal(err)
+	}
+	for _, windows := range []bool{false, true} {
+		var document map[string]any
+		data, err := os.ReadFile(h.file(windows, "claude"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(data, &document); err != nil {
+			t.Fatal(err)
+		}
+		delete(document["hooks"].(map[string]any), promptEvent)
+		if windows {
+			document["disableAllHooks"] = true
+		}
+		data, err = json.Marshal(document)
+		if err != nil {
+			t.Fatal(err)
+		}
+		writeTestFile(t, h.file(windows, "claude"), string(data))
+	}
+	entries := statusOf(t, installer)
+	if native := strings.Join(entries["claude user"].Problems, "\n"); !strings.Contains(native, "and still run") || strings.Contains(native, "disableAllHooks") {
+		t.Fatalf("the distribution's file: %s", native)
+	}
+	if windows := strings.Join(entries["claude user windows"].Problems, "\n"); strings.Contains(windows, "still run") || !strings.Contains(windows, "disableAllHooks") {
+		t.Fatalf("the Windows file: %s", windows)
+	}
+}
+
 // Only the commands install writes are workflow hooks. A hook that merely
 // mentions the same words is someone else's, and install and the duplicate
 // cleanup keep it.
@@ -651,7 +688,7 @@ func TestStatusNamesDuplicateFilesAndTheLastEvent(t *testing.T) {
 	// setting is removed.
 	writeTestFile(t, filepath.Join(root, ".claude/settings.json"), strings.Replace(string(user), "{", `{"disableAllHooks": true,`, 1))
 	problems = strings.Join(statusOf(t, installer)["claude project"].Problems, "\n")
-	if strings.Count(problems, "would run each event twice here once its hooks are turned back on") != 2 || strings.Contains(problems, " runs each event twice") {
+	if !strings.Contains(problems, "would run each event twice here once its hooks are turned back on") || !strings.Contains(problems, "once hooks are turned back on, every file that lists them runs each event") || strings.Contains(problems, " runs each event twice") {
 		t.Fatalf("duplicates while hooks are off: %s", problems)
 	}
 }

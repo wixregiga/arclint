@@ -341,16 +341,27 @@ func (installer *Installer) Status() (status application.HooksStatus, err error)
 		if host.shared != "" {
 			shared = filepath.Join(installer.root, filepath.FromSlash(host.shared))
 		}
-		// A file that turns off every hook may be any the host reads here,
-		// so no hook of this host is said to run while one does.
-		off := disablesHooks(host, shared)
-		for _, file := range append(slices.Clone(users), local) {
-			off = off || disablesHooks(host, file.path)
+		// A reader of this project runs no hook while a file it reads turns
+		// every hook off: the distribution's host reads its user file, this
+		// project's file and the shared one; a Windows host app reads its
+		// user file, the shared one, and this project's file when it was
+		// written for both sides.
+		sharedOff, localOff := disablesHooks(host, shared), disablesHooks(host, local.path)
+		off := map[commandForm]bool{nativeForm: sharedOff || localOff, windowsForm: sharedOff || (localOff && local.form == sharedForm)}
+		for _, user := range users {
+			off[user.form] = off[user.form] || disablesHooks(host, user.path)
 		}
-		disabled = disabled || off
+		disabled = disabled || off[nativeForm] || off[windowsForm]
+		// This project's file runs while any of its readers runs hooks.
+		readersOff := func(file target) bool {
+			if file.scope == scopeUser {
+				return off[file.form]
+			}
+			return off[nativeForm] && (local.form != sharedForm || off[windowsForm])
+		}
 		entries := make([]application.HookFileStatus, 0, len(users)+1)
 		for _, file := range append(slices.Clone(users), local) {
-			entry, runs := installer.inspect(file, off)
+			entry, runs := installer.inspect(file, readersOff(file))
 			if disablesHooks(host, file.path) {
 				entry.Problems = append(entry.Problems, "This file sets "+host.disable+", so the host runs none of the hooks it reads where this file applies; remove the setting to run them.")
 			}
@@ -368,7 +379,7 @@ func (installer *Installer) Status() (status application.HooksStatus, err error)
 			sees := user.form == nativeForm || local.form == sharedForm
 			userListed, _ := listsArclintHooks(user.path)
 			if userListed && localListed && sees {
-				localEntry.Problems = append(localEntry.Problems, duplicateProblem(user.path+" already lists the hooks for every project; with both, the host", off))
+				localEntry.Problems = append(localEntry.Problems, duplicateProblem(user.path+" already lists the hooks for every project; with both, the host", off[user.form]))
 			}
 			if entry.Installation == application.HooksAbsent && (localEntry.Installation != application.HooksComplete || !sees) {
 				entry.Problems = append(entry.Problems, "Workflow hooks are not installed.")
@@ -379,7 +390,11 @@ func (installer *Installer) Status() (status application.HooksStatus, err error)
 				localEntry.Problems = append(localEntry.Problems, host.shared+" sets "+host.disable+", so the host runs no hooks in this project; remove the setting to run them.")
 			}
 			if listed, err := listsArclintHooks(shared); err == nil && listed {
-				localEntry.Problems = append(localEntry.Problems, duplicateProblem(host.shared+" also lists the workflow hooks; with every file that lists them, the host", off))
+				listing := host.shared + " also lists the workflow hooks; every file that lists them runs each event."
+				if readersOff(local) {
+					listing = host.shared + " also lists the workflow hooks; once hooks are turned back on, every file that lists them runs each event."
+				}
+				localEntry.Problems = append(localEntry.Problems, listing)
 			}
 		}
 		// A user file that cannot be located is listed with the other user
