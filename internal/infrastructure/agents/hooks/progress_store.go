@@ -38,10 +38,16 @@ type sessionRecord struct {
 	// BetweenTurns is true from the end of a turn, or the session's start,
 	// until the user's next prompt.
 	BetweenTurns bool `json:",omitempty"`
-	// AttributedFrom is when the agent's work began after a time between
-	// turns, zero once a snapshot has been taken since: a file that changed
-	// before it is not the agent's work.
+	// BetweenSince and AttributedFrom bound the last time between turns:
+	// from the end of a turn, or from always for a record that started
+	// between turns, until the session started, resumed or received its
+	// next prompt. A file that changed then is not the agent's work. Both
+	// are zero once a snapshot has been taken since.
+	BetweenSince   time.Time `json:",omitzero"`
 	AttributedFrom time.Time `json:",omitzero"`
+	// Unsampled is true after an update whose sample of the checkout failed
+	// for a reason other than the project lying outside a git work tree.
+	Unsampled bool `json:",omitempty"`
 }
 
 // ProgressStore keeps each session's workflow Progress in the project's
@@ -128,7 +134,7 @@ func (store *ProgressStore) FinishTurn(session string) error {
 		if err != nil {
 			return err
 		}
-		record.BetweenTurns = true
+		record.BetweenTurns, record.BetweenSince = true, store.checkout.now()
 		return writeRecord(project, name, record)
 	})
 }
@@ -149,24 +155,23 @@ func (store *ProgressStore) current(project *os.Root, name string) (sessionRecor
 		return record, false, err
 	}
 	record.Cursor = &end
-	record.Snapshot, _, record.Observed = store.look()
+	taken, began, err := store.look()
+	record.Snapshot, record.Observed, record.AttributedFrom = taken, err == nil, began
 	record.BetweenTurns = true
 	return record, true, nil
 }
 
-// look takes a snapshot of the checkout and reports when it began and
-// whether it could.
-func (store *ProgressStore) look() (snapshot, time.Time, bool) {
+// look takes a snapshot of the checkout and reports when it began, or why
+// it could not.
+func (store *ProgressStore) look() (snapshot, time.Time, error) {
 	began := store.checkout.now()
 	taken, err := store.sample()
-	return taken, began, err == nil
+	return taken, began, err
 }
 
 // observe returns the activities since the record's last update, in the
 // order they happened, and advances the record past them. A record that
-// started just now has seen the checkout already. When the checkout cannot
-// be read this time, the record keeps its snapshot, so a later update
-// reports the files changed meanwhile.
+// started just now has seen the checkout already.
 //
 // An update covers what happened before its sample of the checkout began.
 // Whatever a parallel tool call does while the sample runs may or may not
@@ -174,12 +179,30 @@ func (store *ProgressStore) look() (snapshot, time.Time, bool) {
 // changed then, wait for the next update; the record keeps the file's
 // earlier fingerprint, so that update finds the change again and puts both
 // in the order they happened.
+//
+// When the sample fails, the update reads nothing, so the next one orders
+// the log with the files that changed meanwhile. When it fails again, the
+// log is read without the checkout, as in a project outside a git work
+// tree, so a repository git cannot read never holds ArcLint's own work
+// back. A session that has never seen the checkout compares its first
+// sample with a clean one, so the agent's changes since the record began
+// are reported rather than taken for the starting point.
 func (store *ProgressStore) observe(project *os.Root, record *sessionRecord, started bool) ([]agent.Activity, error) {
-	var now snapshot
-	var began time.Time
-	seen := false
-	if !started {
-		now, began, seen = store.look()
+	if started {
+		logged, cursor, err := readActivities(project, *record.Cursor, time.Time{})
+		if err != nil {
+			return nil, err
+		}
+		record.Cursor = &cursor
+		return untimed(logged), nil
+	}
+	now, began, sampled := store.look()
+	// A failed sample is an outcome of the checkout, not of this update.
+	seen := sampled == nil
+	outsideGit := errors.Is(sampled, errNoGit)
+	if !seen && !outsideGit && !record.Unsampled {
+		record.Unsampled = true
+		return nil, nil
 	}
 	logged, cursor, err := readActivities(project, *record.Cursor, began)
 	if err != nil {
@@ -187,24 +210,28 @@ func (store *ProgressStore) observe(project *os.Root, record *sessionRecord, sta
 	}
 	record.Cursor = &cursor
 	timed := logged
-	if seen {
-		if record.Observed {
-			for _, file := range store.checkout.changes(record.Snapshot, now) {
-				switch {
-				case file.at.After(began):
-					if was, known := record.Snapshot[file.path]; known {
-						now[file.path] = was
-					} else {
-						delete(now, file.path)
-					}
-				case file.at.Before(record.AttributedFrom):
-				default:
-					timed = append(timed, timedActivity{activity: store.changeOf(file.path), at: file.at})
-				}
-			}
-		}
-		record.Snapshot, record.Observed, record.AttributedFrom = now, true, time.Time{}
+	if !seen {
+		return untimed(timed), nil
 	}
+	before := record.Snapshot
+	if !record.Observed {
+		before = snapshot{}
+	}
+	for _, file := range store.checkout.changes(before, now) {
+		switch {
+		case file.at.After(began):
+			if was, known := before[file.path]; known {
+				now[file.path] = was
+			} else {
+				delete(now, file.path)
+			}
+		case file.at.Before(record.AttributedFrom) && !file.at.Before(record.BetweenSince):
+		default:
+			timed = append(timed, timedActivity{activity: store.changeOf(file.path), at: file.at})
+		}
+	}
+	record.Snapshot, record.Observed, record.Unsampled = now, true, false
+	record.BetweenSince, record.AttributedFrom = time.Time{}, time.Time{}
 	return untimed(timed), nil
 }
 
