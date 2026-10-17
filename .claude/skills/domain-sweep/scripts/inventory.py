@@ -600,7 +600,7 @@ MAX_READINGS = 64
 # How many lines after it a line's readings are compared over, and how
 # many other readings are followed at once.
 SLASH_WINDOW = 30
-MAX_SHADOWS = 64
+MAX_FOLLOWED = 64
 
 
 def regex_extent(text, i):
@@ -725,66 +725,55 @@ class TypeScriptLexer:
         return len(self.stack) + (1 if self.state in ("template", "string") else 0)
 
     def sources(self, lines):
-        """Map line number to source."""
+        """Map line number to source.
+
+        One line cannot tell a misread regular expression from a division
+        before a literal that runs on; the lines after it can. So every
+        reading of an undecided slash is followed: the lexers that follow
+        them read each line in step, each one branching again at a slash it
+        cannot settle, and a line's rows are those of every reading, so a
+        wrong guess reads more lines, never fewer. Readings whose states
+        meet merge into one. Reversing one slash may reveal another
+        undecided one, so a line's readings are explored breadth first,
+        each adding one reversal of a slash it found, up to MAX_READINGS;
+        and when more than MAX_FOLLOWED readings are open, those that leave
+        the most of the next SLASH_WINDOW lines inside a literal or a
+        comment, or damaged, are dropped."""
         found = {}
-        # Lexers carrying the other readings of earlier ambiguous slashes,
-        # each read in step with this one until its state meets this one's.
-        shadows = []
+        readers = [(0, self)]  # (window cost when it branched, lexer)
         for number, text in enumerate(lines, start=1):
-            # Only a line with a slash has a decision to reverse.
-            start = self.snapshot() if "/" in text else None
-            kinds, marks, slashes, damaged = self.read(number, text, frozenset())
-            if slashes:
-                # One line cannot tell a misread regular expression from a
-                # division before a literal that runs on; the lines after
-                # it can. Carry on from the reading, the first one or one
-                # with a slash reversed, that leaves the fewest lines of the
-                # window inside a literal or a comment, or damaged; and
-                # follow every other reading in a shadow until it meets this
-                # one, keeping its rows, so a wrong choice reads more lines,
-                # never fewer.
-                # Reversing one slash may reveal another undecided one, so
-                # readings are explored breadth first, each adding one
-                # reversal of a slash it found, up to MAX_READINGS.
-                best = None
-                afters = []
-                kinds, marks = set(kinds), list(marks)
+            kinds, marks = set(), []
+            following = {}  # signature -> (cost, lexer)
+            for cost, lexer in readers:
+                # Only a line with a slash has a decision to reverse.
+                start = lexer.snapshot() if "/" in text else None
+                read = lexer.read(number, text, frozenset())
+                if not read[2]:
+                    kinds |= read[0]
+                    marks += read[1]
+                    keep(following, lexer, cost)
+                    continue
                 queue = [frozenset()]
                 explored = {frozenset()}
-                while queue and len(afters) < MAX_READINGS:
+                readings = 0
+                while queue and readings < MAX_READINGS:
                     reversed_slashes = queue.pop(0)
-                    self.restore(start)
-                    result = self.read(number, text, reversed_slashes)
+                    reading = TypeScriptLexer()
+                    reading.restore(start)
+                    result = reading.read(number, text, reversed_slashes)
+                    readings += 1
                     kinds |= result[0]
                     marks += result[1]
                     for position in result[2]:
-                        following = reversed_slashes | {position}
-                        if position not in reversed_slashes and following not in explored:
-                            explored.add(following)
-                            queue.append(following)
-                    after = self.snapshot()
-                    afters.append(after)
-                    score = self.window_cost(lines, number, result[3])
-                    if best is None or score < best[0]:
-                        best = (score, after)
-                self.restore(best[1])
-                for after in afters:
-                    if after is not best[1]:
-                        shadow = TypeScriptLexer()
-                        shadow.restore(after)
-                        if shadow.signature() != self.signature():
-                            shadows.append((number, shadow))
-                del shadows[:-MAX_SHADOWS]
-            following = []
-            for since, shadow in shadows:
-                if since < number:
-                    shadow_kinds, shadow_marks, _, _ = shadow.read(number, text, frozenset())
-                    kinds |= shadow_kinds
-                    marks += shadow_marks
-                    if shadow.signature() == self.signature():
-                        continue  # the readings have met: one lexer reads on
-                following.append((since, shadow))
-            shadows = following
+                        grown = reversed_slashes | {position}
+                        if position not in reversed_slashes and grown not in explored:
+                            explored.add(grown)
+                            queue.append(grown)
+                    after = reading.snapshot()
+                    reading_cost = reading.window_cost(lines, number, result[3])
+                    reading.restore(after)
+                    keep(following, reading, reading_cost)
+            readers = sorted(following.values(), key=lambda pair: pair[0])[:MAX_FOLLOWED]
             for line in marks:
                 found[line] = "test"
             if kinds and text.strip():
@@ -1269,6 +1258,14 @@ class TypeScriptLexer:
             token("operator", char)
 
 
+def keep(following, lexer, cost):
+    """Follow lexer on, unless one in the same state already is; of two,
+    the one whose reading cost less."""
+    signature = lexer.signature()
+    if signature not in following or cost < following[signature][0]:
+        following[signature] = (cost, lexer)
+
+
 def _literals_open(snapshot):
     return len(snapshot["stack"]) + (1 if snapshot["state"] in ("template", "string") else 0)
 
@@ -1386,6 +1383,7 @@ def python_sources(lines):
                 end = text.find("\r", i + 1)
                 if end < 0:
                     break
+                code.append("\r")  # the statement ends there too
                 i = end + 1
                 continue
             match = PY_STRING.match(text, i) if char in "'\"rRbBuUfF" else None
