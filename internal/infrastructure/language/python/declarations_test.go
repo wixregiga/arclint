@@ -163,6 +163,158 @@ func diffDecls(t *testing.T, got, want []conformance.Declaration) {
 	t.Fail()
 }
 
+// A class deriving ABC or Protocol, or naming ABCMeta as its metaclass,
+// carries the abstract mark, whether it writes the base bare, through
+// its module, or with type arguments; any other class carries none.
+func TestPythonMarksAbstractClasses(t *testing.T) {
+	src := []byte(`import abc
+import typing
+from abc import ABC, ABCMeta
+from typing import Protocol, Generic, TypeVar
+
+class Discounter(ABC):
+    pass
+
+class Pricing(abc.ABC):
+    pass
+
+class Ledger(Protocol):
+    pass
+
+class Store(Protocol[T]):
+    pass
+
+class Typed(typing.Protocol):
+    pass
+
+class Meta(Base, metaclass=ABCMeta):
+    pass
+
+class QualifiedMeta(metaclass=abc.ABCMeta):
+    pass
+
+class Concrete(Discounter):
+    pass
+
+class Plain:
+    pass
+
+class Generic2(Generic[T]):
+    pass
+
+class Wrapped((ABC)):
+    pass
+
+class WrappedMeta(metaclass=(ABCMeta)):
+    pass
+
+class WrappedProtocol(((Protocol))[T]):
+    pass
+
+class Spaced(abc . ABC):
+    pass
+
+class WrappedModule((abc).ABC):
+    pass
+
+class WrappedMetaModule(metaclass=(abc) . ABCMeta):
+    pass
+
+class Called(make_base()):
+    pass
+
+class Commented((ABC  # the abstract base
+    )):
+    pass
+
+class CommentedMeta(metaclass=(  # abstract
+    ABCMeta)):
+    pass
+`)
+	got := abstractDeclarations(src)
+	if got.ParseError != "" {
+		t.Fatal(got.ParseError)
+	}
+	abstract := map[string]bool{}
+	for _, d := range got.Decls {
+		if d.Kind != "class" {
+			t.Errorf("unexpected %s %s", d.Kind, d.Name)
+			continue
+		}
+		abstract[d.Name] = d.Abstract
+	}
+	want := map[string]bool{
+		"Discounter": true, "Pricing": true, "Ledger": true, "Store": true, "Typed": true,
+		"Meta": true, "QualifiedMeta": true,
+		"Concrete": false, "Plain": false, "Generic2": false,
+		"Wrapped": true, "WrappedMeta": true, "WrappedProtocol": true,
+		"Spaced": true, "WrappedModule": true, "WrappedMetaModule": true, "Called": false, "Commented": true, "CommentedMeta": true,
+	}
+	if !reflect.DeepEqual(abstract, want) {
+		t.Fatalf("abstract marks:\n got %v\nwant %v", abstract, want)
+	}
+}
+
+// A def or class with its own type parameters is generic; and a def in
+// the body of an elif, else, except, or finally clause, or of a loop,
+// or of a match case, is declared at the level the clause stands at.
+func TestPythonMarksGenericsAndReadsClauseBodies(t *testing.T) {
+	src := []byte(`def first[T](xs: list[T]) -> T:
+    return xs[0]
+
+class Box[T]:
+    pass
+
+def plain(x):
+    return x
+
+if FAST:
+    pass
+elif SLOW:
+    def test_elif():
+        pass
+else:
+    def test_else():
+        pass
+
+try:
+    pass
+except ImportError:
+    def test_except():
+        pass
+finally:
+    def test_finally():
+        pass
+
+for _ in range(1):
+    def test_loop():
+        pass
+
+match MODE:
+    case "fast":
+        def test_match():
+            pass
+`)
+	got := extractDeclarations(newParsers(), src)
+	if got.ParseError != "" {
+		t.Fatal(got.ParseError)
+	}
+	generic := map[string]bool{}
+	for _, d := range got.Decls {
+		if d.Owner != "" {
+			t.Errorf("%s %s is owned by %q, want module level", d.Kind, d.Name, d.Owner)
+		}
+		generic[d.Name] = d.Generic
+	}
+	want := map[string]bool{"first": true, "Box": true, "plain": false,
+		"test_elif": false, "test_else": false, "test_except": false, "test_finally": false, "test_loop": false, "test_match": false}
+	for name, g := range want {
+		if have, ok := generic[name]; !ok || have != g {
+			t.Errorf("%s generic = %v (declared %v), want %v", name, have, ok, g)
+		}
+	}
+}
+
 // TestPythonAbstractClassDeclarations marks the classes whose own
 // declaration states that they are abstract, through the module's
 // imports, and leaves every other class unmarked: a local class that

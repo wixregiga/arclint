@@ -65,10 +65,13 @@ type DeclInfo struct {
 	// Exported follows the language's own visibility convention.
 	Exported bool `json:"exported"`
 	// Abstract marks a class its own declaration states to be abstract:
-	// a TypeScript abstract class, or a Python class naming abc.ABC or
-	// typing.Protocol among its bases or abc.ABCMeta as its metaclass.
-	// An interface is abstract by its kind and does not carry it.
-	Abstract  bool `json:"abstract,omitempty"`
+	// a TypeScript abstract class, or a Python class whose bases name
+	// abc.ABC or typing.Protocol, or whose metaclass is abc.ABCMeta, as
+	// the library provides them. False for every other kind.
+	Abstract bool `json:"abstract"`
+	// Generic marks a func, method, or type that declares its own type
+	// parameters. False for every other declaration.
+	Generic   bool `json:"generic"`
 	StartLine int  `json:"startLine"`
 	EndLine   int  `json:"endLine"`
 	// Params and Results carry the syntactic signature of func and

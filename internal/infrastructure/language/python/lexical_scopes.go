@@ -589,7 +589,7 @@ func aliasValue(b *pyBinding, w *pyWalker, depth int) string {
 	}
 	right := b.node.ChildByFieldName("right", w.lang)
 	if right != nil {
-		right = unparenthesized(right, w)
+		right = w.unparenthesized(right)
 	}
 	if right == nil {
 		return ""

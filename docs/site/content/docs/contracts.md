@@ -117,9 +117,13 @@ standalone interface declared as a service", p. 14), has no body to call an
 `Assert...` method from. When the owner of an assertion is an interface or an
 abstract class (a TypeScript `abstract class`, or a Python class deriving
 `ABC` or `Protocol`, or naming `ABCMeta` as its metaclass),
-`assertion/checked-by-its-operation` asks for `verified_by` instead of the
-call, and still asks the owner to declare the operation. A concrete owner
-calls its check whether or not the assertion also names tests.
+`assertion/checked-by-its-operation` still asks the owner to declare the
+operation, and does not ask for the call. A domain service so declared is
+checked in the model when the model can state its guarantee (see
+[a domain service declared as an abstraction](#a-domain-service-declared-as-an-abstraction)),
+and otherwise by its `verified_by`; an aggregate root so declared names its
+tests under `verified_by`. A concrete owner calls its check whether or not
+the assertion also names tests.
 
 ## Rules that follow calls and field types
 
@@ -276,7 +280,8 @@ checks it, the recording never restates it as a post-condition.
 **A domain service declared as an abstraction** (an interface in Go or
 TypeScript, an abstract class in TypeScript, a class whose own bases
 name `ABC` or `Protocol` in Python) has no body for a check, so its
-guarantee is checked once, in the model, in one of two shapes:
+guarantee is checked once, in the model, in one of two shapes, or, where
+the model cannot state it, by the tests its `verified_by` names:
 
 - a function of the context spelled `Assert` followed by the key
   (`AssertNotEmpty`, `assertNotEmpty`, `assert_not_empty`);
@@ -306,9 +311,9 @@ type Encrypter interface {
 }
 ```
 
-With neither shape the finding is on the model, never a request for a
-method the interface cannot hold: `declared service Encrypter: not-empty
-has no check in context identity`. Whether each implementation of the
+With neither shape and no tests the finding is on the model, never a
+request for a method the interface cannot hold: `declared service
+Encrypter: not-empty has no check in context identity`. Whether each implementation of the
 service reaches the check is not yet observed. `arclint domain define
 assertion` prints where the guarantee it records is checked, chosen by
 how the owner is declared.

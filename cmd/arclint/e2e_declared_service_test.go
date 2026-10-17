@@ -291,14 +291,14 @@ func TestDefineAssertionSaysWhereItIsChecked(t *testing.T) {
 	define := []string{"domain", "define", "assertion", "not-empty", "--owner", "Encrypter", "--on", "Encrypt", "--statement", "An encrypted password is never empty."}
 
 	stdout := mustRunDomain(t, root, define...)
-	want := "  check: Encrypter is not declared yet. As an interface, an abstract class, an ABC, or a Protocol, it is checked in the model: the function AssertNotEmpty of context identity, or the invariant not-empty of a value object Encrypt returns. As a concrete type, it declares AssertNotEmpty, and Encrypt calls it.\n"
+	want := "  check: Encrypter is not declared yet. As an interface, an abstract class, an ABC, or a Protocol, it is checked in the model: the function AssertNotEmpty of context identity, or the invariant not-empty of a value object Encrypt returns, or else the tests named with --verified-by. As a concrete type, it declares AssertNotEmpty, and Encrypt calls it.\n"
 	if !strings.HasPrefix(stdout, "Defined assertion not-empty under Encrypter in context identity.\n") || !strings.HasSuffix(stdout, want) {
 		t.Fatalf("undeclared owner:\n got %q\nwant suffix %q", stdout, want)
 	}
 
 	write(t, root, "src/identity/encrypter.go", "package identity\n\n// Encrypter protects a password.\ntype Encrypter interface {\n\tEncrypt(plain string) (string, error)\n}\n")
 	stdout = mustRunDomain(t, root, define...)
-	if want := "Unchanged assertion not-empty under Encrypter in context identity.\n  check: Encrypter is declared as an interface, so the check is in the model: the function AssertNotEmpty of context identity, or the invariant not-empty of a value object Encrypt returns.\n"; stdout != want {
+	if want := "Unchanged assertion not-empty under Encrypter in context identity.\n  check: Encrypter is declared as an interface, so the check is in the model: the function AssertNotEmpty of context identity, or the invariant not-empty of a value object Encrypt returns, or else the tests named with --verified-by.\n"; stdout != want {
 		t.Fatalf("interface owner:\n got %q\nwant %q", stdout, want)
 	}
 	stdout = mustRunDomain(t, root, append(define, "--format", "json")...)

@@ -338,7 +338,7 @@ func observed(paths ...string) []conformance.ObservedFile {
 
 // goDecls is one parsed Go file of declarations and calls.
 func goDecls(pkg string, decls []conformance.Declaration, calls ...conformance.Call) conformance.LanguageFacts {
-	return conformance.LanguageFacts{Language: rule.LanguageGo, Package: pkg, ImportsAvailable: true, DeclarationsAvailable: true, CallsAvailable: true, FieldTypesAvailable: true, Declarations: decls, Calls: calls}
+	return conformance.LanguageFacts{Language: rule.LanguageGo, Package: pkg, DeclarationsAvailable: true, CallsAvailable: true, FieldTypesAvailable: true, Declarations: decls, Calls: calls}
 }
 
 func TestDomainRuleIsUnsupportedWhenNoFileYieldsItsFacts(t *testing.T) {

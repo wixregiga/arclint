@@ -2,7 +2,6 @@ package python
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 	"sync"
 
@@ -281,44 +280,6 @@ func (w *pyWalker) walk(n *gotreesitter.Node, owner string, inFunction bool) {
 			w.walk(n.NamedChild(i), owner, inFunction)
 		}
 	}
-}
-
-// abstractBases are the bases that declare a class abstract, and
-// abstractMetaclasses the metaclasses that do, as a class statement
-// writes them: bare as imported from abc or typing, or through the
-// module. A name imported under another spelling is not recognized.
-var (
-	abstractBases       = []string{"ABC", "abc.ABC", "Protocol", "typing.Protocol", "typing_extensions.Protocol"}
-	abstractMetaclasses = []string{"ABCMeta", "abc.ABCMeta"}
-)
-
-// abstractClass reports whether a class statement derives an abstract
-// base, with or without type arguments (Protocol[T]), or names an
-// abstract metaclass.
-func (w *pyWalker) abstractClass(n *gotreesitter.Node) bool {
-	bases := n.ChildByFieldName("superclasses", w.lang)
-	if bases == nil {
-		return false
-	}
-	for i := 0; i < bases.NamedChildCount(); i++ {
-		b := w.unparenthesized(bases.NamedChild(i))
-		switch b.Type(w.lang) {
-		case "keyword_argument":
-			key := b.ChildByFieldName("name", w.lang)
-			if key != nil && key.Text(w.src) == "metaclass" && slices.Contains(abstractMetaclasses, w.dottedName(b.ChildByFieldName("value", w.lang))) {
-				return true
-			}
-		case nodeSubscript:
-			if slices.Contains(abstractBases, w.dottedName(b.ChildByFieldName("value", w.lang))) {
-				return true
-			}
-		default:
-			if slices.Contains(abstractBases, w.dottedName(b)) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // dottedName spells a name or a chain of attributes as dots join it,

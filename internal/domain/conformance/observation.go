@@ -121,11 +121,16 @@ type Declaration struct {
 	// Exported follows the language's own visibility convention.
 	Exported bool
 	// Abstract marks a class its own declaration states to be abstract:
-	// a TypeScript abstract class, or a Python class that names abc.ABC
-	// or typing.Protocol among its bases or abc.ABCMeta as its
-	// metaclass. An interface is abstract by its kind and does not
-	// carry the mark; every other declaration leaves it false.
-	Abstract  bool
+	// a TypeScript abstract class, or a Python class whose bases name
+	// abc.ABC or typing.Protocol, or whose metaclass is abc.ABCMeta, as
+	// the library itself provides them. False for every other kind; an
+	// interface is abstract by its kind.
+	Abstract bool
+	// Generic marks a func, method, or type that declares its own type
+	// parameters: Go's func F[T any] or type List[T any], TypeScript's
+	// function f<T>() or class Box<T>, Python's def f[T]() or
+	// class Box[T]. False for every other declaration.
+	Generic   bool
 	StartLine int
 	EndLine   int
 	// Params and Results carry the syntactic signature of func and

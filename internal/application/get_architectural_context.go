@@ -325,14 +325,11 @@ func (uc GetArchitecturalContext) inspectContext(out *ArchitecturalContext, cfg 
 		return conformance.Carriers{}, nil
 	}
 	var required []rule.Fact
-	if dependencies || found {
-		// A Go test carrying an assertion takes testing's T under the
-		// name its file imports testing by.
-		required = append(required, rule.FactImports)
-	}
-	var referencesFor func(string) bool
 	if found {
+		// The carriers read imports too, so dependencies need nothing more.
 		required = append(required, carrierFacts(lang)...)
+	} else if dependencies {
+		required = append(required, rule.FactImports)
 	}
 	if len(required) == 0 {
 		return conformance.Carriers{}, nil
@@ -708,12 +705,32 @@ func unanchoredContracts(dk *DomainKnowledge, languages []rule.Language) []Unanc
 		}
 	}
 	for _, ctx := range dk.Contexts {
-		add(ctx.Name, ctx.Invariants, ctx.Assertions, ctx.Specifications)
-	}
-	for _, u := range dk.Used {
-		var specs []DomainSpecificationRef
-		if u.Specification != nil {
-			specs = append(specs, *u.Specification)
+		for _, inv := range ctx.Invariants {
+			if inv.Anchor != AnchorMissing {
+				continue
+			}
+			out = append(out, UnanchoredContract{
+				Kind: ContractInvariant, Context: ctx.Name, Owner: inv.Owner, Key: inv.Key,
+				Statement: inv.Statement, Expected: expectedInvariantCarrier(inv, languages),
+			})
+		}
+		for _, a := range ctx.Assertions {
+			if a.Anchor != AnchorMissing {
+				continue
+			}
+			out = append(out, UnanchoredContract{
+				Kind: ContractAssertion, Context: ctx.Name, Owner: a.Owner, Key: a.Key,
+				Statement: a.Statement, Expected: expectedAssertionCarrier(a.Key, a.Owner, a.OwnerConcept, a.BodilessOwner, languages),
+			})
+		}
+		for _, s := range ctx.Specifications {
+			if s.Anchor != AnchorMissing {
+				continue
+			}
+			out = append(out, UnanchoredContract{
+				Kind: ContractSpecification, Context: ctx.Name, Name: s.Name,
+				Expected: fmt.Sprintf("satisfaction method on %s", s.Name),
+			})
 		}
 		add(u.Context, u.Invariants, u.Assertions, specs)
 	}
@@ -730,9 +747,14 @@ func expectedInvariantCarrier(inv DomainInvariantRef, languages []rule.Language)
 }
 
 // expectedAssertionCarrier names what the recording says carries an
-// assertion: the checking method on its owner, or, for an owner
-// declared without a body, a test under verified_by.
-func expectedAssertionCarrier(key, owner, bodilessOwner string, languages []rule.Language) string {
+// assertion: the checking method on its owner; for a domain service
+// declared without a body, its check in the model or a test under
+// verified_by; for an aggregate root declared without one, a test.
+func expectedAssertionCarrier(key, owner string, ownerConcept vocab.Concept, bodilessOwner string, languages []rule.Language) string {
+	if bodilessOwner != "" && ownerConcept == vocab.ConceptDomainService {
+		return fmt.Sprintf("%s in the context, the invariant %s of a value object the operation returns, or a test under verified_by, since %s is declared as %s",
+			"the function "+strings.TrimPrefix(strings.TrimSuffix(expectedMethod(conformance.AssertKey(key), owner, languages), " on "+owner), "method "), key, owner, bodilessOwner)
+	}
 	if bodilessOwner != "" {
 		return fmt.Sprintf("a test under verified_by, since %s is declared as %s", owner, bodilessOwner)
 	}

@@ -67,6 +67,8 @@ var domainChecks = map[string]domainCheck{
 	"value_object/no-setters":                               {run: checkValueObjectNoSetters},
 	"invariant/enforced-at-every-mutation":                  {run: checkInvariantEnforcedAtMutation},
 	"assertion/checked-by-its-operation":                    {judge: checkAssertionChecked},
+	"invariant/verifying-tests-declared":                    {judge: checkInvariantTestsDeclared, readsTests: true},
+	"assertion/verifying-tests-declared":                    {judge: checkAssertionTestsDeclared, readsTests: true},
 	"specification/satisfaction-method":                     {run: checkSpecificationSatisfaction},
 	"aggregate/protects-an-invariant":                       {run: checkAggregateProtectsInvariant},
 	"aggregate/root-declared":                               {run: checkAggregateRootDeclared},
@@ -1405,10 +1407,12 @@ func checkInvariantEnforcedAtMutation(r rule.Rule, subject rule.Subject, cc cont
 
 // checkAssertionChecked judges every recorded assertion against its
 // owner: an aggregate's root or a concrete domain service declares the
-// operation and the checking method, and the operation calls the check;
-// a domain service declared as an abstraction has the check in the
-// model instead. An owner whose type is not located is left to
-// aggregate/root-declared or domain_service/declared.
+// operation and the checking method, and the operation calls the check.
+// A domain service declared as an interface or an abstract class has no
+// body to call a check from, so its guarantee is checked in the model,
+// or else by the tests its verified_by names; an aggregate root so
+// declared names the tests. An owner whose type is not located is left
+// to aggregate/root-declared or domain_service/declared.
 func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ domainCode) ([]Violation, []string, error) {
 	var vs []Violation
 	var unresolved []string
@@ -1432,10 +1436,10 @@ func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ 
 		}
 		decl := loc.decl()
 		owner := assertionOwner{
-			label: "service " + s.Name, holder: "the service", decl: decl, idx: cc.unitIdx(decl),
+			label: "service " + s.Name, holder: "the service", context: cc.ctx.Name, decl: decl, idx: cc.unitIdx(decl),
 			decision: vocab.DecideThenCarryOut(),
 		}
-		if !declaredAbstraction(decl) {
+		if bodiless(decl.decl) == "" {
 			more, err := assertionsChecked(r, subject, owner, s.Assertions)
 			if err != nil {
 				return nil, nil, err
@@ -1453,24 +1457,17 @@ func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ 
 	return vs, unresolved, nil
 }
 
-// declaredAbstraction reports a type declared as an abstraction that
-// implementations complete: an interface, or a class its own
-// declaration states to be abstract (a TypeScript abstract class, a
-// Python ABC or Protocol). Its operations have no body a check could be
-// called from.
-func declaredAbstraction(d locDecl) bool {
-	return d.decl.Kind == declKindInterface || d.decl.Kind == declKindClass && d.decl.Abstract
-}
-
 // declaredServiceChecked judges the assertions of a domain service
 // declared as an abstraction. The service declares the operation each
 // assertion names, and the guarantee is checked once, in the model: by
 // a function of the context spelled assert followed by the key, or by
 // the value object the operation returns when that value records an
-// invariant of the same key. A guarantee with neither is a finding on
-// the model, never a request for a method the abstraction cannot hold;
-// a result the language's resolution cannot follow leaves it
-// undetermined, with the reason.
+// invariant of the same key. What the model does not state is verified
+// by the tests the assertion's verified_by names, whose existence
+// assertion/verifying-tests-declared judges. A guarantee with none of
+// the three is a finding on the model, never a request for a method the
+// abstraction cannot hold; a result the language's resolution cannot
+// follow leaves it undetermined, with the reason.
 func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, owner assertionOwner, assertions []vocab.Assertion) ([]Violation, []string, error) {
 	var vs []Violation
 	var unresolved []string
@@ -1497,7 +1494,7 @@ func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, o
 		if err != nil {
 			return nil, nil, err
 		}
-		if check.found {
+		if check.found || len(as.VerifiedBy) > 0 {
 			continue
 		}
 		if check.unresolved != "" {
@@ -1514,7 +1511,8 @@ func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, o
 		}
 		v, err := newViolation(r, subject, service.file.path, service.decl.StartLine,
 			fmt.Sprintf("declared service %s: %s has no check in context %s", service.decl.Name, as.Key, cc.ctx.Name),
-			owner.remediation(fmt.Sprintf("declare the function %s there, or return from %s a value whose invariant %s enforces it", fn, on, as.Key)))
+			owner.remediation(fmt.Sprintf("declare the function %s there, return from %s a value whose invariant %s enforces it, or write a test of %s that checks it and record it: arclint domain define assertion %s --context %s --verified-by <test file>:<test name>",
+				fn, on, as.Key, on, as.Key, owner.context)))
 		if err != nil {
 			return nil, nil, err
 		}

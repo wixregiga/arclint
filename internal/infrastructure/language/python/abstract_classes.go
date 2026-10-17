@@ -70,10 +70,10 @@ func declaresAbstract(df *declarationFacts, c *pyClass, from importOrigin, dir s
 		return false
 	}
 	names := func(n *gotreesitter.Node) string {
-		n = unparenthesized(n, w)
+		n = w.unparenthesized(n)
 		if n.Type(w.lang) == nodeSubscript {
 			if value := n.ChildByFieldName("value", w.lang); value != nil {
-				n = unparenthesized(value, w)
+				n = w.unparenthesized(value)
 			}
 		}
 		switch n.Type(w.lang) {
@@ -81,7 +81,7 @@ func declaresAbstract(df *declarationFacts, c *pyClass, from importOrigin, dir s
 		default:
 			return ""
 		}
-		chain := libraryChain(qualifiedTarget(c.header, n.Text(w.src), w, 0), from, dir)
+		chain := libraryChain(qualifiedTarget(c.header, w.dottedName(n), w, 0), from, dir)
 		if len(chain) == 0 {
 			return ""
 		}
@@ -183,13 +183,4 @@ func splitPoints(q string, lead int) []int {
 		out = append(out, lead-1)
 	}
 	return out
-}
-
-// unparenthesized strips the parentheses around an expression: (ABC) is
-// ABC.
-func unparenthesized(n *gotreesitter.Node, w *pyWalker) *gotreesitter.Node {
-	for n.Type(w.lang) == "parenthesized_expression" && n.NamedChildCount() == 1 {
-		n = n.NamedChild(0)
-	}
-	return n
 }

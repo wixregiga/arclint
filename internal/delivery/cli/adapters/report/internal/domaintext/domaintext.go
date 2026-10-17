@@ -740,7 +740,7 @@ func checkLine(h conformance.AssertionHome, result application.DomainDefineResul
 	if check == "" {
 		check = conformance.AssertKey(result.Name) + " (spelled in the language's method case)"
 	}
-	inModel := fmt.Sprintf("the function %s of context %s, or the invariant %s of a value object %s returns", check, result.Context, result.Name, h.Operation)
+	inModel := fmt.Sprintf("the function %s of context %s, or the invariant %s of a value object %s returns, or else the tests named with --verified-by", check, result.Context, result.Name, h.Operation)
 	switch h.Home {
 	case conformance.CheckHomeRoot:
 		return fmt.Sprintf("the root of %s declares %s, and %s calls it.", result.Owner, check, h.Operation)
