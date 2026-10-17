@@ -660,7 +660,7 @@ class TypeScriptLexer:
             # Only a line with a slash has a decision to reverse.
             start = self.snapshot() if "/" in text else None
             kinds, marks, slashes, damaged = self.read(number, text, frozenset())
-            if slashes and (damaged or self.literals_open() > _literals_open(start)):
+            if slashes:
                 # One line cannot tell a misread regular expression from a
                 # division before a literal that runs on; the lines after
                 # it can. Keep the reading, the first one or one with a
@@ -1299,13 +1299,17 @@ def python_sources(lines):
         while stack and stack[-1][0] in ("string", "fstring") and len(stack[-1][1]) == 1 and not continued:
             stack.pop()
         line_code = "".join(code)
-        brackets = max(0, brackets + sum(line_code.count(c) for c in PY_OPEN) - sum(line_code.count(c) for c in PY_CLOSE))
-        explicit = not stack and line_code.rstrip().endswith("\\")
-        joined.append(line_code.rstrip()[:-1] if explicit else line_code)
-        joined_start = joined_start or number
-        if not (explicit or stack or brackets):
-            # The statement ends with this line: a backslash, an open
-            # literal or an open bracket would carry it on.
+        # A lone carriage return in code ends a Python line too, so one Git
+        # line may hold several; only the last can run on into a literal.
+        pieces = line_code.split("\r")
+        for index, piece in enumerate(pieces):
+            last = index == len(pieces) - 1
+            brackets = max(0, brackets + sum(piece.count(c) for c in PY_OPEN) - sum(piece.count(c) for c in PY_CLOSE))
+            explicit = not (last and stack) and piece.rstrip().endswith("\\")
+            joined.append(piece.rstrip()[:-1] if explicit else piece)
+            joined_start = joined_start or number
+            if explicit or (last and stack) or brackets:
+                continue  # a backslash, an open literal or an open bracket carries the statement on
             if py_test_declaration(" ".join(joined)):
                 if joined_start != number:
                     found[joined_start] = "test"
