@@ -197,8 +197,8 @@ func TestExtensionNearItsTimeLimitIsReported(t *testing.T) {
 			t.Errorf("note = %s %q, remediation %q\nwant %q, remediation %q", d.Kind(), d.Message(), d.Remediation(), want, tc.remediation)
 		}
 		near, _ := d.NearTimeLimit()
-		if wantNear := (conformance.NearLimit{Extension: "forbid-content", Source: ".arclint/extensions/forbid.ts", Limit: 4 * time.Second, Elapsed: tc.elapsed}); near != wantNear {
-			t.Errorf("near = %+v, want %+v", near, wantNear)
+		if near.Extension() != "forbid-content" || near.Source() != ".arclint/extensions/forbid.ts" || near.Limit() != 4*time.Second || near.Elapsed() != tc.elapsed {
+			t.Errorf("near = %s %s %s %s", near.Extension(), near.Source(), near.Limit(), near.Elapsed())
 		}
 		if wantPattern := map[bool]string{true: "t/p@1.0.0", false: ""}[tc.provenance != nil]; d.Pattern() != wantPattern {
 			t.Errorf("pattern = %q, want %q", d.Pattern(), wantPattern)
@@ -209,27 +209,39 @@ func TestExtensionNearItsTimeLimitIsReported(t *testing.T) {
 	}
 }
 
-// A near-limit note without its Extension's source, or under half the
-// limit, is not constructed.
-func TestNearTimeLimitNeedsItsCircumstances(t *testing.T) {
-	valid := conformance.NearLimit{Extension: "slow", Source: "a.ts", Limit: 4 * time.Second, Elapsed: 3 * time.Second}
-	if _, err := conformance.NewNearTimeLimit("src/slow", "", valid); err != nil {
-		t.Fatalf("valid note: %v", err)
+// A NearLimit names its Extension and source and ran past half its
+// limit; anything less is not constructed, and the note needs both a
+// Rule and a NearLimit.
+func TestNearLimitNeedsItsCircumstances(t *testing.T) {
+	valid := conformance.NearLimitSpec{Extension: "slow", Source: "a.ts", Limit: 4 * time.Second, Elapsed: 3 * time.Second}
+	near, err := conformance.NewNearLimit(valid)
+	if err != nil {
+		t.Fatalf("valid near limit: %v", err)
 	}
-	for name, change := range map[string]func(*conformance.NearLimit){
-		"no extension": func(n *conformance.NearLimit) { n.Extension = " " },
-		"no source":    func(n *conformance.NearLimit) { n.Source = "" },
-		"no limit":     func(n *conformance.NearLimit) { n.Limit = 0 },
-		"exactly half": func(n *conformance.NearLimit) { n.Elapsed = 2 * time.Second },
+	same, err := conformance.NewNearLimit(valid)
+	if err != nil || same != near {
+		t.Fatalf("two NearLimits with the same values differ: %v", err)
+	}
+	for name, change := range map[string]func(*conformance.NearLimitSpec){
+		"no extension": func(n *conformance.NearLimitSpec) { n.Extension = " " },
+		"no source":    func(n *conformance.NearLimitSpec) { n.Source = "" },
+		"no limit":     func(n *conformance.NearLimitSpec) { n.Limit = 0 },
+		"exactly half": func(n *conformance.NearLimitSpec) { n.Elapsed = 2 * time.Second },
 	} {
-		near := valid
-		change(&near)
-		if _, err := conformance.NewNearTimeLimit("src/slow", "", near); err == nil {
+		spec := valid
+		change(&spec)
+		if _, err := conformance.NewNearLimit(spec); err == nil {
 			t.Errorf("%s: accepted", name)
 		}
 	}
-	if _, err := conformance.NewNearTimeLimit(" ", "", valid); err == nil {
+	if _, err := conformance.NewNearTimeLimit("src/slow", "", near); err != nil {
+		t.Fatalf("valid note: %v", err)
+	}
+	if _, err := conformance.NewNearTimeLimit(" ", "", near); err == nil {
 		t.Error("no rule: accepted")
+	}
+	if _, err := conformance.NewNearTimeLimit("src/slow", "", conformance.NearLimit{}); err == nil {
+		t.Error("no near limit: accepted")
 	}
 }
 

@@ -152,7 +152,7 @@ func nearLimitDocOf(d conformance.Diagnostic) *nearLimitDoc {
 	if !ok {
 		return nil
 	}
-	return &nearLimitDoc{Extension: near.Extension, Source: near.Source, LimitMs: near.Limit.Milliseconds(), ElapsedMs: near.Elapsed.Round(time.Millisecond).Milliseconds()}
+	return &nearLimitDoc{Extension: near.Extension(), Source: near.Source(), LimitMs: near.Limit().Milliseconds(), ElapsedMs: near.Elapsed().Round(time.Millisecond).Milliseconds()}
 }
 
 // notEvaluatedDoc states the circumstances of a Rule its Extension

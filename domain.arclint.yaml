@@ -500,6 +500,20 @@ contexts:
           measures-its-run: >-
             ExtensionFailure always states how long its Extension ran before it
             stopped, beside the time limit in force.
+      NearLimit:
+        definition: >-
+          An Extension Rule's check that finished after more than half its
+          TimeLimit; a run twice as slow would stop it. It is reported as
+          coverage with its remedy: raise the TimeLimit where it is set, or
+          reduce the work.
+        invariants:
+          past-half-its-limit: >-
+            A NearLimit is a check that ran longer than half its TimeLimit; a
+            check that used half its TimeLimit or less is never near it.
+          names-its-extension: >-
+            A NearLimit always names the Extension that ran the check and the
+            Extension's source file, beside the TimeLimit in force and how long
+            the check ran.
   distribution:
     definition: >-
       Moving published Patterns between repositories without changing them: what

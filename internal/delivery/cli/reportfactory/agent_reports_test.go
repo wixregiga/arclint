@@ -198,9 +198,13 @@ func TestCheckRemediationAcrossRenderers(t *testing.T) {
 // The near-limit note carries its numbers and its remediation as fields
 // in JSON, and prints the remediation under the coverage line.
 func TestNearTimeLimitAcrossRenderers(t *testing.T) {
-	near, err := conformance.NewNearTimeLimit("src/slow", "", conformance.NearLimit{
+	note, err := conformance.NewNearLimit(conformance.NearLimitSpec{
 		Extension: "slow", Source: ".arclint/extensions/slow.ts", Limit: 5 * time.Second, Elapsed: 3241*time.Millisecond + 600*time.Microsecond,
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	near, err := conformance.NewNearTimeLimit("src/slow", "", note)
 	if err != nil {
 		t.Fatal(err)
 	}
