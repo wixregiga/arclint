@@ -109,6 +109,7 @@ func TestDomainCommandFamily(t *testing.T) {
 	t.Run("builtInRules", testDomainBuiltInRules)
 	t.Run("serviceContract", testDomainServiceContract)
 	t.Run("interfaceServiceVerifiedByTests", testDomainInterfaceServiceVerifiedByTests)
+	t.Run("verifiedByExcludedTests", testDomainVerifiedByExcludedTests)
 	t.Run("context", testDomainContext)
 	t.Run("ambiguity", testDomainAmbiguity)
 }
@@ -1573,5 +1574,79 @@ func testDomainInterfaceServiceVerifiedByTests(t *testing.T) {
 	if len(d) != 1 || d[0].RuleID != "assertion/verifying-tests-declared" || d[0].Path != "domain.arclint.yaml" ||
 		!strings.Contains(d[0].Message, "declares no test TestDiscountNeverExceedsTotal") {
 		t.Fatalf("renamed test: %+v", d)
+	}
+}
+
+// excludedTestsRules keeps every Go test file out of rule evaluation,
+// as projects whose layering and content rules must not judge tests do.
+const excludedTestsRules = `runtime: [go]
+scan:
+  exclude: ["**/*_test.go"]
+zones:
+  src:
+    paths: ["src/**"]
+rules:
+  no-panic:
+    rationale: "Source never panics."
+    on: src
+    content:
+      forbid: '\bpanic\('
+`
+
+// testDomainVerifiedByExcludedTests holds an interface's assertion to a
+// test in a file scan.exclude leaves out (issue #173): the check reads
+// the file because verified_by names it, conforms while the test is
+// declared, and reports a renamed one with why it read the file, while
+// the content rule never judges the excluded file.
+func testDomainVerifiedByExcludedTests(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "rules.arclint.yaml", excludedTestsRules)
+	write(t, root, "go.mod", "module example.com/shop\n\ngo 1.22\n")
+	write(t, root, "src/pricing/discounter.go", discounterInterface)
+	test := "package pricing\n\nimport \"testing\"\n\nfunc TestDiscountNeverExceedsTotal(t *testing.T) { panic(\"never called\") }\n"
+	write(t, root, "src/pricing/discounter_test.go", test)
+	for _, args := range [][]string{
+		{"domain", "define", "bounded_context", "pricing", "--definition", "Pricing orders."},
+		{"domain", "define", "domain_service", "Discounter", "--definition", "Takes a discount off an order's total."},
+		{"domain", "define", "assertion", "never-exceeds-total", "--owner", "Discounter", "--on", "Discount",
+			"--statement", "A discount never exceeds the order total.",
+			"--verified-by", "src/pricing/discounter_test.go:TestDiscountNeverExceedsTotal"},
+	} {
+		if out := mustRunDomain(t, root, args...); !strings.HasPrefix(out, "Defined ") {
+			t.Fatalf("%v: got %q", args, out)
+		}
+	}
+	check := func(wantCode int) []diagnosticDoc {
+		t.Helper()
+		stdout, stderr, code := runBin(t, root, os.Environ(), "check", "--format", "json")
+		if code != wantCode {
+			t.Fatalf("check: exit %d, want %d\nstdout: %s\nstderr: %s", code, wantCode, stdout, stderr)
+		}
+		var diagnostics []diagnosticDoc
+		if err := json.Unmarshal([]byte(stdout), &diagnostics); err != nil {
+			t.Fatalf("check json: %v\n%s", err, stdout)
+		}
+		var out []diagnosticDoc
+		for _, d := range diagnostics {
+			if d.Kind == "violation" {
+				out = append(out, d)
+			}
+		}
+		return out
+	}
+
+	if d := check(0); len(d) != 0 {
+		t.Fatalf("an existing test in an excluded file: %+v", d)
+	}
+	out := mustRunDomain(t, root, "domain", "show", "assertion", "never-exceeds-total")
+	if !strings.Contains(out, "Enforced at: src/pricing/discounter_test.go:5\nStatus: conforms\n") {
+		t.Fatalf("show does not find the test in the excluded file:\n%s", out)
+	}
+
+	write(t, root, "src/pricing/discounter_test.go", strings.Replace(test, "TestDiscountNeverExceedsTotal", "TestDiscountCapped", 1))
+	d := check(1)
+	if len(d) != 1 || d[0].RuleID != "assertion/verifying-tests-declared" ||
+		!strings.Contains(d[0].Message, "declares no test TestDiscountNeverExceedsTotal; read because verified_by names it; scan.exclude keeps it out of rule evaluation") {
+		t.Fatalf("a renamed test in an excluded file: %+v", d)
 	}
 }

@@ -16,9 +16,11 @@ import (
 // parser technology. referencesFor, when not nil, selects the files
 // the reference facts (calls, resolved calls, field types) are needed
 // for; a language holding none of them may be observed without them.
-// Nil needs them for every file.
+// Nil needs them for every file. namedTests are the test files the
+// domain recording names under verified_by, read even when the scan
+// leaves them out.
 type ObservationSource interface {
-	Observe(languages []rule.Language, scan rule.Scan, facts []rule.Fact, referencesFor func(path string) bool) (conformance.Observations, error)
+	Observe(languages []rule.Language, scan rule.Scan, facts []rule.Fact, referencesFor func(path string) bool, namedTests []string) (conformance.Observations, error)
 }
 
 // BaselineSource loads the repository's committed Baseline. Absence is
@@ -90,10 +92,6 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 			return conformance.Assessment{}, err
 		}
 	}
-	observations, err := uc.observations.Observe(cfg.Languages, cfg.Scan, requiredFacts(rules), nil)
-	if err != nil {
-		return conformance.Assessment{}, fmt.Errorf("observe repository: %w", err)
-	}
 	// Missing domain model is an empty Ubiquitous Language; load
 	// failure is a configuration error, same class as an unreadable
 	// rules.arclint.yaml.
@@ -103,6 +101,12 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 	}
 	if !found {
 		knowledge = vocab.UbiquitousLanguage{Recording: uc.knowledge.Recording()}
+	}
+	// The language names the test files its verified_by entries ask to
+	// be read, whatever the scan leaves out.
+	observations, err := uc.observations.Observe(cfg.Languages, cfg.Scan, requiredFacts(rules), nil, knowledge.VerifyingTestPaths())
+	if err != nil {
+		return conformance.Assessment{}, fmt.Errorf("observe repository: %w", err)
 	}
 	assessment, err := conformance.Run(conformance.Request{
 		Rules:          rules,

@@ -61,46 +61,88 @@ func checkAssertionTestsDeclared(r rule.Rule, subject rule.Subject, cc contextCo
 // such as test("..."), so its name written in the file is all the check
 // can read.
 func (code domainCode) judgeVerifyingTest(r rule.Rule, subject rule.Subject, recording string, line int, what, entry string) ([]Violation, string, error) {
-	finding := func(message, remediation string) ([]Violation, string, error) {
+	finding := func(message, remediation string) ([]Violation, error) {
 		v, err := newViolation(r, subject, recording, line, what+": "+message, remediation)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
-		return []Violation{v}, "", nil
+		return []Violation{v}, nil
 	}
 	t, err := vocab.ParseVerifyingTest(entry)
 	if err != nil {
-		return finding("verified_by "+err.Error(), "spell the test as its file's path from the repository root, a colon, and the test's name")
+		return judged(finding("verified_by "+err.Error(), "spell the test as its file's path from the repository root, a colon, and the test's name"))
 	}
-	if !code.facts.observed(t.Path) {
-		if code.facts.held(t.Path) {
-			return nil, fmt.Sprintf("%s: the scan does not observe %s; scan.exclude, a testdata directory, or a directory arclint never walks leaves it out", t, t.Path), nil
+	file, gap, exists := code.testFileOf(t)
+	switch {
+	case !exists:
+		return judged(finding(fmt.Sprintf("verified_by names %s, but no file %s is in the repository", t, t.Path),
+			fmt.Sprintf("name the test's file by its path from the repository root, or remove %s from verified_by", t)))
+	case gap != "":
+		return nil, gap, nil
+	}
+	missing := func(message, remediation string) ([]Violation, error) {
+		if file.named {
+			message += "; " + namedTestRead
 		}
-		return finding(fmt.Sprintf("verified_by names %s, but no file %s is in the repository", t, t.Path),
-			fmt.Sprintf("name the test's file by its path from the repository root, or remove %s from verified_by", t))
-	}
-	if !code.facts.Contains(t.Path) {
-		return nil, fmt.Sprintf("%s: the file is outside this rule's scope", t), nil
+		return finding(message, remediation)
 	}
 	switch rule.LanguageOf(t.Path) {
 	case rule.LanguageGo:
-		return code.judgeDeclaredTest(t, finding, goTestDeclared, "func "+t.Name+"(t *testing.T)")
+		return judgeDeclaredTest(t, file, missing, goTestDeclared, "func "+t.Name+"(t *testing.T)")
 	case rule.LanguagePython:
-		return code.judgeDeclaredTest(t, finding, pythonTestDeclared, pythonTestSpelling(t.Name))
+		return judgeDeclaredTest(t, file, missing, pythonTestDeclared, pythonTestSpelling(t.Name))
 	case rule.LanguageTypeScript:
-		content, err := code.facts.Read(t.Path)
+		content, err := file.read()
 		if err != nil {
 			return nil, fmt.Sprintf("%s: %v", t, err), nil
 		}
 		if strings.Contains(content, t.Name) {
 			return nil, "", nil
 		}
-		return finding(fmt.Sprintf("verified_by names %s, but the name %q is not written in %s", t, t.Name, t.Path),
-			fmt.Sprintf("name the test as its test() or it() call in %s spells it, or remove %s from verified_by", t.Path, t))
+		return judged(missing(fmt.Sprintf("verified_by names %s, but the name %q is not written in %s", t, t.Name, t.Path),
+			fmt.Sprintf("name the test as its test() or it() call in %s spells it, or remove %s from verified_by", t.Path, t)))
 	default:
-		return finding(fmt.Sprintf("verified_by names %s, which is not a Go, Python or TypeScript file", t),
-			"name a test in a .go, .py, .ts or .tsx file")
+		return judged(finding(fmt.Sprintf("verified_by names %s, which is not a Go, Python or TypeScript file", t),
+			"name a test in a .go, .py, .ts or .tsx file"))
 	}
+}
+
+// judged is a judgment of a test that left nothing undetermined.
+func judged(vs []Violation, err error) ([]Violation, string, error) { return vs, "", err }
+
+// namedTestRead says why the check read a file the scan leaves out.
+const namedTestRead = "read because verified_by names it; scan.exclude keeps it out of rule evaluation"
+
+// testFile is what the check reads of the file a test names: an
+// observed file the Rule selects, or one the walk left out that the
+// recording names, which named marks.
+type testFile struct {
+	facts LanguageFacts
+	read  func() (string, error)
+	named bool
+}
+
+// testFileOf finds the file a test names. exists is false when the
+// repository holds no such file; gap says why a file that exists
+// cannot be read for the test.
+func (code domainCode) testFileOf(t vocab.VerifyingTest) (file testFile, gap string, exists bool) {
+	if code.facts.observed(t.Path) {
+		if !code.facts.Contains(t.Path) {
+			return testFile{}, fmt.Sprintf("%s: the file is outside this rule's scope", t), true
+		}
+		facts, _ := code.facts.FactsFor(t.Path)
+		return testFile{facts: facts, read: func() (string, error) { return code.facts.Read(t.Path) }}, "", true
+	}
+	if facts, present, readable := code.facts.namedTest(t.Path); present {
+		if !readable {
+			return testFile{}, fmt.Sprintf("%s: the file is outside this rule's scope", t), true
+		}
+		return testFile{facts: facts, read: func() (string, error) { return code.facts.readNamedTest(t.Path) }, named: true}, "", true
+	}
+	if code.facts.held(t.Path) {
+		return testFile{}, fmt.Sprintf("%s: the scan does not observe %s, and the file was not read for verified_by", t, t.Path), true
+	}
+	return testFile{}, "", false
 }
 
 // testDeclared finds the declaration of a test in a file's facts, and
@@ -110,12 +152,11 @@ type testDeclared func(t vocab.VerifyingTest, facts LanguageFacts) (Declaration,
 
 // judgeDeclaredTest judges a test of a language whose facts carry
 // declarations. spelling is the declaration a remedy asks for.
-func (code domainCode) judgeDeclaredTest(t vocab.VerifyingTest, finding func(string, string) ([]Violation, string, error), declared testDeclared, spelling string) ([]Violation, string, error) {
-	facts, _ := code.facts.FactsFor(t.Path)
-	if gap := readableTests(t, facts); gap != "" {
+func judgeDeclaredTest(t vocab.VerifyingTest, file testFile, finding func(string, string) ([]Violation, error), declared testDeclared, spelling string) ([]Violation, string, error) {
+	if gap := readableTests(t, file.facts); gap != "" {
 		return nil, gap, nil
 	}
-	_, ok, instead := declared(t, facts)
+	_, ok, instead := declared(t, file.facts)
 	if ok {
 		return nil, "", nil
 	}
@@ -123,7 +164,7 @@ func (code domainCode) judgeDeclaredTest(t vocab.VerifyingTest, finding func(str
 	if instead != "" {
 		message += "; " + instead
 	}
-	return finding(message, fmt.Sprintf("declare %s in %s, or name the test that verifies the statement in verified_by", spelling, t.Path))
+	return judged(finding(message, fmt.Sprintf("declare %s in %s, or name the test that verifies the statement in verified_by", spelling, t.Path)))
 }
 
 // readableTests says why a file's facts cannot tell whether it declares
@@ -147,7 +188,11 @@ func readableTests(t vocab.VerifyingTest, facts LanguageFacts) string {
 // test is not found or its file cannot be read.
 func (code domainCode) verifyingTestCarrier(entry string) (Carrier, bool) {
 	t, err := vocab.ParseVerifyingTest(entry)
-	if err != nil || !code.facts.Contains(t.Path) {
+	if err != nil {
+		return Carrier{}, false
+	}
+	file, gap, exists := code.testFileOf(t)
+	if !exists || gap != "" {
 		return Carrier{}, false
 	}
 	var declared testDeclared
@@ -157,7 +202,7 @@ func (code domainCode) verifyingTestCarrier(entry string) (Carrier, bool) {
 	case rule.LanguagePython:
 		declared = pythonTestDeclared
 	case rule.LanguageTypeScript:
-		content, err := code.facts.Read(t.Path)
+		content, err := file.read()
 		if err != nil {
 			return Carrier{}, false
 		}
@@ -169,11 +214,10 @@ func (code domainCode) verifyingTestCarrier(entry string) (Carrier, bool) {
 	default:
 		return Carrier{}, false
 	}
-	facts, _ := code.facts.FactsFor(t.Path)
-	if readableTests(t, facts) != "" {
+	if readableTests(t, file.facts) != "" {
 		return Carrier{}, false
 	}
-	d, ok, _ := declared(t, facts)
+	d, ok, _ := declared(t, file.facts)
 	if !ok {
 		return Carrier{}, false
 	}

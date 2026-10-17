@@ -440,3 +440,134 @@ func TestCoverageLocatesTheTestCarrierWithoutTheTestsRule(t *testing.T) {
 		t.Errorf("carrier %+v %v, want the Go test", at, located)
 	}
 }
+
+// runNamed runs Rules over observations whose named test files the walk
+// left out, as the repository reader supplies them.
+func runNamed(t *testing.T, rules []rule.Rule, files []conformance.ObservedFile, facts, named map[string]conformance.LanguageFacts, content map[string]string, knowledge vocab.UbiquitousLanguage) conformance.Assessment {
+	t.Helper()
+	obs, err := conformance.NewObservations(files, facts)
+	if err != nil {
+		t.Fatalf("NewObservations: %v", err)
+	}
+	if obs, err = obs.WithNamedTests(named); err != nil {
+		t.Fatalf("WithNamedTests: %v", err)
+	}
+	a, err := conformance.Run(conformance.Request{
+		Rules:          rules,
+		Observations:   obs.WithContent(conformance.NewMapContent(content)),
+		UnknownImports: rule.UnknownImportsWarn,
+		Knowledge:      knowledge,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	return a
+}
+
+// A test file scan.exclude leaves out is read because verified_by names
+// it: the test it declares conforms, a renamed one is a finding that
+// says why the file was read, and a file Exclusion of the Rule still
+// keeps the file unread. In TypeScript its text is read the same way.
+// A file no language reads leaves the test undetermined, and a file the
+// repository does not hold stays a finding.
+func TestVerifyingTestsReadNamedFilesTheScanLeavesOut(t *testing.T) {
+	id := "assertion/verifying-tests-declared"
+	r := builtInRule(t, id)
+	goFile, goTest, tsTest, pyTest := "internal/pricing/discounter.go", "internal/pricing/discounter_test.go", "src/pricing/discounter.test.ts", "tests/test_discounter.py"
+	files := observed(goFile)
+	facts := map[string]conformance.LanguageFacts{goFile: goDecls("pricing", nil)}
+	testFacts := goTestFile("pricing", "", []conformance.Declaration{
+		{Kind: "func", Name: "TestDiscountNeverExceedsTotal", Exported: true, StartLine: 5, Params: []conformance.DeclarationParam{{Name: "t", Type: "*testing.T"}}},
+	})
+	testFacts.Calls, testFacts.CallsAvailable, testFacts.FieldTypesAvailable = nil, false, false
+	named := map[string]conformance.LanguageFacts{goTest: testFacts, tsTest: {}, pyTest: {}}
+	content := map[string]string{tsTest: `test("caps the discount", () => {});`, pyTest: "def test_caps():\n    pass\n"}
+	judge := func(r rule.Rule, tests ...string) (conformance.Outcome, []string) {
+		a := runNamed(t, []rule.Rule{r}, files, facts, named, content, discounterContext(t, tests...))
+		return outcomesOf(a)[id+"|context:pricing"], messagesOf(a)
+	}
+
+	for _, c := range []struct {
+		tests []string
+		want  conformance.Outcome
+		says  string
+	}{
+		{[]string{goTest + ":TestDiscountNeverExceedsTotal"}, conformance.OutcomeConforms, ""},
+		{[]string{tsTest + ":caps the discount"}, conformance.OutcomeConforms, ""},
+		{[]string{goTest + ":TestRenamed"}, conformance.OutcomeViolates, "declares no test TestRenamed; read because verified_by names it; scan.exclude keeps it out of rule evaluation"},
+		{[]string{tsTest + ":rounds down"}, conformance.OutcomeViolates, "read because verified_by names it"},
+		{[]string{pyTest + ":test_caps"}, conformance.OutcomeUndetermined, ""},
+		{[]string{"internal/pricing/gone_test.go:TestA"}, conformance.OutcomeViolates, "no file internal/pricing/gone_test.go is in the repository"},
+	} {
+		outcome, got := judge(r, c.tests...)
+		if outcome != c.want || (c.says != "" && (len(got) != 1 || !strings.Contains(got[0], c.says))) {
+			t.Errorf("%v: outcome %s, %q; want %s saying %q", c.tests, outcome, got, c.want, c.says)
+		}
+	}
+
+	glob, err := rule.NewGlob("**/*_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	exclusion, err := rule.NewExclusion([]rule.Glob{glob}, nil, "tests are not judged")
+	if err != nil {
+		t.Fatal(err)
+	}
+	excluded, err := r.Exclude(exclusion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome, got := judge(excluded, goTest+":TestRenamed"); outcome != conformance.OutcomeUndetermined || len(got) != 0 {
+		t.Errorf("a file Exclusion of the Rule: outcome %s, %q; want undetermined", outcome, got)
+	}
+}
+
+// A named test file is no observed file: no Rule's Facts list it or
+// lend its declarations, no Zone holds it, and a check reading every
+// file never sees it, while the carrier of an interface's assertion is
+// still found there.
+func TestNamedTestFilesStayOutOfEveryOtherRule(t *testing.T) {
+	goFile, goTest := "internal/pricing/discounter.go", "internal/pricing/discounter_test.go"
+	facts := map[string]conformance.LanguageFacts{goFile: goDecls("pricing", []conformance.Declaration{
+		{Kind: "interface", Name: "Discounter", Exported: true, StartLine: 3},
+		{Kind: "method", Name: "Discount", Owner: "Discounter", Exported: true, StartLine: 4},
+	})}
+	testFacts := goTestFile("pricing", "", []conformance.Declaration{
+		{Kind: "func", Name: "TestDiscountNeverExceedsTotal", Exported: true, StartLine: 5, Params: []conformance.DeclarationParam{{Name: "t", Type: "*testing.T"}}},
+		{Kind: "struct", Name: "Discounter", Exported: true, StartLine: 9},
+	})
+	testFacts.Calls, testFacts.CallsAvailable, testFacts.FieldTypesAvailable = nil, false, false
+	obs, err := conformance.NewObservations(observed(goFile), facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if obs, err = obs.WithNamedTests(map[string]conformance.LanguageFacts{goTest: testFacts}); err != nil {
+		t.Fatal(err)
+	}
+	inspection, err := conformance.NewInspectionFacts(nil, obs, rule.FactFileTree, rule.FactImports, rule.FactDeclarations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range inspection.Files() {
+		if f.Path == goTest {
+			t.Errorf("the named test file is listed among the observed files")
+		}
+	}
+	if _, ok := inspection.FactsFor(goTest); ok || inspection.Contains(goTest) {
+		t.Errorf("the named test file lends its facts as an observed file")
+	}
+
+	// The struct the test file declares would be a second Discounter
+	// if any Rule saw it.
+	knowledge := discounterContext(t, goTest+":TestDiscountNeverExceedsTotal")
+	a := runNamed(t, []rule.Rule{builtInRule(t, "ubiquitous_language/terms-declared-in-code"), builtInRule(t, "assertion/checked-by-its-operation")},
+		observed(goFile), facts, map[string]conformance.LanguageFacts{goTest: testFacts}, nil, knowledge)
+	if got := messagesOf(a); len(got) != 0 {
+		t.Errorf("a Rule judged the named test file: %q", got)
+	}
+	if c := a.Contracts(); len(c) != 1 {
+		t.Fatalf("contracts = %d, want 1", len(c))
+	} else if at, located := c[0].Carrier(); !located || at != (conformance.Carrier{Path: goTest, Line: 5}) {
+		t.Errorf("carrier %+v %v, want the named test", at, located)
+	}
+}

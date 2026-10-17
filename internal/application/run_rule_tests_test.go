@@ -74,15 +74,17 @@ func (f fakeRuleTestSource) Tests() ([]rule.Test, error) { return f.tests, nil }
 // its cleaned path, where the real observer materializes it, recording
 // what the use case requested.
 type fakeFixtureObserver struct {
-	languages []rule.Language
-	facts     []rule.Fact
+	languages  []rule.Language
+	facts      []rule.Fact
+	namedTests []string
 }
 
 func (f *fakeFixtureObserver) Observe(files []rule.TestFile, languages []rule.Language,
-	scan rule.Scan, facts []rule.Fact,
+	scan rule.Scan, facts []rule.Fact, namedTests []string,
 ) (conformance.Observations, error) {
 	f.languages = languages
 	f.facts = facts
+	f.namedTests = namedTests
 	observed := make([]conformance.ObservedFile, 0, len(files))
 	for _, file := range files {
 		observed = append(observed, conformance.ObservedFile{Path: path.Clean(file.Path)})

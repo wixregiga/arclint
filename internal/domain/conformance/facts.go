@@ -20,9 +20,13 @@ type Facts struct {
 	excluded    []string
 	allowed     map[string]bool
 	excludeFile func(string) bool
-	graphZones  map[rule.ZoneName]bool
-	constraint  rule.Type
-	scope       rule.Scope
+	// namedTests are the test files verified_by names that the walk
+	// left out, as the Rule's Scope selects them: true when the Rule
+	// may read one, false when a file Exclusion removes it.
+	namedTests map[string]bool
+	graphZones map[rule.ZoneName]bool
+	constraint rule.Type
+	scope      rule.Scope
 }
 
 // NewFacts prepares a Rule's input from validated observations. Run shares the
@@ -189,6 +193,45 @@ func (f Facts) observed(path string) bool {
 	}
 	_, ok := f.source.files[path]
 	return ok
+}
+
+// namedTest returns what the observations read of a test file the walk
+// left out because a verified_by entry names it, limited to the
+// classes the Rule requires. present says the observations hold the
+// file; readable says the Rule's Scope selects it after Exclusions.
+func (f Facts) namedTest(path string) (facts LanguageFacts, present, readable bool) {
+	readable, present = f.namedTests[path]
+	if !present || !readable {
+		return LanguageFacts{}, present, false
+	}
+	facts = f.source.observations.named[path]
+	facts.ImportsAvailable = f.required[rule.FactImports] && facts.ImportsAvailable
+	facts.DeclarationsAvailable = f.required[rule.FactDeclarations] && facts.DeclarationsAvailable
+	facts.Imports, facts.Declarations = nil, nil
+	if facts.Supports(rule.FactImports) {
+		facts.Imports = append([]Import(nil), f.source.observations.named[path].Imports...)
+	}
+	if facts.Supports(rule.FactDeclarations) {
+		facts.Declarations = copyDeclarations(f.source.observations.named[path].Declarations, false)
+	}
+	return facts, true, true
+}
+
+// readNamedTest lends the content of a test file the walk left out
+// because a verified_by entry names it, when the Rule may read it.
+func (f Facts) readNamedTest(path string) (string, error) {
+	if !f.namedTests[path] {
+		return "", fmt.Errorf("%s is not a test file this rule may read", path)
+	}
+	content := f.source.observations.content
+	if content == nil {
+		return "", fmt.Errorf("read %s: no content capability on observations", path)
+	}
+	data, err := content.Read(path)
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", path, err)
+	}
+	return data, nil
 }
 
 // held reports whether the repository holds path although the walk may
