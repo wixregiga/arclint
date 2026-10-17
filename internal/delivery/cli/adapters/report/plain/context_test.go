@@ -262,7 +262,7 @@ func TestPlainContextNamesEveryAggregateAnIdentityIdentifies(t *testing.T) {
 	d := &application.DomainKnowledge{
 		Source: "domain.arclint.yaml", Counts: vocab.Counts{Contexts: 1}, Scoped: true, Located: true, UsesLocated: true,
 		Used: []application.DomainUseRef{{
-			Context: "skill", Name: "ItemAddress", Role: conformance.UsedValueObject, Aggregates: []string{"Artifact", "Skill"},
+			Context: "skill", Name: "ItemAddress", Role: conformance.UsedValueObject, Identifies: []string{"Artifact", "Skill"},
 			Sites: []application.DomainUseSite{{Path: "app/uninstall.go", Line: 14, Way: conformance.UseByField, Via: "UninstallItem.Address"}},
 			Invariants: []application.DomainInvariantRef{{
 				Key: "distinct", Statement: "An ItemAddress is distinct.", Owner: "ItemAddress", OwnerConcept: vocab.ConceptValueObject,

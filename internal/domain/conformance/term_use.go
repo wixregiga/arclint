@@ -49,9 +49,11 @@ type TermUse struct {
 	context string
 	term    string
 	role    UsedRole
-	// aggregates lists the aggregates the term belongs to, identifies, or
-	// serves, as its role says.
+	// aggregates lists the aggregates an entity is a member of or a
+	// repository or factory serves; identifies lists the aggregates and
+	// entities a value object is the identity of.
 	aggregates []string
+	identifies []string
 	way        UseWay
 	via        string
 }
@@ -89,7 +91,8 @@ func newTermUse(ref Reference, reached locDecl, term usedTerm, site useSite) (Te
 	}
 	return TermUse{
 		path: site.path, line: site.line, context: term.context, term: term.name,
-		role: term.role, aggregates: append([]string(nil), term.aggregates...), way: site.way, via: site.via,
+		role: term.role, aggregates: append([]string(nil), term.aggregates...), identifies: append([]string(nil), term.identifies...),
+		way: site.way, via: site.via,
 	}, nil
 }
 
@@ -108,11 +111,14 @@ func (u TermUse) Term() string { return u.term }
 // Role is the part the term plays in its context.
 func (u TermUse) Role() UsedRole { return u.role }
 
-// Aggregates lists, in recording order, the aggregates the term
-// belongs to, identifies, or serves, as its role says: the one an
-// entity is a member of, every one a value object is the identity of,
-// every one a repository or factory serves; empty otherwise.
+// Aggregates lists, in recording order, the aggregate an entity is a
+// member of, or every aggregate a repository or factory serves; empty
+// otherwise.
 func (u TermUse) Aggregates() []string { return append([]string(nil), u.aggregates...) }
+
+// Identifies lists, in recording order, every aggregate and entity a
+// value object is the identity of; empty otherwise.
+func (u TermUse) Identifies() []string { return append([]string(nil), u.identifies...) }
 
 // Way says whether a call or a field reaches the term.
 func (u TermUse) Way() UseWay { return u.way }
@@ -130,11 +136,13 @@ type UndeterminedUse struct {
 	path, what, reason string
 	line               int
 	context, term      string
+	role               UsedRole
 }
 
 // UndeterminedUseSpec is the input to the validated UndeterminedUse.
-// Context and Term name the term the reference may reach, when one is
-// known; Line is 0 when the whole file could not be read.
+// Context, Term and Role name the term the reference may reach and the
+// part it plays, when one is known; Line is 0 when the whole file could
+// not be read.
 type UndeterminedUseSpec struct {
 	Path    string
 	Line    int
@@ -142,6 +150,7 @@ type UndeterminedUseSpec struct {
 	Reason  string
 	Context string
 	Term    string
+	Role    UsedRole
 }
 
 // NewUndeterminedUse is the one door an UndeterminedUse is built
@@ -154,10 +163,10 @@ func NewUndeterminedUse(s UndeterminedUseSpec) (UndeterminedUse, error) {
 	if s.Path == "" || s.Line < 0 || strings.TrimSpace(s.What) == "" {
 		return UndeterminedUse{}, fmt.Errorf("undetermined use: a path, a nonnegative line, and what is written there are required")
 	}
-	if s.Term != "" && s.Context == "" {
-		return UndeterminedUse{}, fmt.Errorf("undetermined use of %s at %s:%d: the term needs its bounded context", s.Term, s.Path, s.Line)
+	if s.Term != "" && (s.Context == "" || s.Role == "") {
+		return UndeterminedUse{}, fmt.Errorf("undetermined use of %s at %s:%d: the term needs its bounded context and role", s.Term, s.Path, s.Line)
 	}
-	return UndeterminedUse{path: s.Path, line: s.Line, what: s.What, reason: s.Reason, context: s.Context, term: s.Term}, nil
+	return UndeterminedUse{path: s.Path, line: s.Line, what: s.What, reason: s.Reason, context: s.Context, term: s.Term, role: s.Role}, nil
 }
 
 // Path is the worksite file holding the reference.
@@ -180,6 +189,10 @@ func (u UndeterminedUse) Context() string { return u.context }
 // Term names the term the reference may reach, "" when none is known.
 func (u UndeterminedUse) Term() string { return u.term }
 
+// Role is the part the term the reference may reach plays, "" when no
+// term is known.
+func (u UndeterminedUse) Role() UsedRole { return u.role }
+
 // TermUses is what the code of a worksite reaches of the recorded
 // domain: every use of a term, and every reference that cannot be told
 // to be one or not.
@@ -196,6 +209,7 @@ type usedTerm struct {
 	name       string
 	role       UsedRole
 	aggregates []string
+	identifies []string
 	candidates []locDecl
 }
 
@@ -266,7 +280,7 @@ func usedTerms(contexts []contextCode) []usedTerm {
 			term := usedTerm{context: cc.ctx.Name, name: t.Name, role: role, candidates: cc.terms[t.Name].candidates}
 			switch role {
 			case UsedValueObject:
-				term.aggregates = identifies[t.Name]
+				term.identifies = identifies[t.Name]
 			case UsedEntity:
 				term.aggregates = []string{t.Aggregate}
 			case UsedAggregate, UsedDomainEvent, UsedDomainService, UsedSpecification, UsedRepository, UsedFactory:
@@ -313,8 +327,10 @@ func servingTerms(cc contextCode) []usedTerm {
 }
 
 // identityOwners maps each identity the context's aggregates and their
-// members name to every aggregate it identifies, in recording order,
-// whether or not the identity is also recorded as a value object.
+// members name to every aggregate or entity it identifies, in recording
+// order, whether or not the identity is also recorded as a value
+// object: an aggregate's identity identifies the aggregate, a member's
+// identity the member.
 func identityOwners(ctx vocab.BoundedContext) map[string][]string {
 	owners := map[string][]string{}
 	claim := func(identity, aggregate string) {
@@ -325,7 +341,7 @@ func identityOwners(ctx vocab.BoundedContext) map[string][]string {
 	for _, agg := range ctx.Aggregates {
 		claim(agg.Identity, agg.Name)
 		for _, e := range agg.Entities {
-			claim(e.Identity, agg.Name)
+			claim(e.Identity, e.Name)
 		}
 	}
 	return owners
@@ -424,14 +440,14 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 				undetermined(UndeterminedUseSpec{
 					Path: site.path, Line: site.line, What: string(site.way) + " " + site.via,
 					Reason:  fmt.Sprintf("it reaches %s in %s, which %d declarations spell, and not all of them are %s", referenceName(ref), ref.File, len(spelled), term.name),
-					Context: term.context, Term: term.name,
+					Context: term.context, Term: term.name, Role: term.role,
 				})
 				continue
 			case len(term.candidates) > 1:
 				undetermined(UndeterminedUseSpec{
 					Path: site.path, Line: site.line, What: string(site.way) + " " + site.via,
 					Reason:  fmt.Sprintf("it reaches %s in %s, one of %s spelling %s, so which is the model's cannot be told", referenceName(ref), ref.File, candidateList(term.candidates), term.name),
-					Context: term.context, Term: term.name,
+					Context: term.context, Term: term.name, Role: term.role,
 				})
 				continue
 			}
@@ -455,7 +471,7 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 					undetermined(UndeterminedUseSpec{
 						Path: site.path, Line: site.line, What: string(site.way) + " " + site.via,
 						Reason:  fmt.Sprintf("%s returns %s as written; result types are not resolved", referenceName(ref), result),
-						Context: term.context, Term: term.name,
+						Context: term.context, Term: term.name, Role: term.role,
 					})
 					break written
 				}

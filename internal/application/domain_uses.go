@@ -13,11 +13,12 @@ type DomainUseRef struct {
 	// Role is aggregate, entity, value_object, domain_event,
 	// domain_service, specification, repository, or factory.
 	Role conformance.UsedRole `json:"role"`
-	// Aggregates lists the aggregates the entry belongs to, identifies,
-	// or serves, as its role says: the one an entity is a member of,
-	// every one a value object is the identity of, every one a
-	// repository or factory serves.
-	Aggregates []string        `json:"aggregates,omitempty"`
+	// Aggregates lists the aggregate an entity is a member of, or every
+	// aggregate a repository or factory serves.
+	Aggregates []string `json:"aggregates,omitempty"`
+	// Identifies lists every aggregate and entity a value object is the
+	// identity of.
+	Identifies []string        `json:"identifies,omitempty"`
 	Sites      []DomainUseSite `json:"sites"`
 	// Invariants and Assertions are the contracts of the entry, or of
 	// its aggregate for a member entity; Specification is a used
@@ -37,16 +38,17 @@ type DomainUseSite struct {
 }
 
 // UndeterminedUseRef is one reference of the worksite that may be a use
-// resolution cannot confirm. Context and Term name the recorded entry
-// it may reach, when one is known; Line is 0 when the whole file could
+// resolution cannot confirm. Context, Term and Role name the recorded
+// entry it may reach, when one is known; Line is 0 when the whole file could
 // not be read.
 type UndeterminedUseRef struct {
-	Path    string `json:"path"`
-	Line    int    `json:"line,omitempty"`
-	What    string `json:"what"`
-	Reason  string `json:"reason"`
-	Context string `json:"context,omitempty"`
-	Term    string `json:"term,omitempty"`
+	Path    string               `json:"path"`
+	Line    int                  `json:"line,omitempty"`
+	What    string               `json:"what"`
+	Reason  string               `json:"reason"`
+	Context string               `json:"context,omitempty"`
+	Term    string               `json:"term,omitempty"`
+	Role    conformance.UsedRole `json:"role,omitempty"`
 }
 
 // usedKnowledge groups the worksite's uses into one entry per recorded
@@ -65,23 +67,35 @@ func usedKnowledge(dk, declaredHere *DomainKnowledge, uses conformance.TermUses)
 			recorded[key{ctx.Name, v}] = true
 		}
 	}
-	declared := map[key]bool{}
+	// What the listing shows is declared in the role it shows it in: a
+	// repository or factory of the same name as a declared aggregate is
+	// still listed, since the listing has no place for it.
+	type shown struct {
+		context, name string
+		role          conformance.UsedRole
+	}
+	declared := map[shown]bool{}
+	show := func(context string, role conformance.UsedRole, names ...string) {
+		for _, name := range names {
+			declared[shown{context, name, role}] = true
+		}
+	}
 	for _, ctx := range declaredHere.Contexts {
-		names := append(append(append([]string(nil), ctx.ValueObjects...), ctx.Events...), ctx.Services...)
+		show(ctx.Name, conformance.UsedValueObject, ctx.ValueObjects...)
+		show(ctx.Name, conformance.UsedDomainEvent, ctx.Events...)
+		show(ctx.Name, conformance.UsedDomainService, ctx.Services...)
 		for _, a := range ctx.Aggregates {
-			names = append(append(names, a.Name), a.Entities...)
+			show(ctx.Name, conformance.UsedAggregate, a.Name)
+			show(ctx.Name, conformance.UsedEntity, a.Entities...)
 			// The listing shows an implied identity with its aggregate; a
 			// recorded one carries contracts of its own, which only its own
 			// entry shows.
 			if a.Identity != "" && !recorded[key{ctx.Name, a.Identity}] {
-				names = append(names, a.Identity)
+				show(ctx.Name, conformance.UsedValueObject, a.Identity)
 			}
 		}
-		for _, s := range ctx.Specifications {
-			names = append(names, s.Name)
-		}
-		for _, name := range names {
-			declared[key{ctx.Name, name}] = true
+		for _, sp := range ctx.Specifications {
+			show(ctx.Name, conformance.UsedSpecification, sp.Name)
 		}
 	}
 	// One entry per term and role: a name may be one aggregate's
@@ -93,7 +107,7 @@ func usedKnowledge(dk, declaredHere *DomainKnowledge, uses conformance.TermUses)
 	var used []DomainUseRef
 	index := map[entryKey]int{}
 	for _, u := range uses.Uses {
-		if declared[key{u.Context(), u.Term()}] {
+		if declared[shown{u.Context(), u.Term(), u.Role()}] {
 			continue
 		}
 		k := entryKey{u.Context(), u.Term(), u.Role()}
@@ -117,17 +131,17 @@ func usedKnowledge(dk, declaredHere *DomainKnowledge, uses conformance.TermUses)
 	}
 	undetermined := make([]UndeterminedUseRef, 0, len(uses.Undetermined))
 	for _, u := range uses.Undetermined {
-		if u.Term() != "" && declared[key{u.Context(), u.Term()}] {
+		if u.Term() != "" && declared[shown{u.Context(), u.Term(), u.Role()}] {
 			continue
 		}
-		undetermined = append(undetermined, UndeterminedUseRef{Path: u.Path(), Line: u.Line(), What: u.What(), Reason: u.Reason(), Context: u.Context(), Term: u.Term()})
+		undetermined = append(undetermined, UndeterminedUseRef{Path: u.Path(), Line: u.Line(), What: u.What(), Reason: u.Reason(), Context: u.Context(), Term: u.Term(), Role: u.Role()})
 	}
 	return used, undetermined
 }
 
 // usedEntry builds the entry of one used term with its contracts.
 func usedEntry(dk *DomainKnowledge, u conformance.TermUse) DomainUseRef {
-	entry := DomainUseRef{Context: u.Context(), Name: u.Term(), Role: u.Role(), Aggregates: u.Aggregates()}
+	entry := DomainUseRef{Context: u.Context(), Name: u.Term(), Role: u.Role(), Aggregates: u.Aggregates(), Identifies: u.Identifies()}
 	owner := ""
 	switch u.Role() {
 	case conformance.UsedAggregate, conformance.UsedValueObject, conformance.UsedDomainService:

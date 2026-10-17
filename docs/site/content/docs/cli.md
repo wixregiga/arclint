@@ -269,10 +269,11 @@ The JSON shape carries the same facts under `domain.scoped`,
 and `domain.unanchored`; the used entries travel apart from the
 declared `domain.contexts`, under `domain.used` with each `sites` entry
 (`path`, `line`, `way` as `call` or `field`, and `via`), with
-`aggregates` listing the aggregates an entry belongs to, identifies or
-serves, and the
+`aggregates` listing the aggregate an entity belongs to or every
+aggregate a repository or factory serves, `identifies` listing every
+aggregate and entity an identity identifies, and the
 references that may be uses under `domain.undetermined`, each with the
-`context` and `term` it may reach when one is known.
+`context`, `term` and `role` it may reach when one is known.
 `domain.usesLocated` says the worksite's uses were looked for.
 
 `arclint context --dependencies --format json` adds a `dependencies` block
