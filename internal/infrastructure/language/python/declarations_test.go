@@ -201,6 +201,15 @@ class Plain:
 
 class Generic2(Generic[T]):
     pass
+
+class Wrapped((ABC)):
+    pass
+
+class WrappedMeta(metaclass=(ABCMeta)):
+    pass
+
+class WrappedProtocol(((Protocol))[T]):
+    pass
 `)
 	got := extractDeclarations(newParsers(), src)
 	if got.ParseError != "" {
@@ -218,6 +227,7 @@ class Generic2(Generic[T]):
 		"Discounter": true, "Pricing": true, "Ledger": true, "Store": true, "Typed": true,
 		"Meta": true, "QualifiedMeta": true,
 		"Concrete": false, "Plain": false, "Generic2": false,
+		"Wrapped": true, "WrappedMeta": true, "WrappedProtocol": true,
 	}
 	if !reflect.DeepEqual(abstract, want) {
 		t.Fatalf("abstract marks:\n got %v\nwant %v", abstract, want)

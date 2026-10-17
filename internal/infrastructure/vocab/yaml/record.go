@@ -326,19 +326,24 @@ func invariants(invs []vocab.Invariant, order []string) keyed[vocab.Invariant] {
 		build: build,
 		update: func(n *yaml.Node, inv vocab.Invariant) {
 			tested := len(inv.VerifiedBy) > 0
+			alone := n.Kind == yaml.ScalarNode || n.Kind == yaml.AliasNode
 			switch {
-			case !tested && n.Kind == yaml.ScalarNode:
-				setScalar(n, textScalar(inv.Statement))
+			case !tested && alone:
+				*n = *restated(n, inv.Statement)
 			case tested && n.Kind == yaml.MappingNode:
-				setText(n, keyStatement, inv.Statement, invariantKeys)
+				key, value := mapEntry(n, keyStatement)
+				if value == nil {
+					setText(n, keyStatement, inv.Statement, invariantKeys)
+				} else {
+					*value = *restated(value, inv.Statement)
+					keepLineComment(key, value)
+				}
 				setTests(n, inv.VerifiedBy, invariantKeys)
-			case tested && n.Kind == yaml.ScalarNode:
+			case tested && alone:
 				// The statement alone becomes the mapping's statement, its
 				// node, style, and comments kept.
-				statement := *n
-				setScalar(&statement, textScalar(inv.Statement))
 				m := newMapping()
-				appendKV(m, keyStatement, &statement)
+				appendKV(m, keyStatement, restated(n, inv.Statement))
 				appendKV(m, keyVerifiedBy, testSequence(inv.VerifiedBy))
 				*n = *m
 			case !tested && n.Kind == yaml.MappingNode:
@@ -581,15 +586,36 @@ func setList(mapping *yaml.Node, key string, values []string, order []string) {
 // and comments, and the comments of the statement key it loses.
 func statementAlone(mapping *yaml.Node, statement string) *yaml.Node {
 	key, value := mapEntry(mapping, keyStatement)
-	if value == nil || value.Kind != yaml.ScalarNode {
+	if value == nil {
 		return textScalar(statement)
 	}
-	alone := *value
-	setScalar(&alone, textScalar(statement))
+	alone := *restated(value, statement)
 	alone.HeadComment = joinComments(key.HeadComment, alone.HeadComment)
 	alone.LineComment = joinComments(key.LineComment, alone.LineComment)
 	alone.FootComment = joinComments(key.FootComment, alone.FootComment)
 	return &alone
+}
+
+// restated is the node a statement is written as in place of node: an
+// alias that still names the statement stays the alias, a scalar keeps
+// its style, and either keeps its comments; anything else becomes the
+// statement written fresh.
+func restated(node *yaml.Node, statement string) *yaml.Node {
+	out := *node
+	switch node.Kind {
+	case yaml.AliasNode:
+		if named := resolve(node); named != nil && named.Kind == yaml.ScalarNode && named.Value == statement {
+			return &out
+		}
+		fresh := textScalar(statement)
+		fresh.HeadComment, fresh.LineComment, fresh.FootComment = node.HeadComment, node.LineComment, node.FootComment
+		return fresh
+	case yaml.ScalarNode:
+		setScalar(&out, textScalar(statement))
+		return &out
+	default:
+		return textScalar(statement)
+	}
 }
 
 // mapEntry returns the key and value nodes of one mapping entry, nil

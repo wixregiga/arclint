@@ -1214,3 +1214,56 @@ contexts:
 		t.Errorf("a changed list lost its comment:\n%s", text)
 	}
 }
+
+// A statement written as an alias stays the alias, comment included,
+// when its invariant gains or loses tests, as long as it still states
+// the same rule.
+func TestRecordKeepsAnAliasedStatement(t *testing.T) {
+	const aliased = `version: 1
+project: ticketing
+contexts:
+  sales:
+    definition: Selling seats for events.
+    value_objects:
+      Money:
+        definition: &rule Money is never negative.
+        invariants:
+          never-negative:
+            statement: *rule # the definition says it too
+            verified_by:
+              - internal/money/money_test.go:TestMoney
+`
+	repo, _ := repository(t, aliased)
+	edit := func(tests []string) string {
+		t.Helper()
+		lang, _, err := repo.RecordedLanguage()
+		if err != nil {
+			t.Fatalf("load: %v", err)
+		}
+		lang.Contexts[0].ValueObjects[0].Invariants[0].VerifiedBy = tests
+		edited, err := vocab.NewUbiquitousLanguage(lang.Project, lang.Description, lang.Contexts, lang.Relations)
+		if err != nil {
+			t.Fatalf("edit: %v", err)
+		}
+		edited.Recording = lang.Recording
+		if err := repo.Record(edited); err != nil {
+			t.Fatalf("Record: %v", err)
+		}
+		again, _, err := repo.RecordedLanguage()
+		if err != nil {
+			t.Fatalf("reload: %v", err)
+		}
+		if d := edited.Difference(again); d != "" {
+			t.Fatalf("language changed across Record: %s", d)
+		}
+		written, _ := os.ReadFile(repo.Path())
+		return string(written)
+	}
+	if text := edit(nil); !strings.Contains(text, "          never-negative: *rule # the definition says it too\n") {
+		t.Fatalf("clearing the tests lost the aliased statement or its comment:\n%s", text)
+	}
+	if text := edit([]string{"internal/money/money_test.go:TestMoney"}); !strings.Contains(text,
+		"          never-negative:\n            statement: *rule # the definition says it too\n            verified_by:\n") {
+		t.Fatalf("adding tests lost the aliased statement or its comment:\n%s", text)
+	}
+}
