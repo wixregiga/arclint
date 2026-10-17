@@ -46,13 +46,30 @@ type UndeterminedUseRef struct {
 
 // usedKnowledge groups the worksite's uses into one entry per recorded
 // term, in order of the first site reaching each, with the contracts
-// the located listing carries for it.
-func usedKnowledge(dk *DomainKnowledge, uses conformance.TermUses) ([]DomainUseRef, []UndeterminedUseRef) {
+// the located listing carries for it. A term the declared listing
+// keeps is declared here and is not listed again as used.
+func usedKnowledge(dk, declaredHere *DomainKnowledge, uses conformance.TermUses) ([]DomainUseRef, []UndeterminedUseRef) {
 	type key struct{ context, name string }
+	declared := map[key]bool{}
+	for _, ctx := range declaredHere.Contexts {
+		names := append(append(append([]string(nil), ctx.ValueObjects...), ctx.Events...), ctx.Services...)
+		for _, a := range ctx.Aggregates {
+			names = append(append(names, a.Name), a.Entities...)
+		}
+		for _, s := range ctx.Specifications {
+			names = append(names, s.Name)
+		}
+		for _, name := range names {
+			declared[key{ctx.Name, name}] = true
+		}
+	}
 	var used []DomainUseRef
 	index := map[key]int{}
 	for _, u := range uses.Uses {
 		k := key{u.Context(), u.Term()}
+		if declared[k] {
+			continue
+		}
 		i, ok := index[k]
 		if !ok {
 			i = len(used)

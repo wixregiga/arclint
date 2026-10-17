@@ -284,17 +284,20 @@ func (uc GetArchitecturalContext) Execute(req ContextRequest) (ArchitecturalCont
 		return ArchitecturalContext{}, err
 	}
 	if out.Domain != nil {
+		// What the scoped listing keeps is declared here; a use of it is
+		// not listed again as used, whether or not --full lists the rest.
+		declaredHere := scopeDomainKnowledge(out.Domain, carriers, *scope)
 		var used []DomainUseRef
 		var undetermined []UndeterminedUseRef
 		if out.Domain.Located {
-			uses, err := carriers.Uses(scope.contains)
+			uses, err := carriers.Uses(scope.contains, cfg.Languages)
 			if err != nil {
 				return ArchitecturalContext{}, fmt.Errorf("locate uses: %w", err)
 			}
-			used, undetermined = usedKnowledge(out.Domain, uses)
+			used, undetermined = usedKnowledge(out.Domain, declaredHere, uses)
 		}
 		if !req.Full {
-			out.Domain = scopeDomainKnowledge(out.Domain, carriers, *scope)
+			out.Domain = declaredHere
 		}
 		out.Domain.UsesLocated = out.Domain.Located
 		out.Domain.Used, out.Domain.Undetermined = used, undetermined
@@ -665,7 +668,8 @@ func domainKnowledgeOf(lang vocab.UbiquitousLanguage) *DomainKnowledge {
 }
 
 // unanchoredContracts collects every listed contract whose Anchor is
-// missing, in listing order, each naming the declaration the recording
+// missing, declared ones first in listing order and then those of the
+// used entries, each once, naming the declaration the recording
 // expects, spelled the way the project's languages spell a method.
 // Empty when the contracts were never located.
 func unanchoredContracts(dk *DomainKnowledge, languages []rule.Language) []UnanchoredContract {
@@ -673,34 +677,49 @@ func unanchoredContracts(dk *DomainKnowledge, languages []rule.Language) []Unanc
 		return nil
 	}
 	var out []UnanchoredContract
+	seen := map[UnanchoredContract]bool{}
+	add := func(context string, invariants []DomainInvariantRef, assertions []DomainAssertionRef, specifications []DomainSpecificationRef) {
+		var found []UnanchoredContract
+		for _, inv := range invariants {
+			if inv.Anchor == AnchorMissing {
+				found = append(found, UnanchoredContract{
+					Kind: ContractInvariant, Context: context, Owner: inv.Owner, Key: inv.Key,
+					Statement: inv.Statement, Expected: expectedInvariantCarrier(inv, languages),
+				})
+			}
+		}
+		for _, a := range assertions {
+			if a.Anchor == AnchorMissing {
+				found = append(found, UnanchoredContract{
+					Kind: ContractAssertion, Context: context, Owner: a.Owner, Key: a.Key,
+					Statement: a.Statement, Expected: expectedAssertionCarrier(a.Key, a.Owner, a.BodilessOwner, languages),
+				})
+			}
+		}
+		for _, s := range specifications {
+			if s.Anchor == AnchorMissing {
+				found = append(found, UnanchoredContract{
+					Kind: ContractSpecification, Context: context, Name: s.Name,
+					Expected: fmt.Sprintf("satisfaction method on %s", s.Name),
+				})
+			}
+		}
+		for _, u := range found {
+			if !seen[u] {
+				seen[u] = true
+				out = append(out, u)
+			}
+		}
+	}
 	for _, ctx := range dk.Contexts {
-		for _, inv := range ctx.Invariants {
-			if inv.Anchor != AnchorMissing {
-				continue
-			}
-			out = append(out, UnanchoredContract{
-				Kind: ContractInvariant, Context: ctx.Name, Owner: inv.Owner, Key: inv.Key,
-				Statement: inv.Statement, Expected: expectedInvariantCarrier(inv, languages),
-			})
+		add(ctx.Name, ctx.Invariants, ctx.Assertions, ctx.Specifications)
+	}
+	for _, u := range dk.Used {
+		var specs []DomainSpecificationRef
+		if u.Specification != nil {
+			specs = append(specs, *u.Specification)
 		}
-		for _, a := range ctx.Assertions {
-			if a.Anchor != AnchorMissing {
-				continue
-			}
-			out = append(out, UnanchoredContract{
-				Kind: ContractAssertion, Context: ctx.Name, Owner: a.Owner, Key: a.Key,
-				Statement: a.Statement, Expected: expectedAssertionCarrier(a.Key, a.Owner, a.BodilessOwner, languages),
-			})
-		}
-		for _, s := range ctx.Specifications {
-			if s.Anchor != AnchorMissing {
-				continue
-			}
-			out = append(out, UnanchoredContract{
-				Kind: ContractSpecification, Context: ctx.Name, Name: s.Name,
-				Expected: fmt.Sprintf("satisfaction method on %s", s.Name),
-			})
-		}
+		add(u.Context, u.Invariants, u.Assertions, specs)
 	}
 	return out
 }

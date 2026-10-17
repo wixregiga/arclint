@@ -370,3 +370,66 @@ func TestContextNeverListsADeclaredEntryAsUsed(t *testing.T) {
 		t.Fatalf("an entry declared in the worksite is not used:\n%s", stdout)
 	}
 }
+
+// An aggregate whose contract method lies in the worksite is declared
+// here, even when its type is declared in another file of its package:
+// the worksite's calls on it are not listed again as used.
+func TestContextKeepsAContractCarrierDeclaredNotUsed(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "domain.arclint.yaml", usesDomain)
+	write(t, root, "rules.arclint.yaml", "runtime: [go]\n")
+	write(t, root, "go.mod", "module example.com/shop\n\ngo 1.24\n")
+	write(t, root, "ordering/order.go", "package ordering\n\n// Order is a request.\ntype Order struct{ total int }\n")
+	write(t, root, "ordering/commands.go", "package ordering\n\n// EnsureHasTotal enforces has-total.\nfunc (o *Order) EnsureHasTotal() error { return nil }\n\n// Place places the order.\nfunc (o *Order) Place() error { return o.EnsureHasTotal() }\n")
+	stdout, stderr, code := runBin(t, root, os.Environ(), "context", "ordering/commands.go")
+	if code != 0 {
+		t.Fatalf("context: exit %d\nstderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "  declared here, context ordering:\n    aggregates: Order (OrderID)\n") {
+		t.Fatalf("Order is declared here:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "used here, context") || strings.Count(stdout, "has-total (Order)") != 1 {
+		t.Fatalf("a declared aggregate is not listed again as used:\n%s", stdout)
+	}
+}
+
+// A used entry's missing contract joins the unanchored summary, in the
+// human output and in JSON, once.
+func TestContextSummarizesTheMissingContractsOfUsedEntries(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "domain.arclint.yaml", usesDomain)
+	write(t, root, "rules.arclint.yaml", "runtime: [py]\n")
+	write(t, root, "ordering/__init__.py", "")
+	write(t, root, "ordering/order.py", "class Order:\n    def place(self) -> None:\n        pass\n")
+	write(t, root, "ordering/app.py", "from ordering.order import Order\n\n\ndef run(order: Order) -> None:\n    order.place()\n")
+	stdout, stderr, code := runBin(t, root, os.Environ(), "context", "ordering/app.py")
+	if code != 0 {
+		t.Fatalf("context: exit %d\nstderr: %s", code, stderr)
+	}
+	for _, want := range []string{
+		"    aggregate Order: ordering/app.py:5\n      invariant has-total (Order): An Order carries a total. missing\n",
+		"  unanchored contracts: 1 missing\n    missing: invariant has-total of Order (context ordering)\n      expected method ensure_has_total on Order\n",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("context lacks %q:\n%s", want, stdout)
+		}
+	}
+	stdout, stderr, code = runBin(t, root, os.Environ(), "context", "ordering/app.py", "--format", "json")
+	if code != 0 {
+		t.Fatalf("context json: exit %d\nstderr: %s", code, stderr)
+	}
+	var doc struct {
+		Domain struct {
+			Unanchored []struct {
+				Owner string `json:"owner"`
+				Key   string `json:"key"`
+			} `json:"unanchored"`
+		} `json:"domain"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &doc); err != nil {
+		t.Fatalf("context json: %v\n%s", err, stdout)
+	}
+	if u := doc.Domain.Unanchored; len(u) != 1 || u[0].Owner != "Order" || u[0].Key != "has-total" {
+		t.Fatalf("unanchored = %+v", u)
+	}
+}

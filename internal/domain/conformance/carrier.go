@@ -32,6 +32,9 @@ type Carriers struct {
 	// recording order.
 	all   contractIndex
 	terms []usedTerm
+	// observed is every inspected file, so a worksite file its language
+	// supplied no facts for is told apart from one with no references.
+	observed []string
 }
 
 // NewCarriers locates recorded language through the same prepared Facts queries
@@ -44,7 +47,9 @@ func NewCarriers(facts Facts, knowledge vocab.UbiquitousLanguage) (Carriers, err
 	if err != nil {
 		return Carriers{}, err
 	}
-	return carriersOf(code), nil
+	c := carriersOf(code)
+	c.observed = facts.paths()
+	return c, nil
 }
 
 // carriersOf indexes the contexts of resolved domain code by name, and
