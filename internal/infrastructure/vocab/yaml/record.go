@@ -656,16 +656,19 @@ func setList(mapping *yaml.Node, key string, values []string, order []string) {
 
 // statementAlone is an invariant mapping that no longer names tests,
 // written as its statement alone: the statement's node with its style
-// and comments, and the comments of the statement key it loses.
+// and comments, and the comments of the mapping and of the statement
+// key it loses.
 func statementAlone(mapping *yaml.Node, statement string) *yaml.Node {
 	key, value := mapEntry(mapping, keyStatement)
 	if value == nil {
 		return textScalar(statement)
 	}
 	alone := *restated(value, statement)
-	alone.HeadComment = joinComments(key.HeadComment, alone.HeadComment)
-	alone.LineComment = joinComments(key.LineComment, alone.LineComment)
-	alone.FootComment = joinComments(key.FootComment, alone.FootComment)
+	// The mapping's own comments, which a flow mapping writes after its
+	// closing brace, go with the statement too.
+	alone.HeadComment = joinComments(mapping.HeadComment, joinComments(key.HeadComment, alone.HeadComment))
+	alone.LineComment = joinComments(mapping.LineComment, joinComments(key.LineComment, alone.LineComment))
+	alone.FootComment = joinComments(key.FootComment, joinComments(alone.FootComment, mapping.FootComment))
 	return &alone
 }
 

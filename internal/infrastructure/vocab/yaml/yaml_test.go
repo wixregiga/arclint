@@ -1371,3 +1371,37 @@ contexts:
 		t.Fatalf("an edit of an anchored value reached its aliases: %s\n%s", d, written)
 	}
 }
+
+// An invariant written as a flow mapping keeps the comment after its
+// closing brace when it loses its tests and becomes its statement alone.
+func TestRecordKeepsTheCommentOfAFlowInvariant(t *testing.T) {
+	const flow = `version: 1
+project: ticketing
+contexts:
+  sales:
+    definition: Selling seats for events.
+    value_objects:
+      Money:
+        definition: An amount in one currency.
+        invariants:
+          positive: {statement: Money is positive., verified_by: [a_test.go:TestA]} # rationale
+`
+	repo, _ := repository(t, flow)
+	lang, _, err := repo.RecordedLanguage()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	lang.Contexts[0].ValueObjects[0].Invariants[0].VerifiedBy = nil
+	edited, err := vocab.NewUbiquitousLanguage(lang.Project, lang.Description, lang.Contexts, lang.Relations)
+	if err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+	edited.Recording = lang.Recording
+	if err := repo.Record(edited); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	written, _ := os.ReadFile(repo.Path())
+	if !strings.Contains(string(written), "          positive: Money is positive. # rationale\n") {
+		t.Fatalf("the flow mapping's comment was lost:\n%s", written)
+	}
+}
