@@ -172,19 +172,27 @@ func parseFile(fset *token.FileSet, tc *typeCheck, root, rel string, want wanted
 }
 
 // markImplementations records on every type the file declares the
-// interfaces it implements, when the file was type-checked. A file the
-// type check did not reach has no method sets to compare, so its
-// implementations are not available rather than empty.
+// interfaces it implements. A type of a file the type check did not
+// reach has no method set to compare, so what it implements is
+// undetermined, with the reason, rather than empty.
 func markImplementations(tc *typeCheck, rel string, facts *conformance.LanguageFacts) {
-	if _, typed := tc.files[rel]; !typed {
-		return
-	}
 	facts.ImplementationsAvailable = true
+	_, typed := tc.files[rel]
 	byType := tc.implementationsOf()[rel]
 	for i := range facts.Declarations {
 		d := &facts.Declarations[i]
-		if (d.Kind == "struct" || d.Kind == "type") && d.Owner == "" {
-			d.Implements = append([]conformance.Implementation(nil), byType[d.Name]...)
+		if (d.Kind != "struct" && d.Kind != "type") || d.Owner != "" {
+			continue
 		}
+		if !typed {
+			reason := tc.unresolvedReason(rel)
+			d.Implements = []conformance.Implementation{{
+				Abstraction: conformance.Reference{Resolution: conformance.ResolutionUndetermined, Reason: reason},
+				Evidence:    conformance.ImplementationUndetermined,
+				Reason:      reason,
+			}}
+			continue
+		}
+		d.Implements = append([]conformance.Implementation(nil), byType[d.Name]...)
 	}
 }

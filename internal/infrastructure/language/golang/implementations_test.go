@@ -132,13 +132,16 @@ func TestImplementationsFollowTheMethodSets(t *testing.T) {
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("implementations:\n got %s\nwant %s", strings.Join(got, "\n     "), strings.Join(want, "\n     "))
 	}
-	// An interface implements nothing itself, and a file nobody
-	// type-checks has no implementations to report.
+	// An interface implements nothing itself, and a type the type check
+	// does not reach implements what nobody can tell.
 	if got := implementationsOf(facts["user/password.go"]); len(got) != 0 {
 		t.Errorf("interfaces carry implementations: %q", got)
 	}
-	if fake := facts["adapters/fake_test.go"]; fake.ImplementationsAvailable || len(implementationsOf(fake)) != 0 {
-		t.Errorf("a test file is not type-checked, so its implementations are unavailable: %+v", fake)
+	if got, want := implementationsOf(facts["adapters/fake_test.go"]), []string{"Fake -> @ [undetermined] "}; strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("a test file is not type-checked, so what its types implement is undetermined: %q", got)
+	}
+	if reason := facts["adapters/fake_test.go"].Declarations[0].Implements[0].Reason; reason != "test files are not type-checked" {
+		t.Errorf("reason %q", reason)
 	}
 	if _, err := conformance.NewObservations(files, facts); err != nil {
 		t.Errorf("the facts do not validate: %v", err)

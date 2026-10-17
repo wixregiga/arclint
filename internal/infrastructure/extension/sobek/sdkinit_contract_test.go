@@ -54,8 +54,14 @@ func TestPublishedContextCallsMatchHost(t *testing.T) {
 			{Kind: "func", Name: "Order", Exported: true, StartLine: 3, EndLine: 4, Params: []ParamInfo{{Name: "id", Type: "string", Optional: true}}, Results: []string{"string"}},
 			{Kind: "field", Name: "item", Owner: "Order", StartLine: 5, EndLine: 5, Holds: []ReferenceInfo{{Resolution: "declared", File: "dep/item.ts", Owner: "Item", Name: "Item", Package: "-", Reason: "-"}},
 				Type: &ReferenceInfo{Resolution: "declared", File: "dep/item.ts", Owner: "-", Name: "Item", Package: "-", Reason: "-"}},
+			{Kind: "class", Name: "Order", Exported: true, StartLine: 3, EndLine: 9, Params: []ParamInfo{}, Results: []string{}, Holds: []ReferenceInfo{},
+				Implements: []ImplementationInfo{{
+					Abstraction: ReferenceInfo{Resolution: "declared", File: "dep/port.ts", Owner: "-", Name: "Port", Package: "-", Reason: "-"},
+					Evidence:    "heuristic", Reason: "member names alone",
+					Operations: []ReferenceInfo{{Resolution: "declared", File: "src/order.ts", Owner: "Order", Name: "place", Package: "-", Reason: "-"}},
+				}}},
 		},
-		FieldTypesAvailable: true, CallsAvailable: true, ResolvedCallsAvailable: true,
+		FieldTypesAvailable: true, ImplementationsAvailable: true, CallsAvailable: true, ResolvedCallsAvailable: true,
 		// Every reference field carries a value, "-" where its resolution
 		// would leave it empty, so the wire shape shows each one.
 		Calls: []CallInfo{{
@@ -200,9 +206,12 @@ export default defineRule({type: "host-contract", description: "contract", capab
 	expectedFacts["parseError"] = ""
 	decl := expectedFacts["decls"].([]any)[0].(map[string]any)
 	decl["params"].([]any)[0].(map[string]any)["variadic"] = false
-	decl["holds"], decl["type"], decl["abstract"] = []any{}, nil, false
+	decl["holds"], decl["type"], decl["abstract"], decl["implements"] = []any{}, nil, false, []any{}
 	field := expectedFacts["decls"].([]any)[1].(map[string]any)
-	field["exported"], field["params"], field["results"], field["abstract"] = false, []any{}, []any{}, false
+	field["exported"], field["params"], field["results"], field["abstract"], field["implements"] = false, []any{}, []any{}, false, []any{}
+	class := expectedFacts["decls"].([]any)[2].(map[string]any)
+	class["abstract"], class["generic"], class["type"] = false, false, nil
+	class["params"], class["results"], class["holds"] = []any{}, []any{}, []any{}
 	if !reflect.DeepEqual(actual, expected) {
 		t.Fatalf("host wire shapes differ:\ngot  %s\nwant %s", got[1].Message, wantJSON)
 	}
