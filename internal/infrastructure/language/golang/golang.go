@@ -55,14 +55,17 @@ func produce(root string, files []conformance.ObservedFile, requested []rule.Fac
 			want.resolvedCalls = true
 		case rule.FactFieldTypes:
 			want.fieldTypes = true
+		case rule.FactImplementations:
+			want.implementations = true
 		case rule.FactFileTree, rule.FactImports:
 			// Imports are always produced; the file tree is the walk's.
 		}
 	}
 	want.resolvedCalls = want.resolvedCalls && want.calls
 	want.fieldTypes = want.fieldTypes && want.declarations
+	want.implementations = want.implementations && want.declarations
 	var tc *typeCheck
-	if want.resolvedCalls || want.fieldTypes {
+	if want.resolvedCalls || want.fieldTypes || want.implementations {
 		tc = typeChecker(root, files, res)
 	}
 	return fanout.Analyze(files, analyzable, func() fanout.Analyzer {
@@ -76,7 +79,7 @@ func produce(root string, files []conformance.ObservedFile, requested []rule.Fac
 // wanted is the fact classes one observation asks for; a resolved
 // class is honored only together with the view it resolves.
 type wanted struct {
-	declarations, calls, resolvedCalls, fieldTypes bool
+	declarations, calls, resolvedCalls, fieldTypes, implementations bool
 }
 
 // analyzable reports whether the go tool would ever consider the file:
@@ -109,6 +112,9 @@ func analyzeFile(fset *token.FileSet, res *resolver, tc *typeCheck, root, rel st
 			holds = resolved
 		}
 		facts.Declarations = extractDeclarations(fset, parsed, holds)
+		if want.implementations {
+			markImplementations(tc, rel, &facts)
+		}
 	}
 	if want.calls {
 		facts.CallsAvailable = true
@@ -163,4 +169,22 @@ func parseFile(fset *token.FileSet, tc *typeCheck, root, rel string, want wanted
 		resolved = unresolvedFile{reason: tc.unresolvedReason(rel)}
 	}
 	return parsed, fset, resolved, ""
+}
+
+// markImplementations records on every type the file declares the
+// interfaces it implements, when the file was type-checked. A file the
+// type check did not reach has no method sets to compare, so its
+// implementations are not available rather than empty.
+func markImplementations(tc *typeCheck, rel string, facts *conformance.LanguageFacts) {
+	if _, typed := tc.files[rel]; !typed {
+		return
+	}
+	facts.ImplementationsAvailable = true
+	byType := tc.implementationsOf()[rel]
+	for i := range facts.Declarations {
+		d := &facts.Declarations[i]
+		if (d.Kind == "struct" || d.Kind == "type") && d.Owner == "" {
+			d.Implements = append([]conformance.Implementation(nil), byType[d.Name]...)
+		}
+	}
 }

@@ -51,6 +51,10 @@ type typeCheck struct {
 	// methods holds the name of every method a type-checked repository
 	// type declares, interfaces included.
 	methods map[string]bool
+	// impls is which types implement which interfaces, computed once on
+	// the first request.
+	implOnce sync.Once
+	impls    implementations
 }
 
 // sourcePackage is one directory of repository Go source the way the
