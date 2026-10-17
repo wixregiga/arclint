@@ -295,21 +295,42 @@ func (w *pyWalker) abstractClass(n *gotreesitter.Node) bool {
 		b := w.unparenthesized(bases.NamedChild(i))
 		switch b.Type(w.lang) {
 		case "keyword_argument":
-			key, value := b.ChildByFieldName("name", w.lang), w.unparenthesized(b.ChildByFieldName("value", w.lang))
-			if key != nil && value != nil && key.Text(w.src) == "metaclass" && slices.Contains(abstractMetaclasses, value.Text(w.src)) {
+			key := b.ChildByFieldName("name", w.lang)
+			if key != nil && key.Text(w.src) == "metaclass" && slices.Contains(abstractMetaclasses, w.dottedName(b.ChildByFieldName("value", w.lang))) {
 				return true
 			}
 		case nodeSubscript:
-			if value := w.unparenthesized(b.ChildByFieldName("value", w.lang)); value != nil && slices.Contains(abstractBases, value.Text(w.src)) {
+			if slices.Contains(abstractBases, w.dottedName(b.ChildByFieldName("value", w.lang))) {
 				return true
 			}
 		default:
-			if slices.Contains(abstractBases, b.Text(w.src)) {
+			if slices.Contains(abstractBases, w.dottedName(b)) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// dottedName spells a name or a chain of attributes as dots join it,
+// whatever spaces or parentheses the source writes around its parts:
+// (abc) . ABC is abc.ABC. Any other expression spells "".
+func (w *pyWalker) dottedName(n *gotreesitter.Node) string {
+	n = w.unparenthesized(n)
+	if n == nil {
+		return ""
+	}
+	switch n.Type(w.lang) {
+	case nodeIdentifier:
+		return n.Text(w.src)
+	case nodeAttribute:
+		object, attribute := w.dottedName(n.ChildByFieldName("object", w.lang)), n.ChildByFieldName("attribute", w.lang)
+		if object == "" || attribute == nil {
+			return ""
+		}
+		return object + "." + attribute.Text(w.src)
+	}
+	return ""
 }
 
 // unparenthesized is the expression inside any parentheses written

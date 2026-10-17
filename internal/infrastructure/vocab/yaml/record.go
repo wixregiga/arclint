@@ -47,22 +47,59 @@ func freshDocument(m vocab.UbiquitousLanguage, modeline string) *yaml.Node {
 // it no longer records is dropped, and every new entry is appended to
 // its section in language order.
 func syncDocument(body *yaml.Node, m vocab.UbiquitousLanguage) {
+	origins := pinAliases(body)
 	ensureVersion(body)
 	setText(body, keyProject, m.Project, documentKeys)
 	setText(body, keyDescription, m.Description, documentKeys)
 	contexts(m).sync(body, true)
 	syncRelations(body, m.Relations)
-	settleAliases(body)
+	settleAliases(body, origins)
 }
 
-// settleAliases keeps every alias of the edited tree naming the value
-// it named when the file was read. A reader resolves an alias to the
-// latest anchor of its name written before it, so an edit that drops
-// the anchored node, moves it after the alias, or puts another anchor
-// of the same name between them would change what the alias reads as.
-// Such an alias becomes a copy of the value it named, keeping its own
-// comments, so the file still loads and records the same values.
-func settleAliases(root *yaml.Node) {
+// pinAliases points every alias of the tree read from the file at a
+// copy of the value it reads as, taken before any edit, so whatever an
+// edit does to the anchored node, the sync compares an alias with the
+// value the file recorded through it. It returns each copy's original
+// node, for settleAliases.
+func pinAliases(root *yaml.Node) map[*yaml.Node]*yaml.Node {
+	pinned := map[*yaml.Node]*yaml.Node{}
+	origins := map[*yaml.Node]*yaml.Node{}
+	var pin func(target *yaml.Node) *yaml.Node
+	var walk func(n *yaml.Node)
+	pin = func(target *yaml.Node) *yaml.Node {
+		if target == nil {
+			return nil
+		}
+		if snap, ok := pinned[target]; ok {
+			return snap
+		}
+		snap := copyNode(target)
+		pinned[target], origins[snap] = snap, target
+		walk(snap)
+		return snap
+	}
+	walk = func(n *yaml.Node) {
+		if n.Kind == yaml.AliasNode {
+			n.Alias = pin(n.Alias)
+			return
+		}
+		for _, c := range n.Content {
+			walk(c)
+		}
+	}
+	walk(root)
+	return origins
+}
+
+// settleAliases keeps every alias of the edited tree reading as the
+// value the file recorded through it. A reader resolves an alias to the
+// latest anchor of its name written before it; an alias stays when
+// that anchor is still its original node holding the same value.
+// Otherwise, because the edit dropped the anchored node, moved it after
+// the alias, changed it, or put another anchor of the name between
+// them, the alias becomes a copy of the value it read as, keeping its
+// own comments, so the file still loads and records the same values.
+func settleAliases(root *yaml.Node, origins map[*yaml.Node]*yaml.Node) {
 	bound := map[string]*yaml.Node{}
 	var walk func(n, key *yaml.Node)
 	walk = func(n, key *yaml.Node) {
@@ -70,7 +107,7 @@ func settleAliases(root *yaml.Node) {
 			return
 		}
 		if n.Kind == yaml.AliasNode {
-			if n.Alias != nil && bound[n.Value] == n.Alias {
+			if original := origins[n.Alias]; original != nil && bound[n.Value] == original && sameValue(original, n.Alias) {
 				return
 			}
 			copied := copyWithoutAnchors(n.Alias)
@@ -97,18 +134,38 @@ func settleAliases(root *yaml.Node) {
 	walk(root, nil)
 }
 
-// keepLineComment moves a block collection's line comment onto the key
-// it is the value of, where a comment on the key's line is written; the
-// encoder writes no line comment for a block list or mapping itself.
-func keepLineComment(key, value *yaml.Node) {
-	if key == nil || value.LineComment == "" || value.Style&yaml.FlowStyle != 0 {
-		return
+// sameValue reports whether two nodes hold the same value, whatever
+// their comments, styles, and positions: an alias reads the same
+// through either.
+func sameValue(a, b *yaml.Node) bool {
+	if a.Kind != b.Kind || len(a.Content) != len(b.Content) {
+		return false
 	}
-	if value.Kind != yaml.SequenceNode && value.Kind != yaml.MappingNode {
-		return
+	switch a.Kind {
+	case yaml.ScalarNode:
+		return a.Value == b.Value && a.ShortTag() == b.ShortTag()
+	case yaml.AliasNode:
+		return a.Value == b.Value
+	case yaml.DocumentNode, yaml.SequenceNode, yaml.MappingNode:
+		// A collection holds the same value when its items do.
 	}
-	key.LineComment = joinComments(key.LineComment, value.LineComment)
-	value.LineComment = ""
+	for i := range a.Content {
+		if !sameValue(a.Content[i], b.Content[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// copyNode copies a node tree as it is, anchors included; an alias in
+// it keeps pointing at what it points at.
+func copyNode(n *yaml.Node) *yaml.Node {
+	out := *n
+	out.Content = make([]*yaml.Node, len(n.Content))
+	for i, c := range n.Content {
+		out.Content[i] = copyNode(c)
+	}
+	return &out
 }
 
 // copyWithoutAnchors copies a node tree, leaving out the anchors so the
@@ -124,6 +181,20 @@ func copyWithoutAnchors(n *yaml.Node) *yaml.Node {
 		out.Content[i] = copyWithoutAnchors(c)
 	}
 	return &out
+}
+
+// keepLineComment moves a block collection's line comment onto the key
+// it is the value of, where a comment on the key's line is written; the
+// encoder writes no line comment for a block list or mapping itself.
+func keepLineComment(key, value *yaml.Node) {
+	if key == nil || value.LineComment == "" || value.Style&yaml.FlowStyle != 0 {
+		return
+	}
+	if value.Kind != yaml.SequenceNode && value.Kind != yaml.MappingNode {
+		return
+	}
+	key.LineComment = joinComments(key.LineComment, value.LineComment)
+	value.LineComment = ""
 }
 
 func ensureVersion(body *yaml.Node) {

@@ -210,6 +210,18 @@ class WrappedMeta(metaclass=(ABCMeta)):
 
 class WrappedProtocol(((Protocol))[T]):
     pass
+
+class Spaced(abc . ABC):
+    pass
+
+class WrappedModule((abc).ABC):
+    pass
+
+class WrappedMetaModule(metaclass=(abc) . ABCMeta):
+    pass
+
+class Called(make_base()):
+    pass
 `)
 	got := extractDeclarations(newParsers(), src)
 	if got.ParseError != "" {
@@ -228,6 +240,7 @@ class WrappedProtocol(((Protocol))[T]):
 		"Meta": true, "QualifiedMeta": true,
 		"Concrete": false, "Plain": false, "Generic2": false,
 		"Wrapped": true, "WrappedMeta": true, "WrappedProtocol": true,
+		"Spaced": true, "WrappedModule": true, "WrappedMetaModule": true, "Called": false,
 	}
 	if !reflect.DeepEqual(abstract, want) {
 		t.Fatalf("abstract marks:\n got %v\nwant %v", abstract, want)

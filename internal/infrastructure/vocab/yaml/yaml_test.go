@@ -1319,3 +1319,55 @@ contexts:
 		t.Fatalf("the reorder changed another entry's tests: %s\n%s", d, written)
 	}
 }
+
+// An edit of an anchored value never reaches the entries that alias
+// it, whichever section the sync visits first: an aggregate invariant
+// aliasing a value object's definition keeps its statement when only
+// the definition changes, and an invariant aliasing another's statement
+// stays its statement alone when the other gains tests.
+func TestRecordKeepsAliasesReadingWhatTheyRead(t *testing.T) {
+	const aliased = `version: 1
+project: ticketing
+contexts:
+  sales:
+    definition: Selling seats for events.
+    value_objects:
+      Money:
+        definition: &rule Money is never negative.
+        invariants:
+          never-negative: &statement An amount is never below zero.
+    aggregates:
+      Order:
+        definition: A purchase.
+        identity: OrderID
+        invariants:
+          total-never-negative: *rule
+          lines-never-negative: *statement
+`
+	repo, _ := repository(t, aliased)
+	lang, _, err := repo.RecordedLanguage()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	ctx := &lang.Contexts[0]
+	money := ctx.ValueObjects[0]
+	money.Definition = "An amount in one currency."
+	money.Invariants[0].VerifiedBy = []string{"internal/money/money_test.go:TestNeverNegative"}
+	ctx.ValueObjects[0] = money
+	edited, err := vocab.NewUbiquitousLanguage(lang.Project, lang.Description, lang.Contexts, lang.Relations)
+	if err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+	edited.Recording = lang.Recording
+	if err := repo.Record(edited); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	again, _, err := repo.RecordedLanguage()
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if d := edited.Difference(again); d != "" {
+		written, _ := os.ReadFile(repo.Path())
+		t.Fatalf("an edit of an anchored value reached its aliases: %s\n%s", d, written)
+	}
+}
