@@ -518,6 +518,7 @@ def in_expression(prev, last_op, after_label_colon):
 TEST_CALLEES = {"it", "test", "describe"}
 
 QUOTED = re.compile(r"""(["'`])((?:\\.|(?!\1).)*)\1""")
+SWALLOWED_TEST = re.compile(r"""(?:^|[^\w.$])(?:it|test|describe)(?:\.\w+)*\s*\(\s*["'`]""")
 
 # A line whose reading opened a literal it never closed is read again with
 # one slash decision reversed, at most this many, from the last.
@@ -827,10 +828,12 @@ class TypeScriptLexer:
                         regex = not regex
                 other_token()
                 if regex:
-                    if any(WORDS.search(m.group(2)) for m in QUOTED.finditer(text[i + 1:end])):
+                    body = text[i + 1:end]
+                    if any(WORDS.search(m.group(2)) for m in QUOTED.finditer(body)):
                         # A quoted phrase inside a regular expression may be
-                        # a string the slash rule misread: read the line.
-                        kinds.add("text")
+                        # a string the slash rule misread: read the line, as
+                        # a test when the phrase names a test.
+                        kinds.add("test" if SWALLOWED_TEST.search(body) else "text")
                     token("operand")
                     i = end
                 else:
@@ -944,8 +947,9 @@ class TypeScriptLexer:
         """Read one bracket or operator character."""
         prev = self.prev
         in_type = self.type_context
-        if char != "<" and not self.type_arguments:
-            # A type after as or satisfies is names and dots up to <.
+        if char not in "<|&[]" and not self.type_arguments:
+            # A type after as or satisfies runs through names, dots, unions,
+            # intersections and array brackets: number | Box<number>[].
             self.type_context = False
         if char == "(":
             header = isinstance(prev, tuple) and prev[1] == "for" or (
@@ -1402,7 +1406,7 @@ def main():
     # Paths git prints are relative to the top of the work tree, wherever
     # --repo points inside it; refs become object ids, so a ref that is
     # also a file name stays a ref.
-    repo = git_text(os.path.abspath(args.repo), "rev-parse", "--show-toplevel").rstrip("\n")
+    repo = os.fsdecode(git(os.path.abspath(args.repo), "rev-parse", "--show-toplevel").rstrip(b"\n"))
     base, head = (resolve(repo, ref) if ref else None for ref in (args.base, args.head))
     merge_base, files, generated, rows = collect(
         repo, base, head, args.scope, args.paths, args.exclude, set(args.recording), args.hint,
