@@ -97,7 +97,7 @@
           "type": "object",
           "description": "The aggregate's invariants, a map from key to statement; each key names the rule, and ensure followed by the key names the root method that enforces it.",
           "propertyNames": { "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
-          "additionalProperties": { "type": "string", "minLength": 1, "description": "The rule in the ubiquitous language, as a domain expert would state it." }
+          "additionalProperties": { "$ref": "#/$defs/invariant", "description": "A consistency rule that must hold whenever the objects it constrains can be observed: an aggregate's invariants hold at the end of every operation on the aggregate, and a value object's invariants hold for every value that exists. The aggregate root, or the value object's constructor, is responsible for enforcing it, so that a state violating it is never reachable. In the code an invariant is stated as an assertion." }
         },
         "assertions": {
           "type": "object",
@@ -142,7 +142,28 @@
           "type": "object",
           "description": "The conditions a value of this kind always satisfies, a map from key to statement; a value that would violate one is never constructed.",
           "propertyNames": { "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
-          "additionalProperties": { "type": "string", "minLength": 1, "description": "The rule in the ubiquitous language, as a domain expert would state it." }
+          "additionalProperties": { "$ref": "#/$defs/invariant", "description": "A consistency rule that must hold whenever the objects it constrains can be observed: an aggregate's invariants hold at the end of every operation on the aggregate, and a value object's invariants hold for every value that exists. The aggregate root, or the value object's constructor, is responsible for enforcing it, so that a state violating it is never reachable. In the code an invariant is stated as an assertion." }
+        }
+      }
+    },
+    "invariant": {
+      "description": "A consistency rule that must hold whenever the objects it constrains can be observed: an aggregate's invariants hold at the end of every operation on the aggregate, and a value object's invariants hold for every value that exists. The aggregate root, or the value object's constructor, is responsible for enforcing it, so that a state violating it is never reachable. In the code an invariant is stated as an assertion.",
+      "oneOf": [{ "$ref": "#/$defs/invariant_statement", "description": "The rule in the ubiquitous language, as a domain expert would state it." }, { "$ref": "#/$defs/verified_invariant", "description": "A consistency rule that must hold whenever the objects it constrains can be observed: an aggregate's invariants hold at the end of every operation on the aggregate, and a value object's invariants hold for every value that exists. The aggregate root, or the value object's constructor, is responsible for enforcing it, so that a state violating it is never reachable. In the code an invariant is stated as an assertion." }]
+    },
+    "invariant_statement": { "type": "string", "minLength": 1, "description": "The rule in the ubiquitous language, as a domain expert would state it." },
+    "verified_invariant": {
+      "type": "object",
+      "description": "A consistency rule that must hold whenever the objects it constrains can be observed: an aggregate's invariants hold at the end of every operation on the aggregate, and a value object's invariants hold for every value that exists. The aggregate root, or the value object's constructor, is responsible for enforcing it, so that a state violating it is never reachable. In the code an invariant is stated as an assertion.",
+      "additionalProperties": false,
+      "required": ["statement", "verified_by"],
+      "properties": {
+        "statement": { "type": "string", "minLength": 1, "description": "The rule in the ubiquitous language, as a domain expert would state it." },
+        "verified_by": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[^:\\s/\\\\]([^:\\\\]*[^:\\s\\\\])?:\\S(.*\\S)?$" },
+          "description": "The automated tests that verify the rule, each spelled as the test file's path from the repository root, a colon, and the test's name (internal/order/order_test.go:TestLinesFrozen). Record them where the rule cannot be stated in the code alone; the check reads that each test exists, not whether it proves the rule."
         }
       }
     },
@@ -153,7 +174,14 @@
       "required": ["on", "statement"],
       "properties": {
         "on": { "type": "string", "minLength": 1, "description": "The operation the guarantee belongs to: a command of the root, or an operation of the service." },
-        "statement": { "type": "string", "minLength": 1, "description": "The guarantee as the domain expert states it, in the ubiquitous language (Only an active tenant offers an invitation); it is recorded in the expert's words and never rewritten into a post-condition, because on already names the operation." }
+        "statement": { "type": "string", "minLength": 1, "description": "The guarantee as the domain expert states it, in the ubiquitous language (Only an active tenant offers an invitation); it is recorded in the expert's words and never rewritten into a post-condition, because on already names the operation." },
+        "verified_by": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[^:\\s/\\\\]([^:\\\\]*[^:\\s\\\\])?:\\S(.*\\S)?$" },
+          "description": "The automated tests that verify the guarantee, each spelled as the test file's path from the repository root, a colon, and the test's name (internal/pricing/discount_test.go:TestDiscountNeverExceedsTotal). An owner declared as an interface or an abstract class has no body to call the check from, so its assertions name their tests here; the check reads that each test exists, not whether it proves the guarantee."
+        }
       }
     },
     "event": {

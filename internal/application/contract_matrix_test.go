@@ -1,6 +1,7 @@
 package application
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
@@ -65,27 +66,27 @@ func TestDomainKnowledgeOfProjectsEveryContract(t *testing.T) {
 	want := []DomainInvariantRef{
 		{Key: "published-frozen", Statement: "A published Event never changes.", Owner: "Event", OwnerConcept: vocab.ConceptAggregate},
 		{Key: "one-venue", Statement: "An Event has at most one Venue.", Owner: "Event", OwnerConcept: vocab.ConceptAggregate},
-		{Key: "never-negative", Statement: "A Price is never negative.", Owner: "Price", OwnerConcept: vocab.ConceptValueObject},
+		{Key: "never-negative", Statement: "A Price is never negative.", Owner: "Price", OwnerConcept: vocab.ConceptValueObject, VerifiedBy: []string{"internal/catalog/price_test.go:TestNeverNegative"}},
 		{Key: "within-the-whole", Statement: "A Discount never exceeds the whole.", Owner: "Discount", OwnerConcept: vocab.ConceptValueObject},
 	}
 	if len(ctx.Invariants) != len(want) {
 		t.Fatalf("invariants = %+v", ctx.Invariants)
 	}
 	for i, inv := range ctx.Invariants {
-		if inv != want[i] {
+		if !reflect.DeepEqual(inv, want[i]) {
 			t.Errorf("invariant %d = %+v, want %+v", i, inv, want[i])
 		}
 	}
 	wantAssertions := []DomainAssertionRef{
 		{Key: "tiers-priced", Statement: "Tiers are priced.", Owner: "Event", OwnerConcept: vocab.ConceptAggregate, On: "Publish"},
-		{Key: "tier-on-sale", Statement: "Only a tier on sale is priced.", Owner: "Pricing", OwnerConcept: vocab.ConceptDomainService, On: "Price"},
+		{Key: "tier-on-sale", Statement: "Only a tier on sale is priced.", Owner: "Pricing", OwnerConcept: vocab.ConceptDomainService, On: "Price", VerifiedBy: []string{"internal/catalog/pricing_test.go:TestTierOnSale"}},
 		{Key: "one-currency", Statement: "A priced order is in one currency.", Owner: "Pricing", OwnerConcept: vocab.ConceptDomainService, On: "Price"},
 	}
 	if len(ctx.Assertions) != len(wantAssertions) {
 		t.Fatalf("assertions = %+v", ctx.Assertions)
 	}
 	for i, a := range ctx.Assertions {
-		if a != wantAssertions[i] {
+		if !reflect.DeepEqual(a, wantAssertions[i]) {
 			t.Errorf("assertion %d = %+v, want %+v", i, a, wantAssertions[i])
 		}
 	}
@@ -233,14 +234,14 @@ func catalogLanguage(t *testing.T) vocab.UbiquitousLanguage {
 			},
 		}},
 		ValueObjects: []vocab.ValueObject{
-			{Name: "Price", Definition: "Whole cents.", Invariants: []vocab.Invariant{{Key: "never-negative", Statement: "A Price is never negative."}}},
+			{Name: "Price", Definition: "Whole cents.", Invariants: []vocab.Invariant{{Key: "never-negative", Statement: "A Price is never negative.", VerifiedBy: []string{"internal/catalog/price_test.go:TestNeverNegative"}}}},
 			{Name: "Discount", Definition: "A percentage off.", Invariants: []vocab.Invariant{{Key: "within-the-whole", Statement: "A Discount never exceeds the whole."}}},
 		},
 		Events: []vocab.DomainEvent{{Name: "Published", Definition: "An Event went on sale.", RaisedBy: "Event"}},
 		Services: []vocab.DomainService{{
 			Name: "Pricing", Definition: "Prices tiers.",
 			Assertions: []vocab.Assertion{
-				{Key: "tier-on-sale", On: "Price", Statement: "Only a tier on sale is priced."},
+				{Key: "tier-on-sale", On: "Price", Statement: "Only a tier on sale is priced.", VerifiedBy: []string{"internal/catalog/pricing_test.go:TestTierOnSale"}},
 				{Key: "one-currency", On: "Price", Statement: "A priced order is in one currency."},
 			},
 		}},

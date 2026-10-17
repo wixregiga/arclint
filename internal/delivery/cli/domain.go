@@ -291,6 +291,8 @@ const (
 	flagDefinition   = "definition"
 	flagStatement    = "statement"
 	flagOn           = "on"
+	flagVerifiedBy   = "verified-by"
+	flagClearTests   = "clear-verified-by"
 	flagText         = "text"
 	flagIdentity     = "identity"
 	flagAlias        = "alias"
@@ -307,6 +309,8 @@ func defineFlags(list application.ListDomainDefinitions) []Flag {
 		{Name: flagDefinition, Doc: "what the term means in this project (bounded_context, aggregate, entity, value_object, domain_event, domain_service, specification)"},
 		{Name: flagStatement, Doc: "what an invariant or assertion holds, in the project's words"},
 		{Name: flagOn, Doc: "the operation of the root an assertion is checked on"},
+		{Name: flagVerifiedBy, Repeat: true, Doc: "a test that verifies an invariant or assertion, as <path>:<test name> from the repository root; may be repeated, and replaces the recorded tests"},
+		{Name: flagClearTests, Bool: true, Doc: "record the invariant or assertion with no verifying tests"},
 		{Name: flagText, Doc: "the open question, for a question"},
 		{Name: flagIdentity, Doc: "the value object that identifies an aggregate's root or an entity"},
 		{Name: flagAlias, Repeat: true, Doc: "another name the project uses for the term; may be repeated"},
@@ -327,7 +331,7 @@ func defineFlags(list application.ListDomainDefinitions) []Flag {
 // propertyFlags lists the flags a plain define reads into the change;
 // any of them set alongside --guided is a usage error.
 var propertyFlags = []string{
-	flagDefinition, flagStatement, flagOn, flagText, flagIdentity,
+	flagDefinition, flagStatement, flagOn, flagVerifiedBy, flagClearTests, flagText, flagIdentity,
 	flagAlias, flagClearAliases,
 	flagRepository, flagFactory, flagRaisedBy,
 	flagFrom, flagTo, flagKind, flagDescription,
@@ -340,6 +344,9 @@ func changeFromFlags(ctx Context) (vocab.Change, error) {
 	if ctx.Changed(flagAlias) && ctx.Bool(flagClearAliases) {
 		return vocab.Change{}, ConfigError(fmt.Errorf("--%s and --%s cannot be combined", flagAlias, flagClearAliases))
 	}
+	if ctx.Changed(flagVerifiedBy) && ctx.Bool(flagClearTests) {
+		return vocab.Change{}, ConfigError(fmt.Errorf("--%s and --%s cannot be combined", flagVerifiedBy, flagClearTests))
+	}
 	ch := vocab.Change{}
 	if ctx.Changed(flagDefinition) {
 		ch.SetDefinition, ch.Definition = true, ctx.String(flagDefinition)
@@ -349,6 +356,12 @@ func changeFromFlags(ctx Context) (vocab.Change, error) {
 	}
 	if ctx.Changed(flagOn) {
 		ch.SetOn, ch.On = true, ctx.String(flagOn)
+	}
+	if ctx.Changed(flagVerifiedBy) {
+		ch.SetVerifiedBy, ch.VerifiedBy = true, ctx.Strings(flagVerifiedBy)
+	}
+	if ctx.Bool(flagClearTests) {
+		ch.SetVerifiedBy, ch.VerifiedBy = true, nil
 	}
 	if ctx.Changed(flagText) {
 		ch.SetText, ch.Text = true, ctx.String(flagText)
@@ -469,7 +482,7 @@ func rejectFlags(ctx Context, flags ...string) error {
 }
 
 func defineRecordingRunner(ctx Context, define application.DefineDomainDefinition, render Renderer) error {
-	flags := []string{"context", "owner", flagDefinition, flagStatement, flagOn, flagText, flagIdentity, flagAlias, flagClearAliases, flagRepository, flagFactory, flagRaisedBy}
+	flags := []string{"context", "owner", flagDefinition, flagStatement, flagOn, flagVerifiedBy, flagClearTests, flagText, flagIdentity, flagAlias, flagClearAliases, flagRepository, flagFactory, flagRaisedBy}
 	if err := rejectFlags(ctx, flags...); err != nil {
 		return err
 	}
@@ -668,6 +681,18 @@ func runGuidedDefine(ctx Context, define application.DefineDomainDefinition, rec
 			}
 			req.Change.SetOn = true
 			summary = append(summary, "  On: "+req.Change.On)
+		}
+		for {
+			test, err := s.askOptional("Verifying test (<path>:<test name> from the repository root; empty when there is none or no other):")
+			if err != nil {
+				return err
+			}
+			if test == "" {
+				break
+			}
+			req.Change.SetVerifiedBy = true
+			req.Change.VerifiedBy = append(req.Change.VerifiedBy, test)
+			summary = append(summary, "  Verified by: "+test)
 		}
 	case vocab.ConceptQuestion:
 		req.Change.Text, err = s.ask("Question:", "The question text is required.")
@@ -1120,8 +1145,8 @@ required ones when first recorded:
   aggregate        --definition --identity; optional --alias --repository --factory
   entity           --owner <aggregate> --definition; optional --identity --alias
   value_object     --definition; optional --alias
-  invariant        --owner <aggregate or value object> --statement
-  assertion        --owner <aggregate or domain service> --on --statement
+  invariant        --owner <aggregate or value object> --statement; optional --verified-by
+  assertion        --owner <aggregate or domain service> --on --statement; optional --verified-by
   business_rule    an invariant, or an assertion when --on is passed
   domain_event     --definition; optional --raised-by <aggregate>
   domain_service   --definition
@@ -1140,6 +1165,14 @@ The name of an invariant, assertion, or question is its key: short and
 kebab-case, since the method that enforces an aggregate's invariant, or the
 method an aggregate or domain service declares to check an assertion, is named
 after it.
+
+--verified-by names one automated test that verifies an invariant or an
+assertion, as the test file's path from the repository root, a colon, and the
+test's name. Repeat it to name several; together they replace the recorded
+tests, and --clear-verified-by records none. arclint check reads that each test
+exists, not whether it proves the statement. An assertion whose owner is an
+interface or an abstract class, which has no body to call a check from, is
+verified this way.
 
 A bounded context must be recorded before anything is recorded in it. Pass
 --context when the project records several.`
@@ -1165,6 +1198,10 @@ const defineExample = `  arclint domain define bounded_context ordering \
 
   arclint domain define assertion paid-in-full --owner Order --on Ship \
     --statement "An Order ships only once paid in full."
+
+  arclint domain define assertion never-exceeds-total --owner Discounter \
+    --on Discount --statement "A discount never exceeds the order total." \
+    --verified-by internal/pricing/discount_test.go:TestDiscountNeverExceedsTotal
 
   arclint domain define domain_event OrderShipped --raised-by Order \
     --definition "The Order left the warehouse."

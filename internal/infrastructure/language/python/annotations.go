@@ -58,7 +58,7 @@ func (idx *resolutionIndex) annotationRefs(s *pyScope, n *gotreesitter.Node, see
 			return []conformance.Reference{unknown(reason)}
 		}
 		return idx.annotationRefs(scope, ann, seen)
-	case "generic_type", "subscript":
+	case "generic_type", nodeSubscript:
 		if n.NamedChildCount() < 2 {
 			break
 		}
@@ -136,7 +136,7 @@ func (idx *resolutionIndex) annotationReceiver(s *pyScope, n *gotreesitter.Node,
 			return pyValue{ref: unknown(reason)}
 		}
 		return idx.annotationReceiver(scope, ann, seen)
-	case "generic_type", "subscript":
+	case "generic_type", nodeSubscript:
 		if n.NamedChildCount() < 2 {
 			break
 		}

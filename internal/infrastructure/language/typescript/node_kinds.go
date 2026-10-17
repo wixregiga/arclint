@@ -13,6 +13,7 @@ const (
 	tsClassExpression              = "class"
 	tsInterfaceDeclaration         = "interface_declaration"
 	tsMethodSignature              = "method_signature"
+	tsAbstractMethodSignature      = "abstract_method_signature"
 	tsPropertySignature            = "property_signature"
 	tsTypeAliasDeclaration         = "type_alias_declaration"
 	tsFunctionDeclaration          = "function_declaration"

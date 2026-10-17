@@ -235,14 +235,35 @@ func entities(a vocab.Aggregate) keyed[vocab.Entity] {
 	}
 }
 
-// invariants describes an owner's keyed statements; order is the
-// owner's key order.
+// invariants describes an owner's keyed invariants; order is the
+// owner's key order. An invariant that names no tests is written as its
+// statement alone, and one that does as a mapping of the statement and
+// verified_by.
 func invariants(invs []vocab.Invariant, order []string) keyed[vocab.Invariant] {
+	build := func(inv vocab.Invariant) *yaml.Node {
+		if len(inv.VerifiedBy) == 0 {
+			return textScalar(inv.Statement)
+		}
+		m := newMapping()
+		appendKV(m, keyStatement, textScalar(inv.Statement))
+		appendKV(m, keyVerifiedBy, testSequence(inv.VerifiedBy))
+		return m
+	}
 	return keyed[vocab.Invariant]{
 		key: keyInvariants, order: order, items: invs,
-		name:   func(inv vocab.Invariant) string { return inv.Key },
-		build:  func(inv vocab.Invariant) *yaml.Node { return textScalar(inv.Statement) },
-		update: func(n *yaml.Node, inv vocab.Invariant) { setScalar(n, textScalar(inv.Statement)) },
+		name:  func(inv vocab.Invariant) string { return inv.Key },
+		build: build,
+		update: func(n *yaml.Node, inv vocab.Invariant) {
+			switch {
+			case len(inv.VerifiedBy) == 0 && n.Kind == yaml.ScalarNode:
+				setScalar(n, textScalar(inv.Statement))
+			case len(inv.VerifiedBy) > 0 && n.Kind == yaml.MappingNode:
+				setText(n, keyStatement, inv.Statement, invariantKeys)
+				setTests(n, inv.VerifiedBy, invariantKeys)
+			default:
+				*n = *build(inv)
+			}
+		},
 	}
 }
 
@@ -256,6 +277,9 @@ func assertions(items []vocab.Assertion, order []string) keyed[vocab.Assertion] 
 			m := newMapping()
 			appendKV(m, keyOn, stringScalar(as.On))
 			appendKV(m, keyStatement, textScalar(as.Statement))
+			if len(as.VerifiedBy) > 0 {
+				appendKV(m, keyVerifiedBy, testSequence(as.VerifiedBy))
+			}
 			return m
 		},
 		update: func(n *yaml.Node, as vocab.Assertion) {
@@ -265,6 +289,7 @@ func assertions(items []vocab.Assertion, order []string) keyed[vocab.Assertion] 
 			}
 			setText(n, keyOn, as.On, assertionKeys)
 			setText(n, keyStatement, as.Statement, assertionKeys)
+			setTests(n, as.VerifiedBy, assertionKeys)
 		},
 	}
 }
@@ -468,6 +493,15 @@ func setList(mapping *yaml.Node, key string, values []string, order []string) {
 	setField(mapping, key, stringSequence(values), order)
 }
 
+// setTests sets verified_by, removing it when no test is named.
+func setTests(mapping *yaml.Node, tests []string, order []string) {
+	if len(tests) == 0 {
+		removeField(mapping, keyVerifiedBy)
+		return
+	}
+	setField(mapping, keyVerifiedBy, testSequence(tests), order)
+}
+
 func appendList(mapping *yaml.Node, key string, values []string) {
 	if len(values) > 0 {
 		appendKV(mapping, key, stringSequence(values))
@@ -573,6 +607,16 @@ func textScalar(v string) *yaml.Node {
 		n.Style = yaml.FoldedStyle
 	}
 	return n
+}
+
+// testSequence builds a block list for verified_by, one test a line:
+// a test's path and name run too long to share a line with another.
+func testSequence(tests []string) *yaml.Node {
+	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: tagSeq}
+	for _, t := range tests {
+		seq.Content = append(seq.Content, stringScalar(t))
+	}
+	return seq
 }
 
 // stringSequence builds a flow list ([a, b]) for aliases.

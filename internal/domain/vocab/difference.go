@@ -149,12 +149,14 @@ func withoutLines(v any) any {
 func zeroInvariantLines(in []Invariant) {
 	for i := range in {
 		in[i].Line = 0
+		in[i].VerifiedBy = nilWhenEmpty(in[i].VerifiedBy)
 	}
 }
 
 func zeroAssertionLines(in []Assertion) {
 	for i := range in {
 		in[i].Line = 0
+		in[i].VerifiedBy = nilWhenEmpty(in[i].VerifiedBy)
 	}
 }
 

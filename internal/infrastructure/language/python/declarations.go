@@ -2,6 +2,7 @@ package python
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 
@@ -155,6 +156,7 @@ const (
 	nodeDecorated     = "decorated_definition"
 	declField         = "field"
 	nodeCall          = "call"
+	nodeSubscript     = "subscript"
 	bindingFunction   = "func"
 	bindingUnknown    = "unknown"
 	bindingAnnotation = "annotation"
@@ -238,7 +240,9 @@ func (w *pyWalker) walk(n *gotreesitter.Node, owner string, inFunction bool) {
 		return
 	case nodeClass:
 		name := w.name(n)
-		w.add("class", name, owner, n)
+		if d := w.add("class", name, owner, n); d != nil {
+			d.Abstract = w.abstractClass(n)
+		}
 		if body := n.ChildByFieldName("body", w.lang); body != nil {
 			for i := 0; i < body.NamedChildCount(); i++ {
 				w.walk(body.NamedChild(i), name, false)
@@ -265,6 +269,44 @@ func (w *pyWalker) walk(n *gotreesitter.Node, owner string, inFunction bool) {
 			w.walk(n.NamedChild(i), owner, inFunction)
 		}
 	}
+}
+
+// abstractBases are the bases that declare a class abstract, and
+// abstractMetaclasses the metaclasses that do, as a class statement
+// writes them: bare as imported from abc or typing, or through the
+// module. A name imported under another spelling is not recognized.
+var (
+	abstractBases       = []string{"ABC", "abc.ABC", "Protocol", "typing.Protocol", "typing_extensions.Protocol"}
+	abstractMetaclasses = []string{"ABCMeta", "abc.ABCMeta"}
+)
+
+// abstractClass reports whether a class statement derives an abstract
+// base, with or without type arguments (Protocol[T]), or names an
+// abstract metaclass.
+func (w *pyWalker) abstractClass(n *gotreesitter.Node) bool {
+	bases := n.ChildByFieldName("superclasses", w.lang)
+	if bases == nil {
+		return false
+	}
+	for i := 0; i < bases.NamedChildCount(); i++ {
+		b := bases.NamedChild(i)
+		switch b.Type(w.lang) {
+		case "keyword_argument":
+			key, value := b.ChildByFieldName("name", w.lang), b.ChildByFieldName("value", w.lang)
+			if key != nil && value != nil && key.Text(w.src) == "metaclass" && slices.Contains(abstractMetaclasses, value.Text(w.src)) {
+				return true
+			}
+		case nodeSubscript:
+			if value := b.ChildByFieldName("value", w.lang); value != nil && slices.Contains(abstractBases, value.Text(w.src)) {
+				return true
+			}
+		default:
+			if slices.Contains(abstractBases, b.Text(w.src)) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // walkCalls records every call with the function it runs in and the

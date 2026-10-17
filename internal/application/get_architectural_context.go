@@ -108,6 +108,10 @@ type DomainInvariantRef struct {
 	Owner     string `json:"owner"`
 	// OwnerConcept is aggregate or value_object.
 	OwnerConcept vocab.Concept `json:"ownerConcept"`
+	// VerifiedBy lists the tests the invariant names as verifying it,
+	// each path:name. Recording one says the test exists to verify the
+	// statement; whether it proves it is not checked.
+	VerifiedBy []string `json:"verifiedBy,omitempty"`
 	// Source is file:line of the carrying declaration when Anchor is
 	// found; empty otherwise.
 	Source string         `json:"source,omitempty"`
@@ -121,10 +125,13 @@ type DomainAssertionRef struct {
 	Statement string `json:"statement"`
 	Owner     string `json:"owner"`
 	// OwnerConcept is aggregate or domain_service.
-	OwnerConcept vocab.Concept  `json:"ownerConcept"`
-	On           string         `json:"on"`
-	Source       string         `json:"source,omitempty"`
-	Anchor       ContractAnchor `json:"anchor,omitempty"`
+	OwnerConcept vocab.Concept `json:"ownerConcept"`
+	On           string        `json:"on"`
+	// VerifiedBy lists the tests the assertion names as verifying it,
+	// as DomainInvariantRef's does.
+	VerifiedBy []string       `json:"verifiedBy,omitempty"`
+	Source     string         `json:"source,omitempty"`
+	Anchor     ContractAnchor `json:"anchor,omitempty"`
 }
 
 // DomainSpecificationRef is one specification name with its source
@@ -585,6 +592,7 @@ func domainKnowledgeOf(lang vocab.UbiquitousLanguage) *DomainKnowledge {
 				Statement:    oi.Invariant.Statement,
 				Owner:        oi.Owner,
 				OwnerConcept: oi.OwnerConcept,
+				VerifiedBy:   oi.Invariant.VerifiedBy,
 			})
 		}
 		for _, oa := range ctx.Assertions() {
@@ -594,6 +602,7 @@ func domainKnowledgeOf(lang vocab.UbiquitousLanguage) *DomainKnowledge {
 				Owner:        oa.Owner,
 				OwnerConcept: oa.OwnerConcept,
 				On:           oa.Assertion.On,
+				VerifiedBy:   oa.Assertion.VerifiedBy,
 			})
 		}
 		for _, s := range ctx.Specifications {

@@ -32,6 +32,11 @@ const (
 	ContextNamePattern = `^[a-z][a-z0-9_-]*$`
 	TermNamePattern    = `^\S(.*\S)?$`
 	KeyPattern         = `^[a-z][a-z0-9]*(-[a-z0-9]+)*$`
+	// VerifyingTestPattern is the spelling of a verified_by entry: a
+	// path with no colon, a colon, and a name without surrounding
+	// whitespace. The loader also refuses a path that is absolute or
+	// has an empty, . or .. part, which a pattern does not say clearly.
+	VerifyingTestPattern = `^[^:\s/\\]([^:\\]*[^:\s\\])?:\S(.*\S)?$`
 )
 
 // schemaBuilder reads property definitions out of the meta-model and
@@ -90,6 +95,9 @@ func writeSchema(buf *bytes.Buffer) error {
 	strItems := co("type", "string", "minLength", 1)
 	names := func(desc string) orderedObject {
 		return o("type", "array", "uniqueItems", true, "items", strItems, "description", desc)
+	}
+	tests := func(desc string) orderedObject {
+		return o("type", "array", "minItems", 1, "uniqueItems", true, "items", co("type", "string", "pattern", VerifyingTestPattern), "description", desc)
 	}
 	// A reference repeats its target's description beside the $ref, so
 	// a reader of the property sees the block's meaning without
@@ -155,7 +163,7 @@ func writeSchema(buf *bytes.Buffer) error {
 				"identity", str(b.def("aggregate", "identity")),
 				"aliases", names(b.def("aggregate", "aliases")),
 				"entities", keyed(b.def("aggregate", "entities"), TermNamePattern, ref("entity", "entity")),
-				"invariants", keyed(b.def("aggregate", "invariants"), KeyPattern, str(b.def("invariant", "statement"))),
+				"invariants", keyed(b.def("aggregate", "invariants"), KeyPattern, ref("invariant", "invariant")),
 				"assertions", keyed(b.def("aggregate", "assertions"), KeyPattern, ref("assertion", "assertion")),
 				"repository", str(b.def("aggregate", "repository")),
 				"factory", str(b.def("aggregate", "factory")),
@@ -168,11 +176,26 @@ func writeSchema(buf *bytes.Buffer) error {
 			"value_object", entry("value_object", []string{"definition"}, o(
 				"definition", str(b.def("value_object", "definition")),
 				"aliases", names(b.def("value_object", "aliases")),
-				"invariants", keyed(b.def("value_object", "invariants"), KeyPattern, str(b.def("invariant", "statement"))),
+				"invariants", keyed(b.def("value_object", "invariants"), KeyPattern, ref("invariant", "invariant")),
+			)),
+			// An invariant no test verifies is its statement alone; one
+			// that names its tests is a mapping of both.
+			"invariant", o(
+				"description", b.meaning("invariant"),
+				"oneOf", []any{
+					co("$ref", "#/$defs/invariant_statement", "description", b.def("invariant", "statement")),
+					co("$ref", "#/$defs/verified_invariant", "description", b.meaning("invariant")),
+				},
+			),
+			"invariant_statement", str(b.def("invariant", "statement")),
+			"verified_invariant", entry("invariant", []string{"statement", "verified_by"}, o(
+				"statement", str(b.def("invariant", "statement")),
+				"verified_by", tests(b.def("invariant", "verified_by")),
 			)),
 			"assertion", entry("assertion", []string{"on", "statement"}, o(
 				"on", str(b.def("assertion", "on")),
 				"statement", str(b.def("assertion", "statement")),
+				"verified_by", tests(b.def("assertion", "verified_by")),
 			)),
 			"event", entry("domain_event", []string{"definition"}, o(
 				"definition", str(b.def("domain_event", "definition")),

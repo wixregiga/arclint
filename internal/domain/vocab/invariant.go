@@ -12,10 +12,13 @@ import (
 // the key is also the name of the root method that enforces it,
 // spelled in the language's method case. The owner is the nesting the
 // invariant is recorded under; an Invariant never names its owner.
+// VerifiedBy lists the tests that verify the rule, each spelled as a
+// VerifyingTest is.
 type Invariant struct {
-	Key       string
-	Statement string
-	Line      int
+	Key        string
+	Statement  string
+	VerifiedBy []string
+	Line       int
 }
 
 // OwnedInvariant is an Invariant with the owner it is recorded under,
@@ -25,6 +28,16 @@ type OwnedInvariant struct {
 	Owner        string
 	OwnerConcept Concept
 	Invariant    Invariant
+}
+
+// cloneInvariants copies invariants with the tests each names, so an
+// edit of the copy never reaches the original.
+func cloneInvariants(in []Invariant) []Invariant {
+	out := cloneSlice(in)
+	for i := range out {
+		out[i].VerifiedBy = cloneStrings(out[i].VerifiedBy)
+	}
+	return out
 }
 
 // recordedKey is KeyPattern compiled: the spelling every key takes,
@@ -76,6 +89,9 @@ func validateInvariants(where string, invariants []Invariant) error {
 		}
 		if strings.TrimSpace(inv.Statement) == "" {
 			return fmt.Errorf("invariant/keyed-within-owner: %s%s: invariant %q has an empty statement", at(inv.Line), where, inv.Key)
+		}
+		if err := requireVerifyingTests("invariant/verified-by-names-tests", inv.Line, fmt.Sprintf("%s: invariant %q", where, inv.Key), inv.VerifiedBy); err != nil {
+			return err
 		}
 	}
 	return nil

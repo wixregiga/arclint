@@ -245,6 +245,26 @@ func TestNewUbiquitousLanguageAppliesTheLoaderInvariants(t *testing.T) {
 			c[0].Aggregates[0].Assertions[0].Statement = ""
 			return c, r
 		}, "assertion/names-owner-operation-and-check"},
+		{"invariant test without a name", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].ValueObjects[0].Invariants[0].VerifiedBy = []string{"internal/money/money_test.go"}
+			return c, r
+		}, "invariant/verified-by-names-tests"},
+		{"invariant test outside the repository", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].ValueObjects[0].Invariants[0].VerifiedBy = []string{"../money_test.go:TestNeverNegative"}
+			return c, r
+		}, "invariant/verified-by-names-tests"},
+		{"invariant test with an absolute path", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Aggregates[0].Invariants[0].VerifiedBy = []string{"/src/order_test.go:TestTotal"}
+			return c, r
+		}, "invariant/verified-by-names-tests"},
+		{"assertion test named twice", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Aggregates[0].Assertions[0].VerifiedBy = []string{"order_test.go:TestA", "order_test.go:TestA"}
+			return c, r
+		}, "assertion/verified-by-names-tests"},
+		{"assertion test name padded", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
+			c[0].Aggregates[0].Assertions[0].VerifiedBy = []string{"order_test.go: TestA"}
+			return c, r
+		}, "assertion/verified-by-names-tests"},
 		{"event raised by a value object", func(c []vocab.BoundedContext, r []vocab.ContextRelation) ([]vocab.BoundedContext, []vocab.ContextRelation) {
 			c[0].Events[0].RaisedBy = "Money"
 			return c, r
@@ -325,5 +345,23 @@ func TestErrDefinitionNotFoundIsWrapped(t *testing.T) {
 	_, _, err := lang.Remove(vocab.ConceptAggregate, vocab.Locator{Context: "sales", Name: "Nothing"})
 	if !errors.Is(err, vocab.ErrDefinitionNotFound) {
 		t.Fatalf("err = %v, want ErrDefinitionNotFound", err)
+	}
+}
+
+// A verified_by entry is the test file's path from the repository root,
+// a colon, and the test's name; the path ends at the first colon, so
+// the name keeps every colon after it.
+func TestParseVerifyingTest(t *testing.T) {
+	got, err := vocab.ParseVerifyingTest("web/order.test.ts:totals: with tax")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Path != "web/order.test.ts" || got.Name != "totals: with tax" || got.String() != "web/order.test.ts:totals: with tax" {
+		t.Errorf("parsed %+v", got)
+	}
+	for _, bad := range []string{"", "order_test.go", ":TestA", "order_test.go:", "a//b_test.go:TestA", "./a_test.go:TestA", `a\b_test.go:TestA`, "a_test.go:Test\nB", " a_test.go:TestA"} {
+		if _, err := vocab.ParseVerifyingTest(bad); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
 	}
 }

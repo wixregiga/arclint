@@ -144,7 +144,7 @@ func (a Aggregate) clone() Aggregate {
 		e.Aliases = cloneStrings(e.Aliases)
 		out.Entities = append(out.Entities, e)
 	}
-	out.Invariants = cloneSlice(a.Invariants)
-	out.Assertions = cloneSlice(a.Assertions)
+	out.Invariants = cloneInvariants(a.Invariants)
+	out.Assertions = cloneAssertions(a.Assertions)
 	return out
 }

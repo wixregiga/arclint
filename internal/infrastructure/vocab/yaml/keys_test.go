@@ -24,6 +24,7 @@ func TestBlockKeysAreTheMetaModelRecordings(t *testing.T) {
 		{"aggregate", "name", aggregateKeys},
 		{"entity", "name", entityKeys},
 		{"value_object", "name", valueObjectKeys},
+		{"invariant", "key", invariantKeys},
 		{"assertion", "key", assertionKeys},
 		{"domain_event", "name", eventKeys},
 		{"domain_service", "name", serviceKeys},
@@ -48,14 +49,12 @@ func TestBlockKeysAreTheMetaModelRecordings(t *testing.T) {
 	if documentKeys[0] != keyVersion {
 		t.Errorf("the document's first key is %q, want version", documentKeys[0])
 	}
-	// invariant and question are keyed statements: key and one text.
-	for _, term := range []string{"invariant", "question"} {
-		block, ok := model.Block(term)
-		if !ok {
-			t.Fatalf("block %q missing from the meta-model", term)
-		}
-		if len(block.Records.Properties) != 2 || block.Records.Properties[0].Name != "key" {
-			t.Errorf("%s records %+v; the adapter writes it as key: text", term, block.Records.Properties)
-		}
+	// A question is a keyed text: key and one text.
+	question, ok := model.Block("question")
+	if !ok {
+		t.Fatal("block question missing from the meta-model")
+	}
+	if len(question.Records.Properties) != 2 || question.Records.Properties[0].Name != "key" {
+		t.Errorf("question records %+v; the adapter writes it as key: text", question.Records.Properties)
 	}
 }

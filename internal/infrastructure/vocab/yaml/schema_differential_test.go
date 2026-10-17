@@ -256,8 +256,36 @@ func TestSchemaAgreesWithLoader(t *testing.T) {
 				"    aggregates:\n      Order:\n        definition: A purchase.\n        identity: OrderID\n        invariants:\n          Total_Sum: The total is the sum.\n", false, false,
 		},
 		{
-			"invariant as a mapping", minimal +
+			"invariant as a mapping without tests", minimal +
 				"    aggregates:\n      Order:\n        definition: A purchase.\n        identity: OrderID\n        invariants:\n          total-sum:\n            statement: The total is the sum.\n", false, false,
+		},
+		{
+			"invariant with the tests that verify it", minimal +
+				"    aggregates:\n      Order:\n        definition: A purchase.\n        identity: OrderID\n        invariants:\n          total-sum:\n            statement: The total is the sum.\n            verified_by:\n              - internal/order/order_test.go:TestTotalSum\n              - \"web/order.test.ts:sums the lines: with tax\"\n", true, false,
+		},
+		{
+			"invariant whose verified_by is empty", minimal +
+				"    aggregates:\n      Order:\n        definition: A purchase.\n        identity: OrderID\n        invariants:\n          total-sum:\n            statement: The total is the sum.\n            verified_by: []\n", false, false,
+		},
+		{
+			"verified_by entry without a test name", minimal +
+				"    value_objects:\n      Money:\n        definition: An amount.\n        invariants:\n          positive:\n            statement: Money is never negative.\n            verified_by: [money_test.go]\n", false, false,
+		},
+		{
+			"verified_by entry with an absolute path", minimal +
+				"    value_objects:\n      Money:\n        definition: An amount.\n        invariants:\n          positive:\n            statement: Money is never negative.\n            verified_by: [/money_test.go:TestPositive]\n", false, false,
+		},
+		{
+			"assertion with the tests that verify it", minimal +
+				"    services:\n      Discounter:\n        definition: Discounts an order.\n        assertions:\n          capped:\n            on: Discount\n            statement: A discount never exceeds the total.\n            verified_by: [pricing/discount_test.py:test_capped, pricing/discount_test.py:TestDiscount.test_capped]\n", true, false,
+		},
+		{
+			"assertion naming one test twice", minimal +
+				"    services:\n      Discounter:\n        definition: Discounts an order.\n        assertions:\n          capped:\n            on: Discount\n            statement: A discount never exceeds the total.\n            verified_by: [a_test.go:TestA, a_test.go:TestA]\n", false, false,
+		},
+		{
+			"verified_by path leaving the repository", minimal +
+				"    services:\n      Discounter:\n        definition: Discounts an order.\n        assertions:\n          capped:\n            on: Discount\n            statement: A discount never exceeds the total.\n            verified_by: [\"../a_test.go:TestA\"]\n", false, true,
 		},
 		{
 			"assertion without on", minimal +

@@ -493,7 +493,13 @@ func TestLoadRejectsTheWrongShape(t *testing.T) {
 		{"alias not text", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    aggregates:\n      Order:\n        definition: d\n        identity: OrderID\n        aliases:\n          - a: b\n", `line 11: context "sales": aggregate "Order": aliases 1 is not text`},
 		{"relations as a mapping", "version: 1\nproject: x\ncontexts: {}\nrelations:\n  a: b\n", "line 4: the domain file: relations is not a list"},
 		{"relation as text", "version: 1\nproject: x\ncontexts: {}\nrelations:\n  - a-to-b\n", "line 5: relation is not a mapping"},
-		{"invariant as a mapping", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    value_objects:\n      Money:\n        definition: d\n        invariants:\n          positive:\n            statement: s\n", `line 10: context "sales": value object "Money": invariant "positive" is not text`},
+		{"invariant as a mapping without tests", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    value_objects:\n      Money:\n        definition: d\n        invariants:\n          positive:\n            statement: s\n", `line 10: context "sales": value object "Money": invariant "positive" names no test under verified_by`},
+		{"invariant as a list", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    value_objects:\n      Money:\n        definition: d\n        invariants:\n          positive: [s]\n", `line 10: context "sales": value object "Money": invariant "positive" is not text`},
+		{"verified_by naming no test", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    value_objects:\n      Money:\n        definition: d\n        invariants:\n          positive:\n            statement: s\n            verified_by: []\n", `line 12: context "sales": value object "Money": invariant "positive": verified_by names no test`},
+		{"verified_by as text", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    services:\n      Pricing:\n        definition: d\n        assertions:\n          capped:\n            on: Price\n            statement: s\n            verified_by: a_test.go:TestA\n", `line 13: context "sales": service "Pricing": assertion "capped": verified_by is not a list`},
+		{"verified_by without a test name", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    value_objects:\n      Money:\n        definition: d\n        invariants:\n          positive:\n            statement: s\n            verified_by: [money_test.go]\n", `invariant/verified-by-names-tests`},
+		{"verified_by leaving the repository", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    services:\n      Pricing:\n        definition: d\n        assertions:\n          capped:\n            on: Price\n            statement: s\n            verified_by: [\"../other/a_test.go:TestA\"]\n", `assertion/verified-by-names-tests`},
+		{"verified_by naming one test twice", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    value_objects:\n      Money:\n        definition: d\n        invariants:\n          positive:\n            statement: s\n            verified_by: [money_test.go:TestA, money_test.go:TestA]\n", `verified_by names "money_test.go:TestA" twice`},
 		{"question as a mapping", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    questions:\n      open:\n        text: t\n", `line 7: context "sales": question "open" is not text`},
 		{"document as a list", "- version: 1\n", "line 1: the domain file is not a mapping"},
 	}
@@ -935,4 +941,75 @@ func mustDefaultRecording(t *testing.T) vocab.DomainRecording {
 		t.Fatal(err)
 	}
 	return recording
+}
+
+// An invariant that names its tests becomes a mapping of its statement
+// and verified_by, one test a line, and returns to its statement alone
+// when it names none; an assertion gains and loses verified_by as a
+// key. The comments around the entries stay where they were.
+func TestRecordWritesVerifyingTests(t *testing.T) {
+	const commented = `version: 1
+project: ticketing
+contexts:
+  sales:
+    definition: Selling seats for events.
+    value_objects:
+      Money:
+        definition: An amount in one currency.
+        invariants:
+          # holds for every amount
+          never-negative: Money is never negative.
+    services:
+      Pricing:
+        definition: Prices an order against the event's tiers.
+        assertions:
+          tiers-on-sale: # the contract
+            on: Price
+            statement: Only a tier on sale prices an order.
+`
+	repo, _ := repository(t, commented)
+	record := func(invTests, asTests []string) string {
+		t.Helper()
+		lang, _, err := repo.RecordedLanguage()
+		if err != nil {
+			t.Fatalf("load: %v", err)
+		}
+		sales := &lang.Contexts[0]
+		sales.ValueObjects[0].Invariants[0].VerifiedBy = invTests
+		sales.Services[0].Assertions[0].VerifiedBy = asTests
+		edited, err := vocab.NewUbiquitousLanguage(lang.Project, lang.Description, lang.Contexts, lang.Relations)
+		if err != nil {
+			t.Fatalf("edit: %v", err)
+		}
+		edited.Recording = lang.Recording
+		if err := repo.Record(edited); err != nil {
+			t.Fatalf("Record: %v", err)
+		}
+		again, _, err := repo.RecordedLanguage()
+		if err != nil {
+			t.Fatalf("reload: %v", err)
+		}
+		if d := edited.Difference(again); d != "" {
+			t.Fatalf("language changed across Record: %s", d)
+		}
+		written, _ := os.ReadFile(repo.Path())
+		return string(written)
+	}
+
+	text := record(
+		[]string{"internal/money/money_test.go:TestNeverNegative", "web/money.test.ts:never negative: not even -0"},
+		[]string{"internal/pricing/pricing_test.go:TestTiersOnSale"},
+	)
+	for _, want := range []string{
+		"        invariants:\n          # holds for every amount\n          never-negative:\n            statement: Money is never negative.\n            verified_by:\n              - internal/money/money_test.go:TestNeverNegative\n              - 'web/money.test.ts:never negative: not even -0'\n",
+		"          tiers-on-sale: # the contract\n            on: Price\n            statement: Only a tier on sale prices an order.\n            verified_by:\n              - internal/pricing/pricing_test.go:TestTiersOnSale\n",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("file lacks:\n%s\nfile:\n%s", want, text)
+		}
+	}
+
+	if text = record(nil, nil); text != commented {
+		t.Errorf("clearing the tests does not restore the file:\n%s", text)
+	}
 }

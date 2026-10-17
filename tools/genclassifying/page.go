@@ -183,7 +183,7 @@ func (p *page) family(title, lead string, terms []string) error {
 		if len(b.Records.Properties) > 0 {
 			p.printf("| Property | Required | Meaning |\n|---|---|---|\n")
 			for _, prop := range b.Records.Properties {
-				p.printf("| `%s` | %s | %s |\n", prop.Name, yesNo(prop.Required), cell(prop.Definition))
+				p.printf("| `%s` | %s | %s%s |\n", prop.Name, yesNo(prop.Required), cell(prop.Definition), p.cite(prop.Sources))
 			}
 			p.printf("\n")
 		}

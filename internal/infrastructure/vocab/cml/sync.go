@@ -490,9 +490,7 @@ func syncOperations(existing []*syntax.DomainObjectOperation, inv []vocab.Invari
 				continue
 			}
 			op.Doc = fresh.Doc
-			if hintOne(op.Hint, "on") != hintOne(fresh.Hint, "on") {
-				op.Hint = scalarHint(op.Hint, "on", hintOne(fresh.Hint, "on"))
-			}
+			op.Hint = syncOwnedHint(op.Hint, fresh.Hint)
 			delete(op.Present, "doc")
 			delete(op.Present, "hint")
 			delete(owned, op.Name)
@@ -515,6 +513,20 @@ func syncOperations(existing []*syntax.DomainObjectOperation, inv []vocab.Invari
 	return orderOperations(out, desired, name, isOwned)
 }
 
+// syncOwnedHint brings the arclint entries of an invariant's or an
+// assertion's hint to the fresh ones, the operation it constrains and
+// the tests that verify it, leaving every other entry where it is. An
+// unchanged entry keeps its authored spelling.
+func syncOwnedHint(existing, fresh string) string {
+	if hintOne(existing, "on") != hintOne(fresh, "on") {
+		existing = scalarHint(existing, "on", hintOne(fresh, "on"))
+	}
+	if !slices.Equal(hints(existing, verifiedByHint), hints(fresh, verifiedByHint)) {
+		existing = replaceHint(existing, verifiedByHint, hints(fresh, verifiedByHint))
+	}
+	return existing
+}
+
 func syncServiceOperations(existing []*syntax.ServiceOperation, assertions []vocab.Assertion) []*syntax.ServiceOperation {
 	desired := freshServiceOperations(assertions)
 	owned := map[string]*syntax.ServiceOperation{}
@@ -532,9 +544,7 @@ func syncServiceOperations(existing []*syntax.ServiceOperation, assertions []voc
 				continue
 			}
 			op.Doc = fresh.Doc
-			if hintOne(op.Hint, "on") != hintOne(fresh.Hint, "on") {
-				op.Hint = scalarHint(op.Hint, "on", hintOne(fresh.Hint, "on"))
-			}
+			op.Hint = syncOwnedHint(op.Hint, fresh.Hint)
 			delete(op.Present, "doc")
 			delete(op.Present, "hint")
 			delete(owned, op.Name)

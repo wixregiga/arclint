@@ -138,6 +138,7 @@ func Overview(p *out.Printer, st Style, o application.DomainOverview) {
 				p.Printf("    %s\n", st.Muted("invariants:"))
 				for _, inv := range a.Invariants {
 					p.Printf("      %s\n", namedLine(inv.Key, inv.Statement))
+					writeVerifiedBy(p, st, "        ", inv.VerifiedBy)
 					writeSourceLine(p, st, "        ", contractSource(o.Matrix, ctx.Name, application.ContractInvariant, a.Name, inv.Key))
 				}
 			}
@@ -145,6 +146,7 @@ func Overview(p *out.Printer, st Style, o application.DomainOverview) {
 				p.Printf("    %s\n", st.Muted("assertions:"))
 				for _, as := range a.Assertions {
 					p.Printf("      %s\n", namedLine(as.Key+" (on "+as.On+")", as.Statement))
+					writeVerifiedBy(p, st, "        ", as.VerifiedBy)
 					writeSourceLine(p, st, "        ", contractSource(o.Matrix, ctx.Name, application.ContractAssertion, a.Name, as.Key))
 				}
 			}
@@ -159,6 +161,7 @@ func Overview(p *out.Printer, st Style, o application.DomainOverview) {
 				}
 				for _, inv := range v.Invariants {
 					p.Printf("      %s %s\n", st.Muted("invariant"), namedLine(inv.Key, inv.Statement))
+					writeVerifiedBy(p, st, "        ", inv.VerifiedBy)
 					writeSourceLine(p, st, "        ", contractSource(o.Matrix, ctx.Name, application.ContractInvariant, v.Name, inv.Key))
 				}
 			}
@@ -183,6 +186,7 @@ func Overview(p *out.Printer, st Style, o application.DomainOverview) {
 					p.Printf("      %s\n", st.Muted("assertions:"))
 					for _, as := range s.Assertions {
 						p.Printf("        %s\n", namedLine(as.Key+" (on "+as.On+")", as.Statement))
+						writeVerifiedBy(p, st, "          ", as.VerifiedBy)
 						writeSourceLine(p, st, "          ", contractSource(o.Matrix, ctx.Name, application.ContractAssertion, s.Name, as.Key))
 					}
 				}
@@ -447,6 +451,7 @@ func Show(p *out.Printer, st Style, v application.DomainEntryView) {
 			p.Println(st.Bold("Invariants:"))
 			for _, inv := range a.Invariants {
 				p.Printf("  %s\n", namedLine(inv.Key, inv.Statement))
+				writeVerifiedBy(p, st, "    ", inv.VerifiedBy)
 				ruleDetail(p, st, v.Rules, vocab.ConceptInvariant, inv.Key, "    ")
 			}
 		}
@@ -454,6 +459,7 @@ func Show(p *out.Printer, st Style, v application.DomainEntryView) {
 			p.Println(st.Bold("Assertions:"))
 			for _, as := range a.Assertions {
 				p.Printf("  %s\n", namedLine(as.Key+" (on "+as.On+")", as.Statement))
+				writeVerifiedBy(p, st, "    ", as.VerifiedBy)
 				ruleDetail(p, st, v.Rules, vocab.ConceptAssertion, as.Key, "    ")
 			}
 		}
@@ -471,17 +477,20 @@ func Show(p *out.Printer, st Style, v application.DomainEntryView) {
 			p.Println(st.Bold("Invariants:"))
 			for _, inv := range v.ValueObject.Invariants {
 				p.Printf("  %s\n", namedLine(inv.Key, inv.Statement))
+				writeVerifiedBy(p, st, "    ", inv.VerifiedBy)
 				ruleDetail(p, st, v.Rules, vocab.ConceptInvariant, inv.Key, "    ")
 			}
 		}
 	case vocab.ConceptInvariant:
 		p.Printf("%s %s\n", st.Bold("Owner:"), v.Owner)
 		p.Printf("%s %s\n", st.Bold("Statement:"), v.Invariant.Statement)
+		writeVerifiedBy(p, st, "", v.Invariant.VerifiedBy)
 		ruleDetail(p, st, v.Rules, vocab.ConceptInvariant, v.Invariant.Key, "")
 	case vocab.ConceptAssertion:
 		p.Printf("%s %s\n", st.Bold("Owner:"), v.Owner)
 		p.Printf("%s %s\n", st.Bold("On:"), v.Assertion.On)
 		p.Printf("%s %s\n", st.Bold("Statement:"), v.Assertion.Statement)
+		writeVerifiedBy(p, st, "", v.Assertion.VerifiedBy)
 		ruleDetail(p, st, v.Rules, vocab.ConceptAssertion, v.Assertion.Key, "")
 	case vocab.ConceptDomainEvent:
 		if v.Event.RaisedBy != "" {
@@ -494,6 +503,7 @@ func Show(p *out.Printer, st Style, v application.DomainEntryView) {
 			p.Println(st.Bold("Assertions:"))
 			for _, as := range v.Service.Assertions {
 				p.Printf("  %s\n", namedLine(as.Key+" (on "+as.On+")", as.Statement))
+				writeVerifiedBy(p, st, "    ", as.VerifiedBy)
 				ruleDetail(p, st, v.Rules, vocab.ConceptAssertion, as.Key, "    ")
 			}
 		}
@@ -745,6 +755,8 @@ func changedValue(property string, ch vocab.Change) string {
 		return shortValue(ch.Identity)
 	case "aliases":
 		return listValue(ch.Aliases)
+	case "verified_by":
+		return listValue(ch.VerifiedBy)
 	case "repository":
 		return shortValue(ch.Repository)
 	case "factory":
@@ -823,12 +835,14 @@ func Knowledge(p *out.Printer, st Style, d *application.DomainKnowledge) {
 			p.Println("    invariants:")
 			for _, inv := range ctx.Invariants {
 				p.Printf("      %s (%s): %s%s\n", inv.Key, inv.Owner, inv.Statement, anchorSuffix(st, inv.Source, inv.Anchor))
+				writeVerifiedBy(p, st, "        ", inv.VerifiedBy)
 			}
 		}
 		if len(ctx.Assertions) > 0 {
 			p.Println("    assertions:")
 			for _, a := range ctx.Assertions {
 				p.Printf("      %s (%s, on %s): %s%s\n", a.Key, a.Owner, a.On, a.Statement, anchorSuffix(st, a.Source, a.Anchor))
+				writeVerifiedBy(p, st, "        ", a.VerifiedBy)
 			}
 		}
 		if len(ctx.Specifications) > 0 {
@@ -848,6 +862,17 @@ func Knowledge(p *out.Printer, st Style, d *application.DomainKnowledge) {
 		p.Printf("  relation: %s -[%s]-> %s\n", rel.From, rel.Kind, rel.To)
 	}
 	writeUnanchored(p, st, d)
+}
+
+// writeVerifiedBy prints the tests an invariant or assertion names
+// under verified_by, and what arclint checks of them: that each exists,
+// never that it proves the statement.
+func writeVerifiedBy(p *out.Printer, st Style, indent string, tests []string) {
+	if len(tests) == 0 {
+		return
+	}
+	p.Printf("%s%s %s %s\n", indent, st.Muted("verified by:"), strings.Join(tests, ", "),
+		st.Muted("(arclint checks that each test exists, not what it proves)"))
 }
 
 func aggregateRef(a application.DomainAggregateRef) string {

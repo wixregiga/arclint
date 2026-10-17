@@ -104,11 +104,11 @@ func LibraryFileSpec() LibraryFile {
     contexts: named responsibilities, each with a definition
       aggregates: definition, identity, aliases?, repository?, factory?
         entities: definition, identity?, aliases?
-        invariants: keyed statements enforced by the root
-        assertions: keyed guarantees with on naming the operation and statement
-      value_objects: definition, aliases?, keyed invariants?
+        invariants: keyed statements enforced by the root, verified_by tests?
+        assertions: keyed guarantees with on naming the operation, statement, verified_by tests?
+      value_objects: definition, aliases?, keyed invariants with verified_by tests?
       events: definition, raised_by aggregate?
-      services: definition, keyed assertions with on and statement?
+      services: definition, keyed assertions with on, statement, verified_by tests?
       specifications: definition
       questions: keyed unresolved decisions
     relations: from context, to context, kind, description?

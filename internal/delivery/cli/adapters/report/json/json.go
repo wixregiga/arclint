@@ -535,22 +535,24 @@ type domainAggregateKnowJSON struct {
 }
 
 type domainInvariantKnowJSON struct {
-	Key          string `json:"key"`
-	Statement    string `json:"statement"`
-	Owner        string `json:"owner"`
-	OwnerConcept string `json:"ownerConcept"`
-	Source       string `json:"source,omitempty"`
-	Anchor       string `json:"anchor"`
+	Key          string   `json:"key"`
+	Statement    string   `json:"statement"`
+	Owner        string   `json:"owner"`
+	OwnerConcept string   `json:"ownerConcept"`
+	VerifiedBy   []string `json:"verifiedBy,omitempty"`
+	Source       string   `json:"source,omitempty"`
+	Anchor       string   `json:"anchor"`
 }
 
 type domainAssertionKnowJSON struct {
-	Key          string `json:"key"`
-	Statement    string `json:"statement"`
-	Owner        string `json:"owner"`
-	OwnerConcept string `json:"ownerConcept"`
-	On           string `json:"on"`
-	Source       string `json:"source,omitempty"`
-	Anchor       string `json:"anchor"`
+	Key          string   `json:"key"`
+	Statement    string   `json:"statement"`
+	Owner        string   `json:"owner"`
+	OwnerConcept string   `json:"ownerConcept"`
+	On           string   `json:"on"`
+	VerifiedBy   []string `json:"verifiedBy,omitempty"`
+	Source       string   `json:"source,omitempty"`
+	Anchor       string   `json:"anchor"`
 }
 
 type domainSpecificationKnowJSON struct {
@@ -663,13 +665,13 @@ func domainKnowledgeDoc(d *application.DomainKnowledge) *domainKnowledgeJSON {
 		for _, inv := range ctx.Invariants {
 			entry.Invariants = append(entry.Invariants, domainInvariantKnowJSON{
 				Key: inv.Key, Statement: inv.Statement, Owner: inv.Owner, OwnerConcept: string(inv.OwnerConcept),
-				Source: inv.Source, Anchor: string(inv.Anchor),
+				VerifiedBy: inv.VerifiedBy, Source: inv.Source, Anchor: string(inv.Anchor),
 			})
 		}
 		for _, a := range ctx.Assertions {
 			entry.Assertions = append(entry.Assertions, domainAssertionKnowJSON{
 				Key: a.Key, Statement: a.Statement, Owner: a.Owner, OwnerConcept: string(a.OwnerConcept), On: a.On,
-				Source: a.Source, Anchor: string(a.Anchor),
+				VerifiedBy: a.VerifiedBy, Source: a.Source, Anchor: string(a.Anchor),
 			})
 		}
 		for _, s := range ctx.Specifications {
