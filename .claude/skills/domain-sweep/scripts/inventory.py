@@ -331,7 +331,7 @@ def is_generated(path, lines):
     suffix = path.rsplit(".", 1)[-1] if "." in path else ""
     line_openers = GENERATED_LINE.get(suffix, C_LINE)
     blocks = GENERATED_BLOCK.get(suffix, C_BLOCK)
-    i = 0
+    i = 1 if lines and lines[0].startswith("#!") else 0  # a hashbang line
     if lines and lines[0].strip() in ("+++", "---"):
         fence = lines[0].strip()
         i = 1
@@ -599,7 +599,15 @@ class TypeScriptLexer:
         # inside type arguments, it.each<Row>(...), n angle brackets deep;
         # ("name", "string") or ("name", t), inside the name literal.
         self.test_call = None
+        # Calls whose arguments a nested test call interrupted, describe(
+        # suiteName, () => { test("...") }), to resume when it is read.
+        self.test_outer = []
         self.callee_line = 0  # the line the test callee began on
+
+    def drop_call(self):
+        """The test call being read turned out to be none, or ended: resume
+        the call it interrupted, if any."""
+        self.test_call = self.test_outer.pop() if self.test_outer else None
 
     def snapshot(self):
         return copy.deepcopy(self.__dict__)
@@ -674,20 +682,20 @@ class TypeScriptLexer:
             elif self.test_call == "callee" and continues != "string":
                 self.test_call = ("tagged", continues)
             elif self.test_call == "callee":
-                self.test_call = None
+                self.drop_call()
 
         def literal_ends(closed):
             """A string or template closed; closed is "string" or the open
             count it had."""
             if self.test_call == ("name", closed):
-                self.test_call = None
+                self.drop_call()
             elif self.test_call == ("tagged", closed):
                 self.test_call = "callee"
 
         def other_token():
             """Any token that is not part of a test declaration's shape."""
             if self.test_call == "callee":
-                self.test_call = None
+                self.drop_call()
             elif isinstance(self.test_call, tuple) and self.test_call[0] == "open":
                 self.test_call = ("args", self.test_call[1])
 
@@ -864,7 +872,10 @@ class TypeScriptLexer:
                 other_token()
             token("operand")
             return
-        if word in TEST_CALLEES and self.test_call in (None, "callee"):
+        call = self.test_call
+        if word in TEST_CALLEES and (call in (None, "callee") or (isinstance(call, tuple) and call[0] == "args")):
+            if isinstance(call, tuple):
+                self.test_outer.append(call)  # a test inside another call's arguments
             self.test_call, self.callee_line = "callee", number
         else:
             other_token()
@@ -912,6 +923,7 @@ class TypeScriptLexer:
     def punctuation(self, char, text, i, token, other_token, templates_open):
         """Read one bracket or operator character."""
         prev = self.prev
+        in_type = self.type_context
         if char != "<" and not self.type_arguments:
             # A type after as or satisfies is names and dots up to <.
             self.type_context = False
@@ -943,6 +955,12 @@ class TypeScriptLexer:
             call = self.test_call
             if isinstance(call, tuple) and call[0] in ("open", "args") and call[1] == opened:
                 self.test_call = "callee"
+            elif any(outer[1] == opened for outer in self.test_outer):
+                # The interrupted call closes around an unfinished one.
+                while self.test_outer and self.test_outer[-1][1] != opened:
+                    self.test_outer.pop()
+                self.test_outer.pop()
+                self.test_call = "callee"
             else:
                 other_token()
             if closes_condition:
@@ -955,6 +973,8 @@ class TypeScriptLexer:
         elif char == "{":
             if self.expression_body == "body":
                 opens, self.expression_body = "body", False
+            elif in_type:
+                opens = "body"  # an inline type, 4 satisfies { ... }: an operand once closed
             elif self.type_alias:
                 opens = "type"
             elif self.parens and self.parens[-1][1]:
