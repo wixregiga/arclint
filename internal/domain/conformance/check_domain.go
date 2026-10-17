@@ -1483,7 +1483,7 @@ func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, o
 		if !hasOp {
 			v, err := newViolation(r, subject, service.file.path, service.decl.StartLine,
 				fmt.Sprintf("%s: assertion %s constrains operation %s, which %s does not declare", owner.label, as.Key, as.On, owner.holder),
-				fmt.Sprintf("declare %s on %s", methodSpellings(owner.idx, as.On), service.decl.Name))
+				owner.remediation(fmt.Sprintf("declare %s on %s", methodSpellings(owner.idx, as.On), service.decl.Name)))
 			if err != nil {
 				return nil, nil, err
 			}
@@ -1514,7 +1514,7 @@ func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, o
 		}
 		v, err := newViolation(r, subject, service.file.path, service.decl.StartLine,
 			fmt.Sprintf("declared service %s: %s has no check in context %s", service.decl.Name, as.Key, cc.ctx.Name),
-			fmt.Sprintf("declare the function %s there, or return from %s a value whose invariant %s enforces it", fn, on, as.Key))
+			owner.remediation(fmt.Sprintf("declare the function %s there, or return from %s a value whose invariant %s enforces it", fn, on, as.Key)))
 		if err != nil {
 			return nil, nil, err
 		}
