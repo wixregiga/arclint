@@ -954,6 +954,17 @@ class InventoryTest(unittest.TestCase):
         rows = self.located(self.repo.rows("--base", "main", "--head", "HEAD"))
         self.assertEqual(rows["test_rules.py:2"][1], "test", "a committed Python file keeps its declared encoding")
 
+    def test_round_twenty_five_cases(self):
+        self.repo.write("web/quota.ts", "const ratio = 8\n / `requests/second\n" + "Only accepted requests count.\n" * 36 + "`.length;\n")
+        self.repo.write("doc.md", "We must\tnot overwrite existing files.\nUse A | B.\n")
+        rows = self.located(self.repo.rows("--base", "main"))
+        for line in range(2, 40):
+            self.assertIn(f"web/quota.ts:{line}", rows)
+        tsv = self.repo.rows("--base", "main", "--scope", "changed", "--hint", r"\bmust\s+not\b")
+        self.assertTrue(all(len(row) == 5 for row in tsv))
+        md = self.repo.run("--base", "main", "--scope", "changed", "--hint", r"\|", "--format", "md").stdout.splitlines()
+        self.assertIn("| added | doc | \\| | doc.md:2 | Use A \\| B. |", md)
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
