@@ -114,7 +114,8 @@ GENERATED = re.compile(r"Code generated .* DO NOT EDIT\.?")
 
 # Two words in a one-line literal: a message or a sentence, not an import
 # path, a key, a format verb or a struct tag.
-WORDS = re.compile(r"[A-Za-z]{2,}[ \t]+[A-Za-z]+|[A-Za-z]+[ \t]+[A-Za-z]{2,}")
+# Letters of any script: [^\W\d_] is \w without digits and the underscore.
+WORDS = re.compile(r"[^\W\d_]{2,}[ \t]+[^\W\d_]+|[^\W\d_]+[ \t]+[^\W\d_]{2,}")
 
 # Go and Python test declarations, matched against a line's code alone:
 # every literal on the line reads "", so a declaration written inside a
@@ -888,7 +889,10 @@ class TypeScriptLexer:
                 if kind == "operator":
                     sure = op not in ("}", ">")
                 elif isinstance(kind, tuple):
-                    sure = kind[0] == "word" and kind[1] not in ("await", "yield", "of")
+                    # A keyword's spelling, or any name inside a type after
+                    # as or satisfies (void, number), cannot settle a slash.
+                    sure = (kind[0] == "word" and kind[1] not in REGEX_KEYWORDS
+                            and kind[1] not in ("await", "yield", "of") and not self.type_context)
                 else:
                     sure = False
             self.before, self.prev, self.after_dot, self.prev_line = self.prev, kind, False, self.logical
