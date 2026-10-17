@@ -23,11 +23,14 @@ test:
 test-oracle:
 	ARCLINT_ORACLE=1 $(GO) test -timeout 30m -run TestResolutionOverRealRepositories ./internal/infrastructure/language/golang/
 
-# The long CML property sweeps in full: every generated domain, every
-# Context Mapper verdict, every corpus file and edit. make test runs a
-# fixed sample of each; the nightly Exhaustive workflow runs this.
+# The long sweeps in full: every generated domain, every Context Mapper
+# verdict, every corpus file and edit of the CML tests, and every Go and
+# Python standard library file the domain-sweep lexers are compared on.
+# make test and make check run a fixed sample of each; the nightly
+# Exhaustive workflow runs this.
 test-exhaustive:
 	ARCLINT_EXHAUSTIVE=1 $(GO) test -timeout 60m ./internal/infrastructure/vocab/cml/...
+	ARCLINT_EXHAUSTIVE=1 python3 -I -B -m unittest discover -s .agents/skills/domain-sweep/scripts -p 'test_*.py' -k LexerOracle
 
 vet:
 	$(GO) vet ./...
@@ -197,7 +200,9 @@ _examples-go:
 	cd docs/examples/go && $(GO) vet ./... && $(GO) test ./...
 
 # The domain-sweep skill's script, tested against real git repositories it
-# creates in a temporary directory. -B writes no bytecode into the skill.
+# creates in a temporary directory, and its lexers compared with go/scanner
+# (tools/sweeporacle) and Python's tokenize on real files. -B writes no
+# bytecode into the skill.
 _skill-scripts:
 	python3 -I -B -m unittest discover -s .agents/skills/domain-sweep/scripts -p 'test_*.py'
 

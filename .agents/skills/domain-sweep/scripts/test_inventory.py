@@ -3,14 +3,27 @@
 Run: python3 -I -B -m unittest discover -s .agents/skills/domain-sweep/scripts
 """
 
+import io
 import os
+import re
 import subprocess
 import sys
+import sysconfig
 import tempfile
 import textwrap
+import tokenize
 import unittest
 
-SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "inventory.py")
+HERE = os.path.dirname(os.path.abspath(__file__))
+SCRIPT = os.path.join(HERE, "inventory.py")
+sys.path.insert(0, HERE)
+
+import inventory  # noqa: E402
+
+# The oracle tests read the repository's own files and a fixed sample of a
+# standard library; ARCLINT_EXHAUSTIVE=1 reads every standard library file.
+EXHAUSTIVE = os.environ.get("ARCLINT_EXHAUSTIVE") == "1"
+SAMPLE_EVERY = 25
 
 
 def clean_env():
@@ -561,6 +574,30 @@ class InventoryTest(unittest.TestCase):
         rows = repo.rows("--base", "main", "--scope", "changed")
         self.assertEqual([row[3] for row in rows], ["README.md:2"])
 
+    def test_a_regex_after_a_keyword_on_the_line_before(self):
+        self.repo.write("web/a.ts", 'async function f() {\n  return await\n  /[`]/.test("");\n}\n// Never overwrite.\n')
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {"web/a.ts:5": "comment"})
+
+    def test_a_comment_between_a_condition_and_its_parenthesis(self):
+        self.repo.write("web/a.ts", 'if /* ready */ (true) /[`]/.test("");\n// Never overwrite.\n')
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual({loc: row[1] for loc, row in rows.items()},
+                         {"web/a.ts:1": "comment", "web/a.ts:2": "comment"})
+
+    def test_a_parameterized_test_name(self):
+        self.repo.write("web/a.test.ts", 'test.each([1, 2])("rejects invalid input %s", () => {});\n'
+                        'describe.each([[1, f(2)]])("never %s", () => {});\n')
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual(rows["web/a.test.ts:1"][1], "test")
+        self.assertEqual(rows["web/a.test.ts:2"][1], "test")
+
+    def test_a_non_null_assertion_after_a_tagged_template(self):
+        self.repo.write("web/a.ts", "const half = count`x`! / 2; // Only the owner writes.\nconst q = a[0] / b / c; // Divides twice.\n")
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual(rows["web/a.ts:1"][1], "comment")
+        self.assertEqual(rows["web/a.ts:2"][1], "comment")
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
@@ -572,6 +609,118 @@ class InventoryTest(unittest.TestCase):
         before = self.repo.git("status", "--porcelain", "--ignored")
         self.repo.run("--base", "main")
         self.assertEqual(self.repo.git("status", "--porcelain", "--ignored"), before)
+
+
+def repository_root():
+    return subprocess.run(
+        ["git", "-C", HERE, "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True,
+    ).stdout.rstrip("\n")
+
+
+def tracked(root, pattern):
+    out = subprocess.run(
+        ["git", "-C", root, "ls-files", "-z", pattern], capture_output=True, text=True, check=True,
+    ).stdout
+    return [os.path.join(root, p) for p in out.split("\0") if p and "/testdata/" not in f"/{p}"]
+
+
+def sample(paths):
+    paths = sorted(paths)
+    return paths if EXHAUSTIVE else paths[::SAMPLE_EVERY]
+
+
+def read_source(path):
+    with open(path, encoding="utf-8", errors="replace", newline="") as handle:
+        return handle.read()
+
+
+def tokenize_sources(text):
+    """The line sources Python's own tokenizer implies, by the rules the
+    inventory documents: comments, strings that span lines or hold two
+    words, and test declarations at the start of a statement."""
+    kinds = {}
+
+    def add(line, kind):
+        kinds.setdefault(line, set()).add(kind)
+
+    tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    for i, tok in enumerate(tokens):
+        if tok.type == tokenize.COMMENT:
+            add(tok.start[0], "comment")
+        elif tok.type == tokenize.STRING:
+            if tok.end[0] > tok.start[0]:
+                for line in range(tok.start[0], tok.end[0] + 1):
+                    add(line, "text")
+            else:
+                body = tok.string.lstrip("rRbBuUfF")
+                quote = 3 if body[:3] in ('"""', "'''") else 1
+                if inventory.WORDS.search(body[quote:-quote]):
+                    add(tok.start[0], "text")
+        elif tok.type == tokenize.NAME and tok.string in ("def", "class"):
+            j = i - 1
+            while j >= 0 and tokens[j].type in (tokenize.INDENT, tokenize.DEDENT):
+                j -= 1
+            starts = j < 0 or tokens[j].type in (tokenize.NEWLINE, tokenize.NL) or (
+                tokens[j].string == "async" and tokens[j].start[0] == tok.start[0]
+            )
+            name = tokens[i + 1] if i + 1 < len(tokens) else None
+            if not (starts and name and name.type == tokenize.NAME):
+                continue
+            if tok.string == "def" and name.string.startswith("test") and tokens[i + 2].string == "(":
+                add(tok.start[0], "test")
+            if tok.string == "class" and name.string.startswith("Test"):
+                add(tok.start[0], "test")
+    lines = text.split("\n")
+    return {
+        line: inventory.pick(found)
+        for line, found in kinds.items()
+        if line - 1 < len(lines) and lines[line - 1].strip()
+    }
+
+
+class LexerOracleTest(unittest.TestCase):
+    """The inventory's lexers agree, line for line, with each language's
+    own scanner on real files: the repository's, and the standard
+    library's."""
+
+    def test_go_lexer_matches_go_scanner(self):
+        root = repository_root()
+        goroot = subprocess.run(["go", "env", "GOROOT"], capture_output=True, text=True, check=True).stdout.strip()
+        stdlib = []
+        for directory, dirs, names in os.walk(os.path.join(goroot, "src")):
+            dirs[:] = [d for d in dirs if d != "testdata"]
+            stdlib += [os.path.join(directory, n) for n in names if n.endswith(".go")]
+        paths = tracked(root, "*.go") + sample(stdlib)
+        oracle = subprocess.run(
+            ["go", "run", "./tools/sweeporacle"], cwd=root, input="\n".join(paths) + "\n",
+            capture_output=True, text=True, check=True,
+        ).stdout
+        want = {}
+        for row in oracle.splitlines():
+            location, kind = row.rsplit("\t", 1)
+            path, line = location.rsplit(":", 1)
+            want.setdefault(path, {})[int(line)] = kind
+        lines = 0
+        for path in paths:
+            got = inventory.go_sources(inventory.split_lines(read_source(path)))
+            self.assertEqual(got, want.get(path, {}), path)
+            lines += len(got)
+        self.assertGreater(lines, 10000, "the oracle compared too little to mean anything")
+
+    def test_python_lexer_matches_tokenize(self):
+        root = repository_root()
+        stdlib_dir = sysconfig.get_paths()["stdlib"]
+        stdlib = []
+        for directory, dirs, names in os.walk(stdlib_dir):
+            dirs[:] = [d for d in dirs if d not in ("site-packages", "lib2to3")]
+            stdlib += [os.path.join(directory, n) for n in names if n.endswith(".py")]
+        lines = 0
+        for path in tracked(root, "*.py") + sample(stdlib):
+            text = read_source(path)
+            got = inventory.python_sources(inventory.split_lines(text))
+            self.assertEqual(got, tokenize_sources(text), path)
+            lines += len(got)
+        self.assertGreater(lines, 1000, "the oracle compared too little to mean anything")
 
 
 if __name__ == "__main__":

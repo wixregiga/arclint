@@ -1,7 +1,8 @@
 name: Exhaustive
 
-# The CML property sweeps in full. make ci runs a fixed sample of each so
-# pull requests stay fast; this runs every case once a night and on demand.
+# The CML property sweeps and the domain-sweep lexer oracles in full. make
+# ci runs a fixed sample of each so pull requests stay fast; this runs
+# every case once a night and on demand.
 on:
   schedule:
     - cron: "17 6 * * *"
@@ -22,5 +23,5 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Run every case of the CML property sweeps
+      - name: Run every case of the long sweeps
         run: make test-exhaustive
