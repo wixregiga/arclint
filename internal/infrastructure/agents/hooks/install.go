@@ -323,6 +323,7 @@ func (installer *Installer) write(file target) error {
 // project.
 func (installer *Installer) Status() (status application.HooksStatus, err error) {
 	status = application.HooksStatus{Project: installer.root, Binary: installer.binary}
+	running := false
 	if err := installer.validate(); err != nil {
 		return status, fmt.Errorf("workflow hook status: %w", err)
 	}
@@ -335,7 +336,10 @@ func (installer *Installer) Status() (status application.HooksStatus, err error)
 		local := installer.projectTarget(host)
 		entries := make([]application.HookFileStatus, 0, len(users)+1)
 		for _, file := range append(slices.Clone(users), local) {
-			entries = append(entries, installer.inspect(file))
+			entry, runnable := installer.inspect(file)
+			entries = append(entries, entry)
+			// A partial file whose binary runs still records events.
+			running = running || (runnable && entry.Installation == application.HooksPartial)
 		}
 		localEntry := &entries[len(entries)-1]
 		// A workflow hook either file lists runs beside the other's, even
@@ -371,7 +375,7 @@ func (installer *Installer) Status() (status application.HooksStatus, err error)
 		return status, fmt.Errorf("workflow hook status: %w", err)
 	}
 	if status.LastEvent.IsZero() {
-		status.Silence = installer.silence(status.Files)
+		status.Silence = installer.silence(status.Files, running)
 	}
 	return status, nil
 }
@@ -398,16 +402,19 @@ func unreadableFiles(host hookHost, configurations []UserConfiguration) []applic
 }
 
 // silence says why no hook event has reached the project, in the order a
-// user can rule the causes out.
-func (installer *Installer) silence(files []application.HookFileStatus) []string {
+// user can rule the causes out. running reports a partial file whose
+// hooks name a binary that can run.
+func (installer *Installer) silence(files []application.HookFileStatus, running bool) []string {
 	var reasons []string
 	installed := func(installation application.HookInstallation) bool {
 		return slices.ContainsFunc(files, func(file application.HookFileStatus) bool { return file.Installation == installation })
 	}
 	switch {
 	case installed(application.HooksComplete):
-	case installed(application.HooksPartial):
+	case running:
 		reasons = append(reasons, "No configuration file lists every workflow hook, but the hooks a file lists still run and record an event each time one fires; each file below names the hooks it lists and lacks. Run `arclint agents hooks install` to add the missing ones.")
+	case installed(application.HooksPartial):
+		reasons = append(reasons, "No configuration file lists every workflow hook, and the binary the listed hooks run cannot run, so no host runs them here; run `arclint agents hooks install`.")
 	default:
 		reasons = append(reasons, "No configuration file lists the workflow hooks, so no host runs them here; run `arclint agents hooks install`.")
 	}
@@ -423,13 +430,14 @@ func (installer *Installer) silence(files []application.HookFileStatus) []string
 	)
 }
 
-// inspect reports what a target lists against what install writes there.
-func (installer *Installer) inspect(file target) application.HookFileStatus {
+// inspect reports what a target lists against what install writes there,
+// and whether every binary its workflow hooks name can run.
+func (installer *Installer) inspect(file target) (application.HookFileStatus, bool) {
 	entry := application.HookFileStatus{Host: file.host.name, Scope: file.scope, Windows: file.form == windowsForm, Path: file.path, Installation: application.HooksUnknown}
 	document, _, err := readConfiguration(file.path)
 	if err != nil {
 		entry.Problems = append(entry.Problems, "Configuration is unreadable: "+err.Error())
-		return entry
+		return entry, false
 	}
 	hooks, _ := document["hooks"].(map[string]any)
 	want := installer.groups(file)
@@ -453,7 +461,7 @@ func (installer *Installer) inspect(file target) application.HookFileStatus {
 	switch {
 	case len(entry.Listed) == 0:
 		entry.Installation = application.HooksAbsent
-		return entry
+		return entry, false
 	case len(entry.Missing) == 0:
 		entry.Installation = application.HooksComplete
 	default:
@@ -472,7 +480,7 @@ func (installer *Installer) inspect(file target) application.HookFileStatus {
 		entry.Problems = append(entry.Problems, partialProblem(entry.Listed, entry.Missing, len(unrunnable) == 0))
 	}
 	entry.Problems = append(entry.Problems, unrunnable...)
-	return entry
+	return entry, len(unrunnable) == 0
 }
 
 // partialProblem names the hooks a file lists and the hooks it lacks. The

@@ -445,6 +445,13 @@ func TestStatusNamesMissingChangedAndUnrunnableHooks(t *testing.T) {
 	if codex.Installation != application.HooksPartial || !strings.Contains(problems, "SessionStart is installed; UserPromptSubmit, PostToolUse and Stop are missing. Run `arclint agents hooks install` to add them.") || !strings.Contains(problems, "The hooks run /gone/arclint, which does not exist.") {
 		t.Fatalf("partial install of a removed binary: %+v", codex)
 	}
+	status, err := installer.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if silence := strings.Join(status.Silence, "\n"); strings.Contains(silence, "still run") || !strings.Contains(silence, "the binary the listed hooks run cannot run") {
+		t.Fatalf("silence for a partial file whose binary is gone:\n%s", silence)
+	}
 }
 
 // A file installed before UserPromptSubmit existed still runs its other
