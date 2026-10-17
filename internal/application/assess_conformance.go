@@ -103,8 +103,9 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 		knowledge = vocab.UbiquitousLanguage{Recording: uc.knowledge.Recording()}
 	}
 	// The language names the test files its verified_by entries ask to
-	// be read, whatever the scan leaves out.
-	observations, err := uc.observations.Observe(cfg.Languages, cfg.Scan, requiredFacts(rules), nil, knowledge.VerifyingTestPaths())
+	// be read, whatever the scan leaves out; the Rules judging those
+	// tests decide which of them may be read.
+	observations, err := uc.observations.Observe(cfg.Languages, cfg.Scan, requiredFacts(rules), nil, conformance.NamedTestsToRead(rules, knowledge))
 	if err != nil {
 		return conformance.Assessment{}, fmt.Errorf("observe repository: %w", err)
 	}

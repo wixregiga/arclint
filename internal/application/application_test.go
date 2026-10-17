@@ -485,6 +485,15 @@ func TestListPatternsSummarizes(t *testing.T) {
 // out.
 func TestAssessConformanceAsksForTheNamedTestFiles(t *testing.T) {
 	cfg, obs := fixture(t, "m/ok.go")
+	builtIn, err := rule.BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range builtIn {
+		if r.ID().Qualified() == "assertion/verifying-tests-declared" {
+			cfg.Rules = append(cfg.Rules, r)
+		}
+	}
 	lang, err := vocab.NewUbiquitousLanguage("p", "", []vocab.BoundedContext{{
 		Name: "pricing", Definition: "d",
 		Services: []vocab.DomainService{{Name: "Pricing", Definition: "d", Assertions: []vocab.Assertion{
@@ -504,5 +513,13 @@ func TestAssessConformanceAsksForTheNamedTestFiles(t *testing.T) {
 	}
 	if got := observations.namedTests; len(got) != 1 || got[0] != "m/price_test.go" {
 		t.Errorf("named test files = %v, want m/price_test.go", got)
+	}
+
+	// A check that runs no Rule judging tests reads no named file.
+	if _, err := uc.Execute(application.AssessConformanceRequest{Exclude: []string{"assertion/verifying-tests-declared"}}); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if got := observations.namedTests; len(got) != 0 {
+		t.Errorf("named test files without the rule judging tests = %v, want none", got)
 	}
 }

@@ -166,7 +166,7 @@ func (uc RunRuleTests) Execute() (RuleTestRun, error) {
 			results = append(results, result)
 			continue
 		}
-		observations, err := uc.fixtures.Observe(t.Files(), cfg.Languages, cfg.Scan, r.Enforcement().Facts(), knowledge.VerifyingTestPaths())
+		observations, err := uc.fixtures.Observe(t.Files(), cfg.Languages, cfg.Scan, r.Enforcement().Facts(), conformance.NamedTestsToRead([]rule.Rule{r}, knowledge))
 		if err != nil {
 			return RuleTestRun{}, fmt.Errorf("rule test %q: observe fixture: %w", t.Name(), err)
 		}

@@ -325,3 +325,28 @@ func pythonTestSpelling(name string) string {
 	}
 	return "def " + name + "()"
 }
+
+// NamedTestsToRead lists the files the recording names under
+// verified_by that a Rule judging those tests may read: an enabled
+// verifying-tests Rule whose Scope selects the file and no file
+// Exclusion of it removes. A file every such Rule excludes, or that no
+// enabled one selects, is never read, whatever else names it.
+func NamedTestsToRead(rules []rule.Rule, knowledge vocab.UbiquitousLanguage) []string {
+	var readers []rule.Rule
+	for _, r := range rules {
+		check, ok := domainChecks[r.ID().Local()]
+		if _, disabled := r.Disablement(); ok && check.readsTests && !disabled && r.Type() == rule.TypeDomain {
+			readers = append(readers, r)
+		}
+	}
+	var out []string
+	for _, path := range knowledge.VerifyingTestPaths() {
+		for _, r := range readers {
+			if r.Scope().WouldSelectFile(path, nil) && !r.Scope().ExcludedFile(path) {
+				out = append(out, path)
+				break
+			}
+		}
+	}
+	return out
+}
