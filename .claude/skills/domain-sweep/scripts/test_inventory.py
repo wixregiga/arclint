@@ -1098,6 +1098,16 @@ class InventoryTest(unittest.TestCase):
             located = self.located(self.repo.rows("--base", "main", "--scope", "changed"))
             self.assertRowsInclude(located, {"missed.test.ts:2": "comment", "missed.test.ts:3": "test"})
 
+    def test_terminators_in_block_comments_and_hashbangs(self):
+        for terminator in (b"\r", "\u2028".encode(), "\u2029".encode()):
+            with open(os.path.join(self.repo.root, "quota.test.ts"), "wb") as handle:
+                handle.write(b"type Count = number /*" + terminator + b'*/ /[`]/.test("x");\n// Never overwrite user files.\n'
+                             b'test("rejects invalid input", () => {});\n')
+            with open(os.path.join(self.repo.root, "cli.test.ts"), "wb") as handle:
+                handle.write(b"#!/usr/bin/env node" + terminator + b'test("never overwrites user files", () => {});\n')
+            located = self.located(self.repo.rows("--base", "main", "--scope", "changed"))
+            self.assertRowsInclude(located, {"quota.test.ts:2": "comment", "quota.test.ts:3": "test", "cli.test.ts:1": "test"})
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
