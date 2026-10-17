@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -525,5 +526,36 @@ func TestAnUpdateWaitsForALineTimedBeforeItsSample(t *testing.T) {
 	want := []agent.Activity{{Kind: agent.CheckRan}, {Kind: agent.FilesChanged, Paths: []string{"internal/a.go"}}}
 	if got := <-seen; !reflect.DeepEqual(got.recorded, want) {
 		t.Fatalf("recorded %+v, want %+v", got.recorded, want)
+	}
+}
+
+// A copy that keeps an old modification time, as `cp -p` does, changed the
+// file when it ran; it is the agent's change in the turn, not one from
+// before the prompt.
+func TestACopyKeepingAnOldModificationTimeCountsWhenItRan(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows file information records no change time")
+	}
+	root := gitRepository(t, map[string]string{"rules.arclint.yaml": "zones:\n  app: internal/**\n", "internal/a.go": "package a\n"})
+	writeFile(t, root, "internal/a.go", "package a // dirty\n")
+	old := time.Now().Add(-48 * time.Hour)
+	pause()
+	store := NewProgressStore(root, recording)
+	observe(t, store, "s")
+	if err := store.StartTurn("s"); err != nil {
+		t.Fatal(err)
+	}
+	sample := store.sample
+	store.sample = func() (snapshot, error) { return nil, errGitTimedOut }
+	observe(t, store, "s")
+	store.sample = sample
+	pause()
+	writeFile(t, root, "internal/a.go", "package a // copied\n")
+	if err := os.Chtimes(filepath.Join(root, "internal/a.go"), old, old); err != nil {
+		t.Fatal(err)
+	}
+	want := []agent.Activity{{Kind: agent.FilesChanged, Paths: []string{"internal/a.go"}}}
+	if seen := observe(t, store, "s"); !reflect.DeepEqual(seen.recorded, want) {
+		t.Fatalf("recorded %+v, want %+v", seen.recorded, want)
 	}
 }

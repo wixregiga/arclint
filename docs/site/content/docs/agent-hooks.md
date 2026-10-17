@@ -211,6 +211,11 @@ refreshes the index.
   parallel tool call does while an event samples the checkout waits for the
   next event. A file system whose clock runs ahead of the machine's, as some
   network file systems do, delays changes until the clock catches up.
+- When `git status` fails at one event, the hooks wait for the next one.
+  When it fails at two events in a row, ArcLint's own activities are read
+  without the checkout, so a repository git cannot read never holds them
+  back; a shell change made before such an outage may then be ordered after
+  them.
 - A removed file takes the time its directory last changed, which is later
   than the removal when another file of that directory changed after it.
 - On Windows, which records no change time, a copy that keeps a file's size,
