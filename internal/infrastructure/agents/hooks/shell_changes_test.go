@@ -1,11 +1,13 @@
 package hooks
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -128,6 +130,7 @@ func TestChangesBetweenTurnsAreNotTheAgents(t *testing.T) {
 	writeFile(t, root, "internal/before.go", "package a\n")
 	handle(t, events, prompt("s", root))
 	handle(t, events, stop("s", root))
+	pause()
 	writeFile(t, root, "internal/between.go", "package a\n")
 	if output := handle(t, events, prompt("s", root)); output != (hostOutput{}) {
 		t.Fatalf("the user's changes were advised at the prompt: %+v", output)
@@ -190,6 +193,7 @@ func TestFilesChangedBeforeASessionResumesAreNotTheAgents(t *testing.T) {
 	handle(t, events, sessionStart("s", root))
 	handle(t, events, prompt("s", root))
 	handle(t, events, stop("s", root))
+	pause()
 	writeFile(t, root, "internal/between.go", "package a\n")
 	resume := sessionStart("s", root)
 	resume["source"] = "resume"
@@ -298,6 +302,7 @@ func TestAFailedSampleAtThePromptKeepsTheTurnsWork(t *testing.T) {
 	if err := store.FinishTurn("s"); err != nil {
 		t.Fatal(err)
 	}
+	pause()
 	writeFile(t, root, "internal/users.go", "package a // the user's edit between turns\n")
 	pause()
 	if err := store.StartTurn("s"); err != nil {
@@ -403,5 +408,83 @@ func TestASessionThatNeverSampledReportsItsChangesOnRecovery(t *testing.T) {
 	want := []agent.Activity{{Kind: agent.FilesChanged, Paths: []string{"internal/agents.go"}}}
 	if seen := observe(t, store, "s"); !reflect.DeepEqual(seen.recorded, want) {
 		t.Fatalf("recorded %+v, want %+v", seen.recorded, want)
+	}
+}
+
+// Every time between turns stays excluded until a sample covers it, even
+// when samples fail through a whole turn and the next turn ends.
+func TestEveryTimeBetweenTurnsStaysExcludedUntilASampleCoversIt(t *testing.T) {
+	root := gitRepository(t, map[string]string{"rules.arclint.yaml": "zones:\n  app: internal/**\n", "internal/a.go": "package a\n"})
+	store := NewProgressStore(root, recording)
+	observe(t, store, "s")
+	for _, step := range []func(string) error{store.StartTurn, store.FinishTurn} {
+		if err := step("s"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pause()
+	writeFile(t, root, "internal/users.go", "package a // the user's edit between turns\n")
+	pause()
+	sample := store.sample
+	store.sample = func() (snapshot, error) { return nil, errGitTimedOut }
+	if err := store.StartTurn("s"); err != nil {
+		t.Fatal(err)
+	}
+	observe(t, store, "s")
+	pause()
+	writeFile(t, root, "internal/agents.go", "package a // the agent's edit in the turn\n")
+	pause()
+	observe(t, store, "s")
+	if err := store.FinishTurn("s"); err != nil {
+		t.Fatal(err)
+	}
+	pause()
+	if err := store.StartTurn("s"); err != nil {
+		t.Fatal(err)
+	}
+	store.sample = sample
+	want := []agent.Activity{{Kind: agent.FilesChanged, Paths: []string{"internal/agents.go"}}}
+	if seen := observe(t, store, "s"); !reflect.DeepEqual(seen.recorded, want) {
+		t.Fatalf("recorded %+v, want %+v", seen.recorded, want)
+	}
+}
+
+// Commands that finish at once append in the order of their times, so a
+// reader stopping at a time misses no line before it.
+func TestConcurrentRecordsAppendInTheOrderOfTheirTimes(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, progressDirectory), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	log := NewActivityLog(root, recording)
+	var group sync.WaitGroup
+	for range 8 {
+		group.Go(func() {
+			for range 25 {
+				if err := log.Record(agent.Activity{Kind: agent.CheckRan}); err != nil {
+					t.Error(err)
+				}
+			}
+		})
+	}
+	group.Wait()
+	data, err := os.ReadFile(filepath.Join(root, activityLog))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var previous time.Time
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	for index, line := range lines {
+		var logged loggedActivity
+		if err := json.Unmarshal([]byte(line), &logged); err != nil {
+			t.Fatalf("line %d: %v", index, err)
+		}
+		if logged.At.Before(previous) {
+			t.Fatalf("line %d at %v follows a line at %v", index, logged.At, previous)
+		}
+		previous = logged.At
+	}
+	if len(lines) != 200 {
+		t.Fatalf("%d lines, want 200", len(lines))
 	}
 }
