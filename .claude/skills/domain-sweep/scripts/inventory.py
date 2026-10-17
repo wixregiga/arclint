@@ -585,9 +585,8 @@ def ts_name(text, i):
 QUOTED = re.compile(r"""(["'`])((?:\\.|(?!\1).)*)\1""")
 SWALLOWED_TEST = re.compile(r"""(?:^|[^\w.$])(?:it|test|describe)(?:\.\w+)*\s*\(\s*["'`]""")
 
-# A line whose reading opened a literal it never closed is read again with
-# one slash decision reversed, at most this many, from the last.
-MAX_SLASH_RETRIES = 16
+# How many readings of one line's undecided slashes are compared at most.
+MAX_READINGS = 64
 # How many lines after it a line's readings are compared over, and how
 # many other readings are followed at once.
 SLASH_WINDOW = 30
@@ -734,15 +733,25 @@ class TypeScriptLexer:
                 # follow every other reading in a shadow until it meets this
                 # one, keeping its rows, so a wrong choice reads more lines,
                 # never fewer.
+                # Reversing one slash may reveal another undecided one, so
+                # readings are explored breadth first, each adding one
+                # reversal of a slash it found, up to MAX_READINGS.
                 best = None
                 afters = []
-                readings = [frozenset()] + [frozenset([p]) for p in reversed(slashes[-MAX_SLASH_RETRIES:])]
                 kinds, marks = set(kinds), list(marks)
-                for reversed_slashes in readings:
+                queue = [frozenset()]
+                explored = {frozenset()}
+                while queue and len(afters) < MAX_READINGS:
+                    reversed_slashes = queue.pop(0)
                     self.restore(start)
                     result = self.read(number, text, reversed_slashes)
                     kinds |= result[0]
                     marks += result[1]
+                    for position in result[2]:
+                        following = reversed_slashes | {position}
+                        if position not in reversed_slashes and following not in explored:
+                            explored.add(following)
+                            queue.append(following)
                     after = self.snapshot()
                     afters.append(after)
                     score = self.window_cost(lines, number, result[3])
