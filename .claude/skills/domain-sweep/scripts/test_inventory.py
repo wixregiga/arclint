@@ -703,6 +703,18 @@ class InventoryTest(unittest.TestCase):
             "web/obj.ts:1": "comment",
         })
 
+    def test_round_nine_lexer_cases(self):
+        self.repo.write("web/x.test.ts", 'export default function setup() {}\n/[`]/.test("x");\n// Never overwrite.\n')
+        self.repo.write("web/script.ts", "const await = 4;\nconst half = await / 2; // Never round.\n"
+                        "function f(yield) { return yield / 2; /* Only half. */ }\n"
+                        "const g = async function () {} / 2; // Not a number.\n")
+        self.repo.write("tools/test_identity.py", "def test_identity[T: (int, str)](value: T):\n    assert value == value\n")
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {
+            "web/x.test.ts:3": "comment", "web/script.ts:2": "comment", "web/script.ts:3": "comment",
+            "web/script.ts:4": "comment", "tools/test_identity.py:1": "test",
+        })
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
@@ -802,8 +814,18 @@ def tokenize_sources(text):
             name = tokens[i + 1] if i + 1 < len(tokens) else None
             if not (starts and name and name.type == tokenize.NAME):
                 continue
-            if tok.string == "def" and name.string.startswith("test") and tokens[i + 2].string == "(":
-                add(tok.start[0], "test")
+            if tok.string == "def" and name.string.startswith("test"):
+                j = i + 2
+                if tokens[j].string == "[":
+                    # PEP 695 type parameters, def test_x[T](, up to their ].
+                    level = 0
+                    while j < len(tokens):
+                        level += {"[": 1, "]": -1}.get(tokens[j].string, 0)
+                        j += 1
+                        if level == 0:
+                            break
+                if j < len(tokens) and tokens[j].string == "(":
+                    add(tok.start[0], "test")
             if tok.string == "class" and name.string.startswith("Test"):
                 add(tok.start[0], "test")
     lines = text.split("\n")
