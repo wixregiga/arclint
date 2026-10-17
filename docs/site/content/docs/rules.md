@@ -241,7 +241,8 @@ rules:
 
 ## built-in word limit
 
-Composed once the domain file records a context, never spelled.
+Composed once the domain file holds any text it judges, the project
+description alone included; never spelled.
 
 - constraint key: none; the id is `domain_recording/text-within-word-limit`
 - Rule Type: `word_limit`

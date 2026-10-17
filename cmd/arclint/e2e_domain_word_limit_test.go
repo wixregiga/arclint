@@ -113,3 +113,30 @@ contexts:
 		t.Fatalf("a ruleset may not spell a Rule under the built-in id: exit %d\nstderr: %s", code, stderr)
 	}
 }
+
+// A recording that holds only the project description is judged, and
+// writing an over-limit description again is refused even though it
+// would change nothing.
+func TestDescriptionOverItsWordLimitIsJudgedWithoutContexts(t *testing.T) {
+	root := domainFixture(t)
+	write(t, root, "domain.arclint.yaml", "version: 1\nproject: shop\ndescription: "+wordText(101)+"\ncontexts: {}\n")
+	stdout, stderr, code := runBin(t, root, os.Environ(), "check", "--only", "domain_recording/text-within-word-limit")
+	if code != 1 || !strings.Contains(stdout, `domain.arclint.yaml:3: [error] domain_recording/text-within-word-limit project "shop": the description has 101 words, and a description holds at most 100`) {
+		t.Fatalf("check: exit %d, want the description reported at its line\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	before, err := os.ReadFile(filepath.Join(root, "domain.arclint.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, code = runBin(t, root, os.Environ(), "domain", "define", "description", "--description", wordText(101))
+	if code != 1 || stdout != "" || !strings.Contains(stderr, "the description has 101 words, and a description holds at most 100") {
+		t.Fatalf("the same over-limit description again: exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
+	}
+	after, err := os.ReadFile(filepath.Join(root, "domain.arclint.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Errorf("a refused define changed the domain file:\n%s", after)
+	}
+}

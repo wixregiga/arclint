@@ -915,15 +915,13 @@ func (d *document) repository(lang vocab.UbiquitousLanguage, available []rule.Pa
 
 	var rules []rule.Rule
 	distributed := map[string]int{}
-	if !lang.Empty() {
-		native, err := rule.BuiltIn()
-		if err != nil {
-			return fail("%v", err)
-		}
-		for _, r := range native {
-			distributed[r.ID().Qualified()] = len(rules)
-			rules = append(rules, r)
-		}
+	native, err := rule.BuiltInFor(lang)
+	if err != nil {
+		return fail("%v", err)
+	}
+	for _, r := range native {
+		distributed[r.ID().Qualified()] = len(rules)
+		rules = append(rules, r)
 	}
 	var extensions []rule.ConfiguredExtension
 	for _, ext := range d.extends {

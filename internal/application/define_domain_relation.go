@@ -100,12 +100,15 @@ func (uc DefineDomainDefinition) ExecuteDescription(description string) (DomainD
 	}
 	description = strings.TrimSpace(description)
 	out := DomainDefineResult{Target: domainDescription, Name: lang.Project, Outcome: vocab.OutcomeUnchanged}
-	if description == lang.Description {
-		return out, nil
-	}
+	// Describe judges the description before an unchanged one returns,
+	// so a description already over its limit is refused when written
+	// again, as an entry's definition is.
 	next, err := lang.Describe(description)
 	if err != nil {
 		return DomainDefineResult{}, domainDescriptionError(err)
+	}
+	if description == lang.Description {
+		return out, nil
 	}
 	out.Outcome = vocab.OutcomeUpdated
 	out.Changed = []string{domainDescription}
