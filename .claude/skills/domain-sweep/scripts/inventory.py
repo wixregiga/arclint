@@ -309,6 +309,8 @@ def split_lines(text):
     """Split text into lines the way Git numbers them: at each newline and
     nowhere else, so a form feed or U+2028 inside a line keeps the
     numbering. A carriage return before the newline is dropped."""
+    if text.startswith("\ufeff"):
+        text = text[1:]  # a byte order mark is no part of the first line
     lines = text.split("\n")
     if lines and lines[-1] == "":
         lines.pop()
@@ -357,19 +359,26 @@ def is_generated(path, lines):
         stripped = text.strip()
         if (closing or (openers and stripped.startswith(openers))) and declares(stripped):
             return True
+        rest = None  # what follows a block comment that closes on this line
         if closing:
             if closing in stripped:
+                rest = stripped[stripped.index(closing) + len(closing):].strip()
                 closing = None
+        elif not stripped or (line_openers and stripped.startswith(line_openers)):
             continue
-        if not stripped or (line_openers and stripped.startswith(line_openers)):
-            continue
-        for opening, end in blocks:
-            if stripped.startswith(opening):
-                if end not in stripped[len(opening):]:
-                    closing = end
-                break
         else:
-            return False
+            for opening, end in blocks:
+                if stripped.startswith(opening):
+                    if end in stripped[len(opening):]:
+                        after = stripped.index(end, len(opening))
+                        rest = stripped[after + len(end):].strip()
+                    else:
+                        closing = end
+                    break
+            else:
+                return False
+        if rest and not (openers and rest.startswith(openers)):
+            return False  # code follows the comment: the file's content has begun
     return False
 
 
@@ -510,7 +519,7 @@ def in_expression(prev, last_op, after_label_colon):
 
 TEST_CALLEES = {"it", "test", "describe"}
 
-QUOTED = re.compile(r"""(["'])(.*?)\1""")
+QUOTED = re.compile(r"""(["'`])(.*?)\1""")
 
 # A line whose reading opened a literal it never closed is read again with
 # one slash decision reversed, at most this many, from the last.
@@ -571,7 +580,8 @@ class TypeScriptLexer:
         self.depth = 0
         self.parens = []  # per open parenthesis: [condition, for header, header had a ;, function parameters]
         # Per open brace: [role, names]. The role is "object", "body" (of a
-        # function in an expression), "type" (a type alias's literal) or
+        # function in an expression, or an inline type after as or
+        # satisfies), "type" (a type alias's literal), "return type" or
         # "block"; names are the keyword spellings bound as names inside it.
         self.braces = []
         self.prev = "operator"  # the previous token, as ends_operand reads it
@@ -585,8 +595,8 @@ class TypeScriptLexer:
         self.bound = set()  # keyword spellings bound as names outside every brace: const await
         self.parameter_names = set()  # names a function's parameters bind, for its body
         # A function or class in an expression: False; "params", waiting for
-        # its parameter list; ("paren", n), inside it, the n-th open; or
-        # "body", waiting for the body brace.
+        # its parameter list; ("paren", n), inside it, the n-th open; "body",
+        # waiting for the body brace; or "return", reading a return type.
         self.expression_body = False
         self.type_alias = False  # a type alias declaration is being read
         self.type_arguments = 0  # angle brackets open after as or satisfies
@@ -971,7 +981,14 @@ class TypeScriptLexer:
             other_token()
             token("operand")
         elif char == "{":
-            if self.expression_body == "body":
+            if self.expression_body == "return" and self.last_op == ":":
+                opens = "return type"  # function(): { value: number } {
+                self.braces.append([opens, set()])
+                other_token()
+                self.depth += 1
+                token("operator", "{")
+                return
+            if self.expression_body in ("body", "return"):
                 opens, self.expression_body = "body", False
             elif in_type:
                 opens = "body"  # an inline type, 4 satisfies { ... }: an operand once closed
@@ -1002,7 +1019,7 @@ class TypeScriptLexer:
                 # The type alias ends with its literal, as a statement.
                 self.type_alias = False
                 token("operator", "}")
-            elif closes in ("object", "body", "type"):
+            elif closes in ("object", "body", "type", "return type"):
                 token("operand")
             else:
                 token("operator", "}")
@@ -1023,6 +1040,10 @@ class TypeScriptLexer:
             other_token()
             token("operator", ":")
             self.case_label, self.after_case_colon = False, True
+        elif char == ":" and self.expression_body == "body":
+            self.expression_body = "return"  # function(): T { ... }
+            other_token()
+            token("operator", ":")
         elif char == "<" and (isinstance(prev, tuple) or prev == "operand") and (
             self.type_arguments or self.type_context
         ):
