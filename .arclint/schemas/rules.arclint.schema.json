@@ -344,6 +344,10 @@
           "$ref": "#/$defs/suppression",
           "description": "Keeps findings at the paths while removing their gate effect; suppressed findings are still reported."
         },
+        "time_limit": {
+          "$ref": "#/$defs/timeLimit",
+          "description": "How long an Extension Rule's check may run before it is stopped and the Rule is reported as not evaluated: a positive duration such as 10s or 1m30s. Only an Extension (uses) Rule carries one; without it the check runs under 5s. Registration always runs under 5s."
+        },
         "uses": {
           "description": "The extension rule name registered under .arclint/extensions or distributed by an extended Pattern.",
           "pattern": "\\S",
@@ -575,7 +579,7 @@
     },
     "override": {
       "additionalProperties": false,
-      "description": "An Override of a distributed or built-in Rule, keyed by that Rule's ID. It carries no constraint or rationale: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID.",
+      "description": "An Override of a distributed or built-in Rule, keyed by that Rule's ID. It carries no constraint or rationale: it disables the Rule with a reason, changes its severity or an Extension Rule's time limit, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID.",
       "minProperties": 1,
       "properties": {
         "disable": {
@@ -593,6 +597,10 @@
         "suppress": {
           "$ref": "#/$defs/suppression",
           "description": "Keeps findings at the paths while removing their gate effect; suppressed findings are still reported."
+        },
+        "time_limit": {
+          "$ref": "#/$defs/timeLimit",
+          "description": "How long an Extension Rule's check may run before it is stopped and the Rule is reported as not evaluated: a positive duration such as 10s or 1m30s. Only an Extension (uses) Rule carries one; without it the check runs under 5s. Registration always runs under 5s."
         }
       },
       "type": "object"
@@ -764,7 +772,7 @@
         },
         {
           "$ref": "#/$defs/override",
-          "description": "An Override of a distributed or built-in Rule, keyed by that Rule's ID. It carries no constraint or rationale: it disables the Rule with a reason, changes its severity, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID."
+          "description": "An Override of a distributed or built-in Rule, keyed by that Rule's ID. It carries no constraint or rationale: it disables the Rule with a reason, changes its severity or an Extension Rule's time limit, excludes subjects, or suppresses findings. To change what a Pattern Rule asserts, disable it and add a local Rule under a new ID."
         }
       ]
     },
@@ -995,6 +1003,12 @@
         "reason"
       ],
       "type": "object"
+    },
+    "timeLimit": {
+      "default": "5s",
+      "description": "How long an Extension Rule's check may run before it is stopped and the Rule is reported as not evaluated: a positive duration such as 10s or 1m30s. Only an Extension (uses) Rule carries one; without it the check runs under 5s. Registration always runs under 5s.",
+      "pattern": "^(([0-9]+(\\.[0-9]*)?|\\.[0-9]+)(ns|us|µs|μs|ms|s|m|h))+$",
+      "type": "string"
     },
     "zone": {
       "description": "One Zone: a glob, a list of globs, or an object in a repository ruleset; a description or an object in a Pattern file.",

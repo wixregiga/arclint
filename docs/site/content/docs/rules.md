@@ -34,6 +34,7 @@ The common keys beside the constraint:
 |---|---|
 | `rationale` | optional authored reason for requiring the Constraint; it stays absent when none is supplied |
 | `severity` | `error` (default), `warning`, or `info`; independent from Assurance |
+| `time_limit` | `uses` only: how long the extension's check may run, such as `10s` or `1m30s`; default `5s` |
 | `on` | one Zone name or a list; required, optional, or forbidden per the table above |
 | `files` | one glob or a list narrowing the judged files; accepted by naming, content, and uses only |
 | `exclude` | `{paths, zones, reason}`: files the Rule does not judge |
@@ -250,7 +251,9 @@ Delegate enforcement to a named Extension.
 `uses` is the extension rule name registered under
 `.arclint/extensions` or supplied by an extended Pattern. `with` holds
 parameters validated host-side against the extension's published
-schema before any extension code runs. See
+schema before any extension code runs. `time_limit` raises or lowers
+how long the check may run (default `5s`); a check that runs out of
+time is reported as not evaluated. See
 [TypeScript extensions](/docs/extensions/).
 
 ```yaml
@@ -451,7 +454,8 @@ Adopt a Pattern's Rules by reference, binding its Zones to paths.
 Each entry names one Pattern by exact reference and binds every Zone
 the Pattern lists to the paths it owns here. The Pattern's Rules then
 load under their namespaced IDs, and Overrides under those IDs adjust
-severity, disable with a reason, exclude, or suppress. The complete
+severity or an extension Rule's `time_limit`, disable with a reason,
+exclude, or suppress. The complete
 adoption grammar lives in [Patterns](/docs/patterns/).
 
 ```yaml

@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"unicode"
 
 	"github.com/wixregiga/arclint/internal/application"
+	"github.com/wixregiga/arclint/internal/domain/conformance"
 )
 
 // NewCheckCommand adapts the conformance use case into the check
@@ -42,7 +44,7 @@ func NewCheckCommand(assess application.AssessConformance, list application.List
 				return ConfigError(err)
 			}
 			agentsContext, err := inspectAgents.Execute()
-			if err != nil {
+			if err != nil && !reportedAsNotEvaluated(err, assessment) {
 				return ConfigError(err)
 			}
 			if err := render.Render(ctx.Stdout, AssessmentReport{Assessment: assessment, AgentsContext: agentsContext}); err != nil {
@@ -57,6 +59,16 @@ func NewCheckCommand(assess application.AssessConformance, list application.List
 			return nil
 		},
 	}
+}
+
+// reportedAsNotEvaluated reports whether an error is an extension that
+// failed while registering, which the Assessment already names in its
+// not-evaluated entries. The AGENTS.md comparison needs the same
+// extension inventory, so it is skipped rather than discarding the
+// report.
+func reportedAsNotEvaluated(err error, assessment conformance.Assessment) bool {
+	var failure conformance.ExtensionFailure
+	return errors.As(err, &failure) && !assessment.Complete()
 }
 
 // splitSelectors splits one flag value into rule selectors; commas and

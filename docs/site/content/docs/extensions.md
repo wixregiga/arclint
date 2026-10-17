@@ -426,8 +426,8 @@ Extensions run on a bare ES runtime:
   while closures, globals, and retained contexts are never shared across
   invocations or different Rule types in the same extension.
 - `Date.now` and `Math.random` are host-controlled (deterministic).
-- Registration and each `check` invocation time out after 5s
-  (interrupt-based).
+- Registration runs under a 5s limit. Each `check` runs under its
+  Rule's `time_limit` (default `5s`). Both are interrupt-based.
 - Relative imports are bundled; bare npm specifiers are rejected with a
   designed error. Import the SDK as `"arclint"`.
 - Transpile results cache under `<root>/.arclint/cache/extensions/`.
@@ -435,12 +435,68 @@ Extensions run on a bare ES runtime:
 An extension that times out, or throws while registering or running
 `check`, stops only its Rule. `check` reports that Rule as not
 evaluated: a `not_evaluated` entry in JSON and one `not evaluated:`
-line in human output, naming the extension's source and the time limit
-or the error. Every other Rule is still evaluated and reported, and
-`check` exits `3`. The Rule does not become a Violation, is not counted
-as applied, and is not silently skipped. When one extension fails while
-registering, no extension can run, so every extension Rule names that
-extension as the cause.
+line in human output. Every other Rule is still evaluated and
+reported, and `check` exits `3`. The Rule does not become a Violation,
+is not counted as applied, and is not silently skipped. When one
+extension fails while registering, no extension can run, so every
+extension Rule names that extension as the cause.
+
+The entry says why the Rule did not run:
+
+```
+not evaluated: rule src/spin: extension "spin" (.arclint/extensions/spin.ts) reached its 5s time limit in check and was stopped after 5.004s, last reading src/ok.go
+```
+
+In JSON the same circumstances are fields of `notEvaluated`:
+
+| field | meaning |
+|---|---|
+| `extension` | the extension rule name the Rule `uses` |
+| `source` | the extension file, or a Pattern's extension, whose code stopped |
+| `phase` | `registration` or `check` |
+| `timedOut` | `true` when the code reached its time limit |
+| `limitMs` | the time limit in force, in milliseconds |
+| `elapsedMs` | how long the code ran before it stopped, in milliseconds |
+| `file` | the file the check last asked the host about, when one is known |
+| `error` | the error the code raised, on one line, when it did not time out |
+
+`file` is the last path the check passed to `ctx.read`, `ctx.imports`,
+`ctx.facts`, or `ctx.zoneOf`. A check that loops after its last host
+call is still working on that file, or has moved past it without
+asking the host again.
+
+## Time limits
+
+A check that needs longer than `5s` on a large repository sets its own
+limit on the Rule:
+
+```yaml
+rules:
+  polymorphism/contract-only-consumers:
+    on: [app, cli]
+    uses: polymorphism/contract-only-consumers
+    time_limit: 20s
+```
+
+An Override sets `time_limit` on a `uses` Rule an extended Pattern
+distributes. `time_limit` on any other Rule is rejected at load.
+Registration always runs under `5s`: a module only calls `defineRule`
+there, and the runtime API is not available yet.
+
+When a check finishes but used more than half its limit, `check` adds a
+coverage line, for example:
+
+```
+coverage: rule src/slow: extension "slow" took 3.1s of its 5s time limit; a run twice as slow would not be evaluated, so make the check faster or raise time_limit
+```
+
+A machine under load runs the same check slower, so a check past half
+its limit is at risk of not being evaluated in CI or while tests run.
+Run `arclint check --only <rule>` on the real repository to see where a
+Rule stands. `arclint rules test` does not report durations: fixtures
+are a few files, and a check that takes milliseconds on them can take
+seconds on the repository. `arclint rules <id>` prints the Rule's
+`time limit`.
 
 `arclint baseline capture` and `baseline refresh` refuse while a Rule
 is not evaluated, because its findings are unknown. A committed

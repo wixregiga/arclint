@@ -10,6 +10,8 @@ import (
 
 	"github.com/grafana/sobek"
 	sj "github.com/santhosh-tekuri/jsonschema/v6"
+
+	"github.com/wixregiga/arclint/internal/domain/conformance"
 )
 
 // RuleType is one extension-registered rule type with a compiled program
@@ -25,7 +27,6 @@ type RuleType struct {
 	vm              *sobek.Runtime
 	check           sobek.Callable
 	program         *sobek.Program
-	timeout         time.Duration
 	registerTimeout time.Duration
 }
 
@@ -96,15 +97,25 @@ func (r *Registry) registerProgram(sourcePath string, prog *sobek.Program, opts 
 		return fmt.Errorf("extension %s: sandbox init: %w", sourcePath, err)
 	}
 
+	started := time.Now()
+	stopped := func(err error) error {
+		if message, ok := definitionError(err); ok {
+			return fmt.Errorf("extension %s: %s", sourcePath, message)
+		}
+		return &CodeFailure{
+			Source: sourcePath, Phase: conformance.PhaseRegistration,
+			Limit: opts.RegisterTimeout, Elapsed: time.Since(started), err: err,
+		}
+	}
 	timer := time.AfterFunc(opts.RegisterTimeout, func() {
-		vm.Interrupt(timeLimit{phase: "registration", limit: opts.RegisterTimeout})
+		vm.Interrupt(timeLimit{phase: conformance.PhaseRegistration, limit: opts.RegisterTimeout})
 	})
 	defer timer.Stop()
 	defer vm.ClearInterrupt()
 
 	wrapper, err := vm.RunProgram(prog)
 	if err != nil {
-		return &CodeFailure{Source: sourcePath, err: err}
+		return stopped(err)
 	}
 	call, ok := sobek.AssertFunction(wrapper)
 	if !ok {
@@ -116,7 +127,7 @@ func (r *Registry) registerProgram(sourcePath string, prog *sobek.Program, opts 
 		return fmt.Errorf("extension %s: %w", sourcePath, err)
 	}
 	if _, err := call(sobek.Undefined(), module, exports); err != nil {
-		return &CodeFailure{Source: sourcePath, err: fmt.Errorf("registration phase: %w", err)}
+		return stopped(fmt.Errorf("registration phase: %w", err))
 	}
 
 	moduleExports := module.Get("exports")
@@ -177,7 +188,6 @@ func (r *Registry) registerProgram(sourcePath string, prog *sobek.Program, opts 
 			vm:              vm,
 			check:           checkFn,
 			program:         prog,
-			timeout:         opts.CheckTimeout,
 			registerTimeout: opts.RegisterTimeout,
 		}
 		r.types[name] = rt
@@ -250,25 +260,35 @@ func (rt *RuleType) ValidateParams(params map[string]any) (map[string]any, error
 }
 
 // Check runs one evaluation-phase invocation: check(ctx, params) with the
-// host-lent read-only ctx, under an interrupt-based timeout. It returns
-// the violations the rule reported.
-func (rt *RuleType) Check(host Host, params map[string]any) ([]ViolationInput, error) {
+// host-lent read-only ctx, interrupted at limit. It returns the
+// violations the rule reported and how long the check ran.
+func (rt *RuleType) Check(host Host, params map[string]any, limit time.Duration) ([]ViolationInput, time.Duration, error) {
+	if limit <= 0 {
+		return nil, 0, fmt.Errorf("extension %s: rule %q: time limit %s is not positive", rt.SourcePath, rt.Name, limit)
+	}
 	registry := &Registry{types: map[string]*RuleType{}}
 	if err := registry.registerProgram(rt.SourcePath, rt.program, Options{
-		CheckTimeout: rt.timeout, RegisterTimeout: rt.registerTimeout,
+		RegisterTimeout: rt.registerTimeout,
 	}); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	fresh := registry.Get(rt.Name)
 	if fresh == nil {
-		return nil, fmt.Errorf("extension %s: rule %q was not registered in the fresh runtime", rt.SourcePath, rt.Name)
+		return nil, 0, fmt.Errorf("extension %s: rule %q was not registered in the fresh runtime", rt.SourcePath, rt.Name)
 	}
-	return fresh.checkWithHost(host, params)
+	return fresh.checkWithHost(host, params, limit)
 }
 
-func (rt *RuleType) checkWithHost(host Host, params map[string]any) ([]ViolationInput, error) {
+func (rt *RuleType) checkWithHost(host Host, params map[string]any, limit time.Duration) ([]ViolationInput, time.Duration, error) {
 	vm := rt.vm
 	var reported []ViolationInput
+	// lastFile is the subject the check last asked the host about: the
+	// file it was most likely evaluating when it stopped.
+	var lastFile string
+	reading := func(call sobek.FunctionCall) string {
+		lastFile = call.Arguments[0].String()
+		return lastFile
+	}
 
 	ctx := vm.NewObject()
 	fail := func(format string, args ...any) sobek.Value {
@@ -294,7 +314,7 @@ func (rt *RuleType) checkWithHost(host Host, params map[string]any) ([]Violation
 		if len(call.Arguments) < 1 {
 			return fail("ctx.read: path is required")
 		}
-		content, err := host.Read(call.Arguments[0].String())
+		content, err := host.Read(reading(call))
 		if err != nil {
 			return fail("ctx.read: %v", err)
 		}
@@ -304,7 +324,7 @@ func (rt *RuleType) checkWithHost(host Host, params map[string]any) ([]Violation
 		if len(call.Arguments) < 1 {
 			return fail("ctx.imports: path is required")
 		}
-		return vm.ToValue(host.Imports(call.Arguments[0].String()))
+		return vm.ToValue(host.Imports(reading(call)))
 	})
 	mustSet("zones", func(_ sobek.FunctionCall) sobek.Value {
 		return vm.ToValue(host.Zones())
@@ -316,7 +336,7 @@ func (rt *RuleType) checkWithHost(host Host, params map[string]any) ([]Violation
 		if host.Facts == nil {
 			return sobek.Null()
 		}
-		facts := host.Facts(call.Arguments[0].String())
+		facts := host.Facts(reading(call))
 		if facts == nil {
 			return sobek.Null()
 		}
@@ -326,7 +346,7 @@ func (rt *RuleType) checkWithHost(host Host, params map[string]any) ([]Violation
 		if len(call.Arguments) < 1 {
 			return fail("ctx.zoneOf: path is required")
 		}
-		zones := host.ZoneOf(call.Arguments[0].String())
+		zones := host.ZoneOf(reading(call))
 		if zones == nil {
 			zones = []string{}
 		}
@@ -384,23 +404,28 @@ func (rt *RuleType) checkWithHost(host Host, params map[string]any) ([]Violation
 		return sobek.Undefined()
 	})
 
-	timer := time.AfterFunc(rt.timeout, func() {
-		vm.Interrupt(timeLimit{phase: fmt.Sprintf("rule %q", rt.Name), limit: rt.timeout})
+	started := time.Now()
+	timer := time.AfterFunc(limit, func() {
+		vm.Interrupt(timeLimit{phase: conformance.PhaseCheck, limit: limit})
 	})
 	defer timer.Stop()
 	defer vm.ClearInterrupt()
 
 	if _, err := rt.check(sobek.Undefined(), ctx, vm.ToValue(params)); err != nil {
-		return reported, &CodeFailure{Source: rt.SourcePath, err: fmt.Errorf("rule %q: %w", rt.Name, err)}
+		elapsed := time.Since(started)
+		return reported, elapsed, &CodeFailure{
+			Source: rt.SourcePath, Phase: conformance.PhaseCheck, Limit: limit,
+			Elapsed: elapsed, File: lastFile, err: fmt.Errorf("rule %q: %w", rt.Name, err),
+		}
 	}
-	return reported, nil
+	return reported, time.Since(started), nil
 }
 
 // timeLimit is the value a runtime is interrupted with when extension
 // code runs past its limit, so the interruption is told apart from an
 // error the code raised.
 type timeLimit struct {
-	phase string
+	phase conformance.ExtensionPhase
 	limit time.Duration
 }
 
@@ -408,29 +433,74 @@ func (t timeLimit) String() string {
 	return fmt.Sprintf("%s exceeded the %s timeout", t.phase, t.limit)
 }
 
+// definitionErrorName is the name the SDK gives the error a malformed
+// defineRule(...) call throws.
+const definitionErrorName = "ArclintDefinitionError"
+
+// definitionError returns the message of a malformed definition the SDK
+// rejected: a configuration error, not code that failed while running.
+func definitionError(err error) (string, bool) {
+	var exception *sobek.Exception
+	if !errors.As(err, &exception) {
+		return "", false
+	}
+	thrown, ok := exception.Value().(*sobek.Object)
+	if !ok {
+		return "", false
+	}
+	if name := thrown.Get("name"); name == nil || name.String() != definitionErrorName {
+		return "", false
+	}
+	return thrown.Get("message").String(), true
+}
+
 // CodeFailure is extension code that did not complete: it ran past its
-// time limit or raised an error while running. Errors outside running
-// code (bundling, a malformed definition, invalid params) are not
-// CodeFailures.
+// time limit or raised an error while running, in one phase. Errors
+// outside running code (bundling, a malformed definition, invalid
+// params) are not CodeFailures.
 type CodeFailure struct {
 	// Source is the extension the code came from.
 	Source string
-	err    error
+	Phase  conformance.ExtensionPhase
+	// Limit is the time limit in force; Elapsed is how long the code ran.
+	Limit   time.Duration
+	Elapsed time.Duration
+	// File is the subject the check last asked the host about, "" when
+	// none is known.
+	File string
+	err  error
 }
 
 func (f *CodeFailure) Error() string { return fmt.Sprintf("extension %s: %v", f.Source, f.err) }
 
 func (f *CodeFailure) Unwrap() error { return f.err }
 
-// TimeLimit returns the limit the code exceeded, when it timed out.
-func (f *CodeFailure) TimeLimit() (time.Duration, bool) {
+// TimedOut reports whether the code was stopped at its time limit.
+func (f *CodeFailure) TimedOut() bool {
 	var interrupted *sobek.InterruptedError
 	if !errors.As(f.err, &interrupted) {
-		return 0, false
+		return false
 	}
-	limit, ok := interrupted.Value().(timeLimit)
-	return limit.limit, ok
+	_, ok := interrupted.Value().(timeLimit)
+	return ok
 }
 
-// Cause is the error the code raised, on one line.
-func (f *CodeFailure) Cause() string { return strings.Join(strings.Fields(f.err.Error()), " ") }
+// Raised is the error the code raised, on one line; "" for a timeout.
+func (f *CodeFailure) Raised() string {
+	if f.TimedOut() {
+		return ""
+	}
+	return strings.Join(strings.Fields(f.err.Error()), " ")
+}
+
+// ExtensionFailure translates the failure into the domain's terms.
+func (f *CodeFailure) ExtensionFailure() (conformance.ExtensionFailure, error) {
+	failure, err := conformance.NewExtensionFailure(conformance.ExtensionFailureSpec{
+		Source: f.Source, Phase: f.Phase, Limit: f.Limit, Elapsed: f.Elapsed,
+		TimedOut: f.TimedOut(), Raised: f.Raised(), File: f.File,
+	})
+	if err != nil {
+		return conformance.ExtensionFailure{}, fmt.Errorf("extension %s: %w", f.Source, err)
+	}
+	return failure, nil
+}

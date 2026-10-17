@@ -1,6 +1,9 @@
 package conformance
 
 import (
+	"time"
+
+	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
@@ -15,16 +18,25 @@ type ExtensionFinding struct {
 	Remediation string
 }
 
+// ExtensionRun is the complete result of one Extension check: its
+// findings and how long the check ran.
+type ExtensionRun struct {
+	Findings []ExtensionFinding
+	Elapsed  time.Duration
+}
+
 // ExtensionEvaluator is the domain-owned port to Extension
 // enforcement: run the named extension rule over exactly the selected
 // subjects through the same Facts as native evaluators, with host-validated
-// parameters, and return its complete
-// findings. Extensions operate only through deterministic host
-// capabilities and cannot bypass diagnostic truthfulness; a finding
-// without a selected subject or its supplied evidence is a Scope breach the check
-// contains without aborting the Assessment. Knowledge is the project's
-// recorded domain model, empty when none is recorded.
+// parameters, under the Rule's TimeLimit, and return its complete
+// findings with the time its check ran. Extensions operate only through
+// deterministic host capabilities and cannot bypass diagnostic
+// truthfulness; a finding without a selected subject or its supplied
+// evidence is a Scope breach the check contains without aborting the
+// Assessment. Extension code that stops, at its time limit or on an
+// error it raised, is returned as an ExtensionFailure. Knowledge is the
+// project's recorded domain model, empty when none is recorded.
 type ExtensionEvaluator interface {
-	Evaluate(extension string, params map[string]any, facts Facts,
-		knowledge vocab.UbiquitousLanguage) ([]ExtensionFinding, error)
+	Evaluate(extension string, params map[string]any, limit rule.TimeLimit, facts Facts,
+		knowledge vocab.UbiquitousLanguage) (ExtensionRun, error)
 }

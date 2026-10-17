@@ -230,10 +230,10 @@ type failingExtensions struct {
 	err error
 }
 
-func (f failingExtensions) Evaluate(string, map[string]any, conformance.Facts,
+func (f failingExtensions) Evaluate(string, map[string]any, rule.TimeLimit, conformance.Facts,
 	vocab.UbiquitousLanguage,
-) ([]conformance.ExtensionFinding, error) {
-	return nil, f.err
+) (conformance.ExtensionRun, error) {
+	return conformance.ExtensionRun{}, f.err
 }
 
 func TestRunRuleTestsContainsConformanceErrorAndContinues(t *testing.T) {
@@ -313,7 +313,10 @@ func TestRunRuleTestsReportsStoppedExtensionAsTheTestsError(t *testing.T) {
 		t.Fatalf("extension rule.New: %v", err)
 	}
 	cfg.Rules = append(cfg.Rules, extRule)
-	failure, err := conformance.NewExtensionTimeout(".arclint/extensions/spin.ts", 5*time.Second)
+	failure, err := conformance.NewExtensionFailure(conformance.ExtensionFailureSpec{
+		Source: ".arclint/extensions/spin.ts", Phase: conformance.PhaseCheck,
+		Limit: 5 * time.Second, Elapsed: 5002 * time.Millisecond, TimedOut: true, File: "m/all_good.go",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +336,7 @@ func TestRunRuleTestsReportsStoppedExtensionAsTheTestsError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	want := `not evaluated: rule t/p:m/ext: extension "spin": .arclint/extensions/spin.ts exceeded its 5s time limit`
+	want := `not evaluated: rule t/p:m/ext: extension "spin" (.arclint/extensions/spin.ts) reached its 5s time limit in check and was stopped after 5.002s, last reading m/all_good.go`
 	if len(results) != 1 || results[0].Passed() || results[0].Err != want {
 		t.Fatalf("results = %+v, want one failed test with Err %q", results, want)
 	}
@@ -345,11 +348,11 @@ type recordingExtensions struct {
 	knowledge vocab.UbiquitousLanguage
 }
 
-func (r *recordingExtensions) Evaluate(_ string, _ map[string]any, _ conformance.Facts,
+func (r *recordingExtensions) Evaluate(_ string, _ map[string]any, _ rule.TimeLimit, _ conformance.Facts,
 	knowledge vocab.UbiquitousLanguage,
-) ([]conformance.ExtensionFinding, error) {
+) (conformance.ExtensionRun, error) {
 	r.knowledge = knowledge
-	return nil, nil
+	return conformance.ExtensionRun{}, nil
 }
 
 func TestRunRuleTestsFeedsFixtureVocabularyToExtensions(t *testing.T) {

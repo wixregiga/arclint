@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
@@ -12,24 +13,27 @@ import (
 
 type fakeExtensions struct {
 	findings []conformance.ExtensionFinding
+	elapsed  time.Duration
 	err      error
 	saw      struct {
 		extension string
 		params    map[string]any
+		limit     rule.TimeLimit
 		subjects  []string
 	}
 }
 
-func (f *fakeExtensions) Evaluate(extension string, params map[string]any, facts conformance.Facts,
+func (f *fakeExtensions) Evaluate(extension string, params map[string]any, limit rule.TimeLimit, facts conformance.Facts,
 	knowledge vocab.UbiquitousLanguage,
-) ([]conformance.ExtensionFinding, error) {
+) (conformance.ExtensionRun, error) {
 	f.saw.extension = extension
 	f.saw.params = params
+	f.saw.limit = limit
 	f.saw.subjects = nil
 	for _, file := range facts.Files() {
 		f.saw.subjects = append(f.saw.subjects, file.Path)
 	}
-	return f.findings, f.err
+	return conformance.ExtensionRun{Findings: f.findings, Elapsed: f.elapsed}, f.err
 }
 
 func extensionRequest(t *testing.T, evaluator conformance.ExtensionEvaluator) conformance.Request {

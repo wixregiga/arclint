@@ -188,6 +188,7 @@ const (
 	keyDescription   = "description"
 	keyRationale     = "rationale"
 	keySeverity      = "severity"
+	keyTimeLimit     = "time_limit"
 	keyOn            = "on"
 	keyFiles         = "files"
 	keyWith          = "with"
@@ -248,6 +249,7 @@ type ruleEntry struct {
 	id             string
 	rationale      string
 	severity       string
+	timeLimit      string
 	on             []rule.ZoneName
 	onPresent      bool
 	files          []rule.Glob
@@ -592,7 +594,7 @@ func parseZones(n *yaml.Node, inPattern bool) ([]zoneEntry, error) {
 }
 
 // ruleKeys are the keys a rules entry may carry beside its constraint.
-var ruleKeys = []string{keyRationale, keySeverity, keyOn, keyFiles, keyWith, keyDisable, keyExclude, keySuppress}
+var ruleKeys = []string{keyRationale, keySeverity, keyTimeLimit, keyOn, keyFiles, keyWith, keyDisable, keyExclude, keySuppress}
 
 func parseRules(n *yaml.Node) ([]ruleEntry, error) {
 	m, err := asMapping(n, keyRules)
@@ -658,6 +660,11 @@ func parseRule(id, where string, n *yaml.Node) (ruleEntry, error) {
 	}
 	if v := m.get(keySeverity); v != nil {
 		if entry.severity, err = scalarString(v, where+".severity"); err != nil {
+			return ruleEntry{}, err
+		}
+	}
+	if v := m.get(keyTimeLimit); v != nil {
+		if entry.timeLimit, err = scalarString(v, where+".time_limit"); err != nil {
 			return ruleEntry{}, err
 		}
 	}
@@ -1074,7 +1081,7 @@ func (e ruleEntry) buildOverride(id rule.ID) (adoption.Override, error) {
 	if err != nil {
 		return adoption.Override{}, err
 	}
-	override, err := adoption.NewOverride(id, values.severity, values.exclusion, values.suppression, values.disablement)
+	override, err := adoption.NewOverride(id, values.severity, values.timeLimit, values.exclusion, values.suppression, values.disablement)
 	if err != nil {
 		return adoption.Override{}, fmt.Errorf("%s: %w", e.where, err)
 	}
@@ -1085,6 +1092,7 @@ func (e ruleEntry) buildOverride(id rule.ID) (adoption.Override, error) {
 // Override entries; source locations belong to decoding, not domain decisions.
 type adoptionValues struct {
 	severity    rule.Severity
+	timeLimit   rule.TimeLimit
 	exclusion   *rule.Exclusion
 	suppression *rule.Suppression
 	disablement *rule.Disablement
@@ -1098,6 +1106,13 @@ func (e ruleEntry) decodeAdoption() (adoptionValues, error) {
 			return adoptionValues{}, fmt.Errorf("%s.severity: %v", e.where, err)
 		}
 		values.severity = s
+	}
+	if e.timeLimit != "" {
+		t, err := rule.ParseTimeLimit(e.timeLimit)
+		if err != nil {
+			return adoptionValues{}, fmt.Errorf("%s.time_limit: %v", e.where, err)
+		}
+		values.timeLimit = t
 	}
 	if e.exclude != nil {
 		ex, err := rule.NewExclusion(e.exclude.paths, e.exclude.zones, e.exclude.reason)
@@ -1131,6 +1146,12 @@ func (e ruleEntry) adopt(r rule.Rule) (rule.Rule, error) {
 	}
 	if values.severity != "" {
 		r, err = r.WithSeverity(values.severity)
+		if err != nil {
+			return rule.Rule{}, fmt.Errorf("%s: %v", e.where, err)
+		}
+	}
+	if !values.timeLimit.IsZero() {
+		r, err = r.WithTimeLimit(values.timeLimit)
 		if err != nil {
 			return rule.Rule{}, fmt.Errorf("%s: %v", e.where, err)
 		}

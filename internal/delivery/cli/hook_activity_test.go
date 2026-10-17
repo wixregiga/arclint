@@ -129,3 +129,18 @@ func TestRecordHookActivitySkipsFailedCommands(t *testing.T) {
 		t.Fatalf("a check with findings was not recorded as run: %+v", recorder.activities)
 	}
 }
+
+// A check that left a Rule not evaluated did not run in full, so the
+// hooks keep asking for the check.
+func TestRecordHookActivitySkipsAnIncompleteCheck(t *testing.T) {
+	recorder := &activityRecorder{}
+	root := RecordHookActivity(commandTree(recorder, NotEvaluatedExit(), false), recorder)
+	err := runPath(t, root, Context{}, "check")
+	var exit *ExitError
+	if !errors.As(err, &exit) || exit.Code != ExitNotEvaluated {
+		t.Fatalf("check error = %v, want exit %d", err, ExitNotEvaluated)
+	}
+	if len(recorder.activities) != 0 {
+		t.Fatalf("an incomplete check was recorded as run: %+v", recorder.activities)
+	}
+}

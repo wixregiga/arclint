@@ -27,11 +27,11 @@ export default [
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, err = registry.Get("first").Check(fakeHost(map[string]string{"private/secret.txt": "outside Scope"}), nil)
+			_, _, err = registry.Get("first").Check(fakeHost(map[string]string{"private/secret.txt": "outside Scope"}), nil, testLimit)
 			if err != nil {
 				t.Fatal(err)
 			}
-			findings, err := registry.Get(next).Check(fakeHost(map[string]string{"public/file.txt": "selected"}), nil)
+			findings, _, err := registry.Get(next).Check(fakeHost(map[string]string{"public/file.txt": "selected"}), nil, testLimit)
 			if err != nil {
 				t.Fatal(err)
 			}

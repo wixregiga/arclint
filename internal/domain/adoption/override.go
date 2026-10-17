@@ -13,27 +13,29 @@ import (
 type Override struct {
 	target      rule.ID
 	severity    rule.Severity
+	timeLimit   rule.TimeLimit
 	exclusion   *rule.Exclusion
 	suppression *rule.Suppression
 	disablement *rule.Disablement
 }
 
 // NewOverride requires an eligible target and at least one adoption decision.
-// Empty severity and nil decisions leave the corresponding Rule values alone.
-func NewOverride(target rule.ID, severity rule.Severity, exclusion *rule.Exclusion, suppression *rule.Suppression, disablement *rule.Disablement) (Override, error) {
+// Empty severity, a zero time limit, and nil decisions leave the
+// corresponding Rule values alone.
+func NewOverride(target rule.ID, severity rule.Severity, timeLimit rule.TimeLimit, exclusion *rule.Exclusion, suppression *rule.Suppression, disablement *rule.Disablement) (Override, error) {
 	if target.IsZero() {
 		return Override{}, fmt.Errorf("override: missing target RuleID")
 	}
 	if target.Qualifier() == "" && !rule.BuiltInID(target) {
 		return Override{}, fmt.Errorf("override: target %s is neither a distributed nor a built-in Rule", target)
 	}
-	if severity == "" && exclusion == nil && suppression == nil && disablement == nil {
-		return Override{}, fmt.Errorf("an override changes something: severity, disable, exclude, or suppress")
+	if severity == "" && timeLimit.IsZero() && exclusion == nil && suppression == nil && disablement == nil {
+		return Override{}, fmt.Errorf("an override changes something: severity, time_limit, disable, exclude, or suppress")
 	}
 	if severity != "" && !severity.Valid() {
 		return Override{}, fmt.Errorf("override: severity %q invalid", severity)
 	}
-	o := Override{target: target, severity: severity}
+	o := Override{target: target, severity: severity, timeLimit: timeLimit}
 	if exclusion != nil {
 		e, err := rule.NewExclusion(exclusion.Paths(), exclusion.Zones(), exclusion.Reason())
 		if err != nil {
@@ -79,6 +81,13 @@ func (o Override) Apply(r rule.Rule) (rule.Rule, error) {
 	if o.severity != "" {
 		var err error
 		r, err = r.WithSeverity(o.severity)
+		if err != nil {
+			return rule.Rule{}, fmt.Errorf("override: %w", err)
+		}
+	}
+	if !o.timeLimit.IsZero() {
+		var err error
+		r, err = r.WithTimeLimit(o.timeLimit)
 		if err != nil {
 			return rule.Rule{}, fmt.Errorf("override: %w", err)
 		}

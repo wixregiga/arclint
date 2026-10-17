@@ -78,15 +78,25 @@ export const s: typeof API.s = {
   },
 };
 
+// DefinitionError marks a malformed defineRule(...) call. The host reports
+// it as a configuration error, never as extension code that failed while
+// running.
+class DefinitionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ArclintDefinitionError";
+  }
+}
+
 export const defineRule: typeof API.defineRule = (def: RuleDef) => {
   if (!def || typeof def.type !== "string" || def.type.length === 0) {
-    throw new Error("defineRule: type is required and must be a non-empty string");
+    throw new DefinitionError("defineRule: type is required and must be a non-empty string");
   }
   if (typeof def.check !== "function") {
-    throw new Error("defineRule: check must be a function");
+    throw new DefinitionError("defineRule: check must be a function");
   }
   if (def.description !== undefined && typeof def.description !== "string") {
-    throw new Error("defineRule: description must be a string");
+    throw new DefinitionError("defineRule: description must be a string");
   }
   const capability = def.capability ?? "heuristic";
   if (
@@ -95,7 +105,7 @@ export const defineRule: typeof API.defineRule = (def: RuleDef) => {
     capability !== "heuristic" &&
     capability !== "advisory"
   ) {
-    throw new Error(`defineRule: invalid capability "${capability}"`);
+    throw new DefinitionError(`defineRule: invalid capability "${capability}"`);
   }
   const paramsSchema = def.params
     ? def.params.toJSON()

@@ -27,7 +27,10 @@ type RuleDetail struct {
 	Files            []string
 	Exclusions       []PolicyNote
 	Suppressions     []PolicyNote
-	Schema           string
+	// TimeLimit is how long an Extension Rule's check may run, "" for
+	// every other Rule.
+	TimeLimit string
+	Schema    string
 }
 
 // ShowRule shows one configured Rule, its schema, provenance, and
@@ -63,6 +66,9 @@ func (uc ShowRule) Execute(id string) (RuleDetail, error) {
 		detail.Facts = append(detail.Facts, string(f))
 	}
 	detail.Limitations = r.Enforcement().Limitations()
+	if params, ok := r.Params().(rule.ExtensionParams); ok {
+		detail.TimeLimit = params.Limit().String()
+	}
 	for _, m := range r.Scope().Zones() {
 		detail.Zones = append(detail.Zones, string(m))
 	}
