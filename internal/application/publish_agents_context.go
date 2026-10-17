@@ -83,7 +83,11 @@ func AgentWorkflow() []string {
 			"   - This change does ___.\n" +
 			"   - These decisions belong to ___.\n" +
 			"   - The caller uses ___.\n" +
-			"   - Existing behavior ___ must remain intact.\n\n" +
+			"   - Existing behavior ___ must remain intact.\n" +
+			"   - This change newly promises ___, each proved by the test ___.\n\n" +
+			"   For a component that reads and writes a format, the promises are: one encoder for fresh and edited output; " +
+			"print, then parse, then print gives the same bytes; an edit changes only its own lines; " +
+			"a repeated edit changes nothing; the author's optional tokens survive.\n\n" +
 			"   Resolve contradictions with the recorded domain and the user's instructions before proceeding. " +
 			"Ask only when an unresolved product decision needs the user's input. " +
 			"This statement is not an approval checkpoint.",
