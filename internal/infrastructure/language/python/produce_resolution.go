@@ -24,10 +24,10 @@ func resolvedFacts(root string, files []conformance.ObservedFile, res *resolver,
 			continue
 		}
 		df := extractDeclarations(ps, src)
-		markAbstractClasses(df, origins{res: res, root: root, ps: ps, modules: modules}, path.Dir(file.Path))
 		if df.ParseError != "" {
 			continue
 		}
+		markAbstractClasses(df, origins{res: res, root: root, ps: ps, modules: modules}, path.Dir(file.Path))
 		idx.modules[file.Path] = newModule(file.Path, df)
 	}
 	// Record repository-visible monkey patches before resolving any call.
