@@ -304,13 +304,102 @@ func TestAFailedSampleAtThePromptKeepsTheTurnsWork(t *testing.T) {
 		t.Fatal(err)
 	}
 	sample := store.sample
-	store.sample = func() (snapshot, error) { return nil, errors.New("git status timed out") }
+	store.sample = func() (snapshot, error) { return nil, errGitTimedOut }
 	if seen := observe(t, store, "s"); len(seen.recorded) != 0 {
 		t.Fatalf("an update without a sample reported %+v", seen.recorded)
 	}
 	store.sample = sample
 	pause()
 	writeFile(t, root, "internal/agents.go", "package a // the agent's edit in the turn\n")
+	want := []agent.Activity{{Kind: agent.FilesChanged, Paths: []string{"internal/agents.go"}}}
+	if seen := observe(t, store, "s"); !reflect.DeepEqual(seen.recorded, want) {
+		t.Fatalf("recorded %+v, want %+v", seen.recorded, want)
+	}
+}
+
+var errGitTimedOut = errors.New("git status timed out")
+
+// A sample that fails once leaves the log for the next update, which puts
+// a shell edit before the check that verified it.
+func TestAFailedSampleLeavesTheLogForTheNextUpdate(t *testing.T) {
+	root := gitRepository(t, map[string]string{"rules.arclint.yaml": "zones:\n  app: internal/**\n", "internal/a.go": "package a\n"})
+	store := NewProgressStore(root, recording)
+	observe(t, store, "s")
+	writeFile(t, root, "internal/a.go", "package a // changed\n")
+	pause()
+	record(t, root, agent.Activity{Kind: agent.CheckRan})
+	pause()
+	sample := store.sample
+	store.sample = func() (snapshot, error) { return nil, errGitTimedOut }
+	if seen := observe(t, store, "s"); len(seen.recorded) != 0 {
+		t.Fatalf("an update whose sample failed read %+v", seen.recorded)
+	}
+	store.sample = sample
+	want := []agent.Activity{{Kind: agent.FilesChanged, Paths: []string{"internal/a.go"}}, {Kind: agent.CheckRan}}
+	if seen := observe(t, store, "s"); !reflect.DeepEqual(seen.recorded, want) {
+		t.Fatalf("recorded %+v, want %+v", seen.recorded, want)
+	}
+}
+
+// A repository git keeps failing on does not hold ArcLint's own work back
+// for longer than one update.
+func TestRepeatedSampleFailuresStillReadTheLog(t *testing.T) {
+	root := gitRepository(t, map[string]string{"rules.arclint.yaml": "zones:\n  app: internal/**\n"})
+	store := NewProgressStore(root, recording)
+	observe(t, store, "s")
+	store.sample = func() (snapshot, error) { return nil, errGitTimedOut }
+	record(t, root, agent.Activity{Kind: agent.CheckRan})
+	pause()
+	observe(t, store, "s")
+	if seen := observe(t, store, "s"); !reflect.DeepEqual(seen.recorded, []agent.Activity{{Kind: agent.CheckRan}}) {
+		t.Fatalf("the second failed sample held the log back: %+v", seen.recorded)
+	}
+}
+
+// A file that changed while the Stop sample ran belongs to the finished
+// turn; the next prompt does not take it for the user's work.
+func TestAChangeDeferredAtStopIsReportedAfterThePrompt(t *testing.T) {
+	root := gitRepository(t, map[string]string{"rules.arclint.yaml": "zones:\n  app: internal/**\n", "internal/a.go": "package a\n"})
+	store := NewProgressStore(root, recording)
+	observe(t, store, "s")
+	sample := store.sample
+	store.sample = func() (snapshot, error) {
+		taken, err := sample()
+		pause()
+		writeFile(t, root, "internal/background.go", "package a // written while Stop sampled\n")
+		return taken, err
+	}
+	if seen := observe(t, store, "s"); len(seen.recorded) != 0 {
+		t.Fatalf("the Stop update reported %+v", seen.recorded)
+	}
+	store.sample = sample
+	if err := store.FinishTurn("s"); err != nil {
+		t.Fatal(err)
+	}
+	pause()
+	if err := store.StartTurn("s"); err != nil {
+		t.Fatal(err)
+	}
+	want := []agent.Activity{{Kind: agent.FilesChanged, Paths: []string{"internal/background.go"}}}
+	if seen := observe(t, store, "s"); !reflect.DeepEqual(seen.recorded, want) {
+		t.Fatalf("recorded %+v, want %+v", seen.recorded, want)
+	}
+}
+
+// A session that never saw the checkout reports the agent's changes when
+// sampling recovers, and leaves out files changed before it began.
+func TestASessionThatNeverSampledReportsItsChangesOnRecovery(t *testing.T) {
+	root := gitRepository(t, map[string]string{"rules.arclint.yaml": "zones:\n  app: internal/**\n", "internal/a.go": "package a\n"})
+	writeFile(t, root, "internal/a.go", "package a // dirty before the session\n")
+	pause()
+	store := NewProgressStore(root, recording)
+	sample := store.sample
+	store.sample = func() (snapshot, error) { return nil, errGitTimedOut }
+	observe(t, store, "s")
+	observe(t, store, "s")
+	pause()
+	writeFile(t, root, "internal/agents.go", "package a // the agent's change\n")
+	store.sample = sample
 	want := []agent.Activity{{Kind: agent.FilesChanged, Paths: []string{"internal/agents.go"}}}
 	if seen := observe(t, store, "s"); !reflect.DeepEqual(seen.recorded, want) {
 		t.Fatalf("recorded %+v, want %+v", seen.recorded, want)
