@@ -20,10 +20,13 @@ type Carrier struct {
 // contract: the type spelling a term, the constructor a value object's
 // invariants are enforced at, the root method enforcing an invariant
 // or a service method checking an assertion, and the satisfaction method of a
-// specification. Every lookup is within one bounded context, because a
-// name means one thing per context.
+// specification. An assertion whose owner is declared without a body,
+// an interface or an abstract class, is carried by the first test its
+// verified_by names that the repository declares. Every lookup is
+// within one bounded context, because a name means one thing per context.
 type Carriers struct {
 	contexts map[string]contextCode
+	code     domainCode
 }
 
 // NewCarriers locates recorded language through the same prepared Facts queries
@@ -41,7 +44,7 @@ func NewCarriers(facts Facts, knowledge vocab.UbiquitousLanguage) (Carriers, err
 
 // carriersOf indexes the contexts of resolved domain code by name.
 func carriersOf(code domainCode) Carriers {
-	c := Carriers{contexts: map[string]contextCode{}}
+	c := Carriers{contexts: map[string]contextCode{}, code: code}
 	for _, cc := range code.contexts {
 		c.contexts[cc.ctx.Name] = cc
 	}
@@ -106,6 +109,19 @@ func (c Carriers) Assertion(ctx, owner, key string) (Carrier, bool, error) {
 	if !ok {
 		return Carrier{}, false, nil
 	}
+	if decl, located := c.owner(ctx, owner); located && bodiless(decl.decl) != "" {
+		for _, oa := range cc.ctx.Assertions() {
+			if oa.Owner != owner || oa.Assertion.Key != key {
+				continue
+			}
+			for _, entry := range oa.Assertion.VerifiedBy {
+				if at, found := c.code.verifyingTestCarrier(entry); found {
+					return at, true, nil
+				}
+			}
+		}
+		return Carrier{}, false, nil
+	}
 	if _, isAggregate := cc.aggregates[owner]; isAggregate {
 		return c.rootMethod(ctx, owner, key, assertKey)
 	}
@@ -122,6 +138,38 @@ func (c Carriers) Assertion(ctx, owner, key string) (Carrier, bool, error) {
 		return Carrier{}, false, err
 	}
 	return carrierOf(m), true, nil
+}
+
+// BodilessOwner names how the owner of an assertion is declared when it
+// has no body to call a checking method from, an interface or an
+// abstract class, or "" when it has one or is not located. Such an
+// owner's assertion is verified by the tests its verified_by names.
+func (c Carriers) BodilessOwner(ctx, owner string) string {
+	decl, located := c.owner(ctx, owner)
+	if !located {
+		return ""
+	}
+	return bodiless(decl.decl)
+}
+
+// owner locates the declared type owning a contract: an aggregate's
+// root, or the type spelling a domain service.
+func (c Carriers) owner(ctx, owner string) (locDecl, bool) {
+	cc, ok := c.contexts[ctx]
+	if !ok {
+		return locDecl{}, false
+	}
+	if ac, isAggregate := cc.aggregates[owner]; isAggregate {
+		if !ac.located() {
+			return locDecl{}, false
+		}
+		return ac.root(), true
+	}
+	loc := cc.terms[owner]
+	if !loc.located() {
+		return locDecl{}, false
+	}
+	return loc.decl(), true
 }
 
 // rootMethod finds the method a contract key names on an aggregate's

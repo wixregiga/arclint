@@ -103,25 +103,19 @@ func (code domainCode) judgeVerifyingTest(r rule.Rule, subject rule.Subject, rec
 	}
 }
 
-// testDeclared reports whether a file's facts declare a test, and when
-// they do not, says what the file declares under the name instead, or
-// "" when nothing.
-type testDeclared func(t vocab.VerifyingTest, facts LanguageFacts) (bool, string)
+// testDeclared finds the declaration of a test in a file's facts, and
+// when there is none, says what the file declares under the name
+// instead, or "" when nothing.
+type testDeclared func(t vocab.VerifyingTest, facts LanguageFacts) (Declaration, bool, string)
 
 // judgeDeclaredTest judges a test of a language whose facts carry
 // declarations. spelling is the declaration a remedy asks for.
 func (code domainCode) judgeDeclaredTest(t vocab.VerifyingTest, finding func(string, string) ([]Violation, string, error), declared testDeclared, spelling string) ([]Violation, string, error) {
 	facts, _ := code.facts.FactsFor(t.Path)
-	switch {
-	case facts.ParseFailure != "":
-		return nil, fmt.Sprintf("%s: the file does not parse: %s", t, facts.ParseFailure), nil
-	case !facts.DeclarationsAvailable:
-		return nil, fmt.Sprintf("%s: the declarations of %s are not available", t, t.Path), nil
-	case rule.LanguageOf(t.Path) == rule.LanguageGo && !facts.ImportsAvailable:
-		// The name testing is imported by decides which T a Go test takes.
-		return nil, fmt.Sprintf("%s: the imports of %s are not available", t, t.Path), nil
+	if gap := readableTests(t, facts); gap != "" {
+		return nil, gap, nil
 	}
-	ok, instead := declared(t, facts)
+	_, ok, instead := declared(t, facts)
 	if ok {
 		return nil, "", nil
 	}
@@ -132,14 +126,68 @@ func (code domainCode) judgeDeclaredTest(t vocab.VerifyingTest, finding func(str
 	return finding(message, fmt.Sprintf("declare %s in %s, or name the test that verifies the statement in verified_by", spelling, t.Path))
 }
 
+// readableTests says why a file's facts cannot tell whether it declares
+// a test, or nothing when they can.
+func readableTests(t vocab.VerifyingTest, facts LanguageFacts) string {
+	switch {
+	case facts.ParseFailure != "":
+		return fmt.Sprintf("%s: the file does not parse: %s", t, facts.ParseFailure)
+	case !facts.DeclarationsAvailable:
+		return fmt.Sprintf("%s: the declarations of %s are not available", t, t.Path)
+	case rule.LanguageOf(t.Path) == rule.LanguageGo && !facts.ImportsAvailable:
+		// The name testing is imported by decides which T a Go test takes.
+		return fmt.Sprintf("%s: the imports of %s are not available", t, t.Path)
+	}
+	return ""
+}
+
+// verifyingTestCarrier locates where the repository declares the test a
+// verified_by entry names: the declaration of a Go or Python test, or
+// the first line a TypeScript file writes its name on. False when the
+// test is not found or its file cannot be read.
+func (code domainCode) verifyingTestCarrier(entry string) (Carrier, bool) {
+	t, err := vocab.ParseVerifyingTest(entry)
+	if err != nil || !code.facts.Contains(t.Path) {
+		return Carrier{}, false
+	}
+	var declared testDeclared
+	switch rule.LanguageOf(t.Path) {
+	case rule.LanguageGo:
+		declared = goTestDeclared
+	case rule.LanguagePython:
+		declared = pythonTestDeclared
+	case rule.LanguageTypeScript:
+		content, err := code.facts.Read(t.Path)
+		if err != nil {
+			return Carrier{}, false
+		}
+		at := strings.Index(content, t.Name)
+		if at < 0 {
+			return Carrier{}, false
+		}
+		return Carrier{Path: t.Path, Line: strings.Count(content[:at], "\n") + 1}, true
+	default:
+		return Carrier{}, false
+	}
+	facts, _ := code.facts.FactsFor(t.Path)
+	if readableTests(t, facts) != "" {
+		return Carrier{}, false
+	}
+	d, ok, _ := declared(t, facts)
+	if !ok {
+		return Carrier{}, false
+	}
+	return Carrier{Path: t.Path, Line: d.StartLine}, true
+}
+
 // goTestDeclared finds a Go test as go test runs it: a function of a
 // _test.go file named Test followed by nothing or by a character that
 // is not a lowercase letter, declaring no type parameters, taking one
 // *testing.T under the name the file imports testing by, and returning
 // nothing.
-func goTestDeclared(t vocab.VerifyingTest, facts LanguageFacts) (bool, string) {
+func goTestDeclared(t vocab.VerifyingTest, facts LanguageFacts) (Declaration, bool, string) {
 	if !strings.HasSuffix(t.Path, "_test.go") {
-		return false, "go test runs tests only from _test.go files"
+		return Declaration{}, false, "go test runs tests only from _test.go files"
 	}
 	for _, d := range facts.Declarations {
 		if d.Kind != declKindFunc || d.Owner != "" || d.Name != t.Name {
@@ -147,17 +195,17 @@ func goTestDeclared(t vocab.VerifyingTest, facts LanguageFacts) (bool, string) {
 		}
 		switch {
 		case !goTestName(d.Name):
-			return false, fmt.Sprintf("func %s is not named as a test, Test followed by a name that does not begin with a lowercase letter", d.Name)
+			return Declaration{}, false, fmt.Sprintf("func %s is not named as a test, Test followed by a name that does not begin with a lowercase letter", d.Name)
 		case len(d.Params) != 1 || !goTestingT(d.Params[0].Type, facts.Imports):
-			return false, fmt.Sprintf("func %s does not take one *testing.T", d.Name)
+			return Declaration{}, false, fmt.Sprintf("func %s does not take one *testing.T", d.Name)
 		case len(d.Results) != 0:
-			return false, fmt.Sprintf("func %s returns a value, and go test runs only a test that returns nothing", d.Name)
+			return Declaration{}, false, fmt.Sprintf("func %s returns a value, and go test runs only a test that returns nothing", d.Name)
 		case d.Generic:
-			return false, fmt.Sprintf("func %s declares type parameters, and go test refuses a test that does", d.Name)
+			return Declaration{}, false, fmt.Sprintf("func %s declares type parameters, and go test refuses a test that does", d.Name)
 		}
-		return true, ""
+		return d, true, ""
 	}
-	return false, ""
+	return Declaration{}, false, ""
 }
 
 // goTestName reports whether go test runs a function of this name as a
@@ -205,7 +253,7 @@ func goTestingT(typ string, imports []Import) bool {
 // name begins with test, or, spelled Class.test_name, such a method of
 // the class. A bare name that only a method spells is answered with
 // the spelling that names it.
-func pythonTestDeclared(t vocab.VerifyingTest, facts LanguageFacts) (bool, string) {
+func pythonTestDeclared(t vocab.VerifyingTest, facts LanguageFacts) (Declaration, bool, string) {
 	class, method, isMethod := strings.Cut(t.Name, ".")
 	if !isMethod {
 		method = t.Name
@@ -216,14 +264,14 @@ func pythonTestDeclared(t vocab.VerifyingTest, facts LanguageFacts) (bool, strin
 		case isMethod && d.Kind == declKindMethod && d.Owner == class && d.Name == method,
 			!isMethod && d.Kind == declKindFunc && d.Owner == "" && d.Name == method:
 			if !strings.HasPrefix(method, "test") {
-				return false, fmt.Sprintf("%s is not named as a test, beginning with test", method)
+				return Declaration{}, false, fmt.Sprintf("%s is not named as a test, beginning with test", method)
 			}
-			return true, ""
+			return d, true, ""
 		case !isMethod && d.Kind == declKindMethod && d.Name == method && instead == "":
 			instead = fmt.Sprintf("%s is a method of %s; name it %s.%s", method, d.Owner, d.Owner, method)
 		}
 	}
-	return false, instead
+	return Declaration{}, false, instead
 }
 
 // pythonTestSpelling is the declaration a remedy asks for.

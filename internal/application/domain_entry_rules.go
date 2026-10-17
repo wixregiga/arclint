@@ -207,7 +207,7 @@ func (uc ShowDomainDefinition) judge(context string, rules *DomainEntryRules) {
 			check.Reasons = []string{"the check reported nothing for this rule"}
 			continue
 		}
-		check.Expected = expectedCarrier(*check, cfg.Languages)
+		check.Expected = expectedCarrier(*check, cfg.Languages, coverage.BodilessOwner())
 		judgeRule(check, coverage, cfg)
 	}
 }
@@ -223,9 +223,9 @@ func coverageOf(a conformance.Assessment, context string, check DomainRuleCheck)
 
 // expectedCarrier names the declaration the recording says enforces
 // the rule, spelled the way the project's languages spell a method.
-func expectedCarrier(check DomainRuleCheck, languages []rule.Language) string {
+func expectedCarrier(check DomainRuleCheck, languages []rule.Language, bodilessOwner string) string {
 	if check.Kind == vocab.ConceptAssertion {
-		return expectedMethod(conformance.AssertKey(check.Key), check.Owner, languages)
+		return expectedAssertionCarrier(check.Key, check.Owner, bodilessOwner, languages)
 	}
 	return expectedInvariantCarrier(DomainInvariantRef{Key: check.Key, Owner: check.Owner, OwnerConcept: check.OwnerConcept}, languages)
 }

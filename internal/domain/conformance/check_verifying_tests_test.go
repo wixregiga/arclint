@@ -305,6 +305,9 @@ func TestContractCoverageIncludesTheVerifyingTests(t *testing.T) {
 	if c.Status() != "structurally_checked" {
 		t.Errorf("verified contract: status %s", c.Status())
 	}
+	if at, located := c.Carrier(); !located || at != (conformance.Carrier{Path: goTest, Line: 5}) || c.BodilessOwner() != "an interface" {
+		t.Errorf("verified contract: carrier %+v %v, owner declared as %q; want the test, as an interface", at, located, c.BodilessOwner())
+	}
 	rules := map[string]conformance.Evaluation{}
 	for _, e := range c.Checks() {
 		rules[e.Rule().Qualified()] = e
@@ -323,5 +326,54 @@ func TestContractCoverageIncludesTheVerifyingTests(t *testing.T) {
 	c = coverage()
 	if len(c.Checks()) != 1 || c.Checks()[0].Rule().Qualified() != "assertion/checked-by-its-operation" {
 		t.Errorf("a contract naming no tests is checked for tests: %v", c.Checks())
+	}
+}
+
+// An assertion whose owner is declared without a body is carried by
+// the first test its verified_by names that the repository declares,
+// at the test's declaration or, in TypeScript, the first line writing
+// its name; without one it is carried by nothing, and the owner is
+// named as declared without a body, so a listing expects the tests.
+func TestCarriersOfABodilessOwnerAreItsTests(t *testing.T) {
+	goFile, goTest, tsTest := "internal/pricing/discounter.go", "internal/pricing/discounter_test.go", "src/pricing/discounter.test.ts"
+	facts := map[string]conformance.LanguageFacts{
+		goFile: goDecls("pricing", []conformance.Declaration{
+			{Kind: "interface", Name: "Discounter", Exported: true, StartLine: 3},
+			{Kind: "method", Name: "Discount", Owner: "Discounter", Exported: true, StartLine: 4},
+		}),
+		goTest: goTestFile("pricing", "", []conformance.Declaration{
+			{Kind: "func", Name: "TestDiscountNeverExceedsTotal", Exported: true, StartLine: 7, Params: []conformance.DeclarationParam{{Name: "t", Type: "*testing.T"}}},
+		}),
+	}
+	content := map[string]string{tsTest: "import { test } from \"vitest\";\n\ntest(\"never exceeds the total\", () => {});\n"}
+	obs, err := conformance.NewObservations(observed(goFile, goTest, tsTest), facts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	obs = obs.WithContent(conformance.NewMapContent(content))
+	inspection, err := conformance.NewInspectionFacts(nil, obs, rule.FactFileTree, rule.FactImports, rule.FactDeclarations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		tests []string
+		want  conformance.Carrier
+		found bool
+	}{
+		{[]string{goTest + ":TestRenamed", goTest + ":TestDiscountNeverExceedsTotal"}, conformance.Carrier{Path: goTest, Line: 7}, true},
+		{[]string{tsTest + ":never exceeds the total"}, conformance.Carrier{Path: tsTest, Line: 3}, true},
+		{nil, conformance.Carrier{}, false},
+	} {
+		carriers, err := conformance.NewCarriers(inspection, discounterContext(t, c.tests...))
+		if err != nil {
+			t.Fatal(err)
+		}
+		at, found, err := carriers.Assertion("pricing", "Discounter", "never-exceeds-total")
+		if err != nil || found != c.found || at != c.want {
+			t.Errorf("%v: carrier %+v %v %v, want %+v %v", c.tests, at, found, err, c.want, c.found)
+		}
+		if got := carriers.BodilessOwner("pricing", "Discounter"); got != "an interface" {
+			t.Errorf("Discounter is declared as %q, want an interface", got)
+		}
 	}
 }
