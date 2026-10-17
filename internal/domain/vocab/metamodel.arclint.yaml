@@ -61,6 +61,13 @@ description: >-
 # and page numbers were carried from the draft this file was made from
 # and have not been checked against the print edition, so treat them
 # as approximate until someone with the book confirms them.
+#
+# The source audit of 2026-10-17 lists these carried pages for the owner
+# to confirm against the print editions: Vernon 2013 pp. 174, 208, 266,
+# 287, and 291; Evans 2003 pp. 127 and 128. Every other carried page
+# outside Vernon's sample pages is equally unchecked. A carried Vernon
+# 2013 chapter 10 page has a vernon-iddd-sample-pages citation beside it
+# wherever the sample's page states the entry.
 works:
   evans2015:
     title: "Domain-Driven Design Reference: Definitions and Pattern Summaries"
@@ -168,7 +175,7 @@ works:
     url: https://www.informit.com/articles/article.aspx?p=1944876&seqNum=3
     verification: fetched
   vernon-iddd-sample-pages:
-    title: "Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-397)"
+    title: "Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-388, index pp. 589-612)"
     author: Vaughn Vernon
     year: 2013
     url: https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf
@@ -709,6 +716,7 @@ building_blocks:
         sources:
           - {work: evans2015, page: 11, section: Entities}
           - {work: vernon2013, chapter: 10, page: 382}
+          - {work: vernon-iddd-sample-pages, page: 382, section: Favor Value Object Parts}
       - text: An entity inside an aggregate has a local identity that needs to be distinguishable only within the aggregate; only the root carries a global one.
         sources:
           - {work: evans2003, chapter: 6, page: 127}
@@ -789,6 +797,7 @@ building_blocks:
         - {work: evans2015, page: 16, section: Aggregates}
         - {work: evans2015, page: 22, section: Assertions}
         - {work: vernon2013, chapter: 10, page: 353}
+        - {work: vernon-iddd-sample-pages, page: 353, section: "Rule: Model True Invariants in Consistency Boundaries"}
     records:
       section: invariants
       note: A map from key to statement, recorded under the aggregate or value object that owns it; the owner is the nesting, never a reference.
@@ -802,6 +811,9 @@ building_blocks:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: evans2015, page: 22, section: Assertions}
         enforcement: {by: loader, languages: all}
+      # Owner check (source audit of 2026-10-17): Vernon's sample p. 353
+      # defines an invariant but says nothing of keys, so no sample citation
+      # sits beside the carried one here.
       - id: invariant/keyed-within-owner
         statement: Every invariant carries a kebab-case key, unique within its owner and distinct from the owner's assertion keys; the parser rejects a key recorded twice under one owner, and the loader rejects an empty key or an empty statement.
         sources:
@@ -819,6 +831,7 @@ building_blocks:
         sources:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: vernon2013, chapter: 10, page: 354}
+          - {work: vernon-iddd-sample-pages, page: 354, section: "Rule: Model True Invariants in Consistency Boundaries"}
         enforcement:
           by: domain
           facts: [file_tree, declarations, calls]
@@ -831,6 +844,7 @@ building_blocks:
         sources:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: vernon2013, chapter: 10, page: 353}
+          - {work: vernon-iddd-sample-pages, page: 353, section: "Rule: Model True Invariants in Consistency Boundaries"}
       - text: Report a refused operation under the name of the rule that refused it, so that the interface tells which rule failed without a trace through the implementation.
         sources:
           - {work: evans2015, page: 20, section: Intention-Revealing Interfaces}
@@ -933,6 +947,7 @@ building_blocks:
         - {work: fowler-anemic-domain-model}
         - {work: stafford-business-logic}
         - {work: vernon2013, chapter: 10, page: 353}
+        - {work: vernon-iddd-sample-pages, page: 353, section: "Rule: Model True Invariants in Consistency Boundaries"}
     records:
       section: none
       note: Recorded as an invariant, an assertion, or a specification with one owner, or left unrecorded as an application policy or a guard.
@@ -966,6 +981,7 @@ building_blocks:
         - {work: fowler-aggregate}
         - {work: evans2003, chapter: 6, page: 127}
         - {work: vernon2013, chapter: 10, page: 347}
+        - {work: vernon-iddd-sample-pages, page: 347, section: Aggregates}
     records:
       section: aggregates
       note: "A map keyed by the aggregate's name, which is the root's name; the entry is the root. The aggregate's code is where its root is declared: the package in Go, the file in TypeScript and Python."
@@ -986,6 +1002,7 @@ building_blocks:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: fowler-aggregate}
           - {work: vernon2013, chapter: 10, page: 380}
+          - {work: vernon-iddd-sample-pages, page: 380, section: Create a Root Entity with Unique Identity}
         enforcement: {by: loader, languages: all}
       - id: aggregate/identity-recorded
         statement: An aggregate names its identity, and the identity is a value object of the same context, recorded there or implied by the naming; an aggregate without an identity, or whose identity is recorded as anything but a value object, is rejected.
@@ -1004,6 +1021,7 @@ building_blocks:
         sources:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: vernon2013, chapter: 10, page: 353}
+          - {work: vernon-iddd-sample-pages, page: 353, section: "Rule: Model True Invariants in Consistency Boundaries"}
         enforcement: {by: domain, languages: all, severity: warning}
       - id: aggregate/root-declared
         statement: The root is one declared type spelled with the aggregate's name in the language's type case, found in the context's code; a type that can carry behaviour (a struct or named type in Go, a class in TypeScript and Python) is the root ahead of an interface or alias of the same name, two such declarations with nothing to choose between them are a finding, and none is a finding at the recording.
@@ -1011,6 +1029,10 @@ building_blocks:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: evans2015, page: 4, section: Ubiquitous Language}
         enforcement: {by: domain, facts: [file_tree, declarations], languages: all}
+      # Owner check (source audit of 2026-10-17): Vernon's sample p. 354 says
+      # the consistency boundary asserts the invariants, not that the root
+      # declares the enforcing method, so no sample citation sits beside the
+      # carried one here.
       - id: aggregate/invariants-enforced-by-root
         statement: For every recorded invariant of the aggregate the root declares the method that enforces it, ensure followed by the key in the language's method case (EnsureLinesFrozen, ensureLinesFrozen, ensure_lines_frozen); the enforcement lives on the root and nowhere else.
         sources:
@@ -1025,12 +1047,22 @@ building_blocks:
           - {work: evans2015, page: 21, section: Side-Effect-Free Functions}
           - {work: fowler-anemic-domain-model}
         enforcement: {by: domain, facts: [file_tree, declarations], languages: all, severity: warning}
+      # Open question for the owner (source audit of 2026-10-17): the cited
+      # passages say an aggregate holds another by identity, not by a direct
+      # object reference, but Vernon's sample pp. 362-363 passes a Team root
+      # into a BacklogItem command and p. 387 prefers dependent objects
+      # "passed in to" the command method. No source read so far states
+      # that a command never takes another aggregate's root. The wording
+      # stays unchanged until the owner decides.
       - id: aggregate/references-by-identity
         statement: No constructor or command of one aggregate's root takes or returns another aggregate's root; what one aggregate needs of another it receives as an identity or a value. Field types are not yet observed, so a root held in a field is not seen, and an import alias hides a root of another package.
         sources:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: fowler-aggregate}
           - {work: vernon2013, chapter: 10, page: 359}
+          - {work: vernon-iddd-sample-pages, page: 359, section: "Rule: Reference Other Aggregates by Identity"}
+          - {work: vernon-iddd-sample-pages, page: 361, section: Making Aggregates Work Together through Identity References}
+          - {work: vernon-effective-aggregate-design-2, page: 8, section: "Rule: Reference Other Aggregates By Identity"}
         enforcement: {by: domain, facts: [file_tree, declarations, imports], languages: all}
       - id: aggregate/root-only-references
         statement: Nothing outside the aggregate holds a reference to a member other than the root; references to members are passed out for use within a single operation only.
@@ -1044,6 +1076,7 @@ building_blocks:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: fowler-aggregate}
           - {work: vernon2013, chapter: 10, page: 360}
+          - {work: vernon-iddd-sample-pages, page: 360, section: "Rule: Reference Other Aggregates by Identity"}
         enforcement: {needs: transaction-facts, facts: [], languages: []}
     guidance:
       - text: Cluster into an aggregate what a true invariant requires to change atomically, and only that; a rule that only needs to hold eventually does not join two things into one aggregate.
@@ -1051,21 +1084,28 @@ building_blocks:
         sources:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: vernon2013, chapter: 10, page: 353}
+          - {work: vernon-iddd-sample-pages, page: 353, section: "Rule: Model True Invariants in Consistency Boundaries"}
       - text: Design small aggregates; do not cluster on the shape of the database or a parent-child relation, and reconsider the model when the boundaries are not guiding transactional and distributional decisions well.
         fundamental: true
         sources:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: vernon2013, chapter: 10, page: 355}
+          - {work: vernon-iddd-sample-pages, page: 355, section: "Rule: Design Small Aggregates"}
       - text: Refer to another aggregate by its identity, never by holding its root.
         fundamental: true
         sources:
           - {work: vernon2013, chapter: 10, page: 359}
+          - {work: vernon-iddd-sample-pages, page: 359, section: "Rule: Reference Other Aggregates by Identity"}
+          - {work: vernon-iddd-sample-pages, page: 361, section: Making Aggregates Work Together through Identity References}
+          - {work: vernon-effective-aggregate-design-2, page: 8, section: "Rule: Reference Other Aggregates By Identity"}
           - {work: fowler-aggregate}
       - text: Use eventual consistency outside the boundary; across aggregates, handle updates asynchronously, and ask whose job it is to bring the other aggregate up to date.
         fundamental: true
         sources:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: vernon2013, chapter: 10, page: 364}
+          - {work: vernon-iddd-sample-pages, page: 364, section: "Rule: Use Eventual Consistency Outside the Boundary"}
+          - {work: vernon-iddd-sample-pages, page: 367, section: Ask Whose Job It Is}
       - text: Load, save, and remove an aggregate whole; a member shares its root's life cycle, is stored and deleted with it, and never outlives it.
         fundamental: true
         sources:
@@ -1081,14 +1121,17 @@ building_blocks:
       - text: Favor value object parts over entity parts inside an aggregate.
         sources:
           - {work: vernon2013, chapter: 10, page: 382}
+          - {work: vernon-iddd-sample-pages, page: 382, section: Favor Value Object Parts}
       - text: Tell the aggregate what to do rather than asking it for state and deciding outside it; follow the Law of Demeter.
         sources:
           - {work: vernon2013, chapter: 10, page: 382}
+          - {work: vernon-iddd-sample-pages, page: 382, section: "Using Law of Demeter and Tell, Don't Ask"}
       - text: Keep an aggregate together on one server, and allow different aggregates to be distributed among nodes; where concurrent modification is possible, carry a version for optimistic concurrency.
         fundamental: true
         sources:
           - {work: evans2015, page: 16, section: Aggregates}
           - {work: vernon2013, chapter: 10, page: 350}
+          - {work: vernon-iddd-sample-pages, page: 350, section: "First Attempt: Large-Cluster Aggregate"}
 
   - term: aggregate_root
     title: Aggregate Root
@@ -1103,6 +1146,7 @@ building_blocks:
         - {work: evans2015, page: 16, section: Aggregates}
         - {work: fowler-aggregate}
         - {work: vernon2013, chapter: 10, page: 380}
+        - {work: vernon-iddd-sample-pages, page: 380, section: Create a Root Entity with Unique Identity}
     records:
       section: aggregates
       note: The root is the aggregate's entry itself; the aggregate's name is the root's name and the aggregate's identity is the root's.
@@ -1331,11 +1375,17 @@ building_blocks:
         sources:
           - {work: evans2015, page: 17, section: Repositories}
         enforcement: {by: domain, facts: [file_tree, declarations], languages: all}
+      # Open question for the owner (source audit of 2026-10-17): this rule
+      # says never, while Vernon's sample p. 387 says injecting a repository
+      # into an aggregate "should generally be viewed as harmful". The
+      # wording stays unchanged until the owner decides.
       - id: repository/not-called-from-aggregates
         statement: No method of an aggregate root or of its members calls a repository.
         sources:
           - {work: vernon2013, chapter: 7, page: 266}
           - {work: vernon2013, chapter: 10, page: 387}
+          - {work: vernon-iddd-sample-pages, page: 387, section: Avoid Dependency Injection}
+          - {work: vernon-effective-aggregate-design-2, page: 8, section: Model Navigation}
         enforcement: {by: domain, facts: [file_tree, declarations, calls, resolved_calls], languages: all}
     guidance:
       - text: Provide repositories only for aggregate roots that actually need direct access; keep application logic focused on the model, delegating all object storage and access to the repositories.

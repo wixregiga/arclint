@@ -161,6 +161,14 @@ func TestConceptDocsComeFromTheMetaModel(t *testing.T) {
 	if !strings.Contains(br.Supplies, "owner") {
 		t.Errorf("business_rule Supplies should mention owner: %q", br.Supplies)
 	}
+	// The authoring guidance places a rule where the meaning does: a
+	// specification is one of the places, never an excluded one.
+	if !strings.Contains(br.Supplies, "as a specification") || strings.Contains(br.Supplies, "never becomes a specification") {
+		t.Errorf("business_rule Supplies contradicts the meaning about specifications: %q", br.Supplies)
+	}
+	if !strings.Contains(strings.Join(br.Questions, " "), "a specification") {
+		t.Errorf("business_rule Questions never ask whether the rule is a specification: %q", br.Questions)
+	}
 }
 
 func TestConceptDocSourcesAreReadable(t *testing.T) {
