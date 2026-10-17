@@ -83,11 +83,17 @@ func specOf(u conformance.UndeterminedUse) conformance.UndeterminedUseSpec {
 	return conformance.UndeterminedUseSpec{Path: u.Path(), Line: u.Line(), What: u.What(), Reason: u.Reason(), Context: u.Context(), Term: u.Term()}
 }
 
-// spelled renders each use as term role way via path:line, in order.
+// spelled renders each use as term role owner way via path:line, in
+// order; the owner is the aggregate, or the aggregates a value object
+// identifies joined by +.
 func spelled(uses []conformance.TermUse) []string {
 	out := make([]string, len(uses))
 	for i, u := range uses {
-		out[i] = strings.Join([]string{u.Term(), string(u.Role()), u.Aggregate(), string(u.Way()), u.Via(), u.Path() + ":" + strconv.Itoa(u.Line())}, " ")
+		owner := u.Aggregate()
+		if ids := u.Identifies(); len(ids) > 0 {
+			owner = strings.Join(ids, "+")
+		}
+		out[i] = strings.Join([]string{u.Term(), string(u.Role()), owner, string(u.Way()), u.Via(), u.Path() + ":" + strconv.Itoa(u.Line())}, " ")
 	}
 	return out
 }
@@ -521,6 +527,29 @@ func TestUsesKeepTheAggregateARecordedIdentityIdentifies(t *testing.T) {
 	}, nil)
 	uses := usesOf(t, []vocab.BoundedContext{ctx}, files, "app")
 	if got := spelled(uses.Uses); len(got) != 1 || got[0] != "OrderID value_object Order field PlaceOrder.id app/place.go:3" {
+		t.Fatalf("uses = %v", got)
+	}
+}
+
+// An identity two aggregates share names both.
+func TestUsesNameEveryAggregateAnIdentityIdentifies(t *testing.T) {
+	ctx := orderingContext()
+	invoice := aggregateOf("Invoice", "OrderID", []string{"totals-match"}, nil)
+	ctx.Aggregates = append(ctx.Aggregates, invoice)
+	ctx.ValueObjects = append(ctx.ValueObjects, valueObject("OrderID"))
+	files := goOrdering()
+	files["ordering/order_id.go"] = resolvedFile(rule.LanguageGo, "ordering", []conformance.Declaration{
+		{Kind: "struct", Name: "OrderID", Exported: true, StartLine: 3},
+	}, nil)
+	files["ordering/invoice.go"] = resolvedFile(rule.LanguageGo, "ordering", []conformance.Declaration{
+		{Kind: "struct", Name: "Invoice", Exported: true, StartLine: 3},
+	}, nil)
+	files["app/place.go"] = resolvedFile(rule.LanguageGo, "app", []conformance.Declaration{
+		{Kind: "struct", Name: "PlaceOrder", Exported: true, StartLine: 2},
+		{Kind: "field", Name: "id", Owner: "PlaceOrder", StartLine: 3, Holds: []conformance.Reference{declared("ordering/order_id.go", "", "OrderID")}, Type: declared("ordering/order_id.go", "", "OrderID")},
+	}, nil)
+	uses := usesOf(t, []vocab.BoundedContext{ctx}, files, "app")
+	if got := spelled(uses.Uses); len(got) != 1 || got[0] != "OrderID value_object Order+Invoice field PlaceOrder.id app/place.go:3" {
 		t.Fatalf("uses = %v", got)
 	}
 }

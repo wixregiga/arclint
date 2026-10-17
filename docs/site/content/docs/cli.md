@@ -268,7 +268,8 @@ The JSON shape carries the same facts under `domain.scoped`,
 `domain.shown`, `domain.located`, per-contract `anchor` and `reason`,
 and `domain.unanchored`; the used entries travel apart from the
 declared `domain.contexts`, under `domain.used` with each `sites` entry
-(`path`, `line`, `way` as `call` or `field`, and `via`), and the
+(`path`, `line`, `way` as `call` or `field`, and `via`), with
+`identifies` listing the aggregates an identity identifies, and the
 references that may be uses under `domain.undetermined`, each with the
 `context` and `term` it may reach when one is known.
 `domain.usesLocated` says the worksite's uses were looked for.

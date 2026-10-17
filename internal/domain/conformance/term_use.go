@@ -50,8 +50,10 @@ type TermUse struct {
 	term      string
 	role      UsedRole
 	aggregate string
-	way       UseWay
-	via       string
+	// identifies lists the aggregates whose identity a value object is.
+	identifies []string
+	way        UseWay
+	via        string
 }
 
 // useSite is where a reference is written: the file and line, how the
@@ -87,7 +89,7 @@ func newTermUse(ref Reference, reached locDecl, term usedTerm, site useSite) (Te
 	}
 	return TermUse{
 		path: site.path, line: site.line, context: term.context, term: term.name,
-		role: term.role, aggregate: term.aggregate, way: site.way, via: site.via,
+		role: term.role, aggregate: term.aggregate, identifies: append([]string(nil), term.identifies...), way: site.way, via: site.via,
 	}, nil
 }
 
@@ -106,9 +108,13 @@ func (u TermUse) Term() string { return u.term }
 // Role is the part the term plays in its context.
 func (u TermUse) Role() UsedRole { return u.role }
 
-// Aggregate names the aggregate an entity is a member of, an identity
-// identifies, or a repository or factory serves; "" otherwise.
+// Aggregate names the aggregate an entity is a member of, or a
+// repository or factory serves; "" otherwise.
 func (u TermUse) Aggregate() string { return u.aggregate }
+
+// Identifies lists, for a value object, every aggregate whose identity
+// it is, in recording order; empty otherwise.
+func (u TermUse) Identifies() []string { return append([]string(nil), u.identifies...) }
 
 // Way says whether a call or a field reaches the term.
 func (u TermUse) Way() UseWay { return u.way }
@@ -192,6 +198,7 @@ type usedTerm struct {
 	name       string
 	role       UsedRole
 	aggregate  string
+	identifies []string
 	candidates []locDecl
 }
 
@@ -259,11 +266,18 @@ func usedTerms(contexts []contextCode) []usedTerm {
 			if !ok {
 				continue
 			}
-			aggregate := t.Aggregate
-			if role == UsedValueObject && aggregate == "" {
-				aggregate = identifies[t.Name]
+			term := usedTerm{context: cc.ctx.Name, name: t.Name, role: role, candidates: cc.terms[t.Name].candidates}
+			switch role {
+			case UsedValueObject:
+				term.identifies = identifies[t.Name]
+			case UsedEntity:
+				term.aggregate = t.Aggregate
+			case UsedAggregate, UsedDomainEvent, UsedDomainService, UsedSpecification, UsedRepository, UsedFactory:
+				// Belongs to no aggregate as a term of Terms: an aggregate is
+				// its own root, and repositories and factories are listed
+				// with their aggregate below.
 			}
-			out = append(out, usedTerm{context: cc.ctx.Name, name: t.Name, role: role, aggregate: aggregate, candidates: cc.terms[t.Name].candidates})
+			out = append(out, term)
 		}
 		for _, agg := range cc.ctx.Aggregates {
 			if agg.Repository != "" {
@@ -278,13 +292,13 @@ func usedTerms(contexts []contextCode) []usedTerm {
 }
 
 // identityOwners maps each identity the context's aggregates and their
-// members name to the aggregate it belongs to, the first in recording
-// order, whether or not the identity is also recorded as a value object.
-func identityOwners(ctx vocab.BoundedContext) map[string]string {
-	owners := map[string]string{}
+// members name to every aggregate it identifies, in recording order,
+// whether or not the identity is also recorded as a value object.
+func identityOwners(ctx vocab.BoundedContext) map[string][]string {
+	owners := map[string][]string{}
 	claim := func(identity, aggregate string) {
-		if _, taken := owners[identity]; identity != "" && !taken {
-			owners[identity] = aggregate
+		if identity != "" && !slices.Contains(owners[identity], aggregate) {
+			owners[identity] = append(owners[identity], aggregate)
 		}
 	}
 	for _, agg := range ctx.Aggregates {
@@ -317,7 +331,12 @@ var termRoles = map[vocab.Concept]UsedRole{
 // the reason.
 func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Language) (TermUses, error) {
 	var out TermUses
-	seenUse := map[TermUse]bool{}
+	type useKey struct {
+		path, context, term, via string
+		line                     int
+		way                      UseWay
+	}
+	seenUse := map[useKey]bool{}
 	seenUndetermined := map[UndeterminedUse]bool{}
 	var invalid error
 	undetermined := func(spec UndeterminedUseSpec) {
@@ -398,8 +417,8 @@ func (c Carriers) Uses(inWorksite func(path string) bool, languages []rule.Langu
 			if err != nil {
 				return err
 			}
-			if !seenUse[use] {
-				seenUse[use] = true
+			if k := (useKey{use.path, use.context, use.term, use.via, use.line, use.way}); !seenUse[k] {
+				seenUse[k] = true
 				out.Uses = append(out.Uses, use)
 			}
 		}

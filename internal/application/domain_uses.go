@@ -13,10 +13,13 @@ type DomainUseRef struct {
 	// Role is aggregate, entity, value_object, domain_event,
 	// domain_service, specification, repository, or factory.
 	Role conformance.UsedRole `json:"role"`
-	// Aggregate names the aggregate an entity is a member of, an
-	// identity identifies, or a repository or factory serves.
-	Aggregate string          `json:"aggregate,omitempty"`
-	Sites     []DomainUseSite `json:"sites"`
+	// Aggregate names the aggregate an entity is a member of, or a
+	// repository or factory serves.
+	Aggregate string `json:"aggregate,omitempty"`
+	// Identifies lists, for a value object, every aggregate whose
+	// identity it is.
+	Identifies []string        `json:"identifies,omitempty"`
+	Sites      []DomainUseSite `json:"sites"`
 	// Invariants and Assertions are the contracts of the entry, or of
 	// its aggregate for a member entity; Specification is a used
 	// specification's satisfaction method.
@@ -103,7 +106,7 @@ func usedKnowledge(dk, declaredHere *DomainKnowledge, uses conformance.TermUses)
 
 // usedEntry builds the entry of one used term with its contracts.
 func usedEntry(dk *DomainKnowledge, u conformance.TermUse) DomainUseRef {
-	entry := DomainUseRef{Context: u.Context(), Name: u.Term(), Role: u.Role(), Aggregate: u.Aggregate()}
+	entry := DomainUseRef{Context: u.Context(), Name: u.Term(), Role: u.Role(), Aggregate: u.Aggregate(), Identifies: u.Identifies()}
 	owner := ""
 	switch u.Role() {
 	case conformance.UsedAggregate, conformance.UsedValueObject, conformance.UsedDomainService:
