@@ -458,9 +458,12 @@ def ts_sources(lines):
     prev = "operator"  # the previous token, as ends_operand reads it
     before = "operator"  # the token before prev
     last_op = None  # the text of the last operator token
+    last_op_before = None  # last_op as it was one token earlier
     case_label = False  # a case or default waits for its colon
     after_case_colon = False  # the last token is the colon of a case label
     jump_line = 0  # the line a break or continue was read on
+    prev_line = 0  # the line the previous token was read on
+    expression_body = False  # a function or class in an expression waits for its body
     after_dot = False  # prev was a member access dot: the next word is a property
     # The test declaration being read: None; "callee"; ("open", n), just
     # after the call's parenthesis, the n-th open; ("args", n), inside a
@@ -490,9 +493,9 @@ def ts_sources(lines):
             segment.clear()
 
         def token(kind, op=None):
-            nonlocal prev, before, after_dot, last_op, after_case_colon
-            before, prev, after_dot = prev, kind, False
-            last_op = op if kind == "operator" else None
+            nonlocal prev, before, after_dot, last_op, last_op_before, after_case_colon, prev_line
+            before, prev, after_dot, prev_line = prev, kind, False, number
+            last_op_before, last_op = last_op, (op if kind == "operator" else None)
             after_case_colon = False
 
         def literal_starts(continues):
@@ -613,13 +616,22 @@ def ts_sources(lines):
                         # the break or continue itself.
                         token(("keyword", prev[1]))
                     elif word == "of":
-                        # of is a keyword only in a for header.
-                        token(("keyword" if parens and parens[-1][1] else "word", word))
+                        # of is a keyword only where a for header's binding
+                        # ends: for (const x of xs), never for (i = of / 2;).
+                        binding = (isinstance(prev, tuple) and prev[0] == "word"
+                                   and prev[1] not in ("let", "const", "var")) or prev == "operand"
+                        header = parens and parens[-1][1] and not parens[-1][2]
+                        token(("keyword" if header and binding else "word", word))
                     else:
                         if word in ("break", "continue"):
                             jump_line = number
                         elif word in ("case", "default"):
                             case_label = True
+                        elif word in ("function", "class") and not ends_operand(prev) and not (
+                            prev == "operator" and last_op in BLOCK_AFTER
+                        ):
+                            # In an expression its body, once closed, is an operand.
+                            expression_body = True
                         token(("word", word))
                 i = j
                 continue
@@ -670,14 +682,15 @@ def ts_sources(lines):
                 before, prev, after_dot = prev, "operator", True
                 continue
             if pair in ("++", "--"):
-                # After an operand, ++ and -- are postfix and end it; before
-                # one, they are prefix.
+                # After an operand on the same line, ++ and -- are postfix
+                # and end it; before one, or after a line break, prefix.
                 other_token()
-                token("operand" if ends_operand(prev) else "operator")
+                token("operand" if ends_operand(prev) and prev_line == number else "operator")
                 i += 2
                 continue
-            if char == "!" and ends_operand(prev) and text[i + 1:i + 2] != "=":
-                # A non-null assertion, count!, ends an operand.
+            if char == "!" and ends_operand(prev) and prev_line == number and text[i + 1:i + 2] != "=":
+                # A non-null assertion, count!, ends an operand; it takes no
+                # line break before it.
                 other_token()
                 token("operand")
                 i += 1
@@ -687,7 +700,7 @@ def ts_sources(lines):
                     prev == ("word", "await") and before == ("word", "for")
                 )
                 condition = header or (isinstance(prev, tuple) and prev[1] in CONTROL_KEYWORDS)
-                parens.append((condition, header))
+                parens.append([condition, header, False])
                 if test_call == "callee":
                     test_call = ("open", len(parens))
                 else:
@@ -708,7 +721,11 @@ def ts_sources(lines):
                 other_token()
                 token("operand")
             elif char == "{":
-                if isinstance(prev, tuple):
+                if expression_body:
+                    opens, expression_body = "body", False
+                elif parens and parens[-1][1]:
+                    opens = "object"  # a destructuring pattern in a for header
+                elif isinstance(prev, tuple):
                     opens = "object" if prev[1] in OBJECT_AFTER_WORDS else "block"
                 elif prev == "operand" or after_case_colon:
                     opens = "block"
@@ -727,7 +744,7 @@ def ts_sources(lines):
                 other_token()
                 depth -= 1
                 closes = braces.pop() if braces else "block"
-                if closes == "object":
+                if closes in ("object", "body"):
                     token("operand")
                 else:
                     token("operator", "}")
@@ -738,10 +755,19 @@ def ts_sources(lines):
                 level = test_call[1] + (1 if char == "<" else -1)
                 test_call = ("generic", level) if level else "callee"
                 token("operator")
-            elif char == ":" and case_label:
+            elif char == ":" and (case_label or (
+                isinstance(prev, tuple) and prev[0] == "word" and (not braces or braces[-1] != "object")
+                and before == "operator" and last_op_before in BLOCK_AFTER
+            )):
+                # The colon of a case label or of a statement label: a
+                # brace after it opens a block.
                 other_token()
                 token("operator", ":")
                 case_label, after_case_colon = False, True
+            elif char == ";" and parens and parens[-1][1]:
+                parens[-1][2] = True  # for (init; test; update): no for-of
+                other_token()
+                token("operator", ";")
             else:
                 other_token()
                 token("operator", char)

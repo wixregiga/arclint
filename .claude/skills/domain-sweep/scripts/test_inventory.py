@@ -688,6 +688,21 @@ class InventoryTest(unittest.TestCase):
         })
         self.assertEqual(rows["gen/line.go:3"][1], "comment")
 
+    def test_round_eight_lexer_cases(self):
+        self.repo.write("web/check.ts", 'setup()\n!/[`]/.test(value) && fail();\n// Never allow a backtick.\n')
+        self.repo.write("web/label.ts", 'done: { break done; }\n/[`]/.test("");\n// Never overwrite.\n')
+        self.repo.write("web/expr.ts", "const half = function() {} / 2; // Never round.\n")
+        self.repo.write("web/loop.ts", "const of = 4; for (let i = of / 2; i > 0; i--) { /* Never round. */ }\n"
+                        "for (const of of [1]) { /* Only once. */ }\n"
+                        "for (const {a} of xs) { /* Each. */ }\n")
+        self.repo.write("web/obj.ts", "const o = { a: { b: 1 } / 2 }; // Not a label.\n")
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {
+            "web/check.ts:3": "comment", "web/label.ts:3": "comment", "web/expr.ts:1": "comment",
+            "web/loop.ts:1": "comment", "web/loop.ts:2": "comment", "web/loop.ts:3": "comment",
+            "web/obj.ts:1": "comment",
+        })
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
@@ -839,6 +854,32 @@ class LexerOracleTest(unittest.TestCase):
                 capture_output=True, text=True, check=True,
             ).stdout
         self.assertEqual(out.splitlines(), [f"{path}:2\tcomment", f"{path}:3\tcomment"])
+
+    def test_typescript_lexer_matches_the_compiler(self):
+        compiler = os.environ.get("ARCLINT_TYPESCRIPT")
+        if not compiler:
+            self.skipTest("set ARCLINT_TYPESCRIPT to a typescript.js; see tools/sweeporacle/README.md")
+        root = repository_root()
+        library = os.path.dirname(compiler)
+        paths = tracked(root, "*.ts") + sorted(
+            os.path.join(library, n) for n in os.listdir(library) if n.endswith((".d.ts", ".js"))
+        )
+        oracle = subprocess.run(
+            ["node", "--max-old-space-size=8000", os.path.join(root, "tools", "sweeporacle", "typescript.cjs")],
+            input="\n".join(paths) + "\n", capture_output=True, text=True, check=True,
+            env={**os.environ, "TYPESCRIPT": compiler},
+        ).stdout
+        want = {}
+        for row in oracle.splitlines():
+            location, kind = row.rsplit("\t", 1)
+            path, line = location.rsplit(":", 1)
+            want.setdefault(path, {})[int(line)] = kind
+        lines = 0
+        for path in paths:
+            got = inventory.ts_sources(inventory.split_lines(read_source(path)))
+            self.assertEqual(got, want.get(path, {}), path)
+            lines += len(got)
+        self.assertGreater(lines, 10000, "the oracle compared too little to mean anything")
 
     def test_python_lexer_matches_tokenize(self):
         root = repository_root()
