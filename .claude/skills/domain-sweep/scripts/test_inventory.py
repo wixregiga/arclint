@@ -1001,6 +1001,12 @@ class InventoryTest(unittest.TestCase):
             "web/table.test.ts:1": "test", "web/table.test.ts:2": "test", "web/table.test.ts:3": "test",
         })
 
+    def test_a_slash_another_reversal_reveals(self):
+        self.repo.write("web/quota.ts", 'const q = 8 as import("./units").T<0> / `/`.length / 8 as import("./units").T<0> / `c/d\n'
+                        "Never lose this.\n`.length;\n")
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertRowsInclude(rows, {"web/quota.ts:1": "text", "web/quota.ts:2": "text", "web/quota.ts:3": "text"})
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
