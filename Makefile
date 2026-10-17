@@ -112,6 +112,7 @@ _generate-agents-md:
 # Runs after skill, so the domain-librarian copy it replaces holds the
 # same bytes arclint agents skill just wrote there.
 _generate-skill-copies:
+	mkdir -p .claude/skills
 	for skill in .agents/skills/*/; do \
 		name=$$(basename "$$skill"); \
 		rm -rf ".claude/skills/$$name" && cp -R ".agents/skills/$$name" ".claude/skills/$$name" || exit 1; \
