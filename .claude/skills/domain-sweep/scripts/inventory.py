@@ -535,6 +535,27 @@ def in_expression(prev, last_op, after_label_colon):
 
 
 TEST_CALLEES = {"it", "test", "describe"}
+TS_ESCAPE = re.compile(r"\\u(?:([0-9A-Fa-f]{4})|\{([0-9A-Fa-f]+)\})")
+
+
+def ts_name(text, i):
+    """Read a TypeScript identifier from text[i], its Unicode escapes
+    decoded: t\\u0065st is test. Return the index past it and the name.
+    The first character is always consumed."""
+    word = []
+    j = i
+    while j < len(text):
+        escape = TS_ESCAPE.match(text, j)
+        if escape:
+            code = int(escape.group(1) or escape.group(2), 16)
+            word.append(chr(code) if code <= 0x10FFFF else "\ufffd")
+            j = escape.end()
+        elif j == i or continues_name(text[j], "$"):
+            word.append(text[j])
+            j += 1
+        else:
+            break
+    return j, "".join(word)
 
 QUOTED = re.compile(r"""(["'`])((?:\\.|(?!\1).)*)\1""")
 SWALLOWED_TEST = re.compile(r"""(?:^|[^\w.$])(?:it|test|describe)(?:\.\w+)*\s*\(\s*["'`]""")
@@ -629,7 +650,8 @@ class TypeScriptLexer:
         # call whose first argument is no literal; ("tagged", t), inside a
         # tagged template table, the t-th open template; ("generic", n),
         # inside type arguments, it.each<Row>(...), n angle brackets deep;
-        # ("name", "string") or ("name", t), inside the name literal.
+        # ("name", "string", n) or ("name", t, n), inside the name literal
+        # of the call that opened the n-th parenthesis.
         self.test_call = None
         # Calls whose arguments a nested test call interrupted, describe(
         # suiteName, () => { test("...") }), to resume when it is read.
@@ -762,7 +784,7 @@ class TypeScriptLexer:
             """A string or template opens in code; continues names how the
             literal is followed: "string" or the template's open count."""
             if isinstance(self.test_call, tuple) and self.test_call[0] == "open":
-                self.test_call = ("name", continues)
+                self.test_call = ("name", continues, self.test_call[1])
                 kinds.add("test")
                 if self.callee_line != number:
                     marks.append(self.callee_line)
@@ -774,8 +796,11 @@ class TypeScriptLexer:
         def literal_ends(closed):
             """A string or template closed; closed is "string" or the open
             count it had."""
-            if self.test_call == ("name", closed):
-                self.drop_call()
+            call = self.test_call
+            if isinstance(call, tuple) and call[:2] == ("name", closed):
+                # The rest of the call's arguments; a chained call after it,
+                # test.skipIf("win32" === os)("name", ...), may name a test too.
+                self.test_call = ("args", call[2])
             elif self.test_call == ("tagged", closed):
                 self.test_call = "callee"
 
@@ -858,9 +883,9 @@ class TypeScriptLexer:
                 token("operand", sure=True)
                 i = j
                 continue
-            if char.isalpha() or char in "_$":
-                j = name_end(text, i + 1, "$")
-                self.word(text[i:j], number, token, other_token)
+            if char.isalpha() or char in "_$" or text.startswith("\\u", i):
+                j, word = ts_name(text, i)
+                self.word(word, number, token, other_token)
                 i = j
                 continue
             if char.isdigit():
