@@ -571,3 +571,42 @@ func TestNamedTestFilesStayOutOfEveryOtherRule(t *testing.T) {
 		t.Errorf("carrier %+v %v, want the named test", at, located)
 	}
 }
+
+// Only an enabled Rule judging tests decides that a named file may be
+// read, and only when its Scope selects the file and no file Exclusion
+// removes it; with no such Rule nothing named is read.
+func TestNamedTestsToReadFollowTheRulesJudgingTests(t *testing.T) {
+	knowledge := discounterContext(t, "internal/pricing/discounter_test.go:TestA", "web/discounter.test.ts:caps")
+	tests := builtInRule(t, "assertion/verifying-tests-declared")
+	glob, err := rule.NewGlob("**/*_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	exclusion, err := rule.NewExclusion([]rule.Glob{glob}, nil, "Go tests are not judged")
+	if err != nil {
+		t.Fatal(err)
+	}
+	excluded, err := tests.Exclude(exclusion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disablement, err := rule.NewDisablement("tests are not judged")
+	if err != nil {
+		t.Fatal(err)
+	}
+	disabled := tests.Disable(disablement)
+	for _, c := range []struct {
+		name  string
+		rules []rule.Rule
+		want  string
+	}{
+		{"the rule judging tests", []rule.Rule{tests}, "internal/pricing/discounter_test.go,web/discounter.test.ts"},
+		{"the rule excluding Go tests", []rule.Rule{excluded}, "web/discounter.test.ts"},
+		{"the rule disabled", []rule.Rule{disabled}, ""},
+		{"no rule judging tests", []rule.Rule{builtInRule(t, "assertion/checked-by-its-operation")}, ""},
+	} {
+		if got := strings.Join(conformance.NamedTestsToRead(c.rules, knowledge), ","); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+}
