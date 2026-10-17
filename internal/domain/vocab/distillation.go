@@ -118,9 +118,10 @@ func DistillationRules() []DistillationRule {
 			Example: "notify billing on TenantProvisioned is a subscriber, not an assertion",
 		},
 		{
-			ID:      "intention-revealing-name",
-			Rule:    "Name a service and its operations for effect and purpose in the ubiquitous language, never for the means; a name ending in Manager, Helper, Handler, or Processor is a finding to rename, not a kind. An application service's input is named for the request, never with the word command.",
-			Example: "TenantProvisioningService.ProvisionTenant, not TenantManager.Handle; ProvisionTenantRequest, not ProvisionTenantCommand",
+			ID:          "intention-revealing-name",
+			Rule:        "Name a service and its operations for effect and purpose in the ubiquitous language, never for the means; a name ending in Manager, Helper, Handler, or Processor is a finding to rename, not a kind. An application service's input is named for the request, never with the word command.",
+			Conventions: []string{"never with the word command"},
+			Example:     "TenantProvisioningService.ProvisionTenant, not TenantManager.Handle; ProvisionTenantRequest, not ProvisionTenantCommand",
 		},
 		{
 			ID:      "event-detection",

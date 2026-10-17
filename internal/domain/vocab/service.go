@@ -66,8 +66,9 @@ func ServiceDecides() SourcedStatement {
 // DomainService is one recorded domain service of a context: a
 // stateless operation that makes a business decision no single
 // aggregate or value object can make alone. It may read through
-// repositories, but it never commits and never publishes; the
-// application service that calls it does. Its assertions are its
+// repositories, but, by ArcLint's own convention, which no cited source
+// states, it never commits and never publishes; the application service
+// that calls it does. Its assertions are its
 // contract: the guarantees its operations give, each checked by the
 // operation it constrains.
 type DomainService struct {
