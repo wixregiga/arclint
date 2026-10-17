@@ -669,6 +669,25 @@ class InventoryTest(unittest.TestCase):
         self.assertEqual(sources.get("tools/named.py:1"), "text")
         self.assertEqual(sources.get("guide.md:3"), "doc", "a Markdown heading declares nothing generated")
 
+    def test_round_seven_lexer_cases(self):
+        self.repo.write("web/x.ts", textwrap.dedent("""\
+            const half = +{ valueOf: () => 4 } / 2; // Never round.
+            const of = 4; const h = of / 2; // Only once.
+            loop: while (true) { break loop
+            /[/*]/.test(""); }
+            const value = 1;
+            for (const x of /[`]/.exec(s) ?? []) {}
+            switch (k) { case 1: { } /[`]/.test(s); }
+            if (ok) { } /[`]/.test(s);
+            // The end.
+            """))
+        self.repo.write("gen/line.go", "package p\n//line template.tmpl:100\n// Never overwrite.\n")
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual({loc: row[1] for loc, row in rows.items() if loc.startswith("web/")}, {
+            "web/x.ts:1": "comment", "web/x.ts:2": "comment", "web/x.ts:9": "comment",
+        })
+        self.assertEqual(rows["gen/line.go:3"][1], "comment")
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
@@ -809,6 +828,17 @@ class LexerOracleTest(unittest.TestCase):
             self.assertEqual(got, want.get(path, {}), path)
             lines += len(got)
         self.assertGreater(lines, 10000, "the oracle compared too little to mean anything")
+
+    def test_go_oracle_reports_physical_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "line.go")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("package p\n//line template.tmpl:100\n// Never overwrite.\n")
+            out = subprocess.run(
+                ["go", "run", "./tools/sweeporacle"], cwd=repository_root(), input=path + "\n",
+                capture_output=True, text=True, check=True,
+            ).stdout
+        self.assertEqual(out.splitlines(), [f"{path}:2\tcomment", f"{path}:3\tcomment"])
 
     def test_python_lexer_matches_tokenize(self):
         root = repository_root()

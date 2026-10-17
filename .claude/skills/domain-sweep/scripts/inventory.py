@@ -385,20 +385,30 @@ def go_sources(lines):
 # After an operand it divides. The lexer keeps the previous token across
 # lines and comments, never the raw text before the slash.
 REGEX_KEYWORDS = {
-    "return", "typeof", "case", "do", "else", "in", "of", "new", "delete", "void", "throw", "yield", "await",
+    "return", "typeof", "case", "do", "else", "in", "new", "delete", "void", "throw", "yield", "await",
     "instanceof", "default",
     # A statement ends after these, by automatic semicolon insertion when
     # nothing follows on their line, so a slash after them starts one.
     "debugger", "break", "continue",
 }
 CONTROL_KEYWORDS = {"if", "while", "for", "with"}
+# A brace after one of these words opens an object literal, an operand
+# once closed; after any other word it opens a block (else {, class A {).
+OBJECT_AFTER_WORDS = {
+    "return", "typeof", "yield", "await", "void", "delete", "throw", "new", "in", "of", "instanceof", "case", "default",
+}
+# A brace after one of these opens a block; after any other operator it
+# opens an object literal. None is the start of the file.
+BLOCK_AFTER = {")", ";", "{", "}", "=>", ">", None}
 
 
 def ends_operand(prev):
-    """Whether the previous token ends an operand: a name that is not one
-    of the keywords above, a number, a literal, or a closing bracket."""
+    """Whether the previous token ends an operand: a name that is not a
+    keyword in its place, a number, a literal, or a closing bracket.
+    Tokens are ("word", name), ("keyword", name) for a name in a keyword
+    role, "operand" and "operator"."""
     if isinstance(prev, tuple):
-        return prev[1] not in REGEX_KEYWORDS
+        return prev[0] == "word" and prev[1] not in REGEX_KEYWORDS
     return prev == "operand"
 
 
@@ -443,9 +453,14 @@ def ts_sources(lines):
     quote = None  # the quote of a continued string
     stack = []  # brace depth in each enclosing ${ } substitution
     depth = 0
-    parens = []  # for each open parenthesis, whether it opened a condition
-    prev = "operator"  # the previous token: ("word", name), "operand" or "operator"
+    parens = []  # for each open parenthesis: (whether it opened a condition, whether a for header)
+    braces = []  # for each open brace: "object" or "block"
+    prev = "operator"  # the previous token, as ends_operand reads it
     before = "operator"  # the token before prev
+    last_op = None  # the text of the last operator token
+    case_label = False  # a case or default waits for its colon
+    after_case_colon = False  # the last token is the colon of a case label
+    jump_line = 0  # the line a break or continue was read on
     after_dot = False  # prev was a member access dot: the next word is a property
     # The test declaration being read: None; "callee"; ("open", n), just
     # after the call's parenthesis, the n-th open; ("args", n), inside a
@@ -474,9 +489,11 @@ def ts_sources(lines):
                 kinds.add("text")
             segment.clear()
 
-        def token(kind):
-            nonlocal prev, before, after_dot
+        def token(kind, op=None):
+            nonlocal prev, before, after_dot, last_op, after_case_colon
             before, prev, after_dot = prev, kind, False
+            last_op = op if kind == "operator" else None
+            after_case_colon = False
 
         def literal_starts(continues):
             """A string or template opens in code; continues names how the
@@ -591,7 +608,19 @@ def ts_sources(lines):
                         test_call, callee_line = "callee", number
                     else:
                         other_token()
-                    token(("word", word))
+                    if prev in (("word", "break"), ("word", "continue")) and jump_line == number:
+                        # A label: the statement ends after it, as after
+                        # the break or continue itself.
+                        token(("keyword", prev[1]))
+                    elif word == "of":
+                        # of is a keyword only in a for header.
+                        token(("keyword" if parens and parens[-1][1] else "word", word))
+                    else:
+                        if word in ("break", "continue"):
+                            jump_line = number
+                        elif word in ("case", "default"):
+                            case_label = True
+                        token(("word", word))
                 i = j
                 continue
             if char.isdigit():
@@ -626,7 +655,7 @@ def ts_sources(lines):
                 continue
             if pair == "=>":
                 other_token()
-                token("operator")
+                token("operator", "=>")
                 i += 2
                 continue
             if text[i:i + 3] == "...":
@@ -654,30 +683,41 @@ def ts_sources(lines):
                 i += 1
                 continue
             if char == "(":
-                condition = (isinstance(prev, tuple) and prev[1] in CONTROL_KEYWORDS) or (
+                header = isinstance(prev, tuple) and prev[1] == "for" or (
                     prev == ("word", "await") and before == ("word", "for")
                 )
-                parens.append(condition)
+                condition = header or (isinstance(prev, tuple) and prev[1] in CONTROL_KEYWORDS)
+                parens.append((condition, header))
                 if test_call == "callee":
                     test_call = ("open", len(parens))
                 else:
                     other_token()
-                token("operator")
+                token("operator", "(")
             elif char == ")":
                 opened = len(parens)
-                closes_condition = parens.pop() if parens else False
+                closes_condition = parens.pop()[0] if parens else False
                 if isinstance(test_call, tuple) and test_call[0] in ("open", "args") and test_call[1] == opened:
                     test_call = "callee"
                 else:
                     other_token()
-                token("operator" if closes_condition else "operand")
+                if closes_condition:
+                    token("operator", ")")
+                else:
+                    token("operand")
             elif char == "]":
                 other_token()
                 token("operand")
             elif char == "{":
+                if isinstance(prev, tuple):
+                    opens = "object" if prev[1] in OBJECT_AFTER_WORDS else "block"
+                elif prev == "operand" or after_case_colon:
+                    opens = "block"
+                else:
+                    opens = "block" if last_op in BLOCK_AFTER else "object"
+                braces.append(opens)
                 other_token()
                 depth += 1
-                token("operator")
+                token("operator", "{")
             elif char == "}":
                 if depth == 0 and stack:
                     depth = stack.pop()
@@ -686,7 +726,11 @@ def ts_sources(lines):
                     continue
                 other_token()
                 depth -= 1
-                token("operator")
+                closes = braces.pop() if braces else "block"
+                if closes == "object":
+                    token("operand")
+                else:
+                    token("operator", "}")
             elif char == "<" and test_call == "callee":
                 test_call = ("generic", 1)
                 token("operator")
@@ -694,9 +738,13 @@ def ts_sources(lines):
                 level = test_call[1] + (1 if char == "<" else -1)
                 test_call = ("generic", level) if level else "callee"
                 token("operator")
+            elif char == ":" and case_label:
+                other_token()
+                token("operator", ":")
+                case_label, after_case_colon = False, True
             else:
                 other_token()
-                token("operator")
+                token("operator", char)
             i += 1
         if state == "template":
             # The literal goes on past this line: every line it spans is text.
