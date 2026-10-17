@@ -163,7 +163,7 @@
           "minItems": 1,
           "uniqueItems": true,
           "items": { "type": "string", "pattern": "^[^:\\s/\\\\]([^:\\\\]*[^:\\s\\\\])?:\\S(.*\\S)?$" },
-          "description": "The automated tests that verify the rule, each spelled as the test file's path from the repository root, a colon, and the test's name (internal/order/order_test.go:TestLinesFrozen). Record them where the rule cannot be stated in the code alone; the check reads that each test exists, not whether it proves the rule."
+          "description": "The automated tests that verify the rule, each spelled as its file's path from the repository root, a colon, and the test's name, as in internal/order/order_test.go:TestLinesFrozen. The check reads that each test exists, not what it proves."
         }
       }
     },
@@ -180,7 +180,7 @@
           "minItems": 1,
           "uniqueItems": true,
           "items": { "type": "string", "pattern": "^[^:\\s/\\\\]([^:\\\\]*[^:\\s\\\\])?:\\S(.*\\S)?$" },
-          "description": "The automated tests that verify the guarantee, each spelled as the test file's path from the repository root, a colon, and the test's name (internal/pricing/discount_test.go:TestDiscountNeverExceedsTotal). An owner declared as an interface or an abstract class has no body to call the check from, so its assertions name their tests here; the check reads that each test exists, not whether it proves the guarantee."
+          "description": "The automated tests that verify the guarantee, each spelled as its file's path from the repository root, a colon, and the test's name. An interface or abstract owner, with no body to call a check from, names its tests here."
         }
       }
     },

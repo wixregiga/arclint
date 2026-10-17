@@ -62,6 +62,7 @@ func locateDomainContracts(dk *DomainKnowledge, carriers conformance.Carriers) e
 			}
 			dk.Contexts[i].Assertions[j].Source = sourceOf(c, found)
 			dk.Contexts[i].Assertions[j].Anchor = anchorOf(found)
+			dk.Contexts[i].Assertions[j].BodilessOwner = carriers.BodilessOwner(ctx, a.Owner)
 		}
 		for j, s := range dk.Contexts[i].Specifications {
 			c, found := carriers.Satisfaction(ctx, s.Name)

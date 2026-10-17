@@ -1546,9 +1546,13 @@ func testDomainInterfaceServiceVerifiedByTests(t *testing.T) {
 		!strings.Contains(d[0].Message, "Discounter is declared as an interface, which has no body to call AssertNeverExceedsTotal") {
 		t.Fatalf("interface without tests: %+v", d)
 	}
+	out := mustRunDomain(t, root, "context", "src/pricing/discounter.go")
+	if !strings.Contains(out, "expected a test under verified_by, since Discounter is declared as an interface") {
+		t.Fatalf("context does not expect the tests of an interface's assertion:\n%s", out)
+	}
 
 	test := "src/pricing/discounter_test.go:TestDiscountNeverExceedsTotal"
-	out := mustRunDomain(t, root, "domain", "define", "assertion", "never-exceeds-total", "--context", "pricing", "--verified-by", test)
+	out = mustRunDomain(t, root, "domain", "define", "assertion", "never-exceeds-total", "--context", "pricing", "--verified-by", test)
 	if !strings.Contains(out, "verified_by: "+test) {
 		t.Fatalf("define does not report the recorded test:\n%s", out)
 	}
@@ -1556,8 +1560,8 @@ func testDomainInterfaceServiceVerifiedByTests(t *testing.T) {
 		t.Fatalf("interface with an existing test: %+v", d)
 	}
 	out = mustRunDomain(t, root, "domain", "show", "assertion", "never-exceeds-total")
-	if !strings.Contains(out, "verified by: "+test+" (arclint checks that each test exists, not what it proves)") {
-		t.Fatalf("show lacks the verifying test:\n%s", out)
+	if !strings.Contains(out, "verified by: "+test+" (arclint checks that each test exists, not what it proves)\nEnforced at: src/pricing/discounter_test.go:5\nStatus: conforms\n") {
+		t.Fatalf("show lacks the verifying test as the carrier:\n%s", out)
 	}
 	out = mustRunDomain(t, root, "context", "src/pricing/discounter.go")
 	if !strings.Contains(out, "verified by: "+test) {

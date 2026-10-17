@@ -832,13 +832,13 @@ building_blocks:
         - {work: vernon-iddd-sample-pages, page: 353, section: "Rule: Model True Invariants in Consistency Boundaries"}
     records:
       section: invariants
-      note: A map from key to statement, or from key to the statement and verified_by when the invariant names the tests that verify it, recorded under the aggregate or value object that owns it; the owner is the nesting, never a reference.
+      note: A map from key to statement, or to the statement and verified_by when tests verify it, recorded under the aggregate or value object that owns it; the owner is the nesting, never a reference.
       properties:
         - {name: key, required: true, definition: "The rule's name in kebab-case, unique within its owner and stable across edits: it is how a finding, a suppression, and a baseline refer to the rule. For an aggregate's invariant it also names the root method that enforces it: ensure followed by the key, spelled in the language's method case, so lines-frozen is enforced by EnsureLinesFrozen in Go, ensureLinesFrozen in TypeScript, and ensure_lines_frozen in Python."}
         - {name: statement, required: true, definition: "The rule in the ubiquitous language, as a domain expert would state it."}
         - name: verified_by
           required: false
-          definition: "The automated tests that verify the rule, each spelled as the test file's path from the repository root, a colon, and the test's name (internal/order/order_test.go:TestLinesFrozen). Record them where the rule cannot be stated in the code alone; the check reads that each test exists, not whether it proves the rule."
+          definition: "The automated tests that verify the rule, each spelled as its file's path from the repository root, a colon, and the test's name, as in internal/order/order_test.go:TestLinesFrozen. The check reads that each test exists, not what it proves."
           sources:
             - {work: evans2015, page: 22, section: Assertions}
     invariants:
@@ -879,12 +879,12 @@ building_blocks:
           limitations:
             - a command is an exported method of the root whose result carries an error; a TypeScript or Python command that throws is not seen
       - id: invariant/verified-by-names-tests
-        statement: Every entry of an invariant's verified_by names one test as the path of its file from the repository root, a colon, and the test's name; an entry missing either part, a path that is absolute or leaves the repository, and a test named twice are rejected.
+        statement: "Every entry of an invariant's verified_by names one test: its file's path from the repository root, a colon, and its name. An entry missing either part, a path absolute or outside the repository, or a repeated entry is rejected."
         sources:
           - {work: evans2015, page: 22, section: Assertions}
         enforcement: {by: loader, languages: all}
       - id: invariant/verifying-tests-declared
-        statement: Every test an invariant's verified_by names is declared in the file it names; a Go test is a func Test in a _test.go file that declares no type parameters, takes one *testing.T and returns nothing, a Python test is a def test function, or a method spelled Class.test_name, and a TypeScript test, which is a call, is its name written in the file. The test's existence is checked; whether it proves the invariant is not.
+        statement: "Every test an invariant's verified_by names is declared in its file: in Go, a test go test runs; in Python, a def test function or Class.test_name method; in TypeScript, the name written in the file. Existence is checked, not proof."
         sources:
           - {work: evans2015, page: 22, section: Assertions}
         enforcement:
@@ -932,7 +932,7 @@ building_blocks:
         - {name: statement, required: true, definition: "The guarantee as the domain expert states it, in the ubiquitous language (Only an active tenant offers an invitation); it is recorded in the expert's words and never rewritten into a post-condition, because on already names the operation."}
         - name: verified_by
           required: false
-          definition: "The automated tests that verify the guarantee, each spelled as the test file's path from the repository root, a colon, and the test's name (internal/pricing/discount_test.go:TestDiscountNeverExceedsTotal). An owner declared as an interface or an abstract class has no body to call the check from, so its assertions name their tests here; the check reads that each test exists, not whether it proves the guarantee."
+          definition: "The automated tests that verify the guarantee, each spelled as its file's path from the repository root, a colon, and the test's name. An interface or abstract owner, with no body to call a check from, names its tests here."
           sources:
             - {work: evans2015, page: 22, section: Assertions}
             - {work: evans2015, page: 14, section: Services}
@@ -960,12 +960,12 @@ building_blocks:
             - an owner declared as an interface or an abstract class has no body to call a checking method from; for its assertion the rule asks instead for the tests under verified_by, and assertion/verifying-tests-declared checks that they exist
             - a Python class is abstract when it derives ABC or Protocol, or names ABCMeta as its metaclass, by the name written in the class statement; a base imported under another name is not seen
       - id: assertion/verified-by-names-tests
-        statement: Every entry of an assertion's verified_by names one test as the path of its file from the repository root, a colon, and the test's name; an entry missing either part, a path that is absolute or leaves the repository, and a test named twice are rejected.
+        statement: "Every entry of an assertion's verified_by names one test: its file's path from the repository root, a colon, and its name. An entry missing either part, a path absolute or outside the repository, or a repeated entry is rejected."
         sources:
           - {work: evans2015, page: 22, section: Assertions}
         enforcement: {by: loader, languages: all}
       - id: assertion/verifying-tests-declared
-        statement: Every test an assertion's verified_by names is declared in the file it names; a Go test is a func Test in a _test.go file that declares no type parameters, takes one *testing.T and returns nothing, a Python test is a def test function, or a method spelled Class.test_name, and a TypeScript test, which is a call, is its name written in the file. The test's existence is checked; whether it proves the guarantee is not.
+        statement: "Every test an assertion's verified_by names is declared in its file: in Go, a test go test runs; in Python, a def test function or Class.test_name method; in TypeScript, the name written in the file. Existence is checked, not proof."
         sources:
           - {work: evans2015, page: 22, section: Assertions}
         enforcement:

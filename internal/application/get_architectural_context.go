@@ -129,9 +129,13 @@ type DomainAssertionRef struct {
 	On           string        `json:"on"`
 	// VerifiedBy lists the tests the assertion names as verifying it,
 	// as DomainInvariantRef's does.
-	VerifiedBy []string       `json:"verifiedBy,omitempty"`
-	Source     string         `json:"source,omitempty"`
-	Anchor     ContractAnchor `json:"anchor,omitempty"`
+	VerifiedBy []string `json:"verifiedBy,omitempty"`
+	// BodilessOwner names how the owner is declared when it has no
+	// body to call a checking method from, an interface or an abstract
+	// class; a test under VerifiedBy then carries the assertion.
+	BodilessOwner string         `json:"bodilessOwner,omitempty"`
+	Source        string         `json:"source,omitempty"`
+	Anchor        ContractAnchor `json:"anchor,omitempty"`
 }
 
 // DomainSpecificationRef is one specification name with its source
@@ -291,7 +295,9 @@ func (uc GetArchitecturalContext) inspectContext(out *ArchitecturalContext, cfg 
 		return conformance.Carriers{}, nil
 	}
 	var required []rule.Fact
-	if dependencies {
+	if dependencies || found {
+		// A Go test carrying an assertion takes testing's T under the
+		// name its file imports testing by.
 		required = append(required, rule.FactImports)
 	}
 	if found {
@@ -651,7 +657,7 @@ func unanchoredContracts(dk *DomainKnowledge, languages []rule.Language) []Unanc
 			}
 			out = append(out, UnanchoredContract{
 				Kind: ContractAssertion, Context: ctx.Name, Owner: a.Owner, Key: a.Key,
-				Statement: a.Statement, Expected: expectedMethod(conformance.AssertKey(a.Key), a.Owner, languages),
+				Statement: a.Statement, Expected: expectedAssertionCarrier(a.Key, a.Owner, a.BodilessOwner, languages),
 			})
 		}
 		for _, s := range ctx.Specifications {
@@ -674,6 +680,16 @@ func expectedInvariantCarrier(inv DomainInvariantRef, languages []rule.Language)
 		return fmt.Sprintf("constructor of %s", inv.Owner)
 	}
 	return expectedMethod(conformance.EnsureKey(inv.Key), inv.Owner, languages)
+}
+
+// expectedAssertionCarrier names what the recording says carries an
+// assertion: the checking method on its owner, or, for an owner
+// declared without a body, a test under verified_by.
+func expectedAssertionCarrier(key, owner, bodilessOwner string, languages []rule.Language) string {
+	if bodilessOwner != "" {
+		return fmt.Sprintf("a test under verified_by, since %s is declared as %s", owner, bodilessOwner)
+	}
+	return expectedMethod(conformance.AssertKey(key), owner, languages)
 }
 
 // expectedMethod names the method a kebab-case key expects on its

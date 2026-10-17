@@ -1465,11 +1465,16 @@ func (o assertionOwner) remediation(repair string) string {
 
 // bodiless names how the owner is declared when it has no body to call
 // a checking method from, or "" when it has one.
-func (o assertionOwner) bodiless() string {
+func (o assertionOwner) bodiless() string { return bodiless(o.decl.decl) }
+
+// bodiless names how a type is declared when it has no body to call a
+// checking method from, an interface or an abstract class, or "" when
+// it has one.
+func bodiless(d Declaration) string {
 	switch {
-	case o.decl.decl.Kind == declKindInterface:
+	case d.Kind == declKindInterface:
 		return "an interface"
-	case o.decl.decl.Kind == declKindClass && o.decl.decl.Abstract:
+	case d.Kind == declKindClass && d.Abstract:
 		return "an abstract class"
 	}
 	return ""
