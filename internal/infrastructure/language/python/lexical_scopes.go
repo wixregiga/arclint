@@ -185,6 +185,8 @@ type resolutionIndex struct {
 	// read for their members: a class whose metaclass or attribute
 	// access is customized is still that class.
 	identities bool
+	// mros holds each class's computed method resolution order.
+	mros map[mroKey]mroResult
 }
 
 func (s *pyScope) bind(b *pyBinding) {

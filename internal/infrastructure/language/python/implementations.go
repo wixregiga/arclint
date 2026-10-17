@@ -202,8 +202,8 @@ func (idx *resolutionIndex) implementation(c, a *pyClass, evidence conformance.I
 		case b.reason != "":
 			// A decorator may replace the method with another function.
 			ref = unknown(b.reason)
-		case idx.patched[owner.scope.module.file+":"+owner.name+":"+name] || idx.patched[owner.scope.module.file+":"+owner.name+":*"]:
-			ref = unknown("monkey patching changes " + owner.name + "." + name)
+		case idx.patchedOnTheWay(c, owner, name) != "":
+			ref = unknown("monkey patching changes " + idx.patchedOnTheWay(c, owner, name) + "." + name)
 		default:
 			ref = declared(owner.scope.module.file, owner.name, name)
 		}
@@ -213,6 +213,30 @@ func (idx *resolutionIndex) implementation(c, a *pyClass, evidence conformance.I
 		impl.Operations = append(impl.Operations, ref)
 	}
 	return impl
+}
+
+// patchedOnTheWay names a class whose attribute of the name the
+// repository patches, between the implementing class and the owner its
+// lookup reaches, both included: a patch on any of them replaces what
+// the lookup finds. "" when none is patched.
+func (idx *resolutionIndex) patchedOnTheWay(c, owner *pyClass, name string) string {
+	patched := func(k *pyClass) bool {
+		file := k.scope.module.file
+		return idx.patched[file+":"+k.name+":"+name] || idx.patched[file+":"+k.name+":*"]
+	}
+	order, reason := idx.mro(c, map[*pyClass]bool{})
+	if reason != "" {
+		order = []*pyClass{c, owner}
+	}
+	for _, k := range order {
+		if patched(k) {
+			return k.name
+		}
+		if k == owner {
+			break
+		}
+	}
+	return ""
 }
 
 // methodNames lists the methods a class body defines, in source order,

@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
@@ -209,5 +210,77 @@ Patched.encrypt = lambda self, plain: plain
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("implementations:\n got %s\nwant %s", strings.Join(got, "\n     "), strings.Join(want, "\n     "))
+	}
+}
+
+// A patch on the implementing class, or on any class between it and
+// the base whose method its lookup reaches, replaces what the lookup
+// finds, so the operation is undetermined.
+func TestImplementationOperationsSeePatchesOnTheWay(t *testing.T) {
+	root, files := writeFiles(t, map[string]string{
+		"port.py": `from abc import ABC, abstractmethod
+
+
+class Encrypter(ABC):
+    @abstractmethod
+    def encrypt(self, plain: str) -> str: ...
+
+
+class Base(Encrypter):
+    def encrypt(self, plain: str) -> str:
+        return plain
+
+
+class Child(Base):
+    pass
+
+
+def checked(self, plain: str) -> str:
+    return plain
+
+
+Child.encrypt = checked
+`,
+	})
+	facts, err := NewProducer().Facts(root, files, []rule.Fact{rule.FactDeclarations, rule.FactImplementations})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := spellImplementations(facts["port.py"])
+	want := []string{
+		"Base -> Encrypter@port.py [exact] Base.encrypt@port.py",
+		"Child -> Encrypter@port.py [exact] encrypt:undetermined",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("implementations:\n got %s\nwant %s", strings.Join(got, "\n     "), strings.Join(want, "\n     "))
+	}
+}
+
+// Each class's method resolution order is computed once, so a
+// hierarchy whose paths multiply at every level is read in time linear
+// in its classes.
+func TestImplementationsComputeEachOrderOnce(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("from abc import ABC, abstractmethod\n\n\nclass Encrypter(ABC):\n    @abstractmethod\n    def encrypt(self, plain: str) -> str: ...\n\n\nclass C0(Encrypter):\n    def encrypt(self, plain: str) -> str:\n        return plain\n\n\nclass C1(C0):\n    pass\n")
+	const depth = 32
+	for i := 2; i <= depth; i++ {
+		fmt.Fprintf(&b, "\n\nclass C%d(C%d, C%d):\n    pass\n", i, i-1, i-2)
+	}
+	root, files := writeFiles(t, map[string]string{"chain.py": b.String()})
+	done := make(chan int, 1)
+	go func() {
+		facts, err := NewProducer().Facts(root, files, []rule.Fact{rule.FactDeclarations, rule.FactImplementations})
+		if err != nil {
+			t.Error(err)
+		}
+		done <- len(spellImplementations(facts["chain.py"]))
+	}()
+	select {
+	case n := <-done:
+		if n != depth+1 {
+			t.Errorf("%d implementations, want %d", n, depth+1)
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("reading the hierarchy did not finish in 20s")
 	}
 }

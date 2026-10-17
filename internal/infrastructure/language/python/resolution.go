@@ -234,7 +234,40 @@ func (idx *resolutionIndex) derivesABC(c *pyClass) bool {
 
 // mro implements Python's C3 linearization rather than guessing the first
 // base that spells a member. Unknown bases keep the lookup undetermined.
+//
+// Each class's order is computed once per reading of its bases and
+// reused, so a hierarchy whose paths multiply at every level is read in
+// time linear in its classes and bases. Reuse is sound: a class whose
+// computation meets a class already on the way is itself in the cycle.
 func (idx *resolutionIndex) mro(c *pyClass, seen map[*pyClass]bool) ([]*pyClass, string) {
+	key := mroKey{class: c, identities: idx.identities}
+	if done, ok := idx.mros[key]; ok {
+		return done.order, done.reason
+	}
+	order, reason := idx.linearize(c, seen)
+	if idx.mros == nil {
+		idx.mros = map[mroKey]mroResult{}
+	}
+	idx.mros[key] = mroResult{order: order, reason: reason}
+	return order, reason
+}
+
+// mroKey names one class's method resolution order as one reading of
+// its bases resolves them.
+type mroKey struct {
+	class      *pyClass
+	identities bool
+}
+
+// mroResult is a computed method resolution order, or why there is
+// none.
+type mroResult struct {
+	order  []*pyClass
+	reason string
+}
+
+// linearize computes the C3 linearization of one class.
+func (idx *resolutionIndex) linearize(c *pyClass, seen map[*pyClass]bool) ([]*pyClass, string) {
 	if seen[c] {
 		return nil, "cyclic base classes for " + c.name
 	}
