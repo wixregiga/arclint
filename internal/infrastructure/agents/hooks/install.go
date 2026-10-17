@@ -407,17 +407,9 @@ func (installer *Installer) Status() (status application.HooksStatus, err error)
 			}
 		}
 		if shared != "" {
-			if sets, _ := disablesHooks(host, shared); sets {
-				localEntry.Problems = append(localEntry.Problems, host.shared+" sets "+host.disable+", so the host runs no hooks in this project; remove the setting to run them.")
-			}
-			if listed, err := listsArclintHooks(shared); err == nil && listed {
-				listing := host.shared + " also lists the workflow hooks; every file that lists them runs each event."
-				if readersOff(local) {
-					listing = host.shared + " also lists the workflow hooks; once hooks are turned back on, every file that lists them runs each event."
-				}
-				localEntry.Problems = append(localEntry.Problems, listing)
-			}
+			localEntry.Problems = append(localEntry.Problems, sharedProblems(host, shared, readersOff(local))...)
 		}
+
 		// A user file that cannot be located is listed with the other user
 		// files, before this project's.
 		status.Files = append(status.Files, entries[:len(users)]...)
@@ -575,6 +567,28 @@ func englishList(names []string) string {
 		return strings.Join(names, "")
 	}
 	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+}
+
+// sharedProblems says what the project's shared file, which install never
+// writes, does to the hooks: a read failure leaves unknown whether it turns
+// them off, the setting turns them off, and the hooks it lists run beside
+// every other file's, or would once hooks are turned back on.
+func sharedProblems(host hookHost, shared string, off bool) []string {
+	var problems []string
+	if _, _, err := readConfiguration(shared); err != nil && host.disable != "" {
+		problems = append(problems, host.shared+" cannot be read, so whether it sets "+host.disable+" and turns the host's hooks off here is unknown: "+err.Error())
+	}
+	if sets, _ := disablesHooks(host, shared); sets {
+		problems = append(problems, host.shared+" sets "+host.disable+", so the host runs no hooks in this project; remove the setting to run them.")
+	}
+	if listed, err := listsArclintHooks(shared); err == nil && listed {
+		if off {
+			problems = append(problems, host.shared+" also lists the workflow hooks; once hooks are turned back on, every file that lists them runs each event.")
+		} else {
+			problems = append(problems, host.shared+" also lists the workflow hooks; every file that lists them runs each event.")
+		}
+	}
+	return problems
 }
 
 // duplicateProblem completes a sentence about hooks two files list: the

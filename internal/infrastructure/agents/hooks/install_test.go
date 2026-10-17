@@ -619,6 +619,17 @@ func TestAnUnknownWindowsProfileIsNotEvidenceThatHooksRun(t *testing.T) {
 	unlocated := func() ([]UserConfiguration, error) {
 		return []UserConfiguration{h.native, {Windows: true, Unreadable: "cmd.exe is missing"}}, nil
 	}
+	// An unreadable shared file is no evidence either, and status says why.
+	writeTestFile(t, filepath.Join(root, ".claude", "settings.json"), `{`)
+	writeTestFile(t, h.file(false, "claude"), `{}`)
+	project := statusOf(t, NewInstaller(root, "Ubuntu", binary, h.users("Ubuntu")))["claude project"]
+	if problems := strings.Join(project.Problems, "\n"); strings.Contains(problems, "still run") || !strings.Contains(problems, ".claude/settings.json cannot be read, so whether it sets disableAllHooks") {
+		t.Fatalf("unreadable shared file: %+v", project)
+	}
+	if err := os.Remove(filepath.Join(root, ".claude", "settings.json")); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, h.file(false, "claude"), `{"disableAllHooks": true}`)
 	// A Windows profile file that cannot be read is no evidence either.
 	writeTestFile(t, h.file(true, "claude"), `{"disableAllHooks": true,`)
 	for name, users := range map[string]func() ([]UserConfiguration, error){"unlocated": unlocated, "unreadable": h.users("Ubuntu")} {
