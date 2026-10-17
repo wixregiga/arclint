@@ -916,7 +916,7 @@ func writeUsed(p *out.Printer, st Style, d *application.DomainKnowledge) {
 }
 
 // usedLabel names a used entry by its role, with the aggregates it
-// belongs to, identifies, or serves.
+// belongs to or serves, or the aggregates and entities it identifies.
 func usedLabel(u application.DomainUseRef) string {
 	switch u.Role {
 	case conformance.UsedEntity:
@@ -926,8 +926,8 @@ func usedLabel(u application.DomainUseRef) string {
 	case conformance.UsedFactory:
 		return fmt.Sprintf("factory %s of %s %s", u.Name, aggregateWord(u.Aggregates), andList(u.Aggregates))
 	case conformance.UsedValueObject:
-		if len(u.Aggregates) > 0 {
-			return fmt.Sprintf("value object %s, identity of %s", u.Name, andList(u.Aggregates))
+		if len(u.Identifies) > 0 {
+			return fmt.Sprintf("value object %s, identity of %s", u.Name, andList(u.Identifies))
 		}
 		return "value object " + u.Name
 	case conformance.UsedDomainEvent:

@@ -406,7 +406,7 @@ func TestArchitecturalContextListsUsesApartFromDeclarations(t *testing.T) {
 		t.Fatalf("used =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 	wantUndetermined := []application.UndeterminedUseRef{
-		{Path: "m/sell.go", Line: 8, What: "call NewPrice", Reason: "NewPrice returns Price as written; result types are not resolved", Context: "catalog", Term: "Price"},
+		{Path: "m/sell.go", Line: 8, What: "call NewPrice", Reason: "NewPrice returns Price as written; result types are not resolved", Context: "catalog", Term: "Price", Role: conformance.UsedValueObject},
 		{Path: "m/sell.go", Line: 10, What: "call notify", Reason: "notify is a function value"},
 	}
 	if !slices.Equal(dk.Undetermined, wantUndetermined) {

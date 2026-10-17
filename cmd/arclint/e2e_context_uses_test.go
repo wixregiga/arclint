@@ -511,3 +511,25 @@ func TestContextShowsAnImpliedIdentityOnceWithItsAggregate(t *testing.T) {
 		})
 	}
 }
+
+// A factory named like its aggregate is declared in the role the
+// listing shows, the aggregate, and stays used as the factory, which
+// the listing has no place for.
+func TestContextKeepsAFactoryNamedLikeItsDeclaredAggregate(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "domain.arclint.yaml", strings.Replace(usesDomain, "        identity: OrderID\n", "        identity: OrderID\n        factory: Order\n", 1))
+	write(t, root, "rules.arclint.yaml", "runtime: [go]\n")
+	write(t, root, "go.mod", "module example.com/shop\n\ngo 1.24\n")
+	write(t, root, "ordering/order.go", "package ordering\n\n// Order is a request.\ntype Order struct{ total int }\n\n// EnsureHasTotal enforces has-total.\nfunc (o *Order) EnsureHasTotal() error { return nil }\n\n// Place places the order.\nfunc (o *Order) Place() error { return o.EnsureHasTotal() }\n")
+	write(t, root, "app/place.go", "package app\n\nimport \"example.com/shop/ordering\"\n\n// Run places the order.\nfunc Run(o *ordering.Order) error {\n\treturn o.Place()\n}\n")
+	stdout, stderr, code := runBin(t, root, os.Environ(), "context", "ordering/order.go", "app/place.go")
+	if code != 0 {
+		t.Fatalf("context: exit %d\nstderr: %s", code, stderr)
+	}
+	if !strings.Contains(stdout, "  declared here, context ordering:\n    aggregates: Order (OrderID)\n") {
+		t.Fatalf("Order is declared here:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "    factory Order of aggregate Order: app/place.go:7; ordering/order.go:10\n") || strings.Contains(stdout, "    aggregate Order: ") {
+		t.Fatalf("the factory stays used and the aggregate does not:\n%s", stdout)
+	}
+}

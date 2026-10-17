@@ -560,6 +560,7 @@ type domainUseJSON struct {
 	Name          string                       `json:"name"`
 	Role          string                       `json:"role"`
 	Aggregates    []string                     `json:"aggregates,omitempty"`
+	Identifies    []string                     `json:"identifies,omitempty"`
 	Sites         []domainUseSiteJSON          `json:"sites"`
 	Invariants    []domainInvariantKnowJSON    `json:"invariants,omitempty"`
 	Assertions    []domainAssertionKnowJSON    `json:"assertions,omitempty"`
@@ -580,6 +581,7 @@ type undeterminedUseJSON struct {
 	Reason  string `json:"reason"`
 	Context string `json:"context,omitempty"`
 	Term    string `json:"term,omitempty"`
+	Role    string `json:"role,omitempty"`
 }
 
 type domainAggregateKnowJSON struct {
@@ -726,7 +728,7 @@ func domainKnowledgeDoc(d *application.DomainKnowledge) *domainKnowledgeJSON {
 	dk.UsesLocated = d.UsesLocated
 	for _, u := range d.Used {
 		use := domainUseJSON{
-			Context: u.Context, Name: u.Name, Role: string(u.Role), Aggregates: append([]string(nil), u.Aggregates...),
+			Context: u.Context, Name: u.Name, Role: string(u.Role), Aggregates: append([]string(nil), u.Aggregates...), Identifies: append([]string(nil), u.Identifies...),
 			Invariants: invariantsDoc(u.Invariants), Assertions: assertionsDoc(u.Assertions),
 		}
 		for _, site := range u.Sites {
@@ -739,7 +741,7 @@ func domainKnowledgeDoc(d *application.DomainKnowledge) *domainKnowledgeJSON {
 		dk.Used = append(dk.Used, use)
 	}
 	for _, u := range d.Undetermined {
-		dk.Undetermined = append(dk.Undetermined, undeterminedUseJSON{Path: u.Path, Line: u.Line, What: u.What, Reason: u.Reason, Context: u.Context, Term: u.Term})
+		dk.Undetermined = append(dk.Undetermined, undeterminedUseJSON{Path: u.Path, Line: u.Line, What: u.What, Reason: u.Reason, Context: u.Context, Term: u.Term, Role: string(u.Role)})
 	}
 	for _, rel := range d.Relations {
 		dk.Relations = append(dk.Relations, domainRelationKnowJSON{From: rel.From, To: rel.To, Kind: rel.Kind})

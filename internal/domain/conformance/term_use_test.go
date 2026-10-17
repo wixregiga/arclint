@@ -80,15 +80,16 @@ func usesObserving(t *testing.T, contexts []vocab.BoundedContext, zones []rule.Z
 
 // specOf spells an undetermined use back as the spec it was built from.
 func specOf(u conformance.UndeterminedUse) conformance.UndeterminedUseSpec {
-	return conformance.UndeterminedUseSpec{Path: u.Path(), Line: u.Line(), What: u.What(), Reason: u.Reason(), Context: u.Context(), Term: u.Term()}
+	return conformance.UndeterminedUseSpec{Path: u.Path(), Line: u.Line(), What: u.What(), Reason: u.Reason(), Context: u.Context(), Term: u.Term(), Role: u.Role()}
 }
 
-// spelled renders each use as term role aggregates way via path:line,
-// in order, the aggregates joined by +.
+// spelled renders each use as term role owners way via path:line, in
+// order: the aggregates it belongs to or serves, or the entries it
+// identifies, joined by +.
 func spelled(uses []conformance.TermUse) []string {
 	out := make([]string, len(uses))
 	for i, u := range uses {
-		owner := strings.Join(u.Aggregates(), "+")
+		owner := strings.Join(append(u.Aggregates(), u.Identifies()...), "+")
 		out[i] = strings.Join([]string{u.Term(), string(u.Role()), owner, string(u.Way()), u.Via(), u.Path() + ":" + strconv.Itoa(u.Line())}, " ")
 	}
 	return out
@@ -172,8 +173,8 @@ func TestUsesFollowResolutionInGo(t *testing.T) {
 	}
 	wantUndetermined := []conformance.UndeterminedUseSpec{
 		{Path: "app/place.go", Line: 7, What: "field PlaceOrder.events", Reason: "the package bus does not type-check"},
-		{Path: "app/place.go", Line: 11, What: "call NewMoney", Reason: "NewMoney returns Money as written; result types are not resolved", Context: "ordering", Term: "Money"},
-		{Path: "app/place.go", Line: 16, What: "call Sum", Reason: "Sum returns []Money as written; result types are not resolved", Context: "ordering", Term: "Money"},
+		{Path: "app/place.go", Line: 11, What: "call NewMoney", Reason: "NewMoney returns Money as written; result types are not resolved", Context: "ordering", Term: "Money", Role: conformance.UsedValueObject},
+		{Path: "app/place.go", Line: 16, What: "call Sum", Reason: "Sum returns []Money as written; result types are not resolved", Context: "ordering", Term: "Money", Role: conformance.UsedValueObject},
 		{Path: "app/place.go", Line: 17, What: "call handle", Reason: "a call through a function value is not followed"},
 	}
 	if len(uses.Undetermined) != len(wantUndetermined) {
@@ -489,7 +490,7 @@ func TestUsesWeighEveryDeclarationOfTheName(t *testing.T) {
 // The one door enforces states-its-reason: an undetermined use always
 // says why resolution cannot confirm it, and where it is.
 func TestUndeterminedUseStatesItsReason(t *testing.T) {
-	ok := conformance.UndeterminedUseSpec{Path: "app/run.go", Line: 4, What: "call run", Reason: "run has no declared type", Context: "ordering", Term: "Money"}
+	ok := conformance.UndeterminedUseSpec{Path: "app/run.go", Line: 4, What: "call run", Reason: "run has no declared type", Context: "ordering", Term: "Money", Role: conformance.UsedValueObject}
 	u, err := conformance.NewUndeterminedUse(ok)
 	if err != nil || specOf(u) != ok {
 		t.Fatalf("NewUndeterminedUse(%+v) = %+v, %v", ok, u, err)
@@ -501,6 +502,7 @@ func TestUndeterminedUseStatesItsReason(t *testing.T) {
 		"a negative line":            {Path: "app/run.go", Line: -1, What: "call run", Reason: "r"},
 		"nothing written":            {Path: "app/run.go", Line: 4, Reason: "r"},
 		"a term without its context": {Path: "app/run.go", Line: 4, What: "call run", Reason: "r", Term: "Money"},
+		"a term without its role":    {Path: "app/run.go", Line: 4, What: "call run", Reason: "r", Context: "ordering", Term: "Money"},
 	} {
 		if _, err := conformance.NewUndeterminedUse(bad); err == nil {
 			t.Errorf("%s became an UndeterminedUse", name)
@@ -566,5 +568,26 @@ func TestUsesNameEveryAggregateARepositoryServes(t *testing.T) {
 	uses := usesOf(t, []vocab.BoundedContext{ctx}, files, "app")
 	if got := spelled(uses.Uses); len(got) != 1 || got[0] != "OrderRepository repository Order+Invoice call Save app/place.go:4" {
 		t.Fatalf("uses = %v", got)
+	}
+}
+
+// A member's identity identifies the member, not its aggregate.
+func TestUsesAttributeAMemberIdentityToItsEntity(t *testing.T) {
+	ctx := orderingContext()
+	ctx.Aggregates[0].Entities[0].Identity = "LineID"
+	files := goOrdering()
+	files["ordering/line_id.go"] = resolvedFile(rule.LanguageGo, "ordering", []conformance.Declaration{
+		{Kind: "struct", Name: "LineID", Exported: true, StartLine: 3},
+	}, nil)
+	files["app/place.go"] = resolvedFile(rule.LanguageGo, "app", []conformance.Declaration{
+		{Kind: "struct", Name: "PlaceOrder", Exported: true, StartLine: 2},
+		{Kind: "field", Name: "line", Owner: "PlaceOrder", StartLine: 3, Holds: []conformance.Reference{declared("ordering/line_id.go", "", "LineID")}, Type: declared("ordering/line_id.go", "", "LineID")},
+	}, nil)
+	uses := usesOf(t, []vocab.BoundedContext{ctx}, files, "app")
+	if got := spelled(uses.Uses); len(got) != 1 || got[0] != "LineID value_object Line field PlaceOrder.line app/place.go:3" {
+		t.Fatalf("uses = %v", got)
+	}
+	if u := uses.Uses[0]; len(u.Aggregates()) != 0 || !slices.Equal(u.Identifies(), []string{"Line"}) {
+		t.Fatalf("aggregates %v, identifies %v", u.Aggregates(), u.Identifies())
 	}
 }
