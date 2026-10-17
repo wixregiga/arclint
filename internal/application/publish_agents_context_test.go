@@ -210,7 +210,7 @@ func TestPublishAgentsContextOmitsAbsentSections(t *testing.T) {
 	}
 	for _, reject := range []string{
 		"### The recorded domain", "### Repository-wide rules", "### Extension rules",
-		"Rationale:",
+		"### Rules shared by several zones", "shared rules", "Rationale:",
 	} {
 		if strings.Contains(block, reject) {
 			t.Errorf("block must omit %q without its data:\n%s", reject, block)
@@ -341,5 +341,97 @@ func TestPublishAgentsContextSectionsTheBuiltInRules(t *testing.T) {
 		if strings.Contains(repository, "\n- "+r.ID().Qualified()+": ") {
 			t.Errorf("built-in %s listed again under the repository-wide rules:\n%s", r.ID().Qualified(), repository)
 		}
+	}
+}
+
+// A Rule that selects several Zones is stated once, under its own
+// section with the Zones it selects; every Zone it selects names it by
+// id and repeats neither its constraint nor its rationale. A Rule that
+// selects one Zone stays stated in full under that Zone.
+func TestPublishAgentsContextStatesASharedRuleOnce(t *testing.T) {
+	cfg := agentsFixture(t)
+	glob, err := rule.NewGlob("n/**")
+	if err != nil {
+		t.Fatalf("NewGlob: %v", err)
+	}
+	second, err := rule.NewZone("n", "second zone", []rule.Glob{glob})
+	if err != nil {
+		t.Fatalf("NewZone: %v", err)
+	}
+	cfg.Zones = append(cfg.Zones, second)
+	both, err := rule.ZoneScope([]rule.ZoneName{"m", "n"})
+	if err != nil {
+		t.Fatalf("ZoneScope: %v", err)
+	}
+	local, err := rule.New(rule.Spec{
+		ID:        "t/p:common/no-globals",
+		Rationale: "Receive browser capabilities through ports.",
+		Type:      rule.TypeExtension,
+		Severity:  "warning",
+		Params:    rule.ExtensionParams{Uses: "forbid-globals", With: map[string]any{"names": []any{"window"}}},
+		Scope:     both,
+	})
+	if err != nil {
+		t.Fatalf("rule.New: %v", err)
+	}
+	shared, err := rule.ParsePatternReference("acme/layers@1.2.0")
+	if err != nil {
+		t.Fatalf("ParsePatternReference: %v", err)
+	}
+	distributed, err := rule.New(rule.Spec{
+		ID:         "acme/layers:polymorphism/contract-only-consumers",
+		Rationale:  "Consumers depend on contracts, never on implementations.",
+		Type:       rule.TypeExtension,
+		Params:     rule.ExtensionParams{Uses: "contract-only-consumers"},
+		Scope:      both,
+		Provenance: &shared,
+	})
+	if err != nil {
+		t.Fatalf("rule.New: %v", err)
+	}
+	cfg.Rules = append(cfg.Rules, local, distributed)
+	publish, err := application.NewPublishAgentsContext(
+		fakeRepository{cfg}, emptyKnowledge(), fakeExtensionInventory{}, &fakePublisher{})
+	if err != nil {
+		t.Fatalf("NewPublishAgentsContext: %v", err)
+	}
+	block, err := publish.Render()
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	for _, want := range []string{
+		"### Zones and their rules\n\nA rule that selects several zones is stated once under Rules shared by several zones; " +
+			"each zone it selects lists its id under shared rules.\n\n- **m**",
+		"  - snake: file names use snake_case\n",
+		`  - technology-free (warning): satisfies extension rule "forbid-content"`,
+		"  - shared rules: common/no-globals, acme/layers:polymorphism/contract-only-consumers\n- **n**: second zone (paths n/**)\n" +
+			"  - shared rules: common/no-globals, acme/layers:polymorphism/contract-only-consumers\n",
+		"### Rules shared by several zones\n\n" +
+			`- common/no-globals (warning): Zones ["m", "n"]: satisfies extension rule "forbid-globals" (names: [window]) ` +
+			"Rationale: Receive browser capabilities through ports.\n" +
+			`- acme/layers:polymorphism/contract-only-consumers: Zones ["m", "n"]: satisfies extension rule "contract-only-consumers" ` +
+			"Rationale: Consumers depend on contracts, never on implementations.\n\n",
+	} {
+		if !strings.Contains(block, want) {
+			t.Errorf("block lacks %q:\n%s", want, block)
+		}
+	}
+	// Each shared Rule's constraint and rationale appear once in the block.
+	for _, once := range []string{
+		`satisfies extension rule "forbid-globals"`,
+		"Receive browser capabilities through ports.",
+		`satisfies extension rule "contract-only-consumers"`,
+		"Consumers depend on contracts, never on implementations.",
+	} {
+		if n := strings.Count(block, once); n != 1 {
+			t.Errorf("block states %q %d times, want once:\n%s", once, n, block)
+		}
+	}
+	zonesAt := strings.Index(block, "### Zones and their rules")
+	sharedAt := strings.Index(block, "### Rules shared by several zones")
+	repositoryAt := strings.Index(block, "### Repository-wide rules")
+	if !(zonesAt >= 0 && zonesAt < sharedAt && sharedAt < repositoryAt) {
+		t.Errorf("shared rules must follow the zones and precede the repository-wide rules: %d, %d, %d:\n%s",
+			zonesAt, sharedAt, repositoryAt, block)
 	}
 }

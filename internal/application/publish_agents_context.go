@@ -2,6 +2,7 @@ package application
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -182,6 +183,7 @@ func renderAgentsBlock(cfg rule.Configured, lang vocab.UbiquitousLanguage,
 		writeRecordedDomain(&b, lang)
 	}
 	writeZoneRules(&b, cfg)
+	writeSharedZoneRules(&b, cfg)
 	writeBuiltInRules(&b, cfg)
 	writeRepositoryRules(&b, cfg)
 	writeExtensionInventory(&b, registered)
@@ -327,14 +329,21 @@ func writeRecordedDomain(b *strings.Builder, lang vocab.UbiquitousLanguage) {
 	b.WriteString("Full text: `arclint domain`.\n\n")
 }
 
-// writeZoneRules lists every declared Zone with its import
-// contract and the Rules bound to it, propositions included; the consumes
-// Rule is folded into the imports line rather than repeated.
+// writeZoneRules lists every declared Zone with its import contract
+// and the Rules bound to it. A Rule that selects this Zone alone is
+// stated in full under it; a Rule that selects several Zones is stated
+// once under the shared heading, and each Zone it selects names it by
+// id. The consumes Rule is folded into the imports line rather than
+// repeated.
 func writeZoneRules(b *strings.Builder, cfg rule.Configured) {
 	if len(cfg.Zones) == 0 {
 		return
 	}
 	b.WriteString("### Zones and their rules\n\n")
+	if slices.ContainsFunc(cfg.Rules, sharedZoneRule) {
+		b.WriteString("A rule that selects several zones is stated once under " + sharedRulesHeading +
+			"; each zone it selects lists its id under " + sharedRulesLead + ".\n\n")
+	}
 	for _, m := range cfg.Zones {
 		p := zonePolicy(m, cfg.Rules)
 		line := "- **" + p.Name + "**"
@@ -345,13 +354,58 @@ func writeZoneRules(b *strings.Builder, cfg rule.Configured) {
 		if imports := importsLine(p); imports != "" {
 			b.WriteString("  - " + imports + "\n")
 		}
+		var shared []string
 		for _, r := range cfg.Rules {
 			if r.Type() == rule.TypeConsumes || !nameIn(r.Scope().Zones(), m.Name()) {
+				continue
+			}
+			if sharedZoneRule(r) {
+				shared = append(shared, ruleName(r, false))
 				continue
 			}
 			proposition := strings.TrimPrefix(r.Proposition(), fmt.Sprintf("Zone %q: ", m.Name()))
 			b.WriteString("  - " + ruleLine(ruleName(r, true), r, proposition) + "\n")
 		}
+		if len(shared) > 0 {
+			b.WriteString("  - " + sharedRulesLead + ": " + strings.Join(shared, ", ") + "\n")
+		}
+	}
+	b.WriteString("\n")
+}
+
+// sharedRulesHeading titles the section stating each Rule that selects
+// several Zones; sharedRulesLead introduces a Zone's ids of them.
+const (
+	sharedRulesHeading = "Rules shared by several zones"
+	sharedRulesLead    = "shared rules"
+)
+
+// sharedZoneRule reports whether a Rule selects more than one Zone, so
+// the block states it once rather than under every Zone it selects.
+func sharedZoneRule(r rule.Rule) bool {
+	return r.Type() != rule.TypeConsumes && len(r.Scope().Zones()) > 1
+}
+
+// writeSharedZoneRules states, once each, the Rules that select several
+// Zones, with the Zones they select, so the Zones above can name them by
+// id without repeating their constraint and rationale.
+func writeSharedZoneRules(b *strings.Builder, cfg rule.Configured) {
+	if len(cfg.Zones) == 0 {
+		return
+	}
+	var lines []string
+	for _, r := range cfg.Rules {
+		if !sharedZoneRule(r) {
+			continue
+		}
+		lines = append(lines, "- "+ruleLine(ruleName(r, false), r, r.Proposition()))
+	}
+	if len(lines) == 0 {
+		return
+	}
+	b.WriteString("### " + sharedRulesHeading + "\n\n")
+	for _, l := range lines {
+		b.WriteString(l + "\n")
 	}
 	b.WriteString("\n")
 }
