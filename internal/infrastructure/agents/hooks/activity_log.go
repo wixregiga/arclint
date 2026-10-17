@@ -145,15 +145,29 @@ func logSize(project *os.Root) (int64, error) {
 // is not one ArcLint wrote. When until is not zero, reading stops at the
 // first line whose command finished after it, which a later read returns.
 func readActivities(project *os.Root, cursor int64, until time.Time) ([]timedActivity, int64, error) {
-	size, err := logSize(project)
-	if err != nil || cursor >= size {
-		return nil, min(cursor, size), err
-	}
 	file, err := project.Open(activityLog)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, 0, nil
+	}
 	if err != nil {
 		return nil, cursor, fmt.Errorf("workflow activity log: %w", err)
 	}
 	defer func() { _ = file.Close() }()
+	// A command holds this lock from taking its time until its line is
+	// written, so every line timed before the read is in the log by now.
+	unlock, err := lockFile(file)
+	if err != nil {
+		return nil, cursor, fmt.Errorf("workflow activity log: %w", err)
+	}
+	defer func() { _ = unlock() }()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, cursor, fmt.Errorf("workflow activity log: %w", err)
+	}
+	size := info.Size()
+	if cursor >= size {
+		return nil, min(cursor, size), nil
+	}
 	if _, err := file.Seek(cursor, io.SeekStart); err != nil {
 		return nil, cursor, fmt.Errorf("workflow activity log: %w", err)
 	}

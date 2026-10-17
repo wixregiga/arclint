@@ -488,3 +488,42 @@ func TestConcurrentRecordsAppendInTheOrderOfTheirTimes(t *testing.T) {
 		t.Fatalf("%d lines, want 200", len(lines))
 	}
 }
+
+// A command that took its time before the sample but has not written its
+// line yet holds the log; the update waits for the line, so a check timed
+// before a shell edit is read with it and does not clear it later.
+func TestAnUpdateWaitsForALineTimedBeforeItsSample(t *testing.T) {
+	root := gitRepository(t, map[string]string{"rules.arclint.yaml": "zones:\n  app: internal/**\n", "internal/a.go": "package a\n"})
+	store := NewProgressStore(root, recording)
+	observe(t, store, "s")
+	file, err := os.OpenFile(filepath.Join(root, activityLog), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = file.Close() }()
+	unlock, err := lockFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked := time.Now()
+	pause()
+	writeFile(t, root, "internal/a.go", "package a // changed after the check began writing\n")
+	pause()
+	seen := make(chan observation, 1)
+	go func() { seen <- observe(t, store, "s") }()
+	time.Sleep(200 * time.Millisecond)
+	line, err := json.Marshal(loggedActivity{Kind: string(agent.CheckRan), At: checked})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := file.Write(append(line, '\n')); err != nil {
+		t.Fatal(err)
+	}
+	if err := unlock(); err != nil {
+		t.Fatal(err)
+	}
+	want := []agent.Activity{{Kind: agent.CheckRan}, {Kind: agent.FilesChanged, Paths: []string{"internal/a.go"}}}
+	if got := <-seen; !reflect.DeepEqual(got.recorded, want) {
+		t.Fatalf("recorded %+v, want %+v", got.recorded, want)
+	}
+}
