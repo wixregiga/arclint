@@ -1267,3 +1267,55 @@ contexts:
 		t.Fatalf("adding tests lost the aliased statement or its comment:\n%s", text)
 	}
 }
+
+// A reader resolves an alias to the latest anchor of its name, so when
+// a reorder puts another anchor of that name in front of an alias, the
+// alias becomes a copy of the test it named and keeps meaning it.
+func TestRecordKeepsAnAliasFromReadingAShadowingAnchor(t *testing.T) {
+	const shadowed = `version: 1
+project: ticketing
+contexts:
+  sales:
+    definition: Selling seats for events.
+    value_objects:
+      Money:
+        definition: An amount in one currency.
+        invariants:
+          never-negative:
+            statement: Money is never negative.
+            verified_by: [&test a_test.go:TestA, &test b_test.go:TestB]
+    services:
+      Pricing:
+        definition: Prices an order against the event's tiers.
+        assertions:
+          tiers-on-sale:
+            on: Price
+            statement: Only a tier on sale prices an order.
+            verified_by: [*test]
+`
+	repo, _ := repository(t, shadowed)
+	lang, _, err := repo.RecordedLanguage()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if got := lang.Contexts[0].Services[0].Assertions[0].VerifiedBy; len(got) != 1 || got[0] != "b_test.go:TestB" {
+		t.Fatalf("the alias reads as %v, want the latest anchor's test", got)
+	}
+	lang.Contexts[0].ValueObjects[0].Invariants[0].VerifiedBy = []string{"b_test.go:TestB", "a_test.go:TestA"}
+	edited, err := vocab.NewUbiquitousLanguage(lang.Project, lang.Description, lang.Contexts, lang.Relations)
+	if err != nil {
+		t.Fatalf("edit: %v", err)
+	}
+	edited.Recording = lang.Recording
+	if err := repo.Record(edited); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	again, _, err := repo.RecordedLanguage()
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if d := edited.Difference(again); d != "" {
+		written, _ := os.ReadFile(repo.Path())
+		t.Fatalf("the reorder changed another entry's tests: %s\n%s", d, written)
+	}
+}

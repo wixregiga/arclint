@@ -377,3 +377,42 @@ func TestCarriersOfABodilessOwnerAreItsTests(t *testing.T) {
 		}
 	}
 }
+
+// An Exclusion of the domain recording keeps the verifying-tests rules
+// from judging the tests it names, in the check as in coverage; an
+// Exclusion of another file leaves them judged.
+func TestVerifyingTestsHonorAnExclusionOfTheRecording(t *testing.T) {
+	id := "assertion/verifying-tests-declared"
+	knowledge := discounterContext(t, "internal/pricing/gone_test.go:TestA")
+	for _, tc := range []struct {
+		exclude string
+		want    conformance.Outcome
+	}{
+		{testRecording, conformance.OutcomeNotApplicable},
+		{vocab.DefaultDomainRecordingPath, conformance.OutcomeViolates},
+	} {
+		glob, err := rule.NewGlob(tc.exclude)
+		if err != nil {
+			t.Fatal(err)
+		}
+		exclusion, err := rule.NewExclusion([]rule.Glob{glob}, nil, "the recorded file is not judged")
+		if err != nil {
+			t.Fatal(err)
+		}
+		r, err := builtInRule(t, id).Exclude(exclusion)
+		if err != nil {
+			t.Fatal(err)
+		}
+		a := runOne(t, r, nil, observed("internal/pricing/discounter.go"), map[string]conformance.LanguageFacts{}, knowledge)
+		if got := outcomesOf(a)[id+"|context:pricing"]; got != tc.want {
+			t.Errorf("excluding %s: outcome %s, want %s; %q", tc.exclude, got, tc.want, messagesOf(a))
+		}
+		for _, c := range a.Contracts() {
+			for _, e := range c.Checks() {
+				if e.Rule().Qualified() == id && e.Outcome() != tc.want {
+					t.Errorf("excluding %s: coverage outcome %s, want %s", tc.exclude, e.Outcome(), tc.want)
+				}
+			}
+		}
+	}
+}
