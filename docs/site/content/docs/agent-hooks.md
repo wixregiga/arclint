@@ -207,6 +207,10 @@ refreshes the index.
   another session in the same checkout, counts as the agent's change.
 - A shell change after `arclint context` or `arclint check` in the same shell
   command, within a few milliseconds, may take its place before them.
+- A removed file takes the time its directory last changed, which is later
+  than the removal when another file of that directory changed after it.
+- On Windows, which records no change time, a copy that keeps a file's size,
+  modification time and mode, as `cp -p` does, is not seen.
 - While `rules.arclint.yaml` cannot be read, the hooks cannot tell which Zones
   own a file and give no context reminder.
 - Everything that runs ArcLint in one checkout shares its activity log:
