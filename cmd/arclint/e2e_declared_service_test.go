@@ -388,6 +388,10 @@ func declaredServiceResults() []declaredServiceResult {
 			"src/identity/encrypter.ts": tsService("import { EncryptedPassword } from \"./value\";\n\ntype Result<T> = Promise<T>;", "Result<EncryptedPassword>")}, true},
 		{"typescript abstract operation beside a generic sibling", "ts", map[string]string{"src/identity/value.ts": tsValue,
 			"src/identity/encrypter.ts": "import { EncryptedPassword } from \"./value\";\n\nexport abstract class Encrypter {\n  abstract other<EncryptedPassword>(): void;\n  abstract encrypt(plain: string): EncryptedPassword;\n}\n"}, true},
+		{"typescript overloads on one line, one returning a string", "ts", map[string]string{"src/identity/value.ts": tsValue,
+			"src/identity/encrypter.ts": "import { EncryptedPassword } from \"./value\";\n\nexport interface Encrypter {\n  encrypt(x: string): string; encrypt(x: Uint8Array): EncryptedPassword;\n}\n"}, false},
+		{"typescript generic overload before one returning a string", "ts", map[string]string{"src/identity/value.ts": tsValue,
+			"src/identity/encrypter.ts": "import { EncryptedPassword } from \"./value\";\n\nexport interface Encrypter {\n  encrypt<T>(x: T): T;\n  encrypt(x: string): string;\n}\n"}, false},
 		{"python module attribute of a sibling module", "py", map[string]string{"src/identity/value.py": pyValue, "src/identity/__init__.py": "",
 			"src/identity/encrypter.py": pyService("from identity import value", "value.EncryptedPassword")}, true},
 	}

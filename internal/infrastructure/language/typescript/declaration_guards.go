@@ -69,7 +69,7 @@ func (r *resolutionIndex) readDeclarationGuard(root, file string, ps *parsers) *
 	if err != nil {
 		return nil
 	}
-	f := &resolutionFile{path: file, src: src, lang: p.Language(), tree: tree, scope: newScope(nil), exports: map[string][]exportBinding{}, nodes: map[*gotreesitter.Node]*lexicalScope{}, fields: map[string]*gotreesitter.Node{}, operations: map[string]*gotreesitter.Node{}, types: map[string][]*gotreesitter.Node{}}
+	f := &resolutionFile{path: file, src: src, lang: p.Language(), tree: tree, scope: newScope(nil), exports: map[string][]exportBinding{}, nodes: map[*gotreesitter.Node]*lexicalScope{}, fields: map[string]*gotreesitter.Node{}, operations: map[string][]*gotreesitter.Node{}, types: map[string][]*gotreesitter.Node{}}
 	f.scope.function = true
 	f.index(tree.RootNode(), f.scope, "")
 	return f

@@ -84,7 +84,8 @@ func declaresAbstract(df *declarationFacts, c *pyClass, from importOrigin, dir s
 			return ""
 		}
 		written := w.dottedName(n)
-		chain := libraryChain(qualifiedTarget(c.header, written, w, 0), from, dir, explicitModules(w))
+		read := c.node.StartByte()
+		chain := libraryChain(qualifiedTargetAt(c.header, written, w, read), from, dir, explicitModulesBefore(w, df.root, read))
 		if len(chain) == 0 {
 			return ""
 		}
@@ -92,9 +93,8 @@ func declaresAbstract(df *declarationFacts, c *pyClass, from importOrigin, dir s
 		// before the class reads it: an attribute path is read by the
 		// class statement, a bare name where it was bound. Every later
 		// name on the chain is another module's, which follow judged.
-		read := c.node.StartByte()
 		if !strings.Contains(written, ".") {
-			read = captureOffset(c.header, written, w, read)
+			read = captureOffsetAt(c.header, written, w, read)
 		}
 		if mutatesBefore(df.module, chain[0], read) {
 			return ""
@@ -183,42 +183,67 @@ func orderedSplits(q string, lead int, explicit map[string]bool) []int {
 	return append(imported, rest...)
 }
 
-// explicitModules lists the module paths a file imports by name, each
-// with the packages above it: import a.b.c imports a, a.b, and a.b.c,
-// and from a.b import c imports a and a.b.
-func explicitModules(w *pyWalker) map[string]bool {
+// explicitModulesBefore lists the module paths a file imports by name
+// in statements that run before offset, each with the packages above
+// it: import a.b.c imports a, a.b, and a.b.c, and from a.b import c
+// imports a and a.b. An import inside a function or class runs later.
+func explicitModulesBefore(w *pyWalker, root *gotreesitter.Node, offset uint32) map[string]bool {
 	out := map[string]bool{}
-	for _, imp := range w.imports {
-		module := imp.loaded
-		if imp.member != "" || module == "" {
-			module = imp.module
+	var walk func(n *gotreesitter.Node)
+	walk = func(n *gotreesitter.Node) {
+		if n.StartByte() >= offset {
+			return
 		}
-		if strings.HasPrefix(module, ".") {
-			out[module] = true
-			continue
-		}
-		for at := 0; at >= 0; {
-			next := strings.Index(module[at:], ".")
-			if next < 0 {
-				out[module] = true
-				break
+		switch n.Type(w.lang) {
+		case nodeClass, nodeFunction:
+			return
+		case nodeImport, nodeImportFrom:
+			for _, imp := range importBindings(w, n) {
+				addModulePath(out, imp)
 			}
-			out[module[:at+next]] = true
-			at += next + 1
+			return
+		}
+		for i := 0; i < n.NamedChildCount(); i++ {
+			walk(n.NamedChild(i))
 		}
 	}
+	walk(root)
 	return out
+}
+
+// addModulePath records the module an import names, with the packages
+// above it.
+func addModulePath(out map[string]bool, imp importBinding) {
+	module := imp.loaded
+	if imp.member != "" || module == "" {
+		module = imp.module
+	}
+	if strings.HasPrefix(module, ".") {
+		out[module] = true
+		return
+	}
+	for at := 0; ; {
+		next := strings.Index(module[at:], ".")
+		if next < 0 {
+			out[module] = true
+			return
+		}
+		out[module[:at+next]] = true
+		at += next + 1
+	}
 }
 
 // noLimit counts every write of a module, wherever it runs.
 const noLimit = ^uint32(0)
 
-// captureOffset is where a bare name took the value it holds: the
-// import or assignment that bound it, through an alias of another bare
-// name to where that one was bound; fallback when nothing binds it.
-func captureOffset(s *pyScope, name string, w *pyWalker, fallback uint32) uint32 {
+// captureOffsetAt is where a bare name a statement at offset reads
+// took the value it holds: the import or assignment that bound it, as
+// of the statement, through an alias of another bare name to where that
+// one was bound; fallback when nothing places it.
+func captureOffsetAt(s *pyScope, name string, w *pyWalker, offset uint32) uint32 {
+	fallback := offset
 	for hop := 0; hop < maxAliasHops; hop++ {
-		b := s.lookup(name)
+		b := s.lookupAt(name, offset, w)
 		if b == nil || b.node == nil {
 			return fallback
 		}
@@ -229,9 +254,18 @@ func captureOffset(s *pyScope, name string, w *pyWalker, fallback uint32) uint32
 		if alias == "" || strings.Contains(alias, ".") {
 			return b.node.StartByte()
 		}
-		s, name = b.scope, alias
+		s, name, offset = b.scope, alias, b.node.StartByte()
 	}
 	return fallback
+}
+
+// captureOffset is captureOffsetAt for a module's final bindings, as an
+// importer reads them once the module has run.
+func captureOffset(s *pyScope, name string, w *pyWalker, fallback uint32) uint32 {
+	if b := s.lookup(name); b == nil || b.node == nil {
+		return fallback
+	}
+	return captureOffsetAt(s, name, w, noLimit)
 }
 
 // mutatesBefore reports whether a module replaces a qualified name or a
