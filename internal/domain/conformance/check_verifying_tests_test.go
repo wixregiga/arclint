@@ -416,3 +416,27 @@ func TestVerifyingTestsHonorAnExclusionOfTheRecording(t *testing.T) {
 		}
 	}
 }
+
+// The Rule judging an assertion's code alone locates the Go test
+// carrying a bodiless owner's assertion, so coverage names the carrier
+// whether or not the Rule judging the tests runs.
+func TestCoverageLocatesTheTestCarrierWithoutTheTestsRule(t *testing.T) {
+	goFile, goTest := "internal/pricing/discounter.go", "internal/pricing/discounter_test.go"
+	facts := map[string]conformance.LanguageFacts{
+		goFile: goDecls("pricing", []conformance.Declaration{
+			{Kind: "interface", Name: "Discounter", Exported: true, StartLine: 3},
+			{Kind: "method", Name: "Discount", Owner: "Discounter", Exported: true, StartLine: 4},
+		}),
+		goTest: goTestFile("pricing", "", []conformance.Declaration{
+			{Kind: "func", Name: "TestDiscountNeverExceedsTotal", Exported: true, StartLine: 5, Params: []conformance.DeclarationParam{{Name: "t", Type: "*testing.T"}}},
+		}),
+	}
+	a := runOne(t, builtInRule(t, "assertion/checked-by-its-operation"), nil, observed(goFile, goTest), facts,
+		discounterContext(t, goTest+":TestDiscountNeverExceedsTotal"))
+	if len(a.Contracts()) != 1 {
+		t.Fatalf("contracts = %d, want 1", len(a.Contracts()))
+	}
+	if at, located := a.Contracts()[0].Carrier(); !located || at != (conformance.Carrier{Path: goTest, Line: 5}) {
+		t.Errorf("carrier %+v %v, want the Go test", at, located)
+	}
+}

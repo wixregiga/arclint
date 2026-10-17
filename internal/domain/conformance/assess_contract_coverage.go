@@ -124,8 +124,7 @@ func (c recordedContract) isolate(cc contextCode) contextCode {
 // carrier locates the declaration carrying the contract in the code a
 // check of it read, exactly as a listing of the language does; nil
 // when nothing there carries it.
-func (c recordedContract) carrier(code domainCode) (*Carrier, error) {
-	carriers := carriersOf(code)
+func (c recordedContract) carrier(carriers Carriers) (*Carrier, error) {
 	var (
 		at    Carrier
 		found bool
@@ -155,7 +154,11 @@ func (c recordedContract) ownerLocated(cc contextCode) bool {
 	return cc.terms[c.spec.Owner].located()
 }
 
-func assessContractCoverage(req Request, prepared map[string]Facts) ([]ContractCoverage, error) {
+// assessContractCoverage judges every recorded contract with the Rules
+// that check it, each over its prepared Facts, and locates the
+// declaration carrying it over located, the same selection with the
+// imports a Go test carrying an assertion is read through.
+func assessContractCoverage(req Request, prepared, located map[string]Facts) ([]ContractCoverage, error) {
 	rules := map[string]rule.Rule{}
 	for _, r := range req.Rules {
 		rules[r.ID().Qualified()] = r
@@ -163,6 +166,7 @@ func assessContractCoverage(req Request, prepared map[string]Facts) ([]ContractC
 	// Resolve each Rule's scoped observations once, independently of how
 	// many invariants and assertions it checks.
 	codeByRule := map[string]domainCode{}
+	carriersByRule := map[string]Carriers{}
 	var out []ContractCoverage
 	var err error
 	for _, contract := range recordedContracts(req.Knowledge) {
@@ -185,13 +189,22 @@ func assessContractCoverage(req Request, prepared map[string]Facts) ([]ContractC
 				}
 				codeByRule[id] = code
 			}
+			carriers, cached := carriersByRule[id]
+			if !cached {
+				carrierCode, err := resolveDomain(located[id], req.Knowledge)
+				if err != nil {
+					return nil, err
+				}
+				carriers = carriersOf(carrierCode)
+				carriersByRule[id] = carriers
+			}
 			if spec.Carrier == nil {
-				if spec.Carrier, err = contract.carrier(code); err != nil {
+				if spec.Carrier, err = contract.carrier(carriers); err != nil {
 					return nil, err
 				}
 			}
 			if spec.Kind == vocab.ConceptAssertion && spec.BodilessOwner == "" {
-				spec.BodilessOwner = carriersOf(code).BodilessOwner(spec.Context, spec.Owner)
+				spec.BodilessOwner = carriers.BodilessOwner(spec.Context, spec.Owner)
 			}
 			for _, cc := range code.contexts {
 				if cc.ctx.Name != spec.Context {
