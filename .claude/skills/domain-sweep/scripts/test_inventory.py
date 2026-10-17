@@ -869,6 +869,14 @@ class InventoryTest(unittest.TestCase):
         rows = repo.rows("--base", "main", "--scope", "changed")
         self.assertEqual([row[3] for row in rows], ["rule.md:1"])
 
+    def test_round_nineteen_cases(self):
+        self.repo.write("web/quota.test.ts", 'const ratio = 8 / `requests/second\npending`.length;\ntest("rejects", () => {});\n')
+        self.repo.write("web/greek.ts", "const \u037a = 1;\n// Never overwrite.\n")
+        rows = self.located(self.repo.rows("--base", "main"))
+        self.assertEqual({loc: row[1] for loc, row in rows.items()}, {
+            "web/quota.test.ts:3": "test", "web/greek.ts:2": "comment",
+        })
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
