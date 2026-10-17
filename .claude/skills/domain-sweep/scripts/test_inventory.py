@@ -1126,6 +1126,16 @@ class InventoryTest(unittest.TestCase):
         located = self.located(self.repo.rows("--base", "main", "--scope", "changed"))
         self.assertRowsInclude(located, {"web/quota.test.ts:2": "comment", "web/quota.test.ts:3": "test"})
 
+    def test_round_forty_one_cases(self):
+        self.repo.write("tools/test_format.py", 'def test_width():\n    x = f"{value:\\\\N{(\n        10  # Width must never exceed ten.\n    )}}"\n')
+        blob = self.repo.git("rev-parse", "main:README.md").strip()
+        self.repo.write(blob, "A file named like a blob.\n")
+        self.repo.write("README.md", "# Project\n\nChanged.\n")
+        self.repo.commit("ambiguous")
+        rows = self.located(self.repo.rows("--base", "main", "--head", "HEAD", "--scope", "changed"))
+        self.assertIn("README.md:3", rows)
+        self.assertEqual(rows["tools/test_format.py:3"][1], "comment")
+
     def test_hints_order_files_and_keep_lines_in_order(self):
         self.repo.write("a.md", "Plain.\nAlso plain.\n")
         self.repo.write("b.md", "Second line.\nIt must hold.\n")
