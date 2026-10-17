@@ -50,12 +50,15 @@ type sessionRecord struct {
 type ProgressStore struct {
 	root, recording string
 	checkout        checkout
+	// sample takes a snapshot of the checkout.
+	sample func() (snapshot, error)
 }
 
 // NewProgressStore keeps progress for the project at root, whose domain
 // recording is at the root-relative path recording.
 func NewProgressStore(root, recording string) *ProgressStore {
-	return &ProgressStore{root: root, recording: recording, checkout: checkout{root: root, now: time.Now}}
+	view := checkout{root: root, now: time.Now}
+	return &ProgressStore{root: root, recording: recording, checkout: view, sample: view.snapshot}
 }
 
 // Update replaces the session's Progress with change's result. change also
@@ -149,7 +152,7 @@ func (store *ProgressStore) current(project *os.Root, name string) (sessionRecor
 
 // look takes a snapshot of the checkout, and reports whether it could.
 func (store *ProgressStore) look() (snapshot, bool) {
-	taken, err := store.checkout.snapshot()
+	taken, err := store.sample()
 	return taken, err == nil
 }
 
@@ -159,16 +162,21 @@ func (store *ProgressStore) look() (snapshot, bool) {
 // be read this time, the record keeps its snapshot, so a later update
 // reports the files changed meanwhile.
 func (store *ProgressStore) observe(project *os.Root, record *sessionRecord, started bool) ([]agent.Activity, error) {
+	// The checkout is seen before the log is read, so every file change it
+	// shows comes with the ArcLint activities that ran before it, even
+	// while a parallel tool call is still running commands.
+	var now snapshot
+	seen := false
+	if !started {
+		now, seen = store.look()
+	}
 	logged, cursor, err := readActivities(project, *record.Cursor)
 	if err != nil {
 		return nil, err
 	}
 	record.Cursor = &cursor
 	timed := logged
-	if started {
-		return untimed(timed), nil
-	}
-	if now, seen := store.look(); seen {
+	if seen {
 		if record.Observed && !record.Unattributed {
 			for _, file := range store.checkout.changes(record.Snapshot, now) {
 				timed = append(timed, timedActivity{activity: store.changeOf(file.path), at: file.at})

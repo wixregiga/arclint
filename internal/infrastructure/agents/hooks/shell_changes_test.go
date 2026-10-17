@@ -3,6 +3,7 @@ package hooks
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -212,5 +213,47 @@ func TestAResumedSessionHearsWhatItsUnfinishedTurnChanged(t *testing.T) {
 	text := handle(t, events, resume).HookSpecificOutput.AdditionalContext
 	if !strings.Contains(text, "ArcLint workflow hooks run in this project.") || !strings.Contains(text, "internal/unfinished.go changed before `arclint context`") {
 		t.Fatalf("the unfinished turn's change was not advised on resume:\n%s", text)
+	}
+}
+
+// A shell removal before `arclint check` is verified by it: the removal
+// takes the time its directory changed, not the time the hooks noticed it.
+func TestAShellRemovalBeforeTheCheckIsVerified(t *testing.T) {
+	events, root := newGitEvents(t)
+	handle(t, events, sessionStart("s", root))
+	handle(t, events, prompt("s", root))
+	record(t, root, agent.Activity{Kind: agent.ContextObtained})
+	record(t, root, agent.Activity{Kind: agent.DomainChanged, Paths: []string{recording}})
+	pause()
+	if err := os.Remove(filepath.Join(root, "internal/a.go")); err != nil {
+		t.Fatal(err)
+	}
+	pause()
+	record(t, root, agent.Activity{Kind: agent.CheckRan})
+	pause()
+	if output := handle(t, events, stop("s", root)); output != (hostOutput{}) {
+		t.Fatalf("a removal the check verified was advised: %+v", output)
+	}
+}
+
+// A parallel tool call can run `arclint context` and then change a file
+// while the hooks sample the checkout. The sample comes first and the log
+// is read after it, so the change arrives with the context that preceded
+// it.
+func TestContextRecordedWhileTheCheckoutIsSampledIsCredited(t *testing.T) {
+	root := gitRepository(t, map[string]string{"rules.arclint.yaml": "zones:\n  app: internal/**\n", "internal/a.go": "package a\n"})
+	store := NewProgressStore(root, recording)
+	observe(t, store, "s")
+	sample := store.sample
+	store.sample = func() (snapshot, error) {
+		record(t, root, agent.Activity{Kind: agent.ContextObtained, Paths: []string{"internal"}})
+		pause()
+		writeFile(t, root, "internal/a.go", "package a // changed in parallel\n")
+		return sample()
+	}
+	seen := observe(t, store, "s")
+	want := []agent.Activity{{Kind: agent.ContextObtained, Paths: []string{"internal"}}, {Kind: agent.FilesChanged, Paths: []string{"internal/a.go"}}}
+	if !reflect.DeepEqual(seen.recorded, want) {
+		t.Fatalf("recorded %+v, want %+v", seen.recorded, want)
 	}
 }

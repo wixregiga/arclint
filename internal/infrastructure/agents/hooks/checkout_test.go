@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -144,5 +145,30 @@ func TestCheckoutOutsideAGitWorkTreeHasNoSnapshot(t *testing.T) {
 	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(root))
 	if _, err := (checkout{root: root, now: time.Now}).snapshot(); !errors.Is(err, errNoGit) {
 		t.Fatalf("a directory outside any git work tree: %v", err)
+	}
+}
+
+// A copy that keeps the source's size, modification time and mode, as
+// `cp -p` and shutil.copy2 do, still changes the file.
+func TestCheckoutSeesACopyThatKeepsTheMetadata(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows file information records no change time")
+	}
+	root := gitRepository(t, map[string]string{"internal/a.go": "package a\n"})
+	view := checkout{root: root, now: time.Now}
+	writeFile(t, root, "internal/a.go", "package a // one\n")
+	path := filepath.Join(root, "internal/a.go")
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := takeSnapshot(t, view)
+	time.Sleep(20 * time.Millisecond)
+	writeFile(t, root, "internal/a.go", "package a // two\n")
+	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	if got := changedPaths(view.changes(before, takeSnapshot(t, view))); !reflect.DeepEqual(got, []string{"internal/a.go"}) {
+		t.Fatalf("a copy keeping the metadata showed %v", got)
 	}
 }

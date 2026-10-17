@@ -25,13 +25,17 @@ const (
 const gitTimeout = 10 * time.Second
 
 // fingerprint is what a file of a snapshot looked like: its size, last
-// modification and mode, or that it did not exist. A file whose
-// fingerprint differs from the snapshot's changed since it was taken.
+// modification, mode and, where the system records one, last change of
+// its content or metadata, or that it did not exist. A copy that keeps the
+// source's size, modification time and mode, as `cp -p` does, still moves
+// the change time, which no program can set. A file whose fingerprint
+// differs from the snapshot's changed since it was taken.
 type fingerprint struct {
 	Absent   bool   `json:"absent,omitempty"`
 	Size     int64  `json:"size,omitempty"`
 	Modified int64  `json:"modified,omitempty"`
 	Mode     uint32 `json:"mode,omitempty"`
+	Changed  int64  `json:"changed,omitempty"`
 }
 
 // snapshot holds the fingerprint of every project file git shows changed,
@@ -112,11 +116,26 @@ func (c checkout) git(command *exec.Cmd) ([]byte, error) {
 
 // fingerprint reads one project file without following a link.
 func (c checkout) fingerprint(path string) fingerprint {
-	info, err := os.Lstat(filepath.Join(c.root, filepath.FromSlash(path)))
-	if err != nil {
-		return fingerprint{Absent: true}
+	return fingerprintOf(filepath.Join(c.root, filepath.FromSlash(path)))
+}
+
+// removedAt is when a file that no longer exists was removed, as near as
+// the file system tells: removing a file changes its directory, so the
+// nearest directory above it that still exists last changed then or
+// later. It is never later than now.
+func (c checkout) removedAt(path string) time.Time {
+	now := c.now()
+	for directory := filepath.Dir(filepath.Join(c.root, filepath.FromSlash(path))); ; directory = filepath.Dir(directory) {
+		if info, err := os.Stat(directory); err == nil {
+			if modified := info.ModTime(); modified.Before(now) {
+				return modified
+			}
+			return now
+		}
+		if directory == c.root || directory == filepath.Dir(directory) {
+			return now
+		}
 	}
-	return fingerprint{Size: info.Size(), Modified: info.ModTime().UnixNano(), Mode: uint32(info.Mode())}
 }
 
 // changes lists the files that changed between before and after, ordered
@@ -124,14 +143,14 @@ func (c checkout) fingerprint(path string) fingerprint {
 // fingerprint changed again; a file only after shows changed for the first
 // time. A file only before shows is clean again: committed, which changes
 // nothing in the file, or restored, which does; its current fingerprint
-// tells the two apart. A file that no longer exists changed when the
-// comparison ran.
+// tells the two apart. A file that no longer exists changed when it was
+// removed.
 func (c checkout) changes(before, after snapshot) []changedFile {
 	var changed []changedFile
 	add := func(path string, now fingerprint) {
-		at := c.now()
-		if !now.Absent {
-			at = time.Unix(0, now.Modified)
+		at := time.Unix(0, now.Modified)
+		if now.Absent {
+			at = c.removedAt(path)
 		}
 		changed = append(changed, changedFile{path: path, at: at})
 	}
