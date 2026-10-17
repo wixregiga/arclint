@@ -352,12 +352,17 @@ func (installer *Installer) Status() (status application.HooksStatus, err error)
 			off[user.form] = off[user.form] || disablesHooks(host, user.path)
 		}
 		disabled = disabled || off[nativeForm] || off[windowsForm]
+		// A Windows profile that cannot be located may turn its hooks off,
+		// so its host apps are not said to run this project's hooks.
+		windowsUnknown := slices.ContainsFunc(configurations, func(configuration UserConfiguration) bool {
+			return configuration.Windows && configuration.Unreadable != ""
+		})
 		// This project's file runs while any of its readers runs hooks.
 		readersOff := func(file target) bool {
 			if file.scope == scopeUser {
 				return off[file.form]
 			}
-			return off[nativeForm] && (local.form != sharedForm || off[windowsForm])
+			return off[nativeForm] && (local.form != sharedForm || off[windowsForm] || windowsUnknown)
 		}
 		entries := make([]application.HookFileStatus, 0, len(users)+1)
 		for _, file := range append(slices.Clone(users), local) {
@@ -445,7 +450,7 @@ func (installer *Installer) silence(files []application.HookFileStatus, running,
 	switch {
 	case installed(application.HooksComplete):
 	case running:
-		reasons = append(reasons, "No configuration file lists every workflow hook, but the hooks install wrote into a file still run and record an event each time one fires; each file below names the hooks it lists, those that still run, and those it lacks. Run `arclint agents hooks install` to add the missing ones.")
+		reasons = append(reasons, "No configuration file lists every workflow hook, but the hooks install wrote into a file still run, and record an event each time one fires while rules.arclint.yaml exists; each file below names the hooks it lists, those that still run, and those it lacks. Run `arclint agents hooks install` to add the missing ones.")
 	case installed(application.HooksPartial):
 		reasons = append(reasons, "No configuration file lists every workflow hook, and no hook a file lists is established to run here; each file below says why. Run `arclint agents hooks install`.")
 	default:

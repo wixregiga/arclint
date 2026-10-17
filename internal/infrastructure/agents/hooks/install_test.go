@@ -591,6 +591,50 @@ func TestDisabledHooksBelongToTheSideThatReadsThem(t *testing.T) {
 	}
 }
 
+// A Windows profile that cannot be located may turn its hooks off, so
+// the project's file is not said to run for the Windows host apps while
+// the distribution's own user file turns its hooks off.
+func TestAnUnlocatedWindowsProfileIsNotEvidenceThatHooksRun(t *testing.T) {
+	root, h := t.TempDir(), newHomes(t)
+	binary := testBinary(t, t.TempDir(), "native")
+	if _, err := NewInstaller(root, "Ubuntu", binary, h.users("Ubuntu")).Install([]string{"claude"}, true); err != nil {
+		t.Fatal(err)
+	}
+	local := filepath.Join(root, ".claude", "settings.local.json")
+	var document map[string]any
+	data, err := os.ReadFile(local)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	delete(document["hooks"].(map[string]any), promptEvent)
+	data, err = json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, local, string(data))
+	writeTestFile(t, h.file(false, "claude"), `{"disableAllHooks": true}`)
+	users := func() ([]UserConfiguration, error) {
+		return []UserConfiguration{h.native, {Windows: true, Unreadable: "cmd.exe is missing"}}, nil
+	}
+	status, err := NewInstaller(root, "Ubuntu", binary, users).Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range status.Files {
+		if entry.Host == claudeHost && entry.Scope == scopeProject {
+			if problems := strings.Join(entry.Problems, "\n"); entry.Installation != application.HooksPartial || strings.Contains(problems, "still run") {
+				t.Fatalf("project file: %+v", entry)
+			}
+		}
+	}
+	if silence := strings.Join(status.Silence, "\n"); strings.Contains(silence, "still run") {
+		t.Fatalf("silence: %s", silence)
+	}
+}
+
 // Only the commands install writes are workflow hooks. A hook that merely
 // mentions the same words is someone else's, and install and the duplicate
 // cleanup keep it.
