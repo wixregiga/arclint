@@ -548,8 +548,8 @@ func TestPatternExtensionsReturnsCopy(t *testing.T) {
 
 func TestConstraintKinds(t *testing.T) {
 	kinds := rule.ConstraintKinds()
-	if len(kinds) != 10 {
-		t.Fatalf("ConstraintKinds() returned %d kinds, want 10", len(kinds))
+	if len(kinds) != 11 {
+		t.Fatalf("ConstraintKinds() returned %d kinds, want 11", len(kinds))
 	}
 	for _, k := range kinds {
 		parsed, err := rule.ParseConstraintKind(string(k))
@@ -567,8 +567,8 @@ func TestAssertionKeysSpellEveryType(t *testing.T) {
 	if len(keys) != len(rule.AuthoredTypes()) {
 		t.Fatalf("AssertionKeys = %v, want one per authored Type", keys)
 	}
-	if rule.TypeDomain.Authored() || len(rule.AuthoredTypes()) != len(rule.Types())-1 {
-		t.Errorf("the domain Type is built in, never authored; AuthoredTypes = %v", rule.AuthoredTypes())
+	if rule.TypeDomain.Authored() || rule.ConstraintKindWordLimit.Authored() || len(rule.AuthoredTypes()) != len(rule.Types())-2 {
+		t.Errorf("the domain and word_limit Types are built in, never authored; AuthoredTypes = %v", rule.AuthoredTypes())
 	}
 	for i, typ := range rule.AuthoredTypes() {
 		if typ.AssertionKey() != keys[i] {

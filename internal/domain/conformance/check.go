@@ -93,6 +93,8 @@ func Run(req Request) (Assessment, error) {
 			es, err = evaluateGraph(r, facts)
 		case r.Type() == rule.TypeDomain:
 			es, err = evaluateDomain(r, facts, req.Knowledge)
+		case r.Type() == rule.ConstraintKindWordLimit:
+			es, err = evaluateWordLimit(r, req.Knowledge)
 		default:
 			es, err = evaluateUnsupported(r, facts)
 		}

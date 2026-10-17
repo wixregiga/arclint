@@ -7,15 +7,31 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
+// BuiltInSource names what arclint composes a built-in Rule from.
+type BuiltInSource string
+
+// The two sources of built-in Rules: the block invariants of the
+// Domain-Driven Design meta-model, each cited to the work that states
+// it, and the word limits arclint itself sets on recorded text, which
+// no work states.
+const (
+	SourceMetaModel  BuiltInSource = "the DDD meta-model"
+	SourceWordLimits BuiltInSource = "the word limits of the domain file"
+)
+
+// WordLimitRuleID is the id of the built-in Rule that reports a
+// recorded text over the WordLimit of its kind.
+const WordLimitRuleID = "domain_recording/text-within-word-limit"
+
 // BuiltIn composes the Rules arclint applies to a recorded domain with
 // nothing written in rules.arclint.yaml: one Rule per block invariant
 // of the Domain-Driven Design meta-model that `arclint check`
 // evaluates, under the invariant's own id, at the invariant's severity,
-// over the whole repository. A domain evaluator invariant becomes a
-// domain Rule. They exist the moment a domain file is recorded; a
-// repository adopts them through Overrides under their ids and never
-// redefines them, and no ruleset may spell a Rule under one of those
-// ids.
+// over the whole repository, and the word-limit Rule at error severity.
+// A domain evaluator invariant becomes a domain Rule. They exist the
+// moment a domain file is recorded; a repository adopts them through
+// Overrides under their ids and never redefines them, and no ruleset
+// may spell a Rule under one of those ids.
 func BuiltIn() ([]Rule, error) {
 	var out []Rule
 	for _, inv := range vocab.DDD().Invariants() {
@@ -29,7 +45,15 @@ func BuiltIn() ([]Rule, error) {
 		}
 		out = append(out, r)
 	}
-	return out, nil
+	scope, err := RepositoryScope()
+	if err != nil {
+		return nil, fmt.Errorf("built-in rules: %v", err)
+	}
+	r, err := New(Spec{ID: WordLimitRuleID, Severity: string(SeverityError), Scope: scope, Constraint: WordLimitConstraint{}})
+	if err != nil {
+		return nil, fmt.Errorf("built-in rules: %v", err)
+	}
+	return append(out, r), nil
 }
 
 // builtInSpec is the Spec of the built-in Rule for a check-level block
@@ -75,13 +99,20 @@ func builtInInvariant(id ID) (vocab.BlockInvariant, bool) {
 // recorded and may never spell a Rule of its own under it.
 func BuiltInID(id ID) bool {
 	_, ok := builtInInvariant(id)
-	return ok
+	return ok || id.Qualified() == WordLimitRuleID
 }
 
-// respectsBuiltIn keeps the built-in ids and the domain Type together:
-// a Spec under a built-in id is exactly the built-in Rule, and a domain
-// Rule carries the id of the invariant it evaluates.
+// respectsBuiltIn keeps the built-in ids and their Types together: a
+// Spec under a built-in id is exactly the built-in Rule, a domain Rule
+// carries the id of the invariant it evaluates, and the word limit is
+// carried under its own id alone.
 func respectsBuiltIn(id ID, c Constraint) error {
+	if id.Qualified() == WordLimitRuleID || c.Kind() == ConstraintKindWordLimit {
+		if id.Qualified() != WordLimitRuleID || c.Kind() != ConstraintKindWordLimit {
+			return fmt.Errorf("the word limit is built in under %s alone; a ruleset adopts it with an override (severity, disable, exclude, suppress)", WordLimitRuleID)
+		}
+		return nil
+	}
 	inv, reserved := builtInInvariant(id)
 	if !reserved {
 		if c.Kind() == TypeDomain {

@@ -80,6 +80,12 @@ func TestBuiltInPropositionsDoNotInventRationale(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, r := range rules {
+		if r.ID().Qualified() == rule.WordLimitRuleID {
+			if r.Proposition() != vocab.WordLimitsStatement() || !r.Rationale().IsZero() {
+				t.Errorf("built-in %s: proposition %q, rationale %q", r.ID(), r.Proposition(), r.Rationale())
+			}
+			continue
+		}
 		inv, ok := vocab.DDD().Invariant(r.ID().Local())
 		if !ok || r.Proposition() != inv.Statement || !r.Rationale().IsZero() {
 			t.Errorf("built-in %s: proposition %q, rationale %q", r.ID(), r.Proposition(), r.Rationale())

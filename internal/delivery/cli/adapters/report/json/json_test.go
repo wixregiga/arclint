@@ -253,7 +253,7 @@ func TestJSONRuleListMarksBuiltIns(t *testing.T) {
 	err := New().Render(&buf, cli.RuleListReport{
 		Rules: []application.RuleSummary{{
 			ID: "aggregate/root-declared", Type: "domain", Severity: "error",
-			Proposition: "c", Assurance: "exact", BuiltIn: true,
+			Proposition: "c", Assurance: "exact", BuiltIn: true, Origin: "built in from the DDD meta-model",
 		}},
 	})
 	if err != nil {
@@ -263,8 +263,8 @@ func TestJSONRuleListMarksBuiltIns(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &docs); err != nil {
 		t.Fatal(err)
 	}
-	if len(docs) != 1 || docs[0]["builtIn"] != true {
-		t.Fatalf("docs = %v, want builtIn true", docs)
+	if len(docs) != 1 || docs[0]["builtIn"] != true || docs[0]["origin"] != "built in from the DDD meta-model" {
+		t.Fatalf("docs = %v, want builtIn true and its origin", docs)
 	}
 	if _, ok := docs[0]["provenance"]; ok {
 		t.Fatalf("a built-in Rule has no Pattern provenance: %v", docs[0])

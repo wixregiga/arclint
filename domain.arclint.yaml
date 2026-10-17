@@ -106,6 +106,12 @@ contexts:
           inside-the-repository: >-
             A DomainRecording's file, followed through any link, lies inside the
             repository, the directory that holds the ruleset.
+      WordLimit:
+        definition: >-
+          The most words one kind of recorded text may hold: 40 for an entry's
+          definition or an invariant's or assertion's statement, 60 for a
+          bounded context's definition, 100 for the project description. A
+          definition says what a word means.
   rule:
     definition: >-
       The rule bounded context: the Rule aggregate's home, holding everything a

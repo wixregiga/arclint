@@ -39,6 +39,7 @@
     "domain_event/declared",
     "domain_event/no-setters",
     "domain_isolation/model-imports-nothing-outside-itself",
+    "domain_recording/text-within-word-limit",
     "domain_service/declared",
     "domain_service/not-held-by-aggregates",
     "entity/identity",
@@ -143,6 +144,132 @@
       "subject": "distribution",
       "message": "context distribution imports context adoption (github.com/wixregiga/arclint/internal/domain/rule) against the recorded conformist relation: distribution is upstream of adoption, and only the downstream imports the upstream",
       "count": 6
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "aggregate \"Rule\" in context \"rule\": the definition has 48 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "context \"agent\": the definition has 159 words, and a definition holds at most 60",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "context \"vocabulary\": the definition has 92 words, and a definition holds at most 60",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "entity \"Pattern\" of \"Rule\" in context \"rule\": the definition has 101 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "entity \"Zone\" of \"Rule\" in context \"rule\": the definition has 81 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "invariant \"evidence-follows-the-constraint\" of \"Facts\" in context \"conformance\": the statement has 45 words, and a statement holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "value object \"Activity\" in context \"agent\": the definition has 52 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "value object \"Binding\" in context \"adoption\": the definition has 45 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "value object \"Catalog\" in context \"distribution\": the definition has 53 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "value object \"Constraint\" in context \"rule\": the definition has 43 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "value object \"DomainFile\" in context \"rule\": the definition has 75 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "value object \"DomainRecording\" in context \"vocabulary\": the definition has 144 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "value object \"Expansion\" in context \"rule\": the definition has 58 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "value object \"Facts\" in context \"conformance\": the definition has 92 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "value object \"Index\" in context \"distribution\": the definition has 48 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "value object \"Installation\" in context \"adoption\": the definition has 53 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "value object \"Override\" in context \"adoption\": the definition has 44 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "value object \"PatternSource\" in context \"distribution\": the definition has 46 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "value object \"RuleID\" in context \"rule\": the definition has 72 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "value object \"TermCase\" in context \"rule\": the definition has 52 words, and a definition holds at most 40",
+      "count": 1
+    },
+    {
+      "ruleId": "domain_recording/text-within-word-limit",
+      "subject": "domain.arclint.yaml",
+      "message": "value object \"Violation\" in context \"conformance\": the definition has 47 words, and a definition holds at most 40",
+      "count": 1
     }
   ]
 }

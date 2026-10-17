@@ -184,8 +184,14 @@ func TestBuiltInRulesJudgeEveryContextOfTheRecordedDomain(t *testing.T) {
 
 	domainRules := 0
 	for _, r := range req.Rules {
+		if r.Type() == rule.ConstraintKindWordLimit {
+			if got := outcomes[r.ID().Qualified()+"|file:docs/model.arclint.yaml"]; got != conformance.OutcomeConforms {
+				t.Errorf("rule %s: the recording's texts are within their limits; outcome %s", r.ID(), got)
+			}
+			continue
+		}
 		if r.Type() != rule.TypeDomain {
-			t.Errorf("rule %s: a built-in rule is a domain rule, not %s", r.ID(), r.Type())
+			t.Errorf("rule %s: a built-in rule is a domain rule or the word limit, not %s", r.ID(), r.Type())
 			continue
 		}
 		domainRules++
@@ -198,8 +204,8 @@ func TestBuiltInRulesJudgeEveryContextOfTheRecordedDomain(t *testing.T) {
 	if domainRules != 24 {
 		t.Fatalf("built-in domain rules = %d, want 24", domainRules)
 	}
-	if got := len(a.AppliedRules()); got != 24 {
-		t.Errorf("applied rules = %d, want 24", got)
+	if got := len(a.AppliedRules()); got != 25 {
+		t.Errorf("applied rules = %d, want the 24 domain rules and the word limit", got)
 	}
 
 	want := map[string][]string{

@@ -68,8 +68,9 @@ func (t Type) Schema() TypeSchema {
 			Name: "on", Kind: "zone_list",
 			Doc: "the declared Zone or Zones the Rule judges; absent means the whole repository",
 		})
-	case TypeLayers, TypeIndependence, TypeAcyclic, TypeDomain:
-		// The constraint itself names the Zones; on is not accepted.
+	case TypeLayers, TypeIndependence, TypeAcyclic, TypeDomain, ConstraintKindWordLimit:
+		// The constraint itself names the Zones, or the Rule is built in
+		// over the whole repository; on is not accepted.
 	}
 	if t.AcceptsFiles() {
 		common = append(common, FieldSchema{
@@ -146,6 +147,10 @@ func (t Type) Schema() TypeSchema {
 		// constraint fields; an Override under the invariant's id adopts
 		// it through the common fields above.
 		params = nil
+	case ConstraintKindWordLimit:
+		// Built in, like a domain Rule: no constraint fields; an Override
+		// under its id adopts it.
+		params = nil
 	case TypeContent:
 		params = []FieldSchema{
 			{Name: "forbid", Kind: "regex", Required: true, Doc: "no line of a selected file may match this RE2 pattern"},
@@ -171,7 +176,7 @@ func (s TypeSchema) Describe() string {
 	if s.Type.Authored() {
 		fmt.Fprintf(&b, "rule type %s (constraint key %s)\n", s.Type, s.Key)
 	} else {
-		fmt.Fprintf(&b, "rule type %s (built in; adopted by an override under the invariant's id)\n", s.Type)
+		fmt.Fprintf(&b, "rule type %s (built in; adopted by an override under its id)\n", s.Type)
 	}
 	for _, section := range []struct {
 		title  string
@@ -754,8 +759,9 @@ func commonRuleProperties(t Type) (map[string]any, []string) {
 		required = append(required, "on")
 	case TypeContent, TypeExtension:
 		props["on"] = schemaRef("judgedZonesOrRepository")
-	case TypeLayers, TypeIndependence, TypeAcyclic, TypeDomain:
-		// The constraint itself names the Zones; on is not accepted.
+	case TypeLayers, TypeIndependence, TypeAcyclic, TypeDomain, ConstraintKindWordLimit:
+		// The constraint itself names the Zones, or the Rule is built in
+		// over the whole repository; on is not accepted.
 	}
 	if t.AcceptsFiles() {
 		props["files"] = schemaRef("judgedFiles")
@@ -870,8 +876,8 @@ func constraintRuleSchema(t Type) map[string]any {
 			"type":                 "object",
 			"additionalProperties": true,
 		}
-	case TypeDomain:
-		// Built in, never spelled: AuthoredTypes never yields it.
+	case TypeDomain, ConstraintKindWordLimit:
+		// Built in, never spelled: AuthoredTypes never yields either.
 	}
 	return strictObjectSchema(description, props, required...)
 }

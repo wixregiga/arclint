@@ -1,0 +1,17 @@
+# Clean case: every recorded text is exactly at its word limit, which
+# the limit admits.
+rule: "domain_recording/text-within-word-limit"
+files:
+  domain.arclint.yaml: |
+    version: 1
+    project: fixture
+    description: word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word
+    contexts:
+      rule:
+        definition: word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word
+        value_objects:
+          Severity:
+            definition: word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word
+            invariants:
+              closed-set: word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word
+expect: []

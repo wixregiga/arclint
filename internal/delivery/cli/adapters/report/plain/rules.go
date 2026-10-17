@@ -31,7 +31,7 @@ func ruleOrigin(row application.RuleSummary) string {
 	case row.Provenance != "":
 		return "  from " + row.Provenance
 	case row.BuiltIn:
-		return "  " + application.BuiltInOrigin
+		return "  " + row.Origin
 	}
 	return ""
 }
@@ -67,7 +67,7 @@ func writeRuleDetail(w io.Writer, d application.RuleDetail) error {
 	write("limitations", strings.Join(d.Limitations, "; "))
 	write("provenance", d.Summary.Provenance)
 	if d.Summary.BuiltIn {
-		write("origin", application.BuiltInOrigin+"; adopt it with an override under its id")
+		write("origin", d.Summary.Origin+"; adopt it with an override under its id")
 	}
 	for _, e := range d.Exclusions {
 		write("excluded", fmt.Sprintf("%s (%s)", strings.Join(e.Selectors, ", "), e.Reason))

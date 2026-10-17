@@ -317,15 +317,17 @@ func TestPublishAgentsContextSectionsTheBuiltInRules(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
-	intro := fmt.Sprintf("%d rules %s judge the recorded domain against the code; no Pattern distributes them. "+
+	intro := fmt.Sprintf("%d rules built in from the DDD meta-model judge the recorded domain against the code, "+
+		"and 1 rule built in from the word limits of the domain file judges the recorded text; no Pattern distributes them. "+
 		"Change one through an Override under its id in rules.arclint.yaml (severity, or disable with a reason).",
-		len(builtIn), application.BuiltInOrigin)
+		len(builtIn)-1)
 	for _, want := range []string{
 		fmt.Sprintf("%d rules over languages [go]", 5+len(builtIn)),
 		"### Built-in rules\n\n" + intro + "\n\n- ",
 		"\n- aggregate/root-declared: ",
 		"\n- bounded_context/isolated: ",
 		"\n- aggregate/protects-an-invariant (warning): ",
+		"\n- domain_recording/text-within-word-limit: Every recorded text stays within its word limit: 40 words ",
 	} {
 		if !strings.Contains(block, want) {
 			t.Errorf("block lacks %q:\n%s", want, block)

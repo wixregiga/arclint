@@ -1234,8 +1234,8 @@ func (e ruleEntry) build(lang vocab.UbiquitousLanguage, declared map[rule.ZoneNa
 		spec.Constraint, err = parseContent(e.constraintNode, where)
 	case rule.TypeExtension:
 		spec.Constraint, err = parseUses(e.constraintNode, where, e.with)
-	case rule.TypeDomain:
-		// Built in, never spelled: no constraint key resolves to it.
+	case rule.TypeDomain, rule.ConstraintKindWordLimit:
+		// Built in, never spelled: no constraint key resolves to either.
 	}
 	if err != nil {
 		return rule.Rule{}, err

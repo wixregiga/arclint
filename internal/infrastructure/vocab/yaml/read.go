@@ -325,6 +325,9 @@ func (s source) language(body *yaml.Node) (vocab.UbiquitousLanguage, error) {
 		return vocab.UbiquitousLanguage{}, fmt.Errorf("%s: %w", s.label, err)
 	}
 	lang.Recording = s.recording
+	if e, ok := f.node(keyDescription); ok {
+		lang.DescriptionLine = e.line
+	}
 	return lang, nil
 }
 
