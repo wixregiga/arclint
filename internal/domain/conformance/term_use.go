@@ -38,10 +38,10 @@ const (
 	UseByField UseWay = "field"
 )
 
-// TermUse is one place where a file's code reaches a recorded term the
-// file does not declare: the file and line, the term with its bounded
-// context and role, and how the code reaches it. Two TermUses with the
-// same values are the same use.
+// TermUse is one place where a file's code reaches a recorded term,
+// wherever the term is declared: the file and line, the term with its
+// bounded context and role, and how the code reaches it. Two TermUses
+// with the same values are the same use.
 type TermUse struct {
 	path      string
 	line      int

@@ -547,10 +547,9 @@ type domainKnowledgeJSON struct {
 	Contexts   []domainContextKnowJSON  `json:"contexts,omitempty"`
 	Relations  []domainRelationKnowJSON `json:"relations,omitempty"`
 	Unanchored []unanchoredKnowJSON     `json:"unanchored,omitempty"`
-	// Used lists the recorded entries the worksite's code reaches
-	// without declaring them, apart from the declared listing in
-	// Contexts; Undetermined lists the references resolution could not
-	// follow.
+	// Used lists the recorded entries the worksite's code reaches that
+	// the declared listing in Contexts does not show; Undetermined lists
+	// the references that may be uses resolution cannot confirm.
 	UsesLocated  bool                  `json:"usesLocated,omitempty"`
 	Used         []domainUseJSON       `json:"used,omitempty"`
 	Undetermined []undeterminedUseJSON `json:"undetermined,omitempty"`
