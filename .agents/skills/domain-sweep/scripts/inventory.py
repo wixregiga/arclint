@@ -582,8 +582,10 @@ SWALLOWED_TEST = re.compile(r"""(?:^|[^\w.$])(?:it|test|describe)(?:\.\w+)*\s*\(
 # A line whose reading opened a literal it never closed is read again with
 # one slash decision reversed, at most this many, from the last.
 MAX_SLASH_RETRIES = 16
-# How many lines after it a line's readings are compared over.
+# How many lines after it a line's readings are compared over, and how
+# many other readings are followed at once.
 SLASH_WINDOW = 30
+MAX_SHADOWS = 64
 
 
 def regex_extent(text, i):
@@ -685,6 +687,15 @@ class TypeScriptLexer:
         else:
             self.test_call = None
 
+    def signature(self):
+        """What decides how the lexer reads the lines to come: two lexers
+        with the same signature read them alike."""
+        return repr((
+            self.state, self.quote, self.stack, self.depth, self.parens, self.braces, self.prev,
+            self.prev_sure, self.test_call, self.test_outer, self.type_alias, self.type_arguments,
+            self.type_context, self.expression_body, self.case_label, self.bound,
+        ))
+
     def snapshot(self):
         return copy.deepcopy(self.__dict__)
 
@@ -698,7 +709,9 @@ class TypeScriptLexer:
     def sources(self, lines):
         """Map line number to source."""
         found = {}
-        extra = {}  # line number -> kinds another reading of an earlier slash gave it
+        # Lexers carrying the other readings of earlier ambiguous slashes,
+        # each read in step with this one until its state meets this one's.
+        shadows = []
         for number, text in enumerate(lines, start=1):
             # Only a line with a slash has a decision to reverse.
             start = self.snapshot() if "/" in text else None
@@ -709,9 +722,11 @@ class TypeScriptLexer:
                 # it can. Carry on from the reading, the first one or one
                 # with a slash reversed, that leaves the fewest lines of the
                 # window inside a literal or a comment, or damaged; and
-                # keep every row any of the readings gives, so a wrong
-                # choice reads more lines, never fewer.
+                # follow every other reading in a shadow until it meets this
+                # one, keeping its rows, so a wrong choice reads more lines,
+                # never fewer.
                 best = None
+                afters = []
                 readings = [frozenset()] + [frozenset([p]) for p in reversed(slashes[-MAX_SLASH_RETRIES:])]
                 kinds, marks = set(kinds), list(marks)
                 for reversed_slashes in readings:
@@ -720,13 +735,28 @@ class TypeScriptLexer:
                     kinds |= result[0]
                     marks += result[1]
                     after = self.snapshot()
-                    score, window = self.window_cost(lines, number, result[3])
-                    for later, later_kinds in window.items():
-                        extra.setdefault(later, set()).update(later_kinds)
+                    afters.append(after)
+                    score = self.window_cost(lines, number, result[3])
                     if best is None or score < best[0]:
                         best = (score, after)
                 self.restore(best[1])
-            kinds |= extra.pop(number, set())
+                for after in afters:
+                    if after is not best[1]:
+                        shadow = TypeScriptLexer()
+                        shadow.restore(after)
+                        if shadow.signature() != self.signature():
+                            shadows.append((number, shadow))
+                del shadows[:-MAX_SHADOWS]
+            following = []
+            for since, shadow in shadows:
+                if since < number:
+                    shadow_kinds, shadow_marks, _, _ = shadow.read(number, text, frozenset())
+                    kinds |= shadow_kinds
+                    marks += shadow_marks
+                    if shadow.signature() == self.signature():
+                        continue  # the readings have met: one lexer reads on
+                following.append((since, shadow))
+            shadows = following
             for line in marks:
                 found[line] = "test"
             if kinds and text.strip():
@@ -734,22 +764,16 @@ class TypeScriptLexer:
         return found
 
     def window_cost(self, lines, number, damaged):
-        """Read on from the state after line number for SLASH_WINDOW lines.
-        Return the count of lines that end inside a literal or a comment, a
-        damaged line counting three, and the kinds each line was given
-        (test for a line a test mark reaches back to). The caller restores
-        the state."""
+        """Read on from the state after line number for SLASH_WINDOW lines
+        and count the lines that end inside a literal or a comment, a
+        damaged line counting three. The caller restores the state."""
         cost = 3 if damaged else 0
         cost += 1 if self.state in ("template", "string", "block") else 0
-        window = {}
         for later in range(number + 1, min(len(lines), number + SLASH_WINDOW) + 1):
-            later_kinds, later_marks, _, later_damaged = self.read(later, lines[later - 1], frozenset())
-            window.setdefault(later, set()).update(later_kinds)
-            for line in later_marks:
-                window.setdefault(line, set()).add("test")
+            _, _, _, later_damaged = self.read(later, lines[later - 1], frozenset())
             cost += 3 if later_damaged else 0
             cost += 1 if self.state in ("template", "string", "block") else 0
-        return cost, window
+        return cost
 
     def read(self, number, text, reversed_slashes):
         """Read one line. Return its kinds, the earlier lines it marks as
@@ -1466,7 +1490,7 @@ def collect(repo, base, head, scope, globs, exclude, recordings, hint):
                 continue
             text = lines[number - 1].strip()
             found = hint_word.search(text)
-            hint_text = found.group(0).lower() if found else "-"
+            hint_text = printable(found.group(0).lower()) if found else "-"
             rows.append((kind, sources[number], hint_text, path, number, printable(text)))
 
     for entry in touched_entries(repo, merge_base, head):
@@ -1522,7 +1546,8 @@ def render(rows, fmt):
         for kind, source, hint_text, path, number, text in rows:
             cell = text.replace("|", "\\|")
             location = f"{spell(path)}:{number}".replace("|", "\\|")
-            out.append(f"| {kind} | {source} | {hint_text} | {location} | {cell} |")
+            hint_cell = hint_text.replace("|", "\\|")
+            out.append(f"| {kind} | {source} | {hint_cell} | {location} | {cell} |")
         return "\n".join(out) + "\n"
     return "".join(
         f"{kind}\t{source}\t{hint_text}\t{spell(path)}:{number}\t{text}\n"
