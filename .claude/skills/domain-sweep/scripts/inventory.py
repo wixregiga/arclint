@@ -46,7 +46,9 @@ comment before its content) repeats its generator's text and has no rows;
 
 Rows are: kind, source, hint, file:line, text. A file name that holds a
 control character or a backslash, or starts with a double quote, is printed
-in double quotes with C escapes, as Git prints it.
+in double quotes with C escapes, as Git prints it. In the text, a tab reads
+as a space and any other control character as a two-digit hex
+escape, backslash x then the code.
   kind    added (the change adds the line), deleted (the change removes it;
           file:line is the line in the merge base) or existing (an unchanged
           line of a file the change touches)
@@ -116,7 +118,7 @@ GO_TEST = re.compile(r"(?:^|;)\s*func\s+Test\w*\s*\(")
 GO_TEST_NAME = re.compile(r"^\s*Test\w*\s*\(")
 GO_FUNC_END = re.compile(r"(?:^|;)\s*func\s*$")
 PY_TEST_CLASS = re.compile(r"^\s*class\s+Test\w*\b")
-PY_TEST_DEF = re.compile(r"^\s*(?:async\s+)?def\s+test\w*\s*")
+PY_TEST_DEF = re.compile(r"^\s*(?:async\s+)?def\s+test")
 
 
 def py_test_declaration(statement):
@@ -128,7 +130,9 @@ def py_test_declaration(statement):
     head = PY_TEST_DEF.match(statement)
     if not head:
         return False
-    i = head.end()
+    i = name_end(statement, head.end())
+    while i < len(statement) and statement[i].isspace():
+        i += 1
     if statement[i:i + 1] == "[":
         level = 0
         while i < len(statement):
@@ -380,6 +384,20 @@ def is_generated(path, lines):
     return False
 
 
+def continues_name(char, extra=""):
+    """Whether char may continue an identifier: a letter, a digit, an
+    underscore, a combining mark or a connector, as Python and JavaScript
+    identifiers allow (Unicode XID_Continue), or one of extra."""
+    return char in extra or ("a" + char).isidentifier()
+
+
+def name_end(text, j, extra=""):
+    """The index past the identifier characters from text[j]."""
+    while j < len(text) and continues_name(text[j], extra):
+        j += 1
+    return j
+
+
 def scan_quoted(text, j, quote):
     """Scan a quoted literal's contents from text[j]. Return the index past
     it, its contents, and how it ends: "closed"; "continued", when the line
@@ -441,7 +459,8 @@ def go_sources(lines):
                     state = "raw"
                     kinds.add("text")
                     break
-                if WORDS.search(text[i + 1:end]):
+                # Go drops carriage returns from a raw string's value.
+                if WORDS.search(text[i + 1:end].replace("\r", "")):
                     kinds.add("text")
                 code.append(LITERAL)
                 i = end + 1
@@ -777,17 +796,13 @@ class TypeScriptLexer:
                 break  # a hashbang line
             if char == "#" and i + 1 < len(text) and (text[i + 1].isalpha() or text[i + 1] in "_$"):
                 # A private name, #count, is a member: an operand.
-                j = i + 1
-                while j < len(text) and (text[j].isalnum() or text[j] in "_$"):
-                    j += 1
+                j = name_end(text, i + 1, "$")
                 other_token()
                 token("operand")
                 i = j
                 continue
             if char.isalpha() or char in "_$":
-                j = i
-                while j < len(text) and (text[j].isalnum() or text[j] in "_$"):
-                    j += 1
+                j = name_end(text, i, "$")
                 self.word(text[i:j], number, token, other_token)
                 i = j
                 continue
@@ -829,11 +844,13 @@ class TypeScriptLexer:
                 other_token()
                 if regex:
                     body = text[i + 1:end]
-                    if any(WORDS.search(m.group(2)) for m in QUOTED.finditer(body)):
-                        # A quoted phrase inside a regular expression may be
-                        # a string the slash rule misread: read the line, as
-                        # a test when the phrase names a test.
-                        kinds.add("test" if SWALLOWED_TEST.search(body) else "text")
+                    if SWALLOWED_TEST.search(body):
+                        # A test call inside a regular expression is one the
+                        # slash rule misread: keep its line as a test.
+                        kinds.add("test")
+                    elif any(WORDS.search(m.group(2)) for m in QUOTED.finditer(body)):
+                        # So is a quoted phrase, likely a string: read the line.
+                        kinds.add("text")
                     token("operand")
                     i = end
                 else:
@@ -1218,9 +1235,7 @@ def python_sources(lines):
                 i += 1
                 continue
             if char.isalnum() or char == "_":
-                j = i
-                while j < len(text) and (text[j].isalnum() or text[j] == "_"):
-                    j += 1
+                j = name_end(text, i)
                 code.append(text[i:j])
                 i = j
                 continue
@@ -1333,7 +1348,7 @@ def collect(repo, base, head, scope, globs, exclude, recordings, hint):
             text = lines[number - 1].strip()
             found = hint_word.search(text)
             hint_text = found.group(0).lower() if found else "-"
-            rows.append((kind, sources[number], hint_text, path, number, text.replace("\t", " ")))
+            rows.append((kind, sources[number], hint_text, path, number, printable(text)))
 
     for entry in touched_entries(repo, merge_base, head):
         old, new = entry.old, entry.new
@@ -1361,6 +1376,14 @@ def collect(repo, base, head, scope, globs, exclude, recordings, hint):
             hinted[(kind, path)] = hinted.get((kind, path), 0) + 1
     rows.sort(key=lambda r: (KIND_ORDER[r[0]], -hinted.get((r[0], r[3]), 0), r[3], r[4]))
     return merge_base, sorted(files), sorted(generated), rows
+
+
+def printable(text):
+    """A line's text for one output cell: a tab reads as a space, and any
+    other control character, a lone carriage return among them, as a C
+    escape, so a row stays one line of one cell."""
+    text = text.replace("\t", " ")
+    return "".join(f"\\x{ord(c):02x}" if ord(c) < 0x20 or c == "\x7f" else c for c in text)
 
 
 def spell(path):
@@ -1406,7 +1429,8 @@ def main():
     # Paths git prints are relative to the top of the work tree, wherever
     # --repo points inside it; refs become object ids, so a ref that is
     # also a file name stays a ref.
-    repo = os.fsdecode(git(os.path.abspath(args.repo), "rev-parse", "--show-toplevel").rstrip(b"\n"))
+    top = git(os.path.abspath(args.repo), "rev-parse", "--show-toplevel")
+    repo = os.fsdecode(top[:-1] if top.endswith(b"\n") else top)  # the path may end in a newline of its own
     base, head = (resolve(repo, ref) if ref else None for ref in (args.base, args.head))
     merge_base, files, generated, rows = collect(
         repo, base, head, args.scope, args.paths, args.exclude, set(args.recording), args.hint,
