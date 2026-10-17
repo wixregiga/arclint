@@ -201,9 +201,9 @@ type DomainKnowledge struct {
 	// Unanchored lists every listed contract whose Anchor is missing.
 	Unanchored []UnanchoredContract `json:"unanchored,omitempty"`
 	// Used lists, for a worksite, every recorded entry its code reaches
-	// that is declared outside it, apart from the declared listing in
-	// Contexts; Undetermined lists the references of the worksite that
-	// may be uses resolution cannot confirm, each with the reason.
+	// that the declared listing in Contexts does not show; Undetermined
+	// lists the references of the worksite that may be uses resolution
+	// cannot confirm, each with the reason.
 	// UsesLocated is true when the worksite's uses were looked for.
 	UsesLocated  bool                 `json:"usesLocated,omitempty"`
 	Used         []DomainUseRef       `json:"used,omitempty"`

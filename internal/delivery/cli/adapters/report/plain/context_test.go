@@ -132,8 +132,8 @@ func TestPlainContextScopedDomainBytes(t *testing.T) {
 
 func TestPlainContextEmptyScopeAndWholeModelHeadlines(t *testing.T) {
 	empty := &application.DomainKnowledge{
-		Source:  "domain.arclint.yaml",
-		Counts:  vocab.Counts{Contexts: 2, Aggregates: 1, Entities: 2, ValueObjects: 3, Invariants: 5},
+		Source:      "domain.arclint.yaml",
+		Counts:      vocab.Counts{Contexts: 2, Aggregates: 1, Entities: 2, ValueObjects: 3, Invariants: 5},
 		Scoped:      true,
 		Located:     true,
 		UsesLocated: true,

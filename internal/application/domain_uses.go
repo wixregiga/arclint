@@ -4,9 +4,9 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 )
 
-// DomainUseRef is one recorded entry a worksite's code uses without
-// declaring it: the entry, the sites that reach it, and the contracts
-// that bind the code calling it, each with its anchor.
+// DomainUseRef is one recorded entry a worksite's code uses that the
+// declared listing does not show: the entry, the sites that reach it,
+// and the contracts that bind the code calling it, each with its anchor.
 type DomainUseRef struct {
 	Context string `json:"context"`
 	Name    string `json:"name"`
