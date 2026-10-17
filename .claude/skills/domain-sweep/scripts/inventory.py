@@ -263,7 +263,7 @@ def changed_lines(repo, entry, head):
     full = os.path.join(repo, entry.new)
     on_disk = head is None and os.path.isfile(full) and not os.path.islink(full)
     if not on_disk:
-        out = git_text(repo, "diff", *HUNK_OPTIONS, entry.old_blob, entry.new_blob)
+        out = git_text(repo, "diff", *HUNK_OPTIONS, entry.old_blob, entry.new_blob, "--")
     else:
         # Both sides are plain copies, outside the repository and under
         # names no attribute matches, so no clean filter changes the file
@@ -1422,10 +1422,13 @@ def python_sources(lines):
                 continue
             if top is not None and top[0] == "spec":
                 raw = next(frame[2] for frame in reversed(stack) if frame[0] == "fstring")
-                if char == "\\" and not raw and text[i + 1:i + 3] == "N{":
-                    # A named escape, \N{EM DASH}, is literal text here too.
-                    end = text.find("}", i + 3)
-                    end = len(text) if end < 0 else end + 1
+                if char == "\\" and not raw:
+                    if text[i + 1:i + 3] == "N{":
+                        # A named escape, \N{EM DASH}, is literal text here too.
+                        end = text.find("}", i + 3)
+                        end = len(text) if end < 0 else end + 1
+                    else:
+                        end = i + 2  # an escaped pair, \\ among them
                     segment.append(text[i:end])
                     i = end
                     continue
