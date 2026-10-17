@@ -248,14 +248,18 @@ def changed_lines(repo, entry):
     if entry.new_blob is not None:
         out = git_text(repo, "diff", *HUNK_OPTIONS, entry.old_blob, entry.new_blob)
     else:
+        # Both sides are plain copies, outside the repository and under
+        # names no attribute matches, so no clean filter changes the file
+        # being numbered: the hunks count the lines read_worktree reads.
         with tempfile.TemporaryDirectory() as tmp:
-            old_copy = os.path.join(tmp, "old")
+            old_copy, new_copy = os.path.join(tmp, "old"), os.path.join(tmp, "new")
             with open(old_copy, "wb") as handle:
                 handle.write(git(repo, "cat-file", "blob", entry.old_blob))
+            with open(os.path.join(repo, entry.new), "rb") as source, open(new_copy, "wb") as handle:
+                handle.write(source.read())
             result = subprocess.run(
-                ["git", "-C", repo, "diff", "--no-index", *HUNK_OPTIONS, "--", old_copy,
-                 os.path.join(repo, entry.new)],
-                capture_output=True,
+                ["git", "diff", "--no-index", *HUNK_OPTIONS, "--", "old", "new"],
+                capture_output=True, cwd=tmp,
             )
             # --no-index exits 1 when the files differ.
             if result.returncode not in (0, 1):
