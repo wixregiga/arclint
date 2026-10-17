@@ -1142,8 +1142,9 @@ func (v *metaModelValidation) declined() {
 }
 
 // paginatedBasis says whether a citation can carry a declined rule: it
-// names a page of a tier 1 or tier 2 work.
+// names a page of a tier 1 or tier 2 work and does not merely
+// illustrate.
 func (v *metaModelValidation) paginatedBasis(c Citation) bool {
 	w, ok := v.model.Work(c.Work)
-	return ok && strings.TrimSpace(c.Page) != "" && (w.Tier == TierCanonical || w.Tier == TierPublished)
+	return ok && !c.Illustrative && strings.TrimSpace(c.Page) != "" && (w.Tier == TierCanonical || w.Tier == TierPublished)
 }
