@@ -1645,6 +1645,15 @@ declined:
       its verdict as a value, and the application carries out the change
       only with that value in hand.
     decision: https://github.com/wixregiga/arclint/issues/128
+  - id: domain_service/no-effect-parameters
+    statement: A domain operation takes no function parameter that carries out an effect.
+    reason: >-
+      Evans asks the domain to decide without side effects (DDD
+      Reference 2015, p. 21) but does not name function-typed
+      parameters; a built-in rule would rest on functional-style
+      guidance, which belongs in a Pattern. The design review flags the
+      callback shape instead.
+    decision: https://github.com/wixregiga/arclint/issues/169
   - id: ubiquitous_language/normative-wording-is-a-rule
     statement: A definition worded with must, always, or never is reported as a rule recorded in the wrong place.
     reason: >-
