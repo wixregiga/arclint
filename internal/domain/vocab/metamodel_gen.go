@@ -150,7 +150,7 @@ func ddd() MetaModel {
 			},
 			{
 				Key:          "vernon-iddd-sample-pages",
-				Title:        "Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-397)",
+				Title:        "Implementing Domain-Driven Design, publisher sample pages (front matter, chapter 10 pp. 347-388, index pp. 589-612)",
 				Authors:      []string{"Vaughn Vernon"},
 				Year:         2013,
 				URL:          "https://ptgmedia.pearsoncmg.com/images/9780321834577/samplepages/0321834577.pdf",
@@ -825,6 +825,7 @@ func ddd() MetaModel {
 						Sources: []Citation{
 							{Work: "evans2015", Page: "11", Section: "Entities"},
 							{Work: "vernon2013", Chapter: 10, Page: "382"},
+							{Work: "vernon-iddd-sample-pages", Page: "382", Section: "Favor Value Object Parts"},
 						},
 					},
 					{
@@ -940,6 +941,7 @@ func ddd() MetaModel {
 						{Work: "evans2015", Page: "16", Section: "Aggregates"},
 						{Work: "evans2015", Page: "22", Section: "Assertions"},
 						{Work: "vernon2013", Chapter: 10, Page: "353"},
+						{Work: "vernon-iddd-sample-pages", Page: "353", Section: "Rule: Model True Invariants in Consistency Boundaries"},
 					},
 				},
 				Records: Recording{
@@ -996,6 +998,7 @@ func ddd() MetaModel {
 						Sources: []Citation{
 							{Work: "evans2015", Page: "16", Section: "Aggregates"},
 							{Work: "vernon2013", Chapter: 10, Page: "354"},
+							{Work: "vernon-iddd-sample-pages", Page: "354", Section: "Rule: Model True Invariants in Consistency Boundaries"},
 						},
 						Enforcement: Enforcement{
 							By:          EvaluatorDomain,
@@ -1013,6 +1016,7 @@ func ddd() MetaModel {
 						Sources: []Citation{
 							{Work: "evans2015", Page: "16", Section: "Aggregates"},
 							{Work: "vernon2013", Chapter: 10, Page: "353"},
+							{Work: "vernon-iddd-sample-pages", Page: "353", Section: "Rule: Model True Invariants in Consistency Boundaries"},
 						},
 					},
 					{
@@ -1154,6 +1158,7 @@ func ddd() MetaModel {
 						{Work: "fowler-anemic-domain-model"},
 						{Work: "stafford-business-logic"},
 						{Work: "vernon2013", Chapter: 10, Page: "353"},
+						{Work: "vernon-iddd-sample-pages", Page: "353", Section: "Rule: Model True Invariants in Consistency Boundaries"},
 					},
 				},
 				Records: Recording{
@@ -1182,6 +1187,7 @@ func ddd() MetaModel {
 						{Work: "fowler-aggregate"},
 						{Work: "evans2003", Chapter: 6, Page: "127"},
 						{Work: "vernon2013", Chapter: 10, Page: "347"},
+						{Work: "vernon-iddd-sample-pages", Page: "347", Section: "Aggregates"},
 					},
 				},
 				Records: Recording{
@@ -1207,6 +1213,7 @@ func ddd() MetaModel {
 							{Work: "evans2015", Page: "16", Section: "Aggregates"},
 							{Work: "fowler-aggregate"},
 							{Work: "vernon2013", Chapter: 10, Page: "380"},
+							{Work: "vernon-iddd-sample-pages", Page: "380", Section: "Create a Root Entity with Unique Identity"},
 						},
 						Enforcement: Enforcement{
 							By:        EvaluatorLoader,
@@ -1246,6 +1253,7 @@ func ddd() MetaModel {
 						Sources: []Citation{
 							{Work: "evans2015", Page: "16", Section: "Aggregates"},
 							{Work: "vernon2013", Chapter: 10, Page: "353"},
+							{Work: "vernon-iddd-sample-pages", Page: "353", Section: "Rule: Model True Invariants in Consistency Boundaries"},
 						},
 						Enforcement: Enforcement{
 							By:        EvaluatorDomain,
@@ -1304,6 +1312,9 @@ func ddd() MetaModel {
 							{Work: "evans2015", Page: "16", Section: "Aggregates"},
 							{Work: "fowler-aggregate"},
 							{Work: "vernon2013", Chapter: 10, Page: "359"},
+							{Work: "vernon-iddd-sample-pages", Page: "359", Section: "Rule: Reference Other Aggregates by Identity"},
+							{Work: "vernon-iddd-sample-pages", Page: "361", Section: "Making Aggregates Work Together through Identity References"},
+							{Work: "vernon-effective-aggregate-design-2", Page: "8", Section: "Rule: Reference Other Aggregates By Identity"},
 						},
 						Enforcement: Enforcement{
 							By:        EvaluatorDomain,
@@ -1333,6 +1344,7 @@ func ddd() MetaModel {
 							{Work: "evans2015", Page: "16", Section: "Aggregates"},
 							{Work: "fowler-aggregate"},
 							{Work: "vernon2013", Chapter: 10, Page: "360"},
+							{Work: "vernon-iddd-sample-pages", Page: "360", Section: "Rule: Reference Other Aggregates by Identity"},
 						},
 						Enforcement: Enforcement{
 							Needs:    "transaction-facts",
@@ -1347,6 +1359,7 @@ func ddd() MetaModel {
 						Sources: []Citation{
 							{Work: "evans2015", Page: "16", Section: "Aggregates"},
 							{Work: "vernon2013", Chapter: 10, Page: "353"},
+							{Work: "vernon-iddd-sample-pages", Page: "353", Section: "Rule: Model True Invariants in Consistency Boundaries"},
 						},
 					},
 					{
@@ -1355,6 +1368,7 @@ func ddd() MetaModel {
 						Sources: []Citation{
 							{Work: "evans2015", Page: "16", Section: "Aggregates"},
 							{Work: "vernon2013", Chapter: 10, Page: "355"},
+							{Work: "vernon-iddd-sample-pages", Page: "355", Section: "Rule: Design Small Aggregates"},
 						},
 					},
 					{
@@ -1362,6 +1376,9 @@ func ddd() MetaModel {
 						Fundamental: true,
 						Sources: []Citation{
 							{Work: "vernon2013", Chapter: 10, Page: "359"},
+							{Work: "vernon-iddd-sample-pages", Page: "359", Section: "Rule: Reference Other Aggregates by Identity"},
+							{Work: "vernon-iddd-sample-pages", Page: "361", Section: "Making Aggregates Work Together through Identity References"},
+							{Work: "vernon-effective-aggregate-design-2", Page: "8", Section: "Rule: Reference Other Aggregates By Identity"},
 							{Work: "fowler-aggregate"},
 						},
 					},
@@ -1371,6 +1388,8 @@ func ddd() MetaModel {
 						Sources: []Citation{
 							{Work: "evans2015", Page: "16", Section: "Aggregates"},
 							{Work: "vernon2013", Chapter: 10, Page: "364"},
+							{Work: "vernon-iddd-sample-pages", Page: "364", Section: "Rule: Use Eventual Consistency Outside the Boundary"},
+							{Work: "vernon-iddd-sample-pages", Page: "367", Section: "Ask Whose Job It Is"},
 						},
 					},
 					{
@@ -1395,12 +1414,14 @@ func ddd() MetaModel {
 						Text: "Favor value object parts over entity parts inside an aggregate.",
 						Sources: []Citation{
 							{Work: "vernon2013", Chapter: 10, Page: "382"},
+							{Work: "vernon-iddd-sample-pages", Page: "382", Section: "Favor Value Object Parts"},
 						},
 					},
 					{
 						Text: "Tell the aggregate what to do rather than asking it for state and deciding outside it; follow the Law of Demeter.",
 						Sources: []Citation{
 							{Work: "vernon2013", Chapter: 10, Page: "382"},
+							{Work: "vernon-iddd-sample-pages", Page: "382", Section: "Using Law of Demeter and Tell, Don't Ask"},
 						},
 					},
 					{
@@ -1409,6 +1430,7 @@ func ddd() MetaModel {
 						Sources: []Citation{
 							{Work: "evans2015", Page: "16", Section: "Aggregates"},
 							{Work: "vernon2013", Chapter: 10, Page: "350"},
+							{Work: "vernon-iddd-sample-pages", Page: "350", Section: "First Attempt: Large-Cluster Aggregate"},
 						},
 					},
 				},
@@ -1423,6 +1445,7 @@ func ddd() MetaModel {
 						{Work: "evans2015", Page: "16", Section: "Aggregates"},
 						{Work: "fowler-aggregate"},
 						{Work: "vernon2013", Chapter: 10, Page: "380"},
+						{Work: "vernon-iddd-sample-pages", Page: "380", Section: "Create a Root Entity with Unique Identity"},
 					},
 				},
 				Records: Recording{
@@ -1763,6 +1786,8 @@ func ddd() MetaModel {
 						Sources: []Citation{
 							{Work: "vernon2013", Chapter: 7, Page: "266"},
 							{Work: "vernon2013", Chapter: 10, Page: "387"},
+							{Work: "vernon-iddd-sample-pages", Page: "387", Section: "Avoid Dependency Injection"},
+							{Work: "vernon-effective-aggregate-design-2", Page: "8", Section: "Model Navigation"},
 						},
 						Enforcement: Enforcement{
 							By:        EvaluatorDomain,

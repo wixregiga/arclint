@@ -202,11 +202,13 @@ func (c Concept) Doc() ConceptDoc {
 		doc.Supplies = "The project supplies the bounded context's name and definition and the terms inside it; its code is located from the declarations that spell those terms."
 	case ConceptBusinessRule:
 		doc.Questions = []string{
-			"Does this resolve to an invariant or an assertion?",
-			"Which aggregate or value object owns enforcement?",
+			"Does this resolve to an invariant, an assertion, a specification, or no domain rule at all?",
+			"Which aggregate, value object, or domain service owns it, or do experts pass the predicate around as a thing they name?",
 		}
-		// business_rule always resolves to invariant or assertion; never specification.
-		doc.Supplies = "The project records a business_rule as an invariant or an assertion under one owner; it is never stored as its own section, and it never becomes a specification."
+		// The meta-model's business_rule definition places a rule as an
+		// invariant, an assertion, or a specification, or leaves it
+		// unrecorded as a guard or an application policy.
+		doc.Supplies = "The project records a business_rule as an invariant or an assertion under one owner, or as a specification when experts pass the predicate around as a thing they name; it is never stored as its own section, and a programming guard or an application policy is left unrecorded."
 	case ConceptQuestion:
 		doc.Questions = []string{
 			"What about the model is unsettled, and who can settle it?",
