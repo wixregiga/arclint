@@ -1471,11 +1471,12 @@ func testDomainServiceContract(t *testing.T) {
 		t.Fatalf("unchecked contract finding: %+v", d)
 	}
 
-	// Neither the operation nor the check is declared.
+	// Neither the operation nor the check is declared: the operation
+	// is the one finding, since only it can call the check.
 	bare := "package tenancy\n\n// TenantProvisioningService provisions a Tenant under a unique name.\ntype TenantProvisioningService struct{}\n"
 	write(t, root, "src/tenancy/provisioning.go", bare)
 	d = checkRules()
-	if len(d) != 2 {
+	if len(d) != 1 {
 		t.Fatalf("bare service findings: %+v", d)
 	}
 	for _, f := range d {
@@ -1506,10 +1507,11 @@ type Discounter interface {
 `
 
 // testDomainInterfaceServiceVerifiedByTests holds a service declared
-// as an interface to the tests its assertion names: without them the
-// finding says how to record them, with an existing test the check is
-// clean, and a renamed test is a finding at the recorded assertion.
-// The tests show in domain show and in arclint context.
+// as an interface, which has no body to call its check from: its
+// assertion is undetermined with or without the tests it names, which
+// never stand in for the call, and a renamed test is a finding at the
+// recorded assertion. The tests show in domain show and in arclint
+// context.
 func testDomainInterfaceServiceVerifiedByTests(t *testing.T) {
 	root := domainFixture(t)
 	write(t, root, "src/pricing/discounter.go", discounterInterface)
@@ -1542,14 +1544,12 @@ func testDomainInterfaceServiceVerifiedByTests(t *testing.T) {
 		return out
 	}
 
-	d := findings(1)
-	if len(d) != 1 || d[0].RuleID != "assertion/checked-by-its-operation" ||
-		d[0].Message != "declared service Discounter: never-exceeds-total has no check in context pricing" {
+	if d := findings(0); len(d) != 0 {
 		t.Fatalf("interface without tests: %+v", d)
 	}
 	out := mustRunDomain(t, root, "context", "src/pricing/discounter.go")
-	if !strings.Contains(out, "expected the function AssertNeverExceedsTotal in the context, the invariant never-exceeds-total of a value object the operation returns, or a test under verified_by, since Discounter is declared as an interface") {
-		t.Fatalf("context does not expect the tests of an interface's assertion:\n%s", out)
+	if !strings.Contains(out, "never-exceeds-total (Discounter, on Discount): A discount never exceeds the order total. no body\n") || strings.Contains(out, "unanchored contracts") {
+		t.Fatalf("context does not say the interface has no body to call the check from:\n%s", out)
 	}
 
 	test := "src/pricing/discounter_test.go:TestDiscountNeverExceedsTotal"
@@ -1561,8 +1561,8 @@ func testDomainInterfaceServiceVerifiedByTests(t *testing.T) {
 		t.Fatalf("interface with an existing test: %+v", d)
 	}
 	out = mustRunDomain(t, root, "domain", "show", "assertion", "never-exceeds-total")
-	if !strings.Contains(out, "verified by: "+test+" (arclint checks that each test exists, not what it proves)\nEnforced at: src/pricing/discounter_test.go:5\nStatus: conforms\n") {
-		t.Fatalf("show lacks the verifying test as the carrier:\n%s", out)
+	if !strings.Contains(out, "verified by: "+test+" (arclint checks that each test exists, not what it proves)\nEnforced at: not found; expected none, since Discounter is declared as an interface, which has no body to call a check from\nStatus: undetermined\n") {
+		t.Fatalf("show takes the verifying test for the check:\n%s", out)
 	}
 	out = mustRunDomain(t, root, "context", "src/pricing/discounter.go")
 	if !strings.Contains(out, "verified by: "+test) {
@@ -1570,7 +1570,7 @@ func testDomainInterfaceServiceVerifiedByTests(t *testing.T) {
 	}
 
 	write(t, root, "src/pricing/discounter_test.go", "package pricing\n\nimport \"testing\"\n\nfunc TestDiscountCapped(t *testing.T) {}\n")
-	d = findings(1)
+	d := findings(1)
 	if len(d) != 1 || d[0].RuleID != "assertion/verifying-tests-declared" || d[0].Path != "domain.arclint.yaml" ||
 		!strings.Contains(d[0].Message, "declares no test TestDiscountNeverExceedsTotal") {
 		t.Fatalf("renamed test: %+v", d)
@@ -1639,8 +1639,8 @@ func testDomainVerifiedByExcludedTests(t *testing.T) {
 		t.Fatalf("an existing test in an excluded file: %+v", d)
 	}
 	out := mustRunDomain(t, root, "domain", "show", "assertion", "never-exceeds-total")
-	if !strings.Contains(out, "Enforced at: src/pricing/discounter_test.go:5\nStatus: conforms\n") {
-		t.Fatalf("show does not find the test in the excluded file:\n%s", out)
+	if !strings.Contains(out, "Status: undetermined\n") || strings.Contains(out, "assertion/verifying-tests-declared:") {
+		t.Fatalf("show does not find the test in the excluded file, or takes it for the check:\n%s", out)
 	}
 
 	write(t, root, "src/pricing/discounter_test.go", strings.Replace(test, "TestDiscountNeverExceedsTotal", "TestDiscountCapped", 1))

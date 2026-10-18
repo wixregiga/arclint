@@ -69,7 +69,7 @@ func domainScenario(t *testing.T) conformance.Request {
 		"internal/app/app.go": goFacts("app", []conformance.Import{
 			{Path: "example.com/mod/internal/event", Line: 3, Class: conformance.ImportInternal, TargetDir: "internal/event"},
 		}, nil, nil),
-		"internal/event/event.go": goFacts("event", []conformance.Import{
+		"internal/event/event.go": withResolvedCalls(goFacts("event", []conformance.Import{
 			{Path: "errors", Line: 4, Class: conformance.ImportStdlib},
 			{Path: "example.com/mod/internal/order", Line: 5, Class: conformance.ImportInternal, TargetDir: "internal/order"},
 		}, []conformance.Declaration{
@@ -84,11 +84,11 @@ func domainScenario(t *testing.T) conformance.Request {
 			{Kind: "method", Name: "Cancel", Owner: "Event", Exported: true, StartLine: 65, Results: []string{"error"}},
 			{Kind: "method", Name: "Name", Owner: "Event", Exported: true, StartLine: 70, Results: []string{"string"}},
 		}, []conformance.Call{
-			{Callee: "EnsurePublishedOnly", Line: 33, Enclosing: "New"},
-			{Callee: "EnsurePublishedOnly", Line: 52, Enclosing: "Publish"},
-			{Callee: "AssertTiersPriced", Line: 53, Enclosing: "Publish"},
-			{Callee: "New", Line: 66, Enclosing: "Cancel"},
-		}),
+			{Callee: "EnsurePublishedOnly", Line: 33, Enclosing: "New", Target: declared("internal/event/event.go", "Event", "EnsurePublishedOnly")},
+			{Callee: "EnsurePublishedOnly", Line: 52, Enclosing: "Publish", EnclosingOwner: "Event", Target: declared("internal/event/event.go", "Event", "EnsurePublishedOnly")},
+			{Callee: "AssertTiersPriced", Line: 53, Enclosing: "Publish", EnclosingOwner: "Event", Target: declared("internal/event/event.go", "Event", "AssertTiersPriced")},
+			{Callee: "New", Line: 66, Enclosing: "Cancel", EnclosingOwner: "Event", Target: declared("internal/event/event.go", "", "New")},
+		})),
 		"internal/event/id.go": goFacts("event", nil, []conformance.Declaration{
 			{Kind: "type", Name: "EventID", Exported: true, StartLine: 3},
 		}, nil),
@@ -334,6 +334,13 @@ func observed(paths ...string) []conformance.ObservedFile {
 		out = append(out, conformance.ObservedFile{Path: p})
 	}
 	return out
+}
+
+// withResolvedCalls marks a parsed file's calls as resolved: each call
+// carries the declaration it reaches.
+func withResolvedCalls(f conformance.LanguageFacts) conformance.LanguageFacts {
+	f.ResolvedCallsAvailable = true
+	return f
 }
 
 // goDecls is one parsed Go file of declarations and calls.
@@ -855,8 +862,7 @@ func TestGoInitialismsSpellAKey(t *testing.T) {
 
 // An assertion is checked by assert followed by its key, called from
 // the operation it constrains; the findings name the operation the root
-// lacks, the checking method it lacks, and the call the operation
-// lacks.
+// lacks, and the call the operation lacks.
 func TestAssertionIsCheckedByItsOperation(t *testing.T) {
 	knowledge := oneContext(t, vocab.BoundedContext{
 		Name: "catalog", Definition: "d", Line: 1,
@@ -868,7 +874,7 @@ func TestAssertionIsCheckedByItsOperation(t *testing.T) {
 	r := builtInRule(t, "assertion/checked-by-its-operation")
 	files := observed("internal/event/event.go")
 	run := func(decls []conformance.Declaration, calls ...conformance.Call) []string {
-		a := runOne(t, r, nil, files, map[string]conformance.LanguageFacts{"internal/event/event.go": goDecls("event", decls, calls...)}, knowledge)
+		a := runOne(t, r, nil, files, map[string]conformance.LanguageFacts{"internal/event/event.go": resolvedGo("event", decls, calls...)}, knowledge)
 		var out []string
 		for _, v := range a.Violations() {
 			out = append(out, v.Message())
@@ -882,24 +888,22 @@ func TestAssertionIsCheckedByItsOperation(t *testing.T) {
 	got := run([]conformance.Declaration{root})
 	want := []string{
 		"aggregate Event: assertion tiers-priced constrains operation Publish, which the root does not declare",
-		"aggregate Event: assertion tiers-priced names no checking method on the root; expected AssertTiersPriced (go)",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("bare root:\n got %q\nwant %q", got, want)
 	}
 	got = run([]conformance.Declaration{root, publish, check})
-	if len(got) != 1 || got[0] != "aggregate Event: operation Publish does not call AssertTiersPriced, so assertion tiers-priced is not checked when it completes" {
+	if len(got) != 1 || got[0] != "aggregate Event: operation Publish does not call AssertTiersPriced, so assertion tiers-priced is not checked" {
 		t.Errorf("uncalled check: %q", got)
 	}
-	if got = run([]conformance.Declaration{root, publish, check}, conformance.Call{Callee: "AssertTiersPriced", Line: 12, Enclosing: "Publish"}); len(got) != 0 {
+	if got = run([]conformance.Declaration{root, publish, check}, conformance.Call{Callee: "AssertTiersPriced", Line: 12, Enclosing: "Publish", EnclosingOwner: "Event", Target: declared("internal/event/event.go", "Event", "AssertTiersPriced")}); len(got) != 0 {
 		t.Errorf("checked operation: %q", got)
 	}
 }
 
 // An assertion of a domain service is checked like an aggregate's: the
-// service type declares the operation and assert followed by the key,
-// and the operation calls the check, spelled in each language's method
-// case.
+// service type declares the operation, and the operation calls assert
+// followed by the key, spelled in each language's method case.
 func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 	knowledge := oneContext(t, vocab.BoundedContext{
 		Name: "identity", Definition: "d", Line: 1,
@@ -912,7 +916,7 @@ func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 	r := builtInRule(t, id)
 	goFile := "internal/identity/tenant_provisioning_service.go"
 	run := func(decls []conformance.Declaration, calls ...conformance.Call) []string {
-		a := runOne(t, r, nil, observed(goFile), map[string]conformance.LanguageFacts{goFile: goDecls("identity", decls, calls...)}, knowledge)
+		a := runOne(t, r, nil, observed(goFile), map[string]conformance.LanguageFacts{goFile: resolvedGo("identity", decls, calls...)}, knowledge)
 		var out []string
 		for _, v := range a.Violations() {
 			out = append(out, v.Message())
@@ -926,16 +930,15 @@ func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 	got := run([]conformance.Declaration{svc})
 	want := []string{
 		"service TenantProvisioningService: assertion tenant-name-unique constrains operation ProvisionTenant, which the service does not declare",
-		"service TenantProvisioningService: assertion tenant-name-unique names no checking method on the service; expected AssertTenantNameUnique (go)",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("bare service:\n got %q\nwant %q", got, want)
 	}
 	got = run([]conformance.Declaration{svc, provision, check})
-	if len(got) != 1 || got[0] != "service TenantProvisioningService: operation ProvisionTenant does not call AssertTenantNameUnique, so assertion tenant-name-unique is not checked when it completes" {
+	if len(got) != 1 || got[0] != "service TenantProvisioningService: operation ProvisionTenant does not call AssertTenantNameUnique, so assertion tenant-name-unique is not checked" {
 		t.Errorf("uncalled check: %q", got)
 	}
-	if got = run([]conformance.Declaration{svc, provision, check}, conformance.Call{Callee: "AssertTenantNameUnique", Line: 12, Enclosing: "ProvisionTenant"}); len(got) != 0 {
+	if got = run([]conformance.Declaration{svc, provision, check}, conformance.Call{Callee: "AssertTenantNameUnique", Line: 12, Enclosing: "ProvisionTenant", EnclosingOwner: "TenantProvisioningService", Target: declared(goFile, "TenantProvisioningService", "AssertTenantNameUnique")}); len(got) != 0 {
 		t.Errorf("checked operation: %q", got)
 	}
 	if got = run(nil); len(got) != 0 {
@@ -944,11 +947,11 @@ func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 
 	tsFile := "src/identity/tenant-provisioning-service.ts"
 	facts := map[string]conformance.LanguageFacts{
-		tsFile: {Language: rule.LanguageTypeScript, ImportsAvailable: true, DeclarationsAvailable: true, CallsAvailable: true, FieldTypesAvailable: true, Declarations: []conformance.Declaration{
+		tsFile: {Language: rule.LanguageTypeScript, ImportsAvailable: true, DeclarationsAvailable: true, CallsAvailable: true, ResolvedCallsAvailable: true, FieldTypesAvailable: true, Declarations: []conformance.Declaration{
 			{Kind: "class", Name: "TenantProvisioningService", Exported: true, StartLine: 1},
 			{Kind: "method", Name: "provisionTenant", Owner: "TenantProvisioningService", Exported: true, StartLine: 5},
 			{Kind: "method", Name: "assertTenantNameUnique", Owner: "TenantProvisioningService", Exported: true, StartLine: 15},
-		}, Calls: []conformance.Call{{Callee: "assertTenantNameUnique", Line: 7, Enclosing: "provisionTenant"}}},
+		}, Calls: []conformance.Call{{Callee: "assertTenantNameUnique", Line: 7, Enclosing: "provisionTenant", EnclosingOwner: "TenantProvisioningService", Target: declared(tsFile, "TenantProvisioningService", "assertTenantNameUnique")}}},
 	}
 	a := runOne(t, r, nil, observed(tsFile), facts, knowledge)
 	if got := outcomesOf(a)[id+"|context:identity"]; got != conformance.OutcomeConforms {
@@ -956,12 +959,13 @@ func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 	}
 }
 
-// Every finding about an assertion, of a service or of a root, gives the
-// repair alone, with nothing appended after it.
-func TestAssertionRemediationGivesTheRepairAlone(t *testing.T) {
+// Every finding about an assertion gives the repair alone: declare the
+// operation, declare the check, or call it from the operation, for a
+// service's operation as for a root's command.
+func TestAssertionRemediationNamesTheRepair(t *testing.T) {
 	r := builtInRule(t, "assertion/checked-by-its-operation")
 	remediations := func(knowledge vocab.UbiquitousLanguage, file, pkg string, decls []conformance.Declaration) []string {
-		a := runOne(t, r, nil, observed(file), map[string]conformance.LanguageFacts{file: goDecls(pkg, decls)}, knowledge)
+		a := runOne(t, r, nil, observed(file), map[string]conformance.LanguageFacts{file: resolvedGo(pkg, decls)}, knowledge)
 		var out []string
 		for _, v := range a.Violations() {
 			out = append(out, v.Remediation())
@@ -983,10 +987,14 @@ func TestAssertionRemediationGivesTheRepairAlone(t *testing.T) {
 	got := remediations(service, file, "release", []conformance.Declaration{policy})
 	want := []string{
 		"declare Decide (go) on RetirementPolicy and call AssertNoInstallationLeft (go) from it",
-		"declare AssertNoInstallationLeft (go) on RetirementPolicy and call it from Decide",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("bare service:\n got %q\nwant %q", got, want)
+	}
+	got = remediations(service, file, "release", []conformance.Declaration{policy, decide})
+	want = []string{"declare AssertNoInstallationLeft as a method of RetirementPolicy or a function of context release, call it from Decide, and fail the operation when it fails"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("no check declared:\n got %q\nwant %q", got, want)
 	}
 	got = remediations(service, file, "release", []conformance.Declaration{policy, decide, check})
 	want = []string{"call AssertNoInstallationLeft from Decide and fail the operation when it fails"}

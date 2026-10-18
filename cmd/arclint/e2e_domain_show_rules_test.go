@@ -62,6 +62,7 @@ type showRulesFixture struct {
 
 var showRulesFixtures = map[string]showRulesFixture{
 	"go": {runtime: "go", language: "go", files: map[string]string{
+		"go.mod": "module example.com/shop\n\ngo 1.22\n",
 		"catalog/product.go": `package catalog
 
 import "errors"

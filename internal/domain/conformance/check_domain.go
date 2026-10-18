@@ -1424,13 +1424,15 @@ func checkInvariantEnforcedAtMutation(r rule.Rule, subject rule.Subject, cc cont
 }
 
 // checkAssertionChecked judges every recorded assertion against its
-// owner: an aggregate's root or a concrete domain service declares the
-// operation and the checking method, and the operation calls the check.
-// A domain service declared as an interface or an abstract class has no
-// body to call a check from, so its guarantee is checked in the model,
-// or else by the tests its verified_by names; an aggregate root so
-// declared names the tests. An owner whose type is not located is left
-// to aggregate/root-declared or domain_service/declared.
+// owner, the aggregate's root or the domain service: the owner declares
+// the operation the assertion names, and the operation's own body calls
+// the check, assert followed by the key, declared as a method of the
+// owner or as a function of the context. The call is the one the
+// language's resolution follows to that declaration, never a name
+// alone. An owner declared as an interface or an abstract class has no
+// body to call the check from, so whether its implementations call it
+// is left undetermined. An owner whose type is not located is left to
+// aggregate/root-declared or domain_service/declared.
 func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ domainCode) ([]Violation, []string, error) {
 	var vs []Violation
 	var unresolved []string
@@ -1439,13 +1441,14 @@ func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ 
 		if !ac.located() {
 			continue
 		}
-		more, err := assertionsChecked(r, subject, assertionOwner{
+		more, open, err := cc.assertionsChecked(r, subject, assertionOwner{
 			label: "aggregate " + agg.Name, holder: "the root", context: cc.ctx.Name, decl: ac.root(), idx: ac.idx,
 		}, agg.Assertions)
 		if err != nil {
 			return nil, nil, err
 		}
 		vs = append(vs, more...)
+		unresolved = append(unresolved, open...)
 	}
 	for _, s := range cc.ctx.Services {
 		loc := cc.terms[s.Name]
@@ -1453,18 +1456,9 @@ func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ 
 			continue
 		}
 		decl := loc.decl()
-		owner := assertionOwner{
+		more, open, err := cc.assertionsChecked(r, subject, assertionOwner{
 			label: "service " + s.Name, holder: "the service", context: cc.ctx.Name, decl: decl, idx: cc.unitIdx(decl),
-		}
-		if bodiless(decl.decl) == "" {
-			more, err := assertionsChecked(r, subject, owner, s.Assertions)
-			if err != nil {
-				return nil, nil, err
-			}
-			vs = append(vs, more...)
-			continue
-		}
-		more, open, err := declaredServiceChecked(r, subject, cc, owner, s.Assertions)
+		}, s.Assertions)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1472,204 +1466,6 @@ func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ 
 		unresolved = append(unresolved, open...)
 	}
 	return vs, unresolved, nil
-}
-
-// declaredServiceChecked judges the assertions of a domain service
-// declared as an abstraction. The service declares the operation each
-// assertion names, and the guarantee is checked once, in the model: by
-// a function of the context spelled assert followed by the key, or by
-// the value object the operation returns when that value records an
-// invariant of the same key. What the model does not state is verified
-// by the tests the assertion's verified_by names, whose existence
-// assertion/verifying-tests-declared judges. A guarantee with none of
-// the three is a finding on the model, never a request for a method the
-// abstraction cannot hold; a result the language's resolution cannot
-// follow leaves it undetermined, with the reason.
-func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, owner assertionOwner, assertions []vocab.Assertion) ([]Violation, []string, error) {
-	var vs []Violation
-	var unresolved []string
-	service := owner.decl
-	for _, as := range assertions {
-		op, hasOp, err := owner.idx.methodNamed(service.decl.Name, as.On)
-		if err != nil {
-			return nil, nil, err
-		}
-		if !hasOp {
-			v, err := newViolation(r, subject, service.file.path, service.decl.StartLine,
-				fmt.Sprintf("%s: assertion %s constrains operation %s, which %s does not declare", owner.label, as.Key, as.On, owner.holder),
-				fmt.Sprintf("declare %s on %s", methodSpellings(owner.idx, as.On), service.decl.Name))
-			if err != nil {
-				return nil, nil, err
-			}
-			vs = append(vs, v)
-		}
-		ops, err := owner.idx.methodsNamed(service.decl.Name, as.On)
-		if err != nil {
-			return nil, nil, err
-		}
-		check, err := cc.modelCheck(service, ops, as.Key)
-		if err != nil {
-			return nil, nil, err
-		}
-		if check.found || len(as.VerifiedBy) > 0 {
-			continue
-		}
-		if check.unresolved != "" {
-			unresolved = append(unresolved, check.unresolved)
-			continue
-		}
-		fn, err := methodNameFor(assertKey(as.Key), service.file.lang)
-		if err != nil {
-			return nil, nil, err
-		}
-		on := as.On
-		if hasOp {
-			on = op.decl.Name
-		}
-		v, err := newViolation(r, subject, service.file.path, service.decl.StartLine,
-			fmt.Sprintf("declared service %s: %s has no check in context %s", service.decl.Name, as.Key, cc.ctx.Name),
-			fmt.Sprintf("declare the function %s there, return from %s a value whose invariant %s enforces it, or write a test of %s that checks it and record it: arclint domain define assertion %s --context %s --verified-by <test file>:<test name>",
-				fn, on, as.Key, on, as.Key, owner.context))
-		if err != nil {
-			return nil, nil, err
-		}
-		vs = append(vs, v)
-	}
-	return vs, unresolved, nil
-}
-
-// modelShape is how the model checks a guarantee of a declared service.
-type modelShape int
-
-const (
-	// checkedByFunction is a function of the context spelled assert
-	// followed by the key.
-	checkedByFunction modelShape = iota + 1
-	// checkedByValue is the value object the operation returns, which
-	// records an invariant of the same key and enforces it where it is
-	// constructed.
-	checkedByValue
-)
-
-// modelCheckAt is where the model checks a guarantee of a declared
-// service: the function, or the value object's type. Without one,
-// unresolved says why the operation's result could not be followed.
-type modelCheckAt struct {
-	found      bool
-	shape      modelShape
-	at         locDecl
-	unresolved string
-}
-
-// modelCheck locates the check of a declared service's guarantee in
-// the model: a function of the context spelled assert followed by the
-// key, or else the operation's result, as the language's resolution
-// names it, being a recorded value object of the context that records
-// an invariant of the same key. ops are every declaration of the
-// operation, its overloads included, and each must return that value;
-// one whose result resolution cannot follow leaves the guarantee
-// undetermined. ops is empty when the service does not declare the
-// operation, so only a function can check the guarantee.
-func (cc contextCode) modelCheck(service locDecl, ops []locDecl, key string) (modelCheckAt, error) {
-	if _, err := rule.CaseTerm(key, "flatcase"); err != nil {
-		return modelCheckAt{}, fmt.Errorf("method name for %q: %w", key, err)
-	}
-	if fn, ok := cc.contextFunction(service, assertKey(key)); ok {
-		return modelCheckAt{found: true, shape: checkedByFunction, at: fn}, nil
-	}
-	if len(ops) == 0 {
-		return modelCheckAt{}, nil
-	}
-	var values []locDecl
-	for _, vo := range cc.ctx.ValueObjects {
-		if loc := cc.terms[vo.Name]; recordsInvariant(vo, key) && loc.located() {
-			values = append(values, loc.decl())
-		}
-	}
-	if len(values) == 0 {
-		return modelCheckAt{}, nil
-	}
-	// One overload that returns something else decides it; an overload
-	// whose result cannot be followed leaves it open only when none does.
-	var returned *locDecl
-	open := ""
-	for _, op := range ops {
-		value, unresolved, found := returnedValue(op, values)
-		switch {
-		case unresolved != "":
-			if open == "" {
-				open = unresolved
-			}
-		case !found, returned != nil && !sameDecl(*returned, value):
-			return modelCheckAt{}, nil
-		default:
-			returned = &value
-		}
-	}
-	if open != "" {
-		return modelCheckAt{unresolved: open}, nil
-	}
-	return modelCheckAt{found: true, shape: checkedByValue, at: *returned}, nil
-}
-
-// returnedValue names the recorded value one declaration of an
-// operation returns, as the language's resolution names its result, or
-// why that result cannot be followed.
-func returnedValue(op locDecl, values []locDecl) (locDecl, string, bool) {
-	result := op.decl.Type
-	switch {
-	case !op.file.fieldTypes:
-		return locDecl{}, fmt.Sprintf("%s:%d: the result of %s: the language supplied no resolved types for the file", op.file.path, op.decl.StartLine, op.decl.Name), false
-	case result.IsZero():
-		return locDecl{}, fmt.Sprintf("%s:%d: the result of %s: no resolution reached it", op.file.path, op.decl.StartLine, op.decl.Name), false
-	case result.Resolution == ResolutionUndetermined:
-		return locDecl{}, unresolvedAt(op.file.path, op.decl.StartLine, "the result of "+op.decl.Name, result), false
-	}
-	for _, v := range values {
-		if v.declaredBy(result) {
-			return v, "", true
-		}
-	}
-	return locDecl{}, "", false
-}
-
-// sameDecl reports whether two located declarations are one.
-func sameDecl(a, b locDecl) bool {
-	return a.file.path == b.file.path && a.decl.StartLine == b.decl.StartLine && a.decl.Name == b.decl.Name
-}
-
-// recordsInvariant reports whether a value object records an invariant
-// under the key.
-func recordsInvariant(vo vocab.ValueObject, key string) bool {
-	for _, inv := range vo.Invariants {
-		if inv.Key == key {
-			return true
-		}
-	}
-	return false
-}
-
-// contextFunction finds a function of the context spelling a key in its
-// language's method case: declared at the top of a file the context's
-// code holds, or of a file beside the service. A function nested in
-// another is that function's helper, and a test file's is the test's;
-// neither is the model's.
-func (cc contextCode) contextFunction(service locDecl, key string) (locDecl, bool) {
-	seen := map[string]bool{}
-	for _, idx := range []contractIndex{cc.idx, cc.unitIdx(service)} {
-		for _, f := range idx.files {
-			if seen[f.path] || isTestFile(f.path) {
-				continue
-			}
-			seen[f.path] = true
-			for _, d := range f.decls {
-				if d.Kind == declKindFunc && d.Owner == "" && methodSpelled(d.Name, key, f.lang) {
-					return locDecl{file: f, decl: d}, true
-				}
-			}
-		}
-	}
-	return locDecl{}, false
 }
 
 // assertionOwner is the declared type that owns a set of assertions:
@@ -1701,97 +1497,124 @@ func bodiless(d Declaration) string {
 	return ""
 }
 
-// assertionsChecked applies the one shape both owners share: the owner
-// declares the operation and assert followed by the key, and the
-// operation calls the check. An owner without a body declares the
-// operation, and the assertion names its tests under verified_by.
-func assertionsChecked(r rule.Rule, subject rule.Subject, owner assertionOwner, assertions []vocab.Assertion) ([]Violation, error) {
-	if declared := owner.bodiless(); declared != "" {
-		return assertionsVerifiedByTests(r, subject, owner, declared, assertions)
-	}
+// assertionsChecked judges one owner's assertions: the owner declares
+// each operation, and the operation's body calls the assertion's check.
+// An owner without a body declares the operation, and the call is left
+// undetermined.
+func (cc contextCode) assertionsChecked(r rule.Rule, subject rule.Subject, owner assertionOwner, assertions []vocab.Assertion) ([]Violation, []string, error) {
 	var vs []Violation
+	var unresolved []string
 	name := owner.decl.decl.Name
+	declared := owner.bodiless()
 	for _, as := range assertions {
 		key := assertKey(as.Key)
 		op, hasOp, err := owner.idx.methodNamed(name, as.On)
 		if err != nil {
-			return nil, err
-		}
-		check, hasCheck, err := owner.idx.methodNamed(name, key)
-		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if !hasOp {
+			repair := fmt.Sprintf("declare %s on %s", methodSpellings(owner.idx, as.On), name)
+			if declared == "" {
+				repair += fmt.Sprintf(" and call %s from it", methodSpellings(owner.idx, key))
+			}
 			v, err := newViolation(r, subject, owner.decl.file.path, owner.decl.decl.StartLine,
 				fmt.Sprintf("%s: assertion %s constrains operation %s, which %s does not declare", owner.label, as.Key, as.On, owner.holder),
-				fmt.Sprintf("declare %s on %s and call %s from it", methodSpellings(owner.idx, as.On), name, methodSpellings(owner.idx, key)))
+				repair)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			vs = append(vs, v)
-		}
-		if !hasCheck {
-			v, err := newViolation(r, subject, owner.decl.file.path, owner.decl.decl.StartLine,
-				fmt.Sprintf("%s: assertion %s names no checking method on %s; expected %s", owner.label, as.Key, owner.holder, methodSpellings(owner.idx, key)),
-				fmt.Sprintf("declare %s on %s and call it from %s", methodSpellings(owner.idx, key), name, as.On))
-			if err != nil {
-				return nil, err
-			}
-			vs = append(vs, v)
-		}
-		if !hasOp || !hasCheck {
 			continue
 		}
-		if callsKey(op.file, op.decl.Name, key) {
+		if declared != "" {
+			unresolved = append(unresolved, fmt.Sprintf("%s:%d: %s: %s is declared as %s, which has no body to call %s from; whether its implementations call it is not observed",
+				op.file.path, op.decl.StartLine, owner.label, name, declared, methodSpellings(owner.idx, key)))
 			continue
+		}
+		checks, err := cc.assertionChecks(owner, key)
+		if err != nil {
+			return nil, nil, err
+		}
+		called, open := callsCheck(op, checks, key)
+		switch {
+		case called:
+			continue
+		case open != "":
+			unresolved = append(unresolved, open)
+			continue
+		}
+		check, err := methodNameFor(key, op.file.lang)
+		if err != nil {
+			return nil, nil, err
+		}
+		repair := fmt.Sprintf("call %s from %s and fail the operation when it fails", check, op.decl.Name)
+		if len(checks) == 0 {
+			repair = fmt.Sprintf("declare %s as a method of %s or a function of context %s, call it from %s, and fail the operation when it fails", check, name, owner.context, op.decl.Name)
 		}
 		v, err := newViolation(r, subject, op.file.path, op.decl.StartLine,
-			fmt.Sprintf("%s: operation %s does not call %s, so assertion %s is not checked when it completes", owner.label, op.decl.Name, check.decl.Name, as.Key),
-			fmt.Sprintf("call %s from %s and fail the operation when it fails", check.decl.Name, op.decl.Name))
+			fmt.Sprintf("%s: operation %s does not call %s, so assertion %s is not checked", owner.label, op.decl.Name, check, as.Key),
+			repair)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		vs = append(vs, v)
 	}
-	return vs, nil
+	return vs, unresolved, nil
 }
 
-// assertionsVerifiedByTests judges the assertions of an owner declared
-// as an interface or an abstract class: the owner declares the
-// operation, and the assertion names the tests that verify it, since
-// no body can call a checking method. assertion/verifying-tests-declared
-// judges that the tests exist.
-func assertionsVerifiedByTests(r rule.Rule, subject rule.Subject, owner assertionOwner, declared string, assertions []vocab.Assertion) ([]Violation, error) {
-	var vs []Violation
-	name := owner.decl.decl.Name
-	for _, as := range assertions {
-		_, hasOp, err := owner.idx.methodNamed(name, as.On)
-		if err != nil {
-			return nil, err
-		}
-		if !hasOp {
-			v, err := newViolation(r, subject, owner.decl.file.path, owner.decl.decl.StartLine,
-				fmt.Sprintf("%s: assertion %s constrains operation %s, which %s does not declare", owner.label, as.Key, as.On, owner.holder),
-				fmt.Sprintf("declare %s on %s", methodSpellings(owner.idx, as.On), name))
-			if err != nil {
-				return nil, err
+// assertionChecks lists the declarations that check an assertion: the
+// owner's methods spelling assert followed by the key, then the
+// functions spelling it declared at the top of a file the context's
+// code holds or of a file beside the owner. A function nested in
+// another is that function's helper, and a test file's is the test's;
+// neither is the model's.
+func (cc contextCode) assertionChecks(owner assertionOwner, key string) ([]locDecl, error) {
+	out, err := owner.idx.methodsNamed(owner.decl.decl.Name, key)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	for _, idx := range []contractIndex{cc.idx, owner.idx} {
+		for _, f := range idx.files {
+			if seen[f.path] || isTestFile(f.path) {
+				continue
 			}
-			vs = append(vs, v)
+			seen[f.path] = true
+			for _, d := range f.decls {
+				if d.Kind == declKindFunc && d.Owner == "" && methodSpelled(d.Name, key, f.lang) {
+					out = append(out, locDecl{file: f, decl: d})
+				}
+			}
 		}
-		if len(as.VerifiedBy) > 0 {
+	}
+	return out, nil
+}
+
+// callsCheck reports whether the operation's own body makes a call the
+// language's resolution follows to one of the checks. A call spelling
+// the check whose target resolution cannot follow, or a file whose
+// language supplied no resolved calls, leaves it open with the reason;
+// a call that reaches another declaration of the same name is not the
+// check.
+func callsCheck(op locDecl, checks []locDecl, key string) (bool, string) {
+	if !op.file.resolvedCalls {
+		return false, fmt.Sprintf("%s:%d: the calls of %s: the language supplied no resolved calls for the file", op.file.path, op.decl.StartLine, op.decl.Name)
+	}
+	open := ""
+	for _, c := range op.file.calls {
+		if c.Enclosing != op.decl.Name || c.EnclosingOwner != op.decl.Owner {
 			continue
 		}
-		v, err := newViolation(r, subject, owner.decl.file.path, owner.decl.decl.StartLine,
-			fmt.Sprintf("%s: %s is declared as %s, which has no body to call %s from, and assertion %s names no tests that verify it",
-				owner.label, name, declared, methodSpellings(owner.idx, assertKey(as.Key)), as.Key),
-			fmt.Sprintf("write a test of %s that checks the assertion and record it: arclint domain define assertion %s --context %s --verified-by <test file>:<test name>",
-				as.On, as.Key, owner.context))
-		if err != nil {
-			return nil, err
+		for _, check := range checks {
+			if check.reachedBy(c.Target) {
+				return true, ""
+			}
 		}
-		vs = append(vs, v)
+		if open == "" && c.Target.Resolution == ResolutionUndetermined && methodSpelled(c.Callee, key, op.file.lang) {
+			open = unresolvedAt(op.file.path, c.Line, fmt.Sprintf("call %s in %s", c.Callee, op.decl.Name), c.Target)
+		}
 	}
-	return vs, nil
+	return false, open
 }
 
 func checkSpecificationSatisfaction(r rule.Rule, subject rule.Subject, cc contextCode, _ domainCode) ([]Violation, error) {

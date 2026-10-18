@@ -499,3 +499,10 @@ func calledRepository(c Call, repos []locDecl) (locDecl, bool) {
 	}
 	return locDecl{}, false
 }
+
+// reachedBy reports whether a reference reaches the located declaration
+// itself: a member of the same owner, or a function, of the same name
+// in the same file.
+func (d locDecl) reachedBy(ref Reference) bool {
+	return ref.Resolution == ResolutionDeclared && ref.File == d.file.path && ref.Owner == d.decl.Owner && ref.Name == d.decl.Name
+}

@@ -162,7 +162,7 @@ func TestUnanchoredContractsNameTheExpectedCarrier(t *testing.T) {
 	want := []UnanchoredContract{
 		{Kind: ContractInvariant, Context: "catalog", Owner: "Event", Key: "one-venue", Statement: "An Event has at most one Venue.", Expected: "method EnsureOneVenue on Event"},
 		{Kind: ContractInvariant, Context: "catalog", Owner: "Discount", Key: "within-the-whole", Statement: "A Discount never exceeds the whole.", Expected: "constructor of Discount"},
-		{Kind: ContractAssertion, Context: "catalog", Owner: "Pricing", Key: "one-currency", Statement: "A priced order is in one currency.", Expected: "method AssertOneCurrency on Pricing"},
+		{Kind: ContractAssertion, Context: "catalog", Owner: "Pricing", Key: "one-currency", Statement: "A priced order is in one currency.", Expected: "method AssertOneCurrency on Pricing, or a function of the context of the same name"},
 		{Kind: ContractSpecification, Context: "catalog", Name: "LateOrder", Expected: "satisfaction method on LateOrder"},
 	}
 	if len(got) != len(want) {

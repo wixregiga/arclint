@@ -225,7 +225,7 @@ func coverageOf(a conformance.Assessment, context string, check DomainRuleCheck)
 // the rule, spelled the way the project's languages spell a method.
 func expectedCarrier(check DomainRuleCheck, languages []rule.Language, bodilessOwner string) string {
 	if check.Kind == vocab.ConceptAssertion {
-		return expectedAssertionCarrier(check.Key, check.Owner, check.OwnerConcept, bodilessOwner, languages)
+		return expectedAssertionCarrier(check.Key, check.Owner, bodilessOwner, languages)
 	}
 	return expectedInvariantCarrier(DomainInvariantRef{Key: check.Key, Owner: check.Owner, OwnerConcept: check.OwnerConcept}, languages)
 }

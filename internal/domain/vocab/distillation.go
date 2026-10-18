@@ -94,12 +94,12 @@ func DistillationRules() []DistillationRule {
 		},
 		{
 			ID:      "verified-by-tests",
-			Rule:    "An invariant or assertion the code cannot state in a body (an operation of a service declared as an interface or an abstract class, an effect the model cannot see) -> its verified_by, each test as path:name from the repository root; arclint checks the test exists, never that it proves the statement.",
-			Example: "Discounter.assertions.never-exceeds-total on Discount, verified_by internal/pricing/discounter_test.go:TestDiscountNeverExceedsTotal",
+			Rule:    "An invariant the code cannot state in a body (an effect the model cannot see) -> its verified_by, each test as path:name from the repository root; arclint checks the test exists, never that it proves the statement. An assertion's tests never stand in for the check its operation calls.",
+			Example: "Discounter.assertions.never-exceeds-total on Discount: Discount calls AssertNeverExceedsTotal, and verified_by internal/pricing/discounter_test.go:TestDiscountNeverExceedsTotal names its test",
 		},
 		{
 			ID:   "guarantee-has-one-checked-home",
-			Rule: "A guarantee of a domain service declared as an interface, an abstract class, an ABC, or a Protocol is checked once, in the model, wherever the model can state it: by a function of the context named assert followed by the key, or, when the operation returns a value the business names, by that value's invariant recorded under the same key; only what neither states is verified-by-tests. Never as a method of the interface, a callback, or prose.",
+			Rule: "A guarantee of a domain service is checked in the operation it protects: the operation calls the check named assert followed by the key, a method of the service or a function of the context. Never a check only a caller, a test, or a returned value makes.",
 			Sources: []Citation{
 				{Work: evansReference, Page: "14", Section: servicesSection},
 				{Work: evansReference, Page: "21", Section: sideEffectFreeSection},
@@ -107,7 +107,7 @@ func DistillationRules() []DistillationRule {
 				{Work: iddSamples, Section: "MD5EncryptionService", Note: "checks its argument through the shared AssertionConcern"},
 			},
 			Conventions: []string{"named assert followed by the key"},
-			Example:     "Encrypter.assertions.not-empty on Encrypt holds because Encrypt returns EncryptedPassword, whose constructor enforces EncryptedPassword.invariants.not-empty; never an AssertNotEmpty on the Encrypter interface",
+			Example:     "Encrypter.assertions.not-empty on Encrypt: Encrypt calls AssertNotEmpty before it returns; never a check that callers of Encrypt are expected to make",
 		},
 		{
 			ID:      "precondition-as-assertion",

@@ -36,7 +36,7 @@ type ContractCoverageSpec struct {
 	Carrier *Carrier
 	// BodilessOwner names how an assertion's owner is declared when it
 	// has no body to call a checking method from, an interface or an
-	// abstract class; its carrier is then a test under verified_by.
+	// abstract class; nothing then carries the assertion.
 	BodilessOwner string
 }
 
@@ -109,8 +109,8 @@ func (c ContractCoverage) Carrier() (Carrier, bool) { return c.carrier, c.locate
 
 // BodilessOwner names how an assertion's owner is declared when it has
 // no body to call a checking method from, an interface or an abstract
-// class, so a test under verified_by carries the assertion; "" when the
-// owner has a body or was not located.
+// class, so nothing carries the assertion; "" when the owner has a body
+// or was not located.
 func (c ContractCoverage) BodilessOwner() string { return c.bodilessOwner }
 
 // Unperformed explains why applicable checks were not attempted.

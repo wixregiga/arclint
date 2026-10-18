@@ -740,18 +740,16 @@ func checkLine(h conformance.AssertionHome, result application.DomainDefineResul
 	if check == "" {
 		check = conformance.AssertKey(result.Name) + " (spelled in the language's method case)"
 	}
-	inModel := fmt.Sprintf("the function %s of context %s, or the invariant %s of a value object %s returns, or else the tests named with --verified-by", check, result.Context, result.Name, h.Operation)
+	where := fmt.Sprintf("%s calls %s, a method of %s or a function of context %s", h.Operation, check, result.Owner, result.Context)
 	switch h.Home {
 	case conformance.CheckHomeRoot:
-		return fmt.Sprintf("the root of %s declares %s, and %s calls it.", result.Owner, check, h.Operation)
+		return fmt.Sprintf("%s calls %s, a method of the root of %s or a function of context %s.", h.Operation, check, result.Owner, result.Context)
 	case conformance.CheckHomeService:
-		return fmt.Sprintf("%s declares %s, and %s calls it.", result.Owner, check, h.Operation)
-	case conformance.CheckHomeTests:
-		return fmt.Sprintf("the root of %s is declared as an %s, with no body to call %s from, so the tests named with --verified-by verify it, and %s is declared on it.", result.Owner, h.Declared, check, h.Operation)
-	case conformance.CheckHomeModel:
-		return fmt.Sprintf("%s is declared as an %s, so the check is in the model: %s.", result.Owner, h.Declared, inModel)
+		return where + "."
+	case conformance.CheckHomeBodiless:
+		return fmt.Sprintf("%s is declared as an %s, which has no body to call %s from, so whether its implementations call it is not checked.", result.Owner, h.Declared, check)
 	default:
-		return fmt.Sprintf("%s is not declared yet. As an interface, an abstract class, an ABC, or a Protocol, it is checked in the model: %s. As a concrete type, it declares %s, and %s calls it.", result.Owner, inModel, check, h.Operation)
+		return fmt.Sprintf("%s is not declared yet. Declared as a concrete type, %s.", result.Owner, where)
 	}
 }
 
@@ -1128,14 +1126,17 @@ func shownPhrase(d *application.DomainKnowledge) string {
 }
 
 // anchorSuffix renders a contract's anchor after its line: the source
-// when found, the word "missing" otherwise, nothing when the contracts
-// were never located.
+// when found, the word "missing" when nothing carries it, "no body"
+// when its owner has none to call a check from, nothing when the
+// contracts were never located.
 func anchorSuffix(st Style, source string, anchor application.ContractAnchor) string {
 	switch anchor {
 	case application.AnchorFound:
 		return " " + st.Path(source)
 	case application.AnchorMissing:
 		return " " + st.Warn(string(anchor))
+	case application.AnchorBodiless:
+		return " " + st.Muted("no body")
 	}
 	return ""
 }
@@ -1207,6 +1208,8 @@ func anchorPhrase(source string, anchor application.ContractAnchor) string {
 		return source
 	case application.AnchorMissing:
 		return string(anchor)
+	case application.AnchorBodiless:
+		// Its owner has no body to carry a check, so no source is shown.
 	}
 	return ""
 }

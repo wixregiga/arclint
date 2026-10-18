@@ -13,29 +13,24 @@ import (
 type CheckHome string
 
 const (
-	// CheckHomeRoot is an aggregate's assertion: the root declares
-	// assert followed by the key, and the command calls it.
+	// CheckHomeRoot is an aggregate's assertion: the command calls
+	// assert followed by the key, a method of the root or a function of
+	// the context.
 	CheckHomeRoot CheckHome = "root"
 	// CheckHomeService is the assertion of a domain service declared as
-	// a concrete type: the service declares assert followed by the key,
-	// and the operation calls it.
+	// a concrete type: the operation calls assert followed by the key, a
+	// method of the service or a function of the context.
 	CheckHomeService CheckHome = "service"
-	// CheckHomeModel is the assertion of a domain service declared as an
-	// abstraction: the check is a function of the context spelled assert
-	// followed by the key, or the invariant of the same key on the value
-	// object the operation returns.
-	CheckHomeModel CheckHome = "model"
 	// CheckHomeUndeclared is the assertion of a domain service that no
 	// single type declares yet, so no declared kind chooses its home.
 	CheckHomeUndeclared CheckHome = "undeclared"
-	// CheckHomeTests is the assertion of an aggregate whose root is
-	// declared as an abstract class: no body calls a check, so the tests
-	// its verified_by names verify it.
-	CheckHomeTests CheckHome = "tests"
+	// CheckHomeBodiless is the assertion of an owner declared as an
+	// interface or an abstract class: it has no body to call the check
+	// from, so whether its implementations call it is not observed.
+	CheckHomeBodiless CheckHome = "bodiless"
 )
 
-// The kinds a domain service is declared as when its check is in the
-// model.
+// The kinds an owner without a body is declared as.
 const (
 	DeclaredInterface     = "interface"
 	DeclaredAbstractClass = "abstract class"
@@ -45,8 +40,7 @@ const (
 type AssertionHome struct {
 	Home CheckHome
 	// Declared is the kind the owner is declared as when Home is
-	// CheckHomeModel or CheckHomeTests: DeclaredInterface or
-	// DeclaredAbstractClass.
+	// CheckHomeBodiless: DeclaredInterface or DeclaredAbstractClass.
 	Declared string
 	// Check spells assert followed by the key: in the owner's language
 	// when its type is located, otherwise in each language the ruleset
@@ -78,8 +72,8 @@ func (c Carriers) AssertionHome(ctx, owner, key string, languages []rule.Languag
 	home := AssertionHome{Check: spelled, Operation: as.On}
 	owned, idx, located := cc.assertionOwner(owner, aggregate)
 	switch {
-	case aggregate && located && bodiless(owned.decl) != "":
-		home.Home, home.Declared = CheckHomeTests, DeclaredAbstractClass
+	case located && bodiless(owned.decl) != "":
+		home.Home, home.Declared = CheckHomeBodiless, DeclaredAbstractClass
 		if owned.decl.Kind == declKindInterface {
 			home.Declared = DeclaredInterface
 		}
@@ -87,10 +81,6 @@ func (c Carriers) AssertionHome(ctx, owner, key string, languages []rule.Languag
 		home.Home = CheckHomeRoot
 	case !located:
 		home.Home = CheckHomeUndeclared
-	case owned.decl.Kind == declKindInterface:
-		home.Home, home.Declared = CheckHomeModel, DeclaredInterface
-	case bodiless(owned.decl) != "":
-		home.Home, home.Declared = CheckHomeModel, DeclaredAbstractClass
 	default:
 		home.Home = CheckHomeService
 	}

@@ -1163,16 +1163,14 @@ is validated by the vocabulary constructors; a rejected relation names the rule.
 
 The name of an invariant, assertion, or question is its key: short and
 kebab-case, since the method that enforces an aggregate's invariant, or the
-method an aggregate or domain service declares to check an assertion, is named
-after it.
+method or function of the context that checks an assertion, is named after it.
 
 --verified-by names one automated test that verifies an invariant or an
 assertion, as the test file's path from the repository root, a colon, and the
 test's name. Repeat it to name several; together they replace the recorded
 tests, and --clear-verified-by records none. arclint check reads that each test
-exists, not whether it proves the statement. An assertion whose owner is an
-interface or an abstract class, which has no body to call a check from, is
-verified this way.
+exists, not whether it proves the statement. Naming tests does not check an
+assertion: its operation calls the check.
 
 A bounded context must be recorded before anything is recorded in it. Pass
 --context when the project records several.`
