@@ -77,8 +77,7 @@ description: >-
 # and 2015, Vernon 2013 and his papers and sample code, Evans and Fowler
 # 1997) and may ground a rule. Tier 2 is published authority (Fowler's
 # Patterns of Enterprise Application Architecture with Stafford's
-# patterns, Meyer's Object-Oriented Software Construction, Wlaschin's
-# book, Fowler's bliki) and may ground guidance. Tier 3 is a
+# patterns, Fowler's bliki) and may ground guidance. Tier 3 is a
 # practitioner's blog and only illustrates. Goodreads, unknown Medium
 # authors, Stack Overflow, AI summaries, and search snippets are never
 # cited. A citation marked `illustrative: true` illustrates its entry
@@ -185,13 +184,6 @@ works:
     url: https://martinfowler.com/bliki/CommandQuerySeparation.html
     tier: 2
     verification: fetched
-  fowler-function-length:
-    title: FunctionLength
-    author: Martin Fowler
-    date: 2016-11-30
-    url: https://martinfowler.com/bliki/FunctionLength.html
-    tier: 2
-    verification: fetched
   stafford-service-layer:
     title: Service Layer
     author: Randy Stafford
@@ -240,51 +232,6 @@ works:
     date: 2022-03-26
     url: https://github.com/VaughnVernon/IDDD_Samples
     tier: 1
-    verification: fetched
-  # The languages' own references ground only what a sentence says about
-  # a language, such as how Go hides a field; they are official
-  # documentation, ranked tier 2 beside the published authority.
-  go-spec:
-    title: "The Go Programming Language Specification (language version go1.27)"
-    author: The Go Authors
-    date: 2026-05-26
-    url: https://go.dev/ref/spec
-    tier: 2
-    verification: fetched
-  typescript-2-0:
-    title: TypeScript 2.0 release notes
-    author: Microsoft
-    year: 2016
-    url: https://www.typescriptlang.org/docs/handbook/release-notes/typescript-2-0.html
-    tier: 2
-    verification: fetched
-  typescript-handbook-type-compatibility:
-    title: "TypeScript Handbook: Type Compatibility"
-    author: Microsoft
-    date: 2026-10-16
-    url: https://www.typescriptlang.org/docs/handbook/type-compatibility.html
-    tier: 2
-    verification: fetched
-  python-tutorial-classes:
-    title: "The Python Tutorial, 9. Classes (Python 3.15.0)"
-    author: Python Software Foundation
-    date: 2026-10-17
-    url: https://docs.python.org/3/tutorial/classes.html
-    tier: 2
-    verification: fetched
-  martin-screaming-architecture:
-    title: Screaming Architecture
-    author: Robert C. Martin
-    date: 2011-09-30
-    url: https://blog.cleancoder.com/uncle-bob/2011/09/30/Screaming-Architecture.html
-    tier: 3
-    verification: fetched
-  bogard-vertical-slice:
-    title: Vertical Slice Architecture
-    author: Jimmy Bogard
-    date: 2018-04-19
-    url: https://www.jimmybogard.com/vertical-slice-architecture/
-    tier: 3
     verification: fetched
 
 # The facts arclint observes in source today, one entry per Fact in
@@ -1455,13 +1402,6 @@ building_blocks:
         sources:
           - {work: vernon2013, chapter: 7, page: 268}
           - {work: vernon-iddd-sample-pages, page: 362, section: "Rule: Reference Other Aggregates by Identity"}
-      - text: When an operation would change something outside the model, such as a file, a store or another system, the service decides and the application service carries out the change. The service's operation takes what the decision needs as values, changes nothing, and returns its verdict as a value, a value object when the verdict carries a rule; the application service gathers those values and makes the change only with a verdict that allows it in hand, and an automated test proves what the domain cannot see.
-        sources:
-          - {work: evans2015, page: 10, section: Layered Architecture}
-          - {work: evans2015, page: 12, section: Value Objects}
-          - {work: evans2015, page: 21, section: Side-Effect-Free Functions}
-          - {work: evans2015, page: 22, section: Assertions}
-          - {work: stafford-business-logic}
 
   - term: application_service
     title: Application Service
@@ -1705,10 +1645,7 @@ declined:
     statement: An operation calls the method that checks its assertion before any call that changes state.
     reason: >-
       The check would need to know which calls change things, and no
-      fact arclint observes says so in every language. The decision value
-      makes the order explicit instead: the deciding operation returns
-      its verdict as a value, and the application carries out the change
-      only with that value in hand.
+      fact arclint observes says so in every language.
     decision: https://github.com/wixregiga/arclint/issues/128
   - id: domain_service/no-effect-parameters
     statement: A domain operation takes no function parameter that carries out an effect.

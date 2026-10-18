@@ -25,6 +25,12 @@ func TestSourcedStatementsCiteTheBibliography(t *testing.T) {
 
 func TestValidateSourcedStatementsRejects(t *testing.T) {
 	model := vocab.DDD()
+	// A tier 3 work defined here, so the tier 3 check stays covered
+	// whatever the bibliography lists.
+	model.Works = append(model.Works, vocab.Work{
+		Key: "a-blog", Title: "A Blog Post", Authors: []string{"A Practitioner"}, Year: 2020,
+		URL: "https://example.com/post", Tier: vocab.TierPractitioner, Verification: vocab.VerifiedFetched,
+	})
 	cases := []struct {
 		name      string
 		statement vocab.SourcedStatement
@@ -33,8 +39,8 @@ func TestValidateSourcedStatementsRejects(t *testing.T) {
 		{"no text", vocab.SourcedStatement{Sources: []vocab.Citation{{Work: "evans2015", Page: "10"}}}, `text must be non-empty`},
 		{"no source", vocab.SourcedStatement{Text: "A claim."}, `must cite at least one work`},
 		{"unlisted work", vocab.SourcedStatement{Text: "A claim.", Sources: []vocab.Citation{{Work: "somebody"}}}, `cites work "somebody"`},
-		{"unmarked tier 3", vocab.SourcedStatement{Text: "A claim.", Sources: []vocab.Citation{{Work: "evans2015", Page: "10"}, {Work: "bogard-vertical-slice"}}}, `without marking the citation illustrative`},
-		{"only illustrated", vocab.SourcedStatement{Text: "A claim.", Sources: []vocab.Citation{{Work: "bogard-vertical-slice", Illustrative: true}}}, `must cite at least one tier 1 or tier 2 work`},
+		{"unmarked tier 3", vocab.SourcedStatement{Text: "A claim.", Sources: []vocab.Citation{{Work: "evans2015", Page: "10"}, {Work: "a-blog"}}}, `without marking the citation illustrative`},
+		{"only illustrated", vocab.SourcedStatement{Text: "A claim.", Sources: []vocab.Citation{{Work: "a-blog", Illustrative: true}}}, `must cite at least one tier 1 or tier 2 work`},
 	}
 	for _, c := range cases {
 		err := model.ValidateSourcedStatements([]vocab.SourcedStatement{c.statement})
@@ -61,7 +67,7 @@ func TestInlineNamesEachWorkOnce(t *testing.T) {
 
 // freeTextSource is a parenthesis that opens on an author's name, the
 // way a source written as free text begins.
-var freeTextSource = regexp.MustCompile(`\((Evans|Vernon|Fowler|Stafford|Khorikov|Meyer|Wlaschin)[ ,']`)
+var freeTextSource = regexp.MustCompile(`\((Evans|Vernon|Fowler|Stafford)[ ,']`)
 
 // No text arclint gives an agent carries a source as free text, which no
 // bibliography check would cover.

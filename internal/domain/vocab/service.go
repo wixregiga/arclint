@@ -30,89 +30,30 @@ func (s SourcedStatement) Cited() string {
 // SourcedStatements lists every SourcedStatement arclint repeats, so the
 // bibliography check covers each one.
 func SourcedStatements() []SourcedStatement {
-	return []SourcedStatement{DomainDecides(), ServiceDecides(), MovesBetweenLayers(), SharedMechanism()}
+	return []SourcedStatement{DomainDecides(), SharedMechanism()}
 }
 
 // The bibliography keys of the works the agent-facing guidance cites,
 // and the sections of the Reference it names.
 const (
 	anemicDomainModel          = "fowler-anemic-domain-model"
-	kindsOfLogic               = "stafford-business-logic"
-	goSpec                     = "go-spec"
 	iddSamples                 = "vernon-iddd-samples"
 	layeredArchitectureSection = "Layered Architecture"
-	valueObjectsSection        = "Value Objects"
 	servicesSection            = "Services"
 	sideEffectFreeSection      = "Side-Effect-Free Functions"
 	assertionsSection          = "Assertions"
 )
 
-// DomainDecides says where a decision lives and where its change is
-// made: the domain decides, the application carries the change out and
-// holds no business rule. The librarian, the remediation of a service's
-// unchecked assertion, and the AGENTS.md workflow state it.
+// DomainDecides says where a decision lives, in Evans's own words: the
+// domain model is isolated, and the application layer holds no business
+// rule. The AGENTS.md workflow states it.
 func DomainDecides() SourcedStatement {
 	return SourcedStatement{
-		Text: "The domain decides; the application gathers what the decision needs and carries out the change. " +
-			"The application layer holds no business rule: it only coordinates tasks and delegates work to the domain.",
-		Sources: []Citation{
-			{Work: evansReference, Page: "10", Section: layeredArchitectureSection, Note: "on isolating the domain"},
-			{Work: anemicDomainModel, Note: "quoting Evans 2003, on no business rules or knowledge"},
-			{Work: kindsOfLogic, Note: "on application logic"},
-		},
-	}
-}
-
-// DecideThenCarryOut states DomainDecides and then ServiceDecides, its
-// application to a domain service: the librarian's distillation rule
-// and the remediation of a service's unchecked assertion say it in
-// these words.
-func DecideThenCarryOut() string {
-	return DomainDecides().String() + " " + ServiceDecides().String()
-}
-
-// ServiceDecides applies DomainDecides to a domain service whose
-// operation would change something outside the model: the assertion
-// goes on the operation that decides, its verdict is a value, the
-// application service makes the change only with a verdict that allows
-// it, and a test proves what the domain cannot see. It names no
-// operation or type, and it guides without adding a rule.
-func ServiceDecides() SourcedStatement {
-	return SourcedStatement{
-		Text: "When an operation of a domain service would change something outside the model, such as a file, a store or another system, " +
-			"its assertion goes on the operation that decides. " +
-			"That operation takes what the decision needs as values, changes nothing, and returns its verdict as a value; " +
-			"a verdict that carries a rule, such as approving only when no participant refused, is recorded as a value object whose invariant states that rule, so `value_object/constructed-through-one-door` requires it to declare a constructor. " +
-			"The application service gathers those values, asks for the verdict, and makes the change only with a verdict that allows it in hand. " +
-			"Go makes that verdict hard to forge with unexported fields and a zero value that allows nothing, " +
-			"TypeScript with a private constructor and a private field, and Python only by convention, with an underscore-prefixed name. " +
-			"An automated test proves what the domain cannot see, such as a refusal changing nothing on disk.",
-		Sources: []Citation{
-			{Work: evansReference, Page: "12", Section: valueObjectsSection},
-			{Work: evansReference, Page: "14", Section: servicesSection},
-			{Work: evansReference, Page: "21", Section: sideEffectFreeSection},
-			{Work: evansReference, Page: "22", Section: assertionsSection},
-			{Work: goSpec, Section: "Exported identifiers"},
-			{Work: goSpec, Section: "Struct literals"},
-			{Work: "typescript-2-0", Section: "Private and Protected Constructors"},
-			{Work: "typescript-handbook-type-compatibility", Section: "Private and protected members in classes"},
-			{Work: "python-tutorial-classes", Section: "9.6 Private Variables"},
-		},
-	}
-}
-
-// MovesBetweenLayers is the placement the librarian recommends when a
-// recording or a finding would move code between layers: a pure
-// decision operation in the domain and the gathering and the changes in
-// the application service.
-func MovesBetweenLayers() SourcedStatement {
-	return SourcedStatement{
-		Text: "Then recommend the placement decide-then-carry-out names: a pure decision operation in the domain, values in and verdict out, " +
-			"and the gathering and the changes in the application service.",
+		Text: `Evans: "Isolate the expression of the domain model and the business logic, and eliminate any dependency on infrastructure, user interface, or even application logic that is not business logic." ` +
+			`The application layer "does not contain business rules or knowledge, but only coordinates tasks and delegates work to collaborations of domain objects in the next layer down."`,
 		Sources: []Citation{
 			{Work: evansReference, Page: "10", Section: layeredArchitectureSection},
-			{Work: evansReference, Page: "21", Section: sideEffectFreeSection},
-			{Work: kindsOfLogic},
+			{Work: anemicDomainModel, Note: "quoting Evans 2003, Application Layer"},
 		},
 	}
 }

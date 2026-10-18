@@ -73,8 +73,8 @@ func TestDeclaredServiceIsCheckedInTheModel(t *testing.T) {
 		var out []string
 		for _, v := range a.Violations() {
 			out = append(out, v.Message())
-			if !strings.HasSuffix(v.Remediation(), ". "+vocab.DecideThenCarryOut()) {
-				t.Errorf("a service's finding does not say where the decision lives: %q", v.Remediation())
+			if strings.Contains(v.Remediation(), ". ") {
+				t.Errorf("a service's finding appends a statement to its repair: %q", v.Remediation())
 			}
 		}
 		return out, outcomesOf(a)[id+"|context:identity"]

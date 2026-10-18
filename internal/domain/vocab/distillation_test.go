@@ -55,14 +55,20 @@ func TestDistillationRulesLabelTheMetaModelsConventions(t *testing.T) {
 
 func TestValidateDistillationRulesRejects(t *testing.T) {
 	model := vocab.DDD()
+	// A tier 3 work defined here, so the tier 3 check stays covered
+	// whatever the bibliography lists.
+	model.Works = append(model.Works, vocab.Work{
+		Key: "a-blog", Title: "A Blog Post", Authors: []string{"A Practitioner"}, Year: 2020,
+		URL: "https://example.com/post", Tier: vocab.TierPractitioner, Verification: vocab.VerifiedFetched,
+	})
 	cases := []struct {
 		name  string
 		rule  vocab.DistillationRule
 		wants string
 	}{
 		{"unlisted work", vocab.DistillationRule{ID: "a-rule", Rule: "A rule.", Sources: []vocab.Citation{{Work: "somebody"}}}, `cites work "somebody"`},
-		{"unmarked tier 3", vocab.DistillationRule{ID: "a-rule", Rule: "A rule.", Sources: []vocab.Citation{{Work: "evans2015", Page: "11"}, {Work: "bogard-vertical-slice"}}}, `without marking the citation illustrative`},
-		{"only illustrated", vocab.DistillationRule{ID: "a-rule", Rule: "A rule.", Sources: []vocab.Citation{{Work: "bogard-vertical-slice", Illustrative: true}}}, `must cite at least one tier 1 or tier 2 work`},
+		{"unmarked tier 3", vocab.DistillationRule{ID: "a-rule", Rule: "A rule.", Sources: []vocab.Citation{{Work: "evans2015", Page: "11"}, {Work: "a-blog"}}}, `without marking the citation illustrative`},
+		{"only illustrated", vocab.DistillationRule{ID: "a-rule", Rule: "A rule.", Sources: []vocab.Citation{{Work: "a-blog", Illustrative: true}}}, `must cite at least one tier 1 or tier 2 work`},
 		{"convention off the text", vocab.DistillationRule{ID: "a-rule", Rule: "A rule.", Conventions: []string{"never"}}, `convention label "never" does not quote the entry's text`},
 		{"id not kebab", vocab.DistillationRule{ID: "A_Rule", Rule: "A rule."}, `id "A_Rule" is not lowercase kebab case`},
 	}

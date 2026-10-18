@@ -93,11 +93,6 @@ func DistillationRules() []DistillationRule {
 			Example: "TenantProvisioningService.assertions.tenant-name-unique on ProvisionTenant",
 		},
 		{
-			ID:      "decide-then-carry-out",
-			Rule:    DecideThenCarryOut(),
-			Example: "RetirementPolicy.Decide(installations) carries no-installation-left and returns the verdict; the RetireRelease use case lists the installations, asks for the verdict, and deletes the files only when it allows; never a service that deletes them through callbacks",
-		},
-		{
 			ID:      "verified-by-tests",
 			Rule:    "An invariant or assertion the code cannot state in a body (an operation of a service declared as an interface or an abstract class, an effect the model cannot see) -> its verified_by, each test as path:name from the repository root; arclint checks the test exists, never that it proves the statement.",
 			Example: "Discounter.assertions.never-exceeds-total on Discount, verified_by internal/pricing/discounter_test.go:TestDiscountNeverExceedsTotal",
