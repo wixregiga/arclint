@@ -9,7 +9,7 @@ For each statement, in this order:
 1. **Declined rules.** Compare it with `declined_rules` in the librarian's `VOCAB.yaml` (protocol rule 11). A match is placed `declined`, with the entry's id, reason and basis. Do not propose the rule again.
 2. **Disagreement.** When two owner sources state it differently, it is a question, whatever row it would otherwise fit. Record the discrepancy with both sources.
 3. **Placement.** Otherwise the first row of the placement table whose conditions hold decides.
-4. **Declared services.** When the owner is a declared domain service, apply the shapes of that section.
+4. **Declared services.** When the owner is a declared domain service, apply that section.
 5. **Proving test.** Name the test that proves the entry, or `none`.
 6. **Word limits.** Count the words of every text you propose. Over the limit is not a proposal.
 7. **Sources.** Every literature citation states its tier, and a rule needs a tier 1 source or an owner decision.
@@ -46,12 +46,9 @@ Recorded in issue #144, and carried in the librarian's `VOCAB.yaml` under `decli
 
 ## Declared services
 
-Recorded in issue #148, carried by the distillation rule `guarantee-has-one-checked-home` and enforced by `assertion/checked-by-its-operation`. A domain service declared the canonical way is "a standalone interface declared as a service" (Evans 2015, p. 14): a Go interface, a TypeScript interface or abstract class, a Python ABC or Protocol. Its assertion is checked once, in the model, by one of two shapes:
+Decided by the owner in issue #149, carried by the distillation rule `guarantee-has-one-checked-home` and enforced by `assertion/checked-by-its-operation`: call the assertion in the domain service operation that it is supposed to protect. The operation's body calls `Assert<Key>` (`AssertNeverExceedsTotal`, `assertNeverExceedsTotal`, `assert_never_exceeds_total`), declared as a method of the service or as a function of the context, and the call is the one the language's resolution follows to it.
 
-- **(a) a check in the model:** a function of the context spelled from the key (`AssertNeverExceedsTotal`, `assertNeverExceedsTotal`, `assert_never_exceeds_total`);
-- **(b) a value:** the operation returns a recorded value object of the same context whose invariant has the same key, enforced by its constructor (Evans 2015, p. 21: "moving complex logic into value objects").
-
-Never an interface method, a callback, or prose. Only what neither shape can state is verified by the tests under its `verified_by`, which `assertion/verifying-tests-declared` checks exist. When neither shape exists and no test is named, report the missing check on the model side. An aggregate root declared as an interface or an abstract class needs those tests; a concrete owner (struct, class) keeps the checking method `assertion/checked-by-its-operation` asks for.
+A check that merely exists, a check a caller is expected to make, a returned value object with an invariant of the same key, and tests under `verified_by` do not check the assertion. A service declared as a Go interface, a TypeScript interface or abstract class, or a Python ABC or Protocol has no body to call the check from, so its assertion is undetermined; report that as open for the owner, and do not propose a shape that would satisfy it.
 
 A recorded domain service records at least one assertion (`domain_service/records-an-assertion`). A statement that justifies a service but names no guarantee of its operations is a question for the expert's words, not a service without a contract.
 

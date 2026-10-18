@@ -113,18 +113,14 @@ keeps the file unread. The check says only that the test exists;
 whether the test proves the statement is not checked. In TypeScript a comment
 or a string that repeats the name passes for the test.
 
-A domain service declared as an interface, as Evans states one ("a
-standalone interface declared as a service", p. 14), has no body to call an
-`Assert...` method from. When the owner of an assertion is an interface or an
-abstract class (a TypeScript `abstract class`, or a Python class deriving
-`ABC` or `Protocol`, or naming `ABCMeta` as its metaclass),
-`assertion/checked-by-its-operation` still asks the owner to declare the
-operation, and does not ask for the call. A domain service so declared is
-checked in the model when the model can state its guarantee (see
-[a domain service declared as an abstraction](#a-domain-service-declared-as-an-abstraction)),
-and otherwise by its `verified_by`; an aggregate root so declared names its
-tests under `verified_by`. A concrete owner calls its check whether or not
-the assertion also names tests.
+Tests never stand in for an assertion's check: the operation the
+assertion names still calls it (see below). When the owner of an
+assertion is an interface or an abstract class (a TypeScript `abstract
+class`, or a Python class deriving `ABC` or `Protocol`, or naming
+`ABCMeta` as its metaclass), `assertion/checked-by-its-operation` still
+asks the owner to declare the operation, and leaves the assertion
+undetermined, with or without tests, because the owner has no body to
+call the check from.
 
 ## Rules that follow calls and field types
 
@@ -272,9 +268,33 @@ invariant (`aggregate/protects-an-invariant`, warning).
 **An invariant of an aggregate** is a method named `Ensure` followed by
 its key, and every constructor and every command of the root calls it
 (`invariant/enforced-at-every-mutation`). **An assertion** is a method
-named `Assert` followed by its key, declared on its owner (the aggregate's
-root or the domain service) and called by the operation the assertion
-names (`assertion/checked-by-its-operation`).
+named `Assert` followed by its key, declared as a method of its owner
+(the aggregate's root or the domain service) or as a function of the
+context, and called in the body of the operation the assertion names
+(`assertion/checked-by-its-operation`). The call counts when the
+language's resolution follows it to that declaration: a method of
+another type spelled the same, or a function of the same name outside
+the context, is not the check, and a call resolution cannot follow
+leaves the assertion undetermined. Where in the operation the call is
+made, and whether its failure fails the operation, are not judged.
+
+```go
+// Encrypt protects a Password; it checks not-empty before it returns.
+func (s Encrypter) Encrypt(p Password) (EncryptedPassword, error) {
+	encrypted, err := s.hasher.Hash(p)
+	if err != nil {
+		return EncryptedPassword{}, err
+	}
+	if err := AssertNotEmpty(encrypted); err != nil {
+		return EncryptedPassword{}, err
+	}
+	return encrypted, nil
+}
+```
+
+A check that merely exists, a check a caller is expected to make, a
+returned value object whose invariant has the same key, and tests under
+`verified_by` do not check an assertion.
 The `Ensure` and `Assert` method shapes are ArcLint's own convention,
 which no cited source states; the sources ask that invariants and
 post-conditions be stated explicitly, not what the methods are named.
@@ -283,44 +303,11 @@ checks it, the recording never restates it as a post-condition.
 
 **A domain service declared as an abstraction** (an interface in Go or
 TypeScript, an abstract class in TypeScript, a class whose own bases
-name `ABC` or `Protocol` in Python) has no body for a check, so its
-guarantee is checked once, in the model, in one of two shapes, or, where
-the model cannot state it, by the tests its `verified_by` names:
-
-- a function of the context spelled `Assert` followed by the key
-  (`AssertNotEmpty`, `assertNotEmpty`, `assert_not_empty`);
-- the value object the operation returns, when that value records an
-  invariant under the same key: its constructor already enforces it
-  (`value_object/constructed-through-one-door`).
-
-```yaml
-    value_objects:
-      EncryptedPassword:
-        definition: The protected form of a Password.
-        invariants:
-          not-empty: An encrypted password is never empty.
-    services:
-      Encrypter:
-        definition: Protects a Password.
-        assertions:
-          not-empty:
-            on: Encrypt
-            statement: An encrypted password is never empty.
-```
-
-```go
-// Encrypter protects a Password; it returns the value that keeps not-empty.
-type Encrypter interface {
-	Encrypt(p Password) (EncryptedPassword, error)
-}
-```
-
-With neither shape and no tests the finding is on the model, never a
-request for a method the interface cannot hold: `declared service
-Encrypter: not-empty has no check in context identity`. Whether each implementation of the
-service reaches the check is not yet observed. `arclint domain define
-assertion` prints where the guarantee it records is checked, chosen by
-how the owner is declared.
+name `ABC` or `Protocol` in Python) has no body to call its check from,
+so its assertion is undetermined: whether its implementations call the
+check is not observed. `arclint domain define assertion` prints where
+the guarantee it records is checked, chosen by how the owner is
+declared.
 
 **A domain service** records at least one assertion
 (`domain_service/records-an-assertion`): Evans asks for "a set of
