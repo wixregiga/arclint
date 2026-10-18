@@ -9,18 +9,17 @@ For each statement, in this order:
 1. **Declined rules.** Compare it with `declined_rules` in the librarian's `VOCAB.yaml` (protocol rule 11). A match is placed `declined`, with the entry's id, reason and basis. Do not propose the rule again.
 2. **Disagreement.** When two owner sources state it differently, it is a question, whatever row it would otherwise fit. Record the discrepancy with both sources.
 3. **Placement.** Otherwise the first row of the placement table whose conditions hold decides.
-4. **Decide, then carry out.** For a guarantee of an operation, apply the section of that name before choosing the owner.
-5. **Declared services.** When the owner is a declared domain service, apply the shapes of that section.
-6. **Proving test.** Name the test that proves the entry, or `none`.
-7. **Word limits.** Count the words of every text you propose. Over the limit is not a proposal.
-8. **Sources.** Every literature citation states its tier, and a rule needs a tier 1 source or an owner decision.
+4. **Declared services.** When the owner is a declared domain service, apply the shapes of that section.
+5. **Proving test.** Name the test that proves the entry, or `none`.
+6. **Word limits.** Count the words of every text you propose. Over the limit is not a proposal.
+7. **Sources.** Every literature citation states its tier, and a rule needs a tier 1 source or an owner decision.
 
 ## What counts as evidence
 
 - **The recorded language** is the recording at the merge base. What the change itself records is a candidate like any other row: its recording is a claim (Evidence, rule 1), and "already recorded" never applies to it.
 - **The owner's docs** are the docs as they stand at the merge base. Docs the change adds or edits are claims until the owner approves the change.
 - **The owner's words** are issue and pull request text the owner's account wrote. Text an agent generated is a claim, wherever it is posted: a body that ends "Generated with Claude Code", a bot's review, an issue title over a bot's body.
-- **An owner decision** for step 8 is the owner's words or the owner's docs above.
+- **An owner decision** for step 7 is the owner's words or the owner's docs above.
 
 ## Placement table
 
@@ -28,10 +27,10 @@ For each statement, in this order:
 |---|---|---|---|
 | declined | the statement matches an entry of VOCAB's `declined_rules` | Declined rules (rule 11), issue #144 | `factory/required-for-every-aggregate` (Evans 2015, p. 18) |
 | already recorded | the project's recording at the merge base states it, under the right owner, in equivalent words | Evidence (rule 1) | a statement the change only repeats |
-| change to an existing entry | an entry recorded at the merge base is wrong, incomplete, over its word limit, or silent on a case the change now covers | Precedence (rule 9), Description style (rule 16), `domain_recording/text-within-word-limit` | an entry that says nothing about the file a symlink reaches |
+| change to an existing entry | an entry recorded at the merge base is wrong, incomplete, over its word limit, or silent on a case the change now covers | Precedence (rule 9), Description style (rule 15), `domain_recording/text-within-word-limit` | an entry that says nothing about the file a symlink reaches |
 | invariant under a value object | value integrity, holds at every observable time, one violation, enforceable in the constructor, owner is the subject | Invariant gate (rule 10), invariant-ownership, value-test | PR #96: `DomainRecording / spelled-with-slashes` (the owner's docs: a domain file path is "written with slashes") |
 | invariant under an aggregate | a cluster rule that must stay consistent in one transaction, owned by the root | rule 10, invariant-ownership, transaction-boundary | candidate `Rule / pattern never chooses the domain file` (needed the owner's decision) |
-| assertion | a guarantee of one named operation of the root or of a domain service, with `on`; the operation is the one that decides (see below) | precondition-as-assertion, contract-of-a-service, issue #128 | an assertion on the service operation that returns the verdict, never on the step that writes |
+| assertion | a guarantee of one named operation of the root or of a domain service, with `on` | precondition-as-assertion, contract-of-a-service | |
 | specification | experts pass the predicate around as a thing | specification-as-thing | none in the PR #96 run |
 | definition only | the meaning is established but it restates or orders facts, forbids nothing a naive implementation could do, or has no capable owner; and the definition can hold it within its word limit | rule 10 ("restating a definition is not an invariant"), Litmus first (rule 2) | PR #96: a domain file the ruleset names is the project's own choice |
 | question | a product decision the evidence leaves open, two owner sources that disagree, or a meaning its owner's definition cannot hold within its limit | Ask or record (rule 8), minimal-evidence | PR #96: which file is the domain file when the ruleset names none (issue #95 and the docs disagree); when the ruleset carries `domain.file` |
@@ -44,16 +43,6 @@ A rule found inside a recorded definition is a statement like any other. Wording
 ## Declined rules
 
 Recorded in issue #144, and carried in the librarian's `VOCAB.yaml` under `declined_rules`: the rules arclint deliberately does not enforce, each with an id, the statement declined, the reason, and its basis (a tier and page of literature, or an owner decision's issue). Read that list; do not copy it here, so it cannot drift. When a candidate states what an entry declines, place it `declined` and cite the entry's id, reason and basis. As the librarian's rule 11 says, new tier 1 or 2 literature or a new owner decision in an issue reopens an entry; a request alone does not, so say which of the two would.
-
-## Decide, then carry out
-
-Recorded in issue #128, and in the librarian's rule 13 (Moves between layers). Record a service's assertion on the operation that makes the decision. That operation receives what it needs as values, returns its verdict, and changes nothing. The application gathers those values, asks for the verdict, and makes the changes only when the verdict allows them; it holds no business rule of its own (application-service-holds-no-rule).
-
-- The verdict is a value. A verdict that carries a rule ("approves only when no participant refused") is a value object with that rule as its invariant, so `value_object/constructed-through-one-door` applies.
-- An effect the domain cannot see ("a refusal changes nothing on disk") is proved by an automated test (Evans 2015, p. 22), not by moving the workflow into the domain.
-- A fact the model cannot observe, such as whether a file exists or whether two paths are one file, is gathered by the application through a port and passed to the deciding operation as a value.
-- Before you recommend moving code between layers, for example a workflow into a domain service to satisfy `assertion/checked-by-its-operation`, state the strongest case against the move with sources from the meta-model's bibliography. Then recommend the placement where the decision goes to the domain and the execution stays in the application.
-- A business decision found in an application service is placed under its owner and reported as a finding. "No entry" is never the answer for a product decision.
 
 ## Declared services
 
@@ -92,7 +81,7 @@ The owner's source standard, recorded in issue #151. The librarian's `VOCAB.yaml
 | tier | works | may |
 |---|---|---|
 | 1, canonical | Evans 2003 and 2015, Vernon 2013 and his papers and sample code, Evans and Fowler 1997 | ground rules |
-| 2, published authority | Fowler's PoEAA (Stafford's patterns included), Meyer's OOSC, Wlaschin's book, Fowler's bliki | ground guidance |
+| 2, published authority | Fowler's PoEAA (Stafford's patterns included), Fowler's bliki | ground guidance |
 | 3, practitioner blogs | | only illustrate |
 | excluded | Goodreads, unknown Medium authors, Stack Overflow, AI summaries | never be used |
 
@@ -109,8 +98,8 @@ Write the reason in these words so reports compare.
 | application precondition | not-a-domain-rule, application-service-holds-no-rule | it holds only when one use case runs and no business decision is lost by deleting the step |
 | application coordination | Behavior (rule 12), application-service-holds-no-rule | it loads, invokes, commits, publishes, notifies or translates, and deleting it loses no business decision |
 | delivery validation | not-a-domain-rule | the software proves its own output (read back, round trip) |
-| contributor duty | rule 14 (Completeness sweep) | it tells a contributor what to do, or what a contributor's tool (a skill, a script, a make target) promises, not what the domain holds |
-| presentation | Description style (rule 16) | it is wording of help, warnings or docs |
+| contributor duty | rule 13 (Completeness sweep) | it tells a contributor what to do, or what a contributor's tool (a skill, a script, a make target) promises, not what the domain holds |
+| presentation | Description style (rule 15) | it is wording of help, warnings or docs |
 | decision already recorded elsewhere | Evidence (rule 1) | the meta-model, another context, or an owner decision that placed it outside the domain already records it (PR #96: `context_map/one-relation-per-pair` is in the meta-model; the CML adapter repeats it) |
 
 A no-entry statement that is still a promise names the test that pins it, or `none`.

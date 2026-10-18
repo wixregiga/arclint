@@ -956,12 +956,9 @@ func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 	}
 }
 
-// Every finding about a service's assertion tells the agent where the
-// decision lives and where its change is made, after the repair; a
-// root's command changes its own aggregate, so a root's finding gives
-// the repair alone.
-func TestAssertionRemediationSaysTheDomainDecides(t *testing.T) {
-	decides := vocab.DecideThenCarryOut()
+// Every finding about an assertion, of a service or of a root, gives the
+// repair alone, with nothing appended after it.
+func TestAssertionRemediationGivesTheRepairAlone(t *testing.T) {
 	r := builtInRule(t, "assertion/checked-by-its-operation")
 	remediations := func(knowledge vocab.UbiquitousLanguage, file, pkg string, decls []conformance.Declaration) []string {
 		a := runOne(t, r, nil, observed(file), map[string]conformance.LanguageFacts{file: goDecls(pkg, decls)}, knowledge)
@@ -985,14 +982,14 @@ func TestAssertionRemediationSaysTheDomainDecides(t *testing.T) {
 	file := "internal/release/retirement_policy.go"
 	got := remediations(service, file, "release", []conformance.Declaration{policy})
 	want := []string{
-		"declare Decide (go) on RetirementPolicy and call AssertNoInstallationLeft (go) from it. " + decides,
-		"declare AssertNoInstallationLeft (go) on RetirementPolicy and call it from Decide. " + decides,
+		"declare Decide (go) on RetirementPolicy and call AssertNoInstallationLeft (go) from it",
+		"declare AssertNoInstallationLeft (go) on RetirementPolicy and call it from Decide",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("bare service:\n got %q\nwant %q", got, want)
 	}
 	got = remediations(service, file, "release", []conformance.Declaration{policy, decide, check})
-	want = []string{"call AssertNoInstallationLeft from Decide and fail the operation when it fails. " + decides}
+	want = []string{"call AssertNoInstallationLeft from Decide and fail the operation when it fails"}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("uncalled check:\n got %q\nwant %q", got, want)
 	}

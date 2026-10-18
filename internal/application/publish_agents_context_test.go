@@ -120,11 +120,11 @@ func TestPublishAgentsContextRendersAndInstalls(t *testing.T) {
 		"2. Before editing, state in the project's language:\n   - This change does ___.\n   - These decisions belong to ___.\n   - The caller uses ___.\n   - Existing behavior ___ must remain intact.",
 		"3. If the change introduces or changes a meaning, record it in the project's domain recording through `arclint domain define` before writing code, using the domain-librarian skill.",
 		"4. Implement one complete behavior path through the zones `arclint context` reported",
-		"and implementations own their specific decisions. The domain decides; the application gathers what the decision needs and carries out the change. " +
-			"The application layer holds no business rule: it only coordinates tasks and delegates work to the domain " +
-			"(Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 10, Layered Architecture, on isolating the domain (tier 1, read); " +
-			"Martin Fowler, AnemicDomainModel (2003-11-25), quoting Evans 2003, on no business rules or knowledge (tier 2, read); " +
-			"Randy Stafford, Service Layer, Kinds of Business Logic (Patterns of Enterprise Application Architecture excerpt) (2002), on application logic (tier 2, read)).\n5. ",
+		"and implementations own their specific decisions. " +
+			`Evans: "Isolate the expression of the domain model and the business logic, and eliminate any dependency on infrastructure, user interface, or even application logic that is not business logic." ` +
+			`The application layer "does not contain business rules or knowledge, but only coordinates tasks and delegates work to collaborations of domain objects in the next layer down." ` +
+			"(Eric Evans, Domain-Driven Design Reference: Definitions and Pattern Summaries (2015), p. 10, Layered Architecture (tier 1, read); " +
+			"Martin Fowler, AnemicDomainModel (2003-11-25), quoting Evans 2003, Application Layer (tier 2, read)).\n5. ",
 		"### Commands",
 		"- `arclint agents skill`: write the domain-librarian skill to `.agents/skills/domain-librarian/` for Codex and `.claude/skills/domain-librarian/` for Claude Code when your harness lacks it",
 		"### The recorded domain",

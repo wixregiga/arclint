@@ -33,10 +33,6 @@ func InsufficientInfoQuestions() []ClarificationQuestion {
 			Decides:  "assertion owner (aggregate vs domain_service)",
 		},
 		{
-			Question: outsideTheModelQuestion,
-			Decides:  "deciding operation (domain_service) vs carrying out the change (application_service)",
-		},
-		{
 			Question: "Does <operation> return a value the business names? Then the guarantee is that value's invariant.",
 			Decides:  "where a declared domain_service's guarantee is checked (value invariant vs function of the context)",
 		},
@@ -83,11 +79,6 @@ func InsufficientInfoQuestions() []ClarificationQuestion {
 // carries it, and the concept documentation of entity and aggregate
 // asks it verbatim.
 const identityPartsQuestion = "What is <Identity> made of? If any part can change while the <X> stays the same, the identity cannot be that part."
-
-// outsideTheModelQuestion is asked when an assertion goes on a domain
-// service; the bank carries it, and the concept documentation of
-// assertion and domain service asks it verbatim.
-const outsideTheModelQuestion = "Does <operation> change anything outside the model, such as a file, a store or another system? Then record the assertion on the operation that decides, and let the application service make the change."
 
 // ConflictQuestions returns the two conflict bank entries in
 // VOCAB.yaml order (char-exact).

@@ -45,7 +45,7 @@ Invoke the `ddd-design-review` skill on the design at each commit that matters. 
 Before you blame the advisee, the reviewer or arclint, answer two questions separately:
 
 - **Placement:** which layer and which building block owns the decision?
-- **Shape:** how is the decision expressed there? Consider values in and a verdict out, callbacks, side effects, or prose in a definition.
+- **Shape:** how is the decision expressed there? Consider callbacks, side effects, or prose in a definition.
 
 A wrong shape in the right place is a different defect from a rule in the wrong place, and it has a different fix. Do not conclude "the tool pushed the design the wrong way" until you have checked whether the placement was right and only the shape was wrong.
 
@@ -86,7 +86,6 @@ Send one message per topic, short, in this order:
 Advisory, from the arclint advisor (<thread>). You decide; <what this is input for>.
 
 Finding at <sha>: <what the code does, with path:line>. <What goes wrong, as a concrete scenario>.
-Recommended shape [INFERENCE, not built] (if you did not build it): <values in, verdict out, who carries out the change>.
 Grounds: <one line per source: quote, work, page (tier N, read | not read)>; arclint's convention marked as such.
 The strongest case against: <it> -> <why it fails, or "it stands; then do X">.
 If you judge otherwise: <the test or check that keeps the risk visible>.

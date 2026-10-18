@@ -161,7 +161,6 @@ func (c Concept) Doc() ConceptDoc {
 		doc.Questions = []string{
 			"Does this hold when a named operation occurs, rather than at all times?",
 			"Which operation must call the method that checks it?",
-			outsideTheModelQuestion,
 		}
 		doc.Supplies = "The project supplies the assertion's key, its statement, the aggregate it is recorded under, and the root operation it is on."
 	case ConceptSpecification:
@@ -193,7 +192,6 @@ func (c Concept) Doc() ConceptDoc {
 		doc.Questions = []string{
 			"Is this an operation no aggregate or value object is the natural home of?",
 			"Which aggregates does it span?",
-			outsideTheModelQuestion,
 		}
 		doc.Supplies = "The project supplies the domain service's name and definition."
 	case ConceptBoundedContext:

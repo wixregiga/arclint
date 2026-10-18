@@ -1455,7 +1455,6 @@ func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ 
 		decl := loc.decl()
 		owner := assertionOwner{
 			label: "service " + s.Name, holder: "the service", context: cc.ctx.Name, decl: decl, idx: cc.unitIdx(decl),
-			decision: vocab.DecideThenCarryOut(),
 		}
 		if bodiless(decl.decl) == "" {
 			more, err := assertionsChecked(r, subject, owner, s.Assertions)
@@ -1498,7 +1497,7 @@ func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, o
 		if !hasOp {
 			v, err := newViolation(r, subject, service.file.path, service.decl.StartLine,
 				fmt.Sprintf("%s: assertion %s constrains operation %s, which %s does not declare", owner.label, as.Key, as.On, owner.holder),
-				owner.remediation(fmt.Sprintf("declare %s on %s", methodSpellings(owner.idx, as.On), service.decl.Name)))
+				fmt.Sprintf("declare %s on %s", methodSpellings(owner.idx, as.On), service.decl.Name))
 			if err != nil {
 				return nil, nil, err
 			}
@@ -1529,8 +1528,8 @@ func declaredServiceChecked(r rule.Rule, subject rule.Subject, cc contextCode, o
 		}
 		v, err := newViolation(r, subject, service.file.path, service.decl.StartLine,
 			fmt.Sprintf("declared service %s: %s has no check in context %s", service.decl.Name, as.Key, cc.ctx.Name),
-			owner.remediation(fmt.Sprintf("declare the function %s there, return from %s a value whose invariant %s enforces it, or write a test of %s that checks it and record it: arclint domain define assertion %s --context %s --verified-by <test file>:<test name>",
-				fn, on, as.Key, on, as.Key, owner.context)))
+			fmt.Sprintf("declare the function %s there, return from %s a value whose invariant %s enforces it, or write a test of %s that checks it and record it: arclint domain define assertion %s --context %s --verified-by <test file>:<test name>",
+				fn, on, as.Key, on, as.Key, owner.context))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1676,25 +1675,13 @@ func (cc contextCode) contextFunction(service locDecl, key string) (locDecl, boo
 // assertionOwner is the declared type that owns a set of assertions:
 // an aggregate's root or a domain service. label names the owner in a
 // finding, holder names the declaring type in prose, and context is the
-// bounded context the owner is recorded in. decision is what a finding
-// adds to its remediation about where the decision lives and where its
-// change is made; a root's command changes its own aggregate, so a root
-// adds nothing.
+// bounded context the owner is recorded in.
 type assertionOwner struct {
-	label    string
-	holder   string
-	context  string
-	decl     locDecl
-	idx      contractIndex
-	decision string
-}
-
-// remediation completes a repair with the owner's decision statement.
-func (o assertionOwner) remediation(repair string) string {
-	if o.decision == "" {
-		return repair
-	}
-	return repair + ". " + o.decision
+	label   string
+	holder  string
+	context string
+	decl    locDecl
+	idx     contractIndex
 }
 
 // bodiless names how the owner is declared when it has no body to call
@@ -1737,7 +1724,7 @@ func assertionsChecked(r rule.Rule, subject rule.Subject, owner assertionOwner, 
 		if !hasOp {
 			v, err := newViolation(r, subject, owner.decl.file.path, owner.decl.decl.StartLine,
 				fmt.Sprintf("%s: assertion %s constrains operation %s, which %s does not declare", owner.label, as.Key, as.On, owner.holder),
-				owner.remediation(fmt.Sprintf("declare %s on %s and call %s from it", methodSpellings(owner.idx, as.On), name, methodSpellings(owner.idx, key))))
+				fmt.Sprintf("declare %s on %s and call %s from it", methodSpellings(owner.idx, as.On), name, methodSpellings(owner.idx, key)))
 			if err != nil {
 				return nil, err
 			}
@@ -1746,7 +1733,7 @@ func assertionsChecked(r rule.Rule, subject rule.Subject, owner assertionOwner, 
 		if !hasCheck {
 			v, err := newViolation(r, subject, owner.decl.file.path, owner.decl.decl.StartLine,
 				fmt.Sprintf("%s: assertion %s names no checking method on %s; expected %s", owner.label, as.Key, owner.holder, methodSpellings(owner.idx, key)),
-				owner.remediation(fmt.Sprintf("declare %s on %s and call it from %s", methodSpellings(owner.idx, key), name, as.On)))
+				fmt.Sprintf("declare %s on %s and call it from %s", methodSpellings(owner.idx, key), name, as.On))
 			if err != nil {
 				return nil, err
 			}
@@ -1760,7 +1747,7 @@ func assertionsChecked(r rule.Rule, subject rule.Subject, owner assertionOwner, 
 		}
 		v, err := newViolation(r, subject, op.file.path, op.decl.StartLine,
 			fmt.Sprintf("%s: operation %s does not call %s, so assertion %s is not checked when it completes", owner.label, op.decl.Name, check.decl.Name, as.Key),
-			owner.remediation(fmt.Sprintf("call %s from %s and fail the operation when it fails", check.decl.Name, op.decl.Name)))
+			fmt.Sprintf("call %s from %s and fail the operation when it fails", check.decl.Name, op.decl.Name))
 		if err != nil {
 			return nil, err
 		}
@@ -1785,7 +1772,7 @@ func assertionsVerifiedByTests(r rule.Rule, subject rule.Subject, owner assertio
 		if !hasOp {
 			v, err := newViolation(r, subject, owner.decl.file.path, owner.decl.decl.StartLine,
 				fmt.Sprintf("%s: assertion %s constrains operation %s, which %s does not declare", owner.label, as.Key, as.On, owner.holder),
-				owner.remediation(fmt.Sprintf("declare %s on %s", methodSpellings(owner.idx, as.On), name)))
+				fmt.Sprintf("declare %s on %s", methodSpellings(owner.idx, as.On), name))
 			if err != nil {
 				return nil, err
 			}
@@ -1797,8 +1784,8 @@ func assertionsVerifiedByTests(r rule.Rule, subject rule.Subject, owner assertio
 		v, err := newViolation(r, subject, owner.decl.file.path, owner.decl.decl.StartLine,
 			fmt.Sprintf("%s: %s is declared as %s, which has no body to call %s from, and assertion %s names no tests that verify it",
 				owner.label, name, declared, methodSpellings(owner.idx, assertKey(as.Key)), as.Key),
-			owner.remediation(fmt.Sprintf("write a test of %s that checks the assertion and record it: arclint domain define assertion %s --context %s --verified-by <test file>:<test name>",
-				as.On, as.Key, owner.context)))
+			fmt.Sprintf("write a test of %s that checks the assertion and record it: arclint domain define assertion %s --context %s --verified-by <test file>:<test name>",
+				as.On, as.Key, owner.context))
 		if err != nil {
 			return nil, err
 		}
