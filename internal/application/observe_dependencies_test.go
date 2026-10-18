@@ -20,7 +20,7 @@ func TestDependencyAndDomainInspectionObserveOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if source.calls != 1 || !reflect.DeepEqual(source.facts, []rule.Fact{rule.FactImports, rule.FactDeclarations}) {
+	if source.calls != 1 || !reflect.DeepEqual(source.facts, []rule.Fact{rule.FactImports, rule.FactDeclarations, rule.FactCalls, rule.FactResolvedCalls}) {
 		t.Fatalf("observation calls=%d, requirements=%v", source.calls, source.facts)
 	}
 	if ctx.Dependencies == nil || ctx.Domain == nil || !ctx.Domain.Located {

@@ -220,10 +220,11 @@ func lineOf(t *testing.T, text, prefix string) int {
 
 // TestServiceOperationCallsItsCheck holds a concrete service's
 // assertion to the call its operation makes: the service's own method
-// or the function of the context conforms and anchors the guarantee
-// there; a method of another type spelled the same, or a helper that
-// is not the check, is a finding, though a function of the context
-// spelled like the check exists.
+// or the function of the context conforms, and the guarantee is
+// anchored at the one the operation calls, even when the service also
+// declares a method of the same name; a method of another type spelled
+// the same, or a helper that is not the check, is a finding, though a
+// function of the context spelled like the check exists.
 func TestServiceOperationCallsItsCheck(t *testing.T) {
 	finding := "service Encrypter: operation "
 	for _, s := range serviceSources() {
@@ -236,6 +237,7 @@ func TestServiceOperationCallsItsCheck(t *testing.T) {
 		}{
 			{"own method", true, s.ownMethod, true, s.methodDecl},
 			{"function of the context", false, s.function, true, s.functionDecl},
+			{"function of the context beside a method of the same name", true, s.function, true, s.functionDecl},
 			{"another type's method of the same name", false, s.other, false, ""},
 			{"a helper that is not the check", true, s.helper, false, ""},
 		} {

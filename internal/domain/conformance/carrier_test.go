@@ -2,6 +2,7 @@ package conformance_test
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -689,5 +690,80 @@ func TestMethodNameSpellsPerLanguage(t *testing.T) {
 		if got != c.want {
 			t.Errorf("MethodName(%q, %q) = %q, want %q", c.key, c.lang, got, c.want)
 		}
+	}
+}
+
+// An assertion is carried by the check its operation's resolved call
+// reaches: the function of the context when the operation calls it,
+// even though the owner declares a method of the same name, and the
+// method when the operation calls the method. With two checks and no
+// call that resolves to one, nothing tells which carries it; with one,
+// that one does. Contract coverage names the same carrier.
+func TestAssertionCarrierIsTheCheckTheOperationCalls(t *testing.T) {
+	const file = "internal/pricing/discounter.go"
+	knowledge := oneContext(t, vocab.BoundedContext{
+		Name: "pricing", Definition: "d", Line: 1,
+		Services: []vocab.DomainService{{
+			Name: "Discounter", Definition: "d", Line: 2,
+			Assertions: []vocab.Assertion{{Key: "never-exceeds-total", On: "Discount", Statement: "s", Line: 3}},
+		}},
+	})
+	method := conformance.Declaration{Kind: "method", Name: "AssertNeverExceedsTotal", Owner: "Discounter", Exported: true, StartLine: 20}
+	function := conformance.Declaration{Kind: "func", Name: "AssertNeverExceedsTotal", Exported: true, StartLine: 30}
+	call := func(target conformance.Reference) conformance.Call {
+		return conformance.Call{Callee: "AssertNeverExceedsTotal", Line: 11, Enclosing: "Discount", EnclosingOwner: "Discounter", Target: target}
+	}
+	facts := func(checks []conformance.Declaration, calls ...conformance.Call) conformance.LanguageFacts {
+		return resolvedGo("pricing", append([]conformance.Declaration{
+			{Kind: "struct", Name: "Discounter", Exported: true, StartLine: 3},
+			{Kind: "method", Name: "Discount", Owner: "Discounter", Exported: true, StartLine: 10},
+		}, checks...), calls...)
+	}
+	carrier := func(f conformance.LanguageFacts) (string, string) {
+		t.Helper()
+		obs, err := conformance.NewObservations(observed(file), map[string]conformance.LanguageFacts{file: f})
+		if err != nil {
+			t.Fatal(err)
+		}
+		inspection, err := conformance.NewInspectionFacts(nil, obs, rule.FactFileTree, rule.FactDeclarations, rule.FactCalls, rule.FactResolvedCalls)
+		if err != nil {
+			t.Fatal(err)
+		}
+		carriers, err := conformance.NewCarriers(inspection, knowledge)
+		if err != nil {
+			t.Fatal(err)
+		}
+		at, found, err := carriers.Assertion("pricing", "Discounter", "never-exceeds-total")
+		if err != nil {
+			t.Fatal(err)
+		}
+		listed := ""
+		if found {
+			listed = file + ":" + strconv.Itoa(at.Line)
+		}
+		a := runOne(t, builtInRule(t, "assertion/checked-by-its-operation"), nil, observed(file), map[string]conformance.LanguageFacts{file: f}, knowledge)
+		covered := ""
+		if at, located := a.Contracts()[0].Carrier(); located {
+			covered = at.Path + ":" + strconv.Itoa(at.Line)
+		}
+		return listed, covered
+	}
+	both := []conformance.Declaration{method, function}
+	for _, tc := range []struct {
+		name  string
+		facts conformance.LanguageFacts
+		want  string
+	}{
+		{"the operation calls the function", facts(both, call(declared(file, "", "AssertNeverExceedsTotal"))), file + ":30"},
+		{"the operation calls the method", facts(both, call(declared(file, "Discounter", "AssertNeverExceedsTotal"))), file + ":20"},
+		{"two checks and no call", facts(both), ""},
+		{"one check and no call", facts([]conformance.Declaration{function}), file + ":30"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			listed, covered := carrier(tc.facts)
+			if listed != tc.want || covered != tc.want {
+				t.Errorf("carrier listed %q, covered %q, want %q", listed, covered, tc.want)
+			}
+		})
 	}
 }

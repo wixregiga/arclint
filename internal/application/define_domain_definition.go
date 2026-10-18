@@ -151,7 +151,9 @@ func (uc DefineDomainDefinition) assertionHome(lang vocab.UbiquitousLanguage, co
 	if err != nil {
 		return nil, fmt.Errorf("load configured rules: %w", err)
 	}
-	required := carrierFacts(lang)
+	// Where the guarantee is checked turns on how the owner and its
+	// operation are declared, not on any call.
+	required := []rule.Fact{rule.FactDeclarations}
 	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, required, nil, conformance.NamedTestsToRead(cfg.Rules, lang))
 	if err != nil {
 		return nil, fmt.Errorf("observe the assertion's owner: %w", err)

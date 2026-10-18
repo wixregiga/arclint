@@ -414,8 +414,9 @@ func TestArchitecturalContextListsUsesApartFromDeclarations(t *testing.T) {
 	}
 }
 
-// The repository answer lists the whole model and asks for no
-// reference facts: there is no worksite whose uses to find.
+// The repository answer lists the whole model and looks for no uses:
+// there is no worksite whose uses to find. It reads resolved calls only
+// to locate the check an assertion's operation calls.
 func TestArchitecturalContextRepositoryAsksForNoReferences(t *testing.T) {
 	cfg, knowledge, obs := domainFixture(t)
 	uc, err := application.NewGetArchitecturalContext(fakeRepository{cfg}, knowledge)
@@ -426,8 +427,8 @@ func TestArchitecturalContextRepositoryAsksForNoReferences(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if slices.Contains(obs.facts, rule.FactResolvedCalls) || obs.referencesFor != nil {
-		t.Fatalf("repository scope asked for references: %v", obs.facts)
+	if obs.referencesFor != nil || slices.Contains(obs.facts, rule.FactFieldTypes) || !slices.Contains(obs.facts, rule.FactResolvedCalls) {
+		t.Fatalf("repository scope asked for references, or not for the calls locating an assertion's check: %v", obs.facts)
 	}
 	if ctx.Domain.UsesLocated || len(ctx.Domain.Used) != 0 {
 		t.Fatalf("repository scope lists no uses: %+v", ctx.Domain)

@@ -114,8 +114,11 @@ func (c Carriers) Invariant(ctx, owner, key string) (Carrier, bool, error) {
 
 // Assertion locates the check of an assertion: assert followed by the
 // key, in the method case of the owner's language, declared as a method
-// of the owner, or else as a function of the context. An owner no single
-// type spells has none located.
+// of the owner or as a function of the context. It is the check the
+// call in the body of the assertion's operation reaches, as the
+// language's resolution follows it, when that operation has one place
+// in the domain and the call is seen; otherwise the one check there is,
+// and none when nothing tells which of several carries it.
 func (c Carriers) Assertion(ctx, owner, key string) (Carrier, bool, error) {
 	if _, err := rule.CaseTerm(key, "flatcase"); err != nil {
 		return Carrier{}, false, fmt.Errorf("method name for %q: %w", key, err)
@@ -124,16 +127,29 @@ func (c Carriers) Assertion(ctx, owner, key string) (Carrier, bool, error) {
 	if !ok {
 		return Carrier{}, false, nil
 	}
-	_, aggregate, recorded := cc.recordedAssertion(owner, key)
+	as, aggregate, recorded := cc.recordedAssertion(owner, key)
 	if !recorded {
 		return Carrier{}, false, nil
 	}
-	decl, _, located := cc.assertionOwner(owner, aggregate)
-	if !located {
-		return Carrier{}, false, nil
+	types := cc.terms[owner].candidates
+	if aggregate {
+		types = cc.aggregates[owner].candidates
 	}
-	checks := cc.assertionChecks(decl, decl.decl.Name, assertKey(key))
-	if len(checks) == 0 {
+	ops, err := cc.operationDeclarations(assertionOwner{name: owner, types: types}, as.On)
+	if err != nil {
+		return Carrier{}, false, err
+	}
+	var checks []locDecl
+	switch {
+	case len(ops) == 1:
+		checks = cc.assertionChecks(ops[0], ops[0].decl.Owner, assertKey(key))
+		if check, called, _ := calledCheck(ops[0], checks, assertKey(key)); called {
+			return carrierOf(check), true, nil
+		}
+	case len(types) == 1:
+		checks = cc.assertionChecks(types[0], types[0].decl.Name, assertKey(key))
+	}
+	if len(checks) != 1 {
 		return Carrier{}, false, nil
 	}
 	return carrierOf(checks[0]), true, nil

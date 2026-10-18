@@ -1493,7 +1493,7 @@ func (cc contextCode) assertionsChecked(r rule.Rule, subject rule.Subject, owner
 		default:
 			op := ops[0]
 			checks := cc.assertionChecks(op, op.decl.Owner, key)
-			called, open := callsCheck(op, checks, key)
+			_, called, open := calledCheck(op, checks, key)
 			if called {
 				continue
 			}
@@ -1588,15 +1588,15 @@ func samePlace(f, g fileFacts) bool {
 	return f.path == g.path
 }
 
-// callsCheck reports whether the operation's own body makes a call the
-// language's resolution follows to one of the checks. A call spelling
-// the check whose target resolution cannot follow, or a file whose
-// language supplied no resolved calls, leaves it open with the reason;
-// a call that reaches another declaration of the same name is not the
-// check.
-func callsCheck(op locDecl, checks []locDecl, key string) (bool, string) {
+// calledCheck finds the check the operation's own body calls: the one
+// of checks a call there reaches, as the language's resolution follows
+// it. A call spelling the check whose target resolution cannot follow,
+// or a file whose language supplied no resolved calls, leaves it open
+// with the reason; a call that reaches another declaration of the same
+// name is not the check.
+func calledCheck(op locDecl, checks []locDecl, key string) (locDecl, bool, string) {
 	if !op.file.resolvedCalls {
-		return false, fmt.Sprintf("%s:%d: the calls of %s: the language supplied no resolved calls for the file", op.file.path, op.decl.StartLine, op.decl.Name)
+		return locDecl{}, false, fmt.Sprintf("%s:%d: the calls of %s: the language supplied no resolved calls for the file", op.file.path, op.decl.StartLine, op.decl.Name)
 	}
 	open := ""
 	for _, c := range op.file.calls {
@@ -1605,14 +1605,14 @@ func callsCheck(op locDecl, checks []locDecl, key string) (bool, string) {
 		}
 		for _, check := range checks {
 			if check.reachedBy(c.Target) {
-				return true, ""
+				return check, true, ""
 			}
 		}
 		if open == "" && c.Target.Resolution == ResolutionUndetermined && methodSpelled(c.Callee, key, op.file.lang) {
 			open = unresolvedAt(op.file.path, c.Line, fmt.Sprintf("call %s in %s", c.Callee, op.decl.Name), c.Target)
 		}
 	}
-	return false, open
+	return locDecl{}, false, open
 }
 
 func checkSpecificationSatisfaction(r rule.Rule, subject rule.Subject, cc contextCode, _ domainCode) ([]Violation, error) {

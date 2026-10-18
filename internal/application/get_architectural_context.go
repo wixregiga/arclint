@@ -321,9 +321,7 @@ func (uc GetArchitecturalContext) inspectContext(out *ArchitecturalContext, cfg 
 		return conformance.Carriers{}, nil
 	}
 	var required []rule.Fact
-	if dependencies || found {
-		// A Go test carrying an assertion takes testing's T under the
-		// name its file imports testing by.
+	if dependencies {
 		required = append(required, rule.FactImports)
 	}
 	var referencesFor func(string) bool
@@ -333,8 +331,8 @@ func (uc GetArchitecturalContext) inspectContext(out *ArchitecturalContext, cfg 
 			required = append(required, rule.FactCalls, rule.FactResolvedCalls, rule.FactFieldTypes)
 			referencesFor = scope.contains
 		}
-		// A declared service's guarantee may be the value its
-		// operation returns, read through resolved result types.
+		// An assertion is carried by the check its operation's
+		// resolved call reaches.
 		required = withFacts(required, carrierFacts(lang)...)
 	}
 	if len(required) == 0 {
