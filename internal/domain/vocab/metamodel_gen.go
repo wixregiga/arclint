@@ -1116,7 +1116,7 @@ func ddd() MetaModel {
 					},
 					{
 						ID:        "assertion/checked-by-its-operation",
-						Statement: "The owner of an assertion, the aggregate's root or the domain service, declares the operation the assertion names, and the operation's body calls the checking method (assert followed by the key in the language's method case), declared on the owner or as a function of its bounded context.",
+						Statement: "The operation an assertion names has one place in the domain, one declaration with a body on its owner, the aggregate's root or the domain service, in the code of the owner's bounded context, and that body calls the checking method (assert followed by the key in the language's method case), declared on the owner or as a function of its bounded context.",
 						Sources: []Citation{
 							{Work: "evans2015", Page: "14", Section: "Services"},
 							{Work: "evans2015", Page: "22", Section: "Assertions"},
@@ -1127,7 +1127,7 @@ func ddd() MetaModel {
 							Facts:       []string{"file_tree", "declarations", "calls", "resolved_calls"},
 							Languages:   Languages{All: true},
 							Severity:    severityError,
-							Limitations: []string{"the call is the one the language's resolution follows to the checking method's declaration; a call spelling the check that resolution cannot follow leaves the assertion undetermined, and a file without resolved calls leaves it undetermined", "where in the operation the call is made, whether it runs on every path, and whether its failure fails the operation are not evaluated, nor the checking method's body", "an owner declared as an interface or an abstract class has no body to call the checking method from; whether its implementations call it is not observed, so its assertion is undetermined, and tests under verified_by do not stand in for the call", "a Python class is abstract when its own bases name abc.ABC or typing.Protocol, or its metaclass is abc.ABCMeta, as the library provides them; one abstract only through a base class of the repository is judged as concrete", "a Python base is read statically, in the order its module runs; a replacement made through more than one call, a decorator, or another module, and a submodule another file imports, are not seen", "a Python annotation alone, a star import or a destructuring after the class, and an alias a re-exporting module reads before rebinding its source can still make an abstract base read as concrete; a rebound setattr or called function, or an import inside a called function, can hide a replacement"},
+							Limitations: []string{"the call is the one the language's resolution follows to the checking method's declaration; a call spelling the check that resolution cannot follow leaves the assertion undetermined, and a file without resolved calls leaves it undetermined", "where in the operation the call is made, whether it runs on every path, and whether its failure fails the operation are not evaluated, nor the checking method's body", "the operation is a method of a type spelling the owner, read in that type's unit; a declaration in a test file is not its place, and code outside the context, such as an adapter, is never searched for it", "a declaration without a body does not call the checking method, and tests under verified_by do not stand in for the call"},
 						},
 					},
 					{

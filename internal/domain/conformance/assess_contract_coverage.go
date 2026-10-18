@@ -207,9 +207,6 @@ func assessContractCoverage(req Request, prepared, located map[string]Facts) ([]
 					return nil, err
 				}
 			}
-			if spec.Kind == vocab.ConceptAssertion && spec.BodilessOwner == "" {
-				spec.BodilessOwner = carriers.BodilessOwner(spec.Context, spec.Owner)
-			}
 			for _, cc := range code.contexts {
 				if cc.ctx.Name != spec.Context {
 					continue

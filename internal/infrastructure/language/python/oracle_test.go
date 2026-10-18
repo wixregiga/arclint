@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"unicode/utf16"
 
@@ -35,7 +34,7 @@ func TestExportPythonOracle(t *testing.T) {
 	}
 	files := oracleFiles(t, root)
 	res := newResolver(root, files)
-	facts := resolvedFacts(root, files, res, &sync.Map{}, true, true, true, true)
+	facts := resolvedFacts(root, files, res, true, true, true, true)
 	if _, err := conformance.NewObservations(files, facts); err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +263,7 @@ func BenchmarkPythonRepository(b *testing.B) {
 			fanout.Analyze(files, analyzable, func() fanout.Analyzer {
 				ps := newParsers()
 				return func(rel string) conformance.LanguageFacts {
-					return analyzeFile(ps, res, &sync.Map{}, root, rel, false, false)
+					return analyzeFile(ps, res, root, rel, false, false)
 				}
 			})
 		}

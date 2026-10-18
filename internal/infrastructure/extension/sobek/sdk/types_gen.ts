@@ -98,12 +98,12 @@ export interface DeclInfo {
    */
   exported: boolean;
   /**
-   * Abstract marks a class its own declaration states to be abstract:
-   * a TypeScript abstract class, or a Python class whose bases name
-   * abc.ABC or typing.Protocol, or whose metaclass is abc.ABCMeta, as
-   * the library provides them. False for every other kind.
+   * Bodiless marks a func or method written without a body: a method
+   * of a Go or TypeScript interface, a TypeScript abstract method, or a
+   * Go function whose body is supplied outside Go. False for every
+   * other declaration, and for every Python def.
    */
-  abstract: boolean;
+  bodiless: boolean;
   /**
    * Generic marks a func, method, or type that declares its own type
    * parameters. False for every other declaration.

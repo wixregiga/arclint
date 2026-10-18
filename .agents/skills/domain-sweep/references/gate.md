@@ -48,7 +48,7 @@ Recorded in issue #144, and carried in the librarian's `VOCAB.yaml` under `decli
 
 Decided by the owner in issue #149, carried by the distillation rule `guarantee-has-one-checked-home` and enforced by `assertion/checked-by-its-operation`: call the assertion in the domain service operation that it is supposed to protect. The operation's body calls `Assert<Key>` (`AssertNeverExceedsTotal`, `assertNeverExceedsTotal`, `assert_never_exceeds_total`), declared as a method of the service or as a function of the context, and the call is the one the language's resolution follows to it.
 
-A check that merely exists, a check a caller is expected to make, a returned value object with an invariant of the same key, and tests under `verified_by` do not check the assertion. A service declared as a Go interface, a TypeScript interface or abstract class, or a Python ABC or Protocol has no body to call the check from, so its assertion is undetermined; report that as open for the owner, and do not propose a shape that would satisfy it.
+The operation has one place in the domain: one declaration, with a body, in the code of the service's context. No declaration there, two or more, or one without a body is a finding; an adapter outside the context is never searched. A check that merely exists, a check a caller is expected to make, a returned value object with an invariant of the same key, and tests under `verified_by` do not check the assertion.
 
 A recorded domain service records at least one assertion (`domain_service/records-an-assertion`). A statement that justifies a service but names no guarantee of its operations is a question for the expert's words, not a service without a contract.
 

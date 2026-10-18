@@ -59,12 +59,10 @@ func messagesOf(a conformance.Assessment) []string {
 	return out
 }
 
-// A service declared as an interface has no body to call
-// AssertNeverExceedsTotal from, so its assertion is undetermined
-// whether or not verified_by names tests: tests never stand in for the
-// call. The operation itself must still be declared, and a concrete
-// owner naming tests still calls its check. The same holds for an
-// abstract class in TypeScript and Python.
+// Tests never stand in for the call to an assertion's check: an
+// interface's method has no body, so naming tests leaves it a finding,
+// and a concrete operation naming tests still calls its check. A Python
+// method with a body that calls nothing is a finding the same way.
 func TestTestsDoNotCheckAnAssertion(t *testing.T) {
 	id := "assertion/checked-by-its-operation"
 	r := builtInRule(t, id)
@@ -76,38 +74,29 @@ func TestTestsDoNotCheckAnAssertion(t *testing.T) {
 		return runOne(t, r, nil, observed(goFile), map[string]conformance.LanguageFacts{goFile: resolvedGo("pricing", decls)}, knowledge)
 	}
 	verified := discounterContext(t, "internal/pricing/discounter_test.go:TestDiscountNeverExceedsTotal")
+	bodiless := discount
+	bodiless.Bodiless = true
+	noBody := "service Discounter: operation Discount has no body, so it does not call AssertNeverExceedsTotal and assertion never-exceeds-total is not checked"
 	for _, knowledge := range []vocab.UbiquitousLanguage{discounterContext(t), verified} {
-		if a := run(knowledge, iface, discount, assert); outcomesOf(a)[id+"|context:pricing"] != conformance.OutcomeUndetermined || len(a.Violations()) != 0 {
-			t.Errorf("interface: outcome %s, %q", outcomesOf(a)[id+"|context:pricing"], messagesOf(a))
+		if got := messagesOf(run(knowledge, iface, bodiless)); len(got) != 1 || got[0] != noBody {
+			t.Errorf("interface:\n got %q\nwant %q", got, noBody)
 		}
-	}
-	a := run(verified, iface)
-	if got := messagesOf(a); len(got) != 1 || got[0] != "service Discounter: assertion never-exceeds-total constrains operation Discount, which the service does not declare" {
-		t.Errorf("interface without the operation: %q", got)
 	}
 
 	concrete := conformance.Declaration{Kind: "struct", Name: "Discounter", Exported: true, StartLine: 3}
-	a = run(verified, concrete, discount, assert)
+	a := run(verified, concrete, discount, assert)
 	if got := messagesOf(a); len(got) != 1 || got[0] != "service Discounter: operation Discount does not call AssertNeverExceedsTotal, so assertion never-exceeds-total is not checked" {
 		t.Errorf("concrete owner with tests: %q", got)
 	}
 
-	for _, c := range []struct {
-		lang rule.Language
-		file string
-		op   string
-	}{
-		{rule.LanguageTypeScript, "src/pricing/discounter.ts", "discount"},
-		{rule.LanguagePython, "pricing/discounter.py", "discount"},
-	} {
-		facts := map[string]conformance.LanguageFacts{c.file: {Language: c.lang, DeclarationsAvailable: true, CallsAvailable: true, ResolvedCallsAvailable: true, Declarations: []conformance.Declaration{
-			{Kind: "class", Name: "Discounter", Exported: true, Abstract: true, StartLine: 1},
-			{Kind: "method", Name: c.op, Owner: "Discounter", Exported: true, StartLine: 2},
-		}}}
-		a := runOne(t, r, nil, observed(c.file), facts, verified)
-		if got := outcomesOf(a)[id+"|context:pricing"]; got != conformance.OutcomeUndetermined || len(a.Violations()) != 0 {
-			t.Errorf("%s abstract class with tests: outcome %s, %q", c.lang, got, messagesOf(a))
-		}
+	file := "pricing/discounter.py"
+	facts := map[string]conformance.LanguageFacts{file: {Language: rule.LanguagePython, DeclarationsAvailable: true, CallsAvailable: true, ResolvedCallsAvailable: true, Declarations: []conformance.Declaration{
+		{Kind: "class", Name: "Discounter", Exported: true, StartLine: 1},
+		{Kind: "method", Name: "discount", Owner: "Discounter", Exported: true, StartLine: 2},
+	}}}
+	a = runOne(t, r, nil, observed(file), facts, verified)
+	if got := messagesOf(a); len(got) != 1 || got[0] != "service Discounter: operation discount does not call assert_never_exceeds_total, so assertion never-exceeds-total is not checked" {
+		t.Errorf("python protocol method with tests: %q", got)
 	}
 }
 
@@ -252,18 +241,19 @@ func TestInvariantVerifyingTestsAreDeclared(t *testing.T) {
 // A contract that names its tests is covered by the Rule that judges
 // them besides the Rule that judges its code, each reporting its own
 // outcome and the limitation that it reads existence, not proof; the
-// tests do not check an interface's assertion, which stays
-// undetermined. A contract naming none is not checked for tests.
+// tests do not check the assertion of an operation without a body,
+// which stays a finding. A contract naming none is not checked for
+// tests.
 func TestContractCoverageIncludesTheVerifyingTests(t *testing.T) {
 	goFile, goTest := "internal/pricing/discounter.go", "internal/pricing/discounter_test.go"
 	facts := map[string]conformance.LanguageFacts{
 		goFile: resolvedGo("pricing", []conformance.Declaration{
 			{Kind: "interface", Name: "Discounter", Exported: true, StartLine: 3},
-			{Kind: "method", Name: "Discount", Owner: "Discounter", Exported: true, StartLine: 4},
+			{Kind: "method", Name: "Discount", Owner: "Discounter", Exported: true, Bodiless: true, StartLine: 4},
 		}),
-		goTest: goTestFile("pricing", "", []conformance.Declaration{
+		goTest: withResolvedCalls(goTestFile("pricing", "", []conformance.Declaration{
 			{Kind: "func", Name: "TestDiscountNeverExceedsTotal", Exported: true, StartLine: 5, Params: []conformance.DeclarationParam{{Name: "t", Type: "*testing.T"}}},
-		}),
+		})),
 	}
 	obs, err := conformance.NewObservations(observed(goFile, goTest), facts)
 	if err != nil {
@@ -287,18 +277,18 @@ func TestContractCoverageIncludesTheVerifyingTests(t *testing.T) {
 	}
 
 	c := coverage(goTest + ":TestDiscountNeverExceedsTotal")
-	if c.Status() != "undetermined" {
-		t.Errorf("verified contract of an interface: status %s", c.Status())
+	if c.Status() != "violates" {
+		t.Errorf("verified contract of an operation without a body: status %s", c.Status())
 	}
-	if at, located := c.Carrier(); located || c.BodilessOwner() != "an interface" {
-		t.Errorf("verified contract: carrier %+v %v, owner declared as %q; want none, as an interface", at, located, c.BodilessOwner())
+	if at, located := c.Carrier(); located {
+		t.Errorf("verified contract: carrier %+v, want none for an operation without a body", at)
 	}
 	rules := map[string]conformance.Evaluation{}
 	for _, e := range c.Checks() {
 		rules[e.Rule().Qualified()] = e
 	}
 	tests, ok := rules["assertion/verifying-tests-declared"]
-	if len(rules) != 2 || !ok || tests.Outcome() != conformance.OutcomeConforms || rules["assertion/checked-by-its-operation"].Outcome() != conformance.OutcomeUndetermined {
+	if len(rules) != 2 || !ok || tests.Outcome() != conformance.OutcomeConforms || rules["assertion/checked-by-its-operation"].Outcome() != conformance.OutcomeViolates {
 		t.Fatalf("checks of a verified contract: %v", rules)
 	}
 	if !strings.Contains(strings.Join(tests.Limitations(), " "), "matched as text") {
@@ -314,40 +304,50 @@ func TestContractCoverageIncludesTheVerifyingTests(t *testing.T) {
 	}
 }
 
-// An assertion whose owner is declared without a body has no carrier,
-// whatever tests its verified_by names, and the owner is named as
-// declared without a body.
-func TestBodilessOwnerHasNoCarrier(t *testing.T) {
+// An assertion is carried by its check, the owner's method or else the
+// function of the context, never by a test its verified_by names,
+// whether or not the operation calls the check.
+func TestAssertionCarrierIsItsCheck(t *testing.T) {
 	goFile, goTest := "internal/pricing/discounter.go", "internal/pricing/discounter_test.go"
-	facts := map[string]conformance.LanguageFacts{
-		goFile: goDecls("pricing", []conformance.Declaration{
-			{Kind: "interface", Name: "Discounter", Exported: true, StartLine: 3},
-			{Kind: "method", Name: "Discount", Owner: "Discounter", Exported: true, StartLine: 4},
-			{Kind: "func", Name: "AssertNeverExceedsTotal", Exported: true, StartLine: 9},
-		}),
-		goTest: goTestFile("pricing", "", []conformance.Declaration{
-			{Kind: "func", Name: "TestDiscountNeverExceedsTotal", Exported: true, StartLine: 7, Params: []conformance.DeclarationParam{{Name: "t", Type: "*testing.T"}}},
-		}),
-	}
-	obs, err := conformance.NewObservations(observed(goFile, goTest), facts)
-	if err != nil {
-		t.Fatal(err)
-	}
-	inspection, err := conformance.NewInspectionFacts(nil, obs, rule.FactFileTree, rule.FactImports, rule.FactDeclarations)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, tests := range [][]string{{goTest + ":TestDiscountNeverExceedsTotal"}, nil} {
+	carrier := func(owner conformance.Declaration, discount conformance.Declaration, tests ...string) (conformance.Carrier, bool) {
+		t.Helper()
+		facts := map[string]conformance.LanguageFacts{
+			goFile: goDecls("pricing", []conformance.Declaration{owner, discount,
+				{Kind: "func", Name: "AssertNeverExceedsTotal", Exported: true, StartLine: 9},
+			}),
+			goTest: goTestFile("pricing", "", []conformance.Declaration{
+				{Kind: "func", Name: "TestDiscountNeverExceedsTotal", Exported: true, StartLine: 7, Params: []conformance.DeclarationParam{{Name: "t", Type: "*testing.T"}}},
+			}),
+		}
+		obs, err := conformance.NewObservations(observed(goFile, goTest), facts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		inspection, err := conformance.NewInspectionFacts(nil, obs, rule.FactFileTree, rule.FactImports, rule.FactDeclarations)
+		if err != nil {
+			t.Fatal(err)
+		}
 		carriers, err := conformance.NewCarriers(inspection, discounterContext(t, tests...))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if at, found, err := carriers.Assertion("pricing", "Discounter", "never-exceeds-total"); err != nil || found {
-			t.Errorf("%v: carrier %+v %v %v, want none", tests, at, found, err)
+		at, found, err := carriers.Assertion("pricing", "Discounter", "never-exceeds-total")
+		if err != nil {
+			t.Fatal(err)
 		}
-		if got := carriers.BodilessOwner("pricing", "Discounter"); got != "an interface" {
-			t.Errorf("Discounter is declared as %q, want an interface", got)
+		return at, found
+	}
+	iface := conformance.Declaration{Kind: "interface", Name: "Discounter", Exported: true, StartLine: 3}
+	bodiless := conformance.Declaration{Kind: "method", Name: "Discount", Owner: "Discounter", Exported: true, Bodiless: true, StartLine: 4}
+	for _, tests := range [][]string{{goTest + ":TestDiscountNeverExceedsTotal"}, nil} {
+		if at, found := carrier(iface, bodiless, tests...); !found || at != (conformance.Carrier{Path: goFile, Line: 9}) {
+			t.Errorf("%v: carrier %+v %v, want the function of the context, never the test", tests, at, found)
 		}
+	}
+	concrete := conformance.Declaration{Kind: "struct", Name: "Discounter", Exported: true, StartLine: 3}
+	discount := conformance.Declaration{Kind: "method", Name: "Discount", Owner: "Discounter", Exported: true, StartLine: 4}
+	if at, found := carrier(concrete, discount); !found || at != (conformance.Carrier{Path: goFile, Line: 9}) {
+		t.Errorf("carrier %+v %v, want the function of the context", at, found)
 	}
 }
 

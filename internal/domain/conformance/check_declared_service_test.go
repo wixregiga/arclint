@@ -163,10 +163,84 @@ func TestRootCommandCallsItsCheck(t *testing.T) {
 	}
 }
 
-// An owner declared as an interface or an abstract class has no body to
-// call its check from, so its assertion is undetermined, whatever the
-// model or the tests state; it still declares the operation.
-func TestBodilessOwnerAssertionIsUndetermined(t *testing.T) {
+// The operation an assertion names has one place in the domain: one
+// declaration, with a body, on the type that spells the service, in the
+// code of the service's context. No declaration there, two or more, and
+// one without a body are each a finding, whatever the type is declared
+// as; a declaration in a test file, or on another type outside the
+// context, is not the operation's place.
+func TestOperationHasOnePlaceInTheDomain(t *testing.T) {
+	const (
+		userFile    = "internal/user/encrypter.go"
+		legacyFile  = "internal/user/legacy/encrypter.go"
+		userTest    = "internal/user/encrypter_test.go"
+		adapterFile = "internal/adapters/passwords/pbkdf2.go"
+	)
+	knowledge := oneContext(t, vocab.BoundedContext{
+		Name: "identity", Definition: "d", Line: 1,
+		Services: []vocab.DomainService{{
+			Name: "Encrypter", Definition: "d", Line: 2,
+			Assertions: []vocab.Assertion{{Key: "not-empty", On: "Encrypt", Statement: "s", Line: 3}},
+		}},
+	})
+	id := "assertion/checked-by-its-operation"
+	zones := []rule.Zone{mustZone(t, "identity", "internal/user/**")}
+	run := func(facts map[string]conformance.LanguageFacts) ([]string, conformance.Outcome) {
+		t.Helper()
+		var paths []string
+		for p := range facts {
+			paths = append(paths, p)
+		}
+		a := runOne(t, builtInRule(t, id), zones, observed(paths...), facts, knowledge)
+		var out []string
+		for _, v := range a.Violations() {
+			out = append(out, v.Message())
+		}
+		return out, outcomesOf(a)[id+"|context:identity"]
+	}
+	iface := conformance.Declaration{Kind: "interface", Name: "Encrypter", Exported: true, StartLine: 5}
+	ifaceOp := conformance.Declaration{Kind: "method", Name: "Encrypt", Owner: "Encrypter", Exported: true, Bodiless: true, StartLine: 6}
+	concrete := conformance.Declaration{Kind: "struct", Name: "Encrypter", Exported: true, StartLine: 5}
+	op := conformance.Declaration{Kind: "method", Name: "Encrypt", Owner: "Encrypter", Exported: true, StartLine: 10}
+	adapter := resolvedGo("passwords", []conformance.Declaration{
+		{Kind: "struct", Name: "PBKDF2Encrypter", Exported: true, StartLine: 5},
+		{Kind: "method", Name: "Encrypt", Owner: "PBKDF2Encrypter", Exported: true, StartLine: 10},
+	})
+	for _, tc := range []struct {
+		name  string
+		facts map[string]conformance.LanguageFacts
+		want  []string
+	}{
+		{"no declaration in the context, one in an adapter",
+			map[string]conformance.LanguageFacts{userFile: resolvedGo("user", []conformance.Declaration{concrete}), adapterFile: adapter},
+			[]string{"service Encrypter: assertion not-empty constrains operation Encrypt, which is not declared on Encrypter in the code of context identity"}},
+		{"only a test declares it",
+			map[string]conformance.LanguageFacts{userFile: resolvedGo("user", []conformance.Declaration{concrete}), userTest: resolvedGo("user", []conformance.Declaration{op})},
+			[]string{"service Encrypter: assertion not-empty constrains operation Encrypt, which is not declared on Encrypter in the code of context identity"}},
+		{"two declarations in the context",
+			map[string]conformance.LanguageFacts{
+				userFile:   resolvedGo("user", []conformance.Declaration{concrete, op}),
+				legacyFile: resolvedGo("legacy", []conformance.Declaration{concrete, op}),
+			},
+			[]string{"service Encrypter: operation Encrypt is declared 2 times in the code of context identity, at internal/user/encrypter.go:10, internal/user/legacy/encrypter.go:10; assertion not-empty needs it in one place"}},
+		{"one declaration without a body, an adapter beside it",
+			map[string]conformance.LanguageFacts{userFile: resolvedGo("user", []conformance.Declaration{iface, ifaceOp}), adapterFile: adapter},
+			[]string{"service Encrypter: operation Encrypt has no body, so it does not call AssertNotEmpty and assertion not-empty is not checked"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, outcome := run(tc.facts)
+			if strings.Join(got, "\n") != strings.Join(tc.want, "\n") || outcome != conformance.OutcomeViolates {
+				t.Errorf("\n got %q (%s)\nwant %q (violates)", got, outcome, tc.want)
+			}
+		})
+	}
+}
+
+// A TypeScript abstract method has no body, so it is a finding like any
+// other operation that does not call its check, whatever tests the
+// assertion names; an abstract class's method with a body is judged by
+// its calls.
+func TestAbstractOperationIsAFinding(t *testing.T) {
 	const file = "src/identity/encrypter.ts"
 	knowledge := oneContext(t, vocab.BoundedContext{
 		Name: "identity", Definition: "d", Line: 1,
@@ -177,27 +251,32 @@ func TestBodilessOwnerAssertionIsUndetermined(t *testing.T) {
 		}},
 	})
 	id := "assertion/checked-by-its-operation"
-	run := func(decls ...conformance.Declaration) ([]string, conformance.Outcome, []string) {
+	run := func(op conformance.Declaration, calls ...conformance.Call) []string {
 		facts := map[string]conformance.LanguageFacts{file: {
 			Language: rule.LanguageTypeScript, DeclarationsAvailable: true, CallsAvailable: true, ResolvedCallsAvailable: true,
-			Declarations: append([]conformance.Declaration{{Kind: "func", Name: "assertNotEmpty", Exported: true, StartLine: 9}}, decls...),
+			Declarations: []conformance.Declaration{
+				{Kind: "class", Name: "Encrypter", Exported: true, StartLine: 1},
+				op,
+				{Kind: "func", Name: "assertNotEmpty", Exported: true, StartLine: 9},
+			},
+			Calls: calls,
 		}}
 		a := runOne(t, builtInRule(t, id), nil, observed(file), facts, knowledge)
 		var out []string
 		for _, v := range a.Violations() {
 			out = append(out, v.Message())
 		}
-		return out, outcomesOf(a)[id+"|context:identity"], evaluationOf(t, a, id, "identity").Unresolved()
+		return out
 	}
-	abstract := conformance.Declaration{Kind: "class", Name: "Encrypter", Exported: true, Abstract: true, StartLine: 1}
-	operation := conformance.Declaration{Kind: "method", Name: "encrypt", Owner: "Encrypter", Exported: true, StartLine: 2}
-	got, outcome, open := run(abstract, operation)
-	want := "src/identity/encrypter.ts:2: service Encrypter: Encrypter is declared as an abstract class, which has no body to call assertNotEmpty (typescript) from; whether its implementations call it is not observed"
-	if len(got) != 0 || outcome != conformance.OutcomeUndetermined || strings.Join(open, "\n") != want {
-		t.Errorf("an abstract class declaring the operation:\n got %q (%s) %q\nwant undetermined %q", got, outcome, open, want)
+	abstract := conformance.Declaration{Kind: "method", Name: "encrypt", Owner: "Encrypter", Exported: true, Bodiless: true, StartLine: 2}
+	want := "service Encrypter: operation encrypt has no body, so it does not call assertNotEmpty and assertion not-empty is not checked"
+	if got := run(abstract); len(got) != 1 || got[0] != want {
+		t.Errorf("an abstract operation:\n got %q\nwant %q", got, want)
 	}
-	missing := "service Encrypter: assertion not-empty constrains operation encrypt, which the service does not declare"
-	if got, _, _ := run(conformance.Declaration{Kind: "interface", Name: "Encrypter", Exported: true, StartLine: 1}); len(got) != 1 || got[0] != missing {
-		t.Errorf("an interface without the operation:\n got %q\nwant %q", got, missing)
+	withBody := conformance.Declaration{Kind: "method", Name: "encrypt", Owner: "Encrypter", Exported: true, StartLine: 2}
+	call := conformance.Call{Callee: "assertNotEmpty", Line: 3, Enclosing: "encrypt", EnclosingOwner: "Encrypter",
+		Target: conformance.Reference{Resolution: conformance.ResolutionDeclared, File: file, Name: "assertNotEmpty"}}
+	if got := run(withBody, call); len(got) != 0 {
+		t.Errorf("an abstract class's operation with a body that calls the check: %q", got)
 	}
 }

@@ -37,6 +37,8 @@ func extractDeclarations(fset *token.FileSet, file *ast.File, res resolution) []
 				dec.Kind = "method"
 				dec.Owner = receiverName(d.Recv.List[0].Type)
 			}
+			// A declaration without a body is implemented outside Go.
+			dec.Bodiless = d.Body == nil
 			out = append(out, dec)
 		case *ast.GenDecl:
 			for _, spec := range d.Specs {
@@ -113,7 +115,7 @@ func typeDeclarations(fset *token.FileSet, s *ast.TypeSpec, res resolution) []co
 			ms, me := lines(method)
 			for _, name := range method.Names {
 				members = append(members, conformance.Declaration{
-					Kind: "method", Name: name.Name, Owner: owner,
+					Kind: "method", Name: name.Name, Owner: owner, Bodiless: true,
 					Exported: ast.IsExported(name.Name), StartLine: ms, EndLine: me,
 					Params:  paramInfos(funcType.Params),
 					Results: resultTexts(funcType.Results),

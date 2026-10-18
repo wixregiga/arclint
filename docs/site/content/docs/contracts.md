@@ -114,13 +114,7 @@ whether the test proves the statement is not checked. In TypeScript a comment
 or a string that repeats the name passes for the test.
 
 Tests never stand in for an assertion's check: the operation the
-assertion names still calls it (see below). When the owner of an
-assertion is an interface or an abstract class (a TypeScript `abstract
-class`, or a Python class deriving `ABC` or `Protocol`, or naming
-`ABCMeta` as its metaclass), `assertion/checked-by-its-operation` still
-asks the owner to declare the operation, and leaves the assertion
-undetermined, with or without tests, because the owner has no body to
-call the check from.
+assertion names still calls it (see below), with or without tests.
 
 ## Rules that follow calls and field types
 
@@ -271,7 +265,11 @@ its key, and every constructor and every command of the root calls it
 named `Assert` followed by its key, declared as a method of its owner
 (the aggregate's root or the domain service) or as a function of the
 context, and called in the body of the operation the assertion names
-(`assertion/checked-by-its-operation`). The call counts when the
+(`assertion/checked-by-its-operation`). The operation has one place in
+the domain: one declaration, with a body, on a type spelling the owner,
+in the code of the owner's context. No declaration there, two or more,
+and one without a body are each a finding; code outside the context,
+such as an adapter, is never searched for it. The call counts when the
 language's resolution follows it to that declaration: a method of
 another type spelled the same, or a function of the same name outside
 the context, is not the check, and a call resolution cannot follow
@@ -301,13 +299,8 @@ post-conditions be stated explicitly, not what the methods are named.
 The statement is the guarantee in the domain expert's words; the code
 checks it, the recording never restates it as a post-condition.
 
-**A domain service declared as an abstraction** (an interface in Go or
-TypeScript, an abstract class in TypeScript, a class whose own bases
-name `ABC` or `Protocol` in Python) has no body to call its check from,
-so its assertion is undetermined: whether its implementations call the
-check is not observed. `arclint domain define assertion` prints where
-the guarantee it records is checked, chosen by how the owner is
-declared.
+`arclint domain define assertion` prints where the guarantee it
+records is checked.
 
 **A domain service** records at least one assertion
 (`domain_service/records-an-assertion`): Evans asks for "a set of

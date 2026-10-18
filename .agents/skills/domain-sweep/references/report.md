@@ -40,7 +40,7 @@ Under each entry: the evidence that decided it, quoted or cited, and each litera
 
 ## 4. Code changes each entry requires
 
-One bullet per recorded entry: the owner, where enforcement must move or be added, which call sites go away, and which tests pin the behavior today. For a guarantee of an operation, say which operation decides and which application step carries out the change. For a declared service, say which operation calls its check, or that it is declared without a body. Name files and functions; write no code.
+One bullet per recorded entry: the owner, where enforcement must move or be added, which call sites go away, and which tests pin the behavior today. For a guarantee of an operation, say which operation decides and which application step carries out the change. For a domain service, name the one declaration of the operation that calls its check. Name files and functions; write no code.
 
 ## 5. Questions for the owner
 

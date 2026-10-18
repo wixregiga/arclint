@@ -99,7 +99,7 @@ func DistillationRules() []DistillationRule {
 		},
 		{
 			ID:   "guarantee-has-one-checked-home",
-			Rule: "A guarantee of a domain service is checked in the operation it protects: the operation calls the check named assert followed by the key, a method of the service or a function of the context. Never a check only a caller, a test, or a returned value makes.",
+			Rule: "A guarantee of a domain service is checked in the operation it protects, which has one place in the domain: its one declaration in the context's code calls the check named assert followed by the key, a method of the service or a function of the context. Never a check only a caller, a test, or a returned value makes.",
 			Sources: []Citation{
 				{Work: evansReference, Page: "14", Section: servicesSection},
 				{Work: evansReference, Page: "21", Section: sideEffectFreeSection},

@@ -54,7 +54,7 @@ let counter = 0;
 		},
 		{Kind: "interface", Name: "Port", Exported: true, StartLine: 10, EndLine: 13},
 		{
-			Kind: "method", Name: "load", Owner: "Port", Exported: true, StartLine: 11, EndLine: 11,
+			Kind: "method", Name: "load", Owner: "Port", Exported: true, Bodiless: true, StartLine: 11, EndLine: 11,
 			Params: []conformance.DeclarationParam{{Name: "id", Type: "string"}}, Results: []string{"Promise<string>"},
 		},
 		{Kind: "field", Name: "retries", Owner: "Port", Exported: true, StartLine: 12, EndLine: 12},
@@ -77,9 +77,9 @@ let counter = 0;
 	diffDecls(t, got.Decls, want)
 }
 
-// TestTypeScriptAbstractClassDeclarations marks an abstract class and
-// emits its abstract members as methods with their signatures, the
-// operations a subclass completes; a concrete class carries no mark.
+// TestTypeScriptAbstractClassDeclarations emits an abstract class's
+// abstract members as methods with their signatures, marked bodiless,
+// and its methods with a body unmarked.
 func TestTypeScriptAbstractClassDeclarations(t *testing.T) {
 	src := []byte(`export abstract class Encrypter {
   abstract encrypt(plain: string): EncryptedPassword;
@@ -94,12 +94,12 @@ export class Plain {}
 		t.Fatal(got.ParseError)
 	}
 	want := []conformance.Declaration{
-		{Kind: "class", Name: "Encrypter", Exported: true, Abstract: true, StartLine: 1, EndLine: 5},
+		{Kind: "class", Name: "Encrypter", Exported: true, StartLine: 1, EndLine: 5},
 		{
-			Kind: "method", Name: "encrypt", Owner: "Encrypter", Exported: true, StartLine: 2, EndLine: 2,
+			Kind: "method", Name: "encrypt", Owner: "Encrypter", Exported: true, Bodiless: true, StartLine: 2, EndLine: 2,
 			Params: []conformance.DeclarationParam{{Name: "plain", Type: "string"}}, Results: []string{"EncryptedPassword"},
 		},
-		{Kind: "method", Name: "salt", Owner: "Encrypter", StartLine: 3, EndLine: 3, Results: []string{"string"}},
+		{Kind: "method", Name: "salt", Owner: "Encrypter", Bodiless: true, StartLine: 3, EndLine: 3, Results: []string{"string"}},
 		{
 			Kind: "method", Name: "matches", Owner: "Encrypter", Exported: true, StartLine: 4, EndLine: 4,
 			Params: []conformance.DeclarationParam{{Name: "plain", Type: "string"}}, Results: []string{"boolean"},
@@ -159,7 +159,7 @@ const bare = x => x;
 	want := []conformance.Declaration{
 		{Kind: "interface", Name: "Port", Exported: true, StartLine: 1, EndLine: 3},
 		{
-			Kind: "method", Name: "load", Owner: "Port", Exported: true, StartLine: 2, EndLine: 2,
+			Kind: "method", Name: "load", Owner: "Port", Exported: true, Bodiless: true, StartLine: 2, EndLine: 2,
 			Params: []conformance.DeclarationParam{
 				{Name: "id", Type: "string"},
 				{Name: "opts", Type: "LoadOpts", Optional: true},
@@ -250,9 +250,9 @@ func diffDecls(t *testing.T, got, want []conformance.Declaration) {
 	t.Fail()
 }
 
-// An abstract class carries the abstract mark, and its abstract
-// methods, which have no body, are declared as its methods like the
-// ones that do; a class that is not abstract carries no mark.
+// An abstract class's abstract methods, which have no body, are
+// declared as its methods like the ones that do, marked bodiless; a
+// method with a body, in either class, is not.
 func TestTypeScriptMarksAbstractClasses(t *testing.T) {
 	src := []byte(`export abstract class Discounter {
   abstract discount(total: number): number;
@@ -270,12 +270,12 @@ export class FlatDiscount extends Discounter {
 		t.Fatal(got.ParseError)
 	}
 	want := []conformance.Declaration{
-		{Kind: "class", Name: "Discounter", Exported: true, Abstract: true, StartLine: 1, EndLine: 5},
+		{Kind: "class", Name: "Discounter", Exported: true, StartLine: 1, EndLine: 5},
 		{
-			Kind: "method", Name: "discount", Owner: "Discounter", Exported: true, StartLine: 2, EndLine: 2,
+			Kind: "method", Name: "discount", Owner: "Discounter", Exported: true, Bodiless: true, StartLine: 2, EndLine: 2,
 			Params: []conformance.DeclarationParam{{Name: "total", Type: "number"}}, Results: []string{"number"},
 		},
-		{Kind: "method", Name: "audit", Owner: "Discounter", StartLine: 3, EndLine: 3, Results: []string{"void"}},
+		{Kind: "method", Name: "audit", Owner: "Discounter", Bodiless: true, StartLine: 3, EndLine: 3, Results: []string{"void"}},
 		{Kind: "method", Name: "describe", Owner: "Discounter", Exported: true, StartLine: 4, EndLine: 4, Results: []string{"string"}},
 		{Kind: "class", Name: "FlatDiscount", Exported: true, StartLine: 7, EndLine: 10},
 		{

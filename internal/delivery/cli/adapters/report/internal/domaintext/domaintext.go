@@ -746,8 +746,6 @@ func checkLine(h conformance.AssertionHome, result application.DomainDefineResul
 		return fmt.Sprintf("%s calls %s, a method of the root of %s or a function of context %s.", h.Operation, check, result.Owner, result.Context)
 	case conformance.CheckHomeService:
 		return where + "."
-	case conformance.CheckHomeBodiless:
-		return fmt.Sprintf("%s is declared as an %s, which has no body to call %s from, so whether its implementations call it is not checked.", result.Owner, h.Declared, check)
 	default:
 		return fmt.Sprintf("%s is not declared yet. Declared as a concrete type, %s.", result.Owner, where)
 	}
@@ -1126,17 +1124,14 @@ func shownPhrase(d *application.DomainKnowledge) string {
 }
 
 // anchorSuffix renders a contract's anchor after its line: the source
-// when found, the word "missing" when nothing carries it, "no body"
-// when its owner has none to call a check from, nothing when the
-// contracts were never located.
+// when found, the word "missing" otherwise, nothing when the contracts
+// were never located.
 func anchorSuffix(st Style, source string, anchor application.ContractAnchor) string {
 	switch anchor {
 	case application.AnchorFound:
 		return " " + st.Path(source)
 	case application.AnchorMissing:
 		return " " + st.Warn(string(anchor))
-	case application.AnchorBodiless:
-		return " " + st.Muted("no body")
 	}
 	return ""
 }
@@ -1208,8 +1203,6 @@ func anchorPhrase(source string, anchor application.ContractAnchor) string {
 		return source
 	case application.AnchorMissing:
 		return string(anchor)
-	case application.AnchorBodiless:
-		// Its owner has no body to carry a check, so no source is shown.
 	}
 	return ""
 }

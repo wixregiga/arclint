@@ -214,3 +214,48 @@ func TestPlain(t *testing.T) {}
 		}
 	}
 }
+
+// A method of an interface and a func declared without a body, whose
+// body is supplied outside Go, are bodiless; a method or func with a
+// body is not.
+func TestDeclarationsMarkBodiless(t *testing.T) {
+	root := t.TempDir()
+	files := []conformance.ObservedFile{
+		write(t, root, "go.mod", "module example.com/x\n\ngo 1.22\n"),
+		write(t, root, "p/p.go", `package p
+
+// Encrypter protects a password.
+type Encrypter interface {
+	Encrypt(plain string) (string, error)
+}
+
+// Plain encrypts nothing.
+type Plain struct{}
+
+// Encrypt returns the text it was given.
+func (Plain) Encrypt(plain string) (string, error) { return plain, nil }
+
+// sum is written in assembly.
+func sum(a, b int) int
+
+// add has a body.
+func add(a, b int) int { return a + b }
+`),
+	}
+	facts, err := golang.NewProducer().Facts(root, files, []rule.Fact{rule.FactDeclarations})
+	if err != nil {
+		t.Fatalf("Facts: %v", err)
+	}
+	got := map[string]bool{}
+	for _, d := range facts["p/p.go"].Declarations {
+		if d.Kind == "method" || d.Kind == "func" {
+			got[d.Owner+"."+d.Name] = d.Bodiless
+		}
+	}
+	want := map[string]bool{"Encrypter.Encrypt": true, "Plain.Encrypt": false, ".sum": true, ".add": false}
+	for name, bodiless := range want {
+		if b, ok := got[name]; !ok || b != bodiless {
+			t.Errorf("%s bodiless = %v (declared %v), want %v", name, b, ok, bodiless)
+		}
+	}
+}

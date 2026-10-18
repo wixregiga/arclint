@@ -13,8 +13,7 @@ import (
 // value object invariant the constructor, an assertion the method or
 // function of the context its key names, a specification its
 // satisfaction method), so a contract is either found in source or
-// missing from it; an assertion whose owner has no body has nothing to
-// carry it.
+// missing from it.
 type ContractAnchor string
 
 const (
@@ -24,10 +23,6 @@ const (
 	// AnchorMissing means no observed file declares the carrier the
 	// recording names.
 	AnchorMissing ContractAnchor = "missing"
-	// AnchorBodiless means the assertion's owner is declared as an
-	// interface or an abstract class, which has no body to call a check
-	// from, so nothing carries it and no finding asks for a carrier.
-	AnchorBodiless ContractAnchor = "bodiless"
 )
 
 // ContractKind names which recorded contract a listing entry is.
@@ -67,10 +62,6 @@ func locateDomainContracts(dk *DomainKnowledge, carriers conformance.Carriers) e
 			}
 			dk.Contexts[i].Assertions[j].Source = sourceOf(c, found)
 			dk.Contexts[i].Assertions[j].Anchor = anchorOf(found)
-			dk.Contexts[i].Assertions[j].BodilessOwner = carriers.BodilessOwner(ctx, a.Owner)
-			if dk.Contexts[i].Assertions[j].BodilessOwner != "" {
-				dk.Contexts[i].Assertions[j].Anchor = AnchorBodiless
-			}
 		}
 		for j, s := range dk.Contexts[i].Specifications {
 			c, found := carriers.Satisfaction(ctx, s.Name)

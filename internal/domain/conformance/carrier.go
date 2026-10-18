@@ -114,9 +114,8 @@ func (c Carriers) Invariant(ctx, owner, key string) (Carrier, bool, error) {
 
 // Assertion locates the check of an assertion: assert followed by the
 // key, in the method case of the owner's language, declared as a method
-// of the owner, or else as a function of the context. An owner declared
-// without a body, an interface or an abstract class, has no body to
-// call a check from, so nothing carries its assertion.
+// of the owner, or else as a function of the context. An owner no single
+// type spells has none located.
 func (c Carriers) Assertion(ctx, owner, key string) (Carrier, bool, error) {
 	if _, err := rule.CaseTerm(key, "flatcase"); err != nil {
 		return Carrier{}, false, fmt.Errorf("method name for %q: %w", key, err)
@@ -125,48 +124,19 @@ func (c Carriers) Assertion(ctx, owner, key string) (Carrier, bool, error) {
 	if !ok {
 		return Carrier{}, false, nil
 	}
-	_, aggregate := cc.aggregates[owner]
-	decl, idx, located := cc.assertionOwner(owner, aggregate)
-	if !located || bodiless(decl.decl) != "" {
+	_, aggregate, recorded := cc.recordedAssertion(owner, key)
+	if !recorded {
 		return Carrier{}, false, nil
 	}
-	checks, err := cc.assertionChecks(assertionOwner{decl: decl, idx: idx}, assertKey(key))
-	if err != nil || len(checks) == 0 {
-		return Carrier{}, false, err
+	decl, _, located := cc.assertionOwner(owner, aggregate)
+	if !located {
+		return Carrier{}, false, nil
+	}
+	checks := cc.assertionChecks(decl, decl.decl.Name, assertKey(key))
+	if len(checks) == 0 {
+		return Carrier{}, false, nil
 	}
 	return carrierOf(checks[0]), true, nil
-}
-
-// BodilessOwner names how the owner of an assertion is declared when it
-// has no body to call a checking method from, an interface or an
-// abstract class, or "" when it has one or is not located. Such an
-// owner has no body to call its assertion's check from.
-func (c Carriers) BodilessOwner(ctx, owner string) string {
-	decl, located := c.owner(ctx, owner)
-	if !located {
-		return ""
-	}
-	return bodiless(decl.decl)
-}
-
-// owner locates the declared type owning a contract: an aggregate's
-// root, or the type spelling a domain service.
-func (c Carriers) owner(ctx, owner string) (locDecl, bool) {
-	cc, ok := c.contexts[ctx]
-	if !ok {
-		return locDecl{}, false
-	}
-	if ac, isAggregate := cc.aggregates[owner]; isAggregate {
-		if !ac.located() {
-			return locDecl{}, false
-		}
-		return ac.root(), true
-	}
-	loc := cc.terms[owner]
-	if !loc.located() {
-		return locDecl{}, false
-	}
-	return loc.decl(), true
 }
 
 // rootMethod finds the method a contract key names on an aggregate's

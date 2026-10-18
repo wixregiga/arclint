@@ -200,9 +200,9 @@ export default defineRule({type: "host-contract", description: "contract", capab
 	expectedFacts["parseError"] = ""
 	decl := expectedFacts["decls"].([]any)[0].(map[string]any)
 	decl["params"].([]any)[0].(map[string]any)["variadic"] = false
-	decl["holds"], decl["type"], decl["abstract"] = []any{}, nil, false
+	decl["holds"], decl["type"], decl["bodiless"] = []any{}, nil, false
 	field := expectedFacts["decls"].([]any)[1].(map[string]any)
-	field["exported"], field["params"], field["results"], field["abstract"] = false, []any{}, []any{}, false
+	field["exported"], field["params"], field["results"], field["bodiless"] = false, []any{}, []any{}, false
 	if !reflect.DeepEqual(actual, expected) {
 		t.Fatalf("host wire shapes differ:\ngot  %s\nwant %s", got[1].Message, wantJSON)
 	}

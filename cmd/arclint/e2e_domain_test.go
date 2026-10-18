@@ -1507,11 +1507,11 @@ type Discounter interface {
 `
 
 // testDomainInterfaceServiceVerifiedByTests holds a service declared
-// as an interface, which has no body to call its check from: its
-// assertion is undetermined with or without the tests it names, which
-// never stand in for the call, and a renamed test is a finding at the
-// recorded assertion. The tests show in domain show and in arclint
-// context.
+// as an interface, whose operation has no body: the operation does not
+// call its check, which is a finding with or without the tests the
+// assertion names, since tests never stand in for the call, and a
+// renamed test is a second finding at the recorded assertion. The tests
+// show in domain show and in arclint context.
 func testDomainInterfaceServiceVerifiedByTests(t *testing.T) {
 	root := domainFixture(t)
 	write(t, root, "src/pricing/discounter.go", discounterInterface)
@@ -1544,12 +1544,13 @@ func testDomainInterfaceServiceVerifiedByTests(t *testing.T) {
 		return out
 	}
 
-	if d := findings(0); len(d) != 0 {
+	noBody := "service Discounter: operation Discount has no body, so it does not call AssertNeverExceedsTotal and assertion never-exceeds-total is not checked"
+	if d := findings(1); len(d) != 1 || d[0].RuleID != "assertion/checked-by-its-operation" || d[0].Message != noBody {
 		t.Fatalf("interface without tests: %+v", d)
 	}
 	out := mustRunDomain(t, root, "context", "src/pricing/discounter.go")
-	if !strings.Contains(out, "never-exceeds-total (Discounter, on Discount): A discount never exceeds the order total. no body\n") || strings.Contains(out, "unanchored contracts") {
-		t.Fatalf("context does not say the interface has no body to call the check from:\n%s", out)
+	if !strings.Contains(out, "never-exceeds-total (Discounter, on Discount): A discount never exceeds the order total. missing\n") {
+		t.Fatalf("context does not list the assertion as missing its check:\n%s", out)
 	}
 
 	test := "src/pricing/discounter_test.go:TestDiscountNeverExceedsTotal"
@@ -1557,11 +1558,11 @@ func testDomainInterfaceServiceVerifiedByTests(t *testing.T) {
 	if !strings.Contains(out, "verified_by: "+test) {
 		t.Fatalf("define does not report the recorded test:\n%s", out)
 	}
-	if d := findings(0); len(d) != 0 {
+	if d := findings(1); len(d) != 1 || d[0].Message != noBody {
 		t.Fatalf("interface with an existing test: %+v", d)
 	}
 	out = mustRunDomain(t, root, "domain", "show", "assertion", "never-exceeds-total")
-	if !strings.Contains(out, "verified by: "+test+" (arclint checks that each test exists, not what it proves)\nEnforced at: not found; expected none, since Discounter is declared as an interface, which has no body to call a check from\nStatus: undetermined\n") {
+	if !strings.Contains(out, "verified by: "+test+" (arclint checks that each test exists, not what it proves)\nEnforced at: not found; expected method AssertNeverExceedsTotal on Discounter, or a function of the context of the same name\nStatus: finding\n") {
 		t.Fatalf("show takes the verifying test for the check:\n%s", out)
 	}
 	out = mustRunDomain(t, root, "context", "src/pricing/discounter.go")
@@ -1570,11 +1571,22 @@ func testDomainInterfaceServiceVerifiedByTests(t *testing.T) {
 	}
 
 	write(t, root, "src/pricing/discounter_test.go", "package pricing\n\nimport \"testing\"\n\nfunc TestDiscountCapped(t *testing.T) {}\n")
-	d := findings(1)
-	if len(d) != 1 || d[0].RuleID != "assertion/verifying-tests-declared" || d[0].Path != "domain.arclint.yaml" ||
+	d := ofRule(findings(1), "assertion/verifying-tests-declared")
+	if len(d) != 1 || d[0].Path != "domain.arclint.yaml" ||
 		!strings.Contains(d[0].Message, "declares no test TestDiscountNeverExceedsTotal") {
 		t.Fatalf("renamed test: %+v", d)
 	}
+}
+
+// ofRule keeps the findings of one rule.
+func ofRule(findings []diagnosticDoc, id string) []diagnosticDoc {
+	var out []diagnosticDoc
+	for _, f := range findings {
+		if f.RuleID == id {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // excludedTestsRules keeps every Go test file out of rule evaluation,
@@ -1635,17 +1647,17 @@ func testDomainVerifiedByExcludedTests(t *testing.T) {
 		return out
 	}
 
-	if d := check(0); len(d) != 0 {
+	if d := ofRule(check(1), "assertion/verifying-tests-declared"); len(d) != 0 {
 		t.Fatalf("an existing test in an excluded file: %+v", d)
 	}
 	out := mustRunDomain(t, root, "domain", "show", "assertion", "never-exceeds-total")
-	if !strings.Contains(out, "Status: undetermined\n") || strings.Contains(out, "assertion/verifying-tests-declared:") {
+	if !strings.Contains(out, "Status: finding\n") || strings.Contains(out, "assertion/verifying-tests-declared:") {
 		t.Fatalf("show does not find the test in the excluded file, or takes it for the check:\n%s", out)
 	}
 
 	write(t, root, "src/pricing/discounter_test.go", strings.Replace(test, "TestDiscountNeverExceedsTotal", "TestDiscountCapped", 1))
-	d := check(1)
-	if len(d) != 1 || d[0].RuleID != "assertion/verifying-tests-declared" ||
+	d := ofRule(check(1), "assertion/verifying-tests-declared")
+	if len(d) != 1 ||
 		!strings.Contains(d[0].Message, "declares no test TestDiscountNeverExceedsTotal; read because verified_by names it; scan.exclude keeps it out of rule evaluation") {
 		t.Fatalf("a renamed test in an excluded file: %+v", d)
 	}

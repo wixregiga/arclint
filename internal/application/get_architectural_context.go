@@ -129,13 +129,9 @@ type DomainAssertionRef struct {
 	On           string        `json:"on"`
 	// VerifiedBy lists the tests the assertion names as verifying it,
 	// as DomainInvariantRef's does.
-	VerifiedBy []string `json:"verifiedBy,omitempty"`
-	// BodilessOwner names how the owner is declared when it has no
-	// body to call a checking method from, an interface or an abstract
-	// class; nothing then carries the assertion.
-	BodilessOwner string         `json:"bodilessOwner,omitempty"`
-	Source        string         `json:"source,omitempty"`
-	Anchor        ContractAnchor `json:"anchor,omitempty"`
+	VerifiedBy []string       `json:"verifiedBy,omitempty"`
+	Source     string         `json:"source,omitempty"`
+	Anchor     ContractAnchor `json:"anchor,omitempty"`
 }
 
 // DomainSpecificationRef is one specification name with its source
@@ -695,7 +691,7 @@ func unanchoredContracts(dk *DomainKnowledge, languages []rule.Language) []Unanc
 			if a.Anchor == AnchorMissing {
 				found = append(found, UnanchoredContract{
 					Kind: ContractAssertion, Context: context, Owner: a.Owner, Key: a.Key,
-					Statement: a.Statement, Expected: expectedAssertionCarrier(a.Key, a.Owner, a.BodilessOwner, languages),
+					Statement: a.Statement, Expected: expectedAssertionCarrier(a.Key, a.Owner, languages),
 				})
 			}
 		}
@@ -738,11 +734,8 @@ func expectedInvariantCarrier(inv DomainInvariantRef, languages []rule.Language)
 
 // expectedAssertionCarrier names what the recording says carries an
 // assertion: the checking method on its owner, or a function of the
-// context of the same name; an owner declared without a body has none.
-func expectedAssertionCarrier(key, owner, bodilessOwner string, languages []rule.Language) string {
-	if bodilessOwner != "" {
-		return fmt.Sprintf("none, since %s is declared as %s, which has no body to call a check from", owner, bodilessOwner)
-	}
+// context of the same name.
+func expectedAssertionCarrier(key, owner string, languages []rule.Language) string {
 	return expectedMethod(conformance.AssertKey(key), owner, languages) + ", or a function of the context of the same name"
 }
 

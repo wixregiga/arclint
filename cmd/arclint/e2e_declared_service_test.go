@@ -1,16 +1,16 @@
 package main
 
 // End-to-end coverage of a domain service owning an assertion, in every
-// supported language: the operation the assertion names calls the
-// check, assert followed by the key, declared as a method of the
-// service or as a function of the context, and the call is the one the
-// language's resolution follows, never a name alone. A service declared
-// as an abstraction (a Go interface, a TypeScript interface or abstract
-// class, a Python ABC or Protocol) has no body to call it from, so its
-// assertion is undetermined.
+// supported language: the operation the assertion names has one place
+// in the domain, and its body calls the check, assert followed by the
+// key, declared as a method of the service or as a function of the
+// context; the call is the one the language's resolution follows, never
+// a name alone. An operation without a body, such as a Go or TypeScript
+// interface method, is a finding like any other that does not call it.
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -267,21 +267,25 @@ func TestServiceOperationCallsItsCheck(t *testing.T) {
 	}
 }
 
-// TestBodilessServiceAssertionIsUndetermined holds a service declared
-// as an abstraction to no finding and no conformance: it has no body to
-// call the check from, whatever function of the context or returned
-// value object exists.
-func TestBodilessServiceAssertionIsUndetermined(t *testing.T) {
+// TestOperationWithoutTheCallIsAFinding holds a service whose
+// operation has no body, or a body that does not call the check, to
+// one finding, whatever function of the context or returned value
+// object exists: a Go or TypeScript interface method and a TypeScript
+// abstract method have no body; a Python abstract method or Protocol
+// method has one that calls nothing.
+func TestOperationWithoutTheCallIsAFinding(t *testing.T) {
 	goMod := map[string]string{"go.mod": "module example.com/identity\n\ngo 1.22\n"}
+	noBody := "service Encrypter: operation %s has no body, so it does not call %s and assertion not-empty is not checked"
+	noCall := "service Encrypter: operation encrypt does not call assert_not_empty, so assertion not-empty is not checked"
 	for _, tc := range []struct {
-		name, runtime, path, source string
-		module                      map[string]string
+		name, runtime, path, source, want string
+		module                            map[string]string
 	}{
-		{"go interface", "go", "src/identity/encrypter.go", "package identity\n\n// EncryptedPassword is the protected form of a password.\ntype EncryptedPassword struct{ text string }\n\n// NewEncryptedPassword is the one door: invariant not-empty.\nfunc NewEncryptedPassword(text string) (EncryptedPassword, error) { return EncryptedPassword{text: text}, nil }\n\n// Encrypter protects a password.\ntype Encrypter interface {\n\tEncrypt(plain string) (EncryptedPassword, error)\n}\n\n// AssertNotEmpty checks not-empty.\nfunc AssertNotEmpty(encrypted EncryptedPassword) error { return nil }\n", goMod},
-		{"typescript interface", "ts", "src/identity/encrypter.ts", "export class EncryptedPassword {\n  private constructor(private readonly text: string) {}\n  static from(text: string): EncryptedPassword {\n    return new EncryptedPassword(text);\n  }\n}\n\nexport interface Encrypter {\n  encrypt(plain: string): EncryptedPassword;\n}\n\nexport function assertNotEmpty(encrypted: EncryptedPassword): void {}\n", nil},
-		{"typescript abstract class", "ts", "src/identity/encrypter.ts", "export class EncryptedPassword {\n  private constructor(private readonly text: string) {}\n  static from(text: string): EncryptedPassword {\n    return new EncryptedPassword(text);\n  }\n}\n\nexport abstract class Encrypter {\n  abstract encrypt(plain: string): EncryptedPassword;\n}\n", nil},
-		{"python abc", "py", "src/identity/encrypter.py", "from abc import ABC, abstractmethod\n\n\nclass EncryptedPassword:\n    def __init__(self, text: str) -> None:\n        self._text = text\n\n\nclass Encrypter(ABC):\n    @abstractmethod\n    def encrypt(self, plain: str) -> EncryptedPassword: ...\n\n\ndef assert_not_empty(encrypted: EncryptedPassword) -> None:\n    pass\n", nil},
-		{"python protocol", "py", "src/identity/encrypter.py", "from typing import Protocol\n\n\nclass EncryptedPassword:\n    def __init__(self, text: str) -> None:\n        self._text = text\n\n\nclass Encrypter(Protocol):\n    def encrypt(self, plain: str) -> EncryptedPassword: ...\n", nil},
+		{"go interface", "go", "src/identity/encrypter.go", "package identity\n\n// EncryptedPassword is the protected form of a password.\ntype EncryptedPassword struct{ text string }\n\n// NewEncryptedPassword is the one door: invariant not-empty.\nfunc NewEncryptedPassword(text string) (EncryptedPassword, error) { return EncryptedPassword{text: text}, nil }\n\n// Encrypter protects a password.\ntype Encrypter interface {\n\tEncrypt(plain string) (EncryptedPassword, error)\n}\n\n// AssertNotEmpty checks not-empty.\nfunc AssertNotEmpty(encrypted EncryptedPassword) error { return nil }\n", fmt.Sprintf(noBody, "Encrypt", "AssertNotEmpty"), goMod},
+		{"typescript interface", "ts", "src/identity/encrypter.ts", "export class EncryptedPassword {\n  private constructor(private readonly text: string) {}\n  static from(text: string): EncryptedPassword {\n    return new EncryptedPassword(text);\n  }\n}\n\nexport interface Encrypter {\n  encrypt(plain: string): EncryptedPassword;\n}\n\nexport function assertNotEmpty(encrypted: EncryptedPassword): void {}\n", fmt.Sprintf(noBody, "encrypt", "assertNotEmpty"), nil},
+		{"typescript abstract class", "ts", "src/identity/encrypter.ts", "export class EncryptedPassword {\n  private constructor(private readonly text: string) {}\n  static from(text: string): EncryptedPassword {\n    return new EncryptedPassword(text);\n  }\n}\n\nexport abstract class Encrypter {\n  abstract encrypt(plain: string): EncryptedPassword;\n}\n", fmt.Sprintf(noBody, "encrypt", "assertNotEmpty"), nil},
+		{"python abc", "py", "src/identity/encrypter.py", "from abc import ABC, abstractmethod\n\n\nclass EncryptedPassword:\n    def __init__(self, text: str) -> None:\n        self._text = text\n\n\nclass Encrypter(ABC):\n    @abstractmethod\n    def encrypt(self, plain: str) -> EncryptedPassword: ...\n\n\ndef assert_not_empty(encrypted: EncryptedPassword) -> None:\n    pass\n", noCall, nil},
+		{"python protocol", "py", "src/identity/encrypter.py", "from typing import Protocol\n\n\nclass EncryptedPassword:\n    def __init__(self, text: str) -> None:\n        self._text = text\n\n\nclass Encrypter(Protocol):\n    def encrypt(self, plain: str) -> EncryptedPassword: ...\n", noCall, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -291,8 +295,9 @@ func TestBodilessServiceAssertionIsUndetermined(t *testing.T) {
 				write(t, root, path, content)
 			}
 			write(t, root, tc.path, tc.source)
-			if findings, status := declaredServiceFindings(t, root, 0); len(findings) != 0 || status != "undetermined" {
-				t.Fatalf("a service without a body: %s %+v", status, findings)
+			findings, status := declaredServiceFindings(t, root, 1)
+			if len(findings) != 1 || findings[0].RuleID != "assertion/checked-by-its-operation" || findings[0].Path != tc.path || findings[0].Message != tc.want || status != "violates" {
+				t.Fatalf("want one finding %q, got %s %+v", tc.want, status, findings)
 			}
 		})
 	}
@@ -355,19 +360,19 @@ func TestDefineAssertionSaysWhereItIsChecked(t *testing.T) {
 
 	write(t, root, "src/identity/encrypter.go", "package identity\n\n// Encrypter protects a password.\ntype Encrypter interface {\n\tEncrypt(plain string) (string, error)\n}\n")
 	stdout = mustRunDomain(t, root, define...)
-	if want := "Unchanged assertion not-empty under Encrypter in context identity.\n  check: Encrypter is declared as an interface, which has no body to call AssertNotEmpty from, so whether its implementations call it is not checked.\n"; stdout != want {
+	if want := "Unchanged assertion not-empty under Encrypter in context identity.\n  check: Encrypt calls AssertNotEmpty, a method of Encrypter or a function of context identity.\n"; stdout != want {
 		t.Fatalf("interface owner:\n got %q\nwant %q", stdout, want)
 	}
 	stdout = mustRunDomain(t, root, append(define, "--format", "json")...)
 	var doc struct {
 		Check struct {
-			Home, Declared, Check, Operation string
+			Home, Check, Operation string
 		} `json:"check"`
 	}
 	if err := json.Unmarshal([]byte(stdout), &doc); err != nil {
 		t.Fatalf("define json: %v\n%s", err, stdout)
 	}
-	if doc.Check.Home != "bodiless" || doc.Check.Declared != "interface" || doc.Check.Check != "AssertNotEmpty" || doc.Check.Operation != "Encrypt" {
+	if doc.Check.Home != "service" || doc.Check.Check != "AssertNotEmpty" || doc.Check.Operation != "Encrypt" {
 		t.Fatalf("define json check: %+v\n%s", doc.Check, stdout)
 	}
 
@@ -397,8 +402,9 @@ func TestDefineAssertionWithoutARuntime(t *testing.T) {
 	}
 }
 
-// TestDefineAssertionOnAnAbstractRoot says that an aggregate whose root
-// is declared as an abstract class has no body to call its check from.
+// TestDefineAssertionOnAnAbstractRoot says where an aggregate's
+// assertion is checked whatever its root is declared as: its command
+// calls the check.
 func TestDefineAssertionOnAnAbstractRoot(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "rules.arclint.yaml", "runtime: [ts]\nzones:\n  src:\n    paths: [\"src/**\"]\n")
@@ -406,7 +412,7 @@ func TestDefineAssertionOnAnAbstractRoot(t *testing.T) {
 	mustRunDomain(t, root, "domain", "define", "bounded_context", "identity", "--definition", "Who may sign in, and with what.")
 	mustRunDomain(t, root, "domain", "define", "aggregate", "User", "--definition", "A person who may sign in.", "--identity", "UserID")
 	stdout := mustRunDomain(t, root, "domain", "define", "assertion", "credentials-current", "--owner", "User", "--on", "ChangePassword", "--statement", "A user signs in with the password it chose last.")
-	if want := "  check: User is declared as an abstract class, which has no body to call assertCredentialsCurrent from, so whether its implementations call it is not checked.\n"; !strings.HasSuffix(stdout, want) {
+	if want := "  check: changePassword calls assertCredentialsCurrent, a method of the root of User or a function of context identity.\n"; !strings.HasSuffix(stdout, want) {
 		t.Fatalf("abstract root:\n got %q\nwant suffix %q", stdout, want)
 	}
 }

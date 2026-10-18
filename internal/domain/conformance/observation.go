@@ -120,12 +120,11 @@ type Declaration struct {
 	Owner string
 	// Exported follows the language's own visibility convention.
 	Exported bool
-	// Abstract marks a class its own declaration states to be abstract:
-	// a TypeScript abstract class, or a Python class whose bases name
-	// abc.ABC or typing.Protocol, or whose metaclass is abc.ABCMeta, as
-	// the library itself provides them. False for every other kind; an
-	// interface is abstract by its kind.
-	Abstract bool
+	// Bodiless marks a func or method written without a body: a method
+	// of a Go or TypeScript interface, a TypeScript abstract method, or a
+	// Go function whose body is supplied outside Go. False for every
+	// other declaration, and for every Python def, which always has one.
+	Bodiless bool
 	// Generic marks a func, method, or type that declares its own type
 	// parameters: Go's func F[T any] or type List[T any], TypeScript's
 	// function f<T>() or class Box<T>, Python's def f[T]() or
@@ -435,8 +434,8 @@ func NewObservations(files []ObservedFile, facts map[string]LanguageFacts) (Obse
 			if !declarationKinds[d.Kind] {
 				return Observations{}, fmt.Errorf("observations: %s: declaration kind %q is outside the closed cross-language vocabulary", path, d.Kind)
 			}
-			if d.Abstract && d.Kind != declKindClass {
-				return Observations{}, fmt.Errorf("observations: %s: %s %s is marked abstract; only a class carries the mark", path, d.Kind, d.Name)
+			if d.Bodiless && d.Kind != declKindFunc && d.Kind != declKindMethod {
+				return Observations{}, fmt.Errorf("observations: %s: %s %s is marked bodiless; only a func or method has a body", path, d.Kind, d.Name)
 			}
 			if d.Generic && !genericKinds[d.Kind] {
 				return Observations{}, fmt.Errorf("observations: %s: %s %s is marked generic; only a func, method, or type declares type parameters", path, d.Kind, d.Name)

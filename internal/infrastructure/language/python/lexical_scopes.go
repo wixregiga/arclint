@@ -540,13 +540,6 @@ func qualifiedTarget(s *pyScope, text string, w *pyWalker, depth int) string {
 	return qualifiedFrom(s.lookup(head), head, tail, dotted, w, depth)
 }
 
-// qualifiedTargetAt names what a dotted name refers to when a statement
-// at offset reads it in the scope, reading every binding on the way as
-// of the statement that reads it: an alias as of its own assignment.
-func qualifiedTargetAt(s *pyScope, text string, w *pyWalker, offset uint32) string {
-	return qualifiedTargetAtDepth(s, text, w, offset, 0)
-}
-
 func qualifiedTargetAtDepth(s *pyScope, text string, w *pyWalker, offset uint32, depth int) string {
 	head, tail, dotted := strings.Cut(text, ".")
 	return qualifiedFromAt(s.lookupAt(head, offset, w), head, tail, dotted, w, depth, true)

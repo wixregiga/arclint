@@ -887,7 +887,7 @@ func TestAssertionIsCheckedByItsOperation(t *testing.T) {
 
 	got := run([]conformance.Declaration{root})
 	want := []string{
-		"aggregate Event: assertion tiers-priced constrains operation Publish, which the root does not declare",
+		"aggregate Event: assertion tiers-priced constrains operation Publish, which is not declared on Event in the code of context catalog",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("bare root:\n got %q\nwant %q", got, want)
@@ -929,7 +929,7 @@ func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 
 	got := run([]conformance.Declaration{svc})
 	want := []string{
-		"service TenantProvisioningService: assertion tenant-name-unique constrains operation ProvisionTenant, which the service does not declare",
+		"service TenantProvisioningService: assertion tenant-name-unique constrains operation ProvisionTenant, which is not declared on TenantProvisioningService in the code of context identity",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("bare service:\n got %q\nwant %q", got, want)
@@ -986,7 +986,7 @@ func TestAssertionRemediationNamesTheRepair(t *testing.T) {
 	file := "internal/release/retirement_policy.go"
 	got := remediations(service, file, "release", []conformance.Declaration{policy})
 	want := []string{
-		"declare Decide (go) on RetirementPolicy and call AssertNoInstallationLeft (go) from it",
+		"declare Decide (go) on RetirementPolicy in context release and call AssertNoInstallationLeft (go) from it",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("bare service:\n got %q\nwant %q", got, want)

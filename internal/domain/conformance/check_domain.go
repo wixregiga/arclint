@@ -892,23 +892,6 @@ func (idx contractIndex) methodNamed(owner, key string) (locDecl, bool, error) {
 	return locDecl{}, false, nil
 }
 
-// methodsNamed lists every method a key names on a type, overloads
-// included, spelled in the method case of the file's language.
-func (idx contractIndex) methodsNamed(owner, key string) ([]locDecl, error) {
-	if _, err := rule.CaseTerm(key, "flatcase"); err != nil {
-		return nil, fmt.Errorf("method name for %q: %w", key, err)
-	}
-	var out []locDecl
-	for _, f := range idx.files {
-		for _, d := range f.decls {
-			if d.Kind == declKindMethod && d.Owner == owner && methodSpelled(d.Name, key, f.lang) {
-				out = append(out, locDecl{file: f, decl: d})
-			}
-		}
-	}
-	return out, nil
-}
-
 // constructors lists the doors a type is built through: a constructor
 // or __init__ on it, a factory method on it named create, from, of,
 // parse, new, or build that returns it, and every function of the unit
@@ -1424,136 +1407,112 @@ func checkInvariantEnforcedAtMutation(r rule.Rule, subject rule.Subject, cc cont
 }
 
 // checkAssertionChecked judges every recorded assertion against its
-// owner, the aggregate's root or the domain service: the owner declares
-// the operation the assertion names, and the operation's own body calls
-// the check, assert followed by the key, declared as a method of the
-// owner or as a function of the context. The call is the one the
-// language's resolution follows to that declaration, never a name
-// alone. An owner declared as an interface or an abstract class has no
-// body to call the check from, so whether its implementations call it
-// is left undetermined. An owner whose type is not located is left to
-// aggregate/root-declared or domain_service/declared.
+// owner, the aggregate's root or the domain service: the operation the
+// assertion names has one place in the domain, one declaration with a
+// body in the context's code, and that body calls the check, assert
+// followed by the key, declared as a method of the owner or as a
+// function of the context. The call is the one the language's
+// resolution follows to that declaration, never a name alone. An owner
+// no type spells is left to aggregate/root-declared or
+// domain_service/declared.
 func checkAssertionChecked(r rule.Rule, subject rule.Subject, cc contextCode, _ domainCode) ([]Violation, []string, error) {
 	var vs []Violation
 	var unresolved []string
-	for _, agg := range cc.ctx.Aggregates {
-		ac := cc.aggregates[agg.Name]
-		if !ac.located() {
-			continue
+	judge := func(owner assertionOwner, assertions []vocab.Assertion) error {
+		if len(assertions) == 0 || len(owner.types) == 0 {
+			return nil
 		}
-		more, open, err := cc.assertionsChecked(r, subject, assertionOwner{
-			label: "aggregate " + agg.Name, holder: "the root", context: cc.ctx.Name, decl: ac.root(), idx: ac.idx,
-		}, agg.Assertions)
-		if err != nil {
-			return nil, nil, err
-		}
+		more, open, err := cc.assertionsChecked(r, subject, owner, assertions)
 		vs = append(vs, more...)
 		unresolved = append(unresolved, open...)
+		return err
+	}
+	for _, agg := range cc.ctx.Aggregates {
+		owner := assertionOwner{label: "aggregate " + agg.Name, name: agg.Name, context: cc.ctx.Name, types: cc.aggregates[agg.Name].candidates}
+		if err := judge(owner, agg.Assertions); err != nil {
+			return nil, nil, err
+		}
 	}
 	for _, s := range cc.ctx.Services {
-		loc := cc.terms[s.Name]
-		if len(s.Assertions) == 0 || !loc.located() {
-			continue
-		}
-		decl := loc.decl()
-		more, open, err := cc.assertionsChecked(r, subject, assertionOwner{
-			label: "service " + s.Name, holder: "the service", context: cc.ctx.Name, decl: decl, idx: cc.unitIdx(decl),
-		}, s.Assertions)
-		if err != nil {
+		owner := assertionOwner{label: "service " + s.Name, name: s.Name, context: cc.ctx.Name, types: cc.terms[s.Name].candidates}
+		if err := judge(owner, s.Assertions); err != nil {
 			return nil, nil, err
 		}
-		vs = append(vs, more...)
-		unresolved = append(unresolved, open...)
 	}
 	return vs, unresolved, nil
 }
 
-// assertionOwner is the declared type that owns a set of assertions:
-// an aggregate's root or a domain service. label names the owner in a
-// finding, holder names the declaring type in prose, and context is the
-// bounded context the owner is recorded in.
+// assertionOwner is the recorded owner of a set of assertions, an
+// aggregate or a domain service, with every type in the context's
+// scope that spells it. label names the owner in a finding, and context
+// is the bounded context it is recorded in.
 type assertionOwner struct {
 	label   string
-	holder  string
+	name    string
 	context string
-	decl    locDecl
-	idx     contractIndex
+	types   []locDecl
 }
 
-// bodiless names how the owner is declared when it has no body to call
-// a checking method from, or "" when it has one.
-func (o assertionOwner) bodiless() string { return bodiless(o.decl.decl) }
-
-// bodiless names how a type is declared when it has no body to call a
-// checking method from, an interface or an abstract class, or "" when
-// it has one.
-func bodiless(d Declaration) string {
-	switch {
-	case d.Kind == declKindInterface:
-		return "an interface"
-	case d.Kind == declKindClass && d.Abstract:
-		return "an abstract class"
-	}
-	return ""
-}
-
-// assertionsChecked judges one owner's assertions: the owner declares
-// each operation, and the operation's body calls the assertion's check.
-// An owner without a body declares the operation, and the call is left
-// undetermined.
+// assertionsChecked judges one owner's assertions: the operation each
+// names has exactly one declaration, with a body, and that body calls
+// the assertion's check.
 func (cc contextCode) assertionsChecked(r rule.Rule, subject rule.Subject, owner assertionOwner, assertions []vocab.Assertion) ([]Violation, []string, error) {
 	var vs []Violation
 	var unresolved []string
-	name := owner.decl.decl.Name
-	declared := owner.bodiless()
+	at := owner.types[0]
+	spellings := cc.unitIdx(at)
 	for _, as := range assertions {
 		key := assertKey(as.Key)
-		op, hasOp, err := owner.idx.methodNamed(name, as.On)
+		ops, err := cc.operationDeclarations(owner, as.On)
 		if err != nil {
 			return nil, nil, err
 		}
-		if !hasOp {
-			repair := fmt.Sprintf("declare %s on %s", methodSpellings(owner.idx, as.On), name)
-			if declared == "" {
-				repair += fmt.Sprintf(" and call %s from it", methodSpellings(owner.idx, key))
+		var message, repair string
+		path, line := at.file.path, at.decl.StartLine
+		switch {
+		case len(ops) == 0:
+			message = fmt.Sprintf("%s: assertion %s constrains operation %s, which is not declared on %s in the code of context %s", owner.label, as.Key, as.On, owner.name, owner.context)
+			repair = fmt.Sprintf("declare %s on %s in context %s and call %s from it", methodSpellings(spellings, as.On), owner.name, owner.context, methodSpellings(spellings, key))
+		case len(ops) > 1:
+			places := make([]string, len(ops))
+			for i, op := range ops {
+				places[i] = fmt.Sprintf("%s:%d", op.file.path, op.decl.StartLine)
 			}
-			v, err := newViolation(r, subject, owner.decl.file.path, owner.decl.decl.StartLine,
-				fmt.Sprintf("%s: assertion %s constrains operation %s, which %s does not declare", owner.label, as.Key, as.On, owner.holder),
-				repair)
+			path, line = ops[0].file.path, ops[0].decl.StartLine
+			message = fmt.Sprintf("%s: operation %s is declared %d times in the code of context %s, at %s; assertion %s needs it in one place", owner.label, as.On, len(ops), owner.context, strings.Join(places, ", "), as.Key)
+			repair = fmt.Sprintf("keep one declaration of %s in context %s, with a body that calls %s", as.On, owner.context, methodSpellings(spellings, key))
+		case ops[0].decl.Bodiless:
+			op := ops[0]
+			check, err := methodNameFor(key, op.file.lang)
 			if err != nil {
 				return nil, nil, err
 			}
-			vs = append(vs, v)
-			continue
+			path, line = op.file.path, op.decl.StartLine
+			message = fmt.Sprintf("%s: operation %s has no body, so it does not call %s and assertion %s is not checked", owner.label, op.decl.Name, check, as.Key)
+			repair = fmt.Sprintf("declare %s with a body in context %s that calls %s and fails the operation when it fails", op.decl.Name, owner.context, check)
+		default:
+			op := ops[0]
+			checks := cc.assertionChecks(op, op.decl.Owner, key)
+			called, open := callsCheck(op, checks, key)
+			if called {
+				continue
+			}
+			if open != "" {
+				unresolved = append(unresolved, open)
+				continue
+			}
+			check, err := methodNameFor(key, op.file.lang)
+			if err != nil {
+				return nil, nil, err
+			}
+			path, line = op.file.path, op.decl.StartLine
+			message = fmt.Sprintf("%s: operation %s does not call %s, so assertion %s is not checked", owner.label, op.decl.Name, check, as.Key)
+			repair = fmt.Sprintf("call %s from %s and fail the operation when it fails", check, op.decl.Name)
+			if len(checks) == 0 {
+				repair = fmt.Sprintf("declare %s as a method of %s or a function of context %s, call it from %s, and fail the operation when it fails", check, op.decl.Owner, owner.context, op.decl.Name)
+			}
 		}
-		if declared != "" {
-			unresolved = append(unresolved, fmt.Sprintf("%s:%d: %s: %s is declared as %s, which has no body to call %s from; whether its implementations call it is not observed",
-				op.file.path, op.decl.StartLine, owner.label, name, declared, methodSpellings(owner.idx, key)))
-			continue
-		}
-		checks, err := cc.assertionChecks(owner, key)
-		if err != nil {
-			return nil, nil, err
-		}
-		called, open := callsCheck(op, checks, key)
-		switch {
-		case called:
-			continue
-		case open != "":
-			unresolved = append(unresolved, open)
-			continue
-		}
-		check, err := methodNameFor(key, op.file.lang)
-		if err != nil {
-			return nil, nil, err
-		}
-		repair := fmt.Sprintf("call %s from %s and fail the operation when it fails", check, op.decl.Name)
-		if len(checks) == 0 {
-			repair = fmt.Sprintf("declare %s as a method of %s or a function of context %s, call it from %s, and fail the operation when it fails", check, name, owner.context, op.decl.Name)
-		}
-		v, err := newViolation(r, subject, op.file.path, op.decl.StartLine,
-			fmt.Sprintf("%s: operation %s does not call %s, so assertion %s is not checked", owner.label, op.decl.Name, check, as.Key),
-			repair)
+		v, err := newViolation(r, subject, path, line, message, repair)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1562,32 +1521,71 @@ func (cc contextCode) assertionsChecked(r rule.Rule, subject rule.Subject, owner
 	return vs, unresolved, nil
 }
 
-// assertionChecks lists the declarations that check an assertion: the
-// owner's methods spelling assert followed by the key, then the
-// functions spelling it declared at the top of a file the context's
-// code holds or of a file beside the owner. A function nested in
-// another is that function's helper, and a test file's is the test's;
-// neither is the model's.
-func (cc contextCode) assertionChecks(owner assertionOwner, key string) ([]locDecl, error) {
-	out, err := owner.idx.methodsNamed(owner.decl.decl.Name, key)
-	if err != nil {
-		return nil, err
+// operationDeclarations lists every declaration of the operation in the
+// code of the owner's context: a method spelling it on a type that
+// spells the owner, read in that type's unit. A test file's declaration
+// is the test's, never the operation's place.
+func (cc contextCode) operationDeclarations(owner assertionOwner, operation string) ([]locDecl, error) {
+	if _, err := rule.CaseTerm(operation, "flatcase"); err != nil {
+		return nil, fmt.Errorf("method name for %q: %w", operation, err)
 	}
+	var out []locDecl
+	for _, t := range owner.types {
+		for _, f := range cc.unitIdx(t).files {
+			if isTestFile(f.path) {
+				continue
+			}
+			for _, d := range f.decls {
+				if d.Kind == declKindMethod && t.owns(f, d.Owner) && methodSpelled(d.Name, operation, f.lang) {
+					out = append(out, locDecl{file: f, decl: d})
+				}
+			}
+		}
+	}
+	return uniqueDecls(out), nil
+}
+
+// assertionChecks lists the declarations that check an assertion for
+// a member of the type owner declared beside place: the type's methods
+// spelling assert followed by the key, then the functions spelling it
+// declared at the top of a file of place's unit or of the context's
+// code. A function nested in another is that function's helper, and a
+// test file's is the test's; neither is the model's.
+func (cc contextCode) assertionChecks(place locDecl, owner, key string) []locDecl {
+	var methods, functions []locDecl
 	seen := map[string]bool{}
-	for _, idx := range []contractIndex{cc.idx, owner.idx} {
+	for _, idx := range []contractIndex{cc.unitIdx(place), cc.idx} {
 		for _, f := range idx.files {
 			if seen[f.path] || isTestFile(f.path) {
 				continue
 			}
 			seen[f.path] = true
 			for _, d := range f.decls {
-				if d.Kind == declKindFunc && d.Owner == "" && methodSpelled(d.Name, key, f.lang) {
-					out = append(out, locDecl{file: f, decl: d})
+				if !methodSpelled(d.Name, key, f.lang) {
+					continue
+				}
+				switch {
+				case d.Kind == declKindMethod && d.Owner == owner && samePlace(f, place.file):
+					methods = append(methods, locDecl{file: f, decl: d})
+				case d.Kind == declKindFunc && d.Owner == "":
+					functions = append(functions, locDecl{file: f, decl: d})
 				}
 			}
 		}
 	}
-	return out, nil
+	return append(methods, functions...)
+}
+
+// samePlace reports whether a member declared in f can belong to a type
+// declared in g: in Go the same package, elsewhere the same file.
+func samePlace(f, g fileFacts) bool {
+	if f.lang != g.lang {
+		return false
+	}
+	if f.lang == rule.LanguageGo {
+		return samePackage(f, g)
+	}
+	return f.path == g.path
 }
 
 // callsCheck reports whether the operation's own body makes a call the

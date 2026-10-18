@@ -8,8 +8,8 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
-// CheckHome is where the guarantee of an assertion is checked, chosen
-// by how its owner is declared in the code.
+// CheckHome is where the guarantee of an assertion is checked: on an
+// aggregate's command or a domain service's operation.
 type CheckHome string
 
 const (
@@ -17,31 +17,18 @@ const (
 	// assert followed by the key, a method of the root or a function of
 	// the context.
 	CheckHomeRoot CheckHome = "root"
-	// CheckHomeService is the assertion of a domain service declared as
-	// a concrete type: the operation calls assert followed by the key, a
-	// method of the service or a function of the context.
+	// CheckHomeService is the assertion of a domain service: the
+	// operation calls assert followed by the key, a method of the service
+	// or a function of the context.
 	CheckHomeService CheckHome = "service"
 	// CheckHomeUndeclared is the assertion of a domain service that no
-	// single type declares yet, so no declared kind chooses its home.
+	// single type declares yet.
 	CheckHomeUndeclared CheckHome = "undeclared"
-	// CheckHomeBodiless is the assertion of an owner declared as an
-	// interface or an abstract class: it has no body to call the check
-	// from, so whether its implementations call it is not observed.
-	CheckHomeBodiless CheckHome = "bodiless"
-)
-
-// The kinds an owner without a body is declared as.
-const (
-	DeclaredInterface     = "interface"
-	DeclaredAbstractClass = "abstract class"
 )
 
 // AssertionHome says where one recorded assertion is checked.
 type AssertionHome struct {
 	Home CheckHome
-	// Declared is the kind the owner is declared as when Home is
-	// CheckHomeBodiless: DeclaredInterface or DeclaredAbstractClass.
-	Declared string
 	// Check spells assert followed by the key: in the owner's language
 	// when its type is located, otherwise in each language the ruleset
 	// names, the language beside each name when there are several, and
@@ -72,11 +59,6 @@ func (c Carriers) AssertionHome(ctx, owner, key string, languages []rule.Languag
 	home := AssertionHome{Check: spelled, Operation: as.On}
 	owned, idx, located := cc.assertionOwner(owner, aggregate)
 	switch {
-	case located && bodiless(owned.decl) != "":
-		home.Home, home.Declared = CheckHomeBodiless, DeclaredAbstractClass
-		if owned.decl.Kind == declKindInterface {
-			home.Declared = DeclaredInterface
-		}
 	case aggregate:
 		home.Home = CheckHomeRoot
 	case !located:

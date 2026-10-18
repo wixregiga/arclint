@@ -248,7 +248,7 @@ func (e *Evaluator) host(supplied conformance.Facts, knowledge vocab.UbiquitousL
 			for _, d := range facts.Declarations {
 				decl := DeclInfo{
 					Kind: d.Kind, Name: d.Name, Owner: d.Owner,
-					Exported: d.Exported, Abstract: d.Abstract, Generic: d.Generic, StartLine: d.StartLine, EndLine: d.EndLine,
+					Exported: d.Exported, Bodiless: d.Bodiless, Generic: d.Generic, StartLine: d.StartLine, EndLine: d.EndLine,
 					Results: append([]string(nil), d.Results...),
 				}
 				for _, ref := range d.Holds {

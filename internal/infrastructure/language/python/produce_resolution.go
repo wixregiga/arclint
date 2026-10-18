@@ -2,14 +2,12 @@ package python
 
 import (
 	"os"
-	"path"
 	"path/filepath"
-	"sync"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 )
 
-func resolvedFacts(root string, files []conformance.ObservedFile, res *resolver, modules *sync.Map, wantDecls, wantCalls, wantResolved, wantFields bool) map[string]conformance.LanguageFacts {
+func resolvedFacts(root string, files []conformance.ObservedFile, res *resolver, wantDecls, wantCalls, wantResolved, wantFields bool) map[string]conformance.LanguageFacts {
 	idx := &resolutionIndex{resolver: res, modules: map[string]*pyModule{}, patched: map[string]bool{}}
 	out := map[string]conformance.LanguageFacts{}
 	ps := newParsers()
@@ -17,7 +15,7 @@ func resolvedFacts(root string, files []conformance.ObservedFile, res *resolver,
 		if !analyzable(file.Path) {
 			continue
 		}
-		f := analyzeFile(ps, res, modules, root, file.Path, false, false)
+		f := analyzeFile(ps, res, root, file.Path, false, false)
 		out[file.Path] = f
 		src, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(file.Path)))
 		if err != nil {
@@ -27,7 +25,6 @@ func resolvedFacts(root string, files []conformance.ObservedFile, res *resolver,
 		if df.ParseError != "" {
 			continue
 		}
-		markAbstractClasses(df, origins{res: res, root: root, ps: ps, modules: modules}, path.Dir(file.Path))
 		idx.modules[file.Path] = newModule(file.Path, df)
 	}
 	// Record repository-visible monkey patches before resolving any call.

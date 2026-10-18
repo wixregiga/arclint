@@ -238,9 +238,7 @@ func (w *tsWalker) walk(n *gotreesitter.Node, owner string, exported bool) {
 		return
 	case tsClassDeclaration, tsAbstractClassDeclaration, tsClassExpression:
 		name := w.name(n)
-		if d := w.add("class", name, owner, exported, n); d != nil {
-			d.Abstract = n.Type(w.lang) == tsAbstractClassDeclaration
-		}
+		w.add("class", name, owner, exported, n)
 		if body := n.ChildByFieldName(tsBodyField, w.lang); body != nil {
 			for i := 0; i < body.NamedChildCount(); i++ {
 				w.walk(body.NamedChild(i), name, exported)
@@ -257,6 +255,7 @@ func (w *tsWalker) walk(n *gotreesitter.Node, owner string, exported bool) {
 				case tsMethodSignature:
 					if d := w.add("method", w.name(m), name, true, m); d != nil {
 						d.Params, d.Results = w.signature(m)
+						d.Bodiless = true
 					}
 				case tsPropertySignature:
 					w.add(tsFieldDeclaration, w.name(m), name, true, m)
@@ -284,6 +283,7 @@ func (w *tsWalker) walk(n *gotreesitter.Node, owner string, exported bool) {
 		// abstract method is declared without a body.
 		if d := w.add("method", w.name(n), owner, w.memberPublic(n), n); d != nil {
 			d.Params, d.Results = w.signature(n)
+			d.Bodiless = n.Type(w.lang) == tsAbstractMethodSignature
 		}
 		if w.name(n) == tsConstructor {
 			if params := n.ChildByFieldName(tsParametersField, w.lang); params != nil {
