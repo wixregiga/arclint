@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DirectUnitOfWork, InMemoryEventLog, InMemoryRoles, InMemoryTenants, InMemoryUsers } from "../adapters/memory/index.js";
-import { Pbkdf2Encrypter, RandomPasswordGenerator } from "../adapters/passwords/index.js";
-import { ADMINISTRATOR_ROLE_NAME, TenantProvisioningService } from "../provisioning/index.js";
+import { Pbkdf2Scheme, RandomDrafter } from "../adapters/passwords/index.js";
+import { ADMINISTRATOR_ROLE_NAME, PasswordGenerator, TenantProvisioningService } from "../provisioning/index.js";
 import { RoleID, RoleName, UserAssignedToRole } from "../role/index.js";
 import { Tenant, TenantID, TenantName, TenantNameTaken, TenantProvisioned } from "../tenant/index.js";
-import { UserRegistered } from "../user/index.js";
+import { Encrypter, UserRegistered } from "../user/index.js";
 import { ProvisionTenant } from "./provision-tenant.js";
 
 function fixture() {
@@ -13,8 +13,8 @@ function fixture() {
   const users = new InMemoryUsers();
   const roles = new InMemoryRoles();
   const log = new InMemoryEventLog();
-  const encrypter = new Pbkdf2Encrypter();
-  const service = new TenantProvisioningService(tenants, users, roles, new RandomPasswordGenerator(), encrypter, () => new Date());
+  const encrypter = new Encrypter(new Pbkdf2Scheme());
+  const service = new TenantProvisioningService(tenants, users, roles, new PasswordGenerator(new RandomDrafter()), encrypter, () => new Date());
   return { tenants, users, roles, log, encrypter, useCase: new ProvisionTenant(service, log, new DirectUnitOfWork()) };
 }
 

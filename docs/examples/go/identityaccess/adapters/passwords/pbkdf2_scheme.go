@@ -1,5 +1,6 @@
 // Package passwords holds the adapters behind the password ports of the
-// identityaccess context: a PBKDF2 encrypter and a random generator.
+// identityaccess context: a PBKDF2 protection scheme and a random
+// drafter.
 package passwords
 
 import (
@@ -21,32 +22,32 @@ const (
 	saltLength       = 16
 )
 
-// PBKDF2Encrypter implements user.Encrypter with PBKDF2-HMAC-SHA256.
-// The stored form is "pbkdf2-sha256$<iterations>$<salt>$<key>".
-type PBKDF2Encrypter struct{}
+// PBKDF2Scheme implements user.ProtectionScheme with PBKDF2-HMAC-SHA256.
+// The protected form is "pbkdf2-sha256$<iterations>$<salt>$<key>".
+type PBKDF2Scheme struct{}
 
-// Encrypt derives a salted key from the password.
-func (PBKDF2Encrypter) Encrypt(p user.Password) (user.EncryptedPassword, error) {
+// Protect derives a salted key from the password.
+func (PBKDF2Scheme) Protect(p user.Password) (string, error) {
 	salt := make([]byte, saltLength)
 	if _, err := rand.Read(salt); err != nil {
-		return user.EncryptedPassword{}, fmt.Errorf("pbkdf2: read salt: %w", err)
+		return "", fmt.Errorf("pbkdf2: read salt: %w", err)
 	}
 	key, err := pbkdf2.Key(sha256.New, p.Reveal(), salt, pbkdf2Iterations, pbkdf2KeyLength)
 	if err != nil {
-		return user.EncryptedPassword{}, fmt.Errorf("pbkdf2: derive key: %w", err)
+		return "", fmt.Errorf("pbkdf2: derive key: %w", err)
 	}
-	encoded := strings.Join([]string{
+	return strings.Join([]string{
 		"pbkdf2-sha256",
 		strconv.Itoa(pbkdf2Iterations),
 		base64.RawStdEncoding.EncodeToString(salt),
 		base64.RawStdEncoding.EncodeToString(key),
-	}, "$")
-	return user.NewEncryptedPassword(encoded)
+	}, "$"), nil
 }
 
-// Matches re-derives the key with the stored salt and compares in constant time.
-func (PBKDF2Encrypter) Matches(p user.Password, stored user.EncryptedPassword) bool {
-	parts := strings.Split(stored.String(), "$")
+// Matches re-derives the key with the protected form's salt and
+// compares in constant time.
+func (PBKDF2Scheme) Matches(p user.Password, protected string) bool {
+	parts := strings.Split(protected, "$")
 	if len(parts) != 4 || parts[0] != "pbkdf2-sha256" {
 		return false
 	}

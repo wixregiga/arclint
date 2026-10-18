@@ -277,18 +277,30 @@ leaves the assertion undetermined. Where in the operation the call is
 made, and whether its failure fails the operation, are not judged.
 
 ```go
-// Encrypt protects a Password; it checks not-empty before it returns.
-func (s Encrypter) Encrypt(p Password) (EncryptedPassword, error) {
-	encrypted, err := s.hasher.Hash(p)
+// Encrypt turns a Password into its stored form. The derivation runs
+// behind ProtectionScheme, a port an adapter implements; the domain
+// decides when it runs and checks not-empty before it returns.
+func (e Encrypter) Encrypt(p Password) (EncryptedPassword, error) {
+	if e.scheme == nil {
+		return EncryptedPassword{}, ErrEncrypterWithoutScheme
+	}
+	protected, err := e.scheme.Protect(p)
+	if err != nil {
+		return EncryptedPassword{}, fmt.Errorf("encrypt password: %w", err)
+	}
+	encrypted, err := NewEncryptedPassword(protected)
 	if err != nil {
 		return EncryptedPassword{}, err
 	}
-	if err := AssertNotEmpty(encrypted); err != nil {
+	if err := e.AssertNotEmpty(encrypted); err != nil {
 		return EncryptedPassword{}, err
 	}
 	return encrypted, nil
 }
 ```
+
+This is the identity and access example's `Encrypter` (`docs/examples/go`,
+and the same in `docs/examples/ts`).
 
 A check that merely exists, a check a caller is expected to make, a
 returned value object whose invariant has the same key, and tests under

@@ -1,21 +1,21 @@
 import { pbkdf2Sync, randomBytes, timingSafeEqual } from "node:crypto";
-import { EncryptedPassword, type Encrypter, type Password } from "../../user/index.js";
+import type { Password, ProtectionScheme } from "../../user/index.js";
 
 const ITERATIONS = 600_000;
 const KEY_LENGTH = 32;
 const SALT_LENGTH = 16;
 const SCHEME = "pbkdf2-sha256";
 
-/** Encrypter with PBKDF2-HMAC-SHA256; stored form "pbkdf2-sha256$<iterations>$<salt>$<key>". */
-export class Pbkdf2Encrypter implements Encrypter {
-  encrypt(password: Password): EncryptedPassword {
+/** ProtectionScheme with PBKDF2-HMAC-SHA256; protected form "pbkdf2-sha256$<iterations>$<salt>$<key>". */
+export class Pbkdf2Scheme implements ProtectionScheme {
+  protect(password: Password): string {
     const salt = randomBytes(SALT_LENGTH);
     const key = pbkdf2Sync(password.reveal(), salt, ITERATIONS, KEY_LENGTH, "sha256");
-    return EncryptedPassword.from([SCHEME, String(ITERATIONS), salt.toString("base64"), key.toString("base64")].join("$"));
+    return [SCHEME, String(ITERATIONS), salt.toString("base64"), key.toString("base64")].join("$");
   }
 
-  matches(password: Password, stored: EncryptedPassword): boolean {
-    const parts = stored.toString().split("$");
+  matches(password: Password, protectedForm: string): boolean {
+    const parts = protectedForm.split("$");
     const [scheme, iterationsText, saltText, keyText] = parts;
     if (parts.length !== 4 || scheme !== SCHEME || iterationsText === undefined || saltText === undefined || keyText === undefined) {
       return false;

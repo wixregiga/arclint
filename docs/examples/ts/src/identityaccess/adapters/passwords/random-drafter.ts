@@ -1,6 +1,5 @@
 import { randomInt } from "node:crypto";
-import type { PasswordGenerator } from "../../provisioning/index.js";
-import { Password } from "../../user/index.js";
+import type { Drafter } from "../../provisioning/index.js";
 
 const LETTERS = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
 const DIGITS = "23456789";
@@ -8,11 +7,13 @@ const SYMBOLS = "!@#$%^&*-_=+?";
 const SIZE = 16;
 
 /**
- * Proposes passwords from the operating system's random source. Every
- * password satisfies the Password strength rule by construction.
+ * Drafts passwords from the operating system's random source. Every draft
+ * satisfies the Password strength rule by construction: one character of
+ * each class is placed at a random position and the rest is drawn from
+ * all.
  */
-export class RandomPasswordGenerator implements PasswordGenerator {
-  generateStrongPassword(): Password {
+export class RandomDrafter implements Drafter {
+  draft(): string {
     const all = LETTERS + DIGITS + SYMBOLS;
     const chars = Array.from({ length: SIZE }, () => pick(all));
     const positions = new Set<number>();
@@ -23,7 +24,7 @@ export class RandomPasswordGenerator implements PasswordGenerator {
     [...positions].forEach((position, i) => {
       chars[position] = pick(classes[i] ?? all);
     });
-    return Password.from(chars.join(""));
+    return chars.join("");
   }
 }
 

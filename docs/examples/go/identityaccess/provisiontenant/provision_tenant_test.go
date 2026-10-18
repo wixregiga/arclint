@@ -25,7 +25,7 @@ type fixture struct {
 
 func newFixture() fixture {
 	tenants, users, roles, log := memory.NewTenants(), memory.NewUsers(), memory.NewRoles(), &memory.EventLog{}
-	service := provisioning.NewTenantProvisioningService(tenants, users, roles, passwords.RandomGenerator{}, passwords.PBKDF2Encrypter{}, time.Now)
+	service := provisioning.NewTenantProvisioningService(tenants, users, roles, provisioning.NewPasswordGenerator(passwords.RandomDrafter{}), user.NewEncrypter(passwords.PBKDF2Scheme{}), time.Now)
 	return fixture{tenants: tenants, users: users, roles: roles, log: log, useCase: provisiontenant.NewProvisionTenant(service, log, memory.UnitOfWork{})}
 }
 
@@ -61,7 +61,7 @@ func TestProvisionTenantRegistersAnEnabledAdministrator(t *testing.T) {
 	if !admin.IsEnabled() {
 		t.Fatal("administrator must be enabled")
 	}
-	if !(passwords.PBKDF2Encrypter{}).Matches(out.InitialPassword, admin.Password()) {
+	if !user.NewEncrypter(passwords.PBKDF2Scheme{}).Matches(out.InitialPassword, admin.Password()) {
 		t.Fatal("initial password must match the stored one")
 	}
 

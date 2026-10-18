@@ -2,16 +2,12 @@ import type { DomainEvent } from "../event/index.js";
 import { Role, RoleName, type RoleID, type RoleRepository } from "../role/index.js";
 import { Tenant, TenantNameTaken, type RegistrationInvitation, type TenantID, type TenantName, type TenantRepository } from "../tenant/index.js";
 import { Credentials, Enablement, Password, Person, User, Username, type EmailAddress, type Encrypter, type FullName, type UserID, type UserRepository } from "../user/index.js";
+import type { PasswordGenerator } from "./password-generator.js";
 
 /** The name of the role every tenant starts with. */
 export const ADMINISTRATOR_ROLE_NAME = "Administrator";
 
 const INITIAL_INVITATION = "init";
-
-/** The domain service that proposes a strong password for a user who has not chosen one. */
-export interface PasswordGenerator {
-  generateStrongPassword(): Password;
-}
 
 /** What the process needs to know about the first administrator. */
 export interface Administrator {

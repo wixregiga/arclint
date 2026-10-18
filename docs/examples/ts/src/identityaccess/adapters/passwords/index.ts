@@ -1,2 +1,2 @@
-export { Pbkdf2Encrypter } from "./pbkdf2-encrypter.js";
-export { RandomPasswordGenerator } from "./random-generator.js";
+export { Pbkdf2Scheme } from "./pbkdf2-scheme.js";
+export { RandomDrafter } from "./random-drafter.js";
