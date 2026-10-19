@@ -40,6 +40,10 @@ func writeDomainConvert(p *out.Printer, th Theme, result application.ConvertDoma
 	domaintext.Convert(p, th.domainStyle(), result)
 }
 
+func writeMapServe(p *out.Printer, th Theme, r cli.MapServeReport) {
+	domaintext.MapServe(p, th.domainStyle(), r.URL, r.Project, r.Source)
+}
+
 func writeDomainMissing(p *out.Printer, th Theme, source string) {
 	domaintext.Missing(p, th.domainStyle(), source)
 }

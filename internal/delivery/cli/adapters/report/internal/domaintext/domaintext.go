@@ -90,6 +90,13 @@ func Missing(p *out.Printer, st Style, source string) {
 	p.Println("  arclint domain define --guided")
 }
 
+// MapServe reports the map server once it listens: the URL a browser
+// opens, and the project and domain file the page shows.
+func MapServe(p *out.Printer, st Style, url, project, source string) {
+	p.Printf("%s the domain of %s from %s at %s\n", st.OK("Serving"), st.Bold(project), st.Path(source), st.Bold(url))
+	p.Println("Open the URL in a browser. Ctrl+C stops the server.")
+}
+
 // Overview prints the whole recorded model, context by context, with
 // each contract's source when the overview located them.
 func Overview(p *out.Printer, st Style, o application.DomainOverview) {

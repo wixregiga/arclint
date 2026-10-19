@@ -932,3 +932,18 @@ func TestJSONDomainMissingReportNamesTheProjectsDomainFile(t *testing.T) {
 		t.Fatalf("document = %v, want found=false and the project's domain file", doc)
 	}
 }
+
+func TestJSONMapServeKeys(t *testing.T) {
+	var buf bytes.Buffer
+	err := New().Render(&buf, cli.MapServeReport{URL: "http://127.0.0.1:7380", Project: "clinic", Source: "domain.arclint.yaml"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc["url"] != "http://127.0.0.1:7380" || doc["project"] != "clinic" || doc["source"] != "domain.arclint.yaml" {
+		t.Fatalf("doc = %v", doc)
+	}
+}

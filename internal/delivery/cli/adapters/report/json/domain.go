@@ -763,3 +763,10 @@ func removeJSONDoc(result application.DomainRemoveResult) map[string]any {
 	}
 	return doc
 }
+
+// mapServeJSON is the map server's report once it listens.
+type mapServeJSON struct {
+	URL     string `json:"url"`
+	Project string `json:"project"`
+	Source  string `json:"source"`
+}

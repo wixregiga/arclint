@@ -260,3 +260,15 @@ func TestPlainDomainConvertSaysWhatBecameOfDomainFile(t *testing.T) {
 		}
 	}
 }
+
+func TestPlainMapServeBytes(t *testing.T) {
+	var buf bytes.Buffer
+	err := New().Render(&buf, cli.MapServeReport{URL: "http://127.0.0.1:7380", Project: "clinic", Source: "domain.arclint.yaml"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "Serving the domain of clinic from domain.arclint.yaml at http://127.0.0.1:7380\nOpen the URL in a browser. Ctrl+C stops the server.\n"
+	if buf.String() != want {
+		t.Fatalf("bytes = %q, want %q", buf.String(), want)
+	}
+}

@@ -58,6 +58,8 @@ func (Renderer) Render(w io.Writer, r cli.Report) error {
 		return writeDomainConvert(w, v)
 	case cli.DomainMissingReport:
 		return writeMissingDomainGuidance(w, v.Source)
+	case cli.MapServeReport:
+		return writeMapServe(w, v)
 	case cli.DomainOverviewReport:
 		if !v.Overview.Found {
 			return writeMissingDomainGuidance(w, v.Overview.Source)
