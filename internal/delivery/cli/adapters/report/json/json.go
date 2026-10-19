@@ -57,6 +57,8 @@ func (renderer) Render(w io.Writer, r cli.Report) error {
 		}
 	case cli.DomainOverviewReport:
 		doc = overviewJSONDoc(x.Overview)
+	case cli.MapServeReport:
+		doc = mapServeJSON{URL: x.URL, Project: x.Project, Source: x.Source}
 	case cli.DomainListReport:
 		doc = listJSONDoc(x.Listing)
 	case cli.DomainShowReport:

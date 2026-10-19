@@ -595,6 +595,24 @@ relevance stays with `context`, not `domain`. `arclint domain` prints
 the whole model with every contract's `source:` line: the carrying
 declaration, `missing`, or `unanchorable` with the reason.
 
+### Map
+
+`arclint map serve` shows the recorded Ubiquitous Language in a browser:
+a navigator of the bounded contexts, a concept map of one context at a
+time, and an inspector of what the domain file records for the selected
+entry, with the relations of the context map. The page reads the same
+document `arclint domain overview --format json` prints, and it is
+display only: record meanings with `arclint domain define`.
+
+```sh
+arclint map serve                       # the project found from the working directory
+arclint map serve docs/examples/go      # the project found upward from a path, as check [path]
+arclint map serve --addr 127.0.0.1:8080 # another port; the default serves this machine alone
+```
+
+The server listens on `127.0.0.1:7380` unless `--addr` names another
+host, prints the URL to open, and stops on Ctrl+C.
+
 ## Agent skill artifacts
 
 `arclint agents skill` materializes the domain-librarian skill bundle the

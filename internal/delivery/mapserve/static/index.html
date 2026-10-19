@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<!--
+ArcLint Studio: the project's recorded Ubiquitous Language as a map,
+served by arclint map serve. Display only. The page loads /api/overview,
+the document `arclint domain overview --format json` prints, and draws
+it with studio.js: a navigator of the bounded contexts, a concept map of
+the active context, and an inspector of what the domain file records.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ArcLint Studio</title>
+<style>
+  :root{
+    --bg:#fff; --chrome:#fafafa; --line:#e7e7e9; --ink:#111; --muted:#6b6b72; --faint:#f1f1f3;
+    --sel:#4a90ff; --selbg:#eaf2ff; --missing:#e5484d;
+    --c-bounded_context:#8AB4FF; --c-aggregate:#f2b705; --c-entity:#3b82f6; --c-value_object:#0ea5a4;
+    --c-domain_event:#22c55e; --c-domain_service:#f97316; --c-invariant:#7c5cd6; --c-assertion:#a855f7;
+    --c-specification:#64748b; --c-question:#e5484d;
+  }
+  *{box-sizing:border-box} html,body{margin:0;height:100%}
+  body{font:13px/1.4 ui-sans-serif,system-ui,sans-serif;color:var(--ink);background:var(--bg);
+    display:grid;grid-template:44px 1fr 24px/240px 1fr 300px;}
+  .bar{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid var(--line);background:var(--bg)}
+  .bar .grow{flex:1}
+  .bar .name{font-weight:600}
+  .crumb b{font-weight:600} .crumb span{color:var(--muted)}
+  .bar .source{color:var(--muted);font-size:11px}
+  .nav{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+  h4{margin:0;padding:12px 12px 8px;font-size:12px;font-weight:600}
+  h4 span{color:var(--muted);font-weight:400}
+  .tree{overflow:auto;min-height:0;flex:1}
+  .tree div{padding:4px 12px;display:flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tree div:hover{background:var(--faint)}
+  .tree .sel{background:var(--selbg)}
+  .tree .dim{opacity:.3}
+  .tree .ctx{font-weight:600}
+  .dot{width:8px;height:8px;border-radius:99px;flex:none}
+  .canvas{position:relative;background:var(--chrome);overflow:hidden}
+  .find{position:absolute;top:12px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:2}
+  .find input,.find select{font:inherit;border:1px solid var(--line);border-radius:8px;padding:5px 10px;background:#fff;color:var(--ink);outline:0}
+  .find input{width:220px} .find input::placeholder{color:var(--muted);opacity:1}
+  .stage{position:absolute;inset:0;transform-origin:50% 46%;transition:transform .18s ease}
+  .enclosure{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);width:440px;height:250px;
+    border:1.5px solid var(--sel);border-radius:14px;background:#fff}
+  .enclosure .tag{position:absolute;top:-10px;left:12px;background:var(--sel);color:#fff;font-size:11px;padding:1px 6px;border-radius:4px}
+  .node{position:absolute;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;cursor:pointer;
+    transform:translateX(-50%);white-space:nowrap;border-radius:4px}
+  .node.left,.node.right{transform:none} .node.muted{color:var(--muted)}
+  .node .dot{width:12px;height:12px}
+  .node span.t{overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .node.on{outline:1.5px solid var(--sel);outline-offset:3px}
+  .node.dim{opacity:.22}
+  svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  .legend{position:absolute;left:12px;bottom:12px;display:flex;gap:6px;flex-wrap:wrap}
+  .legend span{display:flex;align-items:center;gap:5px;padding:3px 8px;border:1px solid var(--line);border-radius:99px;background:#fff;font-size:11px;color:var(--muted);cursor:pointer;user-select:none}
+  .legend span.off{opacity:.45;text-decoration:line-through}
+  .zoom{position:absolute;right:12px;bottom:12px;display:flex;gap:10px;padding:4px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--muted)}
+  .zoom span[data-zoom]{cursor:pointer;user-select:none}
+  .empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);text-align:center;padding:24px}
+  .empty code{display:block;margin-top:8px;color:var(--ink)}
+  .insp{border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+  .insp .body{overflow:auto;min-height:0;flex:1}
+  .insp .kind{display:block;padding:0 12px 6px;color:var(--muted);font-size:11px}
+  .sec{border-bottom:1px solid var(--line);padding-bottom:10px}
+  .row{display:grid;grid-template-columns:96px 1fr;align-items:start;gap:6px;padding:3px 12px}
+  .row label{color:var(--muted);padding-top:4px;overflow-wrap:anywhere}
+  .row .values{display:flex;flex-wrap:wrap;gap:4px}
+  .row .v{background:var(--faint);border-radius:6px;padding:4px 8px;overflow-wrap:anywhere}
+  .row .v.miss{color:var(--missing);background:#fdeeee}
+  .status{grid-column:1/-1;border-top:1px solid var(--line);padding:0 12px;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden}
+  .status .grow{flex:1}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+  <header class="bar">
+    <span class="name">ArcLint Studio</span>
+    <span class="crumb" id="crumb"></span>
+    <span class="grow"></span>
+    <span class="source" id="source"></span>
+  </header>
+  <aside class="nav">
+    <h4>Navigator</h4>
+    <div class="tree" id="tree"></div>
+  </aside>
+  <main class="canvas" id="canvas">
+    <div class="find">
+      <input id="query" placeholder="Search the context" autocomplete="off" spellcheck="false" aria-label="Search the context">
+      <select id="filter" aria-label="Concept"><option value="">All concepts</option></select>
+    </div>
+    <div class="stage" id="stage"><div class="enclosure" id="enclosure"></div></div>
+    <div class="legend" id="legend"></div>
+    <div class="zoom"><span data-zoom="-1">&minus;</span><span id="zoomPct">100%</span><span data-zoom="1">+</span></div>
+    <div class="empty" id="empty" hidden></div>
+  </main>
+  <aside class="insp">
+    <h4>Inspector <span>(as recorded)</span></h4>
+    <div class="body" id="inspector"></div>
+  </aside>
+  <footer class="status"><span id="path"></span><span class="grow"></span><span id="counts"></span></footer>
+<script src="studio.js"></script>
+<script>
+(function () {
+  'use strict';
+  var S = window.Studio;
+  function $(id) { return document.getElementById(id); }
+  var esc = S.esc;
+  function colour(concept) { return 'var(--c-' + concept + ')'; }
+
+  var st = { doc: null, context: null, concepts: [], sel: null, query: '', filter: '', hidden: {}, zoom: 1, fit: 1 };
+
+  function selected() { return st.sel ? S.byId(st.concepts, st.sel) : null; }
+  function shown(c) { return !st.hidden[c.concept] && S.matches(c, st.query, st.filter); }
+
+  function selectContext(name) {
+    st.context = S.context(st.doc, name);
+    st.concepts = st.context ? S.conceptsOf(st.context) : [];
+    st.sel = null;
+    render();
+  }
+
+  function renderNavigator() {
+    var h = '';
+    (st.doc.contexts || []).forEach(function (ctx) {
+      var on = st.context && ctx.name === st.context.name;
+      h += '<div data-ctx="' + esc(ctx.name) + '" class="ctx' + (on && !st.sel ? ' sel' : '') + '" title="' + esc(S.CONCEPT_LABEL.bounded_context + ': ' + ctx.name) + '">' +
+        '<span class="dot" style="background:' + colour('bounded_context') + '"></span>' + esc(ctx.name) + '</div>';
+      if (!on) return;
+      S.navigator(st.concepts).forEach(function (r) {
+        var c = r.c;
+        h += '<div data-id="' + esc(c.id) + '" class="' + (st.sel === c.id ? 'sel' : '') + (shown(c) ? '' : ' dim') + '" style="padding-left:' + (r.depth === 1 ? 24 : 36) + 'px" title="' + esc(S.CONCEPT_LABEL[c.concept] + ': ' + c.name) + '">' +
+          '<span class="dot" style="background:' + colour(c.concept) + '"></span>' + esc(c.name) + '</div>';
+      });
+    });
+    $('tree').innerHTML = h;
+  }
+
+  function nodeHTML(c, p, width) {
+    var cls = ['node', p.align === 'left' ? 'left' : p.align === 'right' ? 'right' : '', st.sel === c.id ? 'on' : '', shown(c) ? '' : 'dim',
+      c.concept === 'invariant' || c.concept === 'assertion' || c.concept === 'question' ? 'muted' : ''].join(' ');
+    var style = 'top:' + p.y + 'px;' + (p.align === 'left' ? 'left:' + p.x + 'px;' : p.align === 'right' ? 'right:' + (width - p.x) + 'px;' : 'left:' + p.x + 'px;') +
+      (p.maxWidth ? 'max-width:' + p.maxWidth + 'px;' : '');
+    var text = S.label(c);
+    return '<div class="' + cls + '" style="' + style + '" data-id="' + esc(c.id) + '" title="' + esc(S.CONCEPT_LABEL[c.concept] + ': ' + text) + '">' +
+      '<span class="dot" style="background:' + colour(c.concept) + '"></span><span class="t">' + esc(text) + '</span></div>';
+  }
+
+  function renderCanvas() {
+    var enclosure = $('enclosure');
+    if (!st.context) { enclosure.hidden = true; $('legend').innerHTML = ''; return; }
+    enclosure.hidden = false;
+    var viewport = { width: $('canvas').clientWidth || 740, height: $('canvas').clientHeight || 500 };
+    var L = S.layout(st.concepts, viewport);
+    enclosure.style.width = L.width + 'px';
+    enclosure.style.height = L.height + 'px';
+    var h = '<span class="tag">' + esc(st.context.name) + '</span><svg viewBox="0 0 ' + L.width + ' ' + L.height + '">' +
+      L.lines.map(function (l) { return '<line x1="' + l[0] + '" y1="' + l[1] + '" x2="' + l[2] + '" y2="' + l[3] + '" stroke="#c9ccd3"/>'; }).join('') + '</svg>';
+    st.concepts.forEach(function (c) { var p = L.positions[c.id]; if (p) h += nodeHTML(c, p, L.width); });
+    enclosure.innerHTML = h;
+    st.fit = S.fit(L, viewport);
+    $('stage').style.transform = 'scale(' + (st.zoom * st.fit) + ')';
+    $('zoomPct').textContent = Math.round(st.zoom * st.fit * 100) + '%';
+    $('legend').innerHTML = S.legend(st.concepts).map(function (k) {
+      return '<span data-legend="' + k + '" class="' + (st.hidden[k] ? 'off' : '') + '"><i class="dot" style="background:' + colour(k) + '"></i>' + esc(S.CONCEPT_LABEL[k]) + '</span>';
+    }).join('');
+  }
+
+  function renderInspector() {
+    if (!st.context) { $('inspector').innerHTML = ''; return; }
+    var sections = S.inspect(st.doc, st.context, st.concepts, selected());
+    $('inspector').innerHTML = sections.map(function (sec) {
+      return '<div class="sec"><h4>' + esc(sec.heading) + '</h4>' + (sec.kind ? '<span class="kind">' + esc(sec.kind) + '</span>' : '') +
+        sec.rows.map(function (r) {
+          var values = r.missing ? '<span class="v miss">missing</span>' : r.values.length ? r.values.map(function (v) { return '<span class="v">' + esc(v) + '</span>'; }).join('') : '<span class="v" style="color:var(--muted)">none</span>';
+          return '<div class="row"><label>' + esc(r.field) + '</label><span class="values">' + values + '</span></div>';
+        }).join('') + '</div>';
+    }).join('');
+  }
+
+  function renderChrome() {
+    var project = st.doc.project || '';
+    $('crumb').innerHTML = st.context ? '<b>' + esc(st.context.name) + '</b> <span>/ ' + esc(project) + '</span>' : '<b>' + esc(project) + '</b>';
+    $('source').textContent = st.doc.source || '';
+    $('path').innerHTML = S.path(st.context, st.concepts, selected()).map(esc).join(' <span>&rsaquo;</span> ');
+    $('counts').textContent = S.countsLine(st.doc.counts);
+    var filter = $('filter');
+    if (filter.options.length === 1) {
+      S.CONCEPTS.forEach(function (k) {
+        if (k === 'bounded_context') return;
+        var o = document.createElement('option'); o.value = k; o.textContent = S.CONCEPT_LABEL[k]; filter.appendChild(o);
+      });
+    }
+  }
+
+  function render() {
+    if (!st.doc) return;
+    renderChrome(); renderNavigator(); renderCanvas(); renderInspector();
+  }
+
+  function showEmpty(text, command) {
+    ['stage', 'legend'].forEach(function (id) { $(id).hidden = true; });
+    document.querySelector('.find').hidden = true;
+    document.querySelector('.zoom').hidden = true;
+    var e = $('empty');
+    e.hidden = false;
+    e.innerHTML = '<div>' + esc(text) + (command ? '<code>' + esc(command) + '</code>' : '') + '</div>';
+  }
+
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-ctx],[data-id],[data-legend],[data-zoom]');
+    if (!t) return;
+    if (t.dataset.ctx) return selectContext(t.dataset.ctx);
+    if (t.dataset.legend) { st.hidden[t.dataset.legend] = !st.hidden[t.dataset.legend]; return render(); }
+    if (t.dataset.zoom) { st.zoom = Math.max(0.5, Math.min(2, Math.round((st.zoom + 0.1 * +t.dataset.zoom) * 10) / 10)); return render(); }
+    if (t.dataset.id) { st.sel = t.dataset.id; return render(); }
+  });
+  $('enclosure').addEventListener('click', function (e) { if (!e.target.closest('.node')) { st.sel = null; render(); } });
+  $('query').addEventListener('input', function () { st.query = this.value; render(); });
+  $('filter').addEventListener('change', function () { st.filter = this.value; render(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { st.sel = null; render(); }
+  });
+  window.addEventListener('resize', render);
+
+  fetch('/api/overview', { cache: 'no-store' }).then(function (r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(function (doc) {
+    st.doc = doc;
+    renderChrome();
+    if (!doc.found) return showEmpty('No recorded Ubiquitous Language at ' + (doc.source || 'the domain file') + '.', 'arclint domain init');
+    if (!(doc.contexts || []).length) return showEmpty('No bounded context is recorded yet.', 'arclint domain define bounded_context <name> --definition <text>');
+    selectContext((doc.contexts[0] || {}).name);
+  }).catch(function (err) {
+    showEmpty('The domain overview could not be loaded: ' + err.message);
+  });
+})();
+</script>
+</body>
+</html>

@@ -33,6 +33,7 @@ IMPORTANT: work in this order on every change.
 - `arclint domain show <name>`: when someone asks which rules enforce something: the invariants and assertions an entry records, the code enforcing each one, and its status from the current check (`--format json`)
 - `arclint domain define`: record a meaning through validated commands; ArcLint writes the recording's format
 - `arclint domain remove`: remove an entry through validated commands
+- `arclint map serve`: show the recorded ubiquitous language in a browser: contexts, aggregates, entities, value objects, events, services, invariants, assertions, specifications and questions, read only (`--addr host:port`)
 - `arclint rules [selector]`: every configured rule with its constraint and rationale; one match prints the complete rule
 - `arclint check .`: evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings
 - `arclint rules test`: run the rule fixtures under `.arclint/tests` after changing any rule

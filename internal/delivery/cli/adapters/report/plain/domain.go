@@ -38,6 +38,12 @@ func writeMissingDomainGuidance(w io.Writer, source string) error {
 	return p.Err
 }
 
+func writeMapServe(w io.Writer, r cli.MapServeReport) error {
+	p := &out.Printer{W: w}
+	domaintext.MapServe(p, domaintext.Plain(), r.URL, r.Project, r.Source)
+	return p.Err
+}
+
 func writeOverviewText(w io.Writer, result application.DomainOverview) error {
 	p := &out.Printer{W: w}
 	domaintext.Overview(p, domaintext.Plain(), result)

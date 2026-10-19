@@ -67,6 +67,8 @@ func (r renderer) Render(w io.Writer, rep cli.Report) error {
 		writeDomainConvert(p, th, x.Result)
 	case cli.DomainMissingReport:
 		writeDomainMissing(p, th, x.Source)
+	case cli.MapServeReport:
+		writeMapServe(p, th, x)
 	case cli.DomainOverviewReport:
 		if !x.Overview.Found {
 			writeDomainMissing(p, th, x.Overview.Source)

@@ -8,6 +8,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 	"github.com/wixregiga/arclint/internal/delivery/cli"
 	clifactory "github.com/wixregiga/arclint/internal/delivery/cli/factory"
 	"github.com/wixregiga/arclint/internal/delivery/cli/reportfactory"
+	"github.com/wixregiga/arclint/internal/delivery/mapserve"
 	"github.com/wixregiga/arclint/internal/domain/distribution"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
@@ -240,6 +242,18 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
+	// The map shows the recorded language alone, so it keeps the
+	// overview before it learns to locate contracts in source. The page
+	// reads the overview as the JSON renderer spells it, whatever
+	// renderer the command's own report uses.
+	mapOverview := getDomainOverview
+	jsonRenderer, err := reportfactory.Select(cli.RendererJSON)
+	if err != nil {
+		return configError(err)
+	}
+	studio := mapserve.Server{Overview: func(w io.Writer, overview application.DomainOverview) error {
+		return jsonRenderer.Render(w, cli.DomainOverviewReport{Overview: overview})
+	}}
 	getDomainOverview = getDomainOverview.WithObservations(repository, observations)
 	listDomainDefinitions, err := application.NewListDomainDefinitions(knowledge)
 	if err != nil {
@@ -298,6 +312,7 @@ func run(args []string) int {
 		cli.NewRulesCommand(listRules, showRule, ruleTests, publishRuleSchema, renderer),
 		cli.NewContextCommand(getContext, renderer),
 		cli.NewDomainCommand(initDomain, getDomainOverview, listDomainDefinitions, showDomainDefinition, defineDomainDefinition, removeDomainDefinition, publishDomainSchema, exportDomainRecording, convertDomainRecording, recording.Path(), renderer),
+		cli.NewMapCommand(mapOverview, studio, renderer),
 		cli.NewAgentsCommand(publishAgents, publishSkillProtocol, publishSkillVocabulary, publishDomainSchema, renderer, hooksCommand),
 		cli.NewBaselineCommand(capture, refresh, renderer),
 		cli.NewPatternsCommand(patternCommands, renderer),
@@ -693,13 +708,11 @@ func runInit(args []string, renderer cli.Renderer, configError func(error) int) 
 // discoverRulesPath finds the project's ruleset before any adapter
 // exists: the composition root needs the repository root to wire
 // concrete Adapters. The ruleset is rules.arclint.yaml, discovered
-// upward from the working directory; `check [path]` selects the
-// repository by path, and discovery walks upward from it.
+// upward from the working directory; `check [path]` and `map serve
+// [path]` select the repository by path, and discovery walks upward
+// from it.
 func discoverRulesPath(args []string) (string, error) {
-	start := "."
-	if len(args) > 1 && args[0] == "check" && !strings.HasPrefix(args[1], "-") {
-		start = args[1]
-	}
+	start := repositoryPath(args)
 	discovered, err := yamlrule.DiscoverPath(start, rule.RulesetFileName)
 	if err != nil {
 		// No subcommand means --version or --help: neither needs a
@@ -720,6 +733,49 @@ func discoverRulesPath(args []string) (string, error) {
 		return "", fmt.Errorf("resolve ruleset: %w", err)
 	}
 	return discovered, nil
+}
+
+// repositoryPath is the path a command selects the repository by: the
+// positional argument of `check` and of `map serve`, wherever it sits
+// among the command's flags; the working directory otherwise. The
+// flags that carry a value are named here so their value is never
+// mistaken for the path.
+func repositoryPath(args []string) string {
+	switch {
+	case len(args) > 1 && args[0] == "check":
+		return positionalAmong(args[1:], "--only", "--exclude")
+	case len(args) > 2 && args[0] == "map" && args[1] == "serve":
+		return positionalAmong(args[2:], "--addr")
+	}
+	return "."
+}
+
+// positionalAmong is the first argument that is neither a flag nor the
+// value of one of valueFlags, written as `--flag value`; `--flag=value`
+// is one argument, and everything after `--` is positional. Without
+// one, the working directory.
+func positionalAmong(rest []string, valueFlags ...string) string {
+	skipNext := false
+	for i, a := range rest {
+		switch {
+		case skipNext:
+			skipNext = false
+		case a == "--":
+			if i+1 < len(rest) {
+				return rest[i+1]
+			}
+			return "."
+		case strings.HasPrefix(a, "-"):
+			for _, f := range valueFlags {
+				if a == f {
+					skipNext = true
+				}
+			}
+		default:
+			return a
+		}
+	}
+	return "."
 }
 
 // runsWithoutRuleset reports the commands that answer without a usable

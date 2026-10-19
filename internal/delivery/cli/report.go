@@ -118,6 +118,17 @@ type DomainOverviewReport struct {
 
 func (DomainOverviewReport) report() {}
 
+// MapServeReport is the product of `arclint map serve` once the server
+// listens: the URL a browser opens, and the project and domain file the
+// page shows.
+type MapServeReport struct {
+	URL     string
+	Project string
+	Source  string
+}
+
+func (MapServeReport) report() {}
+
 // DomainListReport is the product of `arclint domain list`.
 type DomainListReport struct {
 	Listing application.DomainListing

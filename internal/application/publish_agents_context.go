@@ -58,6 +58,7 @@ func AgentCommandSurface() []AgentCommandDoc {
 		{"domain show", "domain show <name>", "when someone asks which rules enforce something: the invariants and assertions an entry records, the code enforcing each one, and its status from the current check (`--format json`)"},
 		{"domain define", "domain define", "record a meaning through validated commands; ArcLint writes the recording's format"},
 		{"domain remove", "domain remove", "remove an entry through validated commands"},
+		{"map serve", "map serve", "show the recorded ubiquitous language in a browser: contexts, aggregates, entities, value objects, events, services, invariants, assertions, specifications and questions, read only (`--addr host:port`)"},
 		{"rules", "rules [selector]", "every configured rule with its constraint and rationale; one match prints the complete rule"},
 		{"check", "check .", "evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings"},
 		{"rules test", "rules test", "run the rule fixtures under `.arclint/tests` after changing any rule"},
