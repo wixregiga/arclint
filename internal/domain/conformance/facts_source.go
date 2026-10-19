@@ -3,7 +3,6 @@ package conformance
 import (
 	"fmt"
 	"path"
-	"slices"
 	"sort"
 	"strings"
 
@@ -125,20 +124,6 @@ func newFactsSource(zones []rule.Zone, obs Observations) (*factsSource, error) {
 		observations: obs, membership: mem,
 		dependencies: newDependencyIndex(obs, mem), files: files,
 	}, nil
-}
-
-// forCarriers prepares what a Rule checking recorded contracts selects,
-// with its own facts and the imports, to locate the declaration
-// carrying each contract: a Go test carrying an assertion takes T under
-// the name its file imports testing by. It never evaluates the Rule.
-func (s *factsSource) forCarriers(r rule.Rule) Facts {
-	required := append([]rule.Fact(nil), r.Enforcement().Facts()...)
-	if !slices.Contains(required, rule.FactImports) {
-		required = append(required, rule.FactImports)
-	}
-	f := s.prepare(required, r.Scope().WouldSelectFile, r.Scope().ExcludedFile)
-	f.constraint, f.scope = r.Type(), r.Scope()
-	return f
 }
 
 // forRule is the sole preparation path for native and extension evaluators.

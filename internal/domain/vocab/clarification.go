@@ -33,8 +33,8 @@ func InsufficientInfoQuestions() []ClarificationQuestion {
 			Decides:  "assertion owner (aggregate vs domain_service)",
 		},
 		{
-			Question: "Does <operation> return a value the business names? Then the guarantee is that value's invariant.",
-			Decides:  "where a declared domain_service's guarantee is checked (value invariant vs function of the context)",
+			Question: "Which domain service performs <X>, and which operations does it offer, each named for its effect in the ubiquitous language?",
+			Decides:  "the domain_service and its operations, each the on of its assertions",
 		},
 		{
 			Question: "Does <X> change anything, or does it only answer a question?",

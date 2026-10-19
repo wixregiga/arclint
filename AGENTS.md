@@ -175,9 +175,9 @@ Before implementing or delegating a design on arclint, and when reviewing
 one, run the `ddd-design-review` skill (`.agents/skills/ddd-design-review/`;
 the `.claude/skills` copy comes from `make generate ONLY=skill-copies`).
 It names where each decision and each change lives, checks that against
-the meta-model, the declined rules and the declared-service shapes,
-steelmans the opposite, and gives a verdict per decision with tiered
-sources. Put its verdicts in every delegated design brief.
+the meta-model and the declined rules, steelmans the opposite, and gives
+a verdict per decision with tiered sources. Put its verdicts in every
+delegated design brief.
 
 ## Finish gate
 

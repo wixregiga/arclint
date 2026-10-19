@@ -734,24 +734,19 @@ func Define(p *out.Printer, st Style, result application.DomainDefineResult, cha
 }
 
 // checkLine says where the guarantee of a defined assertion is checked,
-// in one sentence chosen by how its owner is declared in the code.
+// in one sentence chosen by its owner.
 func checkLine(h conformance.AssertionHome, result application.DomainDefineResult) string {
 	check := h.Check
 	if check == "" {
 		check = conformance.AssertKey(result.Name) + " (spelled in the language's method case)"
 	}
-	inModel := fmt.Sprintf("the function %s of context %s, or the invariant %s of a value object %s returns, or else the tests named with --verified-by", check, result.Context, result.Name, h.Operation)
 	switch h.Home {
 	case conformance.CheckHomeRoot:
 		return fmt.Sprintf("the root of %s declares %s, and %s calls it.", result.Owner, check, h.Operation)
 	case conformance.CheckHomeService:
 		return fmt.Sprintf("%s declares %s, and %s calls it.", result.Owner, check, h.Operation)
-	case conformance.CheckHomeTests:
-		return fmt.Sprintf("the root of %s is declared as an %s, with no body to call %s from, so the tests named with --verified-by verify it, and %s is declared on it.", result.Owner, h.Declared, check, h.Operation)
-	case conformance.CheckHomeModel:
-		return fmt.Sprintf("%s is declared as an %s, so the check is in the model: %s.", result.Owner, h.Declared, inModel)
 	default:
-		return fmt.Sprintf("%s is not declared yet. As an interface, an abstract class, an ABC, or a Protocol, it is checked in the model: %s. As a concrete type, it declares %s, and %s calls it.", result.Owner, inModel, check, h.Operation)
+		return fmt.Sprintf("%s is not declared yet. It declares %s, and %s calls it.", result.Owner, check, h.Operation)
 	}
 }
 

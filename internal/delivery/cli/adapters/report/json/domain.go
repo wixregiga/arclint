@@ -701,11 +701,7 @@ func defineJSONDoc(r cli.DomainDefineReport) map[string]any {
 		doc["values"] = values
 	}
 	if c := result.Check; c != nil {
-		check := map[string]any{"home": string(c.Home), "check": c.Check, "operation": c.Operation}
-		if c.Declared != "" {
-			check["declared"] = c.Declared
-		}
-		doc["check"] = check
+		doc["check"] = map[string]any{"home": string(c.Home), "check": c.Check, "operation": c.Operation}
 	}
 	return doc
 }

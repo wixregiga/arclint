@@ -126,13 +126,11 @@ func Run(req Request) (Assessment, error) {
 		return Assessment{}, err
 	}
 	prepared := make(map[string]Facts, len(rules))
-	located := make(map[string]Facts, len(rules))
 	for _, r := range rules {
 		prepared[r.ID().Qualified()] = source.forRule(r)
-		located[r.ID().Qualified()] = source.forCarriers(r)
 	}
 	a.patternBound = patternBound
-	a.contracts, err = assessContractCoverage(req, prepared, located)
+	a.contracts, err = assessContractCoverage(req, prepared)
 	if err != nil {
 		return Assessment{}, err
 	}

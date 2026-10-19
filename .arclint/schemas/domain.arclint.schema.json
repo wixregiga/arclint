@@ -180,7 +180,7 @@
           "minItems": 1,
           "uniqueItems": true,
           "items": { "type": "string", "pattern": "^[^:\\s/\\\\]([^:\\\\]*[^:\\s\\\\])?:\\S(.*\\S)?$" },
-          "description": "The automated tests that verify the guarantee, each spelled as its file's path from the repository root, a colon, and the test's name. An interface or abstract owner, with no body to call a check from, names its tests here."
+          "description": "The automated tests that verify the guarantee, each spelled as its file's path from the repository root, a colon, and the test's name."
         }
       }
     },

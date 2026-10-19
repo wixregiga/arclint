@@ -94,20 +94,8 @@ func DistillationRules() []DistillationRule {
 		},
 		{
 			ID:      "verified-by-tests",
-			Rule:    "An invariant or assertion the code cannot state in a body (an operation of a service declared as an interface or an abstract class, an effect the model cannot see) -> its verified_by, each test as path:name from the repository root; arclint checks the test exists, never that it proves the statement.",
+			Rule:    "An invariant or assertion the code cannot state in a body (an effect the model cannot see) -> its verified_by, each test as path:name from the repository root; arclint checks the test exists, never that it proves the statement.",
 			Example: "Discounter.assertions.never-exceeds-total on Discount, verified_by internal/pricing/discounter_test.go:TestDiscountNeverExceedsTotal",
-		},
-		{
-			ID:   "guarantee-has-one-checked-home",
-			Rule: "A guarantee of a domain service declared as an interface, an abstract class, an ABC, or a Protocol is checked once, in the model, wherever the model can state it: by a function of the context named assert followed by the key, or, when the operation returns a value the business names, by that value's invariant recorded under the same key; only what neither states is verified-by-tests. Never as a method of the interface, a callback, or prose.",
-			Sources: []Citation{
-				{Work: evansReference, Page: "14", Section: servicesSection},
-				{Work: evansReference, Page: "21", Section: sideEffectFreeSection},
-				{Work: evansReference, Page: "22", Section: assertionsSection},
-				{Work: iddSamples, Section: "MD5EncryptionService", Note: "checks its argument through the shared AssertionConcern"},
-			},
-			Conventions: []string{"named assert followed by the key"},
-			Example:     "Encrypter.assertions.not-empty on Encrypt holds because Encrypt returns EncryptedPassword, whose constructor enforces EncryptedPassword.invariants.not-empty; never an AssertNotEmpty on the Encrypter interface",
 		},
 		{
 			ID:      "precondition-as-assertion",
