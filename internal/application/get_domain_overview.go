@@ -2,7 +2,6 @@ package application
 
 import (
 	"fmt"
-	"slices"
 
 	"github.com/wixregiga/arclint/internal/domain/conformance"
 	"github.com/wixregiga/arclint/internal/domain/rule"
@@ -68,7 +67,7 @@ func (uc GetDomainOverview) Execute() (DomainOverview, error) {
 	if err != nil {
 		return DomainOverview{}, fmt.Errorf("load configured rules: %w", err)
 	}
-	required := carrierFacts(lang)
+	required := []rule.Fact{rule.FactDeclarations}
 	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, required, nil, conformance.NamedTestsToRead(cfg.Rules, lang))
 	if err != nil {
 		return DomainOverview{}, fmt.Errorf("observe contracts: %w", err)
@@ -88,32 +87,4 @@ func (uc GetDomainOverview) Execute() (DomainOverview, error) {
 	matrix.Unanchored = unanchoredContracts(matrix, cfg.Languages)
 	out.Matrix = matrix
 	return out, nil
-}
-
-// carrierFacts are the facts locating the recorded language needs:
-// imports and declarations, and the resolved result types of operations when a
-// domain service records an assertion, whose check may be the value
-// its operation returns.
-func carrierFacts(lang vocab.UbiquitousLanguage) []rule.Fact {
-	// A Go test carrying an assertion takes testing's T under the name
-	// its file imports testing by.
-	facts := []rule.Fact{rule.FactImports, rule.FactDeclarations}
-	for _, ctx := range lang.Contexts {
-		for _, s := range ctx.Services {
-			if len(s.Assertions) > 0 {
-				return append(facts, rule.FactFieldTypes)
-			}
-		}
-	}
-	return facts
-}
-
-// withFacts appends the facts a request does not hold yet.
-func withFacts(required []rule.Fact, facts ...rule.Fact) []rule.Fact {
-	for _, f := range facts {
-		if !slices.Contains(required, f) {
-			required = append(required, f)
-		}
-	}
-	return required
 }

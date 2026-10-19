@@ -114,10 +114,6 @@ func (c recordedContract) isolate(cc contextCode) contextCode {
 		s, _ := cc.ctx.Service(c.spec.Owner)
 		s.Assertions = []vocab.Assertion{c.assertion}
 		narrow.Services = []vocab.DomainService{s}
-		// A declared service's guarantee may be the invariant of the
-		// value its operation returns; the assertion check reads the
-		// recorded values and reports nothing about them.
-		narrow.ValueObjects = cc.ctx.ValueObjects
 	default:
 		// recordedContracts only supplies the three legal contract owners.
 	}
@@ -160,9 +156,8 @@ func (c recordedContract) ownerLocated(cc contextCode) bool {
 
 // assessContractCoverage judges every recorded contract with the Rules
 // that check it, each over its prepared Facts, and locates the
-// declaration carrying it over located, the same selection with the
-// imports a Go test carrying an assertion is read through.
-func assessContractCoverage(req Request, prepared, located map[string]Facts) ([]ContractCoverage, error) {
+// declaration carrying it in the code those Facts read.
+func assessContractCoverage(req Request, prepared map[string]Facts) ([]ContractCoverage, error) {
 	rules := map[string]rule.Rule{}
 	for _, r := range req.Rules {
 		rules[r.ID().Qualified()] = r
@@ -195,20 +190,13 @@ func assessContractCoverage(req Request, prepared, located map[string]Facts) ([]
 			}
 			carriers, cached := carriersByRule[id]
 			if !cached {
-				carrierCode, err := resolveDomain(located[id], req.Knowledge)
-				if err != nil {
-					return nil, err
-				}
-				carriers = carriersOf(carrierCode)
+				carriers = carriersOf(code)
 				carriersByRule[id] = carriers
 			}
 			if spec.Carrier == nil {
 				if spec.Carrier, err = contract.carrier(carriers); err != nil {
 					return nil, err
 				}
-			}
-			if spec.Kind == vocab.ConceptAssertion && spec.BodilessOwner == "" {
-				spec.BodilessOwner = carriers.BodilessOwner(spec.Context, spec.Owner)
 			}
 			for _, cc := range code.contexts {
 				if cc.ctx.Name != spec.Context {

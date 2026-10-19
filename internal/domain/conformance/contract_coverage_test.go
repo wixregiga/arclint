@@ -23,7 +23,7 @@ func TestContractCoverageSeparatesOwnersAndReportsLimits(t *testing.T) {
 		{Kind: "method", Owner: "Selection", Name: "AssertAccompanyingIncluded", StartLine: 3},
 		{Kind: "struct", Name: "Removal", StartLine: 5},
 		{Kind: "method", Owner: "Removal", Name: "Remove", StartLine: 6},
-	}, conformance.Call{Callee: "AssertAccompanyingIncluded", Enclosing: "Select", Line: 2})
+	}, conformance.Call{Callee: "AssertAccompanyingIncluded", Enclosing: "Select", EnclosingOwner: "Selection", Line: 2})
 	a := runOne(t, r, nil, observed("catalog.go"), map[string]conformance.LanguageFacts{"catalog.go": facts}, knowledge)
 	byOwner := map[string]conformance.ContractCoverage{}
 	for _, c := range a.Contracts() {
@@ -178,7 +178,7 @@ func TestContractCoverageCarriesTheDeclarationACheckLocated(t *testing.T) {
 		{Kind: "struct", Name: "Reservation", StartLine: 20},
 		{Kind: "method", Owner: "Reservation", Name: "Reserve", StartLine: 21},
 		{Kind: "method", Owner: "Reservation", Name: "AssertInStock", StartLine: 24},
-	}, conformance.Call{Callee: "AssertInStock", Enclosing: "Reserve", Line: 22})
+	}, conformance.Call{Callee: "AssertInStock", Enclosing: "Reserve", EnclosingOwner: "Reservation", Line: 22})
 	obs, err := conformance.NewObservations(observed("catalog.go"), map[string]conformance.LanguageFacts{"catalog.go": facts})
 	if err != nil {
 		t.Fatal(err)

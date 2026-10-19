@@ -39,9 +39,9 @@ type DomainDefineResult struct {
 	// Target and Values describe edits to the context map or project description.
 	Target string
 	Values map[string]string
-	// Check says where a recorded assertion is checked, chosen by how
-	// its owner is declared in the code; nil for every other concept
-	// and when no observations were lent.
+	// Check names the method that checks a recorded assertion and the
+	// operation that calls it; nil for every other concept and when no
+	// observations were lent.
 	Check *conformance.AssertionHome
 }
 
@@ -70,8 +70,8 @@ func NewDefineDomainDefinition(knowledge vocab.Repository, project string) (Defi
 }
 
 // WithObservations lends rules and observations so that defining an
-// assertion says where its guarantee is checked, chosen by how its
-// owner is declared in the code.
+// assertion names the method that checks its guarantee and the
+// operation that calls it.
 func (uc DefineDomainDefinition) WithObservations(rules rule.Repository, observations ObservationSource) DefineDomainDefinition {
 	uc.rules = rules
 	uc.observations = observations
@@ -151,7 +151,7 @@ func (uc DefineDomainDefinition) assertionHome(lang vocab.UbiquitousLanguage, co
 	if err != nil {
 		return nil, fmt.Errorf("load configured rules: %w", err)
 	}
-	required := carrierFacts(lang)
+	required := []rule.Fact{rule.FactDeclarations}
 	obs, err := uc.observations.Observe(cfg.Languages, cfg.Scan, required, nil, conformance.NamedTestsToRead(cfg.Rules, lang))
 	if err != nil {
 		return nil, fmt.Errorf("observe the assertion's owner: %w", err)
