@@ -62,11 +62,11 @@ func messagesOf(a conformance.Assessment) []string {
 // concreteDiscounter is the Discounter service as a struct whose
 // operation Discount calls its check AssertNeverExceedsTotal.
 func concreteDiscounter() conformance.LanguageFacts {
-	return goDecls("pricing", []conformance.Declaration{
+	return resolvedGo("pricing", []conformance.Declaration{
 		{Kind: "struct", Name: "Discounter", Exported: true, StartLine: 3},
 		{Kind: "method", Name: "Discount", Owner: "Discounter", Exported: true, StartLine: 4},
 		{Kind: "method", Name: "AssertNeverExceedsTotal", Owner: "Discounter", Exported: true, StartLine: 8},
-	}, conformance.Call{Callee: "AssertNeverExceedsTotal", Line: 5, Enclosing: "Discount", EnclosingOwner: "Discounter"})
+	}, conformance.Call{Callee: "AssertNeverExceedsTotal", Line: 5, Enclosing: "Discount", EnclosingOwner: "Discounter", Target: declared("internal/pricing/discounter.go", "Discounter", "AssertNeverExceedsTotal")})
 }
 
 // Each test verified_by names is declared in the file it names: a Go
@@ -219,6 +219,10 @@ func TestContractCoverageIncludesTheVerifyingTests(t *testing.T) {
 			{Kind: "func", Name: "TestDiscountNeverExceedsTotal", Exported: true, StartLine: 5, Params: []conformance.DeclarationParam{{Name: "t", Type: "*testing.T"}}},
 		}),
 	}
+	// The test file resolves its calls too, as the Go adapter does.
+	test := facts[goTest]
+	test.ResolvedCallsAvailable = true
+	facts[goTest] = test
 	obs, err := conformance.NewObservations(observed(goFile, goTest), facts)
 	if err != nil {
 		t.Fatal(err)

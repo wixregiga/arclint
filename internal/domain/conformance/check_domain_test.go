@@ -84,10 +84,10 @@ func domainScenario(t *testing.T) conformance.Request {
 			{Kind: "method", Name: "Cancel", Owner: "Event", Exported: true, StartLine: 65, Results: []string{"error"}},
 			{Kind: "method", Name: "Name", Owner: "Event", Exported: true, StartLine: 70, Results: []string{"string"}},
 		}, []conformance.Call{
-			{Callee: "EnsurePublishedOnly", Line: 33, Enclosing: "New"},
-			{Callee: "EnsurePublishedOnly", Line: 52, Enclosing: "Publish"},
-			{Callee: "AssertTiersPriced", Line: 53, Enclosing: "Publish", EnclosingOwner: "Event"},
-			{Callee: "New", Line: 66, Enclosing: "Cancel"},
+			{Callee: "EnsurePublishedOnly", Line: 33, Enclosing: "New", Target: declared("internal/event/event.go", "Event", "EnsurePublishedOnly")},
+			{Callee: "EnsurePublishedOnly", Line: 52, Enclosing: "Publish", Target: declared("internal/event/event.go", "Event", "EnsurePublishedOnly")},
+			{Callee: "AssertTiersPriced", Line: 53, Enclosing: "Publish", EnclosingOwner: "Event", Target: declared("internal/event/event.go", "Event", "AssertTiersPriced")},
+			{Callee: "New", Line: 66, Enclosing: "Cancel", Target: declared("internal/event/event.go", "", "New")},
 		}),
 		"internal/event/id.go": goFacts("event", nil, []conformance.Declaration{
 			{Kind: "type", Name: "EventID", Exported: true, StartLine: 3},
@@ -105,6 +105,11 @@ func domainScenario(t *testing.T) conformance.Request {
 			{Kind: "method", Name: "SetStatus", Owner: "Order", Exported: true, StartLine: 20},
 		}, nil),
 	}
+	// The event file resolves its calls, as the Go adapter does, so the
+	// check of an assertion reads the method each call reaches.
+	event := facts["internal/event/event.go"]
+	event.ResolvedCallsAvailable = true
+	facts["internal/event/event.go"] = event
 	obs, err := conformance.NewObservations(files, facts)
 	if err != nil {
 		t.Fatalf("NewObservations: %v", err)
@@ -868,7 +873,7 @@ func TestAssertionIsCheckedByItsOperation(t *testing.T) {
 	r := builtInRule(t, "assertion/checked-by-its-operation")
 	files := observed("internal/event/event.go")
 	run := func(decls []conformance.Declaration, calls ...conformance.Call) []string {
-		a := runOne(t, r, nil, files, map[string]conformance.LanguageFacts{"internal/event/event.go": goDecls("event", decls, calls...)}, knowledge)
+		a := runOne(t, r, nil, files, map[string]conformance.LanguageFacts{"internal/event/event.go": resolvedGo("event", decls, calls...)}, knowledge)
 		var out []string
 		for _, v := range a.Violations() {
 			out = append(out, v.Message())
@@ -891,13 +896,33 @@ func TestAssertionIsCheckedByItsOperation(t *testing.T) {
 	if len(got) != 1 || got[0] != "aggregate Event: operation Publish does not call AssertTiersPriced, so assertion tiers-priced is not checked when it completes" {
 		t.Errorf("uncalled check: %q", got)
 	}
-	if got = run([]conformance.Declaration{root, publish, check}, conformance.Call{Callee: "AssertTiersPriced", Line: 12, Enclosing: "Publish", EnclosingOwner: "Event"}); len(got) != 0 {
+	ownCheck := declared("internal/event/event.go", "Event", "AssertTiersPriced")
+	if got = run([]conformance.Declaration{root, publish, check}, conformance.Call{Callee: "AssertTiersPriced", Line: 12, Enclosing: "Publish", EnclosingOwner: "Event", Target: ownCheck}); len(got) != 0 {
 		t.Errorf("checked operation: %q", got)
+	}
+	// A call resolution followed counts only when it reaches the root's
+	// own check, never a collaborator's method of the same name; a call
+	// resolution did not follow keeps the name match.
+	validator := conformance.Declaration{Kind: "method", Name: "AssertTiersPriced", Owner: "Validator", Exported: true, StartLine: 40, Results: []string{"error"}}
+	uncalled := "aggregate Event: operation Publish does not call AssertTiersPriced, so assertion tiers-priced is not checked when it completes"
+	for _, c := range []struct {
+		name   string
+		target conformance.Reference
+		want   []string
+	}{
+		{"a collaborator's method", declared("internal/event/event.go", "Validator", "AssertTiersPriced"), []string{uncalled}},
+		{"a method outside the repository", external("example.com/check", "Validator", "AssertTiersPriced"), []string{uncalled}},
+		{"a call resolution did not follow", undetermined("the receiver's type is not known"), nil},
+	} {
+		got = run([]conformance.Declaration{root, publish, check, validator}, conformance.Call{Callee: "AssertTiersPriced", Line: 12, Enclosing: "Publish", EnclosingOwner: "Event", Target: c.target})
+		if strings.Join(got, "\n") != strings.Join(c.want, "\n") {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
 	}
 	// A call from a same-named method of another type is not the
 	// operation's call.
 	other := conformance.Declaration{Kind: "method", Name: "Publish", Owner: "Draft", Exported: true, StartLine: 30, Results: []string{"error"}}
-	if got = run([]conformance.Declaration{root, publish, check, other}, conformance.Call{Callee: "AssertTiersPriced", Line: 32, Enclosing: "Publish", EnclosingOwner: "Draft"}); len(got) != 1 || got[0] != "aggregate Event: operation Publish does not call AssertTiersPriced, so assertion tiers-priced is not checked when it completes" {
+	if got = run([]conformance.Declaration{root, publish, check, other}, conformance.Call{Callee: "AssertTiersPriced", Line: 32, Enclosing: "Publish", EnclosingOwner: "Draft", Target: ownCheck}); len(got) != 1 || got[0] != "aggregate Event: operation Publish does not call AssertTiersPriced, so assertion tiers-priced is not checked when it completes" {
 		t.Errorf("a call from another type's Publish: %q", got)
 	}
 }
@@ -918,7 +943,7 @@ func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 	r := builtInRule(t, id)
 	goFile := "internal/identity/tenant_provisioning_service.go"
 	run := func(decls []conformance.Declaration, calls ...conformance.Call) []string {
-		a := runOne(t, r, nil, observed(goFile), map[string]conformance.LanguageFacts{goFile: goDecls("identity", decls, calls...)}, knowledge)
+		a := runOne(t, r, nil, observed(goFile), map[string]conformance.LanguageFacts{goFile: resolvedGo("identity", decls, calls...)}, knowledge)
 		var out []string
 		for _, v := range a.Violations() {
 			out = append(out, v.Message())
@@ -941,7 +966,7 @@ func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 	if len(got) != 1 || got[0] != "service TenantProvisioningService: operation ProvisionTenant does not call AssertTenantNameUnique, so assertion tenant-name-unique is not checked when it completes" {
 		t.Errorf("uncalled check: %q", got)
 	}
-	if got = run([]conformance.Declaration{svc, provision, check}, conformance.Call{Callee: "AssertTenantNameUnique", Line: 12, Enclosing: "ProvisionTenant", EnclosingOwner: "TenantProvisioningService"}); len(got) != 0 {
+	if got = run([]conformance.Declaration{svc, provision, check}, conformance.Call{Callee: "AssertTenantNameUnique", Line: 12, Enclosing: "ProvisionTenant", EnclosingOwner: "TenantProvisioningService", Target: declared(goFile, "TenantProvisioningService", "AssertTenantNameUnique")}); len(got) != 0 {
 		t.Errorf("checked operation: %q", got)
 	}
 	// The rule is the same for every declaration of the service: an
@@ -959,11 +984,11 @@ func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 
 	tsFile := "src/identity/tenant-provisioning-service.ts"
 	facts := map[string]conformance.LanguageFacts{
-		tsFile: {Language: rule.LanguageTypeScript, ImportsAvailable: true, DeclarationsAvailable: true, CallsAvailable: true, FieldTypesAvailable: true, Declarations: []conformance.Declaration{
+		tsFile: {Language: rule.LanguageTypeScript, ImportsAvailable: true, DeclarationsAvailable: true, CallsAvailable: true, ResolvedCallsAvailable: true, FieldTypesAvailable: true, Declarations: []conformance.Declaration{
 			{Kind: "class", Name: "TenantProvisioningService", Exported: true, StartLine: 1},
 			{Kind: "method", Name: "provisionTenant", Owner: "TenantProvisioningService", Exported: true, StartLine: 5},
 			{Kind: "method", Name: "assertTenantNameUnique", Owner: "TenantProvisioningService", Exported: true, StartLine: 15},
-		}, Calls: []conformance.Call{{Callee: "assertTenantNameUnique", Line: 7, Enclosing: "provisionTenant", EnclosingOwner: "TenantProvisioningService"}}},
+		}, Calls: []conformance.Call{{Callee: "assertTenantNameUnique", Line: 7, Enclosing: "provisionTenant", EnclosingOwner: "TenantProvisioningService", Target: declared(tsFile, "TenantProvisioningService", "assertTenantNameUnique")}}},
 	}
 	a := runOne(t, r, nil, observed(tsFile), facts, knowledge)
 	if got := outcomesOf(a)[id+"|context:identity"]; got != conformance.OutcomeConforms {
@@ -972,11 +997,11 @@ func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 
 	pyFile := "identity/tenant_provisioning_service.py"
 	facts = map[string]conformance.LanguageFacts{
-		pyFile: {Language: rule.LanguagePython, ImportsAvailable: true, DeclarationsAvailable: true, CallsAvailable: true, FieldTypesAvailable: true, Declarations: []conformance.Declaration{
+		pyFile: {Language: rule.LanguagePython, ImportsAvailable: true, DeclarationsAvailable: true, CallsAvailable: true, ResolvedCallsAvailable: true, FieldTypesAvailable: true, Declarations: []conformance.Declaration{
 			{Kind: "class", Name: "TenantProvisioningService", Exported: true, StartLine: 1},
 			{Kind: "method", Name: "provision_tenant", Owner: "TenantProvisioningService", Exported: true, StartLine: 5},
 			{Kind: "method", Name: "assert_tenant_name_unique", Owner: "TenantProvisioningService", Exported: true, StartLine: 15},
-		}, Calls: []conformance.Call{{Callee: "assert_tenant_name_unique", Line: 7, Enclosing: "provision_tenant", EnclosingOwner: "TenantProvisioningService"}}},
+		}, Calls: []conformance.Call{{Callee: "assert_tenant_name_unique", Line: 7, Enclosing: "provision_tenant", EnclosingOwner: "TenantProvisioningService", Target: declared(pyFile, "TenantProvisioningService", "assert_tenant_name_unique")}}},
 	}
 	a = runOne(t, r, nil, observed(pyFile), facts, knowledge)
 	if got := outcomesOf(a)[id+"|context:identity"]; got != conformance.OutcomeConforms {
@@ -989,7 +1014,7 @@ func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 func TestAssertionRemediationGivesTheRepairAlone(t *testing.T) {
 	r := builtInRule(t, "assertion/checked-by-its-operation")
 	remediations := func(knowledge vocab.UbiquitousLanguage, file, pkg string, decls []conformance.Declaration) []string {
-		a := runOne(t, r, nil, observed(file), map[string]conformance.LanguageFacts{file: goDecls(pkg, decls)}, knowledge)
+		a := runOne(t, r, nil, observed(file), map[string]conformance.LanguageFacts{file: resolvedGo(pkg, decls)}, knowledge)
 		var out []string
 		for _, v := range a.Violations() {
 			out = append(out, v.Remediation())
