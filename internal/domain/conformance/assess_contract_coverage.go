@@ -56,8 +56,6 @@ const (
 	ruleValueObjectConstructor  = "value_object/constructed-through-one-door"
 	ruleInvariantsEnforcedRoot  = "aggregate/invariants-enforced-by-root"
 	ruleInvariantEnforcedMutate = "invariant/enforced-at-every-mutation"
-	ruleInvariantTestsDeclared  = "invariant/verifying-tests-declared"
-	ruleAssertionTestsDeclared  = "assertion/verifying-tests-declared"
 )
 
 // ContractRuleIDs names every built-in Rule whose evaluation decides
@@ -66,29 +64,19 @@ const (
 func ContractRuleIDs() []string {
 	return []string{
 		ruleAssertionChecked, ruleValueObjectConstructor, ruleInvariantsEnforcedRoot, ruleInvariantEnforcedMutate,
-		ruleInvariantTestsDeclared, ruleAssertionTestsDeclared,
 	}
 }
 
-// ruleIDs lists the Rules that check the contract: those that judge
-// its code, and, when it names tests under verified_by, the one that
-// judges those tests exist.
+// ruleIDs lists the Rules that judge the contract's code.
 func (c recordedContract) ruleIDs() []string {
-	if c.spec.Kind == vocab.ConceptAssertion {
-		ids := []string{ruleAssertionChecked}
-		if len(c.assertion.VerifiedBy) > 0 {
-			ids = append(ids, ruleAssertionTestsDeclared)
-		}
-		return ids
+	switch {
+	case c.spec.Kind == vocab.ConceptAssertion:
+		return []string{ruleAssertionChecked}
+	case c.ownerConcept == vocab.ConceptValueObject:
+		return []string{ruleValueObjectConstructor}
+	default:
+		return []string{ruleInvariantsEnforcedRoot, ruleInvariantEnforcedMutate}
 	}
-	ids := []string{ruleInvariantsEnforcedRoot, ruleInvariantEnforcedMutate}
-	if c.ownerConcept == vocab.ConceptValueObject {
-		ids = []string{ruleValueObjectConstructor}
-	}
-	if len(c.invariant.VerifiedBy) > 0 {
-		ids = append(ids, ruleInvariantTestsDeclared)
-	}
-	return ids
 }
 
 // isolate retains the located code but passes only this contract to the
@@ -207,9 +195,6 @@ func assessContractCoverage(req Request, prepared, located map[string]Facts) ([]
 					return nil, err
 				}
 			}
-			if spec.Kind == vocab.ConceptAssertion && spec.BodilessOwner == "" {
-				spec.BodilessOwner = carriers.BodilessOwner(spec.Context, spec.Owner)
-			}
 			for _, cc := range code.contexts {
 				if cc.ctx.Name != spec.Context {
 					continue
@@ -245,15 +230,6 @@ func evaluateRecordedContract(r rule.Rule, contract recordedContract, cc context
 	check, exists := domainChecks[r.ID().Local()]
 	if !exists {
 		return Evaluation{}, fmt.Errorf("contract coverage: no check for %s", r.ID())
-	}
-	if check.readsTests {
-		// The tests are judged where they are; neither the context's
-		// code nor the owner's location decides whether they exist.
-		violations, unresolved, err := check.judge(r, subject, contract.isolate(cc), code)
-		if err != nil {
-			return Evaluation{}, fmt.Errorf("contract coverage: %w", err)
-		}
-		return judgedEvaluation(r, subject, violations, unresolved)
 	}
 	if cc.scopeParseFailures > 0 {
 		return simpleEvaluation(r, subject, OutcomeFailed)

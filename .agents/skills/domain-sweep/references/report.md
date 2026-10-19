@@ -31,7 +31,7 @@ First the YAML fragment the recorded domain would hold, in the shape of `domain.
 
 ```bash
 arclint domain define value_object DomainRecording --context vocabulary --definition "..."
-arclint domain define invariant spelled-with-slashes --owner DomainRecording --context vocabulary --statement "..." --verified-by internal/domain/vocab/domain_recording_test.go:TestNewDomainRecordingStaysInsideTheRepository
+arclint domain define invariant spelled-with-slashes --owner DomainRecording --context vocabulary --statement "..."
 arclint domain define question ruleset-names-the-recording-when --context vocabulary --text "..."
 arclint domain remove invariant <key> --owner <Owner>
 ```
@@ -40,7 +40,7 @@ Under each entry: the evidence that decided it, quoted or cited, and each litera
 
 ## 4. Code changes each entry requires
 
-One bullet per recorded entry: the owner, where enforcement must move or be added, which call sites go away, and which tests pin the behavior today. For a guarantee of an operation, say which operation decides and which application step carries out the change. For a declared service, say which shape of `gate.md` (a check in the model, or a value) it takes. Name files and functions; write no code.
+One bullet per recorded entry: the owner, where enforcement must move or be added, which call sites go away, and which tests pin the behavior today. For a guarantee of an operation, say which operation decides and which application step carries out the change. Name files and functions; write no code.
 
 ## 5. Questions for the owner
 

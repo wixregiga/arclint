@@ -1,7 +1,6 @@
 package yamlvocab
 
 import (
-	"slices"
 	"strconv"
 	"strings"
 
@@ -379,51 +378,15 @@ func entities(a vocab.Aggregate) keyed[vocab.Entity] {
 	}
 }
 
-// invariants describes an owner's keyed invariants; order is the
-// owner's key order. An invariant that names no tests is written as its
-// statement alone, and one that does as a mapping of the statement and
-// verified_by.
+// invariants describes an owner's keyed invariants, each written as
+// its statement; order is the owner's key order.
 func invariants(invs []vocab.Invariant, order []string) keyed[vocab.Invariant] {
-	build := func(inv vocab.Invariant) *yaml.Node {
-		if len(inv.VerifiedBy) == 0 {
-			return textScalar(inv.Statement)
-		}
-		m := newMapping()
-		appendKV(m, keyStatement, textScalar(inv.Statement))
-		appendKV(m, keyVerifiedBy, testSequence(inv.VerifiedBy))
-		return m
-	}
 	return keyed[vocab.Invariant]{
 		key: keyInvariants, order: order, items: invs,
 		name:  func(inv vocab.Invariant) string { return inv.Key },
-		build: build,
+		build: func(inv vocab.Invariant) *yaml.Node { return textScalar(inv.Statement) },
 		update: func(n *yaml.Node, inv vocab.Invariant) {
-			tested := len(inv.VerifiedBy) > 0
-			alone := n.Kind == yaml.ScalarNode || n.Kind == yaml.AliasNode
-			switch {
-			case !tested && alone:
-				*n = *restated(n, inv.Statement)
-			case tested && n.Kind == yaml.MappingNode:
-				key, value := mapEntry(n, keyStatement)
-				if value == nil {
-					setText(n, keyStatement, inv.Statement, invariantKeys)
-				} else {
-					*value = *restated(value, inv.Statement)
-					keepLineComment(key, value)
-				}
-				setTests(n, inv.VerifiedBy, invariantKeys)
-			case tested && alone:
-				// The statement alone becomes the mapping's statement, its
-				// node, style, and comments kept.
-				m := newMapping()
-				appendKV(m, keyStatement, restated(n, inv.Statement))
-				appendKV(m, keyVerifiedBy, testSequence(inv.VerifiedBy))
-				*n = *m
-			case !tested && n.Kind == yaml.MappingNode:
-				*n = *statementAlone(n, inv.Statement)
-			default:
-				*n = *build(inv)
-			}
+			*n = *restated(n, inv.Statement)
 		},
 	}
 }
@@ -438,9 +401,6 @@ func assertions(items []vocab.Assertion, order []string) keyed[vocab.Assertion] 
 			m := newMapping()
 			appendKV(m, keyOn, stringScalar(as.On))
 			appendKV(m, keyStatement, textScalar(as.Statement))
-			if len(as.VerifiedBy) > 0 {
-				appendKV(m, keyVerifiedBy, testSequence(as.VerifiedBy))
-			}
 			return m
 		},
 		update: func(n *yaml.Node, as vocab.Assertion) {
@@ -450,7 +410,6 @@ func assertions(items []vocab.Assertion, order []string) keyed[vocab.Assertion] 
 			}
 			setText(n, keyOn, as.On, assertionKeys)
 			setText(n, keyStatement, as.Statement, assertionKeys)
-			setTests(n, as.VerifiedBy, assertionKeys)
 		},
 	}
 }
@@ -654,24 +613,6 @@ func setList(mapping *yaml.Node, key string, values []string, order []string) {
 	setField(mapping, key, stringSequence(values), order)
 }
 
-// statementAlone is an invariant mapping that no longer names tests,
-// written as its statement alone: the statement's node with its style
-// and comments, and the comments of the mapping and of the statement
-// key it loses.
-func statementAlone(mapping *yaml.Node, statement string) *yaml.Node {
-	key, value := mapEntry(mapping, keyStatement)
-	if value == nil {
-		return textScalar(statement)
-	}
-	alone := *restated(value, statement)
-	// The mapping's own comments, which a flow mapping writes after its
-	// closing brace, go with the statement too.
-	alone.HeadComment = joinComments(mapping.HeadComment, joinComments(key.HeadComment, alone.HeadComment))
-	alone.LineComment = joinComments(mapping.LineComment, joinComments(key.LineComment, alone.LineComment))
-	alone.FootComment = joinComments(key.FootComment, joinComments(alone.FootComment, mapping.FootComment))
-	return &alone
-}
-
 // restated is the node a statement is written as in place of node: an
 // alias that still names the statement stays the alias, a scalar keeps
 // its style, and either keeps its comments; anything else becomes the
@@ -694,17 +635,6 @@ func restated(node *yaml.Node, statement string) *yaml.Node {
 	}
 }
 
-// mapEntry returns the key and value nodes of one mapping entry, nil
-// when the mapping does not hold it.
-func mapEntry(mapping *yaml.Node, key string) (*yaml.Node, *yaml.Node) {
-	for i := 0; i+1 < len(mapping.Content); i += 2 {
-		if mapping.Content[i].Value == key {
-			return mapping.Content[i], mapping.Content[i+1]
-		}
-	}
-	return nil, nil
-}
-
 func joinComments(a, b string) string {
 	switch {
 	case a == "":
@@ -713,69 +643,6 @@ func joinComments(a, b string) string {
 		return a
 	}
 	return a + "\n" + b
-}
-
-// setTests sets verified_by, removing it when no test is named. A test
-// the list already holds keeps its node and the comments around it,
-// so an edit that leaves the tests alone leaves the list as written.
-func setTests(mapping *yaml.Node, tests []string, order []string) {
-	if len(tests) == 0 {
-		removeField(mapping, keyVerifiedBy)
-		return
-	}
-	key, existing := mapEntry(mapping, keyVerifiedBy)
-	if existing != nil && existing.Kind == yaml.AliasNode {
-		// A list written as an alias of another stays one while it
-		// names the same tests; otherwise it becomes its own list,
-		// keeping the alias's comments.
-		if named := resolve(existing); named != nil && named.Kind == yaml.SequenceNode && slices.Equal(scalarValues(named), tests) {
-			return
-		}
-		list := testSequence(tests)
-		list.HeadComment, list.LineComment, list.FootComment = existing.HeadComment, existing.LineComment, existing.FootComment
-		*existing = *list
-		keepLineComment(key, existing)
-		return
-	}
-	if existing == nil || existing.Kind != yaml.SequenceNode {
-		setField(mapping, keyVerifiedBy, testSequence(tests), order)
-		return
-	}
-	// An item is matched by the test it names, through an alias too,
-	// and keeps its own node: the alias stays an alias.
-	kept := map[string]*yaml.Node{}
-	for _, item := range existing.Content {
-		named := resolve(item)
-		if named == nil || named.Kind != yaml.ScalarNode {
-			continue
-		}
-		if _, seen := kept[named.Value]; !seen {
-			kept[named.Value] = item
-		}
-	}
-	content := make([]*yaml.Node, 0, len(tests))
-	for _, t := range tests {
-		if item, ok := kept[t]; ok {
-			content = append(content, item)
-			delete(kept, t)
-			continue
-		}
-		content = append(content, stringScalar(t))
-	}
-	existing.Content = content
-}
-
-// scalarValues lists the values a sequence names, through aliases.
-func scalarValues(seq *yaml.Node) []string {
-	out := make([]string, 0, len(seq.Content))
-	for _, item := range seq.Content {
-		named := resolve(item)
-		if named == nil || named.Kind != yaml.ScalarNode {
-			return nil
-		}
-		out = append(out, named.Value)
-	}
-	return out
 }
 
 func appendList(mapping *yaml.Node, key string, values []string) {
@@ -883,16 +750,6 @@ func textScalar(v string) *yaml.Node {
 		n.Style = yaml.FoldedStyle
 	}
 	return n
-}
-
-// testSequence builds a block list for verified_by, one test a line:
-// a test's path and name run too long to share a line with another.
-func testSequence(tests []string) *yaml.Node {
-	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: tagSeq}
-	for _, t := range tests {
-		seq.Content = append(seq.Content, stringScalar(t))
-	}
-	return seq
 }
 
 // stringSequence builds a flow list ([a, b]) for aliases.

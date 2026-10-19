@@ -61,71 +61,6 @@ analysis produces `undetermined`; parse failure produces `failed`. Findings
 remain findings even when suppressed or baselined. A context with no named
 invariants or assertions explicitly reports that no coverage is established.
 
-## Contracts verified by tests
-
-Evans gives the answer for a contract the code cannot state: "If assertions
-cannot be coded directly in your programming language, write automated unit
-tests for them" (DDD Reference 2015, p. 22). An invariant or an assertion
-names those tests under `verified_by`, each as the test file's path from the
-repository root, a colon, and the test's name:
-
-```sh
-arclint domain define assertion never-exceeds-total --context pricing \
-  --verified-by internal/pricing/discounter_test.go:TestDiscountNeverExceedsTotal
-```
-
-Repeat `--verified-by` to name several tests; together they replace the
-recorded ones, and `--clear-verified-by` records none. In YAML the tests sit
-under the entry:
-
-```yaml
-services:
-  Discounter:
-    definition: Takes a discount off an order's total.
-    assertions:
-      never-exceeds-total:
-        on: Discount
-        statement: A discount never exceeds the order total.
-        verified_by:
-          - internal/pricing/discounter_test.go:TestDiscountNeverExceedsTotal
-```
-
-An invariant that names tests is written as a mapping of `statement` and
-`verified_by`; one that names none stays its statement alone. In CML each
-test is an `arclint.verified_by` entry of the operation's hint.
-
-`invariant/verifying-tests-declared` and `assertion/verifying-tests-declared`
-check that each named test exists:
-
-| Language | A test is |
-|---|---|
-| Go | a `func Test...(t *testing.T)` in a `_test.go` file, with no type parameters and no results, named as `go test` runs it, with `testing` under the name the file imports it by |
-| Python | a module-level `def test...`, or a `test...` method spelled `Class.test_name` |
-| TypeScript | its name written in the file, since a test is a call such as `test("...")` |
-
-A missing file, a renamed test, or a function that is not a test is a
-finding at the recorded entry. A test file that `scan.exclude` or a `testdata`
-directory leaves out is still read for this check, because `verified_by` names
-it: only its imports and declarations, or its text in TypeScript, are read, and
-no other rule, Zone, or context sees the file. A finding about such a file says
-it was read for that reason. A file Exclusion of the verifying-tests rule still
-keeps the file unread. The check says only that the test exists;
-whether the test proves the statement is not checked. In TypeScript a comment
-or a string that repeats the name passes for the test.
-
-A domain service declared as an interface, as Evans states one ("a
-standalone interface declared as a service", p. 14), has no body to call an
-`Assert...` method from. When the owner of an assertion is an interface or an
-abstract class (a TypeScript `abstract class`, or a Python class deriving
-`ABC` or `Protocol`, or naming `ABCMeta` as its metaclass),
-`assertion/checked-by-its-operation` still asks the owner to declare the
-operation, and does not ask for the call. A domain service so declared is
-checked in the model when the model can state its guarantee (see
-[a domain service declared as an abstraction](#a-domain-service-declared-as-an-abstraction)),
-and otherwise by its `verified_by`; an aggregate root so declared names its
-tests under `verified_by`. A concrete owner calls its check whether or not
-the assertion also names tests.
-
 ## Rules that follow calls and field types
 
 Some built-in rules judge the role a type plays: an aggregate never calls a
@@ -274,53 +209,21 @@ its key, and every constructor and every command of the root calls it
 (`invariant/enforced-at-every-mutation`). **An assertion** is a method
 named `Assert` followed by its key, declared on its owner (the aggregate's
 root or the domain service) and called by the operation the assertion
-names (`assertion/checked-by-its-operation`).
+names, inside that operation's own body
+(`assertion/checked-by-its-operation`). The rule is the same for every
+operation: one that does not make the call is a finding, and a call from a
+same-named method of another type does not count. Its reasons are the
+sources the meta-model cites for it, in Evans's words: "Define a service
+contract, a set of assertions about interactions with the service" (DDD
+Reference, p. 14, Services); "State post-conditions of operations and
+invariants of classes and aggregates" and "Assertions define contracts of
+services and entity modifiers" (p. 22, Assertions). `arclint domain define assertion` prints the method that
+checks the guarantee it records and the operation that calls it.
 The `Ensure` and `Assert` method shapes are ArcLint's own convention,
 which no cited source states; the sources ask that invariants and
 post-conditions be stated explicitly, not what the methods are named.
 The statement is the guarantee in the domain expert's words; the code
 checks it, the recording never restates it as a post-condition.
-
-**A domain service declared as an abstraction** (an interface in Go or
-TypeScript, an abstract class in TypeScript, a class whose own bases
-name `ABC` or `Protocol` in Python) has no body for a check, so its
-guarantee is checked once, in the model, in one of two shapes, or, where
-the model cannot state it, by the tests its `verified_by` names:
-
-- a function of the context spelled `Assert` followed by the key
-  (`AssertNotEmpty`, `assertNotEmpty`, `assert_not_empty`);
-- the value object the operation returns, when that value records an
-  invariant under the same key: its constructor already enforces it
-  (`value_object/constructed-through-one-door`).
-
-```yaml
-    value_objects:
-      EncryptedPassword:
-        definition: The protected form of a Password.
-        invariants:
-          not-empty: An encrypted password is never empty.
-    services:
-      Encrypter:
-        definition: Protects a Password.
-        assertions:
-          not-empty:
-            on: Encrypt
-            statement: An encrypted password is never empty.
-```
-
-```go
-// Encrypter protects a Password; it returns the value that keeps not-empty.
-type Encrypter interface {
-	Encrypt(p Password) (EncryptedPassword, error)
-}
-```
-
-With neither shape and no tests the finding is on the model, never a
-request for a method the interface cannot hold: `declared service
-Encrypter: not-empty has no check in context identity`. Whether each implementation of the
-service reaches the check is not yet observed. `arclint domain define
-assertion` prints where the guarantee it records is checked, chosen by
-how the owner is declared.
 
 **A domain service** records at least one assertion
 (`domain_service/records-an-assertion`): Evans asks for "a set of

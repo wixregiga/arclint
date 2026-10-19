@@ -86,7 +86,7 @@ func domainScenario(t *testing.T) conformance.Request {
 		}, []conformance.Call{
 			{Callee: "EnsurePublishedOnly", Line: 33, Enclosing: "New"},
 			{Callee: "EnsurePublishedOnly", Line: 52, Enclosing: "Publish"},
-			{Callee: "AssertTiersPriced", Line: 53, Enclosing: "Publish"},
+			{Callee: "AssertTiersPriced", Line: 53, Enclosing: "Publish", EnclosingOwner: "Event"},
 			{Callee: "New", Line: 66, Enclosing: "Cancel"},
 		}),
 		"internal/event/id.go": goFacts("event", nil, []conformance.Declaration{
@@ -201,11 +201,11 @@ func TestBuiltInRulesJudgeEveryContextOfTheRecordedDomain(t *testing.T) {
 			}
 		}
 	}
-	if domainRules != 27 {
-		t.Fatalf("built-in domain rules = %d, want 27", domainRules)
+	if domainRules != 25 {
+		t.Fatalf("built-in domain rules = %d, want 25", domainRules)
 	}
-	if got := len(a.AppliedRules()); got != 28 {
-		t.Errorf("applied rules = %d, want the 27 domain rules and the word limit", got)
+	if got := len(a.AppliedRules()); got != 26 {
+		t.Errorf("applied rules = %d, want the 25 domain rules and the word limit", got)
 	}
 
 	want := map[string][]string{
@@ -891,8 +891,14 @@ func TestAssertionIsCheckedByItsOperation(t *testing.T) {
 	if len(got) != 1 || got[0] != "aggregate Event: operation Publish does not call AssertTiersPriced, so assertion tiers-priced is not checked when it completes" {
 		t.Errorf("uncalled check: %q", got)
 	}
-	if got = run([]conformance.Declaration{root, publish, check}, conformance.Call{Callee: "AssertTiersPriced", Line: 12, Enclosing: "Publish"}); len(got) != 0 {
+	if got = run([]conformance.Declaration{root, publish, check}, conformance.Call{Callee: "AssertTiersPriced", Line: 12, Enclosing: "Publish", EnclosingOwner: "Event"}); len(got) != 0 {
 		t.Errorf("checked operation: %q", got)
+	}
+	// A call from a same-named method of another type is not the
+	// operation's call.
+	other := conformance.Declaration{Kind: "method", Name: "Publish", Owner: "Draft", Exported: true, StartLine: 30, Results: []string{"error"}}
+	if got = run([]conformance.Declaration{root, publish, check, other}, conformance.Call{Callee: "AssertTiersPriced", Line: 32, Enclosing: "Publish", EnclosingOwner: "Draft"}); len(got) != 1 || got[0] != "aggregate Event: operation Publish does not call AssertTiersPriced, so assertion tiers-priced is not checked when it completes" {
+		t.Errorf("a call from another type's Publish: %q", got)
 	}
 }
 
@@ -935,8 +941,17 @@ func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 	if len(got) != 1 || got[0] != "service TenantProvisioningService: operation ProvisionTenant does not call AssertTenantNameUnique, so assertion tenant-name-unique is not checked when it completes" {
 		t.Errorf("uncalled check: %q", got)
 	}
-	if got = run([]conformance.Declaration{svc, provision, check}, conformance.Call{Callee: "AssertTenantNameUnique", Line: 12, Enclosing: "ProvisionTenant"}); len(got) != 0 {
+	if got = run([]conformance.Declaration{svc, provision, check}, conformance.Call{Callee: "AssertTenantNameUnique", Line: 12, Enclosing: "ProvisionTenant", EnclosingOwner: "TenantProvisioningService"}); len(got) != 0 {
 		t.Errorf("checked operation: %q", got)
+	}
+	// The rule is the same for every declaration of the service: an
+	// operation with no body makes no call, so it is a finding.
+	for _, kind := range []string{"interface", "type"} {
+		declared := svc
+		declared.Kind = kind
+		if got = run([]conformance.Declaration{declared, provision, check}); len(got) != 1 || got[0] != "service TenantProvisioningService: operation ProvisionTenant does not call AssertTenantNameUnique, so assertion tenant-name-unique is not checked when it completes" {
+			t.Errorf("service declared as %s: %q", kind, got)
+		}
 	}
 	if got = run(nil); len(got) != 0 {
 		t.Errorf("an undeclared service is domain_service/declared's finding: %q", got)
@@ -948,11 +963,24 @@ func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 			{Kind: "class", Name: "TenantProvisioningService", Exported: true, StartLine: 1},
 			{Kind: "method", Name: "provisionTenant", Owner: "TenantProvisioningService", Exported: true, StartLine: 5},
 			{Kind: "method", Name: "assertTenantNameUnique", Owner: "TenantProvisioningService", Exported: true, StartLine: 15},
-		}, Calls: []conformance.Call{{Callee: "assertTenantNameUnique", Line: 7, Enclosing: "provisionTenant"}}},
+		}, Calls: []conformance.Call{{Callee: "assertTenantNameUnique", Line: 7, Enclosing: "provisionTenant", EnclosingOwner: "TenantProvisioningService"}}},
 	}
 	a := runOne(t, r, nil, observed(tsFile), facts, knowledge)
 	if got := outcomesOf(a)[id+"|context:identity"]; got != conformance.OutcomeConforms {
 		t.Errorf("typescript: outcome %s, want conforms; violations %v", got, anchorsOf(a)[id])
+	}
+
+	pyFile := "identity/tenant_provisioning_service.py"
+	facts = map[string]conformance.LanguageFacts{
+		pyFile: {Language: rule.LanguagePython, ImportsAvailable: true, DeclarationsAvailable: true, CallsAvailable: true, Declarations: []conformance.Declaration{
+			{Kind: "class", Name: "TenantProvisioningService", Exported: true, StartLine: 1},
+			{Kind: "method", Name: "provision_tenant", Owner: "TenantProvisioningService", Exported: true, StartLine: 5},
+			{Kind: "method", Name: "assert_tenant_name_unique", Owner: "TenantProvisioningService", Exported: true, StartLine: 15},
+		}, Calls: []conformance.Call{{Callee: "assert_tenant_name_unique", Line: 7, Enclosing: "provision_tenant", EnclosingOwner: "TenantProvisioningService"}}},
+	}
+	a = runOne(t, r, nil, observed(pyFile), facts, knowledge)
+	if got := outcomesOf(a)[id+"|context:identity"]; got != conformance.OutcomeConforms {
+		t.Errorf("python: outcome %s, want conforms; violations %v", got, anchorsOf(a)[id])
 	}
 }
 

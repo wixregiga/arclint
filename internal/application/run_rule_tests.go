@@ -21,7 +21,7 @@ type RuleTestSource interface {
 // normalized Observations for the requested languages, scan policy,
 // and fact classes through the same analysis production uses.
 type FixtureObserver interface {
-	Observe(files []rule.TestFile, languages []rule.Language, scan rule.Scan, facts []rule.Fact, namedTests []string) (conformance.Observations, error)
+	Observe(files []rule.TestFile, languages []rule.Language, scan rule.Scan, facts []rule.Fact) (conformance.Observations, error)
 }
 
 // VocabularySource is the port through which the use case turns a
@@ -166,7 +166,7 @@ func (uc RunRuleTests) Execute() (RuleTestRun, error) {
 			results = append(results, result)
 			continue
 		}
-		observations, err := uc.fixtures.Observe(t.Files(), cfg.Languages, cfg.Scan, r.Enforcement().Facts(), conformance.NamedTestsToRead([]rule.Rule{r}, knowledge))
+		observations, err := uc.fixtures.Observe(t.Files(), cfg.Languages, cfg.Scan, r.Enforcement().Facts())
 		if err != nil {
 			return RuleTestRun{}, fmt.Errorf("rule test %q: observe fixture: %w", t.Name(), err)
 		}

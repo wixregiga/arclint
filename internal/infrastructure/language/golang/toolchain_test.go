@@ -97,7 +97,7 @@ func runOracle(t *testing.T, spec repoSpec) {
 	if err != nil {
 		t.Fatalf("source: %v", err)
 	}
-	observed, err := source.Observe(nil, rule.Scan{}, nil, nil, nil)
+	observed, err := source.Observe(nil, rule.Scan{}, nil, nil)
 	if err != nil {
 		t.Fatalf("walk: %v", err)
 	}

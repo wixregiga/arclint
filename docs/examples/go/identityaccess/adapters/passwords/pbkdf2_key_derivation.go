@@ -1,5 +1,6 @@
 // Package passwords holds the adapters behind the password ports of the
-// identityaccess context: a PBKDF2 encrypter and a random generator.
+// identityaccess context: a PBKDF2 key derivation and the operating
+// system's random source.
 package passwords
 
 import (
@@ -11,8 +12,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-
-	"example.com/saasovation/identityaccess/user"
 )
 
 const (
@@ -21,32 +20,32 @@ const (
 	saltLength       = 16
 )
 
-// PBKDF2Encrypter implements user.Encrypter with PBKDF2-HMAC-SHA256.
-// The stored form is "pbkdf2-sha256$<iterations>$<salt>$<key>".
-type PBKDF2Encrypter struct{}
+// PBKDF2KeyDerivation implements user.KeyDerivation with
+// PBKDF2-HMAC-SHA256. The stored text is
+// "pbkdf2-sha256$<iterations>$<salt>$<key>".
+type PBKDF2KeyDerivation struct{}
 
-// Encrypt derives a salted key from the password.
-func (PBKDF2Encrypter) Encrypt(p user.Password) (user.EncryptedPassword, error) {
+// Derive derives a salted key from the plain text.
+func (PBKDF2KeyDerivation) Derive(plain string) (string, error) {
 	salt := make([]byte, saltLength)
 	if _, err := rand.Read(salt); err != nil {
-		return user.EncryptedPassword{}, fmt.Errorf("pbkdf2: read salt: %w", err)
+		return "", fmt.Errorf("pbkdf2: read salt: %w", err)
 	}
-	key, err := pbkdf2.Key(sha256.New, p.Reveal(), salt, pbkdf2Iterations, pbkdf2KeyLength)
+	key, err := pbkdf2.Key(sha256.New, plain, salt, pbkdf2Iterations, pbkdf2KeyLength)
 	if err != nil {
-		return user.EncryptedPassword{}, fmt.Errorf("pbkdf2: derive key: %w", err)
+		return "", fmt.Errorf("pbkdf2: derive key: %w", err)
 	}
-	encoded := strings.Join([]string{
+	return strings.Join([]string{
 		"pbkdf2-sha256",
 		strconv.Itoa(pbkdf2Iterations),
 		base64.RawStdEncoding.EncodeToString(salt),
 		base64.RawStdEncoding.EncodeToString(key),
-	}, "$")
-	return user.NewEncryptedPassword(encoded)
+	}, "$"), nil
 }
 
 // Matches re-derives the key with the stored salt and compares in constant time.
-func (PBKDF2Encrypter) Matches(p user.Password, stored user.EncryptedPassword) bool {
-	parts := strings.Split(stored.String(), "$")
+func (PBKDF2KeyDerivation) Matches(plain, stored string) bool {
+	parts := strings.Split(stored, "$")
 	if len(parts) != 4 || parts[0] != "pbkdf2-sha256" {
 		return false
 	}
@@ -62,7 +61,7 @@ func (PBKDF2Encrypter) Matches(p user.Password, stored user.EncryptedPassword) b
 	if err != nil {
 		return false
 	}
-	key, err := pbkdf2.Key(sha256.New, p.Reveal(), salt, iterations, len(expected))
+	key, err := pbkdf2.Key(sha256.New, plain, salt, iterations, len(expected))
 	if err != nil {
 		return false
 	}

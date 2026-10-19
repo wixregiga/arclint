@@ -24,7 +24,6 @@ func TestBlockKeysAreTheMetaModelRecordings(t *testing.T) {
 		{"aggregate", "name", aggregateKeys},
 		{"entity", "name", entityKeys},
 		{"value_object", "name", valueObjectKeys},
-		{"invariant", "key", invariantKeys},
 		{"assertion", "key", assertionKeys},
 		{"domain_event", "name", eventKeys},
 		{"domain_service", "name", serviceKeys},
@@ -48,6 +47,14 @@ func TestBlockKeysAreTheMetaModelRecordings(t *testing.T) {
 	}
 	if documentKeys[0] != keyVersion {
 		t.Errorf("the document's first key is %q, want version", documentKeys[0])
+	}
+	// An invariant is a keyed statement: key and one statement.
+	invariant, ok := model.Block("invariant")
+	if !ok {
+		t.Fatal("block invariant missing from the meta-model")
+	}
+	if len(invariant.Records.Properties) != 2 || invariant.Records.Properties[0].Name != "key" || invariant.Records.Properties[1].Name != keyStatement {
+		t.Errorf("invariant records %+v; the adapter writes it as key: statement", invariant.Records.Properties)
 	}
 	// A question is a keyed text: key and one text.
 	question, ok := model.Block("question")

@@ -513,16 +513,13 @@ func syncOperations(existing []*syntax.DomainObjectOperation, inv []vocab.Invari
 	return orderOperations(out, desired, name, isOwned)
 }
 
-// syncOwnedHint brings the arclint entries of an invariant's or an
-// assertion's hint to the fresh ones, the operation it constrains and
-// the tests that verify it, leaving every other entry where it is. An
-// unchanged entry keeps its authored spelling.
+// syncOwnedHint brings the arclint entry of an invariant's or an
+// assertion's hint to the fresh one, the operation an assertion
+// constrains, leaving every other entry where it is. An unchanged
+// entry keeps its authored spelling.
 func syncOwnedHint(existing, fresh string) string {
 	if hintOne(existing, "on") != hintOne(fresh, "on") {
 		existing = scalarHint(existing, "on", hintOne(fresh, "on"))
-	}
-	if !slices.Equal(hints(existing, verifiedByHint), hints(fresh, verifiedByHint)) {
-		existing = replaceHint(existing, verifiedByHint, hints(fresh, verifiedByHint))
 	}
 	return existing
 }

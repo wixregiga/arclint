@@ -34,7 +34,6 @@ const (
 	keyFactory        = "factory"
 	keyOn             = "on"
 	keyStatement      = "statement"
-	keyVerifiedBy     = "verified_by"
 	keyRaisedBy       = "raised_by"
 	keyFrom           = "from"
 	keyTo             = "to"
@@ -51,8 +50,7 @@ var (
 	aggregateKeys     = []string{keyDefinition, keyIdentity, keyAliases, keyEntities, keyInvariants, keyAssertions, keyRepository, keyFactory}
 	entityKeys        = []string{keyDefinition, keyIdentity, keyAliases}
 	valueObjectKeys   = []string{keyDefinition, keyAliases, keyInvariants}
-	invariantKeys     = []string{keyStatement, keyVerifiedBy}
-	assertionKeys     = []string{keyOn, keyStatement, keyVerifiedBy}
+	assertionKeys     = []string{keyOn, keyStatement}
 	eventKeys         = []string{keyDefinition, keyRaisedBy}
 	serviceKeys       = []string{keyDefinition, keyAssertions}
 	specificationKeys = []string{keyDefinition}
@@ -251,16 +249,6 @@ func (f *fields) list(key string) []string {
 		out = append(out, value)
 	}
 	return out
-}
-
-// tests reads verified_by; absent reads as nil, and a list naming no
-// test is an error, since leaving the key out says the same.
-func (f *fields) tests() []string {
-	tests := f.list(keyVerifiedBy)
-	if e, ok := f.node(keyVerifiedBy); ok && f.err == nil && len(tests) == 0 {
-		f.fail(f.s.errorf(e.line, "%s: %s names no test; leave it out when no test verifies the statement", f.what, keyVerifiedBy))
-	}
-	return tests
 }
 
 // keyed reads a section keyed by name or key: its entries in file
@@ -469,7 +457,7 @@ func (s source) assertions(f *fields) ([]vocab.Assertion, error) {
 	for _, m := range f.keyed(keyAssertions) {
 		g := s.fields(m.value, fmt.Sprintf("%s: assertion %q", f.what, m.key), assertionKeys)
 		out = append(out, vocab.Assertion{
-			Key: m.key, On: g.text(keyOn), Statement: g.text(keyStatement), VerifiedBy: g.tests(), Line: m.line,
+			Key: m.key, On: g.text(keyOn), Statement: g.text(keyStatement), Line: m.line,
 		})
 		if g.err != nil {
 			return nil, g.err
@@ -478,30 +466,15 @@ func (s source) assertions(f *fields) ([]vocab.Assertion, error) {
 	return out, nil
 }
 
-// invariants reads an owner's keyed invariants: each the statement
-// alone, or a mapping of the statement and the tests that verify it.
+// invariants reads an owner's keyed invariants, each its statement.
 func (s source) invariants(f *fields) ([]vocab.Invariant, error) {
 	var out []vocab.Invariant
 	for _, m := range f.keyed(keyInvariants) {
-		what := fmt.Sprintf("%s: invariant %q", f.what, m.key)
-		inv := vocab.Invariant{Key: m.key, Line: m.line}
-		if n := resolve(m.value); n != nil && n.Kind == yaml.MappingNode {
-			g := s.fields(n, what, invariantKeys)
-			inv.Statement, inv.VerifiedBy = g.text(keyStatement), g.tests()
-			if g.err != nil {
-				return nil, g.err
-			}
-			if len(inv.VerifiedBy) == 0 {
-				return nil, s.errorf(m.line, "%s names no test under %s; an invariant no test verifies is written as its statement alone", what, keyVerifiedBy)
-			}
-		} else {
-			statement, err := s.text(m.value, m.line, what)
-			if err != nil {
-				return nil, err
-			}
-			inv.Statement = statement
+		statement, err := s.text(m.value, m.line, fmt.Sprintf("%s: invariant %q", f.what, m.key))
+		if err != nil {
+			return nil, err
 		}
-		out = append(out, inv)
+		out = append(out, vocab.Invariant{Key: m.key, Statement: statement, Line: m.line})
 	}
 	return out, f.err
 }

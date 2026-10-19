@@ -46,16 +46,14 @@ func countsDoc(c vocab.Counts) domainCountsJSON {
 }
 
 type domainInvariantJSON struct {
-	Key        string   `json:"key"`
-	Statement  string   `json:"statement"`
-	VerifiedBy []string `json:"verifiedBy,omitempty"`
+	Key       string `json:"key"`
+	Statement string `json:"statement"`
 }
 
 type domainAssertionJSON struct {
-	Key        string   `json:"key"`
-	On         string   `json:"on"`
-	Statement  string   `json:"statement"`
-	VerifiedBy []string `json:"verifiedBy,omitempty"`
+	Key       string `json:"key"`
+	On        string `json:"on"`
+	Statement string `json:"statement"`
 }
 
 type domainEntityJSON struct {
@@ -227,7 +225,7 @@ func invariantsJSON(invs []vocab.Invariant) []domainInvariantJSON {
 	}
 	out := make([]domainInvariantJSON, 0, len(invs))
 	for _, inv := range invs {
-		out = append(out, domainInvariantJSON{Key: inv.Key, Statement: inv.Statement, VerifiedBy: inv.VerifiedBy})
+		out = append(out, domainInvariantJSON{Key: inv.Key, Statement: inv.Statement})
 	}
 	return out
 }
@@ -238,7 +236,7 @@ func assertionsJSON(as []vocab.Assertion) []domainAssertionJSON {
 	}
 	out := make([]domainAssertionJSON, 0, len(as))
 	for _, a := range as {
-		out = append(out, domainAssertionJSON{Key: a.Key, On: a.On, Statement: a.Statement, VerifiedBy: a.VerifiedBy})
+		out = append(out, domainAssertionJSON{Key: a.Key, On: a.On, Statement: a.Statement})
 	}
 	return out
 }
@@ -258,18 +256,16 @@ func relationsToJSON(relations []vocab.ContextRelation) []domainRelationJSON {
 
 // An owned rule in a listing names the owner it sits under.
 type domainOwnedInvariantJSON struct {
-	Key        string   `json:"key"`
-	Owner      string   `json:"owner"`
-	Statement  string   `json:"statement"`
-	VerifiedBy []string `json:"verifiedBy,omitempty"`
+	Key       string `json:"key"`
+	Owner     string `json:"owner"`
+	Statement string `json:"statement"`
 }
 
 type domainOwnedAssertionJSON struct {
-	Key        string   `json:"key"`
-	Owner      string   `json:"owner"`
-	On         string   `json:"on"`
-	Statement  string   `json:"statement"`
-	VerifiedBy []string `json:"verifiedBy,omitempty"`
+	Key       string `json:"key"`
+	Owner     string `json:"owner"`
+	On        string `json:"on"`
+	Statement string `json:"statement"`
 }
 
 type domainOwnedEntityJSON struct {
@@ -387,7 +383,7 @@ func ownedInvariantsJSON(ctx vocab.BoundedContext) []domainOwnedInvariantJSON {
 	owned := ctx.Invariants()
 	out := make([]domainOwnedInvariantJSON, 0, len(owned))
 	for _, oi := range owned {
-		out = append(out, domainOwnedInvariantJSON{Key: oi.Invariant.Key, Owner: oi.Owner, Statement: oi.Invariant.Statement, VerifiedBy: oi.Invariant.VerifiedBy})
+		out = append(out, domainOwnedInvariantJSON{Key: oi.Invariant.Key, Owner: oi.Owner, Statement: oi.Invariant.Statement})
 	}
 	return out
 }
@@ -396,7 +392,7 @@ func ownedAssertionsJSON(ctx vocab.BoundedContext) []domainOwnedAssertionJSON {
 	owned := ctx.Assertions()
 	out := make([]domainOwnedAssertionJSON, 0, len(owned))
 	for _, oa := range owned {
-		out = append(out, domainOwnedAssertionJSON{Key: oa.Assertion.Key, Owner: oa.Owner, On: oa.Assertion.On, Statement: oa.Assertion.Statement, VerifiedBy: oa.Assertion.VerifiedBy})
+		out = append(out, domainOwnedAssertionJSON{Key: oa.Assertion.Key, Owner: oa.Owner, On: oa.Assertion.On, Statement: oa.Assertion.Statement})
 	}
 	return out
 }
@@ -507,15 +503,9 @@ func showJSONDoc(v application.DomainEntryView) map[string]any {
 		doc["invariants"] = presentList(invariantsJSON(v.ValueObject.Invariants))
 	case vocab.ConceptInvariant:
 		doc["statement"] = v.Invariant.Statement
-		if len(v.Invariant.VerifiedBy) > 0 {
-			doc["verifiedBy"] = v.Invariant.VerifiedBy
-		}
 	case vocab.ConceptAssertion:
 		doc["on"] = v.Assertion.On
 		doc["statement"] = v.Assertion.Statement
-		if len(v.Assertion.VerifiedBy) > 0 {
-			doc["verifiedBy"] = v.Assertion.VerifiedBy
-		}
 	case vocab.ConceptDomainEvent:
 		doc["definition"] = v.Event.Definition
 		if v.Event.RaisedBy != "" {
@@ -701,11 +691,7 @@ func defineJSONDoc(r cli.DomainDefineReport) map[string]any {
 		doc["values"] = values
 	}
 	if c := result.Check; c != nil {
-		check := map[string]any{"home": string(c.Home), "check": c.Check, "operation": c.Operation}
-		if c.Declared != "" {
-			check["declared"] = c.Declared
-		}
-		doc["check"] = check
+		doc["check"] = map[string]any{"home": string(c.Home), "check": c.Check, "operation": c.Operation}
 	}
 	return doc
 }
@@ -726,8 +712,6 @@ func changedValue(property string, ch vocab.Change) any {
 		return ch.Identity
 	case "aliases":
 		return emptyList(ch.Aliases)
-	case "verified_by":
-		return emptyList(ch.VerifiedBy)
 	case "repository":
 		return ch.Repository
 	case "factory":

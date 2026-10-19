@@ -16,11 +16,9 @@ import (
 // parser technology. referencesFor, when not nil, selects the files
 // the reference facts (calls, resolved calls, field types) are needed
 // for; a language holding none of them may be observed without them.
-// Nil needs them for every file. namedTests are the test files the
-// domain recording names under verified_by, read even when the scan
-// leaves them out.
+// Nil needs them for every file.
 type ObservationSource interface {
-	Observe(languages []rule.Language, scan rule.Scan, facts []rule.Fact, referencesFor func(path string) bool, namedTests []string) (conformance.Observations, error)
+	Observe(languages []rule.Language, scan rule.Scan, facts []rule.Fact, referencesFor func(path string) bool) (conformance.Observations, error)
 }
 
 // BaselineSource loads the repository's committed Baseline. Absence is
@@ -102,10 +100,7 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 	if !found {
 		knowledge = vocab.UbiquitousLanguage{Recording: uc.knowledge.Recording()}
 	}
-	// The language names the test files its verified_by entries ask to
-	// be read, whatever the scan leaves out; the Rules judging those
-	// tests decide which of them may be read.
-	observations, err := uc.observations.Observe(cfg.Languages, cfg.Scan, requiredFacts(rules), nil, conformance.NamedTestsToRead(rules, knowledge))
+	observations, err := uc.observations.Observe(cfg.Languages, cfg.Scan, requiredFacts(rules), nil)
 	if err != nil {
 		return conformance.Assessment{}, fmt.Errorf("observe repository: %w", err)
 	}

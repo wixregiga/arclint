@@ -63,9 +63,53 @@ func NewEncryptedPassword(text string) (EncryptedPassword, error) {
 // String renders the stored form.
 func (p EncryptedPassword) String() string { return p.value }
 
+// KeyDerivation is the port through which the Encrypter derives the
+// stored text of a password and compares a password with stored text.
+// Infrastructure implements it with a key derivation function.
+type KeyDerivation interface {
+	Derive(plain string) (string, error)
+	Matches(plain, stored string) bool
+}
+
 // Encrypter is the domain service that turns a Password into its stored
-// form and verifies a Password against one. Infrastructure implements it.
-type Encrypter interface {
-	Encrypt(p Password) (EncryptedPassword, error)
-	Matches(p Password, stored EncryptedPassword) bool
+// form and verifies a Password against one. It decides what a stored
+// password is; the KeyDerivation it is given does the cryptography.
+type Encrypter struct {
+	derivation KeyDerivation
+}
+
+// NewEncrypter builds the Encrypter over a key derivation.
+func NewEncrypter(derivation KeyDerivation) Encrypter {
+	return Encrypter{derivation: derivation}
+}
+
+// Encrypt derives the stored form of the password. Assertion not-empty:
+// the stored form it returns is never empty.
+func (e Encrypter) Encrypt(p Password) (EncryptedPassword, error) {
+	text, err := e.derivation.Derive(p.Reveal())
+	if err != nil {
+		return EncryptedPassword{}, err
+	}
+	encrypted, err := NewEncryptedPassword(text)
+	if err != nil {
+		return EncryptedPassword{}, err
+	}
+	if err := e.AssertNotEmpty(encrypted); err != nil {
+		return EncryptedPassword{}, err
+	}
+	return encrypted, nil
+}
+
+// AssertNotEmpty checks not-empty on Encrypt. NewEncryptedPassword refuses
+// empty text, so the zero EncryptedPassword is the only empty one.
+func (Encrypter) AssertNotEmpty(encrypted EncryptedPassword) error {
+	if encrypted == (EncryptedPassword{}) {
+		return ErrEncryptedPasswordEmpty
+	}
+	return nil
+}
+
+// Matches tells whether the password is the one the stored form protects.
+func (e Encrypter) Matches(p Password, stored EncryptedPassword) bool {
+	return e.derivation.Matches(p.Reveal(), stored.String())
 }

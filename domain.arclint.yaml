@@ -502,10 +502,6 @@ contexts:
             Facts never presents a call target or a field type as resolved
             unless the language's own resolution reached it; what resolution
             cannot follow is undetermined, with the reason.
-          excluded-tests-only-for-their-check: >-
-            Facts exposes a test file that scan.exclude leaves out only to the
-            checks of the tests verified_by names, and only when the recording
-            names it; no other Rule, Zone or context sees it.
       Violation:
         definition: >-
           One suspected breach of a Rule, anchored at a file and line and

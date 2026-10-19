@@ -172,7 +172,7 @@ func (s *factsSource) forRule(r rule.Rule) Facts {
 }
 
 func (s *factsSource) prepare(required []rule.Fact, selects func(string, []rule.ZoneName) bool, excluded func(string) bool) Facts {
-	f := Facts{source: s, required: map[rule.Fact]bool{}, allowed: map[string]bool{}, excludeFile: excluded, namedTests: map[string]bool{}}
+	f := Facts{source: s, required: map[rule.Fact]bool{}, allowed: map[string]bool{}, excludeFile: excluded}
 	for _, fact := range required {
 		f.required[fact] = true
 	}
@@ -186,13 +186,6 @@ func (s *factsSource) prepare(required []rule.Fact, selects func(string, []rule.
 		}
 		f.selected = append(f.selected, path)
 		f.allowed[path] = true
-	}
-	// A named test file belongs to no Zone; the Scope selects it as a
-	// repository Rule selects any file, and file Exclusions still apply.
-	for path := range s.observations.named {
-		if selects(path, nil) {
-			f.namedTests[path] = !excluded(path)
-		}
 	}
 	return f
 }

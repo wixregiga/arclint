@@ -378,10 +378,9 @@ func invariantInfos(invs []vocab.Invariant) []DomainInvariantInfo {
 	out := make([]DomainInvariantInfo, len(invs))
 	for i, inv := range invs {
 		out[i] = DomainInvariantInfo{
-			Key:        inv.Key,
-			Statement:  inv.Statement,
-			VerifiedBy: append([]string(nil), inv.VerifiedBy...),
-			Line:       inv.Line,
+			Key:       inv.Key,
+			Statement: inv.Statement,
+			Line:      inv.Line,
 		}
 	}
 	return out
@@ -391,11 +390,10 @@ func assertionInfos(assertions []vocab.Assertion) []DomainAssertionInfo {
 	out := make([]DomainAssertionInfo, len(assertions))
 	for i, a := range assertions {
 		out[i] = DomainAssertionInfo{
-			Key:        a.Key,
-			On:         a.On,
-			Statement:  a.Statement,
-			VerifiedBy: append([]string(nil), a.VerifiedBy...),
-			Line:       a.Line,
+			Key:       a.Key,
+			On:        a.On,
+			Statement: a.Statement,
+			Line:      a.Line,
 		}
 	}
 	return out

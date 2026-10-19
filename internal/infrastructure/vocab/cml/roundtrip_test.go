@@ -140,16 +140,14 @@ func generatedLanguage(t *testing.T, rng *rand.Rand, i int) vocab.UbiquitousLang
 	text := func() string { return prose[rng.Intn(len(prose))] }
 	name := func(slot int) string { return terms[(i+slot)%len(terms)] }
 	keys := []string{"total-is-sum", "tier-2-pricing", "x-1", "x1", "a-b2-c3d"}
-	testSets := [][]string{nil, {"internal/order/order_test.go:TestTotalIsSum"}, {"web/a b.test.ts:sums, = 100% \"quoted\": Ω", "tests/test_order.py:TestOrder.test_total"}}
-	tests := func(slot int) []string { return testSets[(i+slot)%len(testSets)] }
 	contexts := []vocab.BoundedContext{{Name: "first-context", Definition: text()}, {Name: "second_context2", Definition: text()}}
 	for j := range contexts {
 		c := &contexts[j]
-		a := vocab.Aggregate{Name: name(0), Definition: text(), Identity: name(1), Aliases: []string{"alias,=%, Unicode Ω", "alias 2"}, Repository: []string{"AccountRepository", "Repository", "storage name"}[i%3], Factory: name(8), Entities: []vocab.Entity{{Name: name(2), Definition: text(), Identity: name(1), Aliases: []string{"member alias"}}}, Invariants: []vocab.Invariant{{Key: keys[i%len(keys)], Statement: text(), VerifiedBy: tests(0)}}, Assertions: []vocab.Assertion{{Key: "available-for-2", On: []string{"Publish", "reserve item", "Event", " Operation ", "Comma,equals=%\n\t"}[i%5], Statement: text(), VerifiedBy: tests(1)}}}
+		a := vocab.Aggregate{Name: name(0), Definition: text(), Identity: name(1), Aliases: []string{"alias,=%, Unicode Ω", "alias 2"}, Repository: []string{"AccountRepository", "Repository", "storage name"}[i%3], Factory: name(8), Entities: []vocab.Entity{{Name: name(2), Definition: text(), Identity: name(1), Aliases: []string{"member alias"}}}, Invariants: []vocab.Invariant{{Key: keys[i%len(keys)], Statement: text()}}, Assertions: []vocab.Assertion{{Key: "available-for-2", On: []string{"Publish", "reserve item", "Event", " Operation ", "Comma,equals=%\n\t"}[i%5], Statement: text()}}}
 		c.Aggregates = []vocab.Aggregate{a}
-		c.ValueObjects = []vocab.ValueObject{{Name: name(1), Definition: text(), Aliases: []string{"value alias"}, Invariants: []vocab.Invariant{{Key: "non-negative-2", Statement: text(), VerifiedBy: tests(2)}}}, {Name: name(3), Definition: text()}}
+		c.ValueObjects = []vocab.ValueObject{{Name: name(1), Definition: text(), Aliases: []string{"value alias"}, Invariants: []vocab.Invariant{{Key: "non-negative-2", Statement: text()}}}, {Name: name(3), Definition: text()}}
 		c.Events = []vocab.DomainEvent{{Name: name(4), Definition: text(), RaisedBy: a.Name}, {Name: name(5), Definition: text()}}
-		c.Services = []vocab.DomainService{{Name: name(6), Definition: text(), Assertions: []vocab.Assertion{{Key: "unique-for-3", On: "Book", Statement: text(), VerifiedBy: tests(1)}}}}
+		c.Services = []vocab.DomainService{{Name: name(6), Definition: text(), Assertions: []vocab.Assertion{{Key: "unique-for-3", On: "Book", Statement: text()}}}}
 		c.Specifications = []vocab.Specification{{Name: name(7), Definition: text()}}
 		c.Questions = []vocab.Question{{Key: "question-2", Text: text()}}
 	}

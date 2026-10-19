@@ -591,24 +591,22 @@ type domainAggregateKnowJSON struct {
 }
 
 type domainInvariantKnowJSON struct {
-	Key          string   `json:"key"`
-	Statement    string   `json:"statement"`
-	Owner        string   `json:"owner"`
-	OwnerConcept string   `json:"ownerConcept"`
-	VerifiedBy   []string `json:"verifiedBy,omitempty"`
-	Source       string   `json:"source,omitempty"`
-	Anchor       string   `json:"anchor"`
+	Key          string `json:"key"`
+	Statement    string `json:"statement"`
+	Owner        string `json:"owner"`
+	OwnerConcept string `json:"ownerConcept"`
+	Source       string `json:"source,omitempty"`
+	Anchor       string `json:"anchor"`
 }
 
 type domainAssertionKnowJSON struct {
-	Key          string   `json:"key"`
-	Statement    string   `json:"statement"`
-	Owner        string   `json:"owner"`
-	OwnerConcept string   `json:"ownerConcept"`
-	On           string   `json:"on"`
-	VerifiedBy   []string `json:"verifiedBy,omitempty"`
-	Source       string   `json:"source,omitempty"`
-	Anchor       string   `json:"anchor"`
+	Key          string `json:"key"`
+	Statement    string `json:"statement"`
+	Owner        string `json:"owner"`
+	OwnerConcept string `json:"ownerConcept"`
+	On           string `json:"on"`
+	Source       string `json:"source,omitempty"`
+	Anchor       string `json:"anchor"`
 }
 
 type domainSpecificationKnowJSON struct {
@@ -760,7 +758,7 @@ func invariantsDoc(invariants []application.DomainInvariantRef) []domainInvarian
 	for _, inv := range invariants {
 		out = append(out, domainInvariantKnowJSON{
 			Key: inv.Key, Statement: inv.Statement, Owner: inv.Owner, OwnerConcept: string(inv.OwnerConcept),
-			VerifiedBy: inv.VerifiedBy, Source: inv.Source, Anchor: string(inv.Anchor),
+			Source: inv.Source, Anchor: string(inv.Anchor),
 		})
 	}
 	return out
@@ -771,7 +769,7 @@ func assertionsDoc(assertions []application.DomainAssertionRef) []domainAssertio
 	for _, a := range assertions {
 		out = append(out, domainAssertionKnowJSON{
 			Key: a.Key, Statement: a.Statement, Owner: a.Owner, OwnerConcept: string(a.OwnerConcept), On: a.On,
-			VerifiedBy: a.VerifiedBy, Source: a.Source, Anchor: string(a.Anchor),
+			Source: a.Source, Anchor: string(a.Anchor),
 		})
 	}
 	return out

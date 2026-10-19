@@ -493,13 +493,9 @@ func TestLoadRejectsTheWrongShape(t *testing.T) {
 		{"alias not text", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    aggregates:\n      Order:\n        definition: d\n        identity: OrderID\n        aliases:\n          - a: b\n", `line 11: context "sales": aggregate "Order": aliases 1 is not text`},
 		{"relations as a mapping", "version: 1\nproject: x\ncontexts: {}\nrelations:\n  a: b\n", "line 4: the domain file: relations is not a list"},
 		{"relation as text", "version: 1\nproject: x\ncontexts: {}\nrelations:\n  - a-to-b\n", "line 5: relation is not a mapping"},
-		{"invariant as a mapping without tests", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    value_objects:\n      Money:\n        definition: d\n        invariants:\n          positive:\n            statement: s\n", `line 10: context "sales": value object "Money": invariant "positive" names no test under verified_by`},
+		{"invariant as a mapping", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    value_objects:\n      Money:\n        definition: d\n        invariants:\n          positive:\n            statement: s\n", `line 10: context "sales": value object "Money": invariant "positive" is not text`},
 		{"invariant as a list", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    value_objects:\n      Money:\n        definition: d\n        invariants:\n          positive: [s]\n", `line 10: context "sales": value object "Money": invariant "positive" is not text`},
-		{"verified_by naming no test", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    value_objects:\n      Money:\n        definition: d\n        invariants:\n          positive:\n            statement: s\n            verified_by: []\n", `line 12: context "sales": value object "Money": invariant "positive": verified_by names no test`},
-		{"verified_by as text", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    services:\n      Pricing:\n        definition: d\n        assertions:\n          capped:\n            on: Price\n            statement: s\n            verified_by: a_test.go:TestA\n", `line 13: context "sales": service "Pricing": assertion "capped": verified_by is not a list`},
-		{"verified_by without a test name", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    value_objects:\n      Money:\n        definition: d\n        invariants:\n          positive:\n            statement: s\n            verified_by: [money_test.go]\n", `invariant/verified-by-names-tests`},
-		{"verified_by leaving the repository", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    services:\n      Pricing:\n        definition: d\n        assertions:\n          capped:\n            on: Price\n            statement: s\n            verified_by: [\"../other/a_test.go:TestA\"]\n", `assertion/verified-by-names-tests`},
-		{"verified_by naming one test twice", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    value_objects:\n      Money:\n        definition: d\n        invariants:\n          positive:\n            statement: s\n            verified_by: [money_test.go:TestA, money_test.go:TestA]\n", `verified_by names "money_test.go:TestA" twice`},
+		{"assertion naming verified_by", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    services:\n      Pricing:\n        definition: d\n        assertions:\n          capped:\n            on: Price\n            statement: s\n            verified_by: [a_test.go:TestA]\n", `line 13: context "sales": service "Pricing": assertion "capped": unknown key "verified_by"; it records on, statement`},
 		{"question as a mapping", "version: 1\nproject: x\ncontexts:\n  sales:\n    definition: d\n    questions:\n      open:\n        text: t\n", `line 7: context "sales": question "open" is not text`},
 		{"document as a list", "- version: 1\n", "line 1: the domain file is not a mapping"},
 	}
@@ -943,281 +939,8 @@ func mustDefaultRecording(t *testing.T) vocab.DomainRecording {
 	return recording
 }
 
-// An invariant that names its tests becomes a mapping of its statement
-// and verified_by, one test a line, and returns to its statement alone
-// when it names none; an assertion gains and loses verified_by as a
-// key. The comments around the entries stay where they were.
-func TestRecordWritesVerifyingTests(t *testing.T) {
-	const commented = `version: 1
-project: ticketing
-contexts:
-  sales:
-    definition: Selling seats for events.
-    value_objects:
-      Money:
-        definition: An amount in one currency.
-        invariants:
-          # holds for every amount
-          never-negative: Money is never negative.
-    services:
-      Pricing:
-        definition: Prices an order against the event's tiers.
-        assertions:
-          tiers-on-sale: # the contract
-            on: Price
-            statement: Only a tier on sale prices an order.
-`
-	repo, _ := repository(t, commented)
-	record := func(invTests, asTests []string) string {
-		t.Helper()
-		lang, _, err := repo.RecordedLanguage()
-		if err != nil {
-			t.Fatalf("load: %v", err)
-		}
-		sales := &lang.Contexts[0]
-		sales.ValueObjects[0].Invariants[0].VerifiedBy = invTests
-		sales.Services[0].Assertions[0].VerifiedBy = asTests
-		edited, err := vocab.NewUbiquitousLanguage(lang.Project, lang.Description, lang.Contexts, lang.Relations)
-		if err != nil {
-			t.Fatalf("edit: %v", err)
-		}
-		edited.Recording = lang.Recording
-		if err := repo.Record(edited); err != nil {
-			t.Fatalf("Record: %v", err)
-		}
-		again, _, err := repo.RecordedLanguage()
-		if err != nil {
-			t.Fatalf("reload: %v", err)
-		}
-		if d := edited.Difference(again); d != "" {
-			t.Fatalf("language changed across Record: %s", d)
-		}
-		written, _ := os.ReadFile(repo.Path())
-		return string(written)
-	}
-
-	text := record(
-		[]string{"internal/money/money_test.go:TestNeverNegative", "web/money.test.ts:never negative: not even -0"},
-		[]string{"internal/pricing/pricing_test.go:TestTiersOnSale"},
-	)
-	for _, want := range []string{
-		"        invariants:\n          # holds for every amount\n          never-negative:\n            statement: Money is never negative.\n            verified_by:\n              - internal/money/money_test.go:TestNeverNegative\n              - 'web/money.test.ts:never negative: not even -0'\n",
-		"          tiers-on-sale: # the contract\n            on: Price\n            statement: Only a tier on sale prices an order.\n            verified_by:\n              - internal/pricing/pricing_test.go:TestTiersOnSale\n",
-	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("file lacks:\n%s\nfile:\n%s", want, text)
-		}
-	}
-
-	if text = record(nil, nil); text != commented {
-		t.Errorf("clearing the tests does not restore the file:\n%s", text)
-	}
-}
-
-// Comments survive the edits verified_by brings: an invariant's inline
-// comment moves with its statement into the mapping and back, and the
-// comments inside a verified_by list stay through an edit elsewhere
-// and through a change that keeps their tests.
-func TestRecordKeepsCommentsAroundVerifyingTests(t *testing.T) {
-	const scalar = `version: 1
-project: ticketing
-contexts:
-  sales:
-    definition: Selling seats for events.
-    value_objects:
-      Money:
-        definition: An amount in one currency.
-        invariants:
-          never-negative: Money is never negative. # holds for every amount
-`
-	repo, _ := repository(t, scalar)
-	edit := func(change func(*vocab.ValueObject)) string {
-		t.Helper()
-		lang, _, err := repo.RecordedLanguage()
-		if err != nil {
-			t.Fatalf("load: %v", err)
-		}
-		change(&lang.Contexts[0].ValueObjects[0])
-		edited, err := vocab.NewUbiquitousLanguage(lang.Project, lang.Description, lang.Contexts, lang.Relations)
-		if err != nil {
-			t.Fatalf("edit: %v", err)
-		}
-		edited.Recording = lang.Recording
-		if err := repo.Record(edited); err != nil {
-			t.Fatalf("Record: %v", err)
-		}
-		written, _ := os.ReadFile(repo.Path())
-		return string(written)
-	}
-	text := edit(func(v *vocab.ValueObject) {
-		v.Invariants[0].VerifiedBy = []string{"internal/money/money_test.go:TestNeverNegative"}
-	})
-	if want := "          never-negative:\n            statement: Money is never negative. # holds for every amount\n            verified_by:\n"; !strings.Contains(text, want) {
-		t.Fatalf("the inline comment did not move with the statement:\n%s", text)
-	}
-
-	commented := strings.Replace(text,
-		"              - internal/money/money_test.go:TestNeverNegative\n",
-		"              # the property test\n              - internal/money/money_test.go:TestNeverNegative # fuzzed\n", 1)
-	if err := os.WriteFile(repo.Path(), []byte(commented), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if text = edit(func(v *vocab.ValueObject) { v.Definition = "An amount in one currency, in cents." }); !strings.Contains(text,
-		"              # the property test\n              - internal/money/money_test.go:TestNeverNegative # fuzzed\n") {
-		t.Fatalf("an edit elsewhere dropped the comments of verified_by:\n%s", text)
-	}
-	text = edit(func(v *vocab.ValueObject) {
-		v.Invariants[0].VerifiedBy = append(v.Invariants[0].VerifiedBy, "internal/money/money_test.go:TestZero")
-	})
-	if !strings.Contains(text, "              # the property test\n              - internal/money/money_test.go:TestNeverNegative # fuzzed\n              - internal/money/money_test.go:TestZero\n") {
-		t.Fatalf("adding a test dropped the comments of a kept one:\n%s", text)
-	}
-
-	text = edit(func(v *vocab.ValueObject) { v.Invariants[0].VerifiedBy = nil })
-	if !strings.Contains(text, "          never-negative: Money is never negative. # holds for every amount\n") {
-		t.Fatalf("clearing the tests dropped the statement's comment:\n%s", text)
-	}
-}
-
-// A verified_by item written as an alias of a test named elsewhere in
-// the file stays an alias, comment included, through an edit elsewhere.
-func TestRecordKeepsAnAliasedVerifyingTest(t *testing.T) {
-	const aliased = `version: 1
-project: ticketing
-contexts:
-  sales:
-    definition: Selling seats for events.
-    value_objects:
-      Money:
-        definition: An amount in one currency.
-        invariants:
-          never-negative:
-            statement: Money is never negative.
-            verified_by:
-              - &money internal/money/money_test.go:TestMoney
-    services:
-      Pricing:
-        definition: Prices an order against the event's tiers.
-        assertions:
-          tiers-on-sale:
-            on: Price
-            statement: Only a tier on sale prices an order.
-            verified_by:
-              - *money # the same property test
-`
-	repo, _ := repository(t, aliased)
-	lang, _, err := repo.RecordedLanguage()
-	if err != nil {
-		t.Fatalf("load: %v", err)
-	}
-	if got := lang.Contexts[0].Services[0].Assertions[0].VerifiedBy; len(got) != 1 || got[0] != "internal/money/money_test.go:TestMoney" {
-		t.Fatalf("the alias does not read as the test it names: %v", got)
-	}
-	lang.Contexts[0].Services[0].Definition = "Prices an order."
-	edited, err := vocab.NewUbiquitousLanguage(lang.Project, lang.Description, lang.Contexts, lang.Relations)
-	if err != nil {
-		t.Fatalf("edit: %v", err)
-	}
-	edited.Recording = lang.Recording
-	if err := repo.Record(edited); err != nil {
-		t.Fatalf("Record: %v", err)
-	}
-	written, _ := os.ReadFile(repo.Path())
-	if !strings.Contains(string(written), "            verified_by:\n              - *money # the same property test\n") {
-		t.Fatalf("the aliased test lost its alias or comment:\n%s", written)
-	}
-}
-
-// An edit that drops the anchor another entry's alias names leaves that
-// entry a copy of the value, so the file still loads and records the
-// same tests; a verified_by list written as an alias stays an alias
-// while it names the same tests, and becomes its own list, comment
-// kept, when its tests change.
-func TestRecordSettlesAliasesOfVerifyingTests(t *testing.T) {
-	const aliased = `version: 1
-project: ticketing
-contexts:
-  sales:
-    definition: Selling seats for events.
-    value_objects:
-      Money:
-        definition: An amount in one currency.
-        invariants:
-          never-negative:
-            statement: Money is never negative.
-            verified_by: &money
-              - &one internal/money/money_test.go:TestMoney
-    services:
-      Pricing:
-        definition: Prices an order against the event's tiers.
-        assertions:
-          tiers-on-sale:
-            on: Price
-            statement: Only a tier on sale prices an order.
-            verified_by:
-              - *one # the same property test
-          one-currency:
-            on: Price
-            statement: An order is priced in one currency.
-            verified_by: *money # shares the money tests
-`
-	repo, _ := repository(t, aliased)
-	edit := func(change func(*vocab.BoundedContext)) (string, vocab.UbiquitousLanguage) {
-		t.Helper()
-		lang, _, err := repo.RecordedLanguage()
-		if err != nil {
-			t.Fatalf("load: %v", err)
-		}
-		change(&lang.Contexts[0])
-		edited, err := vocab.NewUbiquitousLanguage(lang.Project, lang.Description, lang.Contexts, lang.Relations)
-		if err != nil {
-			t.Fatalf("edit: %v", err)
-		}
-		edited.Recording = lang.Recording
-		if err := repo.Record(edited); err != nil {
-			t.Fatalf("Record: %v", err)
-		}
-		again, _, err := repo.RecordedLanguage()
-		if err != nil {
-			written, _ := os.ReadFile(repo.Path())
-			t.Fatalf("the recorded file does not load: %v\n%s", err, written)
-		}
-		if d := edited.Difference(again); d != "" {
-			t.Fatalf("language changed across Record: %s", d)
-		}
-		written, _ := os.ReadFile(repo.Path())
-		return string(written), again
-	}
-
-	text, _ := edit(func(c *vocab.BoundedContext) { c.Definition = "Selling seats." })
-	if !strings.Contains(text, "            verified_by: *money # shares the money tests\n") {
-		t.Fatalf("an unchanged aliased list did not stay an alias:\n%s", text)
-	}
-
-	text, lang := edit(func(c *vocab.BoundedContext) { c.ValueObjects[0].Invariants[0].VerifiedBy = nil })
-	for _, want := range []string{
-		"              - internal/money/money_test.go:TestMoney # the same property test\n",
-		"            verified_by: # shares the money tests\n              - internal/money/money_test.go:TestMoney\n",
-	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("dropping the anchors did not settle the aliases; lacks:\n%s\nfile:\n%s", want, text)
-		}
-	}
-	if got := lang.Contexts[0].Services[0].Assertions; len(got[0].VerifiedBy) != 1 || len(got[1].VerifiedBy) != 1 {
-		t.Errorf("the aliased tests changed: %+v", got)
-	}
-
-	text, _ = edit(func(c *vocab.BoundedContext) {
-		c.Services[0].Assertions[1].VerifiedBy = []string{"internal/pricing/pricing_test.go:TestOneCurrency"}
-	})
-	if !strings.Contains(text, "            verified_by: # shares the money tests\n              - internal/pricing/pricing_test.go:TestOneCurrency\n") {
-		t.Errorf("a changed list lost its comment:\n%s", text)
-	}
-}
-
 // A statement written as an alias stays the alias, comment included,
-// when its invariant gains or loses tests, as long as it still states
-// the same rule.
+// through an edit elsewhere, as long as it still states the same rule.
 func TestRecordKeepsAnAliasedStatement(t *testing.T) {
 	const aliased = `version: 1
 project: ticketing
@@ -1228,80 +951,14 @@ contexts:
       Money:
         definition: &rule Money is never negative.
         invariants:
-          never-negative:
-            statement: *rule # the definition says it too
-            verified_by:
-              - internal/money/money_test.go:TestMoney
+          never-negative: *rule # the definition says it too
 `
 	repo, _ := repository(t, aliased)
-	edit := func(tests []string) string {
-		t.Helper()
-		lang, _, err := repo.RecordedLanguage()
-		if err != nil {
-			t.Fatalf("load: %v", err)
-		}
-		lang.Contexts[0].ValueObjects[0].Invariants[0].VerifiedBy = tests
-		edited, err := vocab.NewUbiquitousLanguage(lang.Project, lang.Description, lang.Contexts, lang.Relations)
-		if err != nil {
-			t.Fatalf("edit: %v", err)
-		}
-		edited.Recording = lang.Recording
-		if err := repo.Record(edited); err != nil {
-			t.Fatalf("Record: %v", err)
-		}
-		again, _, err := repo.RecordedLanguage()
-		if err != nil {
-			t.Fatalf("reload: %v", err)
-		}
-		if d := edited.Difference(again); d != "" {
-			t.Fatalf("language changed across Record: %s", d)
-		}
-		written, _ := os.ReadFile(repo.Path())
-		return string(written)
-	}
-	if text := edit(nil); !strings.Contains(text, "          never-negative: *rule # the definition says it too\n") {
-		t.Fatalf("clearing the tests lost the aliased statement or its comment:\n%s", text)
-	}
-	if text := edit([]string{"internal/money/money_test.go:TestMoney"}); !strings.Contains(text,
-		"          never-negative:\n            statement: *rule # the definition says it too\n            verified_by:\n") {
-		t.Fatalf("adding tests lost the aliased statement or its comment:\n%s", text)
-	}
-}
-
-// A reader resolves an alias to the latest anchor of its name, so when
-// a reorder puts another anchor of that name in front of an alias, the
-// alias becomes a copy of the test it named and keeps meaning it.
-func TestRecordKeepsAnAliasFromReadingAShadowingAnchor(t *testing.T) {
-	const shadowed = `version: 1
-project: ticketing
-contexts:
-  sales:
-    definition: Selling seats for events.
-    value_objects:
-      Money:
-        definition: An amount in one currency.
-        invariants:
-          never-negative:
-            statement: Money is never negative.
-            verified_by: [&test a_test.go:TestA, &test b_test.go:TestB]
-    services:
-      Pricing:
-        definition: Prices an order against the event's tiers.
-        assertions:
-          tiers-on-sale:
-            on: Price
-            statement: Only a tier on sale prices an order.
-            verified_by: [*test]
-`
-	repo, _ := repository(t, shadowed)
 	lang, _, err := repo.RecordedLanguage()
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if got := lang.Contexts[0].Services[0].Assertions[0].VerifiedBy; len(got) != 1 || got[0] != "b_test.go:TestB" {
-		t.Fatalf("the alias reads as %v, want the latest anchor's test", got)
-	}
-	lang.Contexts[0].ValueObjects[0].Invariants[0].VerifiedBy = []string{"b_test.go:TestB", "a_test.go:TestA"}
+	lang.Contexts[0].ValueObjects[0].Aliases = []string{"Amount"}
 	edited, err := vocab.NewUbiquitousLanguage(lang.Project, lang.Description, lang.Contexts, lang.Relations)
 	if err != nil {
 		t.Fatalf("edit: %v", err)
@@ -1315,16 +972,18 @@ contexts:
 		t.Fatalf("reload: %v", err)
 	}
 	if d := edited.Difference(again); d != "" {
-		written, _ := os.ReadFile(repo.Path())
-		t.Fatalf("the reorder changed another entry's tests: %s\n%s", d, written)
+		t.Fatalf("language changed across Record: %s", d)
+	}
+	written, _ := os.ReadFile(repo.Path())
+	if !strings.Contains(string(written), "          never-negative: *rule # the definition says it too\n") {
+		t.Fatalf("an edit elsewhere lost the aliased statement or its comment:\n%s", written)
 	}
 }
 
 // An edit of an anchored value never reaches the entries that alias
 // it, whichever section the sync visits first: an aggregate invariant
 // aliasing a value object's definition keeps its statement when only
-// the definition changes, and an invariant aliasing another's statement
-// stays its statement alone when the other gains tests.
+// the definition changes.
 func TestRecordKeepsAliasesReadingWhatTheyRead(t *testing.T) {
 	const aliased = `version: 1
 project: ticketing
@@ -1352,7 +1011,6 @@ contexts:
 	ctx := &lang.Contexts[0]
 	money := ctx.ValueObjects[0]
 	money.Definition = "An amount in one currency."
-	money.Invariants[0].VerifiedBy = []string{"internal/money/money_test.go:TestNeverNegative"}
 	ctx.ValueObjects[0] = money
 	edited, err := vocab.NewUbiquitousLanguage(lang.Project, lang.Description, lang.Contexts, lang.Relations)
 	if err != nil {
@@ -1372,36 +1030,3 @@ contexts:
 	}
 }
 
-// An invariant written as a flow mapping keeps the comment after its
-// closing brace when it loses its tests and becomes its statement alone.
-func TestRecordKeepsTheCommentOfAFlowInvariant(t *testing.T) {
-	const flow = `version: 1
-project: ticketing
-contexts:
-  sales:
-    definition: Selling seats for events.
-    value_objects:
-      Money:
-        definition: An amount in one currency.
-        invariants:
-          positive: {statement: Money is positive., verified_by: [a_test.go:TestA]} # rationale
-`
-	repo, _ := repository(t, flow)
-	lang, _, err := repo.RecordedLanguage()
-	if err != nil {
-		t.Fatalf("load: %v", err)
-	}
-	lang.Contexts[0].ValueObjects[0].Invariants[0].VerifiedBy = nil
-	edited, err := vocab.NewUbiquitousLanguage(lang.Project, lang.Description, lang.Contexts, lang.Relations)
-	if err != nil {
-		t.Fatalf("edit: %v", err)
-	}
-	edited.Recording = lang.Recording
-	if err := repo.Record(edited); err != nil {
-		t.Fatalf("Record: %v", err)
-	}
-	written, _ := os.ReadFile(repo.Path())
-	if !strings.Contains(string(written), "          positive: Money is positive. # rationale\n") {
-		t.Fatalf("the flow mapping's comment was lost:\n%s", written)
-	}
-}

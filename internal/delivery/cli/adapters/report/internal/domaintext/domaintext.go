@@ -139,7 +139,6 @@ func Overview(p *out.Printer, st Style, o application.DomainOverview) {
 				p.Printf("    %s\n", st.Muted("invariants:"))
 				for _, inv := range a.Invariants {
 					p.Printf("      %s\n", namedLine(inv.Key, inv.Statement))
-					writeVerifiedBy(p, st, "        ", inv.VerifiedBy)
 					writeSourceLine(p, st, "        ", contractSource(o.Matrix, ctx.Name, application.ContractInvariant, a.Name, inv.Key))
 				}
 			}
@@ -147,7 +146,6 @@ func Overview(p *out.Printer, st Style, o application.DomainOverview) {
 				p.Printf("    %s\n", st.Muted("assertions:"))
 				for _, as := range a.Assertions {
 					p.Printf("      %s\n", namedLine(as.Key+" (on "+as.On+")", as.Statement))
-					writeVerifiedBy(p, st, "        ", as.VerifiedBy)
 					writeSourceLine(p, st, "        ", contractSource(o.Matrix, ctx.Name, application.ContractAssertion, a.Name, as.Key))
 				}
 			}
@@ -162,7 +160,6 @@ func Overview(p *out.Printer, st Style, o application.DomainOverview) {
 				}
 				for _, inv := range v.Invariants {
 					p.Printf("      %s %s\n", st.Muted("invariant"), namedLine(inv.Key, inv.Statement))
-					writeVerifiedBy(p, st, "        ", inv.VerifiedBy)
 					writeSourceLine(p, st, "        ", contractSource(o.Matrix, ctx.Name, application.ContractInvariant, v.Name, inv.Key))
 				}
 			}
@@ -187,7 +184,6 @@ func Overview(p *out.Printer, st Style, o application.DomainOverview) {
 					p.Printf("      %s\n", st.Muted("assertions:"))
 					for _, as := range s.Assertions {
 						p.Printf("        %s\n", namedLine(as.Key+" (on "+as.On+")", as.Statement))
-						writeVerifiedBy(p, st, "          ", as.VerifiedBy)
 						writeSourceLine(p, st, "          ", contractSource(o.Matrix, ctx.Name, application.ContractAssertion, s.Name, as.Key))
 					}
 				}
@@ -452,7 +448,6 @@ func Show(p *out.Printer, st Style, v application.DomainEntryView) {
 			p.Println(st.Bold("Invariants:"))
 			for _, inv := range a.Invariants {
 				p.Printf("  %s\n", namedLine(inv.Key, inv.Statement))
-				writeVerifiedBy(p, st, "    ", inv.VerifiedBy)
 				ruleDetail(p, st, v.Rules, vocab.ConceptInvariant, inv.Key, "    ")
 			}
 		}
@@ -460,7 +455,6 @@ func Show(p *out.Printer, st Style, v application.DomainEntryView) {
 			p.Println(st.Bold("Assertions:"))
 			for _, as := range a.Assertions {
 				p.Printf("  %s\n", namedLine(as.Key+" (on "+as.On+")", as.Statement))
-				writeVerifiedBy(p, st, "    ", as.VerifiedBy)
 				ruleDetail(p, st, v.Rules, vocab.ConceptAssertion, as.Key, "    ")
 			}
 		}
@@ -478,20 +472,17 @@ func Show(p *out.Printer, st Style, v application.DomainEntryView) {
 			p.Println(st.Bold("Invariants:"))
 			for _, inv := range v.ValueObject.Invariants {
 				p.Printf("  %s\n", namedLine(inv.Key, inv.Statement))
-				writeVerifiedBy(p, st, "    ", inv.VerifiedBy)
 				ruleDetail(p, st, v.Rules, vocab.ConceptInvariant, inv.Key, "    ")
 			}
 		}
 	case vocab.ConceptInvariant:
 		p.Printf("%s %s\n", st.Bold("Owner:"), v.Owner)
 		p.Printf("%s %s\n", st.Bold("Statement:"), v.Invariant.Statement)
-		writeVerifiedBy(p, st, "", v.Invariant.VerifiedBy)
 		ruleDetail(p, st, v.Rules, vocab.ConceptInvariant, v.Invariant.Key, "")
 	case vocab.ConceptAssertion:
 		p.Printf("%s %s\n", st.Bold("Owner:"), v.Owner)
 		p.Printf("%s %s\n", st.Bold("On:"), v.Assertion.On)
 		p.Printf("%s %s\n", st.Bold("Statement:"), v.Assertion.Statement)
-		writeVerifiedBy(p, st, "", v.Assertion.VerifiedBy)
 		ruleDetail(p, st, v.Rules, vocab.ConceptAssertion, v.Assertion.Key, "")
 	case vocab.ConceptDomainEvent:
 		if v.Event.RaisedBy != "" {
@@ -504,7 +495,6 @@ func Show(p *out.Printer, st Style, v application.DomainEntryView) {
 			p.Println(st.Bold("Assertions:"))
 			for _, as := range v.Service.Assertions {
 				p.Printf("  %s\n", namedLine(as.Key+" (on "+as.On+")", as.Statement))
-				writeVerifiedBy(p, st, "    ", as.VerifiedBy)
 				ruleDetail(p, st, v.Rules, vocab.ConceptAssertion, as.Key, "    ")
 			}
 		}
@@ -734,24 +724,19 @@ func Define(p *out.Printer, st Style, result application.DomainDefineResult, cha
 }
 
 // checkLine says where the guarantee of a defined assertion is checked,
-// in one sentence chosen by how its owner is declared in the code.
+// in one sentence chosen by its owner.
 func checkLine(h conformance.AssertionHome, result application.DomainDefineResult) string {
 	check := h.Check
 	if check == "" {
 		check = conformance.AssertKey(result.Name) + " (spelled in the language's method case)"
 	}
-	inModel := fmt.Sprintf("the function %s of context %s, or the invariant %s of a value object %s returns, or else the tests named with --verified-by", check, result.Context, result.Name, h.Operation)
 	switch h.Home {
 	case conformance.CheckHomeRoot:
 		return fmt.Sprintf("the root of %s declares %s, and %s calls it.", result.Owner, check, h.Operation)
 	case conformance.CheckHomeService:
 		return fmt.Sprintf("%s declares %s, and %s calls it.", result.Owner, check, h.Operation)
-	case conformance.CheckHomeTests:
-		return fmt.Sprintf("the root of %s is declared as an %s, with no body to call %s from, so the tests named with --verified-by verify it, and %s is declared on it.", result.Owner, h.Declared, check, h.Operation)
-	case conformance.CheckHomeModel:
-		return fmt.Sprintf("%s is declared as an %s, so the check is in the model: %s.", result.Owner, h.Declared, inModel)
 	default:
-		return fmt.Sprintf("%s is not declared yet. As an interface, an abstract class, an ABC, or a Protocol, it is checked in the model: %s. As a concrete type, it declares %s, and %s calls it.", result.Owner, inModel, check, h.Operation)
+		return fmt.Sprintf("%s is not declared yet. It declares %s, and %s calls it.", result.Owner, check, h.Operation)
 	}
 }
 
@@ -781,8 +766,6 @@ func changedValue(property string, ch vocab.Change) string {
 		return shortValue(ch.Identity)
 	case "aliases":
 		return listValue(ch.Aliases)
-	case "verified_by":
-		return listValue(ch.VerifiedBy)
 	case "repository":
 		return shortValue(ch.Repository)
 	case "factory":
@@ -867,14 +850,12 @@ func Knowledge(p *out.Printer, st Style, d *application.DomainKnowledge) {
 			p.Println("    invariants:")
 			for _, inv := range ctx.Invariants {
 				p.Printf("      %s (%s): %s%s\n", inv.Key, inv.Owner, inv.Statement, anchorSuffix(st, inv.Source, inv.Anchor))
-				writeVerifiedBy(p, st, "        ", inv.VerifiedBy)
 			}
 		}
 		if len(ctx.Assertions) > 0 {
 			p.Println("    assertions:")
 			for _, a := range ctx.Assertions {
 				p.Printf("      %s (%s, on %s): %s%s\n", a.Key, a.Owner, a.On, a.Statement, anchorSuffix(st, a.Source, a.Anchor))
-				writeVerifiedBy(p, st, "        ", a.VerifiedBy)
 			}
 		}
 		if len(ctx.Specifications) > 0 {
@@ -898,17 +879,6 @@ func Knowledge(p *out.Printer, st Style, d *application.DomainKnowledge) {
 	writeUnanchored(p, st, d)
 }
 
-// writeVerifiedBy prints the tests an invariant or assertion names
-// under verified_by, and what arclint checks of them: that each exists,
-// never that it proves the statement.
-func writeVerifiedBy(p *out.Printer, st Style, indent string, tests []string) {
-	if len(tests) == 0 {
-		return
-	}
-	p.Printf("%s%s %s %s\n", indent, st.Muted("verified by:"), strings.Join(tests, ", "),
-		st.Muted("(arclint checks that each test exists, not what it proves)"))
-}
-
 // writeUsed prints the entries the worksite uses, context by context:
 // each entry with the lines that reach it and the contracts that bind
 // the code reaching it.
@@ -927,11 +897,9 @@ func writeUsed(p *out.Printer, st Style, d *application.DomainKnowledge) {
 			p.Printf("    %s: %s\n", usedLabel(u), st.Path(siteLines(u.Sites)))
 			for _, inv := range u.Invariants {
 				p.Printf("      invariant %s (%s): %s%s\n", inv.Key, inv.Owner, inv.Statement, anchorSuffix(st, inv.Source, inv.Anchor))
-				writeVerifiedBy(p, st, "        ", inv.VerifiedBy)
 			}
 			for _, a := range u.Assertions {
 				p.Printf("      assertion %s (%s, on %s): %s%s\n", a.Key, a.Owner, a.On, a.Statement, anchorSuffix(st, a.Source, a.Anchor))
-				writeVerifiedBy(p, st, "        ", a.VerifiedBy)
 			}
 			if s := u.Specification; s != nil {
 				p.Printf("      satisfaction method%s\n", anchorSuffix(st, s.Source, s.Anchor))

@@ -941,16 +941,10 @@ func ddd() MetaModel {
 				},
 				Records: Recording{
 					Section: SectionInvariants,
-					Note:    "A map from key to statement, or to the statement and verified_by when tests verify it, recorded under the aggregate or value object that owns it; the owner is the nesting, never a reference.",
+					Note:    "A map from key to statement, recorded under the aggregate or value object that owns it; the owner is the nesting, never a reference.",
 					Properties: []Property{
 						{Name: "key", Required: true, Definition: "The rule's name in kebab-case, unique within its owner and stable across edits: it is how a finding, a suppression, and a baseline refer to the rule. For an aggregate's invariant it also names the root method that enforces it: ensure followed by the key, spelled in the language's method case, so lines-frozen is enforced by EnsureLinesFrozen in Go, ensureLinesFrozen in TypeScript, and ensure_lines_frozen in Python."},
 						{Name: "statement", Required: true, Definition: "The rule in the ubiquitous language, as a domain expert would state it."},
-						{
-							Name: "verified_by", Required: false, Definition: "The automated tests that verify the rule, each spelled as its file's path from the repository root, a colon, and the test's name, as in internal/order/order_test.go:TestLinesFrozen. The check reads that each test exists, not what it proves.",
-							Sources: []Citation{
-								{Work: "evans2015", Page: "22", Section: "Assertions"},
-							},
-						},
 					},
 				},
 				Invariants: []BlockInvariant{
@@ -1009,32 +1003,6 @@ func ddd() MetaModel {
 							Limitations: []string{"a command is an exported method of the root whose result carries an error; a TypeScript or Python command that throws is not seen"},
 						},
 					},
-					{
-						ID:        "invariant/verified-by-names-tests",
-						Statement: "Every entry of an invariant's verified_by names one test: its file's path from the repository root, a colon, and its name. An entry missing either part, a path absolute or outside the repository, or a repeated entry is rejected.",
-						Sources: []Citation{
-							{Work: "evans2015", Page: "22", Section: "Assertions"},
-						},
-						Enforcement: Enforcement{
-							By:        EvaluatorLoader,
-							Languages: Languages{All: true},
-							Severity:  severityError,
-						},
-					},
-					{
-						ID:        "invariant/verifying-tests-declared",
-						Statement: "Every test an invariant's verified_by names is declared in its file: in Go, a test go test runs; in Python, a def test function or Class.test_name method; in TypeScript, the name written in the file. Existence is checked, not proof.",
-						Sources: []Citation{
-							{Work: "evans2015", Page: "22", Section: "Assertions"},
-						},
-						Enforcement: Enforcement{
-							By:          EvaluatorDomain,
-							Facts:       []string{"file_tree", "imports", "declarations"},
-							Languages:   Languages{All: true},
-							Severity:    severityError,
-							Limitations: []string{"a TypeScript test name is matched as text anywhere in its file, so a comment or a string that repeats the name is taken for the test", "a test file scan.exclude leaves out is read for this check alone, because verified_by names it; no other rule, Zone, or context sees it, and a file Exclusion of this rule still keeps it unread"},
-						},
-					},
 				},
 				Guidance: []Guidance{
 					{
@@ -1077,16 +1045,9 @@ func ddd() MetaModel {
 					Section: SectionAssertions,
 					Note:    "A map keyed by the assertion's name, recorded under the aggregate whose command it constrains or under the domain service whose operation it constrains; the assertions of a service are its contract.",
 					Properties: []Property{
-						{Name: "key", Required: true, Definition: "The assertion's name in kebab-case, unique within its owner; it names the check of this guarantee in the model. On an aggregate's root or a concrete domain service the check is the owner's method assert followed by the key, spelled in the language's method case (AssertHasLines, assertHasLines, assert_has_lines). A domain service declared as an interface, an abstract class, an ABC, or a Protocol holds no body to check in, so its check is a function of the context spelled the same way, or the invariant of the same key on the value object its operation returns; what neither states is verified by the tests under verified_by."},
+						{Name: "key", Required: true, Definition: "The assertion's name in kebab-case, unique within its owner; it names the method that checks this guarantee: the owner's method assert followed by the key, spelled in the language's method case (AssertHasLines, assertHasLines, assert_has_lines), which the operation calls."},
 						{Name: "on", Required: true, Definition: "The operation the guarantee belongs to: a command of the root, or an operation of the service."},
 						{Name: "statement", Required: true, Definition: "The guarantee as the domain expert states it, in the ubiquitous language (Only an active tenant offers an invitation); it is recorded in the expert's words and never rewritten into a post-condition, because on already names the operation."},
-						{
-							Name: "verified_by", Required: false, Definition: "The automated tests that verify the guarantee, each spelled as its file's path from the repository root, a colon, and the test's name. An interface or abstract owner, with no body to call a check from, names its tests here.",
-							Sources: []Citation{
-								{Work: "evans2015", Page: "22", Section: "Assertions"},
-								{Work: "evans2015", Page: "14", Section: "Services"},
-							},
-						},
 					},
 				},
 				Invariants: []BlockInvariant{
@@ -1123,37 +1084,10 @@ func ddd() MetaModel {
 						},
 						Conventions: []string{"the checking method (assert followed by the key in the language's method case)"},
 						Enforcement: Enforcement{
-							By:          EvaluatorDomain,
-							Facts:       []string{"file_tree", "declarations", "calls", "field_types"},
-							Languages:   Languages{All: true},
-							Severity:    severityError,
-							Limitations: []string{"an owner declared as an interface or an abstract class has no body to call a checking method from; a domain service so declared is checked in the model, by a function of the context spelled assert followed by the key or by the invariant of the same key on the value object its operation returns, or else by the tests under verified_by, which assertion/verifying-tests-declared checks exist; an aggregate root so declared needs those tests", "whether the implementations of a domain service declared as an interface or an abstract class reach its check in the model is not yet observed", "a Python class is abstract when its own bases name abc.ABC or typing.Protocol, or its metaclass is abc.ABCMeta, as the library provides them; one abstract only through a base class of the repository is judged as concrete", "a Python base is read statically, in the order its module runs; a replacement made through more than one call, a decorator, or another module, and a submodule another file imports, are not seen", "a Python annotation alone, a star import or a destructuring after the class, and an alias a re-exporting module reads before rebinding its source can still make an abstract base read as concrete; a rebound setattr or called function, or an import inside a called function, can hide a replacement"},
-						},
-					},
-					{
-						ID:        "assertion/verified-by-names-tests",
-						Statement: "Every entry of an assertion's verified_by names one test: its file's path from the repository root, a colon, and its name. An entry missing either part, a path absolute or outside the repository, or a repeated entry is rejected.",
-						Sources: []Citation{
-							{Work: "evans2015", Page: "22", Section: "Assertions"},
-						},
-						Enforcement: Enforcement{
-							By:        EvaluatorLoader,
+							By:        EvaluatorDomain,
+							Facts:     []string{"file_tree", "declarations", "calls"},
 							Languages: Languages{All: true},
 							Severity:  severityError,
-						},
-					},
-					{
-						ID:        "assertion/verifying-tests-declared",
-						Statement: "Every test an assertion's verified_by names is declared in its file: in Go, a test go test runs; in Python, a def test function or Class.test_name method; in TypeScript, the name written in the file. Existence is checked, not proof.",
-						Sources: []Citation{
-							{Work: "evans2015", Page: "22", Section: "Assertions"},
-						},
-						Enforcement: Enforcement{
-							By:          EvaluatorDomain,
-							Facts:       []string{"file_tree", "imports", "declarations"},
-							Languages:   Languages{All: true},
-							Severity:    severityError,
-							Limitations: []string{"a TypeScript test name is matched as text anywhere in its file, so a comment or a string that repeats the name is taken for the test", "a test file scan.exclude leaves out is read for this check alone, because verified_by names it; no other rule, Zone, or context sees it, and a file Exclusion of this rule still keeps it unread"},
 						},
 					},
 				},

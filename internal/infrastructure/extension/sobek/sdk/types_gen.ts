@@ -259,28 +259,23 @@ export interface ViolationInput {
  * DomainInvariantInfo is one recorded invariant as exposed through
  * ctx.domain(): the key that names the method enforcing it (an
  * aggregate's) or the constructor that enforces it (a value object's),
- * and the statement. VerifiedBy lists the tests the invariant names as
- * verifying it, each path:name; arclint checks that they exist, not
- * what they prove. Line is where it is written in the project's domain
- * file; 0 when the vocabulary was not read from a file.
+ * and the statement. Line is where it is written in the project's
+ * domain file; 0 when the vocabulary was not read from a file.
  */
 export interface DomainInvariantInfo {
   key: string;
   statement: string;
-  verifiedBy?: string[];
   line: number /* int */;
 }
 /**
  * DomainAssertionInfo is one recorded assertion as exposed through
- * ctx.domain(). Key names the checking method on the root; On names
- * the operation that must call it. VerifiedBy lists the tests the
- * assertion names as verifying it, as DomainInvariantInfo's does.
+ * ctx.domain(). Key names the checking method on the owner; On names
+ * the operation that must call it.
  */
 export interface DomainAssertionInfo {
   key: string;
   on: string;
   statement: string;
-  verifiedBy?: string[];
   line: number /* int */;
 }
 /**

@@ -9,7 +9,7 @@ For each statement, in this order:
 1. **Declined rules.** Compare it with `declined_rules` in the librarian's `VOCAB.yaml` (protocol rule 11). A match is placed `declined`, with the entry's id, reason and basis. Do not propose the rule again.
 2. **Disagreement.** When two owner sources state it differently, it is a question, whatever row it would otherwise fit. Record the discrepancy with both sources.
 3. **Placement.** Otherwise the first row of the placement table whose conditions hold decides.
-4. **Declared services.** When the owner is a declared domain service, apply the shapes of that section.
+4. **Domain services.** When the owner is a domain service, apply that section.
 5. **Proving test.** Name the test that proves the entry, or `none`.
 6. **Word limits.** Count the words of every text you propose. Over the limit is not a proposal.
 7. **Sources.** Every literature citation states its tier, and a rule needs a tier 1 source or an owner decision.
@@ -44,20 +44,15 @@ A rule found inside a recorded definition is a statement like any other. Wording
 
 Recorded in issue #144, and carried in the librarian's `VOCAB.yaml` under `declined_rules`: the rules arclint deliberately does not enforce, each with an id, the statement declined, the reason, and its basis (a tier and page of literature, or an owner decision's issue). Read that list; do not copy it here, so it cannot drift. When a candidate states what an entry declines, place it `declined` and cite the entry's id, reason and basis. As the librarian's rule 11 says, new tier 1 or 2 literature or a new owner decision in an issue reopens an entry; a request alone does not, so say which of the two would.
 
-## Declared services
+## Domain services
 
-Recorded in issue #148, carried by the distillation rule `guarantee-has-one-checked-home` and enforced by `assertion/checked-by-its-operation`. A domain service declared the canonical way is "a standalone interface declared as a service" (Evans 2015, p. 14): a Go interface, a TypeScript interface or abstract class, a Python ABC or Protocol. Its assertion is checked once, in the model, by one of two shapes:
-
-- **(a) a check in the model:** a function of the context spelled from the key (`AssertNeverExceedsTotal`, `assertNeverExceedsTotal`, `assert_never_exceeds_total`);
-- **(b) a value:** the operation returns a recorded value object of the same context whose invariant has the same key, enforced by its constructor (Evans 2015, p. 21: "moving complex logic into value objects").
-
-Never an interface method, a callback, or prose. Only what neither shape can state is verified by the tests under its `verified_by`, which `assertion/verifying-tests-declared` checks exist. When neither shape exists and no test is named, report the missing check on the model side. An aggregate root declared as an interface or an abstract class needs those tests; a concrete owner (struct, class) keeps the checking method `assertion/checked-by-its-operation` asks for.
+Recorded in issue #184 and enforced by `assertion/checked-by-its-operation`: the operation an assertion names calls `Assert` followed by the key (`AssertNeverExceedsTotal`, `assertNeverExceedsTotal`, `assert_never_exceeds_total`) in its own body. The rule is the same for every operation of every owner. Identify the domain service that performs the decision and the operations it offers; each assertion's `on` names one of those operations.
 
 A recorded domain service records at least one assertion (`domain_service/records-an-assertion`). A statement that justifies a service but names no guarantee of its operations is a question for the expert's words, not a service without a contract.
 
 ## Proving tests
 
-Recorded in issue #143. For every entry, name the test that proves it as `path:TestName` from the repository root (Go `func Test...`, Python `def test_...` or `Class.test_...`, the TypeScript `test("...")` name). Read the test before you name it. This is verification of enforcement, not classification, so the librarian's Economy section does not limit it. A test that exists shows the behavior is pinned; whether it proves the statement is your judgment, and you say which. Record it with `arclint domain define invariant|assertion ... --verified-by <path>:<test name>`, repeated for several; the flag replaces the recorded tests, and `--clear-verified-by` records none. `invariant/verifying-tests-declared` and `assertion/verifying-tests-declared` then fail the check when a named test is missing. For an owner declared as an interface, the proving test is the expected evidence, not an empty `Assert` method.
+Recorded in issue #143. For every entry, name the test that proves it as `path:TestName` from the repository root (Go `func Test...`, Python `def test_...` or `Class.test_...`, the TypeScript `test("...")` name). Read the test before you name it. This is verification of enforcement, not classification, so the librarian's Economy section does not limit it. A test that exists shows the behavior is pinned; whether it proves the statement is your judgment, and you say which.
 
 Tests pin behavior; they do not approve it. A rule only tests state, with no doc and no owner's words, needs the owner's yes before it is recorded.
 

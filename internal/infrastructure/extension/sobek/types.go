@@ -182,27 +182,22 @@ type ViolationInput struct {
 // DomainInvariantInfo is one recorded invariant as exposed through
 // ctx.domain(): the key that names the method enforcing it (an
 // aggregate's) or the constructor that enforces it (a value object's),
-// and the statement. VerifiedBy lists the tests the invariant names as
-// verifying it, each path:name; arclint checks that they exist, not
-// what they prove. Line is where it is written in the project's domain
-// file; 0 when the vocabulary was not read from a file.
+// and the statement. Line is where it is written in the project's
+// domain file; 0 when the vocabulary was not read from a file.
 type DomainInvariantInfo struct {
-	Key        string   `json:"key"`
-	Statement  string   `json:"statement"`
-	VerifiedBy []string `json:"verifiedBy,omitempty"`
-	Line       int      `json:"line"`
+	Key       string `json:"key"`
+	Statement string `json:"statement"`
+	Line      int    `json:"line"`
 }
 
 // DomainAssertionInfo is one recorded assertion as exposed through
-// ctx.domain(). Key names the checking method on the root; On names
-// the operation that must call it. VerifiedBy lists the tests the
-// assertion names as verifying it, as DomainInvariantInfo's does.
+// ctx.domain(). Key names the checking method on the owner; On names
+// the operation that must call it.
 type DomainAssertionInfo struct {
-	Key        string   `json:"key"`
-	On         string   `json:"on"`
-	Statement  string   `json:"statement"`
-	VerifiedBy []string `json:"verifiedBy,omitempty"`
-	Line       int      `json:"line"`
+	Key       string `json:"key"`
+	On        string `json:"on"`
+	Statement string `json:"statement"`
+	Line      int    `json:"line"`
 }
 
 // DomainEntityInfo is one member entity of an aggregate as exposed

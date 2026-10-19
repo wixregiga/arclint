@@ -146,27 +146,7 @@
         }
       }
     },
-    "invariant": {
-      "description": "A consistency rule that must hold whenever the objects it constrains can be observed: an aggregate's invariants hold at the end of every operation on the aggregate, and a value object's invariants hold for every value that exists. The aggregate root, or the value object's constructor, is responsible for enforcing it, so that a state violating it is never reachable. In the code an invariant is stated as an assertion.",
-      "oneOf": [{ "$ref": "#/$defs/invariant_statement", "description": "The rule in the ubiquitous language, as a domain expert would state it." }, { "$ref": "#/$defs/verified_invariant", "description": "A consistency rule that must hold whenever the objects it constrains can be observed: an aggregate's invariants hold at the end of every operation on the aggregate, and a value object's invariants hold for every value that exists. The aggregate root, or the value object's constructor, is responsible for enforcing it, so that a state violating it is never reachable. In the code an invariant is stated as an assertion." }]
-    },
-    "invariant_statement": { "type": "string", "minLength": 1, "description": "The rule in the ubiquitous language, as a domain expert would state it." },
-    "verified_invariant": {
-      "type": "object",
-      "description": "A consistency rule that must hold whenever the objects it constrains can be observed: an aggregate's invariants hold at the end of every operation on the aggregate, and a value object's invariants hold for every value that exists. The aggregate root, or the value object's constructor, is responsible for enforcing it, so that a state violating it is never reachable. In the code an invariant is stated as an assertion.",
-      "additionalProperties": false,
-      "required": ["statement", "verified_by"],
-      "properties": {
-        "statement": { "type": "string", "minLength": 1, "description": "The rule in the ubiquitous language, as a domain expert would state it." },
-        "verified_by": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": { "type": "string", "pattern": "^[^:\\s/\\\\]([^:\\\\]*[^:\\s\\\\])?:\\S(.*\\S)?$" },
-          "description": "The automated tests that verify the rule, each spelled as its file's path from the repository root, a colon, and the test's name, as in internal/order/order_test.go:TestLinesFrozen. The check reads that each test exists, not what it proves."
-        }
-      }
-    },
+    "invariant": { "type": "string", "minLength": 1, "description": "A consistency rule that must hold whenever the objects it constrains can be observed: an aggregate's invariants hold at the end of every operation on the aggregate, and a value object's invariants hold for every value that exists. The aggregate root, or the value object's constructor, is responsible for enforcing it, so that a state violating it is never reachable. In the code an invariant is stated as an assertion." },
     "assertion": {
       "type": "object",
       "description": "A stated post-condition of an operation or invariant of a class or aggregate, made explicit so that the effect of an operation can be known without tracing its implementation. Assertions define the contracts of services and entity modifiers and the invariants on aggregates; where they cannot be coded directly, they are written as automated unit tests.",
@@ -174,14 +154,7 @@
       "required": ["on", "statement"],
       "properties": {
         "on": { "type": "string", "minLength": 1, "description": "The operation the guarantee belongs to: a command of the root, or an operation of the service." },
-        "statement": { "type": "string", "minLength": 1, "description": "The guarantee as the domain expert states it, in the ubiquitous language (Only an active tenant offers an invitation); it is recorded in the expert's words and never rewritten into a post-condition, because on already names the operation." },
-        "verified_by": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": { "type": "string", "pattern": "^[^:\\s/\\\\]([^:\\\\]*[^:\\s\\\\])?:\\S(.*\\S)?$" },
-          "description": "The automated tests that verify the guarantee, each spelled as its file's path from the repository root, a colon, and the test's name. An interface or abstract owner, with no body to call a check from, names its tests here."
-        }
+        "statement": { "type": "string", "minLength": 1, "description": "The guarantee as the domain expert states it, in the ubiquitous language (Only an active tenant offers an invitation); it is recorded in the expert's words and never rewritten into a post-condition, because on already names the operation." }
       }
     },
     "event": {

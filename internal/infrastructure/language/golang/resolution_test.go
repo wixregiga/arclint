@@ -370,7 +370,7 @@ func TestResolutionOverRealRepositories(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			observed, err := source.Observe(nil, rule.Scan{}, nil, nil, nil)
+			observed, err := source.Observe(nil, rule.Scan{}, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -19,7 +19,6 @@ type ContractCoverage struct {
 	unperformed                    []string
 	carrier                        Carrier
 	located                        bool
-	bodilessOwner                  string
 }
 
 // ContractCoverageSpec is the input to the validated coverage value.
@@ -34,10 +33,6 @@ type ContractCoverageSpec struct {
 	// Carrier is the declaration carrying the contract, as a check
 	// located it; nil when no check located one.
 	Carrier *Carrier
-	// BodilessOwner names how an assertion's owner is declared when it
-	// has no body to call a checking method from, an interface or an
-	// abstract class; its carrier is then a test under verified_by.
-	BodilessOwner string
 }
 
 // NewContractCoverage validates the recording and preserves each check unchanged.
@@ -65,10 +60,7 @@ func NewContractCoverage(s ContractCoverageSpec) (ContractCoverage, error) {
 	out := ContractCoverage{
 		context: s.Context, owner: s.Owner, key: s.Key, statement: s.Statement,
 		kind: s.Kind, path: s.Path, line: s.Line, checks: append([]Evaluation(nil), s.Checks...),
-		unperformed: append([]string(nil), s.Unperformed...), bodilessOwner: s.BodilessOwner,
-	}
-	if s.BodilessOwner != "" && s.Kind != vocab.ConceptAssertion {
-		return ContractCoverage{}, fmt.Errorf("contract coverage: only an assertion's owner is judged by how it is declared")
+		unperformed: append([]string(nil), s.Unperformed...),
 	}
 	if s.Carrier != nil {
 		if strings.TrimSpace(s.Carrier.Path) == "" || s.Carrier.Line <= 0 {
@@ -106,12 +98,6 @@ func (c ContractCoverage) Checks() []Evaluation { return append([]Evaluation(nil
 // Carrier is the declaration carrying the contract; false when no
 // check located one.
 func (c ContractCoverage) Carrier() (Carrier, bool) { return c.carrier, c.located }
-
-// BodilessOwner names how an assertion's owner is declared when it has
-// no body to call a checking method from, an interface or an abstract
-// class, so a test under verified_by carries the assertion; "" when the
-// owner has a body or was not located.
-func (c ContractCoverage) BodilessOwner() string { return c.bodilessOwner }
 
 // Unperformed explains why applicable checks were not attempted.
 func (c ContractCoverage) Unperformed() []string { return append([]string(nil), c.unperformed...) }

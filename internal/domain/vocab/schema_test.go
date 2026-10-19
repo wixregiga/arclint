@@ -199,8 +199,7 @@ func TestSchemaObjectsAreTheMetaModelRecordings(t *testing.T) {
 }
 
 // The maps keyed by name or key carry the published name patterns, the
-// questions are keyed statements, and an invariant is its statement
-// alone or a mapping of the statement and the tests that verify it.
+// questions are keyed statements, and an invariant is its statement.
 func TestSchemaKeyedMapsCarryTheNamePatterns(t *testing.T) {
 	doc := publishedSchema(t)
 	contexts := doc.Properties["contexts"]
@@ -231,24 +230,8 @@ func TestSchemaKeyedMapsCarryTheNamePatterns(t *testing.T) {
 			t.Errorf("%s invariants are keyed invariants; got %s (%v)", owner, raw, err)
 		}
 	}
-	invariant := doc.Defs["invariant"]
-	if len(invariant.OneOf) != 2 || invariant.OneOf[0].Ref != "#/$defs/invariant_statement" || invariant.OneOf[1].Ref != "#/$defs/verified_invariant" {
-		t.Errorf("an invariant is one of its statement or a verified mapping; got %+v", invariant.OneOf)
-	}
-	if statement := doc.Defs["invariant_statement"]; statement.Type != "string" {
-		t.Errorf("an invariant's statement alone is text; got %+v", statement)
-	}
-	verified := doc.Defs["verified_invariant"]
-	if !slices.Equal(verified.Required, []string{"statement", "verified_by"}) {
-		t.Errorf("a verified invariant requires %v, want statement and verified_by", verified.Required)
-	}
-	for owner, tests := range map[string]schemaNode{
-		"verified_invariant": verified.Properties["verified_by"],
-		"assertion":          doc.Defs["assertion"].Properties["verified_by"],
-	} {
-		if tests.Type != "array" || tests.MinItems != 1 || tests.Items == nil || tests.Items.Pattern != vocab.VerifyingTestPattern {
-			t.Errorf("%s verified_by = %+v, want a non-empty list of path:name entries", owner, tests)
-		}
+	if invariant := doc.Defs["invariant"]; invariant.Type != "string" || len(invariant.OneOf) != 0 {
+		t.Errorf("an invariant is its statement, text; got %+v", invariant)
 	}
 	kinds := doc.Defs["relation"].Properties["kind"].Enum
 	var want []string

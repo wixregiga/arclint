@@ -18,8 +18,10 @@ func TestShowDomainDefinitionFindsAnEntryByNameAlone(t *testing.T) {
 	a.Aliases = []string{"Purchase Order"}
 	ctx := orderContext(a)[0]
 	ctx.ValueObjects = []vocab.ValueObject{{Name: "Money", Definition: "An amount."}}
-	ctx.Services = []vocab.DomainService{{Name: "Pricing", Definition: "Prices an Order.",
-		Assertions: []vocab.Assertion{{Key: "priced-once", On: "Price", Statement: "An Order is priced once."}}}}
+	ctx.Services = []vocab.DomainService{{
+		Name: "Pricing", Definition: "Prices an Order.",
+		Assertions: []vocab.Assertion{{Key: "priced-once", On: "Price", Statement: "An Order is priced once."}},
+	}}
 	uc, err := application.NewShowDomainDefinition(recorded(t, ctx))
 	if err != nil {
 		t.Fatalf("construct: %v", err)
@@ -56,8 +58,10 @@ func TestShowDomainDefinitionFindsAnEntryByNameAlone(t *testing.T) {
 func TestShowDomainDefinitionListsTheCandidatesOfAnAmbiguousName(t *testing.T) {
 	t.Parallel()
 	ctx := orderContext(orderAggregate())[0]
-	ctx.ValueObjects = []vocab.ValueObject{{Name: "Money", Definition: "An amount.",
-		Invariants: []vocab.Invariant{{Key: "has-lines", Statement: "Odd, but recorded."}}}}
+	ctx.ValueObjects = []vocab.ValueObject{{
+		Name: "Money", Definition: "An amount.",
+		Invariants: []vocab.Invariant{{Key: "has-lines", Statement: "Odd, but recorded."}},
+	}}
 	uc, err := application.NewShowDomainDefinition(recorded(t, ctx))
 	if err != nil {
 		t.Fatalf("construct: %v", err)

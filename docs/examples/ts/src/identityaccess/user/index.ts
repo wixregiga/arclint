@@ -1,6 +1,6 @@
 export { Username } from "./username.js";
 export { UserID } from "./user-id.js";
-export { Password, EncryptedPassword, type Encrypter } from "./password.js";
+export { Password, EncryptedPassword, Encrypter, type KeyDerivation } from "./password.js";
 export { Credentials } from "./credentials.js";
 export { Enablement } from "./enablement.js";
 export { FullName, EmailAddress, Person } from "./person.js";

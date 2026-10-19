@@ -193,7 +193,7 @@ func freshOperations(invariants []vocab.Invariant, assertions []vocab.Assertion)
 	declared := map[string]bool{}
 	for _, inv := range invariants {
 		name := invariantPrefix + keyCase(inv.Key)
-		ops = append(ops, &syntax.DomainObjectOperation{Doc: inv.Statement, Name: name, Hint: replaceHint("", verifiedByHint, inv.VerifiedBy)})
+		ops = append(ops, &syntax.DomainObjectOperation{Doc: inv.Statement, Name: name})
 		declared[name] = true
 	}
 	for _, a := range assertions {
@@ -224,9 +224,9 @@ func freshServiceOperations(assertions []vocab.Assertion) []*syntax.ServiceOpera
 }
 
 // assertionHint carries what CML cannot say of an assertion: the
-// operation it constrains, then the tests that verify it.
+// operation it constrains.
 func assertionHint(a vocab.Assertion) string {
-	return replaceHint(scalarHint("", "on", a.On), verifiedByHint, a.VerifiedBy)
+	return scalarHint("", "on", a.On)
 }
 
 func freshRelation(r vocab.ContextRelation, contexts map[string]string) syntax.Relationship {

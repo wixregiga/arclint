@@ -255,9 +255,8 @@ func TestPlainDomainOverviewSourcePhrases(t *testing.T) {
 	}
 }
 
-// A value object names every aggregate whose identity it is, a
-// repository every aggregate it serves, and a used contract the tests
-// that verify it, as a declared one does.
+// A value object names every aggregate whose identity it is, and a
+// repository every aggregate it serves.
 func TestPlainContextNamesEveryAggregateAnIdentityIdentifies(t *testing.T) {
 	d := &application.DomainKnowledge{
 		Source: "domain.arclint.yaml", Counts: vocab.Counts{Contexts: 1}, Scoped: true, Located: true, UsesLocated: true,
@@ -265,8 +264,7 @@ func TestPlainContextNamesEveryAggregateAnIdentityIdentifies(t *testing.T) {
 			Context: "skill", Name: "ItemAddress", Role: conformance.UsedValueObject, Identifies: []string{"Artifact", "Skill"},
 			Sites: []application.DomainUseSite{{Path: "app/uninstall.go", Line: 14, Way: conformance.UseByField, Via: "UninstallItem.Address"}},
 			Invariants: []application.DomainInvariantRef{{
-				Key: "distinct", Statement: "An ItemAddress is distinct.", Owner: "ItemAddress", OwnerConcept: vocab.ConceptValueObject,
-				VerifiedBy: []string{"TestItemAddressIsDistinct"}, Source: "skill/item_address.go:30", Anchor: application.AnchorFound,
+				Key: "distinct", Statement: "An ItemAddress is distinct.", Owner: "ItemAddress", OwnerConcept: vocab.ConceptValueObject, Source: "skill/item_address.go:30", Anchor: application.AnchorFound,
 			}},
 		}, {
 			Context: "skill", Name: "Store", Role: conformance.UsedRepository, Aggregates: []string{"Artifact", "Skill"},
@@ -279,7 +277,6 @@ func TestPlainContextNamesEveryAggregateAnIdentityIdentifies(t *testing.T) {
 	}
 	if want := "    value object ItemAddress, identity of Artifact and Skill: app/uninstall.go:14\n" +
 		"      invariant distinct (ItemAddress): An ItemAddress is distinct. skill/item_address.go:30\n" +
-		"        verified by: TestItemAddressIsDistinct (arclint checks that each test exists, not what it proves)\n" +
 		"    repository Store of aggregates Artifact and Skill: app/uninstall.go:20\n"; !strings.Contains(buf.String(), want) {
 		t.Fatalf("output lacks %q:\n%s", want, buf.String())
 	}
