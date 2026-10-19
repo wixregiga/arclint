@@ -1170,9 +1170,7 @@ after it.
 assertion, as the test file's path from the repository root, a colon, and the
 test's name. Repeat it to name several; together they replace the recorded
 tests, and --clear-verified-by records none. arclint check reads that each test
-exists, not whether it proves the statement. An assertion whose owner is an
-interface or an abstract class, which has no body to call a check from, is
-verified this way.
+exists, not whether it proves the statement.
 
 A bounded context must be recorded before anything is recorded in it. Pass
 --context when the project records several.`

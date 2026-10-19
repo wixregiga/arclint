@@ -2,6 +2,7 @@ package user
 
 import (
 	"errors"
+	"fmt"
 	"unicode"
 )
 
@@ -51,7 +52,7 @@ type EncryptedPassword struct {
 // ErrEncryptedPasswordEmpty is returned when an encrypter yields nothing.
 var ErrEncryptedPasswordEmpty = errors.New("encrypted password must not be empty")
 
-// NewEncryptedPassword is the one door through which an encrypter's output
+// NewEncryptedPassword is the one door through which a derived stored form
 // becomes an EncryptedPassword. Invariant not-empty.
 func NewEncryptedPassword(text string) (EncryptedPassword, error) {
 	if text == "" {
@@ -63,9 +64,63 @@ func NewEncryptedPassword(text string) (EncryptedPassword, error) {
 // String renders the stored form.
 func (p EncryptedPassword) String() string { return p.value }
 
+// KeyDerivation derives the stored form of a password's text and tells
+// whether a text matches a stored form. It is the port through which the
+// Encrypter reaches a key derivation function; an adapter implements it.
+type KeyDerivation interface {
+	Derive(plain string) (string, error)
+	Verify(plain, stored string) bool
+}
+
+// ErrEncrypterWithoutKeyDerivation is returned by an Encrypter that was not
+// built through NewEncrypter.
+var ErrEncrypterWithoutKeyDerivation = errors.New("encrypter has no key derivation")
+
 // Encrypter is the domain service that turns a Password into its stored
-// form and verifies a Password against one. Infrastructure implements it.
-type Encrypter interface {
-	Encrypt(p Password) (EncryptedPassword, error)
-	Matches(p Password, stored EncryptedPassword) bool
+// form and verifies a Password against one, through its KeyDerivation.
+type Encrypter struct {
+	kdf KeyDerivation
+}
+
+// NewEncrypter returns the Encrypter that derives stored forms through kdf.
+func NewEncrypter(kdf KeyDerivation) Encrypter {
+	return Encrypter{kdf: kdf}
+}
+
+// Encrypt turns a Password into its stored form.
+//
+// Contract (assertion on Encrypt): not-empty.
+func (e Encrypter) Encrypt(p Password) (EncryptedPassword, error) {
+	if e.kdf == nil {
+		return EncryptedPassword{}, ErrEncrypterWithoutKeyDerivation
+	}
+	derived, err := e.kdf.Derive(p.value)
+	if err != nil {
+		return EncryptedPassword{}, fmt.Errorf("encrypt password: %w", err)
+	}
+	encrypted, err := NewEncryptedPassword(derived)
+	if err != nil {
+		return EncryptedPassword{}, err
+	}
+	if err := e.AssertNotEmpty(encrypted); err != nil {
+		return EncryptedPassword{}, err
+	}
+	return encrypted, nil
+}
+
+// Matches tells whether p is the password stored as stored.
+func (e Encrypter) Matches(p Password, stored EncryptedPassword) bool {
+	if e.kdf == nil || stored.value == "" {
+		return false
+	}
+	return e.kdf.Verify(p.value, stored.value)
+}
+
+// AssertNotEmpty checks the contract assertion not-empty on Encrypt: an
+// encrypted password is never empty.
+func (Encrypter) AssertNotEmpty(encrypted EncryptedPassword) error {
+	if encrypted.value == "" {
+		return ErrEncryptedPasswordEmpty
+	}
+	return nil
 }

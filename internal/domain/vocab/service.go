@@ -37,11 +37,7 @@ func SourcedStatements() []SourcedStatement {
 // and the sections of the Reference it names.
 const (
 	anemicDomainModel          = "fowler-anemic-domain-model"
-	iddSamples                 = "vernon-iddd-samples"
 	layeredArchitectureSection = "Layered Architecture"
-	servicesSection            = "Services"
-	sideEffectFreeSection      = "Side-Effect-Free Functions"
-	assertionsSection          = "Assertions"
 )
 
 // DomainDecides says where a decision lives, in Evans's own words: the

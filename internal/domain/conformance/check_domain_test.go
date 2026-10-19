@@ -86,7 +86,7 @@ func domainScenario(t *testing.T) conformance.Request {
 		}, []conformance.Call{
 			{Callee: "EnsurePublishedOnly", Line: 33, Enclosing: "New"},
 			{Callee: "EnsurePublishedOnly", Line: 52, Enclosing: "Publish"},
-			{Callee: "AssertTiersPriced", Line: 53, Enclosing: "Publish"},
+			{Callee: "AssertTiersPriced", Line: 53, Enclosing: "Publish", EnclosingOwner: "Event"},
 			{Callee: "New", Line: 66, Enclosing: "Cancel"},
 		}),
 		"internal/event/id.go": goFacts("event", nil, []conformance.Declaration{
@@ -891,7 +891,7 @@ func TestAssertionIsCheckedByItsOperation(t *testing.T) {
 	if len(got) != 1 || got[0] != "aggregate Event: operation Publish does not call AssertTiersPriced, so assertion tiers-priced is not checked when it completes" {
 		t.Errorf("uncalled check: %q", got)
 	}
-	if got = run([]conformance.Declaration{root, publish, check}, conformance.Call{Callee: "AssertTiersPriced", Line: 12, Enclosing: "Publish"}); len(got) != 0 {
+	if got = run([]conformance.Declaration{root, publish, check}, conformance.Call{Callee: "AssertTiersPriced", Line: 12, Enclosing: "Publish", EnclosingOwner: "Event"}); len(got) != 0 {
 		t.Errorf("checked operation: %q", got)
 	}
 }
@@ -935,7 +935,7 @@ func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 	if len(got) != 1 || got[0] != "service TenantProvisioningService: operation ProvisionTenant does not call AssertTenantNameUnique, so assertion tenant-name-unique is not checked when it completes" {
 		t.Errorf("uncalled check: %q", got)
 	}
-	if got = run([]conformance.Declaration{svc, provision, check}, conformance.Call{Callee: "AssertTenantNameUnique", Line: 12, Enclosing: "ProvisionTenant"}); len(got) != 0 {
+	if got = run([]conformance.Declaration{svc, provision, check}, conformance.Call{Callee: "AssertTenantNameUnique", Line: 12, Enclosing: "ProvisionTenant", EnclosingOwner: "TenantProvisioningService"}); len(got) != 0 {
 		t.Errorf("checked operation: %q", got)
 	}
 	if got = run(nil); len(got) != 0 {
@@ -948,11 +948,45 @@ func TestAssertionOfAServiceIsCheckedByItsOperation(t *testing.T) {
 			{Kind: "class", Name: "TenantProvisioningService", Exported: true, StartLine: 1},
 			{Kind: "method", Name: "provisionTenant", Owner: "TenantProvisioningService", Exported: true, StartLine: 5},
 			{Kind: "method", Name: "assertTenantNameUnique", Owner: "TenantProvisioningService", Exported: true, StartLine: 15},
-		}, Calls: []conformance.Call{{Callee: "assertTenantNameUnique", Line: 7, Enclosing: "provisionTenant"}}},
+		}, Calls: []conformance.Call{{Callee: "assertTenantNameUnique", Line: 7, Enclosing: "provisionTenant", EnclosingOwner: "TenantProvisioningService"}}},
 	}
 	a := runOne(t, r, nil, observed(tsFile), facts, knowledge)
 	if got := outcomesOf(a)[id+"|context:identity"]; got != conformance.OutcomeConforms {
 		t.Errorf("typescript: outcome %s, want conforms; violations %v", got, anchorsOf(a)[id])
+	}
+}
+
+// A domain service declared as an interface is judged like any owner:
+// its operation has no body, so it does not call the check. Only a call
+// the operation itself makes counts, never one a method of the same
+// name on another type of the file makes.
+func TestAssertionOfAnInterfaceServiceIsCheckedByItsOperation(t *testing.T) {
+	knowledge := oneContext(t, vocab.BoundedContext{
+		Name: "identity", Definition: "d", Line: 1,
+		Services: []vocab.DomainService{{
+			Name: "Encrypter", Definition: "d", Line: 2,
+			Assertions: []vocab.Assertion{{Key: "not-empty", On: "Encrypt", Statement: "An encrypted password is never empty.", Line: 4}},
+		}},
+	})
+	r := builtInRule(t, "assertion/checked-by-its-operation")
+	file := "internal/identity/encrypter.go"
+	run := func(decls []conformance.Declaration, calls ...conformance.Call) []string {
+		a := runOne(t, r, nil, observed(file), map[string]conformance.LanguageFacts{file: goDecls("identity", decls, calls...)}, knowledge)
+		return messagesOf(a)
+	}
+	encrypt := conformance.Declaration{Kind: "method", Name: "Encrypt", Owner: "Encrypter", Exported: true, StartLine: 4}
+	check := conformance.Declaration{Kind: "method", Name: "AssertNotEmpty", Owner: "Encrypter", Exported: true, StartLine: 5}
+	iface := conformance.Declaration{Kind: "interface", Name: "Encrypter", Exported: true, StartLine: 3}
+	if got := run([]conformance.Declaration{iface, encrypt, check}); len(got) != 1 || got[0] != "service Encrypter: operation Encrypt does not call AssertNotEmpty, so assertion not-empty is not checked when it completes" {
+		t.Errorf("interface service: %q", got)
+	}
+	concrete := conformance.Declaration{Kind: "struct", Name: "Encrypter", Exported: true, StartLine: 3}
+	other := conformance.Declaration{Kind: "method", Name: "Encrypt", Owner: "Hasher", Exported: true, StartLine: 9}
+	if got := run([]conformance.Declaration{concrete, encrypt, check, other}, conformance.Call{Callee: "AssertNotEmpty", Line: 10, Enclosing: "Encrypt", EnclosingOwner: "Hasher"}); len(got) != 1 {
+		t.Errorf("a call another type's Encrypt makes counted: %q", got)
+	}
+	if got := run([]conformance.Declaration{concrete, encrypt, check}, conformance.Call{Callee: "AssertNotEmpty", Line: 6, Enclosing: "Encrypt", EnclosingOwner: "Encrypter"}); len(got) != 0 {
+		t.Errorf("checked operation: %q", got)
 	}
 }
 

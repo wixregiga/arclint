@@ -23,12 +23,6 @@ const AdministratorRoleName = "Administrator"
 // administrator registers through; it is withdrawn once used.
 const initialInvitation = "init"
 
-// PasswordGenerator is the domain service that proposes a strong password
-// for a user who has not chosen one yet. Infrastructure implements it.
-type PasswordGenerator interface {
-	GenerateStrongPassword() (user.Password, error)
-}
-
 // Administrator is what the process needs to know about the first
 // administrator of a new tenant.
 type Administrator struct {

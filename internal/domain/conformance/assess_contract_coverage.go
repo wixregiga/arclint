@@ -114,10 +114,6 @@ func (c recordedContract) isolate(cc contextCode) contextCode {
 		s, _ := cc.ctx.Service(c.spec.Owner)
 		s.Assertions = []vocab.Assertion{c.assertion}
 		narrow.Services = []vocab.DomainService{s}
-		// A declared service's guarantee may be the invariant of the
-		// value its operation returns; the assertion check reads the
-		// recorded values and reports nothing about them.
-		narrow.ValueObjects = cc.ctx.ValueObjects
 	default:
 		// recordedContracts only supplies the three legal contract owners.
 	}
@@ -206,9 +202,6 @@ func assessContractCoverage(req Request, prepared, located map[string]Facts) ([]
 				if spec.Carrier, err = contract.carrier(carriers); err != nil {
 					return nil, err
 				}
-			}
-			if spec.Kind == vocab.ConceptAssertion && spec.BodilessOwner == "" {
-				spec.BodilessOwner = carriers.BodilessOwner(spec.Context, spec.Owner)
 			}
 			for _, cc := range code.contexts {
 				if cc.ctx.Name != spec.Context {

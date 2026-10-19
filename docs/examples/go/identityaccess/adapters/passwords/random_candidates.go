@@ -4,8 +4,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
-
-	"example.com/saasovation/identityaccess/user"
 )
 
 const (
@@ -15,35 +13,35 @@ const (
 	generatedSize = 16
 )
 
-// RandomGenerator implements provisioning.PasswordGenerator with the
-// operating system's random source. Every password it proposes satisfies
-// the user.Password strength rule by construction: one character of each
-// class is placed at a random position and the rest is drawn from all.
-type RandomGenerator struct{}
+// RandomCandidates implements provisioning.Candidates with the operating
+// system's random source. Every candidate it supplies holds a letter, a
+// digit, and a symbol: one character of each class is placed at a random
+// position and the rest is drawn from all.
+type RandomCandidates struct{}
 
-// GenerateStrongPassword proposes a 16 character password.
-func (RandomGenerator) GenerateStrongPassword() (user.Password, error) {
+// Next supplies a 16 character candidate.
+func (RandomCandidates) Next() (string, error) {
 	all := letters + digits + symbols
 	buf := make([]byte, generatedSize)
 	for i := range buf {
 		c, err := pick(all)
 		if err != nil {
-			return user.Password{}, err
+			return "", err
 		}
 		buf[i] = c
 	}
 	positions, err := distinctPositions(3, generatedSize)
 	if err != nil {
-		return user.Password{}, err
+		return "", err
 	}
 	for i, class := range []string{letters, digits, symbols} {
 		c, err := pick(class)
 		if err != nil {
-			return user.Password{}, err
+			return "", err
 		}
 		buf[positions[i]] = c
 	}
-	return user.NewPassword(string(buf))
+	return string(buf), nil
 }
 
 func pick(alphabet string) (byte, error) {

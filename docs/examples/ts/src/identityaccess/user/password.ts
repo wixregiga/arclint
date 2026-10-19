@@ -44,8 +44,38 @@ export class EncryptedPassword {
   }
 }
 
-/** The domain service that turns a Password into its stored form and verifies against it. */
-export interface Encrypter {
-  encrypt(password: Password): EncryptedPassword;
-  matches(password: Password, stored: EncryptedPassword): boolean;
+/**
+ * Derives the stored form of a password's text and tells whether a text
+ * matches a stored form. It is the port through which the Encrypter
+ * reaches a key derivation function; an adapter implements it.
+ */
+export interface KeyDerivation {
+  derive(plain: string): string;
+  verify(plain: string, stored: string): boolean;
+}
+
+/**
+ * The domain service that turns a Password into its stored form and
+ * verifies a Password against one, through its KeyDerivation.
+ */
+export class Encrypter {
+  constructor(private readonly kdf: KeyDerivation) {}
+
+  /** Contract (assertion on encrypt): not-empty. */
+  encrypt(password: Password): EncryptedPassword {
+    const encrypted = EncryptedPassword.from(this.kdf.derive(password.reveal()));
+    this.assertNotEmpty(encrypted);
+    return encrypted;
+  }
+
+  matches(password: Password, stored: EncryptedPassword): boolean {
+    return this.kdf.verify(password.reveal(), stored.toString());
+  }
+
+  /** Checks the contract assertion not-empty on encrypt: an encrypted password is never empty. */
+  assertNotEmpty(encrypted: EncryptedPassword): void {
+    if (encrypted.toString() === "") {
+      throw new Error("encrypted password must not be empty");
+    }
+  }
 }

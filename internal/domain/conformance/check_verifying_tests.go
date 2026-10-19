@@ -182,48 +182,6 @@ func readableTests(t vocab.VerifyingTest, facts LanguageFacts) string {
 	return ""
 }
 
-// verifyingTestCarrier locates where the repository declares the test a
-// verified_by entry names: the declaration of a Go or Python test, or
-// the first line a TypeScript file writes its name on. False when the
-// test is not found or its file cannot be read.
-func (code domainCode) verifyingTestCarrier(entry string) (Carrier, bool) {
-	t, err := vocab.ParseVerifyingTest(entry)
-	if err != nil {
-		return Carrier{}, false
-	}
-	file, gap, exists := code.testFileOf(t)
-	if !exists || gap != "" {
-		return Carrier{}, false
-	}
-	var declared testDeclared
-	switch rule.LanguageOf(t.Path) {
-	case rule.LanguageGo:
-		declared = goTestDeclared
-	case rule.LanguagePython:
-		declared = pythonTestDeclared
-	case rule.LanguageTypeScript:
-		content, err := file.read()
-		if err != nil {
-			return Carrier{}, false
-		}
-		at := strings.Index(content, t.Name)
-		if at < 0 {
-			return Carrier{}, false
-		}
-		return Carrier{Path: t.Path, Line: strings.Count(content[:at], "\n") + 1}, true
-	default:
-		return Carrier{}, false
-	}
-	if readableTests(t, file.facts) != "" {
-		return Carrier{}, false
-	}
-	d, ok, _ := declared(t, file.facts)
-	if !ok {
-		return Carrier{}, false
-	}
-	return Carrier{Path: t.Path, Line: d.StartLine}, true
-}
-
 // goTestDeclared finds a Go test as go test runs it: a function of a
 // _test.go file named Test followed by nothing or by a character that
 // is not a lowercase letter, declaring no type parameters, taking one
