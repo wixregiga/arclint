@@ -1508,7 +1508,7 @@ func assertionsChecked(r rule.Rule, subject rule.Subject, owner assertionOwner, 
 		if len(ops) == 0 || !hasCheck {
 			continue
 		}
-		if operationCalls(ops, key) {
+		if operationCalls(ops, check, key) {
 			continue
 		}
 		op := ops[len(ops)-1]
@@ -1524,19 +1524,37 @@ func assertionsChecked(r rule.Rule, subject rule.Subject, owner assertionOwner, 
 }
 
 // operationCalls reports whether one declaration of an operation calls
-// the method a key names inside its own body: a call whose enclosing
-// method is the operation on the operation's own type, never one in a
-// same-named method of another type. Overloads of the operation are
-// one operation, so a call in any of them counts.
-func operationCalls(ops []locDecl, key string) bool {
+// the owner's checking method inside its own body: a call whose
+// enclosing method is the operation on the operation's own type, never
+// one in a same-named method of another type. Overloads of the
+// operation are one operation, so a call in any of them counts.
+func operationCalls(ops []locDecl, check locDecl, key string) bool {
 	for _, op := range ops {
 		for _, c := range op.file.calls {
-			if c.Enclosing == op.decl.Name && c.EnclosingOwner == op.decl.Owner && methodSpelled(c.Callee, key, op.file.lang) {
+			if c.Enclosing == op.decl.Name && c.EnclosingOwner == op.decl.Owner && methodSpelled(c.Callee, key, op.file.lang) && reachesCheck(op.file, c, check) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+// reachesCheck reports whether a call spelled as the check reaches it.
+// A call the language's resolution followed counts only when it reaches
+// the owner's checking method itself, never a collaborator's method of
+// the same name; a call resolution did not follow keeps the name match.
+func reachesCheck(f fileFacts, c Call, check locDecl) bool {
+	if !f.resolvedCalls {
+		return true
+	}
+	switch c.Target.Resolution {
+	case ResolutionDeclared:
+		return c.Target.File == check.file.path && c.Target.Owner == check.decl.Owner && c.Target.Name == check.decl.Name
+	case ResolutionExternal, ResolutionLocal:
+		return false
+	default:
+		return true
+	}
 }
 
 func checkSpecificationSatisfaction(r rule.Rule, subject rule.Subject, cc contextCode, _ domainCode) ([]Violation, error) {

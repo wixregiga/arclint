@@ -952,8 +952,11 @@ building_blocks:
         conventions: ["the checking method (assert followed by the key in the language's method case)"]
         enforcement:
           by: domain
-          facts: [file_tree, declarations, calls, field_types]
+          facts: [file_tree, declarations, calls, resolved_calls, field_types]
           languages: all
+          limitations:
+            - a call the language's resolution does not follow counts when its callee is spelled as the checking method
+            - check bodies, error propagation, and execution paths are not evaluated
       - id: assertion/verified-by-names-tests
         statement: "Every entry of an assertion's verified_by names one test: its file's path from the repository root, a colon, and its name. An entry missing either part, a path absolute or outside the repository, or a repeated entry is rejected."
         sources:

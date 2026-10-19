@@ -28,19 +28,21 @@ contexts:
             statement: An encrypted password is never empty.
 `
 
-// serviceAssertionCase is one language's Encrypter in four states: its
+// serviceAssertionCase is one language's Encrypter in five states: its
 // operation calls the check, its operation does not, its operation is
-// declared with no body, and only a same-named method of another type
-// calls the check.
+// declared with no body, only a same-named method of another type
+// calls the check, and its operation calls a collaborator's method of
+// the check's name.
 type serviceAssertionCase struct {
 	name    string
 	runtime string
 	path    string
 	// checked has the operation call the check; the other states edit it.
-	checked   string
-	unchecked string
-	bodiless  string
-	elsewhere string
+	checked      string
+	unchecked    string
+	bodiless     string
+	elsewhere    string
+	collaborator string
 	// operation and check are the names as the language spells them;
 	// checkDecl is the text that declares the check.
 	operation, check, checkDecl string
@@ -112,6 +114,36 @@ func serviceAssertionCases(t *testing.T) []serviceAssertionCase {
 	goUnchecked := edit(goCheckedEncrypter, "\tif err := e.AssertNotEmpty(encrypted); err != nil {\n\t\treturn \"\", err\n\t}\n", "")
 	tsUnchecked := edit(tsCheckedEncrypter, "    this.assertNotEmpty(encrypted);\n", "")
 	pyUnchecked := edit(pyCheckedEncrypter, "        self.assert_not_empty(encrypted)\n", "")
+	goCollaborator := edit(goCheckedEncrypter, "e.AssertNotEmpty(encrypted)", "(Validator{}).AssertNotEmpty(encrypted)") + `
+// Validator is a collaborator, not the service.
+type Validator struct{}
+
+// AssertNotEmpty of a validator is not the service's check.
+func (Validator) AssertNotEmpty(encrypted string) error {
+	if encrypted == "" {
+		return errors.New("empty")
+	}
+	return nil
+}
+`
+	tsCollaborator := edit(edit(tsCheckedEncrypter, "this.assertNotEmpty(encrypted);", "this.validator.assertNotEmpty(encrypted);"),
+		"export class Encrypter {\n", "export class Encrypter {\n  constructor(private readonly validator: Validator) {}\n\n") + `
+export class Validator {
+  assertNotEmpty(encrypted: string): void {
+    if (encrypted === "") throw new Error("empty");
+  }
+}
+`
+	pyCollaborator := edit(pyCheckedEncrypter, "        self.assert_not_empty(encrypted)\n",
+		"        validator: Validator = Validator()\n        validator.assert_not_empty(encrypted)\n") + `
+
+class Validator:
+    """A collaborator, not the service."""
+
+    def assert_not_empty(self, encrypted: str) -> None:
+        if not encrypted:
+            raise ValueError("empty")
+`
 	return []serviceAssertionCase{
 		{
 			name: "go", runtime: "go", path: "src/identity/encrypter.go",
@@ -134,7 +166,8 @@ func (d Draft) Encrypt(plain string) (string, error) {
 	return plain, d.encrypter.AssertNotEmpty(plain)
 }
 `,
-			operation: "Encrypt", check: "AssertNotEmpty", checkDecl: "func (Encrypter) AssertNotEmpty(",
+			collaborator: goCollaborator,
+			operation:    "Encrypt", check: "AssertNotEmpty", checkDecl: "func (Encrypter) AssertNotEmpty(",
 			module: map[string]string{"go.mod": "module example.com/identity\n\ngo 1.22\n"},
 		},
 		{
@@ -157,7 +190,8 @@ export class Draft {
   }
 }
 `,
-			operation: "encrypt", check: "assertNotEmpty", checkDecl: "  assertNotEmpty(encrypted",
+			collaborator: tsCollaborator,
+			operation:    "encrypt", check: "assertNotEmpty", checkDecl: "  assertNotEmpty(encrypted",
 		},
 		{
 			name: "python", runtime: "py", path: "src/identity/encrypter.py",
@@ -180,7 +214,8 @@ class Draft:
         Encrypter().assert_not_empty(plain)
         return plain
 `,
-			operation: "encrypt", check: "assert_not_empty", checkDecl: "def assert_not_empty(",
+			collaborator: pyCollaborator,
+			operation:    "encrypt", check: "assert_not_empty", checkDecl: "def assert_not_empty(",
 		},
 	}
 }
@@ -188,8 +223,9 @@ class Draft:
 // TestServiceOperationCallsItsAssertion holds a domain service's
 // operation to the call of its assertion's check in Go, TypeScript and
 // Python: the call conforms; an operation without it, one declared with
-// no body, and a call made only from a same-named method of another type
-// are each the same finding at the operation.
+// no body, a call made only from a same-named method of another type,
+// and a call that resolution follows to a collaborator's method of the
+// check's name are each the same finding at the operation.
 func TestServiceOperationCallsItsAssertion(t *testing.T) {
 	for _, tc := range serviceAssertionCases(t) {
 		t.Run(tc.name, func(t *testing.T) {
@@ -214,6 +250,7 @@ func TestServiceOperationCallsItsAssertion(t *testing.T) {
 				{"unchecked", tc.unchecked},
 				{"bodiless", tc.bodiless},
 				{"called from another type", tc.elsewhere},
+				{"collaborator's method", tc.collaborator},
 			} {
 				write(t, root, tc.path, state.content)
 				findings, status := serviceAssertionFindings(t, root, 1)

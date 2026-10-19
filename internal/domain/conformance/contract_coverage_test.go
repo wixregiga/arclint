@@ -17,13 +17,13 @@ func TestContractCoverageSeparatesOwnersAndReportsLimits(t *testing.T) {
 	}}
 	knowledge := oneContext(t, ctx)
 	r := builtInRule(t, "assertion/checked-by-its-operation")
-	facts := goDecls("catalog", []conformance.Declaration{
+	facts := resolvedGo("catalog", []conformance.Declaration{
 		{Kind: "struct", Name: "Selection", StartLine: 1},
 		{Kind: "method", Owner: "Selection", Name: "Select", StartLine: 2},
 		{Kind: "method", Owner: "Selection", Name: "AssertAccompanyingIncluded", StartLine: 3},
 		{Kind: "struct", Name: "Removal", StartLine: 5},
 		{Kind: "method", Owner: "Removal", Name: "Remove", StartLine: 6},
-	}, conformance.Call{Callee: "AssertAccompanyingIncluded", Enclosing: "Select", EnclosingOwner: "Selection", Line: 2})
+	}, conformance.Call{Callee: "AssertAccompanyingIncluded", Enclosing: "Select", EnclosingOwner: "Selection", Line: 2, Target: declared("catalog.go", "Selection", "AssertAccompanyingIncluded")})
 	a := runOne(t, r, nil, observed("catalog.go"), map[string]conformance.LanguageFacts{"catalog.go": facts}, knowledge)
 	byOwner := map[string]conformance.ContractCoverage{}
 	for _, c := range a.Contracts() {
@@ -78,9 +78,9 @@ func TestContractCoverageReportsUnperformedAndUnavailableChecks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	decls := goDecls("catalog", []conformance.Declaration{{Kind: "struct", Name: "Selection", StartLine: 1}})
+	decls := resolvedGo("catalog", []conformance.Declaration{{Kind: "struct", Name: "Selection", StartLine: 1}})
 	noCalls := decls
-	noCalls.CallsAvailable = false
+	noCalls.CallsAvailable, noCalls.ResolvedCallsAvailable = false, false
 	for _, tc := range []struct {
 		name  string
 		rules []rule.Rule
@@ -90,7 +90,7 @@ func TestContractCoverageReportsUnperformedAndUnavailableChecks(t *testing.T) {
 		{"unselected", nil, decls, "unchecked"},
 		{"disabled", []rule.Rule{r.Disable(d)}, decls, "unchecked"},
 		{"calls unavailable", []rule.Rule{r}, noCalls, "unsupported"},
-		{"missing owner", []rule.Rule{r}, goDecls("catalog", nil), "undetermined"},
+		{"missing owner", []rule.Rule{r}, resolvedGo("catalog", nil), "undetermined"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			obs, err := conformance.NewObservations(observed("catalog.go"), map[string]conformance.LanguageFacts{"catalog.go": tc.facts})
@@ -123,10 +123,10 @@ func TestContractCoverageHonorsAnExclusionOfTheRecordingFile(t *testing.T) {
 		{Name: "Selection", Definition: "d", Assertions: []vocab.Assertion{{Key: "accompanying-included", On: "Select", Statement: "Accompanying commands are included.", Line: 8}}},
 	}}
 	knowledge := oneContext(t, ctx)
-	facts := goDecls("catalog", []conformance.Declaration{
+	facts := resolvedGo("catalog", []conformance.Declaration{
 		{Kind: "struct", Name: "Selection", StartLine: 1},
 		{Kind: "method", Owner: "Selection", Name: "Select", StartLine: 2},
-	}, conformance.Call{Callee: "Other", Enclosing: "Select", Line: 2})
+	}, conformance.Call{Callee: "Other", Enclosing: "Select", EnclosingOwner: "Selection", Line: 2, Target: declared("catalog.go", "", "Other")})
 	for _, tc := range []struct {
 		exclude string
 		want    string
@@ -170,7 +170,7 @@ func TestContractCoverageCarriesTheDeclarationACheckLocated(t *testing.T) {
 			Assertions: []vocab.Assertion{{Key: "in-stock", On: "Reserve", Statement: "Only stocked Products are reserved.", Line: 12}}}},
 	}
 	knowledge := oneContext(t, ctx)
-	facts := goDecls("catalog", []conformance.Declaration{
+	facts := resolvedGo("catalog", []conformance.Declaration{
 		{Kind: "struct", Name: "Product", StartLine: 1},
 		{Kind: "method", Owner: "Product", Name: "EnsurePriceSet", StartLine: 3},
 		{Kind: "struct", Name: "Sku", StartLine: 10},
@@ -178,7 +178,7 @@ func TestContractCoverageCarriesTheDeclarationACheckLocated(t *testing.T) {
 		{Kind: "struct", Name: "Reservation", StartLine: 20},
 		{Kind: "method", Owner: "Reservation", Name: "Reserve", StartLine: 21},
 		{Kind: "method", Owner: "Reservation", Name: "AssertInStock", StartLine: 24},
-	}, conformance.Call{Callee: "AssertInStock", Enclosing: "Reserve", EnclosingOwner: "Reservation", Line: 22})
+	}, conformance.Call{Callee: "AssertInStock", Enclosing: "Reserve", EnclosingOwner: "Reservation", Line: 22, Target: declared("catalog.go", "Reservation", "AssertInStock")})
 	obs, err := conformance.NewObservations(observed("catalog.go"), map[string]conformance.LanguageFacts{"catalog.go": facts})
 	if err != nil {
 		t.Fatal(err)
@@ -214,7 +214,7 @@ func TestContractCoverageSaysWhyItIsUndetermined(t *testing.T) {
 		{Name: "Reservation", Definition: "d", Assertions: []vocab.Assertion{{Key: "in-stock", On: "Reserve", Statement: "Only stocked Products are reserved.", Line: 8}}},
 	}}
 	a := runOne(t, builtInRule(t, "assertion/checked-by-its-operation"), nil, observed("catalog.go"),
-		map[string]conformance.LanguageFacts{"catalog.go": goDecls("catalog", nil)}, oneContext(t, ctx))
+		map[string]conformance.LanguageFacts{"catalog.go": resolvedGo("catalog", nil)}, oneContext(t, ctx))
 	cs := a.Contracts()
 	if len(cs) != 1 || cs[0].Status() != "undetermined" {
 		t.Fatalf("coverage = %#v", cs)
@@ -247,7 +247,7 @@ func TestContractCoverageIsNotApplicableWhenAnExclusionRemovesTheCode(t *testing
 	ctx := vocab.BoundedContext{Name: "catalog", Definition: "d", Services: []vocab.DomainService{
 		{Name: "Selection", Definition: "d", Assertions: []vocab.Assertion{{Key: "accompanying-included", On: "Select", Statement: "Accompanying commands are included.", Line: 8}}},
 	}}
-	facts := goDecls("catalog", []conformance.Declaration{
+	facts := resolvedGo("catalog", []conformance.Declaration{
 		{Kind: "struct", Name: "Selection", StartLine: 1},
 		{Kind: "method", Owner: "Selection", Name: "Select", StartLine: 2},
 	})

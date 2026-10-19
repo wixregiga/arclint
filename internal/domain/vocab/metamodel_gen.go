@@ -1123,10 +1123,11 @@ func ddd() MetaModel {
 						},
 						Conventions: []string{"the checking method (assert followed by the key in the language's method case)"},
 						Enforcement: Enforcement{
-							By:        EvaluatorDomain,
-							Facts:     []string{"file_tree", "declarations", "calls", "field_types"},
-							Languages: Languages{All: true},
-							Severity:  severityError,
+							By:          EvaluatorDomain,
+							Facts:       []string{"file_tree", "declarations", "calls", "resolved_calls", "field_types"},
+							Languages:   Languages{All: true},
+							Severity:    severityError,
+							Limitations: []string{"a call the language's resolution does not follow counts when its callee is spelled as the checking method", "check bodies, error propagation, and execution paths are not evaluated"},
 						},
 					},
 					{
