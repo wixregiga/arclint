@@ -417,7 +417,7 @@
       Object.keys(draft.change).forEach(function (f) { change[f] = draft.change[f]; });
       draft = { key: draft.key, action: 'define', context: draft.context, concept: draft.concept, owner: draft.owner, name: draft.name, change: change, created: prior.created };
     }
-    if (draft.action === 'remove' && prior && prior.created) { out.splice(at, 1); return out; }
+    if (draft.action === 'remove' && prior && prior.created) return withoutDraft(drafts, draft.key);
     if (at >= 0) out[at] = draft; else out.push(draft);
     return out;
   }
@@ -429,7 +429,17 @@
     return drafts.filter(function (d) { return d !== draft; })
       .map(function (d) { return d.key === draft.key ? Object.assign({}, d, { created: draft.action === 'remove' }) : d; });
   }
-  function withoutDraft(drafts, k) { return drafts.filter(function (d) { return d.key !== k; }); }
+  /* The drafts without one: a drafted creation takes with it what is
+     drafted under it, everything in a new context or what a new owner
+     holds, since none of it can be published without it. */
+  function withoutDraft(drafts, k) {
+    var gone = draftOf(drafts, k);
+    return drafts.filter(function (d) { return d.key !== k && !(gone && gone.created && under(d, gone)); });
+  }
+  function under(d, owner) {
+    if (owner.concept === 'bounded_context') return d.context === owner.name;
+    return d.context === owner.context && d.owner === owner.name && (OWNER_CONCEPTS[d.concept] || []).indexOf(owner.concept) >= 0;
+  }
   function draftOf(drafts, k) { return drafts.filter(function (d) { return d.key === k; })[0] || null; }
 
   /* The body a define or remove draft posts: the entry as `arclint domain

@@ -410,3 +410,17 @@ test('transformation shows a relation that changes, and one a removed context ta
   const gone = S.applyDrafts(doc, [{ key: S.key('billing', 'bounded_context', '', 'billing'), action: 'remove', context: 'billing', concept: 'bounded_context', owner: '', name: 'billing' }]);
   assert.deepEqual(S.transformation(doc, gone).map((x) => [x.kind, x.concept]), [['removed', 'bounded_context'], ['removed', 'relation']]);
 });
+
+test('withdrawing a drafted creation takes what is drafted under it', () => {
+  const v = { key: S.key('c', 'value_object', '', 'Money'), action: 'define', context: 'c', concept: 'value_object', owner: '', name: 'Money', change: { definition: 'An amount.' }, created: true };
+  const inv = { key: S.key('c', 'invariant', 'Money', 'positive'), action: 'define', context: 'c', concept: 'invariant', owner: 'Money', name: 'positive', change: { statement: 'Money is positive.' }, created: true };
+  const other = { key: S.key('c', 'invariant', 'Price', 'positive'), action: 'define', context: 'c', concept: 'invariant', owner: 'Price', name: 'positive', change: { statement: 'A price is positive.' }, created: true };
+  const remove = { key: v.key, action: 'remove', context: 'c', concept: 'value_object', owner: '', name: 'Money' };
+  assert.deepEqual(S.drafted([v, inv, other], remove).map((d) => d.key), [other.key], 'removing the drafted owner takes its invariant, not another owner\'s');
+  assert.deepEqual(S.withoutDraft([v, inv, other], v.key).map((d) => d.key), [other.key], 'discarding it does too');
+  const recorded = Object.assign({}, v, { created: false });
+  assert.deepEqual(S.withoutDraft([recorded, inv], v.key).map((d) => d.key), [inv.key], 'an owner already recorded keeps what is drafted under it');
+  const ctx = { key: S.key('billing', 'bounded_context', '', 'billing'), action: 'define', context: 'billing', concept: 'bounded_context', owner: '', name: 'billing', change: { definition: 'Bills.' }, created: true };
+  const agg = { key: S.key('billing', 'aggregate', '', 'Invoice'), action: 'define', context: 'billing', concept: 'aggregate', owner: '', name: 'Invoice', change: { definition: 'A bill.' }, created: true };
+  assert.deepEqual(S.withoutDraft([ctx, agg, v], ctx.key).map((d) => d.key), [v.key], 'a new context takes everything drafted in it');
+});

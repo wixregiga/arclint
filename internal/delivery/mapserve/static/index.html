@@ -270,7 +270,7 @@ Entries are edited as drafts; Publish posts each draft to /api/define or
         h += '<div class="row"><label>Owner <span class="req">*</span></label><select data-f="owner">' + (owners.length ? '' : '<option value="">none recorded</option>') +
           owners.map(function (o) { return '<option value="' + esc(o.name) + '"' + (o.name === e.owner ? ' selected' : '') + '>' + esc(o.name) + ' (' + esc(S.CONCEPT_LABEL[o.concept]) + ')</option>'; }).join('') + '</select></div>';
       }
-      h += '<div class="row"><label>' + (S.PROPERTIES[e.concept][0].name === 'statement' || e.concept === 'question' ? 'Key' : 'Name') + ' <span class="req">*</span></label><input data-f="name" value="' + esc(e.name) + '" spellcheck="false"></div>';
+      h += '<div class="row"><label>' + (S.PROPERTIES[e.concept][0].name === 'statement' || e.concept === 'question' ? 'Key' : 'Name') + ' <span class="req">*</span></label><input data-f="name" value="' + esc('name' in e.values ? e.values.name : e.name) + '" spellcheck="false"></div>';
     }
     S.form(e.concept, e.properties).forEach(function (f) {
       var v = e.values && f.name in e.values ? e.values[f.name] : f.value;
@@ -296,11 +296,19 @@ Entries are edited as drafts; Publish posts each draft to /api/define or
       h += '<div class="field"><label>' + esc(f.field) + '</label><span>' + (before ? '<s>' + esc(before) + '</s> ' : '') + (after ? '<ins>' + esc(after) + '</ins>' : '') + '</span></div>';
     });
     var d = draft ? S.draftOf(st.drafts, t.key) : null;
+    if (t.unplaced) h += '<div class="note err">Nothing records ' + esc(t.owner || t.context) + ' for this draft to sit under; discard it, or draft that first.</div>';
     if (d && d.error) h += '<div class="note err">' + esc(d.error) + '</div>';
     return h + '</div>';
   }
   function renderChanges() {
     var drafts = st.draftChanges = S.transformation(st.recorded, st.doc);
+    /* A draft the preview cannot place (its owner is neither recorded nor
+       drafted) still gets a row, so it can be seen and discarded. */
+    var placed = {};
+    drafts.forEach(function (t) { placed[t.key] = true; });
+    st.drafts.forEach(function (d) {
+      if (!placed[d.key]) drafts.push({ key: d.key, context: d.context, concept: d.concept, owner: d.owner, name: d.name, kind: 'not placed', fields: [], unplaced: true });
+    });
     var proposed = st.accepted ? S.transformation(st.accepted, st.recorded) : [];
     var h = '<div class="sec"><h4>Drafts <span>(' + drafts.length + ', not yet in ' + esc(st.recorded.source || 'the domain file') + ')</span></h4>' +
       (drafts.length ? drafts.map(function (t, i) { return changeHTML(t, i); }).join('') : '<div class="note">Edit an entry, or add one, to draft a change.</div>') + '</div>';
@@ -477,6 +485,11 @@ Entries are edited as drafts; Publish posts each draft to /api/define or
       case 'save': return saveDraft();
       case 'cancel': st.edit = null; return render();
     }
+  });
+  /* What is typed in the form is kept as it is typed, so a render that
+     rebuilds the inspector (a resize, a publish) never loses it. */
+  document.addEventListener('input', function (e) {
+    if (st.edit && e.target.dataset && e.target.dataset.f && e.target.closest('#inspector')) st.edit.values[e.target.dataset.f] = e.target.value;
   });
   document.addEventListener('change', function (e) {
     if (st.edit && !st.edit.properties && (e.target.dataset.f === 'concept' || e.target.dataset.f === 'owner')) {
