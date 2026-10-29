@@ -1,7 +1,6 @@
 package application
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -11,6 +10,8 @@ import (
 
 const (
 	domainRelation    = "relation"
+	domainProject     = "project"
+	domainName        = "name"
 	domainDescription = "description"
 )
 
@@ -27,12 +28,9 @@ type DefineRelationRequest struct {
 // ExecuteRelation records the context map through the same repository
 // as definitions. The language constructor enforces the map's constraints.
 func (uc DefineDomainDefinition) ExecuteRelation(req DefineRelationRequest) (DomainDefineResult, error) {
-	lang, found, err := uc.knowledge.RecordedLanguage()
+	lang, _, err := recordedLanguage(uc.knowledge, uc.directory, "")
 	if err != nil {
-		return DomainDefineResult{}, fmt.Errorf("load domain model: %w", err)
-	}
-	if !found {
-		lang = vocab.UbiquitousLanguage{Project: uc.project}
+		return DomainDefineResult{}, err
 	}
 	from, to := strings.TrimSpace(req.From), strings.TrimSpace(req.To)
 	relation, exists := lang.Relation(from, to)
@@ -85,47 +83,4 @@ func (uc DefineDomainDefinition) ExecuteRelation(req DefineRelationRequest) (Dom
 		return DomainDefineResult{}, fmt.Errorf("save domain model: %w", err)
 	}
 	return out, nil
-}
-
-// ExecuteDescription records the project's top-level description. A
-// description over its WordLimit is refused as the recorded language
-// refuses it, never as a usage error.
-func (uc DefineDomainDefinition) ExecuteDescription(description string) (DomainDefineResult, error) {
-	lang, found, err := uc.knowledge.RecordedLanguage()
-	if err != nil {
-		return DomainDefineResult{}, fmt.Errorf("load domain model: %w", err)
-	}
-	if !found {
-		lang = vocab.UbiquitousLanguage{Project: uc.project}
-	}
-	description = strings.TrimSpace(description)
-	out := DomainDefineResult{Target: domainDescription, Name: lang.Project, Outcome: vocab.OutcomeUnchanged}
-	// Describe judges the description before an unchanged one returns,
-	// so a description already over its limit is refused when written
-	// again, as an entry's definition is.
-	next, err := lang.Describe(description)
-	if err != nil {
-		return DomainDefineResult{}, domainDescriptionError(err)
-	}
-	if description == lang.Description {
-		return out, nil
-	}
-	out.Outcome = vocab.OutcomeUpdated
-	out.Changed = []string{domainDescription}
-	out.Values = map[string]string{domainDescription: description}
-	if err := uc.knowledge.Record(next); err != nil {
-		return DomainDefineResult{}, fmt.Errorf("save domain model: %w", err)
-	}
-	return out, nil
-}
-
-// domainDescriptionError classifies a refused description: over its
-// WordLimit, the recorded language refuses it; otherwise the request
-// is unusable as spelled.
-func domainDescriptionError(err error) error {
-	var over vocab.OverlongText
-	if errors.As(err, &over) {
-		return err
-	}
-	return fmt.Errorf("%w: %w", ErrDomainUsage, err)
 }

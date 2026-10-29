@@ -232,10 +232,9 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	// A model initialized or first defined here is named for the
-	// repository directory until the project records its own name.
-	project := filepath.Base(root)
-	initDomain, err := application.NewInitDomain(knowledge, project)
+	// A model initialized or first defined here is filed under the
+	// Project of the directory holding the ruleset.
+	initDomain, err := application.NewInitDomain(knowledge, root)
 	if err != nil {
 		return configError(err)
 	}
@@ -258,7 +257,7 @@ func run(args []string) int {
 		return configError(err)
 	}
 	showDomainDefinition = showDomainDefinition.WithChecks(repository, assess)
-	defineDomainDefinition, err := application.NewDefineDomainDefinition(knowledge, project)
+	defineDomainDefinition, err := application.NewDefineDomainDefinition(knowledge, root)
 	if err != nil {
 		return configError(err)
 	}

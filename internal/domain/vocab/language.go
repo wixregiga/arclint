@@ -55,6 +55,18 @@ func NewUbiquitousLanguage(project, description string, contexts []BoundedContex
 	return lang, nil
 }
 
+// Rename returns the language filed under another project name; the
+// receiver is untouched.
+func (l UbiquitousLanguage) Rename(project string) (UbiquitousLanguage, error) {
+	next, err := NewUbiquitousLanguage(project, l.Description, l.Contexts, l.Relations)
+	if err != nil {
+		return UbiquitousLanguage{}, err
+	}
+	next.Recording = l.Recording
+	next.DescriptionLine = l.DescriptionLine
+	return next, nil
+}
+
 // Empty reports a language that records nothing: no contexts and no
 // relations. A project name alone is not a recorded domain, and neither
 // is the DomainRecording a language would be written in.

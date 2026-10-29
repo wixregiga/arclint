@@ -47,11 +47,11 @@ IMPORTANT: work in this order on every change.
 
 ### The recorded domain
 
-6 contexts, 1 aggregates, 45 value objects, 60 invariants.
+6 contexts, 1 aggregates, 46 value objects, 61 invariants.
 
 - **agent**: value objects Activity, Guidance, Progress; services WorkflowGuide
 - **vocabulary**: value objects DomainRecording, WordLimit, MetaModel
-- **rule**: aggregates Rule (Zone, Pattern); value objects RuleID, ZoneName, Rationale, Constraint, Scope, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec, DomainFile, Assurance, RuleTest, TimeLimit
+- **rule**: aggregates Rule (Zone, Pattern); value objects RuleID, ZoneName, Rationale, Constraint, Scope, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec, DomainFile, Assurance, RuleTest, TimeLimit, Project
 - **adoption**: value objects Binding, Override, Disablement, Exclusion, Suppression, Installation
 - **conformance**: value objects ContractCoverage, DependencyImport, Facts, Violation, ExtensionFailure, NearLimit, TermUse, UndeterminedUse
 - **distribution**: value objects Catalog, Digest, Index, Manifest, PatternFile, PatternSource, Registry, Selection, VendoredPattern

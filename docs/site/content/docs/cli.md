@@ -22,7 +22,7 @@ weight = 6
 | `arclint domain show <name>` | show one domain definition by its name, key, or alias, with the code enforcing each invariant and assertion it records and its status from the current check; when several entries match, list the command that shows each |
 | `arclint domain show <type> <name>` | show one domain definition by singular type and canonical name |
 | `arclint domain explain [type]` | explain ArcLint's supported domain concepts |
-| `arclint domain define <type> <name>` | create or update a domain definition; `define relation --from --to --kind` records a context pair and `define description --description` records the project description, both without a name argument; `--guided` starts interactive authoring |
+| `arclint domain define <type> <name>` | create or update a domain definition; `define relation --from --to --kind` records a context pair without a name argument, and `define project [<name>] [--description]` renames the project or sets its description; `--guided` starts interactive authoring |
 | `arclint domain remove <type> <name>` | remove a domain definition (`rm` alias), or a relation with `remove relation --from --to`; never touches source files |
 | `arclint domain schema` | print the JSON Schema accepted for a YAML domain file; `--write` puts it at `.arclint/schemas/domain.arclint.schema.json` (or under `--dir`) so the file's modeline can name a local copy |
 | `arclint domain export <file>` | translate the project's domain into another file, YAML (`.yaml`, `.yml`) or CML (`.cml`) by its extension; read it back and fail unless it records the same language; leave the project's domain file and `rules.arclint.yaml` alone; edit a target that already records a language in place, keeping what arclint does not model |
@@ -504,13 +504,13 @@ context's name narrows that search when the repository declares a
 recorded term more than once. Recording a context turns on the
 [built-in rules](/docs/contracts/).
 
-Record a context-map relation and the project's top-level description through
+Record a context-map relation and the project's name and description through
 the same validated commands:
 
 ```sh
 arclint domain define relation --from catalog --to billing --kind conformist \
   --description "Billing uses the catalog language."
-arclint domain define description --description "Issuing and paying invoices."
+arclint domain define project invoicing --description "Issuing and paying invoices."
 arclint domain remove relation --from catalog --to billing
 ```
 
@@ -520,10 +520,13 @@ context-relation kinds. An existing pair can change its direction, kind, or
 optional `--description`; omitted properties stay recorded, and passing an
 empty description clears it. Removal accepts either direction. The language
 constructors reject missing contexts, self-relations, and unpublished kinds
-with usage errors naming the rule. `define description --description <text>`
-sets the project description, and an empty text clears it. Shell completion
-suggests `relation` and `description`, recorded contexts for `--from` and
-`--to`, and published kinds for `--kind`.
+with usage errors naming the rule. `define project <name>` renames the
+project: only the name the domain file records changes, and no file moves.
+`--description <text>` sets the project description, and an empty text clears
+it; a name may not be empty. Without a domain file, `define project` creates
+it under the name given, or the repository directory's name. Shell completion
+suggests `relation` and `project`, recorded contexts for `--from` and `--to`,
+and published kinds for `--kind`.
 
 Fresh YAML files get a YAML language-server modeline pointing at
 `.arclint/schemas/domain.arclint.schema.json` when that path exists

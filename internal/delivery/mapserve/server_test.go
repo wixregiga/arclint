@@ -102,7 +102,7 @@ func composed(t *testing.T, root string) mapserve.Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	define, err := application.NewDefineDomainDefinition(knowledge, filepath.Base(root))
+	define, err := application.NewDefineDomainDefinition(knowledge, root)
 	if err != nil {
 		t.Fatal(err)
 	}
