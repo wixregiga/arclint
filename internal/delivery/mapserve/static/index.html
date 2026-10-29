@@ -381,6 +381,7 @@ Entries are edited as drafts; Publish posts each draft to /api/define or
     render();
   }
   function beginAdd(concept) {
+    st.view = 'map';
     st.edit = { context: st.context ? st.context.name : '', concept: concept, owner: '', name: '', properties: null, values: {} };
     render();
   }
@@ -446,10 +447,14 @@ Entries are edited as drafts; Publish posts each draft to /api/define or
     if (!st.drafts.length || st.publishing) return;
     st.publishing = true;
     st.message = 'Publishing…'; render();
-    var queue = st.drafts.slice(), results = [];
+    /* The queue holds keys: each is sent as drafted when its turn comes,
+       so a draft discarded or edited while an earlier one publishes is
+       skipped or sent as it now stands. */
+    var queue = st.drafts.map(function (d) { return d.key; }), results = [];
     function next() {
       if (!queue.length) return done();
-      var d = queue.shift();
+      var d = S.draftOf(st.drafts, queue.shift());
+      if (!d) return next();
       return post(d.action === 'remove' ? '/api/remove' : '/api/define', S.requestOf(d)).then(function (result) {
         results.push({ text: describe(d, result) });
         st.drafts = S.published(st.drafts, d);
