@@ -22,6 +22,7 @@ import (
 	"github.com/wixregiga/arclint/internal/delivery/cli/reportfactory"
 	"github.com/wixregiga/arclint/internal/delivery/mapserve"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
+	cmlvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/cml"
 	gitvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/git"
 	yamlvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/yaml"
 )
@@ -116,11 +117,15 @@ func composed(t *testing.T, root string) mapserve.Server {
 	}
 	server := mapserve.Server{
 		Reports: mapserve.Reports{
-			Overview: func(w io.Writer, o application.DomainOverview) error { return renderer.Render(w, cli.DomainOverviewReport{Overview: o}) },
+			Overview: func(w io.Writer, o application.DomainOverview) error {
+				return renderer.Render(w, cli.DomainOverviewReport{Overview: o})
+			},
 			Defined: func(w io.Writer, r application.DomainDefineResult, req application.DefineDomainRequest) error {
 				return renderer.Render(w, cli.NewDomainDefineReport(r, req))
 			},
-			Removed: func(w io.Writer, r application.DomainRemoveResult) error { return renderer.Render(w, cli.DomainRemoveReport{Result: r}) },
+			Removed: func(w io.Writer, r application.DomainRemoveResult) error {
+				return renderer.Render(w, cli.DomainRemoveReport{Result: r})
+			},
 		},
 		Overview: overview,
 		Define:   define,
@@ -488,6 +493,13 @@ func TestEditsAtOnceAreAllRecorded(t *testing.T) {
 	const edits = 12
 	var wg sync.WaitGroup
 	codes := make([]int, edits)
+	projectCode := 0
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		projectCode = post(t, h, mapserve.ProjectPath, "application/json", `{"description":"Concurrent project edit."}`).Code
+	}()
+
 	for i := range edits {
 		wg.Add(1)
 		go func() {
@@ -497,6 +509,11 @@ func TestEditsAtOnceAreAllRecorded(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+	current, err := composed(t, clone).Overview.Execute()
+	if err != nil || projectCode != http.StatusOK || current.Language.Description != "Concurrent project edit." {
+		t.Fatalf("concurrent project edit: status %d, overview %+v, error %v", projectCode, current, err)
+	}
+
 	var after overviewDoc
 	decode(t, get(t, h, http.MethodGet, mapserve.OverviewPath), &after)
 	recorded := map[string]bool{}
@@ -640,5 +657,95 @@ func TestStudioScriptUnderNode(t *testing.T) {
 		if !strings.Contains(string(out), want) {
 			t.Fatalf("node --test did not run every test (%q missing):\n%s", want, out)
 		}
+	}
+}
+
+func TestProjectEditsRecordingFormats(t *testing.T) {
+	for _, format := range []string{"yaml", "cml"} {
+		t.Run(format, func(t *testing.T) {
+			root := t.TempDir()
+			recording, err := vocab.NewDomainRecording("domain.arclint." + format)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var knowledge vocab.Repository
+			if format == "yaml" {
+				knowledge, err = yamlvocab.NewRepository(root, recording)
+			} else {
+				knowledge, err = cmlvocab.NewRepository(root, recording)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := composed(t, root)
+			server.Overview, err = application.NewGetDomainOverview(knowledge)
+			if err != nil {
+				t.Fatal(err)
+			}
+			server.Define, err = application.NewDefineDomainDefinition(knowledge, root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			server.Remove, err = application.NewRemoveDomainDefinition(knowledge)
+			if err != nil {
+				t.Fatal(err)
+			}
+			h, err := server.Handler()
+			if err != nil {
+				t.Fatal(err)
+			}
+			initial, err := server.Overview.Execute()
+			if err != nil || initial.Found || initial.Source != recording.Path() {
+				t.Fatalf("initial = %+v, %v", initial, err)
+			}
+			steps := []struct{ body, name, description, outcome string }{
+				{`{"name":"clinic","description":"Booking visits."}`, "clinic", "Booking visits.", "created"},
+				{`{"name":"practice"}`, "practice", "Booking visits.", "updated"},
+				{`{"description":"Arranging care."}`, "practice", "Arranging care.", "updated"},
+				{`{"description":""}`, "practice", "", "updated"},
+				{`{"name":"practice"}`, "practice", "", "unchanged"},
+			}
+			for _, step := range steps {
+				rec := post(t, h, mapserve.ProjectPath, "application/json", step.body)
+				var result struct {
+					Result, Type, Name string
+					Changed            []string
+					Values             map[string]string
+				}
+				decode(t, rec, &result)
+				if rec.Code != 200 || result.Result != step.outcome || result.Type != "project" || result.Name != step.name {
+					t.Fatalf("response: %d %s", rec.Code, rec.Body.String())
+				}
+				if step.outcome != "unchanged" && len(result.Changed) == 0 {
+					t.Fatal("missing changes")
+				}
+				overview, err := server.Overview.Execute()
+				if err != nil || !overview.Found || overview.Language.Project != step.name || overview.Language.Description != step.description {
+					t.Fatalf("overview = %+v, %v", overview, err)
+				}
+			}
+			path := filepath.Join(root, recording.Path())
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, refusal := range []struct {
+				body   string
+				status int
+			}{
+				{`{}`, 400}, {`{"name":""}`, 400}, {`{"name":"   "}`, 400},
+				{`{"name":"changed","description":"` + strings.Repeat("word ", 101) + `"}`, 422},
+				{`{"unknown":true}`, 400},
+			} {
+				rec := post(t, h, mapserve.ProjectPath, "application/json", refusal.body)
+				if rec.Code != refusal.status || !strings.Contains(rec.Body.String(), `"error"`) {
+					t.Fatalf("refusal: %d %s", rec.Code, rec.Body.String())
+				}
+				after, err := os.ReadFile(path)
+				if err != nil || !bytes.Equal(before, after) {
+					t.Fatalf("refusal wrote recording: %v", err)
+				}
+			}
+		})
 	}
 }

@@ -62,12 +62,6 @@ func mapServeRunner(overview application.GetDomainOverview, server MapServer, re
 		if err != nil {
 			return domainError(err)
 		}
-		if !result.Found {
-			if err := render.Render(ctx.Stdout, DomainMissingReport{Source: result.Source}); err != nil {
-				return fmt.Errorf("write output: %w", err)
-			}
-			return &ExitError{Code: ExitViolations, Message: "map serve: no recorded Ubiquitous Language at " + result.Source}
-		}
 		// A report that cannot be written is the command's own failure,
 		// kept apart from the server's, which is a configuration error.
 		var writeErr error
@@ -116,6 +110,9 @@ remove each, and shows what each one changed; a draft the language
 refuses stays a draft with the reason. What happens to the branch after
 that is git's: commit and propose the change as the project does.
 Without a remote default branch the page shows the recording alone.
+
+If the domain recording is missing, the page opens so you can begin the
+language. An existing malformed recording must be corrected before serving.
 
 With no path, the project is the one whose rules.arclint.yaml is found
 upward from the working directory, as every other command finds it;

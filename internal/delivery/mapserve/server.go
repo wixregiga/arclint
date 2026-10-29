@@ -33,6 +33,7 @@ const (
 	AcceptedPath = "/api/accepted"
 	DefinePath   = "/api/define"
 	RemovePath   = "/api/remove"
+	ProjectPath  = "/api/project"
 )
 
 // requestLimit bounds one edit's body; a recorded text is at most a few
@@ -96,7 +97,7 @@ func (s Server) Serve(address string, listening func(url string) error) error {
 // Handler answers GET / with the page, GET /studio.js with its script,
 // GET /api/overview with the overview the domain file records now, GET
 // /api/accepted with the one the default branch records, POST
-// /api/define and POST /api/remove with one edit each through the
+// /api/project, POST /api/define and POST /api/remove with one edit each through the
 // define and remove use cases, one edit at a time; any other request,
 // and any request addressed by another name or sent by another page, is
 // refused.
@@ -115,6 +116,7 @@ func (s Server) Handler() (http.Handler, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+OverviewPath, s.overview)
 	mux.HandleFunc("GET "+AcceptedPath, s.accepted)
+	mux.HandleFunc("POST "+ProjectPath, oneAtATime(&edits, s.project))
 	mux.HandleFunc("POST "+DefinePath, oneAtATime(&edits, s.define))
 	mux.HandleFunc("POST "+RemovePath, oneAtATime(&edits, s.remove))
 	mux.HandleFunc("GET "+ScriptPath, serveBytes("text/javascript; charset=utf-8", studioScript))
@@ -291,6 +293,37 @@ func (s Server) define(w http.ResponseWriter, r *http.Request) {
 	}
 	var document bytes.Buffer
 	if err := s.Reports.Defined(&document, result, req); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("render define result: %w", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, document.Bytes())
+}
+
+// projectRequest preserves the distinction between omitted and cleared fields.
+type projectRequest struct {
+	Name        *string `json:"name"`
+	Description *string `json:"description"`
+}
+
+func (s Server) project(w http.ResponseWriter, r *http.Request) {
+	var body projectRequest
+	if !readJSON(w, r, &body) {
+		return
+	}
+	req := application.DefineProjectRequest{}
+	if body.Name != nil {
+		req.SetName, req.Name = true, *body.Name
+	}
+	if body.Description != nil {
+		req.SetDescription, req.Description = true, *body.Description
+	}
+	result, err := s.Define.ExecuteProject(req)
+	if err != nil {
+		writeError(w, refusalStatus(err), err)
+		return
+	}
+	var document bytes.Buffer
+	if err := s.Reports.Defined(&document, result, application.DefineDomainRequest{Concept: "project", Name: result.Name}); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Errorf("render define result: %w", err))
 		return
 	}
