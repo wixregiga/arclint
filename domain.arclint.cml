@@ -110,6 +110,7 @@ BoundedContext rule {
       def void ensureZoneHasAPath();
       "A Pattern lists its Zones without paths, and every Rule the Pattern distributes names only Zones the Pattern lists."
       def void ensurePatternListsZonesWithoutPaths();
+      Repository RuleRepository
     }
 
     "A named group of folders and files an architecture speaks about, such as domain or delivery. A Zone keeps its ZoneName while the paths that belong to it change: a Rule says \"on: domain\" and never repeats a folder. A Pattern lists its Zones with descriptions and no paths; a repository ruleset gives every Zone its paths, either directly or through a Binding. Recorded inside the Rule aggregate because rules.arclint.yaml makes Rule the sole aggregate and Zone lives in its home."
@@ -188,6 +189,12 @@ BoundedContext rule {
     ValueObject TimeLimit {
       "A TimeLimit is a positive duration; zero or a negative duration is rejected at load."
       def void ensurePositive();
+    }
+
+    "The repository arclint governs: the directory holding the ruleset, and the name its domain file records, or that directory's name when it records none. Renaming a Project changes its name alone; its files stay where they are."
+    ValueObject Project {
+      "A Project always has a name."
+      def void ensureNamed() hint = "arclint.verified_by=internal/domain/rule/project_test.go:TestProjectIsNeverNameless";
     }
   }
   // @arclint question "pattern-holds-rules" "In code a Pattern carries the Rules it distributes, which reads like a boundary of its own, while rules.arclint.yaml keeps Rule the sole aggregate and forbids a pattern home. Is Pattern a member of the Rule aggregate, as recorded here, or an aggregate whose members are Rules?"

@@ -39,7 +39,7 @@ func TestLibrarianCommandsRecordBoxofficeLanguageInBothFormats(t *testing.T) {
 				mustRunDomain(t, work, args(text)...)
 			}
 			within(vocab.TextProjectDescription, fmt.Sprintf("project %q", lang.Project), lang.Description, func(text string) []string {
-				return []string{"domain", "define", "description", "--description", text}
+				return []string{"domain", "define", "project", "--description", text}
 			})
 			for _, ctx := range lang.Contexts {
 				within(vocab.TextContextDefinition, fmt.Sprintf("context %q", ctx.Name), ctx.Definition, func(text string) []string {

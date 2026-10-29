@@ -42,10 +42,11 @@ func assertRecordedLanguage(t *testing.T, repo vocab.Repository, want vocab.Ubiq
 	}
 }
 
-func TestDomainRelationAndDescriptionThroughRecordingRepositories(t *testing.T) {
+func TestDomainRelationAndProjectThroughRecordingRepositories(t *testing.T) {
 	for _, format := range []string{"yaml", "cml"} {
 		t.Run(format, func(t *testing.T) {
-			repo := definitionRepository(t, t.TempDir(), format)
+			dir := t.TempDir()
+			repo := definitionRepository(t, dir, format)
 			lang, err := vocab.NewUbiquitousLanguage("shop", "", []vocab.BoundedContext{
 				{Name: "catalog", Definition: "What can be purchased."},
 				{Name: "ordering", Definition: "Taking and fulfilling orders."},
@@ -56,7 +57,7 @@ func TestDomainRelationAndDescriptionThroughRecordingRepositories(t *testing.T) 
 			if err := repo.Record(lang); err != nil {
 				t.Fatal(err)
 			}
-			define, err := application.NewDefineDomainDefinition(repo, "shop")
+			define, err := application.NewDefineDomainDefinition(repo, dir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -82,15 +83,24 @@ func TestDomainRelationAndDescriptionThroughRecordingRepositories(t *testing.T) 
 			lang.Relations[0].From, lang.Relations[0].To, lang.Relations[0].Description = "ordering", "catalog", ""
 			assertRecordedLanguage(t, repo, lang)
 			for _, description := range []string{"A shop's catalog and purchases.", ""} {
-				if _, err := define.ExecuteDescription(description); err != nil {
+				req := application.DefineProjectRequest{SetDescription: true, Description: description}
+				if _, err := define.ExecuteProject(req); err != nil {
 					t.Fatal(err)
 				}
 				lang.Description = description
 				assertRecordedLanguage(t, repo, lang)
-				out, err := define.ExecuteDescription(description)
+				out, err := define.ExecuteProject(req)
 				if err != nil || out.Outcome != vocab.OutcomeUnchanged {
 					t.Fatalf("repeat description: %+v %v", out, err)
 				}
+			}
+			for _, name := range []string{"boutique", "shop"} {
+				out, err := define.ExecuteProject(application.DefineProjectRequest{SetName: true, Name: name})
+				if err != nil || out.Outcome != vocab.OutcomeUpdated || out.Name != name {
+					t.Fatalf("rename to %s: %+v %v", name, out, err)
+				}
+				lang.Project = name
+				assertRecordedLanguage(t, repo, lang)
 			}
 			for _, invalid := range []struct {
 				from, to, kind, rule string
@@ -133,11 +143,12 @@ func TestDomainRelationEditsPreserveBoxofficeLanguage(t *testing.T) {
 	}
 	for _, format := range []string{"yaml", "cml"} {
 		t.Run(format, func(t *testing.T) {
-			repo := definitionRepository(t, t.TempDir(), format)
+			dir := t.TempDir()
+			repo := definitionRepository(t, dir, format)
 			if err := repo.Record(lang); err != nil {
 				t.Fatal(err)
 			}
-			define, err := application.NewDefineDomainDefinition(repo, lang.Project)
+			define, err := application.NewDefineDomainDefinition(repo, dir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -145,7 +156,7 @@ func TestDomainRelationEditsPreserveBoxofficeLanguage(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err := define.ExecuteDescription(lang.Description); err != nil {
+			if _, err := define.ExecuteProject(application.DefineProjectRequest{SetDescription: true, Description: lang.Description}); err != nil {
 				t.Fatal(err)
 			}
 			relation := lang.Relations[len(lang.Relations)-1]

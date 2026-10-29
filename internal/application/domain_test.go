@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/wixregiga/arclint/internal/application"
+	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
@@ -42,6 +43,8 @@ func (m *memoryKnowledge) Record(lang vocab.UbiquitousLanguage) error {
 
 const (
 	testProject = "shop"
+	// testDirectory holds the ruleset of the testProject repository.
+	testDirectory = "/repos/" + testProject
 	testContext = "ordering"
 )
 
@@ -86,7 +89,7 @@ func set(definition string) vocab.Change {
 func TestInitDomainCreatesMissingFile(t *testing.T) {
 	t.Parallel()
 	repo := &memoryKnowledge{}
-	uc, err := application.NewInitDomain(repo, testProject)
+	uc, err := application.NewInitDomain(repo, testDirectory)
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
@@ -105,7 +108,7 @@ func TestInitDomainCreatesMissingFile(t *testing.T) {
 func TestInitDomainNamesTheProjectItIsToldTo(t *testing.T) {
 	t.Parallel()
 	repo := &memoryKnowledge{}
-	uc, err := application.NewInitDomain(repo, testProject)
+	uc, err := application.NewInitDomain(repo, testDirectory)
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
@@ -121,7 +124,7 @@ func TestInitDomainNamesTheProjectItIsToldTo(t *testing.T) {
 func TestInitDomainLeavesExistingFileUnchanged(t *testing.T) {
 	t.Parallel()
 	repo := recorded(t, orderContext(orderAggregate())...)
-	uc, err := application.NewInitDomain(repo, "other")
+	uc, err := application.NewInitDomain(repo, "/repos/other")
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
@@ -149,7 +152,7 @@ func TestInitDomainContainsRepositoryErrors(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			uc, err := application.NewInitDomain(tc.repo, testProject)
+			uc, err := application.NewInitDomain(tc.repo, testDirectory)
 			if err != nil {
 				t.Fatalf("construct: %v", err)
 			}
@@ -157,6 +160,68 @@ func TestInitDomainContainsRepositoryErrors(t *testing.T) {
 				t.Fatalf("error = %v, want %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// A directory with no name of its own names no Project, so init and a
+// first define refuse without writing, and succeed once a name is given.
+func TestFreshRecordingRefusesANamelessDirectory(t *testing.T) {
+	t.Parallel()
+	repo := &memoryKnowledge{}
+	initialize, err := application.NewInitDomain(repo, "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	define, err := application.NewDefineDomainDefinition(repo, "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, run := range map[string]func() error{
+		"init":        func() error { _, err := initialize.Execute(""); return err },
+		"define":      func() error { _, err := define.Execute(application.DefineDomainRequest{Concept: "bounded_context", Name: testContext, Change: set("Orders.")}); return err },
+		"description": func() error { _, err := define.ExecuteProject(application.DefineProjectRequest{SetDescription: true, Description: "A shop."}); return err },
+	} {
+		if err := run(); !errors.Is(err, rule.ErrProjectNameless) || !errors.Is(err, application.ErrDomainUsage) {
+			t.Errorf("%s: error = %v, want a nameless project usage error", name, err)
+		}
+	}
+	if repo.saves != 0 {
+		t.Fatalf("a refusal wrote the recording %d times", repo.saves)
+	}
+	out, err := define.ExecuteProject(application.DefineProjectRequest{SetName: true, Name: testProject})
+	if err != nil || out.Outcome != vocab.OutcomeCreated || repo.lang.Project != testProject {
+		t.Fatalf("named define = %+v, %v; recorded %q", out, err, repo.lang.Project)
+	}
+}
+
+func TestDefineProjectRenamesAndDescribes(t *testing.T) {
+	t.Parallel()
+	repo := recorded(t, orderContext(orderAggregate())...)
+	uc, err := application.NewDefineDomainDefinition(repo, testDirectory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := uc.ExecuteProject(application.DefineProjectRequest{SetName: true, Name: " boutique ", SetDescription: true, Description: "A shop."})
+	if err != nil || out.Outcome != vocab.OutcomeUpdated || out.Name != "boutique" || strings.Join(out.Changed, ",") != "name,description" {
+		t.Fatalf("rename and describe = %+v, %v", out, err)
+	}
+	if repo.lang.Project != "boutique" || repo.lang.Description != "A shop." || repo.saves != 1 {
+		t.Fatalf("recorded %+v after %d saves", repo.lang, repo.saves)
+	}
+	if _, ok := repo.lang.Contexts[0].Aggregate("Order"); !ok {
+		t.Fatal("a rename lost a recorded entry")
+	}
+	out, err = uc.ExecuteProject(application.DefineProjectRequest{SetName: true, Name: "boutique"})
+	if err != nil || out.Outcome != vocab.OutcomeUnchanged || repo.saves != 1 {
+		t.Fatalf("repeat = %+v, %v after %d saves", out, err, repo.saves)
+	}
+	for _, req := range []application.DefineProjectRequest{{}, {SetName: true, Name: " "}} {
+		if _, err := uc.ExecuteProject(req); !errors.Is(err, application.ErrDomainUsage) {
+			t.Errorf("ExecuteProject(%+v) error = %v, want ErrDomainUsage", req, err)
+		}
+	}
+	if repo.saves != 1 || repo.lang.Project != "boutique" {
+		t.Fatalf("a refusal changed the recording: %q after %d saves", repo.lang.Project, repo.saves)
 	}
 }
 
@@ -395,7 +460,7 @@ func TestShowRemoveAmbiguousAcrossContexts(t *testing.T) {
 func TestDefineDomainDefinitionRecordsAFreshProject(t *testing.T) {
 	t.Parallel()
 	repo := &memoryKnowledge{}
-	uc, err := application.NewDefineDomainDefinition(repo, testProject)
+	uc, err := application.NewDefineDomainDefinition(repo, testDirectory)
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
@@ -421,7 +486,7 @@ func TestDefineDomainDefinitionRecordsAFreshProject(t *testing.T) {
 func TestDefineDomainDefinitionCreatesAndSaves(t *testing.T) {
 	t.Parallel()
 	repo := recorded(t, orderContext()...)
-	uc, err := application.NewDefineDomainDefinition(repo, testProject)
+	uc, err := application.NewDefineDomainDefinition(repo, testDirectory)
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
@@ -455,7 +520,7 @@ func TestDefineDomainDefinitionCreatesAndSaves(t *testing.T) {
 func TestDefineDomainDefinitionNestsUnderTheOwner(t *testing.T) {
 	t.Parallel()
 	repo := recorded(t, orderContext(orderAggregate())...)
-	uc, err := application.NewDefineDomainDefinition(repo, testProject)
+	uc, err := application.NewDefineDomainDefinition(repo, testDirectory)
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
@@ -507,7 +572,7 @@ func TestDefineDomainDefinitionNestsUnderTheOwner(t *testing.T) {
 func TestDefineDomainDefinitionUpdatesInPlace(t *testing.T) {
 	t.Parallel()
 	repo := recorded(t, orderContext(orderAggregate())...)
-	uc, err := application.NewDefineDomainDefinition(repo, testProject)
+	uc, err := application.NewDefineDomainDefinition(repo, testDirectory)
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
@@ -534,7 +599,7 @@ func TestDefineDomainDefinitionRequiresContextWhenAmbiguous(t *testing.T) {
 		vocab.BoundedContext{Name: "a", Definition: "a"},
 		vocab.BoundedContext{Name: "b", Definition: "b"},
 	)
-	uc, err := application.NewDefineDomainDefinition(repo, testProject)
+	uc, err := application.NewDefineDomainDefinition(repo, testDirectory)
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
@@ -551,7 +616,7 @@ func TestDefineDomainDefinitionRequiresContextWhenAmbiguous(t *testing.T) {
 func TestDefineDomainDefinitionNeedsARecordedContext(t *testing.T) {
 	t.Parallel()
 	repo := &memoryKnowledge{}
-	uc, err := application.NewDefineDomainDefinition(repo, testProject)
+	uc, err := application.NewDefineDomainDefinition(repo, testDirectory)
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
@@ -580,7 +645,7 @@ func TestDefineDomainDefinitionNeedsARecordedContext(t *testing.T) {
 func TestDefineDomainDefinitionUnchangedNoSave(t *testing.T) {
 	t.Parallel()
 	repo := recorded(t, orderContext(orderAggregate())...)
-	uc, err := application.NewDefineDomainDefinition(repo, testProject)
+	uc, err := application.NewDefineDomainDefinition(repo, testDirectory)
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
@@ -602,7 +667,7 @@ func TestDefineDomainDefinitionUnchangedNoSave(t *testing.T) {
 
 func TestDefineDomainDefinitionUsageErrors(t *testing.T) {
 	t.Parallel()
-	uc, err := application.NewDefineDomainDefinition(recorded(t, orderContext(orderAggregate())...), testProject)
+	uc, err := application.NewDefineDomainDefinition(recorded(t, orderContext(orderAggregate())...), testDirectory)
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
@@ -633,7 +698,7 @@ func TestDefineDomainDefinitionUsageErrors(t *testing.T) {
 func TestDefineDomainDefinitionRefusalNamesTheInvariant(t *testing.T) {
 	t.Parallel()
 	repo := recorded(t, orderContext(orderAggregate())...)
-	uc, err := application.NewDefineDomainDefinition(repo, testProject)
+	uc, err := application.NewDefineDomainDefinition(repo, testDirectory)
 	if err != nil {
 		t.Fatalf("construct: %v", err)
 	}
@@ -748,11 +813,11 @@ func TestRemoveDomainDefinitionUsageError(t *testing.T) {
 
 func TestDomainConstructorsRejectNil(t *testing.T) {
 	t.Parallel()
-	if _, err := application.NewInitDomain(nil, testProject); err == nil {
+	if _, err := application.NewInitDomain(nil, testDirectory); err == nil {
 		t.Fatal("NewInitDomain(nil) accepted")
 	}
-	if _, err := application.NewInitDomain(&memoryKnowledge{}, " "); err == nil {
-		t.Fatal("NewInitDomain without a project accepted")
+	if _, err := application.NewInitDomain(&memoryKnowledge{}, ""); err == nil {
+		t.Fatal("NewInitDomain without a repository directory accepted")
 	}
 	if _, err := application.NewGetDomainOverview(nil); err == nil {
 		t.Fatal("NewGetDomainOverview(nil) accepted")
@@ -763,11 +828,11 @@ func TestDomainConstructorsRejectNil(t *testing.T) {
 	if _, err := application.NewShowDomainDefinition(nil); err == nil {
 		t.Fatal("NewShowDomainDefinition(nil) accepted")
 	}
-	if _, err := application.NewDefineDomainDefinition(nil, testProject); err == nil {
+	if _, err := application.NewDefineDomainDefinition(nil, testDirectory); err == nil {
 		t.Fatal("NewDefineDomainDefinition(nil) accepted")
 	}
 	if _, err := application.NewDefineDomainDefinition(&memoryKnowledge{}, ""); err == nil {
-		t.Fatal("NewDefineDomainDefinition without a project accepted")
+		t.Fatal("NewDefineDomainDefinition without a repository directory accepted")
 	}
 	if _, err := application.NewRemoveDomainDefinition(nil); err == nil {
 		t.Fatal("NewRemoveDomainDefinition(nil) accepted")

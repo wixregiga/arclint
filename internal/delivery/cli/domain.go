@@ -197,6 +197,8 @@ func domainError(err error) error {
 	switch {
 	case err == nil:
 		return nil
+	case errors.Is(err, rule.ErrProjectNameless):
+		return ConfigError(fmt.Errorf("%w; name it with `arclint domain init --project <name>` or `arclint domain define project <name>`", err))
 	case errors.Is(err, application.ErrDomainUsage):
 		return ConfigError(err)
 	default:
@@ -284,6 +286,7 @@ func explainRunner(render Renderer) func(Context) error {
 // command line decides which of them it takes.
 const (
 	domainRelation   = "relation"
+	domainProject    = "project"
 	flagDescription  = "description"
 	flagFrom         = "from"
 	flagTo           = "to"
@@ -399,7 +402,7 @@ func defineRunner(define application.DefineDomainDefinition, recording string, r
 			}
 			return runGuidedDefine(ctx, define, recording, render)
 		}
-		if len(ctx.Args) == 1 && (ctx.Args[0] == domainRelation || ctx.Args[0] == flagDescription) {
+		if (len(ctx.Args) == 1 && ctx.Args[0] == domainRelation) || (len(ctx.Args) >= 1 && ctx.Args[0] == domainProject) {
 			return defineRecordingRunner(ctx, define, render)
 		}
 		if err := rejectFlags(ctx, flagFrom, flagTo, flagKind, flagDescription); err != nil {
@@ -498,10 +501,13 @@ func defineRecordingRunner(ctx Context, define application.DefineDomainDefinitio
 		if err := rejectFlags(ctx, flagFrom, flagTo, flagKind); err != nil {
 			return err
 		}
-		if !ctx.Changed(flagDescription) {
-			return ConfigError(errors.New("define description requires --description <text>"))
+		req := application.DefineProjectRequest{
+			SetName: len(ctx.Args) == 2, SetDescription: ctx.Changed(flagDescription), Description: ctx.String(flagDescription),
 		}
-		result, err = define.ExecuteDescription(ctx.String(flagDescription))
+		if req.SetName {
+			req.Name = ctx.Args[1]
+		}
+		result, err = define.ExecuteProject(req)
 	}
 	if err != nil {
 		return domainError(err)
@@ -897,7 +903,7 @@ func completeEditArgs(list application.ListDomainDefinitions, define bool) func(
 		if len(args) == 0 {
 			values := []string{domainRelation}
 			if define {
-				values = append(values, flagDescription)
+				values = append(values, domainProject)
 			}
 			return append(conceptSingularCandidates(toComplete), filterCandidates(toComplete, values)...)
 		}
@@ -1051,7 +1057,8 @@ The file is created at its path from the directory holding the resolved
 ` + rule.RulesetFileName + ` with the current document version, an editor schema hint,
 and the project's name: the name of the software whose domain it records, the
 repository directory's name unless --project says otherwise. If the file
-already exists, ArcLint leaves it unchanged.`
+already exists, ArcLint leaves it unchanged; rename the project with
+arclint domain define project <name>.`
 
 const initDomainExample = `  arclint domain init
   arclint domain init --project boxoffice`
@@ -1153,9 +1160,13 @@ required ones when first recorded:
   specification    --definition
   question         --text
 
-The context map and project description have no name argument:
+The context map has no name argument, and the project takes its new name:
   relation         --from <context> --to <context> --kind <published kind>; optional --description
-  description      --description <text>
+  project          [<name>] [--description <text>]; a name, a description, or both
+
+Renaming the project changes only the name the domain file records; no file
+moves. Without a domain file, define project creates it under the name given,
+or the repository directory's when only --description is passed.
 
 A relation is identified by its context pair, in either direction. Updating it
 may change its kind or direction; omitted properties stay recorded. Every write
@@ -1209,7 +1220,7 @@ const defineExample = `  arclint domain define bounded_context ordering \
   arclint domain define relation --from catalog --to ordering --kind conformist \
     --description "Ordering uses the catalog language."
 
-  arclint domain define description --description "Taking and fulfilling purchases."
+  arclint domain define project boxoffice --description "Taking and fulfilling purchases."
 
   arclint domain define --guided`
 

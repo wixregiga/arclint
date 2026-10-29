@@ -32,7 +32,7 @@ func TestDefineRefusesTextOverItsWordLimit(t *testing.T) {
 			`value object "Money" in context "ordering": the definition has 41 words, and a definition holds at most 40. Keep what the word means`},
 		{"context", []string{"domain", "define", "bounded_context", "ordering", "--definition", wordText(61)},
 			`context "ordering": the definition has 61 words, and a definition holds at most 60. Keep what the word means`},
-		{"description", []string{"domain", "define", "description", "--description", wordText(101)},
+		{"description", []string{"domain", "define", "project", "--description", wordText(101)},
 			`the description has 101 words, and a description holds at most 100. Keep what the project is about`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -128,7 +128,7 @@ func TestDescriptionOverItsWordLimitIsJudgedWithoutContexts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stdout, stderr, code = runBin(t, root, os.Environ(), "domain", "define", "description", "--description", wordText(101))
+	stdout, stderr, code = runBin(t, root, os.Environ(), "domain", "define", "project", "--description", wordText(101))
 	if code != 1 || stdout != "" || !strings.Contains(stderr, "the description has 101 words, and a description holds at most 100") {
 		t.Fatalf("the same over-limit description again: exit %d\nstdout: %s\nstderr: %s", code, stdout, stderr)
 	}

@@ -199,6 +199,7 @@ contexts:
           pattern-lists-zones-without-paths: >-
             A Pattern lists its Zones without paths, and every Rule the Pattern
             distributes names only Zones the Pattern lists.
+        repository: RuleRepository
     value_objects:
       RuleID:
         definition: >-
@@ -340,6 +341,17 @@ contexts:
           positive: >-
             A TimeLimit is a positive duration; zero or a negative duration is
             rejected at load.
+      Project:
+        definition: >-
+          The repository arclint governs: the directory holding the ruleset, and
+          the name its domain file records, or that directory's name when it
+          records none. Renaming a Project changes its name alone; its files
+          stay where they are.
+        invariants:
+          named:
+            statement: A Project always has a name.
+            verified_by:
+              - internal/domain/rule/project_test.go:TestProjectIsNeverNameless
     questions:
       pattern-holds-rules: >-
         In code a Pattern carries the Rules it distributes, which reads like a

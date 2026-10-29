@@ -49,24 +49,23 @@ type DomainDefineResult struct {
 // Ubiquitous Language through the repository port.
 type DefineDomainDefinition struct {
 	knowledge    vocab.Repository
-	project      string
+	directory    string
 	rules        rule.Repository
 	observations ObservationSource
 }
 
 // NewDefineDomainDefinition requires the Ubiquitous Language repository
-// port and the project name a first recording is filed under when no
-// domain file exists yet: the repository directory's name by default,
-// the same default init records.
-func NewDefineDomainDefinition(knowledge vocab.Repository, project string) (DefineDomainDefinition, error) {
+// port and the directory holding the ruleset, whose Project a first
+// recording is filed under when no domain file exists yet, as init
+// files it.
+func NewDefineDomainDefinition(knowledge vocab.Repository, directory string) (DefineDomainDefinition, error) {
 	if knowledge == nil {
 		return DefineDomainDefinition{}, fmt.Errorf("define domain definition: missing knowledge repository")
 	}
-	project = strings.TrimSpace(project)
-	if project == "" {
-		return DefineDomainDefinition{}, fmt.Errorf("define domain definition: missing project name")
+	if directory == "" {
+		return DefineDomainDefinition{}, fmt.Errorf("define domain definition: missing repository directory")
 	}
-	return DefineDomainDefinition{knowledge: knowledge, project: project}, nil
+	return DefineDomainDefinition{knowledge: knowledge, directory: directory}, nil
 }
 
 // WithObservations lends rules and observations so that defining an
@@ -83,7 +82,7 @@ func (uc DefineDomainDefinition) WithObservations(rules rule.Repository, observa
 // does not record, a required property missing on first recording)
 // wraps ErrDomainUsage; a change the recorded language refuses names
 // the meta-model invariant it would break. A missing domain file is an
-// empty language named for the project; the model is saved only when
+// empty language named for the Project; the model is saved only when
 // something changed.
 func (uc DefineDomainDefinition) Execute(req DefineDomainRequest) (DomainDefineResult, error) {
 	c, err := vocab.ParseConcept(strings.TrimSpace(req.Concept))
@@ -94,12 +93,9 @@ func (uc DefineDomainDefinition) Execute(req DefineDomainRequest) (DomainDefineR
 	if name == "" {
 		return DomainDefineResult{}, fmt.Errorf("%w: %s: a name is required", ErrDomainUsage, c)
 	}
-	lang, found, err := uc.knowledge.RecordedLanguage()
+	lang, _, err := recordedLanguage(uc.knowledge, uc.directory, "")
 	if err != nil {
-		return DomainDefineResult{}, fmt.Errorf("load domain model: %w", err)
-	}
-	if !found {
-		lang = vocab.UbiquitousLanguage{Project: uc.project}
+		return DomainDefineResult{}, err
 	}
 
 	at := vocab.Locator{Owner: strings.TrimSpace(req.Owner), Name: name}

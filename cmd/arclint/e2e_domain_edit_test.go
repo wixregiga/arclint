@@ -22,7 +22,7 @@ func TestDomainRelationAndDescriptionThroughBinary(t *testing.T) {
 			}
 			run(0, "Defined", "domain", "define", "bounded_context", "catalog", "--definition", "What can be purchased.")
 			run(0, "Defined", "domain", "define", "bounded_context", "ordering", "--definition", "Taking and fulfilling orders.")
-			run(0, "Updated description", "domain", "define", "description", "--description", "A shop's catalog and purchases.")
+			run(0, "Updated project", "domain", "define", "project", "--description", "A shop's catalog and purchases.")
 			run(0, "Defined relation", "domain", "define", "relation", "--from", "catalog", "--to", "ordering", "--kind", "conformist", "--description", "Ordering uses the catalog language.")
 			lang := vocab.UbiquitousLanguage{Project: "", Description: "A shop's catalog and purchases.", Contexts: []vocab.BoundedContext{{Name: "catalog", Definition: "What can be purchased."}, {Name: "ordering", Definition: "Taking and fulfilling orders."}}, Relations: []vocab.ContextRelation{{From: "catalog", To: "ordering", Kind: vocab.RelationConformist, Description: "Ordering uses the catalog language."}}}
 			repo := definitionRepository(t, work, format)
@@ -32,6 +32,11 @@ func TestDomainRelationAndDescriptionThroughBinary(t *testing.T) {
 			}
 			lang.Project = got.Project
 			assertRecordedLanguage(t, repo, lang)
+			run(0, "Updated project boutique", "domain", "define", "project", "boutique")
+			run(0, "Unchanged project boutique", "domain", "define", "project", "boutique")
+			run(2, "project has no name", "domain", "define", "project", " ")
+			lang.Project = "boutique"
+			assertRecordedLanguage(t, repo, lang)
 			run(0, "Unchanged relation", "domain", "define", "relation", "--from", "catalog", "--to", "ordering", "--kind", "conformist")
 			run(0, `"description": ""`, "domain", "define", "relation", "--from", "catalog", "--to", "ordering", "--description", "", "--format", "json")
 			lang.Relations[0].Description = ""
@@ -39,11 +44,11 @@ func TestDomainRelationAndDescriptionThroughBinary(t *testing.T) {
 			run(2, "context_relation/published-kind", "domain", "define", "relation", "--from", "catalog", "--to", "ordering", "--kind", "unknown")
 			run(2, "context_map/one-relation-per-pair", "domain", "define", "relation", "--from", "catalog", "--to", "catalog", "--kind", "conformist")
 			run(2, "context_map/relations-name-recorded-contexts", "domain", "define", "relation", "--from", "catalog", "--to", "missing", "--kind", "conformist")
-			run(2, "does not apply", "domain", "define", "description", "--description", "x", "--definition", "wrong")
-			run(2, "requires --description", "domain", "define", "description")
+			run(2, "does not apply", "domain", "define", "project", "--description", "x", "--definition", "wrong")
+			run(2, "pass a name, --description, or both", "domain", "define", "project")
 			run(2, "does not apply", "domain", "define", "value_object", "Money", "--description", "wrong")
 			run(0, "relation", "__complete", "domain", "define", "rel")
-			run(0, "description", "__complete", "domain", "define", "desc")
+			run(0, "project", "__complete", "domain", "define", "proj")
 			run(0, "relation", "__complete", "domain", "remove", "rel")
 			run(0, "conformist", "__complete", "domain", "define", "relation", "--kind", "conf")
 			run(0, "catalog", "__complete", "domain", "define", "relation", "--from", "cat")
