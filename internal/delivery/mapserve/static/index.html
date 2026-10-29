@@ -7,7 +7,9 @@ same document as the remote's default branch records it, and draws them
 with studio.js: a navigator of the bounded contexts, a concept map of
 the active context, and an inspector of what the domain file records.
 Entries are edited as drafts; Publish posts each draft to /api/define or
-/api/remove, the define and remove the command line runs.
+/api/remove, the define and remove the command line runs. New project
+posts to /api/projects: the server creates the project in its own git
+repository and serves it from then on, so its domain is built here.
 -->
 <html lang="en">
 <head>
@@ -88,6 +90,9 @@ Entries are edited as drafts; Publish posts each draft to /api/define or
   .row input,.row textarea,.row select{font:inherit;width:100%;border:1px solid var(--line);border-radius:6px;padding:4px 8px;background:#fff;color:var(--ink);outline:0}
   .row textarea{min-height:64px;resize:vertical}
   .row .req{color:var(--missing)}
+  .row .choices{display:flex;flex-wrap:wrap;gap:4px 12px;padding-top:4px}
+  .row .choices label{color:var(--ink);padding:0;display:flex;gap:4px;align-items:center;white-space:nowrap;overflow-wrap:normal}
+  .row .choices input{width:auto;margin:0}
   .actions{display:flex;gap:6px;padding:8px 12px;flex-wrap:wrap}
   .note{padding:4px 12px;color:var(--muted);font-size:11px}
   .note.err{color:var(--missing)}
@@ -108,6 +113,7 @@ Entries are edited as drafts; Publish posts each draft to /api/define or
     <span class="name">ArcLint Studio</span>
     <span class="crumb" id="crumb"></span>
     <span class="grow"></span>
+    <button id="newProject" title="Start a new project in its own git repository">New project</button>
     <button id="changes" title="What the drafts and the domain file change">Changes</button>
     <button id="publish" class="primary" title="Record every draft in the domain file">Publish</button>
     <span class="source" id="source"></span>
@@ -140,11 +146,13 @@ Entries are edited as drafts; Publish posts each draft to /api/define or
   var esc = S.esc;
   function colour(concept) { return 'var(--c-' + concept + ')'; }
 
-  /* recorded is the domain file as it is; accepted the default branch's, or
+  /* directory is the project served, beside where a new one is suggested;
+     recorded is its domain file as it is; accepted the default branch's, or
      null with the reason; doc is recorded with the drafts applied, what the
-     page draws. view is 'map' or 'changes'; edit is the form being filled. */
-  var st = { recorded: null, accepted: null, acceptedBranch: '', acceptedReason: '', doc: null, drafts: [], publishing: false, context: null, concepts: [], sel: null,
-    query: '', filter: '', hidden: {}, zoom: 1, fit: 1, view: 'map', edit: null, message: '', results: [] };
+     page draws. view is 'map', 'changes' or 'project'; edit is the entry
+     form being filled, project the new project's. */
+  var st = { directory: '', beside: '', recorded: null, accepted: null, acceptedBranch: '', acceptedReason: '', doc: null, drafts: [], publishing: false, context: null, concepts: [], sel: null,
+    query: '', filter: '', hidden: {}, zoom: 1, fit: 1, view: 'map', edit: null, project: null, creating: false, message: '', results: [] };
 
   function selected() { return st.sel ? S.byId(st.concepts, st.sel) : null; }
   function shown(c) { return !st.hidden[c.concept] && S.matches(c, st.query, st.filter); }
@@ -320,7 +328,24 @@ Entries are edited as drafts; Publish posts each draft to /api/define or
     return h;
   }
 
+  var LANGUAGES = [['go', 'Go'], ['ts', 'TypeScript'], ['py', 'Python']];
+  function renderProjectForm() {
+    var p = st.project;
+    var h = '<div class="sec"><h4>New project</h4>' +
+      '<div class="row"><label>Directory <span class="req">*</span></label><input data-p="directory" value="' + esc(p.directory) + '" spellcheck="false"></div>' +
+      '<div class="row"><label>Name</label><input data-p="name" value="' + esc(p.name) + '" placeholder="the directory\'s name" spellcheck="false"></div>' +
+      '<div class="row"><label>Languages</label><span class="choices">' + LANGUAGES.map(function (l) {
+        return '<label><input type="checkbox" data-lang="' + l[0] + '"' + (p.languages.indexOf(l[0]) >= 0 ? ' checked' : '') + '>' + esc(l[1]) + '</label>';
+      }).join('') + '</span></div>' +
+      '<div class="actions"><button data-act="create" class="primary"' + (st.creating ? ' disabled' : '') + '>' + (st.creating ? 'Creating…' : 'Create') + '</button><button data-act="cancel">Cancel</button></div>';
+    if (p.error) h += '<div class="note err">' + esc(p.error) + '</div>';
+    h += '<div class="note">Creates the directory with a git repository, a starter rules.arclint.yaml and an empty domain file, then shows the project here to build its domain. The directory must be new or empty.</div>';
+    if (st.drafts.length) h += '<div class="note err">' + st.drafts.length + ' draft' + (st.drafts.length === 1 ? ' is' : 's are') + ' not published in ' + esc(st.doc.project || st.directory) + '; creating a project discards ' + (st.drafts.length === 1 ? 'it' : 'them') + '.</div>';
+    return h + '</div>';
+  }
+
   function renderInspector() {
+    if (st.view === 'project') { $('inspectorTitle').innerHTML = 'Project <span>(a new git repository)</span>'; $('inspector').innerHTML = renderProjectForm(); return; }
     if (st.view === 'changes') { $('inspectorTitle').innerHTML = 'Changes <span>(the transformation)</span>'; $('inspector').innerHTML = renderChanges(); return; }
     $('inspectorTitle').innerHTML = 'Inspector <span>(as recorded' + (st.drafts.length ? ', with drafts' : '') + ')</span>';
     if (st.edit) { $('inspector').innerHTML = renderForm(); return; }
@@ -335,7 +360,8 @@ Entries are edited as drafts; Publish posts each draft to /api/define or
     var project = st.doc.project || '';
     $('crumb').innerHTML = st.context ? '<b>' + esc(st.context.name) + '</b> <span>/ ' + esc(project) + '</span>' : '<b>' + esc(project) + '</b>';
     $('source').textContent = st.doc.source || '';
-    $('source').title = st.acceptedBranch ? 'Accepted is what ' + st.acceptedBranch + ' records.' : st.acceptedReason;
+    $('source').title = st.directory + '\n' + (st.acceptedBranch ? 'Accepted is what ' + st.acceptedBranch + ' records.' : st.acceptedReason);
+    $('newProject').className = st.view === 'project' ? 'on' : '';
     $('path').innerHTML = S.path(st.context, st.concepts, selected()).map(esc).join(' <span>&rsaquo;</span> ');
     $('counts').textContent = S.countsLine(st.doc.counts);
     $('message').textContent = st.message;
@@ -355,6 +381,7 @@ Entries are edited as drafts; Publish posts each draft to /api/define or
 
   function render() {
     if (!st.doc) return;
+    if (st.context) showMap();
     renderChrome(); renderNavigator(); renderCanvas(); renderInspector();
   }
 
@@ -426,8 +453,37 @@ Entries are edited as drafts; Publish posts each draft to /api/define or
     rebuild(); render();
   }
 
-  /* --- publishing: one define or remove per draft, in order; a draft the
-     server refuses stays, with the reason. --- */
+  /* --- a new project: the server creates it and serves it from then on;
+     the page starts over in it. --- */
+  function beginProject() {
+    st.edit = null;
+    st.project = st.project || { directory: st.beside, name: '', languages: ['go'], error: '' };
+    st.view = 'project';
+    render();
+    var input = document.querySelector('#inspector [data-p="directory"]');
+    if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
+  }
+  function createProject() {
+    var p = st.project;
+    if (st.creating) return;
+    if (!p.directory.trim()) { p.error = 'Name the directory to create the project in.'; return render(); }
+    st.creating = true; p.error = ''; render();
+    return post('/api/projects', { directory: p.directory.trim(), name: p.name.trim(), languages: p.languages }).then(function (created) {
+      st.creating = false;
+      st.project = null;
+      st.drafts = []; st.results = []; st.context = null; st.sel = null; st.edit = null; st.view = 'map';
+      st.message = 'Created ' + created.project + ' at ' + created.directory;
+      return load();
+    }, function (err) {
+      st.creating = false;
+      p.error = err.message;
+      render();
+    });
+  }
+
+  /* --- publishing: one define or remove per draft, in order, each naming
+     the project it was drafted in; a draft the server refuses stays, with
+     the reason. --- */
   function post(path, body) {
     return fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(function (r) {
       return r.text().then(function (text) {
@@ -455,7 +511,7 @@ Entries are edited as drafts; Publish posts each draft to /api/define or
       if (!queue.length) return done();
       var d = S.draftOf(st.drafts, queue.shift());
       if (!d) return next();
-      return post(d.action === 'remove' ? '/api/remove' : '/api/define', S.requestOf(d)).then(function (result) {
+      return post(d.action === 'remove' ? '/api/remove' : '/api/define', Object.assign({ project: st.directory }, S.requestOf(d))).then(function (result) {
         results.push({ text: describe(d, result) });
         st.drafts = S.published(st.drafts, d);
       }, function (err) {
@@ -488,15 +544,22 @@ Entries are edited as drafts; Publish posts each draft to /api/define or
       case 'remove': return draftRemoval();
       case 'discard': return discard(selected() ? keyOf(selected()) : contextKey(st.context.name));
       case 'save': return saveDraft();
-      case 'cancel': st.edit = null; return render();
+      case 'create': return createProject();
+      case 'cancel': st.edit = null; if (st.view === 'project') st.view = 'map'; return render();
     }
   });
   /* What is typed in the form is kept as it is typed, so a render that
      rebuilds the inspector (a resize, a publish) never loses it. */
   document.addEventListener('input', function (e) {
     if (st.edit && e.target.dataset && e.target.dataset.f && e.target.closest('#inspector')) st.edit.values[e.target.dataset.f] = e.target.value;
+    if (st.project && e.target.dataset && e.target.dataset.p) st.project[e.target.dataset.p] = e.target.value;
   });
   document.addEventListener('change', function (e) {
+    if (st.project && e.target.dataset && e.target.dataset.lang) {
+      var lang = e.target.dataset.lang, chosen = st.project.languages.filter(function (l) { return l !== lang; });
+      st.project.languages = LANGUAGES.map(function (l) { return l[0]; }).filter(function (l) { return l === lang ? e.target.checked : chosen.indexOf(l) >= 0; });
+      return;
+    }
     if (st.edit && !st.edit.properties && (e.target.dataset.f === 'concept' || e.target.dataset.f === 'owner')) {
       var values = readForm(); st.edit.concept = values.concept; st.edit.owner = values.owner || ''; st.edit.values = values; st.edit.name = values.name; render();
     }
@@ -506,9 +569,11 @@ Entries are edited as drafts; Publish posts each draft to /api/define or
   $('filter').addEventListener('change', function () { st.filter = this.value; render(); });
   $('changes').addEventListener('click', function () { st.view = st.view === 'changes' ? 'map' : 'changes'; st.edit = null; render(); });
   $('publish').addEventListener('click', publish);
+  $('newProject').addEventListener('click', function () { if (st.view === 'project') { st.view = 'map'; render(); } else beginProject(); });
   $('addContext').addEventListener('click', function () { beginAdd('bounded_context'); });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') { st.sel = null; st.edit = null; render(); }
+    if (e.key === 'Escape') { st.sel = null; st.edit = null; if (st.view === 'project') st.view = 'map'; render(); }
+    if (e.key === 'Enter' && st.view === 'project' && e.target.dataset && e.target.dataset.p) createProject();
   });
   window.addEventListener('resize', render);
   window.addEventListener('beforeunload', function (e) { if (st.drafts.length) { e.preventDefault(); e.returnValue = ''; } });
@@ -519,19 +584,21 @@ Entries are edited as drafts; Publish posts each draft to /api/define or
       return r.json();
     });
   }
-  /* load reads both recordings; drafts survive a reload, so a refused
-     draft stays to be corrected. */
+  /* load reads the project served and both its recordings; drafts survive
+     a reload, so a refused draft stays to be corrected. */
   function load() {
-    return Promise.all([getJSON('/api/overview'), getJSON('/api/accepted')]).then(function (docs) {
+    return Promise.all([getJSON('/api/overview'), getJSON('/api/accepted'), getJSON('/api/project')]).then(function (docs) {
       st.recorded = docs[0];
       var accepted = docs[1];
+      st.directory = docs[2].directory;
+      st.beside = docs[2].beside;
       st.accepted = accepted.available ? accepted.overview : null;
       st.acceptedBranch = accepted.branch || '';
       st.acceptedReason = accepted.available ? '' : (accepted.reason || 'unknown');
       if (!st.recorded.found && !st.drafts.length) { st.doc = st.recorded; renderChrome(); return showEmpty('No recorded Ubiquitous Language at ' + (st.recorded.source || 'the domain file') + '.', 'arclint domain init'); }
       rebuild();
       showMap();
-      if (!(st.doc.contexts || []).length) { render(); return showEmpty('No bounded context is recorded yet.', 'arclint domain define bounded_context <name> --definition <text>'); }
+      if (!(st.doc.contexts || []).length) { render(); return showEmpty('No bounded context is recorded yet. Draft one with + context, then Publish.'); }
       if (!st.context) selectContext(st.doc.contexts[0].name); else render();
     }).catch(function (err) {
       showEmpty('The domain overview could not be loaded: ' + err.message);

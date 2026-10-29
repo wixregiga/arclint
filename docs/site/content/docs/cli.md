@@ -620,6 +620,18 @@ happens to the branch after that is git's, as the project does it:
 commit, push and propose. Without a remote default branch the page
 shows the recording alone and says why.
 
+**New project** starts another project from the page: name a new or
+empty directory whose parent exists, the project's name (the
+directory's name when left blank) and its languages. The server makes
+the directory a git repository, writes the commented starter
+`rules.arclint.yaml` that `arclint init` writes and a domain file
+recording an empty language under the project's name, and serves that
+project from then on, so its domain is built in the page: draft a
+bounded context with **+ context**, its entries, and Publish. Nothing
+is committed and no remote is created; until the project has a remote
+default branch, the page shows its recording alone. A page still open
+on the earlier project cannot publish into the new one; reload it.
+
 ```sh
 arclint map serve                       # the project found from the working directory
 arclint map serve docs/examples/go      # the project found upward from a path, as check [path]

@@ -1,8 +1,9 @@
 // Package mapserve serves the project's domain overview to a browser:
 // the page that draws the recorded Ubiquitous Language, embedded at
 // build time, the overview as the JSON renderer spells it, the overview
-// the default branch records, and the define and remove use cases the
-// page publishes its drafts through.
+// the default branch records, the define and remove use cases the page
+// publishes its drafts through, and the creation of a new project the
+// page then serves.
 package mapserve
 
 import (
@@ -16,6 +17,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,10 +35,12 @@ const (
 	AcceptedPath = "/api/accepted"
 	DefinePath   = "/api/define"
 	RemovePath   = "/api/remove"
+	ProjectPath  = "/api/project"
+	ProjectsPath = "/api/projects"
 )
 
-// requestLimit bounds one edit's body; a recorded text is at most a few
-// hundred words.
+// requestLimit bounds one request's body; a recorded text is at most a
+// few hundred words.
 const requestLimit = 1 << 20
 
 // Reports writes the use cases' results as the JSON renderer spells
@@ -58,13 +62,23 @@ type Accepted struct {
 	Unavailable string
 }
 
-// Server implements the CLI's MapServer port over HTTP.
+// Project is one project the page serves: the directory that holds its
+// ruleset, and the use cases over its domain file.
+type Project struct {
+	Directory string
+	Overview  application.GetDomainOverview
+	Define    application.DefineDomainDefinition
+	Remove    application.RemoveDomainDefinition
+	Accepted  Accepted
+}
+
+// Server implements the CLI's MapServer port over HTTP. It serves
+// Project until the page creates a new project through Create, and
+// serves that one from then on.
 type Server struct {
-	Reports  Reports
-	Overview application.GetDomainOverview
-	Define   application.DefineDomainDefinition
-	Remove   application.RemoveDomainDefinition
-	Accepted Accepted
+	Reports Reports
+	Project Project
+	Create  func(application.CreateProjectRequest) (application.CreateProjectResult, Project, error)
 }
 
 // Serve binds address, tells listening the URL a browser opens, and
@@ -94,41 +108,67 @@ func (s Server) Serve(address string, listening func(url string) error) error {
 }
 
 // Handler answers GET / with the page, GET /studio.js with its script,
-// GET /api/overview with the overview the domain file records now, GET
+// GET /api/project with the directory of the project served, GET
+// /api/overview with the overview its domain file records now, GET
 // /api/accepted with the one the default branch records, POST
 // /api/define and POST /api/remove with one edit each through the
-// define and remove use cases, one edit at a time; any other request,
-// and any request addressed by another name or sent by another page, is
-// refused.
+// define and remove use cases, and POST /api/projects with a new project
+// served from then on; any other request, and any request addressed by
+// another name or sent by another page, is refused.
 func (s Server) Handler() (http.Handler, error) {
-	switch {
-	case s.Reports.Overview == nil || s.Reports.Defined == nil || s.Reports.Removed == nil:
+	if s.Reports.Overview == nil || s.Reports.Defined == nil || s.Reports.Removed == nil {
 		return nil, errors.New("map server: not composed with the report writers")
-	case s.Overview == (application.GetDomainOverview{}):
-		return nil, errors.New("map server: not composed with the domain overview")
-	case s.Define == (application.DefineDomainDefinition{}) || s.Remove == (application.RemoveDomainDefinition{}):
-		return nil, errors.New("map server: not composed with the define and remove use cases")
-	case s.Accepted.Branch != "" && s.Accepted.Overview == (application.GetDomainOverview{}):
-		return nil, errors.New("map server: the accepted branch is named without its overview")
 	}
-	var edits sync.Mutex
+	if s.Create == nil {
+		return nil, errors.New("map server: not composed with project creation")
+	}
+	if err := s.Project.composed(); err != nil {
+		return nil, err
+	}
+	served := &studio{reports: s.Reports, create: s.Create, project: s.Project}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET "+OverviewPath, s.overview)
-	mux.HandleFunc("GET "+AcceptedPath, s.accepted)
-	mux.HandleFunc("POST "+DefinePath, oneAtATime(&edits, s.define))
-	mux.HandleFunc("POST "+RemovePath, oneAtATime(&edits, s.remove))
+	mux.HandleFunc("GET "+ProjectPath, served.alone(served.directory))
+	mux.HandleFunc("GET "+OverviewPath, served.alone(served.overview))
+	mux.HandleFunc("GET "+AcceptedPath, served.alone(served.accepted))
+	mux.HandleFunc("POST "+DefinePath, served.alone(served.define))
+	mux.HandleFunc("POST "+RemovePath, served.alone(served.remove))
+	mux.HandleFunc("POST "+ProjectsPath, served.alone(served.createProject))
 	mux.HandleFunc("GET "+ScriptPath, serveBytes("text/javascript; charset=utf-8", studioScript))
 	mux.HandleFunc("GET /{$}", serveBytes("text/html; charset=utf-8", studioPage))
 	return fromThePage(mux), nil
 }
 
-// oneAtATime runs each edit alone. Define and remove each read the
+func (p Project) composed() error {
+	switch {
+	case p.Directory == "":
+		return errors.New("map server: the project is served without its directory")
+	case p.Overview == (application.GetDomainOverview{}):
+		return errors.New("map server: not composed with the domain overview")
+	case p.Define == (application.DefineDomainDefinition{}) || p.Remove == (application.RemoveDomainDefinition{}):
+		return errors.New("map server: not composed with the define and remove use cases")
+	case p.Accepted.Branch != "" && p.Accepted.Overview == (application.GetDomainOverview{}):
+		return errors.New("map server: the accepted branch is named without its overview")
+	}
+	return nil
+}
+
+// studio is the state the page changes: the project served, which a
+// created project replaces.
+type studio struct {
+	reports Reports
+	create  func(application.CreateProjectRequest) (application.CreateProjectResult, Project, error)
+	mu      sync.Mutex
+	project Project
+}
+
+// alone answers each request by itself. Define and remove each read the
 // domain file, change it and write it whole, so two edits at once would
-// both succeed and the later write would drop the earlier one.
-func oneAtATime(edits *sync.Mutex, next http.HandlerFunc) http.HandlerFunc {
+// both succeed and the later write would drop the earlier one; and no
+// request reads a project while a created one replaces it.
+func (s *studio) alone(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		edits.Lock()
-		defer edits.Unlock()
+		s.mu.Lock()
+		defer s.mu.Unlock()
 		next(w, r)
 	}
 }
@@ -164,16 +204,27 @@ func addressedDirectly(hostport string) bool {
 	return strings.EqualFold(host, "localhost") || net.ParseIP(host) != nil
 }
 
+// directory names the project served and the directory a new project
+// is suggested in: beside it.
+func (s *studio) directory(w http.ResponseWriter, _ *http.Request) {
+	beside := filepath.Dir(s.project.Directory)
+	if !strings.HasSuffix(beside, string(filepath.Separator)) {
+		beside += string(filepath.Separator)
+	}
+	body, _ := json.Marshal(map[string]string{"directory": s.project.Directory, "beside": beside})
+	writeJSON(w, http.StatusOK, body)
+}
+
 // overview is the document the domain file records at this request;
 // it changes with every published draft.
-func (s Server) overview(w http.ResponseWriter, _ *http.Request) {
-	result, err := s.Overview.Execute()
+func (s *studio) overview(w http.ResponseWriter, _ *http.Request) {
+	result, err := s.project.Overview.Execute()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	var document bytes.Buffer
-	if err := s.Reports.Overview(&document, result); err != nil {
+	if err := s.reports.Overview(&document, result); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Errorf("render domain overview: %w", err))
 		return
 	}
@@ -182,24 +233,25 @@ func (s Server) overview(w http.ResponseWriter, _ *http.Request) {
 
 // accepted is the document the default branch records, wrapped with the
 // branch it was read from, or the reason there is none.
-func (s Server) accepted(w http.ResponseWriter, _ *http.Request) {
-	if s.Accepted.Branch == "" {
-		body, _ := json.Marshal(map[string]any{"available": false, "reason": s.Accepted.Unavailable})
+func (s *studio) accepted(w http.ResponseWriter, _ *http.Request) {
+	accepted := s.project.Accepted
+	if accepted.Branch == "" {
+		body, _ := json.Marshal(map[string]any{"available": false, "reason": accepted.Unavailable})
 		writeJSON(w, http.StatusOK, body)
 		return
 	}
-	result, err := s.Accepted.Overview.Execute()
+	result, err := accepted.Overview.Execute()
 	if err != nil {
-		body, _ := json.Marshal(map[string]any{"available": false, "branch": s.Accepted.Branch, "reason": err.Error()})
+		body, _ := json.Marshal(map[string]any{"available": false, "branch": accepted.Branch, "reason": err.Error()})
 		writeJSON(w, http.StatusOK, body)
 		return
 	}
 	var document bytes.Buffer
-	if err := s.Reports.Overview(&document, result); err != nil {
+	if err := s.reports.Overview(&document, result); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Errorf("render accepted domain overview: %w", err))
 		return
 	}
-	branch, _ := json.Marshal(s.Accepted.Branch)
+	branch, _ := json.Marshal(accepted.Branch)
 	var body bytes.Buffer
 	body.WriteString(`{"available":true,"branch":`)
 	body.Write(branch)
@@ -209,11 +261,13 @@ func (s Server) accepted(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, body.Bytes())
 }
 
-// defineRequest is one edit the page publishes: the entry as `arclint
-// domain define <concept> <name>` names it, and the properties to set.
-// A property present in change is set, even to an empty value; one
-// absent stays as recorded, as the define flags behave.
+// defineRequest is one edit the page publishes: the project it was
+// drafted in, the entry as `arclint domain define <concept> <name>`
+// names it, and the properties to set. A property present in change is
+// set, even to an empty value; one absent stays as recorded, as the
+// define flags behave.
 type defineRequest struct {
+	Project string        `json:"project"`
 	Concept string        `json:"concept"`
 	Context string        `json:"context"`
 	Owner   string        `json:"owner"`
@@ -269,50 +323,90 @@ func (c requestChange) change() vocab.Change {
 	return ch
 }
 
-// removeRequest names the entry to remove as `arclint domain remove
-// <concept> <name>` names it.
+// removeRequest names the project and the entry to remove as `arclint
+// domain remove <concept> <name>` names it.
 type removeRequest struct {
+	Project string `json:"project"`
 	Concept string `json:"concept"`
 	Context string `json:"context"`
 	Owner   string `json:"owner"`
 	Name    string `json:"name"`
 }
 
-func (s Server) define(w http.ResponseWriter, r *http.Request) {
+func (s *studio) define(w http.ResponseWriter, r *http.Request) {
 	var body defineRequest
-	if !readJSON(w, r, &body) {
+	if !readJSON(w, r, &body) || !s.serves(w, body.Project) {
 		return
 	}
 	req := application.DefineDomainRequest{Concept: body.Concept, Context: body.Context, Owner: body.Owner, Name: body.Name, Change: body.Change.change()}
-	result, err := s.Define.Execute(req)
+	result, err := s.project.Define.Execute(req)
 	if err != nil {
 		writeError(w, refusalStatus(err), err)
 		return
 	}
 	var document bytes.Buffer
-	if err := s.Reports.Defined(&document, result, req); err != nil {
+	if err := s.reports.Defined(&document, result, req); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Errorf("render define result: %w", err))
 		return
 	}
 	writeJSON(w, http.StatusOK, document.Bytes())
 }
 
-func (s Server) remove(w http.ResponseWriter, r *http.Request) {
+func (s *studio) remove(w http.ResponseWriter, r *http.Request) {
 	var body removeRequest
-	if !readJSON(w, r, &body) {
+	if !readJSON(w, r, &body) || !s.serves(w, body.Project) {
 		return
 	}
-	result, err := s.Remove.Execute(body.Concept, body.Context, body.Owner, body.Name)
+	result, err := s.project.Remove.Execute(body.Concept, body.Context, body.Owner, body.Name)
 	if err != nil {
 		writeError(w, refusalStatus(err), err)
 		return
 	}
 	var document bytes.Buffer
-	if err := s.Reports.Removed(&document, result); err != nil {
+	if err := s.reports.Removed(&document, result); err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Errorf("render remove result: %w", err))
 		return
 	}
 	writeJSON(w, http.StatusOK, document.Bytes())
+}
+
+// serves refuses an edit drafted in another project than the one served
+// now: a page loaded before a project was created publishes nothing into
+// the new one.
+func (s *studio) serves(w http.ResponseWriter, project string) bool {
+	if project == s.project.Directory {
+		return true
+	}
+	writeError(w, http.StatusConflict, fmt.Errorf("this edit was drafted in %q, and the map now serves %s; reload the page", project, s.project.Directory))
+	return false
+}
+
+// projectRequest is a new project as the page asks for it.
+type projectRequest struct {
+	Directory string   `json:"directory"`
+	Name      string   `json:"name"`
+	Languages []string `json:"languages"`
+}
+
+// createProject creates the project and serves it from then on; a
+// refused project leaves the one served as it was.
+func (s *studio) createProject(w http.ResponseWriter, r *http.Request) {
+	var body projectRequest
+	if !readJSON(w, r, &body) {
+		return
+	}
+	result, project, err := s.create(application.CreateProjectRequest{Directory: body.Directory, Name: body.Name, Languages: body.Languages})
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err)
+		return
+	}
+	if err := project.composed(); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("serve %s: %w", result.Directory, err))
+		return
+	}
+	s.project = project
+	created, _ := json.Marshal(map[string]string{"directory": result.Directory, "project": result.Project, "ruleset": result.Ruleset, "source": result.Source})
+	writeJSON(w, http.StatusCreated, created)
 }
 
 // refusalStatus maps a refused edit as the CLI maps it: a request that
@@ -325,18 +419,19 @@ func refusalStatus(err error) int {
 	return http.StatusUnprocessableEntity
 }
 
-// readJSON decodes one edit. The body must declare itself JSON, which a
-// cross-site form cannot, and must spell only the fields an edit has.
+// readJSON decodes one request. The body must declare itself JSON,
+// which a cross-site form cannot, and must spell only the fields the
+// request has.
 func readJSON(w http.ResponseWriter, r *http.Request, into any) bool {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/json" {
-		writeError(w, http.StatusUnsupportedMediaType, errors.New("an edit is a JSON body: Content-Type application/json"))
+		writeError(w, http.StatusUnsupportedMediaType, errors.New("a request is a JSON body: Content-Type application/json"))
 		return false
 	}
 	decoder := json.NewDecoder(io.LimitReader(r.Body, requestLimit))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(into); err != nil {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("read the edit: %w", err))
+		writeError(w, http.StatusBadRequest, fmt.Errorf("read the request: %w", err))
 		return false
 	}
 	return true

@@ -22,6 +22,8 @@ import (
 	"github.com/wixregiga/arclint/internal/delivery/cli/reportfactory"
 	"github.com/wixregiga/arclint/internal/delivery/mapserve"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
+	gitproject "github.com/wixregiga/arclint/internal/infrastructure/project/git"
+	filesystemscaffold "github.com/wixregiga/arclint/internal/infrastructure/scaffold/filesystem"
 	gitvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/git"
 	yamlvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/yaml"
 )
@@ -122,21 +124,58 @@ func composed(t *testing.T, root string) mapserve.Server {
 			},
 			Removed: func(w io.Writer, r application.DomainRemoveResult) error { return renderer.Render(w, cli.DomainRemoveReport{Result: r}) },
 		},
-		Overview: overview,
-		Define:   define,
-		Remove:   remove,
+		Project: mapserve.Project{Directory: root, Overview: overview, Define: define, Remove: remove},
+		Create: func(req application.CreateProjectRequest) (application.CreateProjectResult, mapserve.Project, error) {
+			create, err := application.NewCreateProject(projectDirectories{})
+			if err != nil {
+				return application.CreateProjectResult{}, mapserve.Project{}, err
+			}
+			result, err := create.Execute(req)
+			if err != nil {
+				return application.CreateProjectResult{}, mapserve.Project{}, err
+			}
+			return result, composed(t, result.Directory).Project, nil
+		},
 	}
 	accepted, err := gitvocab.NewRepository(root, recording, parser{})
 	if err != nil {
-		server.Accepted = mapserve.Accepted{Unavailable: err.Error()}
+		server.Project.Accepted = mapserve.Accepted{Unavailable: err.Error()}
 		return server
 	}
 	acceptedOverview, err := application.NewGetDomainOverview(accepted)
 	if err != nil {
 		t.Fatal(err)
 	}
-	server.Accepted = mapserve.Accepted{Branch: accepted.Branch(), Overview: acceptedOverview}
+	server.Project.Accepted = mapserve.Accepted{Branch: accepted.Branch(), Overview: acceptedOverview}
 	return server
+}
+
+// projectDirectories makes a project's directory through git and
+// writes its files as the composition root does, with the default
+// domain file.
+type projectDirectories struct{}
+
+func (projectDirectories) Make(dir string) (bool, error) { return gitproject.Make(dir) }
+
+func (projectDirectories) Discard(dir string, made bool) error { return gitproject.Discard(dir, made) }
+
+func (projectDirectories) Ruleset(dir string) (application.RulesetScaffold, error) {
+	return filesystemscaffold.NewWriter(dir)
+}
+
+func (projectDirectories) DomainFile(dir string) (vocab.Repository, error) {
+	recording, err := vocab.NewDomainRecording(vocab.DefaultDomainRecordingPath)
+	if err != nil {
+		return nil, err
+	}
+	return yamlvocab.NewRepository(dir, recording)
+}
+
+// inProject is an edit's body as the page sends it: drafted in the
+// project at root.
+func inProject(root, body string) string {
+	project, _ := json.Marshal(root)
+	return `{"project":` + string(project) + `,` + strings.TrimPrefix(body, "{")
 }
 
 // pageHost is the host a browser names when it opens the URL the
@@ -230,7 +269,7 @@ func TestPageAndScriptAreServed(t *testing.T) {
 	if page.Code != http.StatusOK || !strings.HasPrefix(page.Header().Get("Content-Type"), "text/html") {
 		t.Fatalf("page: status %d, content-type %q", page.Code, page.Header().Get("Content-Type"))
 	}
-	for _, want := range []string{"ArcLint Studio", "Navigator", "Inspector", `src="studio.js"`, mapserve.OverviewPath, mapserve.AcceptedPath, mapserve.DefinePath, mapserve.RemovePath, "Publish", "Changes"} {
+	for _, want := range []string{"ArcLint Studio", "Navigator", "Inspector", `src="studio.js"`, mapserve.OverviewPath, mapserve.AcceptedPath, mapserve.DefinePath, mapserve.RemovePath, mapserve.ProjectPath, mapserve.ProjectsPath, "Publish", "Changes", "New project"} {
 		if !strings.Contains(page.Body.String(), want) {
 			t.Errorf("page lacks %q", want)
 		}
@@ -299,7 +338,7 @@ func TestDefineRecordsThroughTheUseCaseAndTheOverviewFollows(t *testing.T) {
 	}
 
 	rec := post(t, h, mapserve.DefinePath, "application/json; charset=utf-8",
-		`{"concept":"value_object","context":"identityaccess","owner":"","name":"EmailAddress","change":{"definition":"A mailbox address the tenant can be reached at."}}`)
+		inProject(clone, `{"concept":"value_object","context":"identityaccess","owner":"","name":"EmailAddress","change":{"definition":"A mailbox address the tenant can be reached at."}}`))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("define: status = %d, body %s", rec.Code, rec.Body.String())
 	}
@@ -348,11 +387,11 @@ func TestDefineRecordsThroughTheUseCaseAndTheOverviewFollows(t *testing.T) {
 
 	// A creation, then its removal, both as the command line records them.
 	rec = post(t, h, mapserve.DefinePath, "application/json",
-		`{"concept":"invariant","context":"identityaccess","owner":"Tenant","name":"named","change":{"statement":"A tenant has a name.","verifiedBy":[]}}`)
+		inProject(clone, `{"concept":"invariant","context":"identityaccess","owner":"Tenant","name":"named","change":{"statement":"A tenant has a name.","verifiedBy":[]}}`))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"created"`) {
 		t.Fatalf("create: status = %d, body %s", rec.Code, rec.Body.String())
 	}
-	rec = post(t, h, mapserve.RemovePath, "application/json", `{"concept":"invariant","context":"identityaccess","owner":"Tenant","name":"named"}`)
+	rec = post(t, h, mapserve.RemovePath, "application/json", inProject(clone, `{"concept":"invariant","context":"identityaccess","owner":"Tenant","name":"named"}`))
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"invariant"`) {
 		t.Fatalf("remove: status = %d, body %s", rec.Code, rec.Body.String())
 	}
@@ -382,7 +421,7 @@ func TestARefusedEditSaysWhyAndChangesNothing(t *testing.T) {
 		{"unknown context", mapserve.DefinePath, `{"concept":"value_object","context":"billing","name":"X","change":{"definition":"d"}}`, http.StatusBadRequest, "billing"},
 	}
 	for _, c := range cases {
-		rec := post(t, h, c.path, "application/json", c.body)
+		rec := post(t, h, c.path, "application/json", inProject(clone, c.body))
 		var body struct {
 			Error string `json:"error"`
 		}
@@ -493,7 +532,7 @@ func TestEditsAtOnceAreAllRecorded(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			body := fmt.Sprintf(`{"concept":"value_object","context":"identityaccess","name":"Probe%d","change":{"definition":"A probe value."}}`, i)
-			codes[i] = post(t, h, mapserve.DefinePath, "application/json", body).Code
+			codes[i] = post(t, h, mapserve.DefinePath, "application/json", inProject(clone, body)).Code
 		}()
 	}
 	wg.Wait()
@@ -510,17 +549,204 @@ func TestEditsAtOnceAreAllRecorded(t *testing.T) {
 	}
 }
 
+// served is the project the page is told it is in.
+func served(t *testing.T, h http.Handler) string {
+	t.Helper()
+	var project struct {
+		Directory string `json:"directory"`
+		Beside    string `json:"beside"`
+	}
+	decode(t, get(t, h, http.MethodGet, mapserve.ProjectPath), &project)
+	if want := filepath.Dir(project.Directory) + string(filepath.Separator); project.Beside != want {
+		t.Fatalf("a new project is suggested in %q, want %q beside %q", project.Beside, want, project.Directory)
+	}
+	return project.Directory
+}
+
+func TestCreatingAProjectServesItToBuildItsDomain(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	clone := scratchClone(t)
+	h := handler(t, clone)
+	if got := served(t, h); got != clone {
+		t.Fatalf("served %q, want %q", got, clone)
+	}
+	before, err := os.ReadFile(filepath.Join(clone, vocab.DefaultDomainRecordingPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(t.TempDir(), "orders")
+	body, _ := json.Marshal(map[string]any{"directory": dir, "name": "Orders", "languages": []string{"go", "ts"}})
+	rec := post(t, h, mapserve.ProjectsPath, "application/json", string(body))
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	var created struct {
+		Directory, Project, Ruleset, Source string
+	}
+	decode(t, rec, &created)
+	if created.Directory != dir || created.Project != "Orders" || created.Ruleset != filepath.Join(dir, "rules.arclint.yaml") || created.Source != vocab.DefaultDomainRecordingPath {
+		t.Fatalf("created = %+v", created)
+	}
+	if top := strings.TrimSpace(git(t, dir, "rev-parse", "--show-toplevel")); !sameDirectory(t, top, dir) {
+		t.Fatalf("the project's git repository is %q, want %q", top, dir)
+	}
+	ruleset, err := os.ReadFile(created.Ruleset)
+	if err != nil || !bytes.Contains(ruleset, []byte("runtime: [go, ts]")) {
+		t.Fatalf("ruleset: %v\n%s", err, ruleset)
+	}
+
+	// The page is now in the new project, whose language is empty.
+	if got := served(t, h); got != dir {
+		t.Fatalf("served %q after creating %q", got, dir)
+	}
+	var doc overviewDoc
+	decode(t, get(t, h, http.MethodGet, mapserve.OverviewPath), &doc)
+	if !doc.Found || doc.Project != "Orders" || len(doc.Contexts) != 0 {
+		t.Fatalf("new project's overview = %+v", doc)
+	}
+	var accepted struct {
+		Available bool `json:"available"`
+	}
+	decode(t, get(t, h, http.MethodGet, mapserve.AcceptedPath), &accepted)
+	if accepted.Available {
+		t.Fatal("a new repository without a remote has no accepted language")
+	}
+
+	// Its domain is built through the same define.
+	rec = post(t, h, mapserve.DefinePath, "application/json", inProject(dir, `{"concept":"bounded_context","name":"ordering","change":{"definition":"Taking and fulfilling customer orders."}}`))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"created"`) {
+		t.Fatalf("define in the new project: status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	rec = post(t, h, mapserve.DefinePath, "application/json", inProject(dir, `{"concept":"aggregate","context":"ordering","name":"Order","change":{"definition":"A customer's request for goods.","identity":"OrderID"}}`))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("define an aggregate: status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	decode(t, get(t, h, http.MethodGet, mapserve.OverviewPath), &doc)
+	if len(doc.Contexts) != 1 || doc.Contexts[0].Name != "ordering" || len(doc.Contexts[0].Aggregates) != 1 || doc.Contexts[0].Aggregates[0].Identity != "OrderID" {
+		t.Fatalf("overview after building = %+v", doc)
+	}
+	recorded, err := yamlvocab.NewRepository(dir, mustRecording(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lang, found, err := recorded.RecordedLanguage()
+	if err != nil || !found || lang.Project != "Orders" || len(lang.Contexts) != 1 {
+		t.Fatalf("the new domain file: found %v, err %v, language %+v", found, err, lang)
+	}
+
+	// An edit drafted in the project served before is refused, and its
+	// domain file stays as it was.
+	rec = post(t, h, mapserve.DefinePath, "application/json", inProject(clone, `{"concept":"value_object","context":"identityaccess","name":"EmailAddress","change":{"definition":"Moved."}}`))
+	if rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "reload") {
+		t.Fatalf("stale edit: status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if rec = post(t, h, mapserve.RemovePath, "application/json", `{"concept":"aggregate","context":"ordering","name":"Order"}`); rec.Code != http.StatusConflict {
+		t.Fatalf("an edit naming no project: status = %d", rec.Code)
+	}
+	after, err := os.ReadFile(filepath.Join(clone, vocab.DefaultDomainRecordingPath))
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatalf("the earlier project's domain file changed: %v", err)
+	}
+}
+
+func TestARefusedProjectLeavesNothingAndKeepsTheProjectServed(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	clone := scratchClone(t)
+	h := handler(t, clone)
+	base := t.TempDir()
+	occupied := filepath.Join(base, "occupied")
+	if err := os.MkdirAll(occupied, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(occupied, "notes.txt"), []byte("mine"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name, body, reason, absent string
+	}{
+		{"a directory holding files", `{"directory":` + quote(occupied) + `,"name":"x"}`, "already holds files", ""},
+		{"a relative path", `{"directory":"orders","name":"x"}`, "not an absolute path", ""},
+		{"no directory", `{"directory":"","name":"x"}`, "name the directory", ""},
+		{"a missing parent", `{"directory":` + quote(filepath.Join(base, "missing", "orders")) + `}`, "does not exist", filepath.Join(base, "missing")},
+		{"an unknown language", `{"directory":` + quote(filepath.Join(base, "cobol")) + `,"languages":["cobol"]}`, "cobol", filepath.Join(base, "cobol")},
+	}
+	for _, c := range cases {
+		rec := post(t, h, mapserve.ProjectsPath, "application/json", c.body)
+		var body struct {
+			Error string `json:"error"`
+		}
+		decode(t, rec, &body)
+		if rec.Code != http.StatusUnprocessableEntity || !strings.Contains(body.Error, c.reason) {
+			t.Errorf("%s: status = %d, error %q; want 422 containing %q", c.name, rec.Code, body.Error, c.reason)
+		}
+		if c.absent != "" {
+			if _, err := os.Stat(c.absent); !os.IsNotExist(err) {
+				t.Errorf("%s: %s was created", c.name, c.absent)
+			}
+		}
+	}
+	if entries, err := os.ReadDir(occupied); err != nil || len(entries) != 1 {
+		t.Fatalf("the occupied directory changed: %v %v", entries, err)
+	}
+	if got := served(t, h); got != clone {
+		t.Fatalf("served %q after refusals, want %q", got, clone)
+	}
+}
+
+func quote(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
+func mustRecording(t *testing.T) vocab.DomainRecording {
+	t.Helper()
+	recording, err := vocab.NewDomainRecording(vocab.DefaultDomainRecordingPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return recording
+}
+
+// sameDirectory compares two paths after links, as git reports a
+// temporary directory through any link in its path.
+func sameDirectory(t *testing.T, a, b string) bool {
+	t.Helper()
+	ra, err := filepath.EvalSymlinks(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rb, err := filepath.EvalSymlinks(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ra == rb
+}
+
 func TestHandlerNeedsItsComposition(t *testing.T) {
 	if _, err := (mapserve.Server{}).Handler(); err == nil || !strings.Contains(err.Error(), "report writers") {
 		t.Fatalf("err = %v, want the report writers named", err)
 	}
 	server := composed(t, exampleRoot(t))
-	server.Overview = application.GetDomainOverview{}
+	server.Create = nil
+	if _, err := server.Handler(); err == nil || !strings.Contains(err.Error(), "project creation") {
+		t.Fatalf("err = %v, want project creation named", err)
+	}
+	server = composed(t, exampleRoot(t))
+	server.Project.Directory = ""
+	if _, err := server.Handler(); err == nil || !strings.Contains(err.Error(), "directory") {
+		t.Fatalf("err = %v, want the directory named", err)
+	}
+	server = composed(t, exampleRoot(t))
+	server.Project.Overview = application.GetDomainOverview{}
 	if _, err := server.Handler(); err == nil || !strings.Contains(err.Error(), "overview") {
 		t.Fatalf("err = %v, want the overview named", err)
 	}
 	server = composed(t, exampleRoot(t))
-	server.Accepted = mapserve.Accepted{Branch: "origin/main"}
+	server.Project.Accepted = mapserve.Accepted{Branch: "origin/main"}
 	if _, err := server.Handler(); err == nil || !strings.Contains(err.Error(), "accepted branch") {
 		t.Fatalf("err = %v, want the accepted overview named", err)
 	}

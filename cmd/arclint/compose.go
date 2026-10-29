@@ -37,6 +37,7 @@ import (
 	embeddedpattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/embedded"
 	filesystempattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/filesystem"
 	registrypattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/registry"
+	gitproject "github.com/wixregiga/arclint/internal/infrastructure/project/git"
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
 	"github.com/wixregiga/arclint/internal/infrastructure/ruletest"
 	filesystemscaffold "github.com/wixregiga/arclint/internal/infrastructure/scaffold/filesystem"
@@ -331,9 +332,10 @@ func run(args []string) int {
 // through the same define and remove the command line runs, reads the
 // overview the domain file records now, and reads the one the remote's
 // default branch records through git, when the project has one; without
-// one the page shows the recording alone and says why. Every document
-// is spelled by the JSON renderer, whatever renderer the command's own
-// report uses.
+// one the page shows the recording alone and says why. A project the
+// page creates is composed the same way and served from then on. Every
+// document is spelled by the JSON renderer, whatever renderer the
+// command's own report uses.
 func composeStudio(root string, recording vocab.DomainRecording, overview application.GetDomainOverview, define application.DefineDomainDefinition, remove application.RemoveDomainDefinition) (mapserve.Server, error) {
 	jsonRenderer, err := reportfactory.Select(cli.RendererJSON)
 	if err != nil {
@@ -351,12 +353,115 @@ func composeStudio(root string, recording vocab.DomainRecording, overview applic
 				return jsonRenderer.Render(w, cli.DomainRemoveReport{Result: result})
 			},
 		},
-		Overview: overview,
-		Define:   define,
-		Remove:   remove,
-		Accepted: acceptedRecording(root, recording),
+		Project: mapserve.Project{
+			Directory: root,
+			Overview:  overview,
+			Define:    define,
+			Remove:    remove,
+			Accepted:  acceptedRecording(root, recording),
+		},
+		Create: createStudioProject,
 	}
 	return studio, nil
+}
+
+// createStudioProject creates a project in its own git repository and
+// composes the map's use cases over it.
+func createStudioProject(req application.CreateProjectRequest) (application.CreateProjectResult, mapserve.Project, error) {
+	create, err := application.NewCreateProject(projectDirectories{})
+	if err != nil {
+		return application.CreateProjectResult{}, mapserve.Project{}, fmt.Errorf("compose project creation: %w", err)
+	}
+	result, err := create.Execute(req)
+	if err != nil {
+		// No prefix: the use case's message already says what was refused.
+		return application.CreateProjectResult{}, mapserve.Project{}, fmt.Errorf("%w", err)
+	}
+	project, err := composeStudioProject(result.Directory)
+	if err != nil {
+		return application.CreateProjectResult{}, mapserve.Project{}, fmt.Errorf("serve %s: %w", result.Directory, err)
+	}
+	return result, project, nil
+}
+
+// composeStudioProject composes the map's use cases over the project
+// whose ruleset root holds, as run composes them for the project a
+// command runs in: define observes the project's code, the overview
+// shows the recorded language alone.
+func composeStudioProject(root string) (mapserve.Project, error) {
+	rulesPath := filepath.Join(root, rule.RulesetFileName)
+	recording, _, knowledge, err := composeKnowledge(root, rulesPath)
+	if err != nil {
+		return mapserve.Project{}, fmt.Errorf("compose map project: %w", err)
+	}
+	localPatterns, err := filesystempattern.NewSource(filepath.Join(root, ".arclint", "patterns"))
+	if err != nil {
+		return mapserve.Project{}, fmt.Errorf("compose map project: %w", err)
+	}
+	repository, err := yamlrule.NewRepository(rulesPath, knowledge, embeddedpattern.NewSource(), localPatterns)
+	if err != nil {
+		return mapserve.Project{}, fmt.Errorf("compose map project: %w", err)
+	}
+	observations, err := filesystemobservation.NewSource(root,
+		golangfacts.NewProducer(), typescriptfacts.NewProducer(), pythonfacts.NewProducer())
+	if err != nil {
+		return mapserve.Project{}, fmt.Errorf("compose map project: %w", err)
+	}
+	overview, err := application.NewGetDomainOverview(knowledge)
+	if err != nil {
+		return mapserve.Project{}, fmt.Errorf("compose map project: %w", err)
+	}
+	define, err := application.NewDefineDomainDefinition(knowledge, filepath.Base(root))
+	if err != nil {
+		return mapserve.Project{}, fmt.Errorf("compose map project: %w", err)
+	}
+	remove, err := application.NewRemoveDomainDefinition(knowledge)
+	if err != nil {
+		return mapserve.Project{}, fmt.Errorf("compose map project: %w", err)
+	}
+	return mapserve.Project{
+		Directory: root,
+		Overview:  overview,
+		Define:    define.WithObservations(repository, observations),
+		Remove:    remove,
+		Accepted:  acceptedRecording(root, recording),
+	}, nil
+}
+
+// projectDirectories implements application.ProjectDirectories: git
+// makes the directory, the scaffold writer writes its ruleset, and the
+// domain file is the one that ruleset resolves to.
+type projectDirectories struct{}
+
+func (projectDirectories) Make(dir string) (bool, error) {
+	made, err := gitproject.Make(dir)
+	if err != nil {
+		return made, fmt.Errorf("%w", err)
+	}
+	return made, nil
+}
+
+func (projectDirectories) Discard(dir string, made bool) error {
+	if err := gitproject.Discard(dir, made); err != nil {
+		return fmt.Errorf("%w", err)
+	}
+	return nil
+}
+
+func (projectDirectories) Ruleset(dir string) (application.RulesetScaffold, error) {
+	writer, err := filesystemscaffold.NewWriter(dir)
+	if err != nil {
+		return nil, fmt.Errorf("%w", err)
+	}
+	return writer, nil
+}
+
+func (projectDirectories) DomainFile(dir string) (vocab.Repository, error) {
+	_, _, knowledge, err := composeKnowledge(dir, filepath.Join(dir, rule.RulesetFileName))
+	if err != nil {
+		return nil, err
+	}
+	return knowledge, nil
 }
 
 // acceptedRecording is the recording the remote's default branch holds,

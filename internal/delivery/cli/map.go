@@ -96,7 +96,8 @@ an inspector that shows what the domain file records for the selected
 entry. Entries are edited, added and removed in the page as drafts;
 Publish records them in the domain file through the same define and
 remove the command line runs, so every edit is validated as arclint
-domain define validates it.`
+domain define validates it. New project starts another project in its
+own git repository, and the page then builds its domain.`
 
 const mapServeLong = `Serve a map of the project's recorded Ubiquitous Language to a browser.
 
@@ -116,6 +117,12 @@ remove each, and shows what each one changed; a draft the language
 refuses stays a draft with the reason. What happens to the branch after
 that is git's: commit and propose the change as the project does.
 Without a remote default branch the page shows the recording alone.
+
+New project creates a project in a new or empty directory whose parent
+exists: a git repository, the starter rules.arclint.yaml arclint init
+writes, and a domain file recording an empty language under the
+project's name. The page serves that project from then on, to build its
+domain. Nothing is committed and no remote is created.
 
 With no path, the project is the one whose rules.arclint.yaml is found
 upward from the working directory, as every other command finds it;
