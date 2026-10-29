@@ -2,8 +2,8 @@
 // the page that draws the recorded Ubiquitous Language, embedded at
 // build time, the overview as the JSON renderer spells it, the overview
 // the default branch records, the define and remove use cases the page
-// publishes its drafts through, and the creation of a new project the
-// page then serves.
+// publishes its drafts through, and the projects the page lists,
+// creates, opens, updates and removes.
 package mapserve
 
 import (
@@ -37,6 +37,9 @@ const (
 	RemovePath   = "/api/remove"
 	ProjectPath  = "/api/project"
 	ProjectsPath = "/api/projects"
+	OpenPath     = "/api/projects/open"
+	UpdatePath   = "/api/projects/update"
+	ForgetPath   = "/api/projects/remove"
 )
 
 // requestLimit bounds one request's body; a recorded text is at most a
@@ -72,23 +75,40 @@ type Project struct {
 	Accepted  Accepted
 }
 
+// Projects are the use cases over the projects the page lists, and
+// Serve, which composes the use cases a project is served with.
+type Projects struct {
+	List   application.ListProjects
+	Create application.CreateProject
+	Open   application.OpenProject
+	Update application.UpdateProject
+	Remove application.RemoveProject
+	Serve  func(dir string) (Project, error)
+}
+
 // Server implements the CLI's MapServer port over HTTP. It serves
-// Project until the page creates a new project through Create, and
-// serves that one from then on.
+// Project until the page creates or opens another project, and serves
+// that one from then on.
 type Server struct {
-	Reports Reports
-	Project Project
-	Create  func(application.CreateProjectRequest) (application.CreateProjectResult, Project, error)
+	Reports  Reports
+	Project  Project
+	Projects Projects
 }
 
 // Serve binds address, tells listening the URL a browser opens, and
 // answers requests until the listener fails. An error from listening
-// stops the server before it answers anything.
+// stops the server before it answers anything. The project served at
+// start is remembered among the listed projects; when it cannot be,
+// the list says why.
 func (s Server) Serve(address string, listening func(url string) error) error {
-	handler, err := s.Handler()
+	served, err := s.studio()
 	if err != nil {
 		return err
 	}
+	if _, err := s.Projects.Open.Execute(served.project.Directory); err != nil {
+		served.unremembered = err.Error()
+	}
+	handler := served.routes()
 	var config net.ListenConfig
 	listener, err := config.Listen(context.Background(), "tcp", address)
 	if err != nil {
@@ -112,30 +132,49 @@ func (s Server) Serve(address string, listening func(url string) error) error {
 // /api/overview with the overview its domain file records now, GET
 // /api/accepted with the one the default branch records, POST
 // /api/define and POST /api/remove with one edit each through the
-// define and remove use cases, and POST /api/projects with a new project
-// served from then on; any other request, and any request addressed by
+// define and remove use cases, GET /api/projects with the listed
+// projects, and POST /api/projects, /api/projects/open,
+// /api/projects/update and /api/projects/remove to create, open, update
+// and remove one; any other request, and any request addressed by
 // another name or sent by another page, is refused.
 func (s Server) Handler() (http.Handler, error) {
-	if s.Reports.Overview == nil || s.Reports.Defined == nil || s.Reports.Removed == nil {
-		return nil, errors.New("map server: not composed with the report writers")
+	served, err := s.studio()
+	if err != nil {
+		return nil, err
 	}
-	if s.Create == nil {
-		return nil, errors.New("map server: not composed with project creation")
+	return served.routes(), nil
+}
+
+func (s Server) studio() (*studio, error) {
+	switch {
+	case s.Reports.Overview == nil || s.Reports.Defined == nil || s.Reports.Removed == nil:
+		return nil, errors.New("map server: not composed with the report writers")
+	case s.Projects.List == (application.ListProjects{}) || s.Projects.Create == (application.CreateProject{}) ||
+		s.Projects.Open == (application.OpenProject{}) || s.Projects.Update == (application.UpdateProject{}) ||
+		s.Projects.Remove == (application.RemoveProject{}) || s.Projects.Serve == nil:
+		return nil, errors.New("map server: not composed with the project use cases")
 	}
 	if err := s.Project.composed(); err != nil {
 		return nil, err
 	}
-	served := &studio{reports: s.Reports, create: s.Create, project: s.Project}
+	return &studio{reports: s.Reports, projects: s.Projects, project: s.Project}, nil
+}
+
+func (s *studio) routes() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET "+ProjectPath, served.alone(served.directory))
-	mux.HandleFunc("GET "+OverviewPath, served.alone(served.overview))
-	mux.HandleFunc("GET "+AcceptedPath, served.alone(served.accepted))
-	mux.HandleFunc("POST "+DefinePath, served.alone(served.define))
-	mux.HandleFunc("POST "+RemovePath, served.alone(served.remove))
-	mux.HandleFunc("POST "+ProjectsPath, served.alone(served.createProject))
+	mux.HandleFunc("GET "+ProjectPath, s.alone(s.directory))
+	mux.HandleFunc("GET "+OverviewPath, s.alone(s.overview))
+	mux.HandleFunc("GET "+AcceptedPath, s.alone(s.accepted))
+	mux.HandleFunc("POST "+DefinePath, s.alone(s.define))
+	mux.HandleFunc("POST "+RemovePath, s.alone(s.remove))
+	mux.HandleFunc("GET "+ProjectsPath, s.alone(s.listProjects))
+	mux.HandleFunc("POST "+ProjectsPath, s.alone(s.createProject))
+	mux.HandleFunc("POST "+OpenPath, s.alone(s.openProject))
+	mux.HandleFunc("POST "+UpdatePath, s.alone(s.updateProject))
+	mux.HandleFunc("POST "+ForgetPath, s.alone(s.removeProject))
 	mux.HandleFunc("GET "+ScriptPath, serveBytes("text/javascript; charset=utf-8", studioScript))
 	mux.HandleFunc("GET /{$}", serveBytes("text/html; charset=utf-8", studioPage))
-	return fromThePage(mux), nil
+	return fromThePage(mux)
 }
 
 func (p Project) composed() error {
@@ -153,12 +192,14 @@ func (p Project) composed() error {
 }
 
 // studio is the state the page changes: the project served, which a
-// created project replaces.
+// created or opened project replaces, and why the project served at
+// start is not remembered, when it is not.
 type studio struct {
-	reports Reports
-	create  func(application.CreateProjectRequest) (application.CreateProjectResult, Project, error)
-	mu      sync.Mutex
-	project Project
+	reports      Reports
+	projects     Projects
+	mu           sync.Mutex
+	project      Project
+	unremembered string
 }
 
 // alone answers each request by itself. Define and remove each read the
@@ -204,6 +245,24 @@ func addressedDirectly(hostport string) bool {
 	return strings.EqualFold(host, "localhost") || net.ParseIP(host) != nil
 }
 
+// projectPlace is where the project served is, and where a new one is
+// suggested: beside it. A project opened or removed is named by its
+// directory alone, and Deleted says whether its files went too.
+type projectPlace struct {
+	Directory string `json:"directory"`
+	Beside    string `json:"beside,omitempty"`
+	Deleted   bool   `json:"deleted,omitempty"`
+}
+
+// projectCreated is a created project: where it is, the name its domain
+// file records, its ruleset and its domain file.
+type projectCreated struct {
+	Directory string `json:"directory"`
+	Project   string `json:"project"`
+	Ruleset   string `json:"ruleset"`
+	Source    string `json:"source"`
+}
+
 // directory names the project served and the directory a new project
 // is suggested in: beside it.
 func (s *studio) directory(w http.ResponseWriter, _ *http.Request) {
@@ -211,7 +270,7 @@ func (s *studio) directory(w http.ResponseWriter, _ *http.Request) {
 	if !strings.HasSuffix(beside, string(filepath.Separator)) {
 		beside += string(filepath.Separator)
 	}
-	body, _ := json.Marshal(map[string]string{"directory": s.project.Directory, "beside": beside})
+	body, _ := json.Marshal(projectPlace{Directory: s.project.Directory, Beside: beside})
 	writeJSON(w, http.StatusOK, body)
 }
 
@@ -395,18 +454,159 @@ func (s *studio) createProject(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &body) {
 		return
 	}
-	result, project, err := s.create(application.CreateProjectRequest{Directory: body.Directory, Name: body.Name, Languages: body.Languages})
+	result, err := s.projects.Create.Execute(application.CreateProjectRequest{Directory: body.Directory, Name: body.Name, Languages: body.Languages})
 	if err != nil {
 		writeError(w, http.StatusUnprocessableEntity, err)
 		return
 	}
-	if err := project.composed(); err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Errorf("serve %s: %w", result.Directory, err))
+	if err := s.serve(result.Directory); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	s.project = project
-	created, _ := json.Marshal(map[string]string{"directory": result.Directory, "project": result.Project, "ruleset": result.Ruleset, "source": result.Source})
+	created, _ := json.Marshal(projectCreated{Directory: result.Directory, Project: result.Project, Ruleset: result.Ruleset, Source: result.Source})
 	writeJSON(w, http.StatusCreated, created)
+}
+
+// serve composes the project at dir and serves it from then on; a
+// project that cannot be composed leaves the one served as it was.
+func (s *studio) serve(dir string) error {
+	project, err := s.projects.Serve(dir)
+	if err == nil {
+		err = project.composed()
+	}
+	if err != nil {
+		return fmt.Errorf("serve %s: %w", dir, err)
+	}
+	s.project = project
+	return nil
+}
+
+// projectSummary is one listed project as the page reads it.
+type projectSummary struct {
+	Directory   string `json:"directory"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Problem     string `json:"problem,omitempty"`
+	Served      bool   `json:"served"`
+}
+
+func (s *studio) summaryOf(p application.ProjectSummary) projectSummary {
+	return projectSummary{Directory: p.Directory, Name: p.Name, Description: p.Description, Problem: p.Problem, Served: p.Directory == s.project.Directory}
+}
+
+// listProjects lists the project served, then the remembered ones; a
+// list that cannot be read in full says why beside what it could read.
+func (s *studio) listProjects(w http.ResponseWriter, _ *http.Request) {
+	listed, err := s.projects.List.Execute(s.project.Directory)
+	projects := make([]projectSummary, 0, len(listed))
+	for _, p := range listed {
+		projects = append(projects, s.summaryOf(p))
+	}
+	problem := s.unremembered
+	if err != nil {
+		problem = err.Error()
+	}
+	body, _ := json.Marshal(map[string]any{"projects": projects, "problem": problem})
+	writeJSON(w, http.StatusOK, body)
+}
+
+// openRequest names a path inside the project to open.
+type openRequest struct {
+	Directory string `json:"directory"`
+}
+
+// openProject serves the project a path lies in from then on.
+func (s *studio) openProject(w http.ResponseWriter, r *http.Request) {
+	var body openRequest
+	if !readJSON(w, r, &body) {
+		return
+	}
+	dir, err := s.projects.Open.Execute(body.Directory)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err)
+		return
+	}
+	if err := s.serve(dir); err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err)
+		return
+	}
+	opened, _ := json.Marshal(projectPlace{Directory: dir})
+	writeJSON(w, http.StatusOK, opened)
+}
+
+// updateRequest is a project's name and description as they should be
+// recorded.
+type updateRequest struct {
+	Directory   string `json:"directory"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+// updateProject records a listed project's name and description in its
+// domain file.
+func (s *studio) updateProject(w http.ResponseWriter, r *http.Request) {
+	var body updateRequest
+	if !readJSON(w, r, &body) {
+		return
+	}
+	if !s.lists(w, body.Directory) {
+		return
+	}
+	updated, err := s.projects.Update.Execute(application.UpdateProjectRequest{Directory: body.Directory, Name: body.Name, Description: body.Description})
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err)
+		return
+	}
+	summary, _ := json.Marshal(s.summaryOf(updated))
+	writeJSON(w, http.StatusOK, summary)
+}
+
+// removeProjectRequest names the project to take off the list and whether to
+// delete its files, confirmed by its directory's name.
+type removeProjectRequest struct {
+	Directory    string `json:"directory"`
+	DeleteFiles  bool   `json:"deleteFiles"`
+	Confirmation string `json:"confirmation"`
+}
+
+// removeProject takes a project off the list, deleting its files when
+// asked and confirmed. The project served is never removed: the page
+// opens another first.
+func (s *studio) removeProject(w http.ResponseWriter, r *http.Request) {
+	var body removeProjectRequest
+	if !readJSON(w, r, &body) {
+		return
+	}
+	if body.Directory == s.project.Directory {
+		writeError(w, http.StatusConflict, fmt.Errorf("%s is the project the map serves; open another project before removing it", body.Directory))
+		return
+	}
+	if err := s.projects.Remove.Execute(application.RemoveProjectRequest{Directory: body.Directory, DeleteFiles: body.DeleteFiles, Confirmation: body.Confirmation}); err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err)
+		return
+	}
+	removed, _ := json.Marshal(projectPlace{Directory: body.Directory, Deleted: body.DeleteFiles})
+	writeJSON(w, http.StatusOK, removed)
+}
+
+// lists refuses a request naming a project the page does not list: the
+// one served or a remembered one.
+func (s *studio) lists(w http.ResponseWriter, dir string) bool {
+	if dir == s.project.Directory {
+		return true
+	}
+	listed, err := s.projects.List.Execute(s.project.Directory)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return false
+	}
+	for _, p := range listed {
+		if p.Directory == dir {
+			return true
+		}
+	}
+	writeError(w, http.StatusUnprocessableEntity, fmt.Errorf("%s is not on the list of projects", dir))
+	return false
 }
 
 // refusalStatus maps a refused edit as the CLI maps it: a request that

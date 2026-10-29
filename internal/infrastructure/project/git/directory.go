@@ -1,7 +1,8 @@
 // Package gitproject makes the directory a new project lives in: an
 // empty directory holding a git repository and nothing else. It never
-// writes into a directory that holds anything, and a project that
-// cannot be started is taken away again.
+// writes into a directory that holds anything, a project that cannot be
+// started is taken away again, and only a project's own directory is
+// ever deleted.
 package gitproject
 
 import (
@@ -16,6 +17,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/wixregiga/arclint/internal/domain/rule"
 )
 
 // gitTimeout bounds git init, so a request never waits on a stuck git.
@@ -76,6 +79,33 @@ func Discard(dir string, made bool) error {
 		if err := os.RemoveAll(filepath.Join(dir, entry.Name())); err != nil {
 			return fmt.Errorf("empty %s: %w", dir, err)
 		}
+	}
+	return nil
+}
+
+// Delete removes the project at dir from disk, its git repository
+// included. dir must be an absolute path to a directory that holds the
+// project's rules.arclint.yaml, so nothing but a project's own
+// directory is ever deleted.
+func Delete(dir string) error {
+	if !filepath.IsAbs(dir) {
+		return fmt.Errorf("%q is not an absolute path", dir)
+	}
+	dir = filepath.Clean(dir)
+	if dir == filepath.Dir(dir) {
+		return fmt.Errorf("%s is the root of the file system", dir)
+	}
+	info, err := os.Lstat(filepath.Join(dir, rule.RulesetFileName))
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return fmt.Errorf("%s holds no %s; only a project's own directory is deleted", dir, rule.RulesetFileName)
+	case err != nil:
+		return fmt.Errorf("inspect %s: %w", dir, err)
+	case !info.Mode().IsRegular():
+		return fmt.Errorf("%s in %s is not a file; only a project's own directory is deleted", rule.RulesetFileName, dir)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return fmt.Errorf("delete %s: %w", dir, err)
 	}
 	return nil
 }

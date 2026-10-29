@@ -96,8 +96,9 @@ an inspector that shows what the domain file records for the selected
 entry. Entries are edited, added and removed in the page as drafts;
 Publish records them in the domain file through the same define and
 remove the command line runs, so every edit is validated as arclint
-domain define validates it. New project starts another project in its
-own git repository, and the page then builds its domain.`
+domain define validates it. Projects lists this user's projects, to
+create one in its own git repository, open, rename, describe or remove
+one, and the page then builds the domain of the project it serves.`
 
 const mapServeLong = `Serve a map of the project's recorded Ubiquitous Language to a browser.
 
@@ -118,11 +119,17 @@ refuses stays a draft with the reason. What happens to the branch after
 that is git's: commit and propose the change as the project does.
 Without a remote default branch the page shows the recording alone.
 
-New project creates a project in a new or empty directory whose parent
-exists: a git repository, the starter rules.arclint.yaml arclint init
-writes, and a domain file recording an empty language under the
-project's name. The page serves that project from then on, to build its
-domain. Nothing is committed and no remote is created.
+Projects lists the project served and every project this user has
+served, created or opened, remembered in arclint/projects.json under
+the user's configuration directory. New creates a project in a new or
+empty directory whose parent exists: a git repository, the starter
+rules.arclint.yaml arclint init writes, and a domain file recording an
+empty language under the project's name; nothing is committed and no
+remote is created. Open serves a listed project, or the one found
+upward from a path. Edit renames a project and replaces its
+description in its domain file. Remove takes a project off the list;
+its files are deleted only when asked and confirmed by typing its
+directory's name. The project served is never removed.
 
 With no path, the project is the one whose rules.arclint.yaml is found
 upward from the working directory, as every other command finds it;

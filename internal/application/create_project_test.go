@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -19,8 +20,13 @@ type memoryDirectories struct {
 	makeErr    error
 	rulesetErr error
 	discarded  string
+	deleted    []string
 	ruleset    recordingScaffold
 	knowledge  memoryKnowledge
+	// projects are the domain files of other projects, by directory.
+	projects map[string]*memoryKnowledge
+	// located maps a path to the project it lies in.
+	located map[string]string
 }
 
 func (d *memoryDirectories) Make(dir string) (bool, error) {
@@ -43,17 +49,56 @@ func (d *memoryDirectories) Ruleset(string) (application.RulesetScaffold, error)
 	return &d.ruleset, nil
 }
 
-func (d *memoryDirectories) DomainFile(string) (vocab.Repository, error) {
+func (d *memoryDirectories) DomainFile(dir string) (vocab.Repository, error) {
 	d.steps = append(d.steps, "domain file")
+	if project, ok := d.projects[dir]; ok {
+		return project, nil
+	}
 	if d.ruleset.content == "" {
-		return nil, errors.New("the domain file was opened before the ruleset that names it was written")
+		return nil, fmt.Errorf("%s holds no rules.arclint.yaml", dir)
 	}
 	return &d.knowledge, nil
 }
 
+func (d *memoryDirectories) Locate(path string) (string, error) {
+	if dir, ok := d.located[path]; ok {
+		return dir, nil
+	}
+	return "", fmt.Errorf("no rules.arclint.yaml found in %s or any parent directory", path)
+}
+
+func (d *memoryDirectories) Delete(dir string) error {
+	d.deleted = append(d.deleted, dir)
+	return nil
+}
+
+// memoryRegistry remembers projects in memory, most recent first.
+type memoryRegistry struct {
+	dirs []string
+	err  error
+}
+
+func (r *memoryRegistry) Directories() ([]string, error) { return slices.Clone(r.dirs), r.err }
+
+func (r *memoryRegistry) Remember(dir string) error {
+	if r.err != nil {
+		return r.err
+	}
+	r.dirs = append([]string{dir}, slices.DeleteFunc(r.dirs, func(d string) bool { return d == dir })...)
+	return nil
+}
+
+func (r *memoryRegistry) Forget(dir string) error {
+	if r.err != nil {
+		return r.err
+	}
+	r.dirs = slices.DeleteFunc(r.dirs, func(d string) bool { return d == dir })
+	return nil
+}
+
 func TestCreateProjectStartsTheRulesetAndAnEmptyLanguage(t *testing.T) {
 	dirs := &memoryDirectories{}
-	uc, err := application.NewCreateProject(dirs)
+	uc, err := application.NewCreateProject(dirs, &memoryRegistry{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +123,7 @@ func TestCreateProjectStartsTheRulesetAndAnEmptyLanguage(t *testing.T) {
 
 func TestCreateProjectNamesTheProjectForItsDirectory(t *testing.T) {
 	dirs := &memoryDirectories{}
-	uc, err := application.NewCreateProject(dirs)
+	uc, err := application.NewCreateProject(dirs, &memoryRegistry{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +149,7 @@ func TestCreateProjectRefusesBeforeMakingAnything(t *testing.T) {
 	}
 	for _, c := range cases {
 		dirs := &memoryDirectories{}
-		uc, err := application.NewCreateProject(dirs)
+		uc, err := application.NewCreateProject(dirs, &memoryRegistry{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -119,7 +164,7 @@ func TestCreateProjectRefusesBeforeMakingAnything(t *testing.T) {
 
 func TestCreateProjectStopsWhenTheDirectoryIsRefused(t *testing.T) {
 	dirs := &memoryDirectories{makeErr: errors.New("/x/orders already holds files")}
-	uc, err := application.NewCreateProject(dirs)
+	uc, err := application.NewCreateProject(dirs, &memoryRegistry{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +190,7 @@ func TestCreateProjectTakesBackAProjectItCannotStart(t *testing.T) {
 			"make, ruleset, domain file, discard made=true", "disk full"},
 	}
 	for _, c := range cases {
-		uc, err := application.NewCreateProject(c.dirs)
+		uc, err := application.NewCreateProject(c.dirs, &memoryRegistry{})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -160,8 +205,41 @@ func TestCreateProjectTakesBackAProjectItCannotStart(t *testing.T) {
 	}
 }
 
-func TestNewCreateProjectNeedsItsDirectories(t *testing.T) {
-	if _, err := application.NewCreateProject(nil); err == nil {
-		t.Fatal("NewCreateProject(nil) accepted")
+func TestCreateProjectRemembersTheProject(t *testing.T) {
+	dirs, registry := &memoryDirectories{}, &memoryRegistry{dirs: []string{"/work/billing"}}
+	uc, err := application.NewCreateProject(dirs, registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(t.TempDir(), "orders")
+	if _, err := uc.Execute(application.CreateProjectRequest{Directory: dir}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(registry.dirs, ", ") != dir+", /work/billing" {
+		t.Fatalf("remembered %v", registry.dirs)
+	}
+}
+
+func TestCreateProjectTakesBackAProjectItCannotRemember(t *testing.T) {
+	dirs := &memoryDirectories{}
+	uc, err := application.NewCreateProject(dirs, &memoryRegistry{err: errors.New("read-only file system")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(t.TempDir(), "orders")
+	if _, err := uc.Execute(application.CreateProjectRequest{Directory: dir}); err == nil || !strings.Contains(err.Error(), "read-only file system") {
+		t.Fatalf("err = %v", err)
+	}
+	if dirs.discarded != dir || !strings.HasSuffix(strings.Join(dirs.steps, ", "), "discard made=true") {
+		t.Fatalf("steps %v, discarded %q", dirs.steps, dirs.discarded)
+	}
+}
+
+func TestNewCreateProjectNeedsItsPorts(t *testing.T) {
+	if _, err := application.NewCreateProject(nil, &memoryRegistry{}); err == nil {
+		t.Fatal("NewCreateProject without directories accepted")
+	}
+	if _, err := application.NewCreateProject(&memoryDirectories{}, nil); err == nil {
+		t.Fatal("NewCreateProject without a registry accepted")
 	}
 }

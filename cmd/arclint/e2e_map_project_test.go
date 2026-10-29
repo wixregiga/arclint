@@ -4,19 +4,22 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/wixregiga/arclint/internal/delivery/mapserve"
+	jsonprojects "github.com/wixregiga/arclint/internal/infrastructure/project/json"
 )
 
 // TestStudioCreatesAProjectTheCommandLineThenWorksIn creates a project
 // through the map server as the binary composes it, builds a bounded
 // context and an aggregate in it from the page's requests, and runs the
 // binary in the new project: its ruleset loads, its domain file holds
-// what the page published, and its check runs.
+// what the page published, and its check runs. The page then renames
+// and describes it, opens the project it started with, and deletes it.
 func TestStudioCreatesAProjectTheCommandLineThenWorksIn(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not installed")
@@ -25,7 +28,8 @@ func TestStudioCreatesAProjectTheCommandLineThenWorksIn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := composeStudio(repoCopy, mustDefaultRecording(t), studio.Overview, studio.Define, studio.Remove)
+	registry := jsonprojects.NewRegistry(filepath.Join(t.TempDir(), "projects.json"))
+	server, err := composeStudio(repoCopy, mustDefaultRecording(t), studio.Overview, studio.Define, studio.Remove, registry)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,5 +85,28 @@ func TestStudioCreatesAProjectTheCommandLineThenWorksIn(t *testing.T) {
 	stdout, stderr, code = runBin(t, dir, nil, "check", ".")
 	if code != 0 || !strings.Contains(stdout, "aggregate/protects-an-invariant aggregate Order of context ordering") {
 		t.Fatalf("check: exit %d, want the recorded Order judged\n%s\n%s", code, stdout, stderr)
+	}
+
+	// Renamed and described through the page, the project reads so on the
+	// command line; back in the project it started with, the page deletes
+	// the new one when its name is typed.
+	if rec := request(http.MethodPost, mapserve.UpdatePath, map[string]any{"directory": dir, "name": "Ordering", "description": "Taking and fulfilling customer orders."}); rec.Code != http.StatusOK {
+		t.Fatalf("update: status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	stdout, stderr, code = runBin(t, dir, nil, "domain")
+	if code != 0 || !strings.Contains(stdout, "Project domain: Ordering") || !strings.Contains(stdout, "Taking and fulfilling customer orders.") {
+		t.Fatalf("domain after the update: exit %d\n%s\n%s", code, stdout, stderr)
+	}
+	if rec := request(http.MethodPost, mapserve.OpenPath, map[string]any{"directory": repoCopy}); rec.Code != http.StatusOK {
+		t.Fatalf("open: status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if rec := request(http.MethodPost, mapserve.ForgetPath, map[string]any{"directory": dir, "deleteFiles": true, "confirmation": "orders"}); rec.Code != http.StatusOK {
+		t.Fatalf("delete: status = %d, body %s", rec.Code, rec.Body.String())
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("the project stayed on disk: %v", err)
+	}
+	if dirs, err := registry.Directories(); err != nil || len(dirs) != 1 || dirs[0] != repoCopy {
+		t.Fatalf("remembered %v, %v", dirs, err)
 	}
 }

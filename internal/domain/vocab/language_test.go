@@ -387,3 +387,30 @@ func TestVerifyingTestPathsListTheNamedFiles(t *testing.T) {
 		t.Errorf("paths = %v, want %v", got, want)
 	}
 }
+
+func TestRenameKeepsEverythingButTheProject(t *testing.T) {
+	contexts, relations := ticketing()
+	lang, err := vocab.NewUbiquitousLanguage("ticketing", "Selling and checking tickets.", contexts, relations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recording, err := vocab.NewDomainRecording("docs/domain.arclint.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lang.Recording, lang.DescriptionLine = recording, 3
+	renamed, err := lang.Rename("  boxoffice  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if renamed.Project != "boxoffice" || renamed.Description != lang.Description || len(renamed.Contexts) != len(lang.Contexts) ||
+		len(renamed.Relations) != len(lang.Relations) || renamed.Recording != lang.Recording || renamed.DescriptionLine != 3 {
+		t.Fatalf("renamed = %+v", renamed)
+	}
+	if lang.Project != "ticketing" {
+		t.Fatalf("the receiver changed: %q", lang.Project)
+	}
+	if _, err := lang.Rename(" "); err == nil || !strings.Contains(err.Error(), "project is empty") {
+		t.Fatalf("an empty project: err = %v", err)
+	}
+}

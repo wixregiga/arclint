@@ -7,9 +7,12 @@ same document as the remote's default branch records it, and draws them
 with studio.js: a navigator of the bounded contexts, a concept map of
 the active context, and an inspector of what the domain file records.
 Entries are edited as drafts; Publish posts each draft to /api/define or
-/api/remove, the define and remove the command line runs. New project
-posts to /api/projects: the server creates the project in its own git
-repository and serves it from then on, so its domain is built here.
+/api/remove, the define and remove the command line runs. Projects
+lists, from /api/projects, the project served and every one this user
+has served, created or opened; there a project is created in its own git
+repository, opened, renamed and described, or taken off the list with
+its files deleted only when asked and confirmed. The server serves a
+created or opened project from then on, so its domain is built here.
 -->
 <html lang="en">
 <head>
@@ -93,6 +96,14 @@ repository and serves it from then on, so its domain is built here.
   .row .choices{display:flex;flex-wrap:wrap;gap:4px 12px;padding-top:4px}
   .row .choices label{color:var(--ink);padding:0;display:flex;gap:4px;align-items:center;white-space:nowrap;overflow-wrap:normal}
   .row .choices input{width:auto;margin:0}
+  .proj{padding:8px 12px;border-bottom:1px solid var(--faint)}
+  .proj.served{background:var(--selbg)}
+  .proj .head{display:flex;gap:6px;align-items:center} .proj .head b{font-weight:600;overflow:hidden;text-overflow:ellipsis}
+  .proj .dir{color:var(--muted);font-size:11px;overflow-wrap:anywhere}
+  .proj .desc{margin-top:2px;font-size:12px}
+  .proj .actions{padding:6px 0 0} .proj .actions button{padding:2px 8px;font-size:11px}
+  .proj .row{padding:3px 0}
+  .proj label.check{display:flex;gap:6px;align-items:center;padding:4px 0;font-size:12px} .proj label.check input{width:auto;margin:0}
   .actions{display:flex;gap:6px;padding:8px 12px;flex-wrap:wrap}
   .note{padding:4px 12px;color:var(--muted);font-size:11px}
   .note.err{color:var(--missing)}
@@ -113,7 +124,7 @@ repository and serves it from then on, so its domain is built here.
     <span class="name">ArcLint Studio</span>
     <span class="crumb" id="crumb"></span>
     <span class="grow"></span>
-    <button id="newProject" title="Start a new project in its own git repository">New project</button>
+    <button id="projects" title="List, open, create, edit and remove projects">Projects</button>
     <button id="changes" title="What the drafts and the domain file change">Changes</button>
     <button id="publish" class="primary" title="Record every draft in the domain file">Publish</button>
     <span class="source" id="source"></span>
@@ -149,10 +160,12 @@ repository and serves it from then on, so its domain is built here.
   /* directory is the project served, beside where a new one is suggested;
      recorded is its domain file as it is; accepted the default branch's, or
      null with the reason; doc is recorded with the drafts applied, what the
-     page draws. view is 'map', 'changes' or 'project'; edit is the entry
-     form being filled, project the new project's. */
+     page draws. view is 'map', 'changes', 'projects' or 'project'; edit is
+     the entry form being filled, project the new project's, list the
+     listed projects with the one being edited, removed or opened. */
   var st = { directory: '', beside: '', recorded: null, accepted: null, acceptedBranch: '', acceptedReason: '', doc: null, drafts: [], publishing: false, context: null, concepts: [], sel: null,
-    query: '', filter: '', hidden: {}, zoom: 1, fit: 1, view: 'map', edit: null, project: null, creating: false, message: '', results: [] };
+    query: '', filter: '', hidden: {}, zoom: 1, fit: 1, view: 'map', edit: null, project: null, creating: false, message: '', results: [],
+    list: { items: [], problem: '', loaded: false, edit: null, removing: null, opening: null, busy: false, error: '' } };
 
   function selected() { return st.sel ? S.byId(st.concepts, st.sel) : null; }
   function shown(c) { return !st.hidden[c.concept] && S.matches(c, st.query, st.filter); }
@@ -340,11 +353,62 @@ repository and serves it from then on, so its domain is built here.
       '<div class="actions"><button data-act="create" class="primary"' + (st.creating ? ' disabled' : '') + '>' + (st.creating ? 'Creating…' : 'Create') + '</button><button data-act="cancel">Cancel</button></div>';
     if (p.error) h += '<div class="note err">' + esc(p.error) + '</div>';
     h += '<div class="note">Creates the directory with a git repository, a starter rules.arclint.yaml and an empty domain file, then shows the project here to build its domain. The directory must be new or empty.</div>';
-    if (st.drafts.length) h += '<div class="note err">' + st.drafts.length + ' draft' + (st.drafts.length === 1 ? ' is' : 's are') + ' not published in ' + esc(st.doc.project || st.directory) + '; creating a project discards ' + (st.drafts.length === 1 ? 'it' : 'them') + '.</div>';
-    return h + '</div>';
+    return h + draftsNote('creating a project') + '</div>';
+  }
+  /* Drafts belong to the project served; switching to another discards them. */
+  function draftsNote(switching) {
+    if (!st.drafts.length) return '';
+    return '<div class="note err">' + st.drafts.length + ' draft' + (st.drafts.length === 1 ? ' is' : 's are') + ' not published in ' + esc(st.doc.project || st.directory) + '; ' + switching + ' discards ' + (st.drafts.length === 1 ? 'it' : 'them') + '.</div>';
   }
 
+  /* The projects view: each listed project with what it can do. The one
+     served is opened already and is never removed; a project that cannot
+     be read is listed with the reason, to be removed. A form names its
+     project by its place in the list, so no path travels through the
+     markup. */
+  function renderProjects() {
+    var L = st.list, h = '<div class="sec"><div class="actions" style="padding-top:0"><button data-pact="new" title="Start a new project in its own git repository">+ New</button>' +
+      '<button data-pact="opening" title="Open a project by a path inside it">Open…</button></div>';
+    if (!L.loaded) h += '<div class="note">Loading…</div>';
+    if (L.problem) h += '<div class="note err">Projects are not remembered: ' + esc(L.problem) + '</div>';
+    if (L.error) h += '<div class="note err">' + esc(L.error) + '</div>';
+    if (L.opening) {
+      h += '<div class="proj"><div class="row"><label>Path</label><input data-pf="path" value="' + esc(L.opening.path) + '" placeholder="a directory inside the project" spellcheck="false"></div>' +
+        '<div class="actions"><button data-pact="open" class="primary"' + (L.busy ? ' disabled' : '') + '>Open</button><button data-pact="cancel">Cancel</button></div>' +
+        (L.opening.error ? '<div class="note err">' + esc(L.opening.error) + '</div>' : '') + '</div>';
+    }
+    h += L.items.map(projectHTML).join('');
+    return h + draftsNote('opening another project') + '</div>';
+  }
+  function projectHTML(p, i) {
+    var L = st.list, h = '<div class="proj' + (p.served ? ' served' : '') + '"><div class="head"><b>' + esc(p.name || basename(p.directory)) + '</b>' +
+      (p.served ? '<span class="mark Accepted">Serving</span>' : '') + '</div><div class="dir">' + esc(p.directory) + '</div>';
+    if (p.description) h += '<div class="desc">' + esc(p.description) + '</div>';
+    if (p.problem) h += '<div class="note err" style="padding:2px 0">' + esc(p.problem) + '</div>';
+    if (L.edit && L.edit.directory === p.directory) {
+      return h + '<div class="row"><label>Name <span class="req">*</span></label><input data-pf="name" value="' + esc(L.edit.name) + '" spellcheck="false"></div>' +
+        '<div class="row"><label>Description</label><textarea data-pf="description">' + esc(L.edit.description) + '</textarea></div>' +
+        '<div class="actions"><button data-pact="save" data-pi="' + i + '" class="primary"' + (L.busy ? ' disabled' : '') + '>Save</button><button data-pact="cancel">Cancel</button></div>' +
+        (L.edit.error ? '<div class="note err">' + esc(L.edit.error) + '</div>' : '') + '<div class="note" style="padding:2px 0">Recorded in the project\'s domain file.</div></div>';
+    }
+    if (L.removing && L.removing.directory === p.directory) {
+      var R = L.removing, base = basename(p.directory);
+      h += '<label class="check"><input type="checkbox" data-pf="deleteFiles"' + (R.deleteFiles ? ' checked' : '') + '>Also delete its files from disk, git repository included</label>';
+      if (R.deleteFiles) h += '<div class="row"><label>Type <b>' + esc(base) + '</b></label><input data-pf="confirmation" value="' + esc(R.confirmation) + '" spellcheck="false" autocomplete="off"></div>';
+      return h + '<div class="actions"><button data-pact="remove" data-pi="' + i + '" class="danger"' + (L.busy || (R.deleteFiles && R.confirmation !== base) ? ' disabled' : '') + '>' +
+        (R.deleteFiles ? 'Delete project' : 'Remove from list') + '</button><button data-pact="cancel">Cancel</button></div>' +
+        (R.error ? '<div class="note err">' + esc(R.error) + '</div>' : '') +
+        '<div class="note" style="padding:2px 0">' + (R.deleteFiles ? 'Deletes ' + esc(p.directory) + ' and everything in it. This cannot be undone.' : 'The project stays on disk; open it again by its path.') + '</div></div>';
+    }
+    h += '<div class="actions">' + (p.served ? '' : '<button data-pact="switch" data-pi="' + i + '"' + (p.problem ? ' disabled' : '') + '>Open</button>') +
+      '<button data-pact="edit" data-pi="' + i + '"' + (p.problem ? ' disabled' : '') + '>Edit</button>' +
+      (p.served ? '' : '<button data-pact="removing" data-pi="' + i + '" class="danger">Remove</button>') + '</div>';
+    return h + '</div>';
+  }
+  function basename(dir) { var parts = String(dir).split(/[\\/]/).filter(Boolean); return parts[parts.length - 1] || dir; }
+
   function renderInspector() {
+    if (st.view === 'projects') { $('inspectorTitle').innerHTML = 'Projects <span>(' + (st.list.loaded ? st.list.items.length + ', ' : '') + 'remembered for this user)</span>'; $('inspector').innerHTML = renderProjects(); return; }
     if (st.view === 'project') { $('inspectorTitle').innerHTML = 'Project <span>(a new git repository)</span>'; $('inspector').innerHTML = renderProjectForm(); return; }
     if (st.view === 'changes') { $('inspectorTitle').innerHTML = 'Changes <span>(the transformation)</span>'; $('inspector').innerHTML = renderChanges(); return; }
     $('inspectorTitle').innerHTML = 'Inspector <span>(as recorded' + (st.drafts.length ? ', with drafts' : '') + ')</span>';
@@ -361,7 +425,7 @@ repository and serves it from then on, so its domain is built here.
     $('crumb').innerHTML = st.context ? '<b>' + esc(st.context.name) + '</b> <span>/ ' + esc(project) + '</span>' : '<b>' + esc(project) + '</b>';
     $('source').textContent = st.doc.source || '';
     $('source').title = st.directory + '\n' + (st.acceptedBranch ? 'Accepted is what ' + st.acceptedBranch + ' records.' : st.acceptedReason);
-    $('newProject').className = st.view === 'project' ? 'on' : '';
+    $('projects').className = st.view === 'projects' || st.view === 'project' ? 'on' : '';
     $('path').innerHTML = S.path(st.context, st.concepts, selected()).map(esc).join(' <span>&rsaquo;</span> ');
     $('counts').textContent = S.countsLine(st.doc.counts);
     $('message').textContent = st.message;
@@ -453,8 +517,65 @@ repository and serves it from then on, so its domain is built here.
     rebuild(); render();
   }
 
-  /* --- a new project: the server creates it and serves it from then on;
-     the page starts over in it. --- */
+  /* --- projects: the server creates or opens one and serves it from then
+     on; the page starts over in it. --- */
+  function showProjects() {
+    st.edit = null; st.view = 'projects';
+    /* The list is read afresh: the project served may have changed since. */
+    st.list.items = []; st.list.loaded = false;
+    st.list.edit = null; st.list.removing = null; st.list.opening = null; st.list.error = '';
+    render();
+    return loadProjects();
+  }
+  function loadProjects() {
+    return getJSON('/api/projects').then(function (doc) {
+      st.list.items = doc.projects || []; st.list.problem = doc.problem || ''; st.list.loaded = true;
+      render();
+    }, function (err) { st.list.error = 'The projects could not be listed: ' + err.message; st.list.loaded = true; render(); });
+  }
+  /* Starts over in the project the server now serves. */
+  function startOver(message) {
+    st.project = null; st.drafts = []; st.results = []; st.context = null; st.sel = null; st.edit = null; st.view = 'map';
+    st.list.edit = null; st.list.removing = null; st.list.opening = null;
+    st.message = message;
+    return load();
+  }
+  function projectAction(act, i) {
+    var L = st.list, p = i == null ? null : L.items[+i];
+    if (L.busy) return;
+    function settle(form, then) {
+      L.busy = true; if (form) form.error = ''; render();
+      return then.then(function (result) { L.busy = false; return result; }, function (err) { L.busy = false; if (form) form.error = err.message; else L.error = err.message; render(); });
+    }
+    switch (act) {
+      case 'new': return beginProject();
+      case 'opening': L.opening = { path: st.beside, error: '' }; L.edit = null; L.removing = null; render(); return focusIn('[data-pf="path"]');
+      case 'cancel': L.edit = null; L.removing = null; L.opening = null; return render();
+      case 'edit': L.edit = { directory: p.directory, name: p.name, description: p.description, error: '' }; L.removing = null; render(); return focusIn('[data-pf="name"]');
+      case 'removing': L.removing = { directory: p.directory, deleteFiles: false, confirmation: '', error: '' }; L.edit = null; return render();
+      case 'open':
+        if (!L.opening.path.trim()) { L.opening.error = 'Name a path inside the project.'; return render(); }
+        return settle(L.opening, post('/api/projects/open', { directory: L.opening.path.trim() }).then(function (opened) { return startOver('Opened ' + opened.directory); }));
+      case 'switch':
+        return settle(null, post('/api/projects/open', { directory: p.directory }).then(function (opened) { return startOver('Opened ' + (p.name || opened.directory)); }));
+      case 'save':
+        return settle(L.edit, post('/api/projects/update', { directory: L.edit.directory, name: L.edit.name, description: L.edit.description }).then(function (updated) {
+          L.edit = null; st.message = 'Updated ' + updated.name;
+          return (updated.served ? load() : Promise.resolve()).then(loadProjects);
+        }));
+      case 'remove':
+        return settle(L.removing, post('/api/projects/remove', { directory: L.removing.directory, deleteFiles: L.removing.deleteFiles, confirmation: L.removing.deleteFiles ? L.removing.confirmation : '' }).then(function (removed) {
+          L.removing = null; st.message = (removed.deleted ? 'Deleted ' : 'Removed from the list: ') + removed.directory;
+          return loadProjects();
+        }));
+    }
+  }
+  function focusIn(selector) {
+    var input = document.querySelector('#inspector ' + selector);
+    if (input) { input.focus(); if (input.setSelectionRange) input.setSelectionRange(input.value.length, input.value.length); }
+  }
+
+  /* --- a new project: created in its own git repository. --- */
   function beginProject() {
     st.edit = null;
     st.project = st.project || { directory: st.beside, name: '', languages: ['go'], error: '' };
@@ -470,10 +591,7 @@ repository and serves it from then on, so its domain is built here.
     st.creating = true; p.error = ''; render();
     return post('/api/projects', { directory: p.directory.trim(), name: p.name.trim(), languages: p.languages }).then(function (created) {
       st.creating = false;
-      st.project = null;
-      st.drafts = []; st.results = []; st.context = null; st.sel = null; st.edit = null; st.view = 'map';
-      st.message = 'Created ' + created.project + ' at ' + created.directory;
-      return load();
+      return startOver('Created ' + created.project + ' at ' + created.directory);
     }, function (err) {
       st.creating = false;
       p.error = err.message;
@@ -531,8 +649,9 @@ repository and serves it from then on, so its domain is built here.
   }
 
   document.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-ctx],[data-id],[data-legend],[data-zoom],[data-add],[data-act],[data-discard]');
+    var t = e.target.closest('[data-ctx],[data-id],[data-legend],[data-zoom],[data-add],[data-act],[data-discard],[data-pact]');
     if (!t) return;
+    if (t.dataset.pact) return projectAction(t.dataset.pact, t.dataset.pi);
     if (t.dataset.ctx) return selectContext(t.dataset.ctx);
     if (t.dataset.legend) { st.hidden[t.dataset.legend] = !st.hidden[t.dataset.legend]; return render(); }
     if (t.dataset.zoom) { st.zoom = Math.max(0.5, Math.min(2, Math.round((st.zoom + 0.1 * +t.dataset.zoom) * 10) / 10)); return render(); }
@@ -545,7 +664,7 @@ repository and serves it from then on, so its domain is built here.
       case 'discard': return discard(selected() ? keyOf(selected()) : contextKey(st.context.name));
       case 'save': return saveDraft();
       case 'create': return createProject();
-      case 'cancel': st.edit = null; if (st.view === 'project') st.view = 'map'; return render();
+      case 'cancel': st.edit = null; if (st.view === 'project') return showProjects(); return render();
     }
   });
   /* What is typed in the form is kept as it is typed, so a render that
@@ -553,8 +672,20 @@ repository and serves it from then on, so its domain is built here.
   document.addEventListener('input', function (e) {
     if (st.edit && e.target.dataset && e.target.dataset.f && e.target.closest('#inspector')) st.edit.values[e.target.dataset.f] = e.target.value;
     if (st.project && e.target.dataset && e.target.dataset.p) st.project[e.target.dataset.p] = e.target.value;
+    var form = projectForm();
+    if (form && e.target.dataset && e.target.dataset.pf && e.target.type !== 'checkbox') {
+      form[e.target.dataset.pf] = e.target.value;
+      /* Typing the confirmation enables the delete; only its button changes. */
+      if (e.target.dataset.pf === 'confirmation') { var b = document.querySelector('#inspector [data-pact="remove"]'); if (b) b.disabled = st.list.busy || form.confirmation !== basename(form.directory); }
+    }
   });
+  function projectForm() { var L = st.list; return st.view !== 'projects' ? null : L.edit || L.removing || L.opening; }
   document.addEventListener('change', function (e) {
+    if (st.list.removing && e.target.dataset && e.target.dataset.pf === 'deleteFiles') {
+      st.list.removing.deleteFiles = e.target.checked; st.list.removing.confirmation = ''; render();
+      if (e.target.checked) focusIn('[data-pf="confirmation"]');
+      return;
+    }
     if (st.project && e.target.dataset && e.target.dataset.lang) {
       var lang = e.target.dataset.lang, chosen = st.project.languages.filter(function (l) { return l !== lang; });
       st.project.languages = LANGUAGES.map(function (l) { return l[0]; }).filter(function (l) { return l === lang ? e.target.checked : chosen.indexOf(l) >= 0; });
@@ -569,11 +700,15 @@ repository and serves it from then on, so its domain is built here.
   $('filter').addEventListener('change', function () { st.filter = this.value; render(); });
   $('changes').addEventListener('click', function () { st.view = st.view === 'changes' ? 'map' : 'changes'; st.edit = null; render(); });
   $('publish').addEventListener('click', publish);
-  $('newProject').addEventListener('click', function () { if (st.view === 'project') { st.view = 'map'; render(); } else beginProject(); });
+  $('projects').addEventListener('click', function () { if (st.view === 'projects' || st.view === 'project') { st.view = 'map'; render(); } else showProjects(); });
   $('addContext').addEventListener('click', function () { beginAdd('bounded_context'); });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') { st.sel = null; st.edit = null; if (st.view === 'project') st.view = 'map'; render(); }
+    if (e.key === 'Escape') {
+      if (st.view === 'projects' && projectForm()) return projectAction('cancel');
+      st.sel = null; st.edit = null; if (st.view === 'project' || st.view === 'projects') st.view = 'map'; return render();
+    }
     if (e.key === 'Enter' && st.view === 'project' && e.target.dataset && e.target.dataset.p) createProject();
+    if (e.key === 'Enter' && st.list.opening && e.target.dataset && e.target.dataset.pf === 'path') projectAction('open');
   });
   window.addEventListener('resize', render);
   window.addEventListener('beforeunload', function (e) { if (st.drafts.length) { e.preventDefault(); e.returnValue = ''; } });

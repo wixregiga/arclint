@@ -620,17 +620,33 @@ happens to the branch after that is git's, as the project does it:
 commit, push and propose. Without a remote default branch the page
 shows the recording alone and says why.
 
-**New project** starts another project from the page: name a new or
-empty directory whose parent exists, the project's name (the
-directory's name when left blank) and its languages. The server makes
-the directory a git repository, writes the commented starter
-`rules.arclint.yaml` that `arclint init` writes and a domain file
-recording an empty language under the project's name, and serves that
-project from then on, so its domain is built in the page: draft a
-bounded context with **+ context**, its entries, and Publish. Nothing
-is committed and no remote is created; until the project has a remote
-default branch, the page shows its recording alone. A page still open
-on the earlier project cannot publish into the new one; reload it.
+**Projects** lists the project served and every project this user has
+served, created or opened in Studio, remembered across runs in
+`arclint/projects.json` under the user's configuration directory
+(`~/.config` on Linux). From the list:
+
+- **+ New** creates a project: name a new or empty directory whose
+  parent exists, the project's name (the directory's name when left
+  blank) and its languages. The server makes the directory a git
+  repository, writes the commented starter `rules.arclint.yaml` that
+  `arclint init` writes and a domain file recording an empty language
+  under the project's name, and serves the project, so its domain is
+  built in the page: draft a bounded context with **+ context**, its
+  entries, and Publish. Nothing is committed and no remote is created;
+  until the project has a remote default branch, the page shows its
+  recording alone. A project that cannot be started is taken back.
+- **Open** serves a listed project, and **Open…** one found upward from
+  any path inside it, as every command finds its project.
+- **Edit** renames a project and replaces its description, both
+  recorded in its domain file.
+- **Remove** takes a project off the list and leaves its files on disk.
+  Checking **Also delete its files** deletes its directory, git
+  repository included, once the directory's name is typed to confirm.
+  The project served is never removed; open another first.
+
+Opening or creating a project discards the drafts not yet published. A
+page still open on the earlier project cannot publish into the one
+served now; reload it.
 
 ```sh
 arclint map serve                       # the project found from the working directory

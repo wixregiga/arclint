@@ -167,3 +167,50 @@ func TestDiscardTakesBackOnlyWhatMakeMade(t *testing.T) {
 		t.Fatalf("Discard of a relative path: %v", err)
 	}
 }
+
+func TestDeleteRemovesOnlyAProjectsOwnDirectory(t *testing.T) {
+	needGit(t)
+	base := t.TempDir()
+	project := filepath.Join(base, "orders")
+	if _, err := gitproject.Make(project); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "rules.arclint.yaml"), []byte("runtime: [go]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	inner := filepath.Join(project, "internal")
+	if err := os.Mkdir(inner, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	linked := filepath.Join(base, "linked")
+	if err := os.Mkdir(linked, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(project, "rules.arclint.yaml"), filepath.Join(linked, "rules.arclint.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct{ name, dir, reason string }{
+		{"relative", "orders", "not an absolute path"},
+		{"the root", string(filepath.Separator), "root of the file system"},
+		{"a directory inside the project", inner, "holds no rules.arclint.yaml"},
+		{"a directory holding no project", base, "holds no rules.arclint.yaml"},
+		{"a ruleset reached through a link", linked, "is not a file"},
+	}
+	for _, c := range cases {
+		if err := gitproject.Delete(c.dir); err == nil || !strings.Contains(err.Error(), c.reason) {
+			t.Errorf("%s: err = %v, want %q", c.name, err, c.reason)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(project, ".git")); err != nil {
+		t.Fatalf("a refused delete touched the project: %v", err)
+	}
+	if err := gitproject.Delete(project); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(project); !os.IsNotExist(err) {
+		t.Fatalf("the project stayed: %v", err)
+	}
+	if _, err := os.Stat(linked); err != nil {
+		t.Fatalf("a directory beside it went too: %v", err)
+	}
+}

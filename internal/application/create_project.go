@@ -9,25 +9,6 @@ import (
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 )
 
-// ProjectDirectories makes the directory a new project lives in and
-// opens the files the project is started with.
-type ProjectDirectories interface {
-	// Make creates dir as an empty git repository and says whether it
-	// made the directory rather than finding it empty. It refuses a
-	// relative path, a parent that does not exist, and a directory that
-	// already holds anything, so it never writes into existing work.
-	Make(dir string) (made bool, err error)
-	// Discard takes back a project that could not be started: it empties
-	// dir, which Make found or left empty, and removes dir when Make made
-	// it.
-	Discard(dir string, made bool) error
-	// Ruleset is the scaffold dir's rules.arclint.yaml is written through.
-	Ruleset(dir string) (RulesetScaffold, error)
-	// DomainFile is the repository of the domain file the ruleset in dir
-	// names, or the default one when it names none.
-	DomainFile(dir string) (vocab.Repository, error)
-}
-
 // CreateProjectRequest carries the choices a new project starts from.
 type CreateProjectRequest struct {
 	// Directory is the absolute path the project is created at.
@@ -50,24 +31,29 @@ type CreateProjectResult struct {
 
 // CreateProject starts a new project in its own git repository: the
 // commented starter ruleset, and a domain file recording an empty
-// Ubiquitous Language under the project's name, ready to be built.
+// Ubiquitous Language under the project's name, ready to be built. The
+// project is remembered among the projects the page lists.
 type CreateProject struct {
 	directories ProjectDirectories
+	registry    ProjectRegistry
 }
 
 // NewCreateProject requires the port that makes the project's directory
-// and opens its files.
-func NewCreateProject(directories ProjectDirectories) (CreateProject, error) {
+// and opens its files, and the registry that remembers it.
+func NewCreateProject(directories ProjectDirectories, registry ProjectRegistry) (CreateProject, error) {
 	if directories == nil {
 		return CreateProject{}, fmt.Errorf("create project: missing project directories")
 	}
-	return CreateProject{directories: directories}, nil
+	if registry == nil {
+		return CreateProject{}, fmt.Errorf("create project: missing project registry")
+	}
+	return CreateProject{directories: directories, registry: registry}, nil
 }
 
 // Execute creates the project. Every choice is checked before the
 // directory is made, so a refused request leaves nothing behind; a
-// project that cannot be started once the directory is made is taken
-// back, so the same request can be made again.
+// project that cannot be started or remembered once the directory is
+// made is taken back, so the same request can be made again.
 func (uc CreateProject) Execute(req CreateProjectRequest) (CreateProjectResult, error) {
 	dir := strings.TrimSpace(req.Directory)
 	if dir == "" {
@@ -103,8 +89,8 @@ func (uc CreateProject) Execute(req CreateProjectRequest) (CreateProjectResult, 
 	return result, nil
 }
 
-// start writes the starter ruleset into the made directory and records
-// the empty language in the domain file it names.
+// start writes the starter ruleset into the made directory, records the
+// empty language in the domain file it names, and remembers the project.
 func (uc CreateProject) start(dir, name string, languages []string) (CreateProjectResult, error) {
 	scaffold, err := uc.directories.Ruleset(dir)
 	if err != nil {
@@ -129,6 +115,9 @@ func (uc CreateProject) start(dir, name string, languages []string) (CreateProje
 	recorded, err := initDomain.Execute(name)
 	if err != nil {
 		return CreateProjectResult{}, err
+	}
+	if err := uc.registry.Remember(dir); err != nil {
+		return CreateProjectResult{}, fmt.Errorf("remember the project: %w", err)
 	}
 	return CreateProjectResult{Directory: dir, Project: recorded.Project, Ruleset: ruleset, Source: recorded.Source}, nil
 }

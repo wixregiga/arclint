@@ -38,6 +38,7 @@ import (
 	filesystempattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/filesystem"
 	registrypattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/registry"
 	gitproject "github.com/wixregiga/arclint/internal/infrastructure/project/git"
+	jsonprojects "github.com/wixregiga/arclint/internal/infrastructure/project/json"
 	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
 	"github.com/wixregiga/arclint/internal/infrastructure/ruletest"
 	filesystemscaffold "github.com/wixregiga/arclint/internal/infrastructure/scaffold/filesystem"
@@ -268,7 +269,7 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	studio, err := composeStudio(root, recording, mapOverview, defineDomainDefinition, removeDomainDefinition)
+	studio, err := composeStudio(root, recording, mapOverview, defineDomainDefinition, removeDomainDefinition, jsonprojects.UserRegistry())
 	if err != nil {
 		return configError(err)
 	}
@@ -336,8 +337,12 @@ func run(args []string) int {
 // page creates is composed the same way and served from then on. Every
 // document is spelled by the JSON renderer, whatever renderer the
 // command's own report uses.
-func composeStudio(root string, recording vocab.DomainRecording, overview application.GetDomainOverview, define application.DefineDomainDefinition, remove application.RemoveDomainDefinition) (mapserve.Server, error) {
+func composeStudio(root string, recording vocab.DomainRecording, overview application.GetDomainOverview, define application.DefineDomainDefinition, remove application.RemoveDomainDefinition, registry application.ProjectRegistry) (mapserve.Server, error) {
 	jsonRenderer, err := reportfactory.Select(cli.RendererJSON)
+	if err != nil {
+		return mapserve.Server{}, fmt.Errorf("compose map server: %w", err)
+	}
+	projects, err := composeStudioProjects(registry)
 	if err != nil {
 		return mapserve.Server{}, fmt.Errorf("compose map server: %w", err)
 	}
@@ -360,28 +365,38 @@ func composeStudio(root string, recording vocab.DomainRecording, overview applic
 			Remove:    remove,
 			Accepted:  acceptedRecording(root, recording),
 		},
-		Create: createStudioProject,
+		Projects: projects,
 	}
 	return studio, nil
 }
 
-// createStudioProject creates a project in its own git repository and
-// composes the map's use cases over it.
-func createStudioProject(req application.CreateProjectRequest) (application.CreateProjectResult, mapserve.Project, error) {
-	create, err := application.NewCreateProject(projectDirectories{})
+// composeStudioProjects wires the use cases over the projects the page
+// lists: git makes and deletes their directories, registry remembers
+// them, and a project the page switches to is composed as the one it
+// started with.
+func composeStudioProjects(registry application.ProjectRegistry) (mapserve.Projects, error) {
+	directories := projectDirectories{}
+	list, err := application.NewListProjects(directories, registry)
 	if err != nil {
-		return application.CreateProjectResult{}, mapserve.Project{}, fmt.Errorf("compose project creation: %w", err)
+		return mapserve.Projects{}, fmt.Errorf("%w", err)
 	}
-	result, err := create.Execute(req)
+	create, err := application.NewCreateProject(directories, registry)
 	if err != nil {
-		// No prefix: the use case's message already says what was refused.
-		return application.CreateProjectResult{}, mapserve.Project{}, fmt.Errorf("%w", err)
+		return mapserve.Projects{}, fmt.Errorf("%w", err)
 	}
-	project, err := composeStudioProject(result.Directory)
+	open, err := application.NewOpenProject(directories, registry)
 	if err != nil {
-		return application.CreateProjectResult{}, mapserve.Project{}, fmt.Errorf("serve %s: %w", result.Directory, err)
+		return mapserve.Projects{}, fmt.Errorf("%w", err)
 	}
-	return result, project, nil
+	update, err := application.NewUpdateProject(directories)
+	if err != nil {
+		return mapserve.Projects{}, fmt.Errorf("%w", err)
+	}
+	remove, err := application.NewRemoveProject(directories, registry)
+	if err != nil {
+		return mapserve.Projects{}, fmt.Errorf("%w", err)
+	}
+	return mapserve.Projects{List: list, Create: create, Open: open, Update: update, Remove: remove, Serve: composeStudioProject}, nil
 }
 
 // composeStudioProject composes the map's use cases over the project
@@ -454,6 +469,23 @@ func (projectDirectories) Ruleset(dir string) (application.RulesetScaffold, erro
 		return nil, fmt.Errorf("%w", err)
 	}
 	return writer, nil
+}
+
+// Locate finds the project as every command does: the directory of the
+// rules.arclint.yaml found upward from path.
+func (projectDirectories) Locate(path string) (string, error) {
+	rulesPath, err := yamlrule.DiscoverPath(path, rule.RulesetFileName)
+	if err != nil {
+		return "", fmt.Errorf("%w", err)
+	}
+	return filepath.Dir(rulesPath), nil
+}
+
+func (projectDirectories) Delete(dir string) error {
+	if err := gitproject.Delete(dir); err != nil {
+		return fmt.Errorf("%w", err)
+	}
+	return nil
 }
 
 func (projectDirectories) DomainFile(dir string) (vocab.Repository, error) {
