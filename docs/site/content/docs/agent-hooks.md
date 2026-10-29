@@ -48,11 +48,12 @@ the hooks run in every project and worktree the host opens:
 
 | Host | File | Events |
 |---|---|---|
-| Claude Code | `~/.claude/settings.json`, or under `CLAUDE_CONFIG_DIR` | `SessionStart`; `UserPromptSubmit`; `PostToolUse` for Edit, Write, MultiEdit and NotebookEdit; `Stop` |
+| Claude Code | `~/.claude/settings.json`, or under `CLAUDE_CONFIG_DIR` | `SessionStart`; `UserPromptSubmit`; `PostToolUse` for Edit, Write, MultiEdit, NotebookEdit and Bash; `Stop` |
 | Codex | `~/.codex/hooks.json`, or under `CODEX_HOME` | `SessionStart`; `UserPromptSubmit`; `PostToolUse` for apply_patch; `Stop` |
 
-No hook runs on shell commands. Files a shell command changes are found at
-the events above, as described under [how the hooks observe work](#how-the-hooks-observe-work).
+In Claude Code the hook also runs after each Bash command, so files a shell
+command changes are found right after it. In Codex they are found at the
+events above. Both are described under [how the hooks observe work](#how-the-hooks-observe-work).
 
 The command runs the `arclint` that installed it, by its absolute path, with
 `agents hooks event`. It does not depend on the hosts' `PATH` or on shell
@@ -104,9 +105,10 @@ Until an event arrives, status says why none may have: no file lists the
 hooks, or none lists all of them while the ones listed still run; the
 directory holds no `rules.arclint.yaml`; or it does, but a session
 started before it existed, as in a worktree made from an older commit, and
-reports here only at its next prompt, edit or turn end. It also notes that a
-session reports to the project holding its working directory, and that Claude
-Code runs the hooks only in sessions started after installation.
+reports here only at its next prompt, edit, Claude Code Bash command or turn
+end. It also notes that a session reports to the project holding its working
+directory, and that Claude Code runs the hooks only in sessions started after
+installation.
 
 Inside WSL, status reads the Windows profile through `cmd.exe`. When
 `cmd.exe` cannot run, the Windows files are listed with that problem, and the
@@ -212,6 +214,7 @@ events each, wall time:
 | TypeScript | 67916 | 30 ms | 320 ms |
 | linux | 96080 | 30 ms | 450 ms |
 
+In Claude Code every Bash command is also an event, so each one adds a run.
 The time grows with the number of files git examines. Right after a clone or
 checkout, git may read every file again until a git command of your own
 refreshes the index.
