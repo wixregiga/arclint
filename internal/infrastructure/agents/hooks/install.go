@@ -36,7 +36,7 @@ const (
 // hookHost is one Agent Host's hook configuration.
 type hookHost struct {
 	name string
-	// tools selects the PostToolUse calls that change files. ArcLint's own
+	// tools selects the PostToolUse calls that may change files. ArcLint's own
 	// commands record context, the check and domain changes themselves.
 	tools string
 	// homeVariable moves the host's user configuration directory, by
@@ -58,7 +58,7 @@ type hookHost struct {
 }
 
 var hookHosts = []hookHost{
-	{name: claudeHost, tools: "Edit|Write|MultiEdit|NotebookEdit", homeVariable: "CLAUDE_CONFIG_DIR", homeDirectory: ".claude", user: "settings.json", project: ".claude/settings.local.json", personal: true, shared: ".claude/settings.json", disable: "disableAllHooks"},
+	{name: claudeHost, tools: "Edit|Write|MultiEdit|NotebookEdit|Bash", homeVariable: "CLAUDE_CONFIG_DIR", homeDirectory: ".claude", user: "settings.json", project: ".claude/settings.local.json", personal: true, shared: ".claude/settings.json", disable: "disableAllHooks"},
 	{name: "codex", tools: "apply_patch", homeVariable: "CODEX_HOME", homeDirectory: ".codex", user: "hooks.json", project: ".codex/hooks.json"},
 }
 
@@ -492,7 +492,7 @@ func (installer *Installer) silence(files []application.HookFileStatus, running,
 	if info, err := os.Stat(ruleset); err != nil {
 		reasons = append(reasons, "This directory holds no "+rule.RulesetFileName+", so the hooks answer nothing here and record no event. Run status in the project's root.")
 	} else {
-		reasons = append(reasons, "The hooks answer only where "+rule.RulesetFileName+" exists when an event arrives; it was last written at "+info.ModTime().Format("2006-01-02 15:04:05 -0700")+". A session that started before then, such as one in a worktree made from an older commit, records its first event here at its next prompt, edit or turn end.")
+		reasons = append(reasons, "The hooks answer only where "+rule.RulesetFileName+" exists when an event arrives; it was last written at "+info.ModTime().Format("2006-01-02 15:04:05 -0700")+". A session that started before then, such as one in a worktree made from an older commit, records its first event here at its next prompt, edit, Claude Code Bash command or turn end.")
 	}
 	return append(reasons,
 		"A session reports to the project that holds its working directory: one started in a parent directory, or in another worktree of this repository, reports there or nowhere.",

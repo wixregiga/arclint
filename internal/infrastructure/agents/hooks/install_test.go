@@ -110,6 +110,9 @@ func TestUserInstallWritesEachHostsUserConfiguration(t *testing.T) {
 	if !reflect.DeepEqual(installation.Written, want) || len(installation.Removed) != 0 {
 		t.Fatalf("installation %+v, want written %v", installation, want)
 	}
+	// Claude Code runs the hooks after each Bash command as well, so a
+	// shell change is seen right after the command that made it.
+	tools := map[string]string{"claude": "Edit|Write|MultiEdit|NotebookEdit|Bash", "codex": "apply_patch"}
 	for _, host := range hookHosts {
 		document := readTestConfiguration(t, h.file(false, host.name))
 		if len(document.Hooks) != len(hookEvents) {
@@ -120,7 +123,7 @@ func TestUserInstallWritesEachHostsUserConfiguration(t *testing.T) {
 			if len(groups) != 1 || len(groups[0].Hooks) != 1 || groups[0].Hooks[0].Command != binary+" "+eventArgs || groups[0].Hooks[0].CommandWindows != "" {
 				t.Fatalf("%s %s: %+v", host.name, event, groups)
 			}
-			if wantMatcher := map[bool]string{true: host.tools}[event == postToolUseEvent]; groups[0].Matcher != wantMatcher {
+			if wantMatcher := map[bool]string{true: tools[host.name]}[event == postToolUseEvent]; groups[0].Matcher != wantMatcher {
 				t.Fatalf("%s %s matcher %q, want %q", host.name, event, groups[0].Matcher, wantMatcher)
 			}
 		}

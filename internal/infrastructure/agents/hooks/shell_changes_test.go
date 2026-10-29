@@ -98,6 +98,28 @@ func TestAShellChangeIsAdvisedAtTheNextEditOnce(t *testing.T) {
 	}
 }
 
+// A file a Bash command changed is advised right after that command, once;
+// a later command that changed nothing prints nothing.
+func TestABashCommandIsAdvisedRightAfterItOnce(t *testing.T) {
+	events, root := newGitEvents(t)
+	handle(t, events, sessionStart("s", root))
+	handle(t, events, prompt("s", root))
+	writeFile(t, root, "internal/shell.go", "package a // through sed\n")
+	output := handle(t, events, toolEvent("s", root, "Bash", map[string]any{"command": "sed -i 's/a/a/' internal/shell.go"}))
+	if output.HookSpecificOutput.HookEventName != postToolUseEvent {
+		t.Fatalf("answered as %q", output.HookSpecificOutput.HookEventName)
+	}
+	text := output.HookSpecificOutput.AdditionalContext
+	for _, want := range []string{"internal/shell.go changed before `arclint context`", "internal/shell.go changed before the project's domain recording changed"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("Bash advice lacks %q:\n%s", want, text)
+		}
+	}
+	if again := handle(t, events, toolEvent("s", root, "Bash", map[string]any{"command": "ls internal"})); again != (hostOutput{}) {
+		t.Fatalf("a command that changed nothing repeated advice: %+v", again)
+	}
+}
+
 // A turn that edits only through the shell is advised when it finishes.
 func TestAShellOnlyTurnIsAdvisedWhenItFinishes(t *testing.T) {
 	events, root := newGitEvents(t)
