@@ -60,15 +60,13 @@ func schedulingLanguage(t *testing.T) *vocab.UbiquitousLanguage {
 // fakeMapServer records what the command asked of its port and reports
 // a URL as a bound server would.
 type fakeMapServer struct {
-	address  string
-	overview application.DomainOverview
-	url      string
-	err      error
+	address string
+	url     string
+	err     error
 }
 
-func (f *fakeMapServer) Serve(address string, overview application.DomainOverview, listening func(string) error) error {
+func (f *fakeMapServer) Serve(address string, listening func(string) error) error {
 	f.address = address
-	f.overview = overview
 	if f.err != nil {
 		return f.err
 	}
@@ -95,9 +93,6 @@ func TestMapServeReportsTheURLThroughTheRenderer(t *testing.T) {
 	}
 	if server.address != "127.0.0.1:0" {
 		t.Fatalf("address = %q", server.address)
-	}
-	if server.overview.Language.Project != "clinic" || !server.overview.Found {
-		t.Fatalf("overview = %+v", server.overview)
 	}
 	if len(renderer.reports) != 1 {
 		t.Fatalf("reports = %d, want 1", len(renderer.reports))

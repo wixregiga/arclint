@@ -601,8 +601,24 @@ declaration, `missing`, or `unanchorable` with the reason.
 a navigator of the bounded contexts, a concept map of one context at a
 time, and an inspector of what the domain file records for the selected
 entry, with the relations of the context map. The page reads the same
-document `arclint domain overview --format json` prints, and it is
-display only: record meanings with `arclint domain define`.
+document `arclint domain overview --format json` prints.
+
+The page speaks in standings, not in git. Every entry is **Accepted**
+when the remote's default branch (`origin/HEAD`, as a clone sets it)
+records it the same, **Proposed** when the domain file in the working
+tree records it differently or the branch does not record it yet, and
+**Draft** when it is edited in the page and not published. Edit, add or
+remove an entry in the inspector to draft a change; the Changes view
+lists every draft and every proposed change with the value before and
+after, so the transformation is visible before anything is written.
+**Publish** records the drafts in the domain file, one `arclint domain
+define` or `arclint domain remove` each through the same use cases the
+command line runs, and reports what each one changed; a draft the
+language refuses (a missing required property, a text over its word
+limit, a meta-model invariant) stays a draft with the reason. What
+happens to the branch after that is git's, as the project does it:
+commit, push and propose. Without a remote default branch the page
+shows the recording alone and says why.
 
 ```sh
 arclint map serve                       # the project found from the working directory
@@ -611,7 +627,9 @@ arclint map serve --addr 127.0.0.1:8080 # another port; the default serves this 
 ```
 
 The server listens on `127.0.0.1:7380` unless `--addr` names another
-host, prints the URL to open, and stops on Ctrl+C.
+host, prints the URL to open, and stops on Ctrl+C. It answers only
+requests addressed to an IP address or `localhost` and sent by its own
+page, and it records one edit at a time.
 
 ## Agent skill artifacts
 

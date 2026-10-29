@@ -42,6 +42,7 @@ import (
 	filesystemscaffold "github.com/wixregiga/arclint/internal/infrastructure/scaffold/filesystem"
 	vocabfs "github.com/wixregiga/arclint/internal/infrastructure/vocab"
 	cmlvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/cml"
+	gitvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/git"
 	yamlvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/yaml"
 )
 
@@ -247,13 +248,6 @@ func run(args []string) int {
 	// reads the overview as the JSON renderer spells it, whatever
 	// renderer the command's own report uses.
 	mapOverview := getDomainOverview
-	jsonRenderer, err := reportfactory.Select(cli.RendererJSON)
-	if err != nil {
-		return configError(err)
-	}
-	studio := mapserve.Server{Overview: func(w io.Writer, overview application.DomainOverview) error {
-		return jsonRenderer.Render(w, cli.DomainOverviewReport{Overview: overview})
-	}}
 	getDomainOverview = getDomainOverview.WithObservations(repository, observations)
 	listDomainDefinitions, err := application.NewListDomainDefinitions(knowledge)
 	if err != nil {
@@ -270,6 +264,10 @@ func run(args []string) int {
 	}
 	defineDomainDefinition = defineDomainDefinition.WithObservations(repository, observations)
 	removeDomainDefinition, err := application.NewRemoveDomainDefinition(knowledge)
+	if err != nil {
+		return configError(err)
+	}
+	studio, err := composeStudio(root, recording, mapOverview, defineDomainDefinition, removeDomainDefinition)
 	if err != nil {
 		return configError(err)
 	}
@@ -327,6 +325,53 @@ func run(args []string) int {
 	}
 	outcome := adapter.Run(rootCommand, cli.Invocation{Args: args, Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr})
 	return outcome.ExitCode
+}
+
+// composeStudio wires the map server: the page publishes its drafts
+// through the same define and remove the command line runs, reads the
+// overview the domain file records now, and reads the one the remote's
+// default branch records through git, when the project has one; without
+// one the page shows the recording alone and says why. Every document
+// is spelled by the JSON renderer, whatever renderer the command's own
+// report uses.
+func composeStudio(root string, recording vocab.DomainRecording, overview application.GetDomainOverview, define application.DefineDomainDefinition, remove application.RemoveDomainDefinition) (mapserve.Server, error) {
+	jsonRenderer, err := reportfactory.Select(cli.RendererJSON)
+	if err != nil {
+		return mapserve.Server{}, fmt.Errorf("compose map server: %w", err)
+	}
+	studio := mapserve.Server{
+		Reports: mapserve.Reports{
+			Overview: func(w io.Writer, overview application.DomainOverview) error {
+				return jsonRenderer.Render(w, cli.DomainOverviewReport{Overview: overview})
+			},
+			Defined: func(w io.Writer, result application.DomainDefineResult, req application.DefineDomainRequest) error {
+				return jsonRenderer.Render(w, cli.NewDomainDefineReport(result, req))
+			},
+			Removed: func(w io.Writer, result application.DomainRemoveResult) error {
+				return jsonRenderer.Render(w, cli.DomainRemoveReport{Result: result})
+			},
+		},
+		Overview: overview,
+		Define:   define,
+		Remove:   remove,
+		Accepted: acceptedRecording(root, recording),
+	}
+	return studio, nil
+}
+
+// acceptedRecording is the recording the remote's default branch holds,
+// read through git; a project without one, or without git, is served
+// without it, and the page says why.
+func acceptedRecording(root string, recording vocab.DomainRecording) mapserve.Accepted {
+	accepted, err := gitvocab.NewRepository(root, recording, domainRecordingParser{})
+	if err != nil {
+		return mapserve.Accepted{Unavailable: err.Error()}
+	}
+	overview, err := application.NewGetDomainOverview(accepted)
+	if err != nil {
+		return mapserve.Accepted{Unavailable: err.Error()}
+	}
+	return mapserve.Accepted{Branch: accepted.Branch(), Overview: overview}
 }
 
 // composeKnowledge resolves the project's DomainRecording and opens the

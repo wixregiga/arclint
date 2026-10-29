@@ -15,18 +15,20 @@ const (
 	defaultListen = "127.0.0.1:7380"
 )
 
-// MapServer shows the project's domain overview in a browser. Serve
-// binds address, tells listening the URL a browser opens once the
-// listener is bound, and answers requests until the listener fails.
-// Composition selects the adapter that implements it.
+// MapServer shows the project's domain overview in a browser and
+// publishes the page's drafts into the domain file. Serve binds
+// address, tells listening the URL a browser opens once the listener is
+// bound, and answers requests until the listener fails. Composition
+// selects the adapter that implements it and the use cases it serves.
 type MapServer interface {
-	Serve(address string, overview application.DomainOverview, listening func(url string) error) error
+	Serve(address string, listening func(url string) error) error
 }
 
 // NewMapCommand adapts the domain overview use case into the map
 // command family: serve shows the recorded Ubiquitous Language in a
-// browser. Presentation of the command's own report is closed over the
-// injected Renderer; the page is the server's.
+// browser, where it is edited as drafts and published. Presentation of
+// the command's own report is closed over the injected Renderer; the
+// page is the server's.
 func NewMapCommand(overview application.GetDomainOverview, server MapServer, render Renderer) Command {
 	return Command{
 		Name:  mapCommand,
@@ -76,7 +78,7 @@ func mapServeRunner(overview application.GetDomainOverview, server MapServer, re
 			}
 			return writeErr
 		}
-		if err := server.Serve(ctx.String(flagListen), result, listening); err != nil {
+		if err := server.Serve(ctx.String(flagListen), listening); err != nil {
 			if writeErr != nil {
 				return writeErr
 			}
@@ -91,9 +93,10 @@ const mapGroupLong = `Show the project's recorded Ubiquitous Language as a map.
 The map command serves a browser page over HTTP: a navigator of the
 recorded bounded contexts, a concept map of one context at a time, and
 an inspector that shows what the domain file records for the selected
-entry. Display only: it does not edit the domain file. The language
-shown is the one the project's domain file records; record meanings with
-arclint domain define.`
+entry. Entries are edited, added and removed in the page as drafts;
+Publish records them in the domain file through the same define and
+remove the command line runs, so every edit is validated as arclint
+domain define validates it.`
 
 const mapServeLong = `Serve a map of the project's recorded Ubiquitous Language to a browser.
 
@@ -104,11 +107,22 @@ the domain services with their assertions, the specifications and the
 open questions, with the relations of the context map. The page loads
 the same document arclint domain overview --format json prints.
 
+Each entry is shown with its standing: Accepted when the remote's
+default branch (origin/HEAD) records it the same, Proposed when the
+domain file in the working tree records it differently or the branch
+does not record it yet, Draft when it is edited in the page and not
+published. Publish records the drafts in the domain file, one define or
+remove each, and shows what each one changed; a draft the language
+refuses stays a draft with the reason. What happens to the branch after
+that is git's: commit and propose the change as the project does.
+Without a remote default branch the page shows the recording alone.
+
 With no path, the project is the one whose rules.arclint.yaml is found
 upward from the working directory, as every other command finds it;
 pass a path inside another project to serve that project's domain file.
 The server listens on 127.0.0.1 unless --addr names another host, and
-prints the URL to open. Ctrl+C stops it.`
+prints the URL to open. It answers only requests addressed to an IP
+address or localhost and sent by its own page. Ctrl+C stops it.`
 
 const mapServeExample = `  # Map the current project's domain file
   arclint map serve
