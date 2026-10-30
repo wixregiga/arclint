@@ -10,10 +10,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
-	"path/filepath"
 	"regexp"
-	"sync"
+	"strings"
 
 	"github.com/wixregiga/arclint/internal/application"
 )
@@ -22,11 +22,8 @@ const documentLimit = 1 << 20
 
 var fileID = regexp.MustCompile("^[a-f0-9]{32}$")
 
-// Serialize across fresh adapters in the same process as well as requests.
-var filesMu sync.Mutex
-
 type (
-	// FeatureFiles stores versioned draft documents.
+	// FeatureFiles stores versioned draft documents beneath one project.
 	FeatureFiles  struct{ Project string }
 	storedFeature struct {
 		Version int                      `json:"version"`
@@ -38,10 +35,12 @@ func validDraft(d application.FeatureDraft) error {
 	if d.References == nil {
 		return application.ErrFeatureInput
 	}
+	ids := make(map[string]bool, len(d.References))
 	for _, r := range d.References {
-		if r.ID == "" {
+		if r.ID == "" || ids[r.ID] {
 			return application.ErrFeatureInput
 		}
+		ids[r.ID] = true
 		switch r.Reading {
 		case "plain":
 			if r.Term != nil {
@@ -58,53 +57,84 @@ func validDraft(d application.FeatureDraft) error {
 	return nil
 }
 
-// directory refuses links at every storage component, including the final file.
-func (s FeatureFiles) directory(create bool) (string, error) {
-	p := s.Project
-	for _, part := range []string{".arclint", "studio", "features"} {
-		p = filepath.Join(p, part)
-		info, err := os.Lstat(p)
-		if errors.Is(err, os.ErrNotExist) && create {
-			if err = os.Mkdir(p, 0o700); err != nil && !os.IsExist(err) {
-				return "", fmt.Errorf("feature storage: %w", err)
-			}
-			info, err = os.Lstat(p)
-		}
-		if err != nil {
-			return "", fmt.Errorf("feature storage: %w", err)
-		}
-		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			return "", fmt.Errorf("unsafe feature directory %s", p)
-		}
+// directory pins each directory while descending. Root operations confine even a
+// concurrent symlink replacement; no subsequent file access uses an absolute path.
+func (s FeatureFiles) directory(create bool) (*os.Root, error) {
+	root, err := os.OpenRoot(s.Project)
+	if err != nil {
+		return nil, fmt.Errorf("feature project: %w", err)
 	}
-	return p, nil
+	for _, part := range []string{".arclint", "studio", "features"} {
+		if create {
+			if err = root.Mkdir(part, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
+				_ = root.Close()
+				return nil, fmt.Errorf("create feature directory: %w", err)
+			}
+		}
+		info, statErr := root.Lstat(part)
+		if statErr != nil || !info.IsDir() {
+			_ = root.Close()
+			if statErr != nil {
+				return nil, fmt.Errorf("feature directory: %w", statErr)
+			}
+			return nil, fmt.Errorf("unsafe feature directory %s", part)
+		}
+		next, openErr := root.OpenRoot(part)
+		_ = root.Close()
+		if openErr != nil {
+			return nil, fmt.Errorf("open feature directory: %w", openErr)
+		}
+		root = next
+	}
+	return root, nil
 }
 
-func regular(path string) error {
-	info, err := os.Lstat(path)
+// withFiles reuses the workflow store's rooted-file and advisory-lock pattern.
+// One lock covers revision comparison and replacement across Studio processes.
+func (s FeatureFiles) withFiles(create bool, work func(*os.Root) error) (returnErr error) {
+	root, err := s.directory(create)
 	if err != nil {
-		return fmt.Errorf("feature storage: %w", err)
+		return err
+	}
+	defer func() { returnErr = errors.Join(returnErr, root.Close()) }()
+	lock, err := root.OpenFile(".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return fmt.Errorf("feature lock: %w", err)
+	}
+	defer func() { returnErr = errors.Join(returnErr, lock.Close()) }()
+	info, err := root.Lstat(".lock")
+	if err != nil {
+		return fmt.Errorf("feature lock: %w", err)
 	}
 	if !info.Mode().IsRegular() {
-		return fmt.Errorf("unsafe feature file %s", path)
+		return errors.New("unsafe feature lock")
 	}
-	return nil
+	unlock, err := lockFeatures(lock)
+	if err != nil {
+		return err
+	}
+	defer func() { returnErr = errors.Join(returnErr, unlock()) }()
+	return work(root)
 }
 
-func readFeature(dir, id string) (application.FeatureDraft, error) {
+func readFeature(root *os.Root, id string) (application.FeatureDraft, error) {
 	var stored storedFeature
-	path := filepath.Join(dir, id+".json")
-	if err := regular(path); err != nil {
-		return stored.Feature, fmt.Errorf("feature storage: %w", err)
-	}
-	f, err := os.Open(path)
+	name := id + ".json"
+	info, err := root.Lstat(name)
 	if err != nil {
-		return stored.Feature, fmt.Errorf("feature storage: %w", err)
+		return stored.Feature, fmt.Errorf("feature file: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return stored.Feature, fmt.Errorf("unsafe feature file %s", name)
+	}
+	f, err := root.Open(name)
+	if err != nil {
+		return stored.Feature, fmt.Errorf("open feature: %w", err)
 	}
 	defer func() { _ = f.Close() }()
 	b, err := io.ReadAll(io.LimitReader(f, documentLimit+1))
 	if err != nil {
-		return stored.Feature, fmt.Errorf("feature storage: %w", err)
+		return stored.Feature, fmt.Errorf("read feature: %w", err)
 	}
 	if len(b) > documentLimit {
 		return stored.Feature, errors.New("feature file too large")
@@ -112,173 +142,190 @@ func readFeature(dir, id string) (application.FeatureDraft, error) {
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.DisallowUnknownFields()
 	if err = dec.Decode(&stored); err != nil {
-		return stored.Feature, fmt.Errorf("feature storage: %w", err)
+		return stored.Feature, fmt.Errorf("decode feature: %w", err)
 	}
 	var extra any
 	if dec.Decode(&extra) != io.EOF {
 		return stored.Feature, errors.New("trailing feature data")
 	}
+	var required struct {
+		Feature struct {
+			Title *string `json:"title"`
+			Body  *string `json:"body"`
+		} `json:"feature"`
+	}
+	if err := json.Unmarshal(b, &required); err != nil {
+		return stored.Feature, fmt.Errorf("decode feature fields: %w", err)
+	}
+	if required.Feature.Title == nil || required.Feature.Body == nil {
+		return stored.Feature, errors.New("stored feature needs title and body fields")
+	}
 	if stored.Version != 1 || stored.Feature.ID != id || stored.Feature.Revision != "" {
 		return stored.Feature, errors.New("invalid stored feature")
 	}
 	if err = validDraft(stored.Feature); err != nil {
-		return stored.Feature, fmt.Errorf("feature storage: %w", err)
+		return stored.Feature, fmt.Errorf("stored feature: %w", err)
 	}
 	sum := sha256.Sum256(b)
 	stored.Feature.Revision = hex.EncodeToString(sum[:])
 	return stored.Feature, nil
 }
 
-// List accesses persisted feature drafts.
+// List reads every saved draft in file-name order; a corrupt document is visible as an error.
 func (s FeatureFiles) List() ([]application.FeatureSummary, error) {
-	filesMu.Lock()
-	defer filesMu.Unlock()
 	result := []application.FeatureSummary{}
-	dir, err := s.directory(false)
-	if errors.Is(err, os.ErrNotExist) {
+	opened := false
+	err := s.withFiles(false, func(root *os.Root) error {
+		opened = true
+		entries, err := fs.ReadDir(root.FS(), ".")
+		if err != nil {
+			return fmt.Errorf("list features: %w", err)
+		}
+		for _, entry := range entries {
+			name := entry.Name()
+			if !strings.HasSuffix(name, ".json") {
+				continue
+			}
+			if !fileID.MatchString(strings.TrimSuffix(name, ".json")) {
+				return fmt.Errorf("unexpected feature file %s", name)
+			}
+			d, err := readFeature(root, strings.TrimSuffix(name, ".json"))
+			if err != nil {
+				return err
+			}
+			result = append(result, application.FeatureSummary{ID: d.ID, Title: d.Title, Revision: d.Revision})
+		}
+		return nil
+	})
+	if !opened && errors.Is(err, os.ErrNotExist) {
 		return result, nil
 	}
-	if err != nil {
-		return nil, fmt.Errorf("feature storage: %w", err)
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("feature storage: %w", err)
-	}
-	for _, entry := range entries {
-		name := entry.Name()
-		if filepath.Ext(name) != ".json" {
-			return nil, fmt.Errorf("unexpected feature file %s", name)
-		}
-		id := name[:len(name)-5]
-		if !fileID.MatchString(id) {
-			return nil, errors.New("invalid stored feature id")
-		}
-		d, err := readFeature(dir, id)
-		if err != nil {
-			return nil, fmt.Errorf("feature storage: %w", err)
-		}
-		result = append(result, application.FeatureSummary{ID: d.ID, Title: d.Title, Revision: d.Revision})
-	}
-	return result, nil
+	return result, err
 }
 
-// Get accesses persisted feature drafts.
+// Get reopens one saved draft and computes its current content revision.
 func (s FeatureFiles) Get(id string) (application.FeatureDraft, error) {
-	filesMu.Lock()
-	defer filesMu.Unlock()
-	return s.get(id)
-}
-
-func (s FeatureFiles) get(id string) (application.FeatureDraft, error) {
 	if !fileID.MatchString(id) {
 		return application.FeatureDraft{}, application.ErrFeatureInput
 	}
-	dir, err := s.directory(false)
-	if err == nil {
-		var d application.FeatureDraft
-		d, err = readFeature(dir, id)
-		if err == nil {
-			return d, nil
-		}
-	}
+	var result application.FeatureDraft
+	err := s.withFiles(false, func(root *os.Root) error {
+		var err error
+		result, err = readFeature(root, id)
+		return err
+	})
 	if errors.Is(err, os.ErrNotExist) {
 		err = application.ErrFeatureMissing
 	}
-	return application.FeatureDraft{}, err
+	return result, err
 }
 
-// Save accesses persisted feature drafts.
+// Save replaces a complete snapshot only while its last-read revision is current.
 func (s FeatureFiles) Save(d application.FeatureDraft) (application.FeatureDraft, error) {
-	filesMu.Lock()
-	defer filesMu.Unlock()
 	if err := validDraft(d); err != nil {
-		return d, fmt.Errorf("feature storage: %w", err)
-	}
-	var err error
-	d, err = s.address(d)
-	if err != nil {
 		return d, err
 	}
-	d.Revision = ""
-	b, err := json.Marshal(storedFeature{Version: 1, Feature: d})
-	if err != nil {
-		return d, fmt.Errorf("feature storage: %w", err)
-	}
-	if len(b) > documentLimit {
+	if (d.ID == "" && d.Revision != "") || (d.ID != "" && !fileID.MatchString(d.ID)) {
 		return d, application.ErrFeatureInput
 	}
-	dir, err := s.directory(true)
-	if err != nil {
-		return d, fmt.Errorf("feature storage: %w", err)
+	err := s.withFiles(d.ID == "", func(root *os.Root) error {
+		id, err := featureAddress(root, d)
+		if err != nil {
+			return err
+		}
+		d.ID = id
+		d.Revision = ""
+		b, err := json.Marshal(storedFeature{Version: 1, Feature: d})
+		if err != nil {
+			return fmt.Errorf("encode feature: %w", err)
+		}
+		if len(b) > documentLimit {
+			return application.ErrFeatureInput
+		}
+		if err := replaceFeature(root, d.ID+".json", b); err != nil {
+			return err
+		}
+		sum := sha256.Sum256(b)
+		d.Revision = hex.EncodeToString(sum[:])
+		return nil
+	})
+	if errors.Is(err, os.ErrNotExist) {
+		err = application.ErrFeatureMissing
 	}
-	f, err := os.CreateTemp(dir, ".write-")
+	return d, err
+}
+
+func replaceFeature(root *os.Root, name string, body []byte) error {
+	temporary := ".write-" + rand.Text()
+	f, err := root.OpenFile(temporary, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
-		return d, fmt.Errorf("feature storage: %w", err)
+		return fmt.Errorf("create feature: %w", err)
 	}
-	defer func() { _ = os.Remove(f.Name()) }()
-	if _, err = f.Write(b); err != nil {
+	defer func() { _ = root.Remove(temporary) }()
+	if _, err = f.Write(body); err != nil {
 		_ = f.Close()
-		return d, fmt.Errorf("feature storage: %w", err)
+		return fmt.Errorf("write feature: %w", err)
 	}
 	if err = f.Sync(); err != nil {
 		_ = f.Close()
-		return d, fmt.Errorf("feature storage: %w", err)
+		return fmt.Errorf("sync feature: %w", err)
 	}
 	if err = f.Close(); err != nil {
-		return d, fmt.Errorf("feature storage: %w", err)
+		return fmt.Errorf("close feature: %w", err)
 	}
-	if err = os.Rename(f.Name(), filepath.Join(dir, d.ID+".json")); err != nil {
-		return d, fmt.Errorf("feature storage: %w", err)
-	}
-	sum := sha256.Sum256(b)
-	d.Revision = hex.EncodeToString(sum[:])
-	return d, nil
-}
-
-// Delete accesses persisted feature drafts.
-func (s FeatureFiles) Delete(id, revision string) error {
-	filesMu.Lock()
-	defer filesMu.Unlock()
-	old, err := s.get(id)
-	if err != nil {
-		return fmt.Errorf("feature storage: %w", err)
-	}
-	if old.Revision != revision {
-		return application.ErrFeatureConflict
-	}
-	dir, err := s.directory(false)
-	if err != nil {
-		return fmt.Errorf("feature storage: %w", err)
-	}
-	if err := os.Remove(filepath.Join(dir, id+".json")); err != nil {
-		return fmt.Errorf("delete feature: %w", err)
+	if err = root.Rename(temporary, name); err != nil {
+		return fmt.Errorf("replace feature: %w", err)
 	}
 	return nil
 }
 
-func (s FeatureFiles) address(d application.FeatureDraft) (application.FeatureDraft, error) {
-	if d.ID != "" {
-		old, err := s.get(d.ID)
+// Delete removes a saved draft only if the caller has its current revision.
+func (s FeatureFiles) Delete(id, revision string) error {
+	if !fileID.MatchString(id) {
+		return application.ErrFeatureInput
+	}
+	err := s.withFiles(false, func(root *os.Root) error {
+		old, err := readFeature(root, id)
 		if err != nil {
-			return d, fmt.Errorf("feature storage: %w", err)
+			return err
 		}
-		if old.Revision != d.Revision {
-			return d, application.ErrFeatureConflict
+		if old.Revision != revision {
+			return application.ErrFeatureConflict
+		}
+		if err := root.Remove(id + ".json"); err != nil {
+			return fmt.Errorf("delete feature: %w", err)
+		}
+		return nil
+	})
+	if errors.Is(err, os.ErrNotExist) {
+		err = application.ErrFeatureMissing
+	}
+	return err
+}
+
+func featureAddress(root *os.Root, draft application.FeatureDraft) (string, error) {
+	if draft.ID != "" {
+		old, err := readFeature(root, draft.ID)
+		if err != nil {
+			return "", err
+		}
+		if old.Revision != draft.Revision {
+			return "", application.ErrFeatureConflict
+		}
+		return draft.ID, nil
+	}
+	for {
+		var random [16]byte
+		if _, err := rand.Read(random[:]); err != nil {
+			return "", fmt.Errorf("feature id: %w", err)
+		}
+		id := hex.EncodeToString(random[:])
+		_, err := root.Lstat(id + ".json")
+		if errors.Is(err, os.ErrNotExist) {
+			return id, nil
+		}
+		if err != nil {
+			return "", fmt.Errorf("feature id: %w", err)
 		}
 	}
-	if d.ID != "" {
-		return d, nil
-	}
-	{
-		if d.Revision != "" {
-			return d, application.ErrFeatureInput
-		}
-		var id [16]byte
-		if _, err := rand.Read(id[:]); err != nil {
-			return d, fmt.Errorf("feature storage: %w", err)
-		}
-		d.ID = hex.EncodeToString(id[:])
-	}
-	return d, nil
 }

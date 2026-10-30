@@ -2,7 +2,7 @@ package application
 
 import "fmt"
 
-// ListFeatureDrafts carries the feature draft operation or its typed data.
+// ListFeatureDrafts lists the project’s saved feature documents.
 type ListFeatureDrafts struct{ Store FeatureDraftStore }
 
 // Execute delegates to the feature draft store.

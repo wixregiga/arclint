@@ -377,9 +377,17 @@ func readJSON(w http.ResponseWriter, r *http.Request, into any) bool {
 		writeError(w, http.StatusUnsupportedMediaType, errors.New("an edit is a JSON body: Content-Type application/json"))
 		return false
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, requestLimit))
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, requestLimit))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(into); err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("read the edit: %w", err))
+		return false
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			err = errors.New("an edit contains exactly one JSON document")
+		}
 		writeError(w, http.StatusBadRequest, fmt.Errorf("read the edit: %w", err))
 		return false
 	}

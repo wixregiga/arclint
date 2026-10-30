@@ -2,7 +2,7 @@ package application
 
 import "fmt"
 
-// GetFeatureDraft carries the feature draft operation or its typed data.
+// GetFeatureDraft reopens a saved document.
 type GetFeatureDraft struct{ Store FeatureDraftStore }
 
 // Execute delegates to the feature draft store.

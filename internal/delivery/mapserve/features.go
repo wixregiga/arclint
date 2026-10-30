@@ -1,10 +1,8 @@
 package mapserve
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 
 	"github.com/wixregiga/arclint/internal/application"
@@ -38,19 +36,10 @@ func (s Server) feature(w http.ResponseWriter, r *http.Request) {
 			Body       *string                        `json:"body"`
 			References []application.FeatureReference `json:"references"`
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, requestLimit)
-		raw, readErr := io.ReadAll(r.Body)
-		if readErr != nil {
-			featureResponse(w, nil, application.ErrFeatureInput)
-			return
-		}
-		r.Body = io.NopCloser(bytes.NewReader(raw))
 		if !readJSON(w, r, &body) {
 			return
 		}
-		var whole any
-		err := json.Unmarshal(raw, &whole)
-		if err != nil || body.Title == nil || body.Body == nil || body.References == nil {
+		if body.Title == nil || body.Body == nil || body.References == nil {
 			featureResponse(w, nil, application.ErrFeatureInput)
 			return
 		}

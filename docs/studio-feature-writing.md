@@ -90,3 +90,20 @@ The browser's draft transport is separately injected from StudioGateway so hosts
 can supply it explicitly; standalone uses the same API base. Existing mounts
 remain usable for language without a feature store. The feature view loads its
 store when opened. Failed and stale saves keep all typed text and offer recovery.
+
+## Draft storage integration
+
+Astra's typed draft operations and HTTP routes are integrated. The file adapter
+uses the same rooted-filesystem and advisory-lock approach as the existing agent
+progress store: directory handles confine file access, and one lock covers the
+revision comparison and atomic replacement across Studio processes. JSON files
+remain versioned; non-document metadata such as .gitignore is not a draft.
+
+Verification includes two compiled Studio servers over each of the repository's
+real YAML and CML recordings. It exercises concurrent saves, reopening through
+another process, stale deletion, foreign-origin refusal, Unicode round-trips,
+and byte-for-byte preservation of the domain recording. Filesystem tests also
+cover a replaced storage directory, outside-file links, malformed documents,
+and missing required stored text fields. The browser editor remains a separate
+integration step; passing these checks does not establish that the full feature
+writing flow works.

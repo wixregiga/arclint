@@ -11,11 +11,17 @@ import (
 )
 
 func TestDraftLifecycle(t *testing.T) {
-	for _, recording := range []string{"domain.arclint.yaml", "domain.cml"} {
-		t.Run(recording, func(t *testing.T) {
+	for _, recording := range []struct{ source, name string }{
+		{"docs/examples/go/domain.arclint.yaml", "domain.arclint.yaml"},
+		{"testing/boxoffice/domain.arclint.cml", "domain.arclint.cml"},
+	} {
+		t.Run(recording.name, func(t *testing.T) {
 			root := t.TempDir()
-			path := filepath.Join(root, recording)
-			original := []byte("untouched recording")
+			path := filepath.Join(root, recording.name)
+			original, err := os.ReadFile(filepath.Join("..", "..", "..", recording.source))
+			if err != nil {
+				t.Fatal(err)
+			}
 			if err := os.WriteFile(path, original, 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -138,5 +144,63 @@ func TestDraftRefusals(t *testing.T) {
 	}
 	if _, err = (FeatureFiles{Project: root2}).Save(application.FeatureDraft{References: []application.FeatureReference{}}); err == nil {
 		t.Fatal("directory link followed")
+	}
+}
+
+func TestDraftFilesRemainConfinedAndReadable(t *testing.T) {
+	project := t.TempDir()
+	store := FeatureFiles{Project: project}
+	draft, err := store.Save(application.FeatureDraft{Body: "In the project", References: []application.FeatureReference{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := filepath.Join(project, ".arclint", "studio", "features")
+	if err := os.WriteFile(filepath.Join(directory, ".gitignore"), []byte(".lock\n.write-*\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if entries, err := store.List(); err != nil || len(entries) != 1 {
+		t.Fatalf("non-document metadata: %v %v", entries, err)
+	}
+	outside := t.TempDir()
+	original, err := os.ReadFile(filepath.Join(directory, draft.ID+".json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, draft.ID+".json"), original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	held := directory + "-held"
+	if err := os.Rename(directory, held); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, directory); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Get(draft.ID); err == nil {
+		t.Fatal("opened a replacement directory outside storage")
+	}
+	draft.Body = "Must not escape"
+	if _, err := store.Save(draft); err == nil {
+		t.Fatal("saved through a replacement directory outside storage")
+	}
+	if err := store.Delete(draft.ID, draft.Revision); err == nil {
+		t.Fatal("deleted through a replacement directory outside storage")
+	}
+	after, err := os.ReadFile(filepath.Join(outside, draft.ID+".json"))
+	if err != nil || string(after) != string(original) {
+		t.Fatalf("outside document changed: %v", err)
+	}
+	if err := os.Remove(directory); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(held, directory); err != nil {
+		t.Fatal(err)
+	}
+	invalid := []byte(`{"version":1,"feature":{"id":"` + draft.ID + `","revision":"","references":[]}}`)
+	if err := os.WriteFile(filepath.Join(directory, draft.ID+".json"), invalid, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Get(draft.ID); err == nil {
+		t.Fatal("accepted a stored document with missing text fields")
 	}
 }

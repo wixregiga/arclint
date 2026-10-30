@@ -9,7 +9,7 @@ var (
 	ErrFeatureConflict = errors.New("feature revision conflict")
 )
 
-// FeatureTerm carries the feature draft operation or its typed data.
+// FeatureTerm is the recorded entry an author chose for one occurrence.
 type FeatureTerm struct {
 	Concept string `json:"concept"`
 	Context string `json:"context"`
@@ -17,7 +17,7 @@ type FeatureTerm struct {
 	Name    string `json:"name"`
 }
 
-// FeatureReference carries the feature draft operation or its typed data.
+// FeatureReference retains an occurrence, its original wording, and the chosen reading.
 type FeatureReference struct {
 	ID      string       `json:"id"`
 	From    int          `json:"from"`
@@ -28,7 +28,6 @@ type FeatureReference struct {
 }
 
 // FeatureDraft is a persisted application document, not a domain aggregate.
-// FeatureDraft carries the feature draft operation or its typed data.
 type FeatureDraft struct {
 	ID         string             `json:"id"`
 	Revision   string             `json:"revision"`
@@ -37,14 +36,14 @@ type FeatureDraft struct {
 	References []FeatureReference `json:"references"`
 }
 
-// FeatureSummary carries the feature draft operation or its typed data.
+// FeatureSummary identifies one saved document in the feature list.
 type FeatureSummary struct {
 	ID       string `json:"id"`
 	Title    string `json:"title"`
 	Revision string `json:"revision"`
 }
 
-// FeatureDraftStore carries the feature draft operation or its typed data.
+// FeatureDraftStore persists documents and refuses saves or deletes of a stale revision.
 type FeatureDraftStore interface {
 	List() ([]FeatureSummary, error)
 	Get(string) (FeatureDraft, error)

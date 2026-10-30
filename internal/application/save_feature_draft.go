@@ -2,7 +2,7 @@ package application
 
 import "fmt"
 
-// SaveFeatureDraft carries the feature draft operation or its typed data.
+// SaveFeatureDraft saves a document through the configured store.
 type SaveFeatureDraft struct{ Store FeatureDraftStore }
 
 // Execute delegates to the feature draft store.

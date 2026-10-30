@@ -2,7 +2,7 @@ package application
 
 import "fmt"
 
-// DeleteFeatureDraft carries the feature draft operation or its typed data.
+// DeleteFeatureDraft removes a document at its last-read revision.
 type DeleteFeatureDraft struct{ Store FeatureDraftStore }
 
 // Execute delegates to the feature draft store.
