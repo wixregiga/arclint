@@ -2,7 +2,7 @@
 // the page that draws the recorded Ubiquitous Language, embedded at
 // build time, the overview as the JSON renderer spells it, the overview
 // the default branch records, and the define and remove use cases the
-// page publishes its drafts through.
+// page saves its language edits through. Feature documents use a separate store.
 package mapserve
 
 import (
@@ -28,15 +28,15 @@ import (
 // Routes of the page, its documents and its edits.
 const (
 	PagePath     = "/"
-	ScriptPath   = "/studio.js"
 	OverviewPath = "/api/overview"
 	AcceptedPath = "/api/accepted"
 	DefinePath   = "/api/define"
 	RemovePath   = "/api/remove"
+	ProjectPath  = "/api/project"
 )
 
-// requestLimit bounds one edit's body; a recorded text is at most a few
-// hundred words.
+// requestLimit bounds each language edit or feature snapshot to 1 MiB.
+// The file adapter also bounds the encoded, versioned feature document.
 const requestLimit = 1 << 20
 
 // Reports writes the use cases' results as the JSON renderer spells
@@ -60,6 +60,7 @@ type Accepted struct {
 
 // Server implements the CLI's MapServer port over HTTP.
 type Server struct {
+	Features application.FeatureDraftStore
 	Reports  Reports
 	Overview application.GetDomainOverview
 	Define   application.DefineDomainDefinition
@@ -93,13 +94,10 @@ func (s Server) Serve(address string, listening func(url string) error) error {
 	return nil
 }
 
-// Handler answers GET / with the page, GET /studio.js with its script,
-// GET /api/overview with the overview the domain file records now, GET
-// /api/accepted with the one the default branch records, POST
-// /api/define and POST /api/remove with one edit each through the
-// define and remove use cases, one edit at a time; any other request,
-// and any request addressed by another name or sent by another page, is
-// refused.
+// Handler serves the embedded Studio assets, the current and accepted language,
+// project and entry edits, and feature documents. Language edits use define and
+// remove under one edit lock; feature storage compares revisions independently.
+// Unknown routes and requests from another host or origin are refused.
 func (s Server) Handler() (http.Handler, error) {
 	switch {
 	case s.Reports.Overview == nil || s.Reports.Defined == nil || s.Reports.Removed == nil:
@@ -111,14 +109,26 @@ func (s Server) Handler() (http.Handler, error) {
 	case s.Accepted.Branch != "" && s.Accepted.Overview == (application.GetDomainOverview{}):
 		return nil, errors.New("map server: the accepted branch is named without its overview")
 	}
+	files, err := studioFiles()
+	if err != nil {
+		return nil, fmt.Errorf("map server: embedded Studio: %w", err)
+	}
+	assets := serveWebAssets(files)
 	var edits sync.Mutex
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/features", s.features)
+	mux.HandleFunc("GET /api/feature", s.feature)
+	mux.HandleFunc("POST /api/feature", s.feature)
+	mux.HandleFunc("DELETE /api/feature", s.feature)
 	mux.HandleFunc("GET "+OverviewPath, s.overview)
 	mux.HandleFunc("GET "+AcceptedPath, s.accepted)
+	mux.HandleFunc("POST "+ProjectPath, oneAtATime(&edits, s.project))
 	mux.HandleFunc("POST "+DefinePath, oneAtATime(&edits, s.define))
 	mux.HandleFunc("POST "+RemovePath, oneAtATime(&edits, s.remove))
-	mux.HandleFunc("GET "+ScriptPath, serveBytes("text/javascript; charset=utf-8", studioScript))
-	mux.HandleFunc("GET /{$}", serveBytes("text/html; charset=utf-8", studioPage))
+	mux.HandleFunc("GET /{$}", assets)
+	mux.HandleFunc("GET /assets/", assets)
+	mux.HandleFunc("GET /manifest.webmanifest", assets)
+	mux.HandleFunc("GET /favicon.svg", assets)
 	return fromThePage(mux), nil
 }
 
@@ -297,6 +307,37 @@ func (s Server) define(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, document.Bytes())
 }
 
+// projectRequest preserves the distinction between omitted and cleared fields.
+type projectRequest struct {
+	Name        *string `json:"name"`
+	Description *string `json:"description"`
+}
+
+func (s Server) project(w http.ResponseWriter, r *http.Request) {
+	var body projectRequest
+	if !readJSON(w, r, &body) {
+		return
+	}
+	req := application.DefineProjectRequest{}
+	if body.Name != nil {
+		req.SetName, req.Name = true, *body.Name
+	}
+	if body.Description != nil {
+		req.SetDescription, req.Description = true, *body.Description
+	}
+	result, err := s.Define.ExecuteProject(req)
+	if err != nil {
+		writeError(w, refusalStatus(err), err)
+		return
+	}
+	var document bytes.Buffer
+	if err := s.Reports.Defined(&document, result, application.DefineDomainRequest{Concept: "project", Name: result.Name}); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("render define result: %w", err))
+		return
+	}
+	writeJSON(w, http.StatusOK, document.Bytes())
+}
+
 func (s Server) remove(w http.ResponseWriter, r *http.Request) {
 	var body removeRequest
 	if !readJSON(w, r, &body) {
@@ -333,9 +374,17 @@ func readJSON(w http.ResponseWriter, r *http.Request, into any) bool {
 		writeError(w, http.StatusUnsupportedMediaType, errors.New("an edit is a JSON body: Content-Type application/json"))
 		return false
 	}
-	decoder := json.NewDecoder(io.LimitReader(r.Body, requestLimit))
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, requestLimit))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(into); err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("read the edit: %w", err))
+		return false
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			err = errors.New("an edit contains exactly one JSON document")
+		}
 		writeError(w, http.StatusBadRequest, fmt.Errorf("read the edit: %w", err))
 		return false
 	}
@@ -355,18 +404,7 @@ func writeJSON(w http.ResponseWriter, status int, body []byte) {
 	_, _ = w.Write(body)
 }
 
-func serveBytes(contentType string, body []byte) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", contentType)
-		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
-		_, _ = w.Write(body)
-	}
-}
-
-// URL is the address a browser opens for a bound listener: the host it
-// listens on with its port, and localhost when it listens on every
-// interface, so the printed URL always reaches this machine.
+// URL is the browser address for the listener, using localhost for an unspecified host.
 func URL(bound net.Addr) string {
 	tcp, ok := bound.(*net.TCPAddr)
 	if !ok {

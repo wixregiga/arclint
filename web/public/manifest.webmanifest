@@ -1,0 +1,13 @@
+{
+  "name": "ArcLint Studio",
+  "short_name": "Studio",
+  "description": "Write and evolve a project's domain language through the arclint map server.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f6f3",
+  "theme_color": "#2f7d72",
+  "icons": [
+    { "src": "./favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

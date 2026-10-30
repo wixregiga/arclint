@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -22,6 +23,7 @@ import (
 	"github.com/wixregiga/arclint/internal/delivery/cli/reportfactory"
 	"github.com/wixregiga/arclint/internal/delivery/mapserve"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
+	cmlvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/cml"
 	gitvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/git"
 	yamlvocab "github.com/wixregiga/arclint/internal/infrastructure/vocab/yaml"
 )
@@ -116,11 +118,15 @@ func composed(t *testing.T, root string) mapserve.Server {
 	}
 	server := mapserve.Server{
 		Reports: mapserve.Reports{
-			Overview: func(w io.Writer, o application.DomainOverview) error { return renderer.Render(w, cli.DomainOverviewReport{Overview: o}) },
+			Overview: func(w io.Writer, o application.DomainOverview) error {
+				return renderer.Render(w, cli.DomainOverviewReport{Overview: o})
+			},
 			Defined: func(w io.Writer, r application.DomainDefineResult, req application.DefineDomainRequest) error {
 				return renderer.Render(w, cli.NewDomainDefineReport(r, req))
 			},
-			Removed: func(w io.Writer, r application.DomainRemoveResult) error { return renderer.Render(w, cli.DomainRemoveReport{Result: r}) },
+			Removed: func(w io.Writer, r application.DomainRemoveResult) error {
+				return renderer.Render(w, cli.DomainRemoveReport{Result: r})
+			},
 		},
 		Overview: overview,
 		Define:   define,
@@ -224,25 +230,44 @@ func TestOverviewIsTheJSONRenderersDocument(t *testing.T) {
 	}
 }
 
-func TestPageAndScriptAreServed(t *testing.T) {
+func TestBuiltStudioIsServed(t *testing.T) {
 	h := handler(t, exampleRoot(t))
 	page := get(t, h, http.MethodGet, mapserve.PagePath)
 	if page.Code != http.StatusOK || !strings.HasPrefix(page.Header().Get("Content-Type"), "text/html") {
 		t.Fatalf("page: status %d, content-type %q", page.Code, page.Header().Get("Content-Type"))
 	}
-	for _, want := range []string{"ArcLint Studio", "Navigator", "Inspector", `src="studio.js"`, mapserve.OverviewPath, mapserve.AcceptedPath, mapserve.DefinePath, mapserve.RemovePath, "Publish", "Changes"} {
+	for _, want := range []string{"ArcLint Studio", `id="studio"`, `rel="manifest"`} {
 		if !strings.Contains(page.Body.String(), want) {
 			t.Errorf("page lacks %q", want)
 		}
 	}
-	script := get(t, h, http.MethodGet, mapserve.ScriptPath)
-	if script.Code != http.StatusOK || !strings.HasPrefix(script.Header().Get("Content-Type"), "text/javascript") {
+	scriptURL := regexp.MustCompile(`src="(\./assets/[^" ]+\.js)"`).FindStringSubmatch(page.Body.String())
+	if len(scriptURL) != 2 {
+		t.Fatalf("page has no built module: %s", page.Body.String())
+	}
+	script := get(t, h, http.MethodGet, strings.TrimPrefix(scriptURL[1], "."))
+	if script.Code != http.StatusOK || !strings.Contains(script.Header().Get("Content-Type"), "javascript") {
 		t.Fatalf("script: status %d, content-type %q", script.Code, script.Header().Get("Content-Type"))
 	}
-	for _, want := range []string{"conceptsOf", "navigator", "layout", "inspect", "transformation", "applyDrafts", "requestOf"} {
+	for _, want := range []string{"api/overview", "api/accepted", "api/project", "api/define", "api/remove", "Name the project"} {
 		if !strings.Contains(script.Body.String(), want) {
-			t.Errorf("script lacks %q", want)
+			t.Errorf("built Studio lacks %q", want)
 		}
+	}
+	manifest := get(t, h, http.MethodGet, "/manifest.webmanifest")
+	if manifest.Code != http.StatusOK || manifest.Header().Get("Content-Type") != "application/manifest+json" {
+		t.Fatalf("manifest: %d %s", manifest.Code, manifest.Body.String())
+	}
+	var app map[string]any
+	if err := json.Unmarshal(manifest.Body.Bytes(), &app); err != nil {
+		t.Fatal(err)
+	}
+	if app["name"] != "ArcLint Studio" {
+		t.Fatalf("manifest: %v", app)
+	}
+	icon := get(t, h, http.MethodGet, "/favicon.svg")
+	if icon.Code != http.StatusOK || !strings.Contains(icon.Header().Get("Content-Type"), "image/svg+xml") {
+		t.Fatalf("icon: %d", icon.Code)
 	}
 }
 
@@ -257,7 +282,7 @@ func TestOnlyTheRoutesOfThePageAreServed(t *testing.T) {
 	if rec := get(t, h, http.MethodPut, mapserve.PagePath); rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("PUT page: status = %d", rec.Code)
 	}
-	for _, path := range []string{"/studio.test.js", "/static/index.html", "/other", "/api/model"} {
+	for _, path := range []string{"/studio.js", "/assets/missing.js", "/studio.test.js", "/static/index.html", "/other", "/api/model"} {
 		if rec := get(t, h, http.MethodGet, path); rec.Code != http.StatusNotFound {
 			t.Errorf("GET %s: status = %d, want 404", path, rec.Code)
 		}
@@ -488,6 +513,13 @@ func TestEditsAtOnceAreAllRecorded(t *testing.T) {
 	const edits = 12
 	var wg sync.WaitGroup
 	codes := make([]int, edits)
+	projectCode := 0
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		projectCode = post(t, h, mapserve.ProjectPath, "application/json", `{"description":"Concurrent project edit."}`).Code
+	}()
+
 	for i := range edits {
 		wg.Add(1)
 		go func() {
@@ -497,6 +529,11 @@ func TestEditsAtOnceAreAllRecorded(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+	current, err := composed(t, clone).Overview.Execute()
+	if err != nil || projectCode != http.StatusOK || current.Language.Description != "Concurrent project edit." {
+		t.Fatalf("concurrent project edit: status %d, overview %+v, error %v", projectCode, current, err)
+	}
+
 	var after overviewDoc
 	decode(t, get(t, h, http.MethodGet, mapserve.OverviewPath), &after)
 	recorded := map[string]bool{}
@@ -615,30 +652,92 @@ func TestServeRefusesAnAddressAlreadyInUse(t *testing.T) {
 	}
 }
 
-// TestStudioScriptUnderNode runs the page's model tests with node,
-// lending them the Go example's overview as the JSON renderer spells
-// it, so the script is proved against a real recording and against
-// the same document the server sends.
-func TestStudioScriptUnderNode(t *testing.T) {
-	node, err := exec.LookPath("node")
-	if err != nil {
-		t.Skip("node is not installed; the studio.js tests run where it is")
-	}
-	rec := get(t, handler(t, exampleRoot(t)), http.MethodGet, mapserve.OverviewPath)
-	overviewFile := filepath.Join(t.TempDir(), "overview.json")
-	if err := os.WriteFile(overviewFile, rec.Body.Bytes(), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command(node, "--test", "studio.test.js")
-	cmd.Dir = "static"
-	cmd.Env = append(os.Environ(), "ARCLINT_OVERVIEW_JSON="+overviewFile)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("node --test failed: %v\n%s", err, out)
-	}
-	for _, want := range []string{"fail 0", "skipped 0", "cancelled 0"} {
-		if !strings.Contains(string(out), want) {
-			t.Fatalf("node --test did not run every test (%q missing):\n%s", want, out)
-		}
+func TestProjectEditsRecordingFormats(t *testing.T) {
+	for _, format := range []string{"yaml", "cml"} {
+		t.Run(format, func(t *testing.T) {
+			root := t.TempDir()
+			recording, err := vocab.NewDomainRecording("domain.arclint." + format)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var knowledge vocab.Repository
+			if format == "yaml" {
+				knowledge, err = yamlvocab.NewRepository(root, recording)
+			} else {
+				knowledge, err = cmlvocab.NewRepository(root, recording)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := composed(t, root)
+			server.Overview, err = application.NewGetDomainOverview(knowledge)
+			if err != nil {
+				t.Fatal(err)
+			}
+			server.Define, err = application.NewDefineDomainDefinition(knowledge, root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			server.Remove, err = application.NewRemoveDomainDefinition(knowledge)
+			if err != nil {
+				t.Fatal(err)
+			}
+			h, err := server.Handler()
+			if err != nil {
+				t.Fatal(err)
+			}
+			initial, err := server.Overview.Execute()
+			if err != nil || initial.Found || initial.Source != recording.Path() {
+				t.Fatalf("initial = %+v, %v", initial, err)
+			}
+			steps := []struct{ body, name, description, outcome string }{
+				{`{"name":"clinic","description":"Booking visits."}`, "clinic", "Booking visits.", "created"},
+				{`{"name":"practice"}`, "practice", "Booking visits.", "updated"},
+				{`{"description":"Arranging care."}`, "practice", "Arranging care.", "updated"},
+				{`{"description":""}`, "practice", "", "updated"},
+				{`{"name":"practice"}`, "practice", "", "unchanged"},
+			}
+			for _, step := range steps {
+				rec := post(t, h, mapserve.ProjectPath, "application/json", step.body)
+				var result struct {
+					Result, Type, Name string
+					Changed            []string
+					Values             map[string]string
+				}
+				decode(t, rec, &result)
+				if rec.Code != 200 || result.Result != step.outcome || result.Type != "project" || result.Name != step.name {
+					t.Fatalf("response: %d %s", rec.Code, rec.Body.String())
+				}
+				if step.outcome != "unchanged" && len(result.Changed) == 0 {
+					t.Fatal("missing changes")
+				}
+				overview, err := server.Overview.Execute()
+				if err != nil || !overview.Found || overview.Language.Project != step.name || overview.Language.Description != step.description {
+					t.Fatalf("overview = %+v, %v", overview, err)
+				}
+			}
+			path := filepath.Join(root, recording.Path())
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, refusal := range []struct {
+				body   string
+				status int
+			}{
+				{`{}`, 400}, {`{"name":""}`, 400}, {`{"name":"   "}`, 400},
+				{`{"name":"changed","description":"` + strings.Repeat("word ", 101) + `"}`, 422},
+				{`{"unknown":true}`, 400},
+			} {
+				rec := post(t, h, mapserve.ProjectPath, "application/json", refusal.body)
+				if rec.Code != refusal.status || !strings.Contains(rec.Body.String(), `"error"`) {
+					t.Fatalf("refusal: %d %s", rec.Code, rec.Body.String())
+				}
+				after, err := os.ReadFile(path)
+				if err != nil || !bytes.Equal(before, after) {
+					t.Fatalf("refusal wrote recording: %v", err)
+				}
+			}
+		})
 	}
 }

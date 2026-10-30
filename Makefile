@@ -43,6 +43,7 @@ lint:
 	golangci-lint run --fix ./...
 
 # Every generated file comes from one of these generators, in this order:
+#   web        npm assets:write: the Studio build embedded in the Go host
 #   go         go generate ./...: stdlib tables, SDK types, metamodel, docs pages
 #   schemas    the release schemas under docs/schemas and each project's copies
 #   cml        arclint domain export: the root's domain.arclint.cml, the
@@ -62,7 +63,7 @@ lint:
 # ONLY="skill sdk" runs the named ones through the same recipe, still in
 # this order.
 ARCLINT_GENERATORS := schemas cml sdk skill agents-md
-GENERATORS         := go $(ARCLINT_GENERATORS) skill-copies
+GENERATORS         := web go $(ARCLINT_GENERATORS) skill-copies
 GENERATE_PROJECTS  := . testing/boxoffice
 ONLY               ?=
 UNKNOWN_GENERATORS := $(filter-out $(GENERATORS),$(ONLY))
@@ -71,6 +72,9 @@ ARCLINT := $(abspath $(BIN))
 
 generate:
 	@test -z "$(UNKNOWN_GENERATORS)" || { echo "make generate: unknown generator $(UNKNOWN_GENERATORS); choose from: $(GENERATORS)" >&2; exit 2; }
+ifneq ($(filter web,$(SELECTED_GENERATORS)),)
+	npm --prefix web run assets:write
+endif
 ifneq ($(filter go,$(SELECTED_GENERATORS)),)
 	$(GO) generate ./...
 endif
@@ -149,10 +153,11 @@ CHECK_LINT ?= lint
 CHECK_LEAK ?= _leak
 CHECK_VERIFY ?= _quick-verify
 CHECK_SCHEMA ?= lint-schema
+CHECK_WEB ?= _web-quick
 
 # Canonical local check: auto-fixes lint errors, runs fast tests and
 # arclint check, lints the committed schemas, and checks staged secrets.
-check: $(CHECK_LINT) $(CHECK_VERIFY) $(CHECK_SCHEMA) $(CHECK_LEAK)
+check: $(CHECK_LINT) $(CHECK_VERIFY) $(CHECK_SCHEMA) $(CHECK_WEB) $(CHECK_LEAK)
 
 
 # check-fix is required by the AGENTS.md contract. It aliases to check.
@@ -164,7 +169,7 @@ check-ro:
 
 # CI gate: calls check but overrides steps to be CI-appropriate and full.
 ci:
-	$(MAKE) check CHECK_LINT=_lint-no-fix CHECK_VERIFY=_verify CHECK_LEAK=_leak-ci
+	$(MAKE) check CHECK_LINT=_lint-no-fix CHECK_VERIFY=_verify CHECK_LEAK=_leak-ci CHECK_WEB=_web-verify
 
 # Build the same Linux amd64/arm64 archives and checksums as a beta release,
 # without publishing. Requires goreleaser (mise install / mise run release).
@@ -205,6 +210,20 @@ _examples-go:
 # bytecode into the skill.
 _skill-scripts:
 	python3 -I -B -m unittest discover -s .agents/skills/domain-sweep/scripts -p 'test_*.py'
+
+# npm ci installs locked development dependencies; installed ArcLint needs no Node.
+.PHONY: web-install _web-quick _web-verify
+web-install:
+	npm --prefix web ci
+
+# The freshness check builds in temporary space, keeping check-ro non-mutating.
+_web-quick:
+	npm --prefix web run typecheck
+	npm --prefix web test
+	npm --prefix web run assets:check
+
+_web-verify: _web-quick
+	npm --prefix web run test:browser
 
 _noop:
 	@true

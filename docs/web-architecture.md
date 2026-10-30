@@ -1,17 +1,9 @@
 # Web architecture contract
 
-The repository rules reserve `web/` for the Vite frontend. At the time this
-contract was introduced, the repository contained no Web source.
-These are target constraints, not a description of an existing implementation.
-`web/launch-surfaces-present` is temporarily disabled until the package,
-Vite configuration, HTML entry, manifest, standalone startup, and mount entry
-exist. Remove its `disable` field when those launch surfaces are implemented,
-move the two `web-launch-surfaces-*` fixtures from `.arclint/tests/disabled/`
-back to `.arclint/tests/`, and regenerate the agent guidance. The fixture runner
-loads only that directory's immediate YAML files and cannot express the
-pathless disabled-rule notice as an expectation, so these fixtures retain
-their original enabled-rule assertions while parked. The other Web rules
-remain enabled.
+Studio is implemented under `web/` and its Vite build is embedded in the Go
+map server. The reserved launch rule is active; its fixtures run with the other
+architecture fixtures. Language, Map and Features share one adopting project's
+recording. These constraints apply to the implementation and future additions.
 
 ## Responsibilities visible in the files
 
@@ -94,7 +86,7 @@ elsewhere.
 
 | Rule | Evidence and limit |
 | --- | --- |
-| `web/launch-surfaces-present` | Temporarily disabled until Web exists. When enabled, checks exact presence of six specified files. Does not validate package scripts, the Vite build, HTML wiring, manifest semantics, or mounting behavior. |
+| `web/launch-surfaces-present` | Active. Checks exact presence of six specified files. Does not validate package scripts, the Vite build, HTML wiring, manifest semantics, or mounting behavior. |
 | `web/layers-point-downward` | Native layer check over resolved imports. |
 | `web/browser-dependencies` | Native import check: source may import itself and declared third-party packages, but no Node builtins or code outside the source Zone. A declared package is not thereby proven browser-compatible. |
 | `web/standalone-is-an-entrypoint` | Native importer restriction: no other source imports standalone startup. |
@@ -172,3 +164,20 @@ replaced by architecture fixtures:
 
 Run `arclint rules test` for the rule fixtures, `arclint check --only 'web/*'`
 for current Web findings, and the repository finish gate `make check`.
+
+## Current Studio integration
+
+App composition injects the language `StudioGateway` and the independent
+`FeatureStore` defined in Shared transport. An embedding host can provide the
+language without a draft store; the Features view loads its store only when
+opened. Standalone startup uses the page's API base for both. Mounting alone
+does not write storage or register a worker, and CodeMirror views are destroyed
+when their owner unmounts. Current verification uses Chromium and jsdom; no
+installed PWA, offline workflow or non-Chromium host behavior is claimed.
+
+The existing application operations validate language changes. Separate typed
+application operations save feature snapshots through an infrastructure file
+adapter. Feature prose does not create another domain recording or a new Rule.
+The served page and assets come from the binary in browser tests, including at
+a nested base. `make generate ONLY=web` writes the committed build; the finish
+gate refuses a build that differs from current source.

@@ -16,7 +16,7 @@ const (
 )
 
 // MapServer shows the project's domain overview in a browser and
-// publishes the page's drafts into the domain file. Serve binds
+// saves language edits into the domain file and feature drafts separately. Serve binds
 // address, tells listening the URL a browser opens once the listener is
 // bound, and answers requests until the listener fails. Composition
 // selects the adapter that implements it and the use cases it serves.
@@ -62,12 +62,6 @@ func mapServeRunner(overview application.GetDomainOverview, server MapServer, re
 		if err != nil {
 			return domainError(err)
 		}
-		if !result.Found {
-			if err := render.Render(ctx.Stdout, DomainMissingReport{Source: result.Source}); err != nil {
-				return fmt.Errorf("write output: %w", err)
-			}
-			return &ExitError{Code: ExitViolations, Message: "map serve: no recorded Ubiquitous Language at " + result.Source}
-		}
 		// A report that cannot be written is the command's own failure,
 		// kept apart from the server's, which is a configuration error.
 		var writeErr error
@@ -94,9 +88,10 @@ The map command serves a browser page over HTTP: a navigator of the
 recorded bounded contexts, a concept map of one context at a time, and
 an inspector that shows what the domain file records for the selected
 entry. Entries are edited, added and removed in the page as drafts;
-Publish records them in the domain file through the same define and
+Saving records an entry in the domain file through the same define and
 remove the command line runs, so every edit is validated as arclint
-domain define validates it.`
+domain define validates it. Features describes requested behavior with that same
+language at hand and saves the prose as project files.`
 
 const mapServeLong = `Serve a map of the project's recorded Ubiquitous Language to a browser.
 
@@ -111,11 +106,19 @@ Each entry is shown with its standing: Accepted when the remote's
 default branch (origin/HEAD) records it the same, Proposed when the
 domain file in the working tree records it differently or the branch
 does not record it yet, Draft when it is edited in the page and not
-published. Publish records the drafts in the domain file, one define or
-remove each, and shows what each one changed; a draft the language
+saved. Saving records an entry in the domain file through define or remove
+and shows what changed; a draft the language
 refuses stays a draft with the reason. What happens to the branch after
 that is git's: commit and propose the change as the project does.
 Without a remote default branch the page shows the recording alone.
+
+Features holds freeform prose alongside the current language. Saved feature
+drafts live under .arclint/studio/features in the selected project; they do
+not change the domain recording. Draft saves refuse a stale revision instead
+of overwriting another editor.
+
+If the domain recording is missing, the page opens so you can begin the
+language. An existing malformed recording must be corrected before serving.
 
 With no path, the project is the one whose rules.arclint.yaml is found
 upward from the working directory, as every other command finds it;

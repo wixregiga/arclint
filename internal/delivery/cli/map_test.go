@@ -117,23 +117,38 @@ func TestMapServeListensOnLoopbackByDefault(t *testing.T) {
 	}
 }
 
-func TestMapServeWithoutARecordedLanguageGuidesAndFails(t *testing.T) {
+func TestMapServeWithoutARecordedLanguageReportsItsSource(t *testing.T) {
 	server := &fakeMapServer{url: "http://127.0.0.1:7380"}
 	renderer := &recordingRenderer{}
 	serve := serveCommand(t, NewMapCommand(recordedOverview(t, nil), server, renderer))
-	err := serve.Run(Context{Flags: map[string]string{}, Stdout: io.Discard})
-	var exit *ExitError
-	if !errors.As(err, &exit) || exit.Code != ExitViolations {
-		t.Fatalf("err = %v, want an ExitError with code %d", err, ExitViolations)
+	if err := serve.Run(Context{Flags: map[string]string{flagListen: defaultListen}, Stdout: io.Discard}); err != nil {
+		t.Fatal(err)
 	}
-	if server.address != "" {
-		t.Fatal("the server was started without a language to show")
+	if server.address != defaultListen || len(renderer.reports) != 1 {
+		t.Fatalf("server = %+v, reports = %v", server, renderer.reports)
 	}
-	if len(renderer.reports) != 1 {
-		t.Fatalf("reports = %d, want the missing-language guidance", len(renderer.reports))
+	report, ok := renderer.reports[0].(MapServeReport)
+	if !ok || report.Source != vocab.DefaultDomainRecordingPath || report.URL != server.url || report.Project != "" {
+		t.Fatalf("report = %+v", renderer.reports[0])
 	}
-	if _, ok := renderer.reports[0].(DomainMissingReport); !ok {
-		t.Fatalf("report type = %T, want DomainMissingReport", renderer.reports[0])
+}
+
+type brokenKnowledge struct{ memoryKnowledge }
+
+func (brokenKnowledge) RecordedLanguage() (vocab.UbiquitousLanguage, bool, error) {
+	return vocab.UbiquitousLanguage{}, true, errors.New("malformed recording")
+}
+
+func TestMapServeRefusesAMalformedRecording(t *testing.T) {
+	overview, err := application.NewGetDomainOverview(brokenKnowledge{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := &fakeMapServer{}
+	serve := serveCommand(t, NewMapCommand(overview, server, &recordingRenderer{}))
+	err = serve.Run(Context{Flags: map[string]string{flagListen: defaultListen}, Stdout: io.Discard})
+	if err == nil || !strings.Contains(err.Error(), "malformed recording") || server.address != "" {
+		t.Fatalf("err = %v, server = %+v", err, server)
 	}
 }
 

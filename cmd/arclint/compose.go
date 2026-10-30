@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/wixregiga/arclint/internal/infrastructure/studio"
+
 	"github.com/charmbracelet/x/term"
 
 	"github.com/wixregiga/arclint/internal/application"
@@ -326,7 +328,7 @@ func run(args []string) int {
 	return outcome.ExitCode
 }
 
-// composeStudio wires the map server: the page publishes its drafts
+// composeStudio wires the map server: the page saves its language edits
 // through the same define and remove the command line runs, reads the
 // overview the domain file records now, and reads the one the remote's
 // default branch records through git, when the project has one; without
@@ -338,7 +340,8 @@ func composeStudio(root string, recording vocab.DomainRecording, overview applic
 	if err != nil {
 		return mapserve.Server{}, fmt.Errorf("compose map server: %w", err)
 	}
-	studio := mapserve.Server{
+	server := mapserve.Server{
+		Features: studio.FeatureFiles{Project: root},
 		Reports: mapserve.Reports{
 			Overview: func(w io.Writer, overview application.DomainOverview) error {
 				return jsonRenderer.Render(w, cli.DomainOverviewReport{Overview: overview})
@@ -355,7 +358,7 @@ func composeStudio(root string, recording vocab.DomainRecording, overview applic
 		Remove:   remove,
 		Accepted: acceptedRecording(root, recording),
 	}
-	return studio, nil
+	return server, nil
 }
 
 // acceptedRecording is the recording the remote's default branch holds,
