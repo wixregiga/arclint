@@ -65,9 +65,14 @@ order made saved annotations appear unsaved. The page model compares annotation
 fields by value. A reducer regression and a real-store browser assertion failed
 before the fix and pass afterward; edits made during a save remain drafts.
 
+The earlier global-navigation finding is also fixed: search results and the
+project name open Language when invoked from Features. Real-store browser
+regressions cover both actions, preserve the feature draft, and confirm that
+those actions keep Map mode when invoked there.
+
 ## Validation limits
 
-The integrated checks cover 74 Web unit tests, 27 Chromium browser tests,
+The integrated checks cover 74 Web unit tests, 29 Chromium browser tests,
 compiled two-process persistence tests against real YAML and CML projects,
 architecture fixtures, embedded-asset freshness and the repository gates.
 The relation rendering test supplies response variants; persistence workflows

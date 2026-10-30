@@ -398,3 +398,34 @@ test("deletion confirmation is reset when another feature is selected", async ({
   await expect(page.getByRole("status")).toContainText("Deleted the feature.");
   expect((await listFeatures(request)).map((doc) => doc.id)).toEqual([alpha.id]);
 });
+
+for (const destination of ["search result", "project name"] as const) {
+  test(`opens Language from Features using the global ${destination}, keeping the feature draft`, async ({ page, request }) => {
+    const studio = await openFeatures(page);
+    const project = (await studio.overview()).project!;
+    await page.getByRole("button", { name: "+ Feature" }).first().click();
+    await page.getByRole("textbox", { name: "Title" }).fill("Keep my draft");
+    await editor(page).click();
+    await page.keyboard.type("A Tenant waits.");
+
+    if (destination === "search result") {
+      await studio.search.fill("EmailAddress");
+      await page.getByRole("option", { name: /^Value object EmailAddress\b/ }).click();
+    } else await page.getByTitle("The project and its description", { exact: true }).click();
+    await expect(page.getByRole("tab", { name: "Language", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(studio.card.getByRole("heading", { level: 1 })).toHaveText(destination === "search result" ? "EmailAddress" : project);
+
+    await page.getByRole("tab", { name: "Features", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Keep my draft");
+    await expect(editor(page)).toContainText("A Tenant waits.");
+    expect(await listFeatures(request)).toEqual([]);
+
+    await page.getByRole("tab", { name: "Map", exact: true }).click();
+    if (destination === "search result") {
+      await studio.search.fill("Person");
+      await page.getByRole("option", { name: /^Value object Person\b/ }).click();
+    } else await page.getByTitle("The project and its description", { exact: true }).click();
+    await expect(page.getByRole("tab", { name: "Map", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("complementary", { name: "Inspector" }).getByRole("heading", { level: 1 })).toHaveText(destination === "search result" ? "Person" : project);
+  });
+}

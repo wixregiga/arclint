@@ -290,10 +290,11 @@ export function StudioScreen({ gateway, memory, featureStore }: StudioScreenProp
         searchRef={searchRef}
         reloading={reloading}
         onQueryChange={setQuery}
-        onPick={select}
+        onPick={workspace.mode === "features" ? openInLanguage : select}
         onProject={() => {
           setFailure(null);
           dispatch({ type: "select", selection: { kind: "project" } });
+          if (workspace.mode === "features") dispatch({ type: "mode", mode: "language" });
         }}
         onMode={(mode) => dispatch({ type: "mode", mode })}
         onReload={() => void reloadNow()}
