@@ -16,6 +16,9 @@ function mapAnnotations(references: readonly FeatureReferenceDocument[], changes
   if (changes.empty) return references;
   let changed = false;
   const mapped = references.map((r) => {
+    // External edits may leave an annotation outside this snapshot. Keep it
+    // unresolved instead of passing an invalid position to CodeMirror.
+    if (!Number.isInteger(r.from) || !Number.isInteger(r.to) || r.from < 0 || r.to > changes.length || r.from > r.to) return r;
     const from = changes.mapPos(r.from, 1);
     const to = Math.max(from, changes.mapPos(r.to, -1));
     if (from === r.from && to === r.to) return r;

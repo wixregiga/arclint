@@ -32,6 +32,13 @@ function command(s: EditorState, run: (target: { state: EditorState; dispatch(tr
 }
 
 describe("annotations", () => {
+  it("keeps externally displaced annotations while the author continues writing", () => {
+    const displaced = { ...tied("outside", "Order", ORDER), from: 900, to: 905 };
+    const before = state([displaced]);
+    const after = apply(before, { changes: { from: 0, insert: "Today " } });
+    expect(after.doc.toString()).toBe("Today " + TEXT);
+    expect(annotationsOf(after)).toEqual([displaced]);
+  });
   it("moves with the text and keeps text typed at either edge outside", () => {
     const s0 = state([tied("a", "Order", ORDER), tied("b", "Money", MONEY)]);
     const s1 = apply(s0, { changes: { from: 0, insert: "Today " } });

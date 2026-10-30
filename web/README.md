@@ -24,7 +24,7 @@ committed assets without a JavaScript toolchain.
 `src/app/entrypoints/start-web.ts` owns standalone startup. Its API URLs and
 manifest remain relative to the page directory. `mount-web.ts` exports
 `mountStudio(container, dependencies)`, which returns `dispose()`. A host can lend
-a gateway, API base and memory. Styles remain inside the mount's shadow root;
+a language gateway, a separately injected `featureStore`, API base and memory. Styles remain inside the mount's shadow root;
 importing the mount never starts it or registers a worker.
 
 ## Current scope
@@ -33,8 +33,28 @@ Domain authoring includes project descriptions, recorded entries, aliases,
 connections, draft forms, deliberate saving/removal and comparison with the
 remote default branch when available. Draft forms persist in the current
 browser session; the recording changes only on save. Context relations can be
-viewed but are edited through the existing CLI. Feature prose and ticket export
-are the next absorption unit. Architecture rule authoring stays outside Studio.
+viewed but are edited through the existing CLI. Architecture rule authoring
+stays outside Studio.
+
+Features provides freeform writing with inline language cues, aliases,
+definitions and connections. Authors can deliberately tie an occurrence to a
+recorded entry or mark it plain; ambiguous spellings remain unchosen. Missing
+or displaced references stay visible with their reason. Ctrl-Space inserts a
+term and Ctrl-I inspects the cursor's use. Open in Language edits a definition
+through the same validated operations, then Features shows its current meaning.
+
+Saved features live in `.arclint/studio/features/` under the adopting project.
+They reopen in another session or checkout when those JSON files are shared.
+The `.lock` file and `.write-*` scratch files are local adapter metadata and can
+be ignored by version control. Unsaved text survives mode switches and reloads
+in the current browser session. Stale saves offer an explicit choice while
+retaining typed text; no other editor's work is overwritten silently.
+
+Copy as ticket produces Markdown for Jira, Linear or an agent: title, prose and
+current contextual definitions. Deliberate uses are distinguished from automatic
+cues, and unresolved or ambiguous uses are named. When clipboard access is denied,
+the text remains available for manual copying. There is no automatic issue-tracker
+publication or two-way synchronization.
 
 The presentation adapts BWrite's light authoring workspace and kind badges;
 its repository remains untouched. Map layout derives from ArcLint's prior

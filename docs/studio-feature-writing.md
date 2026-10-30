@@ -104,6 +104,11 @@ real YAML and CML recordings. It exercises concurrent saves, reopening through
 another process, stale deletion, foreign-origin refusal, Unicode round-trips,
 and byte-for-byte preservation of the domain recording. Filesystem tests also
 cover a replaced storage directory, outside-file links, malformed documents,
-and missing required stored text fields. The browser editor remains a separate
-integration step; passing these checks does not establish that the full feature
-writing flow works.
+and missing required stored text fields.
+
+The browser editor is integrated with those real routes. Its browser store stub
+was removed. The complete flow reads the JSON file after saving, reopens in a
+new browser session, edits a definition through Language, returns to the feature
+and copies a ticket using the new meaning. Further cases cover stale saves,
+missing and displaced targets, context ambiguity and text typed while a save is
+pending. The workspace also preserves unsaved Language forms from version 1.

@@ -41,7 +41,7 @@ describe("workspace", () => {
       ...initialWorkspace,
       drafts: { a: { y: "kept" } },
     });
-    expect(restoreWorkspace(JSON.stringify({ version: 1, mode: "map", drafts: { a: { y: "kept" } } }))).toEqual(initialWorkspace);
+    expect(restoreWorkspace(JSON.stringify({ version: 1, mode: "map", drafts: { a: { y: "kept" } } }))).toMatchObject({ mode: "map", drafts: { a: { y: "kept" } }, feature: null, featureDrafts: {} });
   });
 
   it("keeps a feature draft across modes and drops it only when saved, discarded or removed", () => {
@@ -59,7 +59,7 @@ describe("workspace", () => {
     const round = restoreWorkspace(serializeWorkspace(w));
     expect(round).toEqual(w);
 
-    const saved = reduceWorkspace(w, { type: "feature-saved", feature, id: "f-1" });
+    const saved = reduceWorkspace(w, { type: "feature-saved", feature, document: { id: "f-1", revision: "r1", title: "Orders", body: "An Order", references: [] } });
     expect(saved.feature).toEqual({ kind: "saved", id: "f-1" });
     expect(saved.featureDrafts).toEqual({});
 
@@ -91,4 +91,16 @@ describe("workspace", () => {
     expect(w.featureDrafts.ok.references.map((r) => r.id)).toEqual(["a"]);
     expect(w.featureDrafts.ok.revision).toBeNull();
   });
+});
+
+
+it("retains text typed during a save and stays on the feature now open", () => {
+  const feature = { kind: "new" as const, key: "pending" };
+  const base = { title: "Sent title", body: "Sent body", references: [], revision: null };
+  let w = reduceWorkspace(initialWorkspace, { type: "open-feature", feature });
+  w = reduceWorkspace(w, { type: "feature-draft", feature, base, body: "Sent body and newer typing" });
+  w = reduceWorkspace(w, { type: "open-feature", feature: { kind: "new", key: "another" } });
+  const saved = reduceWorkspace(w, { type: "feature-saved", feature, document: { ...base, id: "saved-id", revision: "r1" } });
+  expect(saved.feature).toEqual({ kind: "new", key: "another" });
+  expect(saved.featureDrafts[featureDraftKey({ kind: "saved", id: "saved-id" })]).toMatchObject({ body: "Sent body and newer typing", revision: "r1" });
 });

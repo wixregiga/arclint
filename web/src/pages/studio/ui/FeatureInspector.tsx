@@ -143,12 +143,31 @@ function SelectionActions({ selection, entries, uses, onAssociate }: { selection
       <p className="st-selection__text">“{selection.text}”</p>
       <div className="st-field">
         <label htmlFor="st-tie-query">Tie it to a recorded entry</label>
-        <input id="st-tie-query" type="search" placeholder="Search names, aliases, definitions" value={query} autoComplete="off" onChange={(e) => setQuery(e.target.value)} />
+        <input id="st-tie-query" type="search" placeholder="Search names, aliases, definitions" value={query} autoComplete="off" onChange={(e) => { setQuery(e.target.value); setPicked(null); }} />
       </div>
       <ul className="st-tie-options" role="listbox" aria-label="Entries to tie to">
         {options.length === 0 ? <li className="st-navigator__empty">Nothing recorded matches.</li> : null}
         {options.slice(0, 12).map((e) => (
-          <li key={e.key} role="option" aria-selected={picked?.key === e.key} className={picked?.key === e.key ? "st-tie-option is-active" : "st-tie-option"} onClick={() => setPicked(e)}>
+          <li
+            key={e.key}
+            role="option"
+            tabIndex={picked?.key === e.key || (picked === null && options[0]?.key === e.key) ? 0 : -1}
+            aria-selected={picked?.key === e.key}
+            className={picked?.key === e.key ? "st-tie-option is-active" : "st-tie-option"}
+            onClick={() => setPicked(e)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setPicked(e);
+              } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+                event.preventDefault();
+                const choices = [...event.currentTarget.parentElement!.querySelectorAll<HTMLElement>('[role="option"]')];
+                const index = choices.indexOf(event.currentTarget);
+                const next = event.key === "Home" ? 0 : event.key === "End" ? choices.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + choices.length) % choices.length;
+                choices[next]?.focus();
+              }
+            }}
+          >
             <KindBadge mark={CONCEPT_MARK[e.concept]} label={CONCEPT_TITLE[e.concept]} tone={e.concept} size="small" />
             <span className="st-tie-option__name">{e.name}</span>
             <small>{whereOf(e)}</small>

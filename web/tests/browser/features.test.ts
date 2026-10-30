@@ -1,30 +1,38 @@
-/*
- * Feature writing over the real embedded Studio and a real `arclint map
- * serve` for the language. The feature store is a STUB answered at the
- * network layer by tests/support/feature-store-stub.ts, because this
- * checkout's Go server has no api/feature routes yet; the parent runs the
- * same flows against the real routes once integrated. Titles say [stub
- * store] where the stub answers.
- */
-import { expect, test, type BrowserContext, type Page } from "@playwright/test";
-import { mkdirSync } from "node:fs";
+/* Browser flows over the Go binary's embedded Studio and real project files. */
+import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
+import { mkdirSync, readFileSync, realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { FeatureStoreStub } from "../support/feature-store-stub";
+import type { FeatureDocument, SaveFeatureRequest } from "../../src/shared/transport/index";
 import { StudioPage } from "../support/studio-page";
 
 const SHOTS = path.join(process.cwd(), "test-results", "screenshots");
+const PROJECT = path.join(realpathSync(tmpdir()), `arclint-studio-e2e-${process.env.STUDIO_E2E_PORT ?? 4421}`, "projects", "identity");
 
-async function stubStore(context: BrowserContext, stub: FeatureStoreStub): Promise<void> {
-  await context.route(/\/api\/feature(s)?(\?.*)?$/, async (route) => {
-    const request = route.request();
-    const answer = stub.answer(request.method(), new URL(request.url()), request.postData(), await request.headerValue("if-match"));
-    if (!answer) {
-      await route.fallback();
-      return;
-    }
-    await route.fulfill({ status: answer.status, contentType: "application/json", body: JSON.stringify(answer.body) });
-  });
+async function listFeatures(request: APIRequestContext): Promise<FeatureDocument[]> {
+  const result = await request.get("/api/features");
+  expect(result.status()).toBe(200);
+  const documents: FeatureDocument[] = [];
+  for (const summary of (await result.json()).features) {
+    const response = await request.get(`/api/feature?id=${summary.id}`);
+    expect(response.status()).toBe(200);
+    documents.push((await response.json()).feature);
+  }
+  return documents;
 }
+
+async function saveFeature(request: APIRequestContext, data: SaveFeatureRequest): Promise<FeatureDocument> {
+  const response = await request.post("/api/feature", { data });
+  expect(response.status()).toBe(200);
+  return (await response.json()).feature;
+}
+
+test.beforeEach(async ({ request }) => {
+  for (const feature of await listFeatures(request)) {
+    const response = await request.delete(`/api/feature?id=${feature.id}`, { headers: { "If-Match": feature.revision } });
+    expect(response.status()).toBe(200);
+  }
+});
 
 async function openFeatures(page: Page, base = "/"): Promise<StudioPage> {
   const studio = new StudioPage(page, base);
@@ -44,12 +52,11 @@ async function shoot(page: Page, name: string): Promise<void> {
 }
 
 test.describe("writing a feature with the language at hand", () => {
-  test("[stub store] write, inspect a cue, tie and mark plain, save, reopen in a new session, edit the language, return, copy as ticket", async ({ browser }) => {
-    const stub = new FeatureStoreStub();
+  test("write, inspect a cue, tie and mark plain, save, reopen in a new session, edit the language, return, copy as ticket", async ({ browser, request }) => {
     const first = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     await first.grantPermissions(["clipboard-read", "clipboard-write"]);
-    await stubStore(first, stub);
     const page = await first.newPage();
+    const domainBefore = readFileSync(path.join(PROJECT, "domain.arclint.yaml"), "utf8");
     await openFeatures(page);
     await expect(page.getByRole("navigation", { name: "Features" })).toContainText("No feature is saved yet");
 
@@ -97,6 +104,11 @@ test.describe("writing a feature with the language at hand", () => {
     await expect(selection).toBeVisible();
     await selection.getByRole("searchbox").fill("password");
     await expect(selection.getByRole("option").first()).toContainText("Password");
+    await selection.getByRole("option").first().focus();
+    await page.keyboard.press("End");
+    await page.keyboard.press("Home");
+    await page.keyboard.press("Enter");
+    await expect(selection.getByRole("button", { name: "Tie", exact: true })).toBeEnabled();
     await shoot(page, "feature-02-selection-tie");
     await page.keyboard.press("Escape");
 
@@ -104,8 +116,14 @@ test.describe("writing a feature with the language at hand", () => {
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("status")).toContainText("Saved feature “Invite a person into a tenant”");
     await expect(page.getByRole("navigation", { name: "Features" })).toContainText("Invite a person into a tenant");
-    expect(stub.files.size).toBe(1);
-    const saved = [...stub.files.values()][0];
+    const allSaved = await listFeatures(request);
+    expect(allSaved).toHaveLength(1);
+    const saved = allSaved[0];
+    const file = JSON.parse(readFileSync(path.join(PROJECT, ".arclint/studio/features", `${saved.id}.json`), "utf8"));
+    expect(file.version).toBe(1);
+    expect(file.feature.body).toBe(saved.body);
+    expect(file.feature.references).toEqual(saved.references);
+    expect(readFileSync(path.join(PROJECT, "domain.arclint.yaml"), "utf8")).toBe(domainBefore);
     expect(saved.body).toBe("A Tenant invites a Person by their EmailAddress. The tenant owner sets a password for them.");
     expect((saved.references as { quote: string; from: number; to: number; reading: string; term?: { name: string } }[]).map((r) => [r.quote, r.from, r.to, r.reading, r.term?.name ?? null])).toEqual([
       ["Tenant", 2, 8, "names", "Tenant"],
@@ -116,7 +134,6 @@ test.describe("writing a feature with the language at hand", () => {
     // A new browser session: the saved draft reopens from the store, with its marks.
     const second = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     await second.grantPermissions(["clipboard-read", "clipboard-write"]);
-    await stubStore(second, stub);
     const again = await second.newPage();
     await openFeatures(again);
     await again.getByRole("navigation", { name: "Features" }).getByRole("button", { name: "Invite a person into a tenant" }).click();
@@ -158,12 +175,10 @@ test.describe("writing a feature with the language at hand", () => {
     await first.close();
   });
 
-  test("[stub store] a stale save writes nothing, keeps the text and offers to write over or take the stored text", async ({ browser }) => {
-    const stub = new FeatureStoreStub();
-    stub.save({ title: "Refund a ticket", body: "A Tenant refunds.", references: [] });
-    const id = [...stub.files.keys()][0];
+  test("a stale save writes nothing, keeps the text and offers to write over or take the stored text", async ({ browser, request }) => {
+    const stored = await saveFeature(request, { title: "Refund a ticket", body: "A Tenant refunds.", references: [] });
+    const id = stored.id;
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-    await stubStore(context, stub);
     const page = await context.newPage();
     await openFeatures(page);
     await page.getByRole("navigation", { name: "Features" }).getByRole("button", { name: "Refund a ticket" }).click();
@@ -174,28 +189,26 @@ test.describe("writing a feature with the language at hand", () => {
     await page.keyboard.type(" The Person is told.");
     await expect(page.getByRole("navigation", { name: "Features" })).toContainText("unsaved");
 
-    stub.edit(id, "Refund a ticket (renamed elsewhere)");
+    await saveFeature(request, { ...stored, title: "Refund a ticket (renamed elsewhere)" });
     await page.getByRole("button", { name: "Save", exact: true }).click();
     const alert = page.getByRole("alert");
     await expect(alert).toContainText("changed in the store since you opened it");
     await expect(alert).toContainText("Refund a ticket (renamed elsewhere)");
     await expect(editor(page)).toContainText("The Person is told.");
-    expect(stub.files.get(id)!.body).toBe("A Tenant refunds.");
+    expect((await listFeatures(request)).find((f) => f.id === id)!.body).toBe("A Tenant refunds.");
     await shoot(page, "feature-06-stale-save");
 
     await page.getByRole("button", { name: "Save mine over it" }).click();
     await expect(page.getByRole("status")).toContainText("Saved feature");
-    expect(stub.files.get(id)!.body).toBe("A Tenant refunds. The Person is told.");
-    expect(stub.files.get(id)!.title).toBe("Refund a ticket");
+    expect((await listFeatures(request)).find((f) => f.id === id)!.body).toBe("A Tenant refunds. The Person is told.");
+    expect((await listFeatures(request)).find((f) => f.id === id)!.title).toBe("Refund a ticket");
     await context.close();
   });
 
-  test("[stub store] a deleted target stays an unresolved annotation with its reason, and deleting a feature removes it from the store", async ({ browser }) => {
-    const stub = new FeatureStoreStub();
+  test("a deleted target stays an unresolved annotation with its reason, and deleting a feature removes it from the store", async ({ browser, request }) => {
     const body = "A Gadget is shipped.";
-    stub.save({ title: "Ship a gadget", body, references: [{ id: "x", from: 2, to: 8, quote: "Gadget", reading: "names", term: { concept: "value_object", context: "identityaccess", owner: "", name: "Gadget" } }] });
+    await saveFeature(request, { title: "Ship a gadget", body, references: [{ id: "x", from: 2, to: 8, quote: "Gadget", reading: "names", term: { concept: "value_object", context: "identityaccess", owner: "", name: "Gadget" } }, { id: "outside", from: 900, to: 905, quote: "Tenant", reading: "names", term: { concept: "aggregate", context: "identityaccess", owner: "", name: "Tenant" } }] });
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-    await stubStore(context, stub);
     const page = await context.newPage();
     await openFeatures(page);
     await page.getByRole("navigation", { name: "Features" }).getByRole("button", { name: "Ship a gadget" }).click();
@@ -203,6 +216,15 @@ test.describe("writing a feature with the language at hand", () => {
     const unresolved = page.getByRole("region", { name: "Unresolved annotations" });
     await expect(unresolved).toContainText("Gadget (value object in identityaccess) is not in the recording now.");
     await shoot(page, "feature-07-unresolved");
+    await expect(unresolved).toContainText("Its position lies outside the text.");
+    await editor(page).click();
+    await page.keyboard.press("ControlOrMeta+End");
+    await page.keyboard.type(" Writing continues.");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText("Saved feature");
+    const preserved = (await listFeatures(request))[0];
+    expect(preserved.body).toBe(body + " Writing continues.");
+    expect(preserved.references.find((r) => r.id === "outside")).toMatchObject({ from: 900, to: 905, quote: "Tenant" });
 
     await page.getByRole("button", { name: "Copy as ticket" }).click();
     // No clipboard permission in this context: the ticket is shown for copying by hand, and it names the unresolved use without asserting intent.
@@ -214,12 +236,12 @@ test.describe("writing a feature with the language at hand", () => {
     await page.getByRole("button", { name: "Delete…" }).click();
     await page.getByRole("group", { name: "Confirm deletion" }).getByRole("button", { name: "Delete", exact: true }).click();
     await expect(page.getByRole("status")).toContainText("Deleted the feature.");
-    expect(stub.files.size).toBe(0);
+    expect(await listFeatures(request)).toHaveLength(0);
     await expect(page.getByRole("navigation", { name: "Features" })).toContainText("No feature is saved yet");
     await context.close();
   });
 
-  test("a feature draft survives switching to Language and Map and a reload, and keeps every request under a nested base", async ({ page }) => {
+  test("a feature draft survives switching to Language and Map and a reload, and keeps every request under a nested base", async ({ page, request }) => {
     const api: string[] = [];
     page.on("request", (r) => {
       if (r.url().includes("/api/")) api.push(new URL(r.url()).pathname);
@@ -240,8 +262,69 @@ test.describe("writing a feature with the language at hand", () => {
     await expect(editor(page)).toContainText("A Tenant waits.");
     await expect(page.getByRole("navigation", { name: "Features" })).toContainText("Not saved yet");
     for (const p of api) expect(p.startsWith("/nested/studio/api/")).toBe(true);
-    // Without the stub, this checkout's server has no feature routes: the list says so without hiding the view.
     expect(api).toContain("/nested/studio/api/features");
-    await expect(page.getByRole("navigation", { name: "Features" }).getByRole("alert")).toContainText("404");
+    await expect(page.getByRole("navigation", { name: "Features" }).getByRole("alert")).toHaveCount(0);
+    expect(await listFeatures(request)).toHaveLength(0);
   });
+});
+
+
+test("typing during a pending save remains unsaved until the next save", async ({ page, request }) => {
+  await openFeatures(page);
+  await page.getByRole("button", { name: "+ Feature" }).first().click();
+  await page.getByRole("textbox", { name: "Title" }).fill("In flight");
+  await editor(page).click();
+  await page.keyboard.type("A Tenant waits.");
+  let release!: () => void;
+  let reached!: () => void;
+  const hold = new Promise<void>((done) => { release = done; });
+  const committed = new Promise<void>((done) => { reached = done; });
+  let first = true;
+  await page.route("**/api/feature", async (route) => {
+    if (!first || route.request().method() !== "POST") return route.continue();
+    first = false;
+    const response = await route.fetch();
+    reached();
+    await hold;
+    await route.fulfill({ response });
+  });
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await committed;
+  await page.getByRole("textbox", { name: "Title" }).fill("Newer typing");
+  await editor(page).click();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type(" The Person arrives.");
+  release();
+  await expect(page.getByRole("status")).toContainText("Saved feature “In flight”");
+  await expect(editor(page)).toContainText("The Person arrives.");
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Newer typing");
+  await expect(page.getByRole("navigation", { name: "Features" })).toContainText("unsaved");
+  expect((await listFeatures(request))[0].body).toBe("A Tenant waits.");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Saved feature “Newer typing”");
+  expect((await listFeatures(request))[0].body).toBe("A Tenant waits. The Person arrives.");
+});
+
+test("a recorded spelling in two contexts stays ambiguous until the author chooses", async ({ page, request }) => {
+  for (const data of [
+    { concept: "bounded_context", name: "support", change: { definition: "Helping customers use their accounts." } },
+    { concept: "value_object", context: "support", name: "Tenant", change: { definition: "The support team's record of a subscribing organisation." } },
+  ]) {
+    const response = await request.post("/api/define", { data });
+    expect(response.status()).toBe(200);
+  }
+  await openFeatures(page);
+  await page.getByRole("button", { name: "+ Feature" }).first().click();
+  await editor(page).click();
+  await page.keyboard.type("A Tenant asks for help.");
+  await expect(page.locator(".st-use--ambiguous")).toHaveText("Tenant");
+  await page.locator(".st-use--ambiguous").click();
+  const cursor = page.getByRole("region", { name: "At the cursor" });
+  await expect(cursor).toContainText("identityaccess");
+  await expect(cursor).toContainText("support");
+  await cursor.getByRole("listitem").filter({ hasText: "support" }).getByRole("button", { name: "Tie to this" }).click();
+  await expect(page.locator(".st-use--tied")).toHaveText("Tenant");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Saved feature");
+  expect((await listFeatures(request))[0].references[0].term!.context).toBe("support");
 });

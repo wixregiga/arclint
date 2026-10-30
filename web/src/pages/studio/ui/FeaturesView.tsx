@@ -92,7 +92,7 @@ export function FeaturesView(props: FeaturesViewProps) {
     switch (outcome.kind) {
       case "saved":
         setSaveState(IDLE_SAVE);
-        dispatch({ type: "feature-saved", feature: selection, id: outcome.document.id });
+        dispatch({ type: "feature-saved", feature: selection, document: outcome.document });
         onNotice(`Saved feature “${outcome.document.title.trim() === "" ? "Untitled feature" : outcome.document.title}”.`);
         break;
       case "stale":

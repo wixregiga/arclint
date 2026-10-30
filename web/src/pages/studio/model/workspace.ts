@@ -1,7 +1,7 @@
 import { isConcept, type Concept } from "../../../entities/language/index";
 import type { DraftValues } from "../../../features/edit-entry/index";
-import type { FeatureReferenceDocument } from "../../../shared/transport/index";
-import { featureDraftKey, restoreFeatureDrafts, restoreFeatureSelection, type FeatureDraft, type FeatureSelection } from "./feature-drafts";
+import type { FeatureDocument, FeatureReferenceDocument } from "../../../shared/transport/index";
+import { featureDraftKey, sameText, restoreFeatureDrafts, restoreFeatureSelection, type FeatureDraft, type FeatureSelection } from "./feature-drafts";
 
 /**
  * What the page holds that is not in the recording: the mode, what is
@@ -57,8 +57,8 @@ export type WorkspaceAction =
   | { type: "feature-draft"; feature: FeatureSelection; base: FeatureDraft; title?: string; body?: string; references?: FeatureReferenceDocument[] }
   | { type: "feature-rebase"; feature: FeatureSelection; revision: string }
   | { type: "feature-discard"; feature: FeatureSelection }
-  /** A save went through: the draft is dropped and the saved feature is shown. */
-  | { type: "feature-saved"; feature: FeatureSelection; id: string }
+  /** A save went through; edits typed after the submitted snapshot remain a draft. */
+  | { type: "feature-saved"; feature: FeatureSelection; document: FeatureDocument }
   | { type: "feature-removed"; feature: FeatureSelection };
 
 export function reduceWorkspace(w: Workspace, action: WorkspaceAction): Workspace {
@@ -104,8 +104,17 @@ export function reduceWorkspace(w: Workspace, action: WorkspaceAction): Workspac
     }
     case "feature-discard":
       return { ...w, featureDrafts: without(w.featureDrafts, featureDraftKey(action.feature)) };
-    case "feature-saved":
-      return { ...w, feature: { kind: "saved", id: action.id }, featureDrafts: without(w.featureDrafts, featureDraftKey(action.feature)) };
+    case "feature-saved": {
+      const key = featureDraftKey(action.feature);
+      const current = w.featureDrafts[key];
+      const next: FeatureSelection = { kind: "saved", id: action.document.id };
+      const featureDrafts = without(w.featureDrafts, key);
+      if (current && !sameText(current, action.document)) {
+        featureDrafts[featureDraftKey(next)] = { ...current, revision: action.document.revision };
+      }
+      const sameSelection = w.feature !== null && featureDraftKey(w.feature) === key;
+      return { ...w, feature: sameSelection ? next : w.feature, featureDrafts };
+    }
     case "feature-removed": {
       const same = w.feature !== null && featureDraftKey(w.feature) === featureDraftKey(action.feature);
       return { ...w, feature: same ? null : w.feature, featureDrafts: without(w.featureDrafts, featureDraftKey(action.feature)) };
@@ -131,7 +140,7 @@ export function restoreWorkspace(text: string | null): Workspace {
   if (text === null) return initialWorkspace;
   try {
     const raw: unknown = JSON.parse(text);
-    if (!raw || typeof raw !== "object" || (raw as { version?: unknown }).version !== VERSION) return initialWorkspace;
+    if (!raw || typeof raw !== "object" || ![1, VERSION].includes((raw as { version?: unknown }).version as number)) return initialWorkspace;
     const r = raw as { mode?: unknown; selection?: unknown; editing?: unknown; drafts?: unknown; feature?: unknown; featureDrafts?: unknown };
     const selection = restoreSelection(r.selection);
     return {
