@@ -16,12 +16,13 @@ import {
 import { projectRequestFrom, type ProjectValues } from "../../../features/describe-project/index";
 import { defineRequestFrom, draftOf, hasChanges, NAME, removeRequestFrom } from "../../../features/edit-entry/index";
 import type { StudioMemory } from "../../../shared/lib/studio-memory/index";
-import { isGatewayFailure, type StudioGateway } from "../../../shared/transport/index";
+import { isGatewayFailure, type FeatureStore, type StudioGateway } from "../../../shared/transport/index";
 import { afterRemoval, whereBegun } from "../lib/addresses";
 import { failureText, useLanguage } from "../model/use-language";
 import { useWorkspace } from "../model/use-workspace";
 import { draftKeyOf, PROJECT_DRAFT, type Selection } from "../model/workspace";
 import { EntryPanel } from "./EntryPanel";
+import { FeaturesView } from "./FeaturesView";
 import { LanguageMap } from "./LanguageMap";
 import { Navigator } from "./Navigator";
 import { NewEntryPanel } from "./NewEntryPanel";
@@ -31,6 +32,7 @@ import { TopBar } from "./TopBar";
 export interface StudioScreenProps {
   gateway: StudioGateway;
   memory: StudioMemory;
+  featureStore: FeatureStore | null;
 }
 
 interface Failure {
@@ -42,10 +44,11 @@ interface Failure {
 
 /**
  * The Studio screen: the recorded language in a navigator, one entry or
- * the project in the card, the map beside an inspector in map mode. Every
- * write goes through the gateway; the recording is read again after each.
+ * the project in the card, the map beside an inspector in map mode, and
+ * the features beside the language in features mode. Every write goes
+ * through the gateway; the recording is read again after each.
  */
-export function StudioScreen({ gateway, memory }: StudioScreenProps) {
+export function StudioScreen({ gateway, memory, featureStore }: StudioScreenProps) {
   const { language, reload } = useLanguage(gateway);
   const [workspace, dispatch] = useWorkspace(memory);
   const [query, setQuery] = useState("");
@@ -91,6 +94,16 @@ export function StudioScreen({ gateway, memory }: StudioScreenProps) {
     (entry: Entry) => {
       setFailure(null);
       dispatch({ type: "select", selection: { kind: "entry", key: entry.key } });
+    },
+    [dispatch],
+  );
+
+  /** From a feature to the language: the entry opens in Language mode; the feature text waits in its draft. */
+  const openInLanguage = useCallback(
+    (entry: Entry) => {
+      setFailure(null);
+      dispatch({ type: "select", selection: { kind: "entry", key: entry.key } });
+      dispatch({ type: "mode", mode: "language" });
     },
     [dispatch],
   );
@@ -303,9 +316,23 @@ export function StudioScreen({ gateway, memory }: StudioScreenProps) {
           <p className="st-note">Reading the recording…</p>
         </main>
       ) : (
-        <div className={workspace.mode === "map" ? "st-body st-body--map" : "st-body"}>
-          <Navigator entries={entries} selection={selection} standingOf={standingOf} draftKeys={draftKeys} onSelect={select} onNew={beginNew} />
-          {workspace.mode === "map" ? (
+        <div className={workspace.mode === "map" ? "st-body st-body--map" : workspace.mode === "features" ? "st-body st-body--features" : "st-body"}>
+          {workspace.mode === "features" ? (
+            <FeaturesView
+              store={featureStore}
+              active={workspace.mode === "features"}
+              workspace={workspace}
+              dispatch={dispatch}
+              entries={entries}
+              relations={relations}
+              project={overview?.project ?? ""}
+              onOpenEntry={openInLanguage}
+              onNotice={setNotice}
+            />
+          ) : (
+            <Navigator entries={entries} selection={selection} standingOf={standingOf} draftKeys={draftKeys} onSelect={select} onNew={beginNew} />
+          )}
+          {workspace.mode === "features" ? null : workspace.mode === "map" ? (
             <>
               <main className="st-main st-main--map">
                 <LanguageMap entries={entries} relations={relations} context={activeContext} selectedKey={selection.kind === "entry" ? selection.key : null} standingOf={standingOf} onSelect={select} />

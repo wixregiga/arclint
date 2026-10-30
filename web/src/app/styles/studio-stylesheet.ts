@@ -294,6 +294,10 @@ export const studioStylesheet: string = String.raw`
   gap: 1px;
 }
 
+.st-nav-item {
+  min-width: 0;
+}
+
 .st-nav-row {
   display: flex;
   align-items: center;
@@ -1334,12 +1338,428 @@ export const studioStylesheet: string = String.raw`
   white-space: nowrap;
 }
 
+/* Features: navigator, the feature card with its editor, the language at hand */
+
+.st-body--features {
+  grid-template-columns: 272px minmax(0, 1fr) 380px;
+}
+
+.st-main--feature {
+  align-items: stretch;
+  padding: 20px 24px 72px;
+}
+
+.st-card--feature {
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  display: grid;
+  gap: 14px;
+}
+
+.st-card--feature-empty {
+  max-width: 560px;
+  margin: 28px auto 0;
+}
+
+.st-feature-head {
+  display: grid;
+  gap: 4px;
+}
+
+.st-feature-title {
+  width: 100%;
+  border: 0;
+  padding: 2px 0;
+  background: none;
+  font-size: 24px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.st-feature-title::placeholder {
+  color: var(--ink-muted);
+  font-weight: 500;
+}
+
+.st-feature-title:focus-visible {
+  outline: none;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.st-editor-host {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.st-editor-host:focus-within {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 3px rgba(59, 91, 219, 0.12);
+}
+
+.st-root .st-editor-host .cm-editor {
+  border-radius: inherit;
+  font-family: var(--font-ui);
+  font-size: 15px;
+}
+
+.st-root .st-editor-host .cm-editor.cm-focused {
+  outline: none;
+}
+
+.st-root .st-editor-host .cm-scroller {
+  font-family: inherit;
+  line-height: 1.75;
+  min-height: 320px;
+}
+
+.st-root .st-editor-host .cm-content {
+  padding: 16px 0;
+  caret-color: var(--ink);
+}
+
+.st-root .st-editor-host .cm-line {
+  padding: 0 18px;
+}
+
+.st-root .st-editor-host .cm-placeholder {
+  color: var(--ink-muted);
+}
+
+.st-root .st-editor-host .cm-selectionBackground,
+.st-root .st-editor-host .cm-content ::selection {
+  background: rgba(59, 91, 219, 0.16) !important;
+}
+
+.st-root .st-editor-host .cm-focused .cm-selectionBackground {
+  background: rgba(59, 91, 219, 0.22) !important;
+}
+
+/* Uses of the language in the prose. A cue is quiet; a tie is marked. */
+
+.st-use {
+  --use-color: var(--kind-question);
+  border-radius: 3px;
+  text-decoration-line: underline;
+  text-decoration-color: var(--use-color);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+.st-use--bounded_context { --use-color: var(--kind-bounded_context); }
+.st-use--aggregate { --use-color: var(--kind-aggregate); }
+.st-use--entity { --use-color: var(--kind-entity); }
+.st-use--value_object { --use-color: var(--kind-value_object); }
+.st-use--domain_event { --use-color: var(--kind-domain_event); }
+.st-use--domain_service { --use-color: var(--kind-domain_service); }
+.st-use--specification { --use-color: var(--kind-specification); }
+.st-use--invariant { --use-color: var(--kind-invariant); }
+.st-use--assertion { --use-color: var(--kind-assertion); }
+
+.st-use--cue {
+  text-decoration-style: dotted;
+}
+
+.st-use--tied {
+  text-decoration-style: solid;
+  text-decoration-thickness: 2px;
+  background: color-mix(in srgb, var(--use-color) 10%, transparent);
+}
+
+.st-use--ambiguous {
+  --use-color: var(--proposed);
+  text-decoration-style: double;
+}
+
+.st-use--plain {
+  text-decoration: none;
+  cursor: default;
+}
+
+.st-use--unresolved {
+  --use-color: var(--danger);
+  text-decoration-style: dashed;
+  background: var(--danger-wash);
+}
+
+.st-use-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-inline-end: 4px;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.st-use-mark__word {
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  user-select: none;
+}
+
+.st-root .st-editor-host .cm-tooltip {
+  border: 0;
+  background: transparent;
+}
+
+.st-use-card,
+.st-insert {
+  font-family: var(--font-ui);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+}
+
+.st-use-card {
+  width: max-content;
+  max-width: min(340px, calc(100vw - 32px));
+  padding: 12px 14px 10px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.st-use-card__eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+}
+
+.st-use-card__name {
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.st-use-card__where {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.st-use-card__reading,
+.st-use-card__note {
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+}
+
+.st-insert {
+  min-width: 260px;
+  max-width: 380px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px;
+  font-size: 13.5px;
+}
+
+.st-insert__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.st-insert__option[aria-selected="true"] {
+  background: var(--accent-wash-strong);
+}
+
+.st-insert__name {
+  font-weight: 600;
+}
+
+.st-insert__where,
+.st-insert__empty {
+  color: var(--ink-muted);
+}
+
+.st-insert__empty {
+  padding: 8px;
+}
+
+.st-conflict {
+  display: grid;
+  gap: 8px;
+}
+
+.st-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+/* The language at hand */
+
+.st-feature-inspector {
+  display: grid;
+  gap: 12px;
+}
+
+.st-card--inspector {
+  padding: 14px 16px;
+  box-shadow: none;
+  display: grid;
+  gap: 8px;
+}
+
+.st-card__title--inspector {
+  font-size: 18px;
+}
+
+.st-navigator__heading--sub {
+  padding: 0 8px 6px;
+}
+
+.st-selection__text {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.st-tie-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.st-tie-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 13.5px;
+}
+
+.st-tie-option:hover {
+  background: rgba(31, 36, 48, 0.04);
+}
+
+.st-tie-option.is-active {
+  background: var(--accent-wash-strong);
+}
+
+.st-tie-option__name {
+  font-weight: 600;
+}
+
+.st-tie-option small {
+  color: var(--ink-muted);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.st-tie-reading {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.st-tie-reading__choice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.st-candidates {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.st-candidates li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.st-candidates li > span {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+}
+
+.st-candidates__reading {
+  color: var(--ink-muted);
+}
+
+.st-unresolved {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.st-unresolved li {
+  display: grid;
+  gap: 2px;
+}
+
+.st-unresolved__quote {
+  font-weight: 600;
+}
+
+.st-unresolved__reason {
+  color: var(--danger);
+}
+
+.st-unresolved__actions {
+  display: flex;
+  gap: 12px;
+}
+
+.st-copy-ticket {
+  display: grid;
+  gap: 8px;
+}
+
+.st-copy-ticket__note {
+  font-size: 12.5px;
+  color: var(--accent-ink);
+}
+
+.st-copy-ticket__fallback {
+  display: grid;
+  gap: 6px;
+}
+
+.st-copy-ticket__text {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
 @media (max-width: 960px) {
   .st-body,
-  .st-body--map {
+  .st-body--map,
+  .st-body--features {
     grid-template-columns: 220px minmax(0, 1fr);
   }
-  .st-body--map .st-inspector {
+  .st-body--map .st-inspector,
+  .st-body--features .st-inspector {
     grid-column: 1 / -1;
     border-left: 0;
     border-top: 1px solid var(--line);
@@ -1357,11 +1777,11 @@ export const studioStylesheet: string = String.raw`
   .st-accepted { flex: 1 1 auto; font-size: 11px; white-space: normal; }
   .st-mode { min-height: 36px; padding: 4px 10px; }
   .st-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(100px, 22vh) minmax(0, 1fr); }
-  .st-body--map { grid-template-rows: minmax(80px, 16vh) minmax(170px, 1fr) minmax(180px, 1fr); }
+  .st-body--map, .st-body--features { grid-template-rows: minmax(80px, 16vh) minmax(170px, 1fr) minmax(180px, 1fr); }
   .st-navigator { border-right: 0; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
   .st-main { padding: 12px 10px 32px; }
   .st-main--map { padding: 0; }
-  .st-body--map .st-inspector { max-height: none; }
+  .st-body--map .st-inspector, .st-body--features .st-inspector { max-height: none; }
   .st-card, .st-inspector .st-card { padding: 18px; overflow-wrap: anywhere; }
   .st-status { flex-wrap: wrap; }
   .st-status__counts { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

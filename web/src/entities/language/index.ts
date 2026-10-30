@@ -41,3 +41,7 @@ export { fit, layoutContext } from "./lib/map-layout";
 export type { MapLayout, MapLine, MapLineKind, MapNode, Viewport } from "./lib/map-layout";
 export { layoutContextMap } from "./lib/context-map-layout";
 export type { ContextMapLayout, ContextNode, RelationLine } from "./lib/context-map-layout";
+export { cleanName, hasWordCharacter, normalizeName, recognize, RECOGNIZED_CONCEPTS } from "./lib/recognition";
+export type { Recognition } from "./lib/recognition";
+export { describeReading, describeTerm, entryOfTerm, readingWord, termOf, useAt, usesOf, usesWithin } from "./lib/uses";
+export type { Use, UseKind } from "./lib/uses";

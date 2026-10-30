@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GatewayFailure } from "./gateway";
-import { apiUrl, createHttpGateway } from "./http-gateway";
+import { apiUrl } from "./http-call";
+import { createHttpGateway } from "./http-gateway";
 
 function answering(handler: (url: string, init?: RequestInit) => Response | Promise<Response>): typeof fetch {
   return ((input: RequestInfo | URL, init?: RequestInit) => Promise.resolve(handler(String(input), init))) as typeof fetch;

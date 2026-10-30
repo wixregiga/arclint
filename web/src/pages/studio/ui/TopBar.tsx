@@ -44,6 +44,9 @@ export function TopBar(props: TopBarProps) {
         <button type="button" role="tab" aria-selected={mode === "map"} className="st-mode" onClick={() => onMode("map")}>
           Map
         </button>
+        <button type="button" role="tab" aria-selected={mode === "features"} className="st-mode" onClick={() => onMode("features")}>
+          Features
+        </button>
       </div>
       <AcceptedStatus accepted={accepted} />
       <button type="button" className="st-button st-button--small st-button--quiet" onClick={onReload} disabled={reloading} title="Read the domain file again">

@@ -84,6 +84,52 @@ describe("mountStudio", () => {
     b.remove();
   });
 
+  it("lends the language alone when a host gives a gateway and no store: no feature request, and Features says so", async () => {
+    const { mountStudio } = await import("./mount-web");
+    const seen: string[] = [];
+    const fetchSpy = ((input: RequestInfo | URL) => {
+      seen.push(String(input));
+      return Promise.reject(new TypeError("no network in this host"));
+    }) as typeof fetch;
+    const host = document.createElement("div");
+    document.body.append(host);
+    const mount = mountStudio(host, { gateway: gatewayFor("alpha"), fetch: fetchSpy });
+    await until(() => (mount.root.textContent ?? "").includes("alpha described."), "the project to render");
+    const tab = Array.from(mount.root.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find((b) => b.textContent === "Features")!;
+    tab.click();
+    await until(() => (mount.root.textContent ?? "").includes("lends no feature store"), "the Features view to say there is no store");
+    expect(seen).toEqual([]);
+    mount.dispose();
+    host.remove();
+  });
+
+  it("reads no feature until Features opens, then lists them under the same base", async () => {
+    const { mountStudio } = await import("./mount-web");
+    const seen: string[] = [];
+    const fetchSpy = ((input: RequestInfo | URL) => {
+      const url = String(input);
+      seen.push(new URL(url).pathname);
+      if (url.endsWith("api/features")) {
+        return Promise.resolve(new Response(JSON.stringify({ features: [{ id: "f-1", title: "Refund a ticket", revision: "r1" }] }), { status: 200, headers: { "Content-Type": "application/json" } }));
+      }
+      if (url.endsWith("api/overview")) {
+        return Promise.resolve(new Response(JSON.stringify({ source: "x", found: true, project: "gamma", counts, contexts: [] }), { status: 200, headers: { "Content-Type": "application/json" } }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ available: false, reason: "none" }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    }) as typeof fetch;
+    const host = document.createElement("div");
+    document.body.append(host);
+    const mount = mountStudio(host, { apiBase: "/nested/studio/", fetch: fetchSpy });
+    await until(() => (mount.root.textContent ?? "").includes("gamma"), "the project to render");
+    expect(seen.sort()).toEqual(["/nested/studio/api/accepted", "/nested/studio/api/overview"]);
+    const tab = Array.from(mount.root.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find((b) => b.textContent === "Features")!;
+    tab.click();
+    await until(() => (mount.root.textContent ?? "").includes("Refund a ticket"), "the saved feature to be listed");
+    expect(seen).toContain("/nested/studio/api/features");
+    mount.dispose();
+    host.remove();
+  });
+
   it("builds its gateway under the host's base when only a base is lent", async () => {
     const { mountStudio } = await import("./mount-web");
     const seen: string[] = [];

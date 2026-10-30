@@ -16,6 +16,9 @@
     "assets:check": "node scripts/embedded-assets.ts --check"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.15",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },

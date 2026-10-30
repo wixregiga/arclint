@@ -1,14 +1,17 @@
 import { isConcept, type Concept } from "../../../entities/language/index";
 import type { DraftValues } from "../../../features/edit-entry/index";
+import type { FeatureReferenceDocument } from "../../../shared/transport/index";
+import { featureDraftKey, restoreFeatureDrafts, restoreFeatureSelection, type FeatureDraft, type FeatureSelection } from "./feature-drafts";
 
 /**
  * What the page holds that is not in the recording: the mode, what is
- * selected, whether its form is open, and the drafts typed but not saved.
- * Drafts are keyed by what they edit, so a draft survives moving to another
- * entry, switching to the map, or reloading the page, and is dropped only
- * by Cancel, Discard, or a save that went through.
+ * selected, whether its form is open, the entry drafts typed but not
+ * saved, and the feature drafts. Drafts are keyed by what they edit, so
+ * a draft survives moving to another entry, switching between Language,
+ * Map and Features, or reloading the page, and is dropped only by
+ * Cancel, Discard, or a save that went through.
  */
-export type Mode = "language" | "map";
+export type Mode = "language" | "map" | "features";
 
 export type Selection =
   | { kind: "project" }
@@ -20,6 +23,8 @@ export interface Workspace {
   selection: Selection;
   editing: boolean;
   drafts: Record<string, DraftValues>;
+  feature: FeatureSelection | null;
+  featureDrafts: Record<string, FeatureDraft>;
 }
 
 export const PROJECT_DRAFT = "project";
@@ -35,7 +40,7 @@ export function draftKeyOf(selection: Selection): string {
   }
 }
 
-export const initialWorkspace: Workspace = { mode: "language", selection: { kind: "project" }, editing: false, drafts: {} };
+export const initialWorkspace: Workspace = { mode: "language", selection: { kind: "project" }, editing: false, drafts: {}, feature: null, featureDrafts: {} };
 
 export type WorkspaceAction =
   | { type: "select"; selection: Selection }
@@ -46,7 +51,15 @@ export type WorkspaceAction =
   | { type: "cancel-edit"; key: string; then: Selection }
   | { type: "discard-draft"; key: string }
   | { type: "saved"; key: string; then: Selection }
-  | { type: "forget-selection"; then: Selection };
+  | { type: "forget-selection"; then: Selection }
+  | { type: "open-feature"; feature: FeatureSelection | null }
+  /** The author typed; the draft begins from `base` when there is none yet. */
+  | { type: "feature-draft"; feature: FeatureSelection; base: FeatureDraft; title?: string; body?: string; references?: FeatureReferenceDocument[] }
+  | { type: "feature-rebase"; feature: FeatureSelection; revision: string }
+  | { type: "feature-discard"; feature: FeatureSelection }
+  /** A save went through: the draft is dropped and the saved feature is shown. */
+  | { type: "feature-saved"; feature: FeatureSelection; id: string }
+  | { type: "feature-removed"; feature: FeatureSelection };
 
 export function reduceWorkspace(w: Workspace, action: WorkspaceAction): Workspace {
   switch (action.type) {
@@ -70,20 +83,47 @@ export function reduceWorkspace(w: Workspace, action: WorkspaceAction): Workspac
       return { ...w, editing: false, selection: action.then, drafts: without(w.drafts, action.key) };
     case "forget-selection":
       return { ...w, editing: false, selection: action.then };
+    case "open-feature":
+      return { ...w, feature: action.feature };
+    case "feature-draft": {
+      const key = featureDraftKey(action.feature);
+      const current = w.featureDrafts[key] ?? action.base;
+      const next: FeatureDraft = {
+        ...current,
+        title: action.title ?? current.title,
+        body: action.body ?? current.body,
+        references: action.references ?? current.references,
+      };
+      return { ...w, featureDrafts: { ...w.featureDrafts, [key]: next } };
+    }
+    case "feature-rebase": {
+      const key = featureDraftKey(action.feature);
+      const current = w.featureDrafts[key];
+      if (!current) return w;
+      return { ...w, featureDrafts: { ...w.featureDrafts, [key]: { ...current, revision: action.revision } } };
+    }
+    case "feature-discard":
+      return { ...w, featureDrafts: without(w.featureDrafts, featureDraftKey(action.feature)) };
+    case "feature-saved":
+      return { ...w, feature: { kind: "saved", id: action.id }, featureDrafts: without(w.featureDrafts, featureDraftKey(action.feature)) };
+    case "feature-removed": {
+      const same = w.feature !== null && featureDraftKey(w.feature) === featureDraftKey(action.feature);
+      return { ...w, feature: same ? null : w.feature, featureDrafts: without(w.featureDrafts, featureDraftKey(action.feature)) };
+    }
   }
 }
 
-function without(drafts: Record<string, DraftValues>, key: string): Record<string, DraftValues> {
+function without<T>(drafts: Record<string, T>, key: string): Record<string, T> {
   if (!(key in drafts)) return drafts;
   const out = { ...drafts };
   delete out[key];
   return out;
 }
 
-const VERSION = 1;
+const VERSION = 2;
 
 export function serializeWorkspace(w: Workspace): string {
-  return JSON.stringify({ version: VERSION, mode: w.mode, selection: w.selection, editing: w.editing, drafts: w.drafts });
+  return JSON.stringify({ version: VERSION, mode: w.mode, selection: w.selection, editing: w.editing, drafts: w.drafts, feature: w.feature, featureDrafts: w.featureDrafts });
 }
 
 /** The workspace a memory held, or the initial one when it held nothing readable. */
@@ -92,13 +132,15 @@ export function restoreWorkspace(text: string | null): Workspace {
   try {
     const raw: unknown = JSON.parse(text);
     if (!raw || typeof raw !== "object" || (raw as { version?: unknown }).version !== VERSION) return initialWorkspace;
-    const r = raw as { mode?: unknown; selection?: unknown; editing?: unknown; drafts?: unknown };
+    const r = raw as { mode?: unknown; selection?: unknown; editing?: unknown; drafts?: unknown; feature?: unknown; featureDrafts?: unknown };
     const selection = restoreSelection(r.selection);
     return {
-      mode: r.mode === "map" ? "map" : "language",
+      mode: r.mode === "map" ? "map" : r.mode === "features" ? "features" : "language",
       selection,
       editing: selection.kind === "new" ? true : r.editing === true,
       drafts: restoreDrafts(r.drafts),
+      feature: restoreFeatureSelection(r.feature),
+      featureDrafts: restoreFeatureDrafts(r.featureDrafts),
     };
   } catch {
     return initialWorkspace;

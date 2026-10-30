@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { featureDraftKey } from "./feature-drafts";
 import { draftKeyOf, initialWorkspace, reduceWorkspace, restoreWorkspace, serializeWorkspace, type Workspace } from "./workspace";
 
 describe("workspace", () => {
@@ -36,9 +37,58 @@ describe("workspace", () => {
     expect(restoreWorkspace(serializeWorkspace(w))).toEqual(w);
     expect(restoreWorkspace(null)).toEqual(initialWorkspace);
     expect(restoreWorkspace("{not json")).toEqual(initialWorkspace);
-    expect(restoreWorkspace(JSON.stringify({ version: 1, selection: { kind: "new", concept: "nonsense" }, drafts: { a: { x: 1, y: "kept" } } }))).toEqual({
+    expect(restoreWorkspace(JSON.stringify({ version: 2, selection: { kind: "new", concept: "nonsense" }, drafts: { a: { x: 1, y: "kept" } } }))).toEqual({
       ...initialWorkspace,
       drafts: { a: { y: "kept" } },
     });
+    expect(restoreWorkspace(JSON.stringify({ version: 1, mode: "map", drafts: { a: { y: "kept" } } }))).toEqual(initialWorkspace);
+  });
+
+  it("keeps a feature draft across modes and drops it only when saved, discarded or removed", () => {
+    const feature = { kind: "new", key: "k" } as const;
+    const base = { title: "", body: "", references: [], revision: null };
+    let w = reduceWorkspace(initialWorkspace, { type: "mode", mode: "features" });
+    w = reduceWorkspace(w, { type: "open-feature", feature });
+    w = reduceWorkspace(w, { type: "feature-draft", feature, base, body: "An Order" });
+    w = reduceWorkspace(w, { type: "feature-draft", feature, base, title: "Orders" });
+    w = reduceWorkspace(w, { type: "mode", mode: "language" });
+    w = reduceWorkspace(w, { type: "mode", mode: "features" });
+    expect(w.feature).toEqual(feature);
+    expect(w.featureDrafts[featureDraftKey(feature)]).toEqual({ title: "Orders", body: "An Order", references: [], revision: null });
+
+    const round = restoreWorkspace(serializeWorkspace(w));
+    expect(round).toEqual(w);
+
+    const saved = reduceWorkspace(w, { type: "feature-saved", feature, id: "f-1" });
+    expect(saved.feature).toEqual({ kind: "saved", id: "f-1" });
+    expect(saved.featureDrafts).toEqual({});
+
+    const savedFeature = { kind: "saved", id: "f-1" } as const;
+    const reference = { id: "r", from: 3, to: 8, quote: "Order", reading: "names" as const, term: { concept: "aggregate", context: "sales", owner: "", name: "Order" } };
+    let s = reduceWorkspace(saved, { type: "feature-draft", feature: savedFeature, base: { ...base, revision: "r1" }, references: [reference] });
+    expect(s.featureDrafts[featureDraftKey(savedFeature)].revision).toBe("r1");
+    s = reduceWorkspace(s, { type: "feature-rebase", feature: savedFeature, revision: "r2" });
+    expect(s.featureDrafts[featureDraftKey(savedFeature)].revision).toBe("r2");
+    expect(restoreWorkspace(serializeWorkspace(s)).featureDrafts[featureDraftKey(savedFeature)].references).toEqual([reference]);
+    expect(reduceWorkspace(s, { type: "feature-discard", feature: savedFeature }).featureDrafts).toEqual({});
+    const removed = reduceWorkspace(s, { type: "feature-removed", feature: savedFeature });
+    expect(removed.feature).toBeNull();
+    expect(removed.featureDrafts).toEqual({});
+  });
+
+  it("drops feature drafts and references it cannot read", () => {
+    const text = JSON.stringify({
+      version: 2,
+      feature: { kind: "saved", id: 7 },
+      featureDrafts: {
+        ok: { title: "t", body: "b", references: [{ id: "a", from: 0, to: 1, quote: "b", reading: "names", term: { concept: "aggregate", context: "c", owner: "", name: "N" } }, { id: "bad", from: "x" }, { id: "p", from: 0, to: 1, quote: "b", reading: "weird" }] },
+        bad: { title: 1 },
+      },
+    });
+    const w = restoreWorkspace(text);
+    expect(w.feature).toBeNull();
+    expect(Object.keys(w.featureDrafts)).toEqual(["ok"]);
+    expect(w.featureDrafts.ok.references.map((r) => r.id)).toEqual(["a"]);
+    expect(w.featureDrafts.ok.revision).toBeNull();
   });
 });
