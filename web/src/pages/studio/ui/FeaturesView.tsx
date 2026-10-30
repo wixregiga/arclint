@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAt, usesOf, type Entry, type Use } from "../../../entities/language/index";
 import { ticketMarkdown } from "../../../features/copy-ticket/index";
 import type { Association, EditorSelection, FeatureEditorHandle } from "../../../features/write-feature/index";
@@ -67,6 +67,18 @@ export function FeaturesView(props: FeaturesViewProps) {
   const base: FeatureDraft | null = selection === null ? null : selection.kind === "new" ? EMPTY_DRAFT : document ? draftFromDocument(document) : null;
   const shown: FeatureDraft | null = draft ?? base;
   const dirty = draft !== null && (selection?.kind === "new" || document === null || !sameText(draft, document));
+
+  // Replace stale editor contents before paint, while keeping local drafts and
+  // the selection and undo history of an acknowledged, unchanged snapshot.
+  const displayed = useRef<{ key: string | null; draft: FeatureDraft | null }>({ key: null, draft: null });
+  useLayoutEffect(() => {
+    const previous = displayed.current;
+    displayed.current = { key, draft: shown };
+    if (previous.key === key && previous.draft && !draft && document && !sameText(previous.draft, document)) {
+      setEditorSelection(null);
+      setReset((n) => n + 1);
+    }
+  }, [key, shown, draft, document]);
 
   const uses = useMemo(() => (shown ? usesOf(shown.body, shown.references, entries) : []), [shown, entries]);
   // The use at the cursor; with a selection, the use that is exactly the selection, so a fresh tie shows what it became.
@@ -137,7 +149,6 @@ export function FeaturesView(props: FeaturesViewProps) {
     dispatch({ type: "feature-discard", feature: selection });
     setSaveState(IDLE_SAVE);
     setRemoveError(null);
-    setReset((n) => n + 1);
     if (selection.kind === "saved") void features.load(selection.id);
   }
 
@@ -150,7 +161,6 @@ export function FeaturesView(props: FeaturesViewProps) {
     dispatch({ type: "feature-discard", feature: selection });
     setSaveState(IDLE_SAVE);
     setRemoveError(null);
-    setReset((n) => n + 1);
   }
 
   async function remove() {

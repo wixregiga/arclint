@@ -70,9 +70,15 @@ project name open Language when invoked from Features. Real-store browser
 regressions cover both actions, preserve the feature draft, and confirm that
 those actions keep Map mode when invoked there.
 
+A later review found an authoritative snapshot could update behind stale editor
+contents after a refused delete. The editor now adopts replacement content before
+paint when no local draft is preserved. Real-store tests retain pending typing,
+synchronize prose and annotations, and verify subsequent saves preserve the other
+session's changes. Ordinary save acknowledgements retain undo history.
+
 ## Validation limits
 
-The integrated checks cover 74 Web unit tests, 29 Chromium browser tests,
+The integrated checks cover 74 Web unit tests, 31 Chromium browser tests,
 compiled two-process persistence tests against real YAML and CML projects,
 architecture fixtures, embedded-asset freshness and the repository gates.
 The relation rendering test supplies response variants; persistence workflows

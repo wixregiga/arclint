@@ -302,9 +302,16 @@ test("typing during a pending save remains unsaved until the next save", async (
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Newer typing");
   await expect(page.getByRole("navigation", { name: "Features" })).toContainText("unsaved");
   expect((await listFeatures(request))[0].body).toBe("A Tenant waits.");
+  await editor(page).click();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type(" More detail.");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("Saved feature “Newer typing”");
-  expect((await listFeatures(request))[0].body).toBe("A Tenant waits. The Person arrives.");
+  expect((await listFeatures(request))[0].body).toBe("A Tenant waits. The Person arrives. More detail.");
+  await editor(page).click();
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(editor(page)).toContainText("The Person arrives.");
+  await expect(editor(page)).not.toContainText("More detail.");
 });
 
 test("a recorded spelling in two contexts stays ambiguous until the author chooses", async ({ page, request }) => {
@@ -427,5 +434,63 @@ for (const destination of ["search result", "project name"] as const) {
     } else await page.getByTitle("The project and its description", { exact: true }).click();
     await expect(page.getByRole("tab", { name: "Map", exact: true })).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("complementary", { name: "Inspector" }).getByRole("heading", { level: 1 })).toHaveText(destination === "search result" ? "Person" : project);
+  });
+}
+
+for (const typing of [false, true]) {
+  test(`a stale delete synchronizes the stored snapshot ${typing ? "after preserving pending typing until discarded" : "when there is no local draft"}`, async ({ page, request }) => {
+    const stored = await saveFeature(request, {
+      title: "Snapshot sync", body: "A Tenant waits.",
+      references: [{ id: "tenant", from: 2, to: 8, quote: "Tenant", reading: "names", term: { concept: "aggregate", context: "identityaccess", owner: "", name: "Tenant" } }],
+    });
+    await openFeatures(page);
+    await page.getByRole("navigation", { name: "Features" }).getByRole("button", { name: stored.title, exact: true }).click();
+    await expect(editor(page)).toContainText("Tenant waits.");
+    const changed = await saveFeature(request, {
+      ...stored, title: "Changed in another session", body: "A Person arrives.",
+      references: [{ id: "person", from: 2, to: 8, quote: "Person", reading: "names", term: { concept: "value_object", context: "identityaccess", owner: "", name: "Person" } }],
+    });
+    let release!: () => void;
+    let reached!: () => void;
+    const held = new Promise<void>((done) => { release = done; });
+    const started = new Promise<void>((done) => { reached = done; });
+    await page.route(/\/api\/feature(?:\?.*)?$/, async (route) => {
+      if (route.request().method() !== "DELETE") return route.continue();
+      const response = await route.fetch();
+      reached();
+      await held;
+      await route.fulfill({ response });
+    });
+    await page.getByRole("button", { name: "Delete…" }).click();
+    await page.getByRole("group", { name: "Confirm deletion" }).getByRole("button", { name: "Delete", exact: true }).click();
+    await started;
+    try {
+      if (typing) {
+        await editor(page).click();
+        await page.keyboard.press("ControlOrMeta+End");
+        await page.keyboard.type(" Local typing.");
+      }
+    } finally {
+      release();
+    }
+    await expect(page.getByRole("alert").first()).toContainText("changed in the store");
+    if (typing) {
+      await expect(editor(page)).toContainText("Tenant waits. Local typing.");
+      await expect(page.locator(".st-use--tied")).toHaveText("Tenant");
+      await page.getByRole("button", { name: "Take the stored text" }).click();
+    }
+    await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue(changed.title);
+    await expect(editor(page)).toContainText("Person arrives.");
+    await expect(editor(page)).not.toContainText("Tenant waits.");
+    await expect(page.locator(".st-use--tied")).toHaveText("Person");
+
+    await editor(page).click();
+    await page.keyboard.press("ControlOrMeta+End");
+    await page.keyboard.type(" More detail.");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByRole("status")).toContainText(`Saved feature “${changed.title}”`);
+    const saved = (await listFeatures(request))[0];
+    expect(saved.body).toBe(changed.body + " More detail.");
+    expect(saved.references).toEqual(changed.references);
   });
 }
