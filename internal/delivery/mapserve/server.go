@@ -28,7 +28,6 @@ import (
 // Routes of the page, its documents and its edits.
 const (
 	PagePath     = "/"
-	ScriptPath   = "/studio.js"
 	OverviewPath = "/api/overview"
 	AcceptedPath = "/api/accepted"
 	DefinePath   = "/api/define"
@@ -112,6 +111,11 @@ func (s Server) Handler() (http.Handler, error) {
 	case s.Accepted.Branch != "" && s.Accepted.Overview == (application.GetDomainOverview{}):
 		return nil, errors.New("map server: the accepted branch is named without its overview")
 	}
+	files, err := studioFiles()
+	if err != nil {
+		return nil, fmt.Errorf("map server: embedded Studio: %w", err)
+	}
+	assets := serveWebAssets(files)
 	var edits sync.Mutex
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+OverviewPath, s.overview)
@@ -119,8 +123,10 @@ func (s Server) Handler() (http.Handler, error) {
 	mux.HandleFunc("POST "+ProjectPath, oneAtATime(&edits, s.project))
 	mux.HandleFunc("POST "+DefinePath, oneAtATime(&edits, s.define))
 	mux.HandleFunc("POST "+RemovePath, oneAtATime(&edits, s.remove))
-	mux.HandleFunc("GET "+ScriptPath, serveBytes("text/javascript; charset=utf-8", studioScript))
-	mux.HandleFunc("GET /{$}", serveBytes("text/html; charset=utf-8", studioPage))
+	mux.HandleFunc("GET /{$}", assets)
+	mux.HandleFunc("GET /assets/", assets)
+	mux.HandleFunc("GET /manifest.webmanifest", assets)
+	mux.HandleFunc("GET /favicon.svg", assets)
 	return fromThePage(mux), nil
 }
 
@@ -388,18 +394,7 @@ func writeJSON(w http.ResponseWriter, status int, body []byte) {
 	_, _ = w.Write(body)
 }
 
-func serveBytes(contentType string, body []byte) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", contentType)
-		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
-		_, _ = w.Write(body)
-	}
-}
-
-// URL is the address a browser opens for a bound listener: the host it
-// listens on with its port, and localhost when it listens on every
-// interface, so the printed URL always reaches this machine.
+// URL is the browser address for the listener, using localhost for an unspecified host.
 func URL(bound net.Addr) string {
 	tcp, ok := bound.(*net.TCPAddr)
 	if !ok {

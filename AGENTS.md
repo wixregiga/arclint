@@ -101,7 +101,7 @@ Relations: vocabulary → rule (conformist); vocabulary → conformance (conform
 - **distribution**: The distribution bounded context: Patterns travelling between repositories. (paths internal/domain/distribution/**)
 - **agent**: The agent bounded context: the order of a coding agent's work and the Guidance for skipped steps. (paths internal/domain/agent/**)
 - **web**: Web frontend package, build configuration, and public assets. (paths web/**)
-  - launch-surfaces-present (disabled: Web is not implemented yet; re-enable when its launch surfaces are added.): contains files matching ["web/package.json", "web/vite.config.ts", "web/index.html", "web/public/manifest.webmanifest", "web/src/app/entrypoints/start-web.ts", "web/src/app/entrypoints/mount-web.ts"] Rationale: Web has separate standalone startup and host-controlled mounting entrypoints, plus an authored web app manifest; presence alone proves no runtime behavior.
+  - launch-surfaces-present: contains files matching ["web/package.json", "web/vite.config.ts", "web/index.html", "web/public/manifest.webmanifest", "web/src/app/entrypoints/start-web.ts", "web/src/app/entrypoints/mount-web.ts"] Rationale: Web has separate standalone startup and host-controlled mounting entrypoints, plus an authored web app manifest; presence alone proves no runtime behavior.
 - **web_source**: Browser-portable Web source, organized by FSD responsibility. (paths web/src/**)
   - imports no other zone; stdlib imports forbidden
   - source-layout: satisfies extension rule "web-source-layout" Rationale: A reader can find code by FSD layer, slice, and purposeful segment; implementation is not placed beside a slice's public interface.

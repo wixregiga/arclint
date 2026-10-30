@@ -76,10 +76,9 @@ test.describe("beginning a language in an empty recording", () => {
     expect(overview.contexts ?? []).toEqual([]);
   });
 
-  test("describes the project through api/project when the server offers it", async ({ page }) => {
+  test("describes the project through api/project", async ({ page }) => {
     const studio = new StudioPage(page, "/empty/");
     await studio.open();
-    test.skip(!(await studio.hasProjectRoute()), "api/project is not served by this arclint binary");
     await studio.card.getByRole("button", { name: "Edit", exact: true }).click();
     await studio.field("Description").fill("A small library.");
     await studio.card.getByRole("button", { name: "Save" }).click();
@@ -92,11 +91,33 @@ test.describe("beginning a language in an empty recording", () => {
   test("reports a project edit the running server cannot take, keeping the text", async ({ page }) => {
     const studio = new StudioPage(page, "/empty/");
     await studio.open();
-    test.skip(await studio.hasProjectRoute(), "api/project is served; the success path covers it");
+    await page.route("**/api/project", (route) => route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "Project endpoint is unavailable (404)." }) }));
     await studio.card.getByRole("button", { name: "Edit", exact: true }).click();
-    await studio.field("Description").fill("A small library.");
+    await studio.field("Description").fill("A library with home delivery.");
     await studio.card.getByRole("button", { name: "Save" }).click();
     await expect(studio.card.getByRole("alert")).toContainText("404");
-    await expect(studio.field("Description")).toHaveValue("A small library.");
+    await expect(studio.field("Description")).toHaveValue("A library with home delivery.");
   });
+});
+
+
+test("begins a language with no domain file through the embedded Studio", async ({ page }) => {
+  const studio = new StudioPage(page, "/new/");
+  await studio.open();
+  expect((await studio.overview()).found).toBe(false);
+  await expect(studio.card).toContainText("No domain file exists");
+  await studio.card.getByRole("button", { name: "Name the project" }).click();
+  await studio.field("Project name").fill("Neighbourhood library");
+  await studio.field("Description").fill("Loans and returns for our neighbourhood library.");
+  await studio.card.getByRole("button", { name: "Begin the language" }).click();
+  await expect(studio.card.getByRole("heading", { level: 1 })).toHaveText("Neighbourhood library");
+  expect((await studio.overview()).found).toBe(true);
+  await studio.card.getByRole("button", { name: "+ Bounded context" }).click();
+  await studio.field("Name").fill("lending");
+  await studio.field("Definition").fill("Lending books to members.");
+  await studio.card.getByRole("button", { name: "Record", exact: true }).click();
+  await expect(studio.card.getByRole("heading", { level: 1 })).toHaveText("lending");
+  await page.reload();
+  await expect(studio.card.getByRole("heading", { level: 1 })).toHaveText("lending");
+  expect((await studio.overview()).contexts![0].definition).toBe("Lending books to members.");
 });

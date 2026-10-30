@@ -102,3 +102,22 @@ test.describe("editing an entry", () => {
     await expect(studio.navigator.getByRole("button", { name: /Password.*unsaved/ })).toHaveCount(0);
   });
 });
+
+
+test("keeps the draft when a successful write cannot be read back yet", async ({ page }) => {
+  const studio = new StudioPage(page, "/");
+  await studio.open();
+  await studio.select("Credentials");
+  await studio.card.getByRole("button", { name: "Edit", exact: true }).click();
+  const changed = "A username and password presented together to authenticate a user.";
+  await studio.field("Definition").fill(changed);
+  await page.route("**/api/overview", (route) => route.abort("connectionrefused"));
+  await studio.card.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("contentinfo").getByRole("alert")).toContainText("did not answer");
+  await expect(studio.field("Definition")).toHaveValue(changed);
+  await page.unroute("**/api/overview");
+  await page.getByRole("button", { name: "Try again" }).click();
+  expect((await studio.overview()).contexts![0].valueObjects!.find((v) => v.name === "Credentials")!.definition).toBe(changed);
+  await studio.card.getByRole("button", { name: "Cancel" }).click();
+  await expect(studio.card).toContainText(changed);
+});

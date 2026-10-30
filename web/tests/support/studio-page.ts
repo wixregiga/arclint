@@ -50,12 +50,7 @@ export class StudioPage {
     return JSON.parse(text) as OverviewLike;
   }
 
-  async hasProjectRoute(): Promise<boolean> {
-    return this.page.evaluate(async (base) => {
-      const r = await fetch(new URL("api/project", base).toString(), { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-      return r.status !== 404 && r.status !== 405;
-    }, this.page.url());
-  }
+
 }
 
 export interface OverviewLike {

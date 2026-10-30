@@ -396,10 +396,19 @@ exclusion winning.
 
 ## Developing
 
+Studio opens with `arclint map serve` in the adopting project. Its Language
+view writes the configured domain recording; Map shows the same concepts and
+connections. A project can start without a domain file. Installed binaries
+include Studio and need no Node runtime.
+
 ```bash
-make ci                  # format + lint + vet + tests + selfcheck
+mise install             # pinned Go tooling and Node for Web development
+make web-install         # locked Studio development dependencies
+cd web && npx playwright install chromium && cd ..
+make ci                  # Go, Web, browser, schema and architecture checks
 go test -short ./...     # the quick loop, network suite skipped
 make bench               # cold start and large-repo timings
+make generate ONLY=web   # rebuild and embed Studio after Web source edits
 ```
 
 This repository is checked by its own ruleset on every CI run

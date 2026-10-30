@@ -114,8 +114,8 @@ export function StudioScreen({ gateway, memory }: StudioScreenProps) {
     setFailure(null);
     try {
       const said = await what();
-      await reload();
-      dispatch({ type: "saved", key, then });
+      const refreshed = await reload();
+      if (refreshed) dispatch({ type: "saved", key, then });
       setNotice(said);
     } catch (error) {
       const retryable = isGatewayFailure(error) && error.kind !== "refused";

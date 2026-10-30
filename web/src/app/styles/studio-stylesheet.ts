@@ -13,8 +13,6 @@ export const studioStylesheet: string = String.raw`
 
 .st-root {
   --bg: #f6f6f3;
-  --grid-minor: rgba(31, 36, 48, 0.045);
-  --grid-major: rgba(31, 36, 48, 0.075);
   --surface: #ffffff;
   --surface-sunken: #fafaf8;
   --ink: #1f2430;
@@ -60,9 +58,6 @@ export const studioStylesheet: string = String.raw`
   line-height: 1.5;
   color: var(--ink);
   background-color: var(--bg);
-  background-image: linear-gradient(var(--grid-major) 1px, transparent 1px), linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
-    linear-gradient(var(--grid-minor) 1px, transparent 1px), linear-gradient(90deg, var(--grid-minor) 1px, transparent 1px);
-  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
   background-position: -1px -1px;
   -webkit-font-smoothing: antialiased;
   color-scheme: light;
@@ -102,6 +97,9 @@ export const studioStylesheet: string = String.raw`
 
 .st-app {
   height: 100%;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
@@ -1350,5 +1348,22 @@ export const studioStylesheet: string = String.raw`
   .st-brand__source {
     display: none;
   }
+}
+@media (max-width: 640px) {
+  .st-topbar { flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+  .st-brand { flex: 1 1 100%; }
+  .st-brand__project { max-width: 190px; }
+  .st-search { flex: 1 1 100%; max-width: none; order: 4; }
+  .st-accepted { flex: 1 1 auto; font-size: 11px; white-space: normal; }
+  .st-mode { min-height: 36px; padding: 4px 10px; }
+  .st-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(100px, 22vh) minmax(0, 1fr); }
+  .st-body--map { grid-template-rows: minmax(80px, 16vh) minmax(170px, 1fr) minmax(180px, 1fr); }
+  .st-navigator { border-right: 0; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+  .st-main { padding: 12px 10px 32px; }
+  .st-main--map { padding: 0; }
+  .st-body--map .st-inspector { max-height: none; }
+  .st-card, .st-inspector .st-card { padding: 18px; overflow-wrap: anywhere; }
+  .st-status { flex-wrap: wrap; }
+  .st-status__counts { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 `;

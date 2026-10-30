@@ -34,7 +34,7 @@ function git(dir: string, ...args: string[]): void {
  * - empty: a project whose recording holds nothing yet, from `arclint
  *   domain init`.
  */
-export function prepareProjects(scratch: string, arclint: string): Record<"identity" | "boxoffice" | "empty", FixtureProject> {
+export function prepareProjects(scratch: string, arclint: string): Record<"identity" | "boxoffice" | "empty" | "newProject", FixtureProject> {
   const base = path.join(scratch, "projects");
   rmSync(base, { recursive: true, force: true });
   mkdirSync(base, { recursive: true });
@@ -61,7 +61,12 @@ export function prepareProjects(scratch: string, arclint: string): Record<"ident
   writeFileSync(path.join(empty, "rules.arclint.yaml"), "project: fresh\nruntime: [go]\n");
   execFileSync(arclint, ["domain", "init"], { cwd: empty, stdio: "pipe" });
 
+  const newProject = path.join(base, "new-project");
+  mkdirSync(newProject);
+  writeFileSync(path.join(newProject, "rules.arclint.yaml"), "project: fresh\nruntime: [go]\n");
+
   return {
+    newProject: { name: "new-project", dir: newProject },
     identity: { name: "identity", dir: identity },
     boxoffice: { name: "boxoffice", dir: boxoffice },
     empty: { name: "empty", dir: empty },

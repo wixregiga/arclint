@@ -11,7 +11,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:browser": "playwright test",
-    "check": "npm run typecheck && npm run test && npm run build && npm run test:browser"
+    "check": "npm run typecheck && npm run test && npm run build && npm run test:browser",
+    "assets:write": "node scripts/embedded-assets.ts",
+    "assets:check": "node scripts/embedded-assets.ts --check"
   },
   "dependencies": {
     "react": "^19.3.0",

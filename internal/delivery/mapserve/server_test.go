@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -229,25 +230,44 @@ func TestOverviewIsTheJSONRenderersDocument(t *testing.T) {
 	}
 }
 
-func TestPageAndScriptAreServed(t *testing.T) {
+func TestBuiltStudioIsServed(t *testing.T) {
 	h := handler(t, exampleRoot(t))
 	page := get(t, h, http.MethodGet, mapserve.PagePath)
 	if page.Code != http.StatusOK || !strings.HasPrefix(page.Header().Get("Content-Type"), "text/html") {
 		t.Fatalf("page: status %d, content-type %q", page.Code, page.Header().Get("Content-Type"))
 	}
-	for _, want := range []string{"ArcLint Studio", "Navigator", "Inspector", `src="studio.js"`, mapserve.OverviewPath, mapserve.AcceptedPath, mapserve.DefinePath, mapserve.RemovePath, "Publish", "Changes"} {
+	for _, want := range []string{"ArcLint Studio", `id="studio"`, `rel="manifest"`} {
 		if !strings.Contains(page.Body.String(), want) {
 			t.Errorf("page lacks %q", want)
 		}
 	}
-	script := get(t, h, http.MethodGet, mapserve.ScriptPath)
-	if script.Code != http.StatusOK || !strings.HasPrefix(script.Header().Get("Content-Type"), "text/javascript") {
+	scriptURL := regexp.MustCompile(`src="(\./assets/[^" ]+\.js)"`).FindStringSubmatch(page.Body.String())
+	if len(scriptURL) != 2 {
+		t.Fatalf("page has no built module: %s", page.Body.String())
+	}
+	script := get(t, h, http.MethodGet, strings.TrimPrefix(scriptURL[1], "."))
+	if script.Code != http.StatusOK || !strings.Contains(script.Header().Get("Content-Type"), "javascript") {
 		t.Fatalf("script: status %d, content-type %q", script.Code, script.Header().Get("Content-Type"))
 	}
-	for _, want := range []string{"conceptsOf", "navigator", "layout", "inspect", "transformation", "applyDrafts", "requestOf"} {
+	for _, want := range []string{"api/overview", "api/accepted", "api/project", "api/define", "api/remove", "Name the project"} {
 		if !strings.Contains(script.Body.String(), want) {
-			t.Errorf("script lacks %q", want)
+			t.Errorf("built Studio lacks %q", want)
 		}
+	}
+	manifest := get(t, h, http.MethodGet, "/manifest.webmanifest")
+	if manifest.Code != http.StatusOK || manifest.Header().Get("Content-Type") != "application/manifest+json" {
+		t.Fatalf("manifest: %d %s", manifest.Code, manifest.Body.String())
+	}
+	var app map[string]any
+	if err := json.Unmarshal(manifest.Body.Bytes(), &app); err != nil {
+		t.Fatal(err)
+	}
+	if app["name"] != "ArcLint Studio" {
+		t.Fatalf("manifest: %v", app)
+	}
+	icon := get(t, h, http.MethodGet, "/favicon.svg")
+	if icon.Code != http.StatusOK || !strings.Contains(icon.Header().Get("Content-Type"), "image/svg+xml") {
+		t.Fatalf("icon: %d", icon.Code)
 	}
 }
 
@@ -262,7 +282,7 @@ func TestOnlyTheRoutesOfThePageAreServed(t *testing.T) {
 	if rec := get(t, h, http.MethodPut, mapserve.PagePath); rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("PUT page: status = %d", rec.Code)
 	}
-	for _, path := range []string{"/studio.test.js", "/static/index.html", "/other", "/api/model"} {
+	for _, path := range []string{"/studio.js", "/assets/missing.js", "/studio.test.js", "/static/index.html", "/other", "/api/model"} {
 		if rec := get(t, h, http.MethodGet, path); rec.Code != http.StatusNotFound {
 			t.Errorf("GET %s: status = %d, want 404", path, rec.Code)
 		}

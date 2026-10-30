@@ -67,3 +67,17 @@ and disposal and all shipped Web entrypoints. Parent runs architecture fixtures,
 Web build/tests, make check and make ci. Rule changes only activate the reserved
 Web launch rule once implemented; never weaken existing checks or baselines.
 
+
+## Unit 1 integration
+
+The Web source is integrated with Astra's project/empty-recording HTTP path.
+The Go host embeds the Vite build under `static/web`, serves only its page,
+assets, manifest and icon, and retains the existing origin and edit-serialization
+checks. `make generate ONLY=web` owns the committed build; the repository gate
+compares it against a fresh temporary build. Installed binaries need no Node.
+
+The reserved Web launch rule is active and its two parked fixtures are restored.
+The existing legacy pure map-model regression tests remain during the absorption;
+the legacy page and script are no longer served. Actual browser flows load the
+embedded Web build and use real Go servers for YAML, CML, empty and absent
+recordings, including nested hosting. Browser coverage currently uses Chromium.
