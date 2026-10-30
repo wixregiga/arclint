@@ -32,10 +32,10 @@ export function connectionsOf(entries: readonly Entry[], relations: readonly Rel
     for (const r of relations) {
       if (r.from === entry.name) {
         const other = entries.find((e) => e.concept === "bounded_context" && e.name === r.to);
-        if (other) out.push({ kind: "relation", label: `${relationWord(r.kind)} upstream of`, entry: other, note: r.description });
+        if (other) out.push({ kind: "relation", label: relationLabel(r.kind, "from"), entry: other, note: r.description });
       } else if (r.to === entry.name) {
         const other = entries.find((e) => e.concept === "bounded_context" && e.name === r.from);
-        if (other) out.push({ kind: "relation", label: `${relationWord(r.kind)} downstream of`, entry: other, note: r.description });
+        if (other) out.push({ kind: "relation", label: relationLabel(r.kind, "to"), entry: other, note: r.description });
       }
     }
     return out;
@@ -94,4 +94,27 @@ function memberLabel(member: Entry): string {
 /** A relation kind as the recording spells it, in words. */
 export function relationWord(kind: string): string {
   return kind.replace(/_/g, " ");
+}
+
+/** The influence the recorded kind states; unknown kinds imply no direction. */
+export function relationInfluence(kind: string): "one-way" | "mutual" | "none" {
+  switch (kind) {
+    case "partnership":
+    case "shared_kernel":
+      return "mutual";
+    case "customer_supplier":
+    case "conformist":
+    case "anticorruption_layer":
+    case "open_host_service":
+    case "published_language":
+      return "one-way";
+    default:
+      return "none";
+  }
+}
+
+export function relationLabel(kind: string, side: "from" | "to"): string {
+  const word = relationWord(kind);
+  if (kind === "separate_ways") return `${word} from`;
+  return relationInfluence(kind) === "one-way" ? `${word} ${side === "from" ? "upstream of" : "downstream of"}` : `${word} with`;
 }

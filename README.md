@@ -412,7 +412,7 @@ make generate ONLY=web   # rebuild and embed Studio after Web source edits
 ```
 
 This repository is checked by its own ruleset on every CI run
-(`make selfcheck`), so the architecture below is enforced, not just
+(the self-check in `make ci`), so the architecture below is enforced, not just
 described. The codebase follows the rules it ships:
 
 - `internal/domain`: the Rule aggregate, conformance check, and

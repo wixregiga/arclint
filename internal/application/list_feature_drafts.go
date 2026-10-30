@@ -9,7 +9,7 @@ type ListFeatureDrafts struct{ Store FeatureDraftStore }
 func (u ListFeatureDrafts) Execute() ([]FeatureSummary, error) {
 	result, err := u.Store.List()
 	if err != nil {
-		return result, fmt.Errorf("read feature: %w", err)
+		return result, fmt.Errorf("list features: %w", err)
 	}
 	return result, nil
 }

@@ -50,3 +50,31 @@ type FeatureDraftStore interface {
 	Save(FeatureDraft) (FeatureDraft, error)
 	Delete(string, string) error
 }
+
+// CheckFeatureDraft checks the document shape without resolving its annotations.
+// Collapsed and out-of-body ranges remain available as unresolved references.
+func CheckFeatureDraft(d FeatureDraft) error {
+	if d.References == nil {
+		return ErrFeatureInput
+	}
+	ids := make(map[string]bool, len(d.References))
+	for _, r := range d.References {
+		if r.ID == "" || ids[r.ID] || r.From < 0 || r.To < r.From {
+			return ErrFeatureInput
+		}
+		ids[r.ID] = true
+		switch r.Reading {
+		case "plain":
+			if r.Term != nil {
+				return ErrFeatureInput
+			}
+		case "names", "value", "rule":
+			if r.Term == nil || r.Term.Concept == "" || r.Term.Name == "" {
+				return ErrFeatureInput
+			}
+		default:
+			return ErrFeatureInput
+		}
+	}
+	return nil
+}

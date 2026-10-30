@@ -328,3 +328,71 @@ test("a recorded spelling in two contexts stays ambiguous until the author choos
   await expect(page.getByRole("status")).toContainText("Saved feature");
   expect((await listFeatures(request))[0].references[0].term!.context).toBe("support");
 });
+
+for (const operation of ["save", "delete"] as const) {
+  test(`a delayed ${operation} conflict stays with its originating feature`, async ({ page, request }) => {
+    const alpha = await saveFeature(request, { title: "Alpha", body: "A Tenant waits.", references: [] });
+    const beta = await saveFeature(request, { title: "Beta", body: "A Person arrives.", references: [] });
+    await openFeatures(page);
+    const features = page.getByRole("navigation", { name: "Features" });
+    await features.getByRole("button", { name: "Alpha", exact: true }).click();
+    await expect(editor(page)).toContainText(alpha.body);
+    await editor(page).click();
+    await page.keyboard.press("ControlOrMeta+End");
+    await page.keyboard.type(" Alpha's unsaved addition.");
+    await saveFeature(request, { ...alpha, title: "Alpha changed elsewhere" });
+    let release!: () => void;
+    let reached!: () => void;
+    const hold = new Promise<void>((done) => { release = done; });
+    const started = new Promise<void>((done) => { reached = done; });
+    await page.route(/\/api\/feature(?:\?.*)?$/, async (route) => {
+      if (route.request().method() !== (operation === "save" ? "POST" : "DELETE")) return route.continue();
+      const response = await route.fetch();
+      reached();
+      await hold;
+      await route.fulfill({ response });
+    });
+    if (operation === "save") await page.getByRole("button", { name: "Save", exact: true }).click();
+    else {
+      await page.getByRole("button", { name: "Delete…" }).click();
+      await page.getByRole("group", { name: "Confirm deletion" }).getByRole("button", { name: "Delete", exact: true }).click();
+    }
+    await started;
+    await features.getByRole("button", { name: "Beta", exact: true }).click();
+    await expect(editor(page)).toContainText(beta.body);
+    await editor(page).click();
+    await page.keyboard.press("ControlOrMeta+End");
+    await page.keyboard.type(" Beta's unsaved addition.");
+    release();
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Take the stored text" })).toHaveCount(0);
+    await expect(editor(page)).toContainText("Beta's unsaved addition.");
+    await features.getByRole("button", { name: /Alpha/ }).click();
+    await expect(page.getByRole("alert").first()).toContainText("Alpha changed elsewhere");
+    await expect(editor(page)).toContainText("Alpha's unsaved addition.");
+    const documents = await listFeatures(request);
+    expect(documents.find((doc) => doc.id === beta.id)!.body).toBe(beta.body);
+    expect(documents.find((doc) => doc.id === alpha.id)!.body).toBe(alpha.body);
+  });
+}
+
+test("deletion confirmation is reset when another feature is selected", async ({ page, request }) => {
+  const alpha = await saveFeature(request, { title: "Delete Alpha", body: "Alpha", references: [] });
+  const beta = await saveFeature(request, { title: "Delete Beta", body: "Beta", references: [] });
+  await openFeatures(page);
+  const features = page.getByRole("navigation", { name: "Features" });
+  await features.getByRole("button", { name: "Delete Beta", exact: true }).click();
+  await expect(editor(page)).toContainText(beta.body);
+  await features.getByRole("button", { name: "Delete Alpha", exact: true }).click();
+  await expect(editor(page)).toContainText(alpha.body);
+  await page.getByRole("button", { name: "Delete…" }).click();
+  await expect(page.getByRole("group", { name: "Confirm deletion" })).toBeVisible();
+  await features.getByRole("button", { name: "Delete Beta", exact: true }).click();
+  await expect(editor(page)).toContainText(beta.body);
+  await expect(page.getByRole("group", { name: "Confirm deletion" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Delete…" }).click();
+  await page.getByRole("group", { name: "Confirm deletion" }).getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Deleted the feature.");
+  expect((await listFeatures(request)).map((doc) => doc.id)).toEqual([alpha.id]);
+});

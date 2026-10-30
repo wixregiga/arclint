@@ -65,8 +65,8 @@ export const CONCEPT_MEANING: Readonly<Record<Concept, string>> = {
   domain_event: "Something that happened that the business cares about.",
   domain_service: "An operation of the business that belongs to no single thing.",
   invariant: "A rule that always holds for the thing it belongs to.",
-  assertion: "A guarantee one operation makes when it completes.",
-  specification: "A condition something is checked against.",
+  assertion: "A guarantee of one named operation.",
+  specification: "A named business condition that can decide whether something satisfies it.",
   question: "Something not yet settled about the language.",
 };
 
@@ -142,7 +142,7 @@ const PROPERTIES: Readonly<Record<Concept, readonly PropertySpec[]>> = {
   ],
   assertion: [
     { name: "on", label: "On", required: true, shape: "text", advanced: false, hint: "The operation that makes the guarantee." },
-    { name: "statement", label: "Statement", required: true, shape: "prose", advanced: false, hint: "What holds once the operation completes. At most 40 words." },
+    { name: "statement", label: "Statement", required: true, shape: "prose", advanced: false, hint: "The guarantee that applies when the operation runs. At most 40 words." },
     verifiedBy,
   ],
   specification: [definition],

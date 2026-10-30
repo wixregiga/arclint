@@ -73,12 +73,12 @@ contexts:
               the domain recording has changed.
   vocabulary:
     definition: >-
-      The recorded Ubiquitous Language of a project and the MetaModel it is
-      checked against. A project writes one DomainRecording in YAML or CML.
-      Authors consult and refine that language while describing features.
-      Feature drafts hold prose and deliberate term references without becoming
-      another domain recording. Rule expands the language; conformance judges
-      code against it.
+      The project's recorded Ubiquitous Language and the MetaModel it is checked
+      against. A project writes one DomainRecording in YAML or CML. Authors
+      consult and refine the language while describing features. Feature drafts
+      carry prose and deliberate term references without becoming another domain
+      recording. Rule expansion reads the language; conformance judges code
+      against it.
     value_objects:
       DomainRecording:
         definition: >-

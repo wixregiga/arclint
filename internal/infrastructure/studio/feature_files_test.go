@@ -3,7 +3,9 @@ package studio
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -144,6 +146,75 @@ func TestDraftRefusals(t *testing.T) {
 	}
 	if _, err = (FeatureFiles{Project: root2}).Save(application.FeatureDraft{References: []application.FeatureReference{}}); err == nil {
 		t.Fatal("directory link followed")
+	}
+}
+
+func TestDraftRangeRefusalsPreserveStoredText(t *testing.T) {
+	store := FeatureFiles{Project: t.TempDir()}
+	draft, err := store.Save(application.FeatureDraft{Body: "Keep this", References: []application.FeatureReference{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, span := range [][2]int{{-1, 2}, {3, 2}} {
+		invalid := draft
+		invalid.Body = "Must not replace it"
+		invalid.References = []application.FeatureReference{{ID: "r", From: span[0], To: span[1], Reading: "plain"}}
+		if _, err := store.Save(invalid); !errors.Is(err, application.ErrFeatureInput) {
+			t.Fatalf("accepted impossible range %v: %v", span, err)
+		}
+		got, err := store.Get(draft.ID)
+		if err != nil || got.Body != draft.Body || got.Revision != draft.Revision {
+			t.Fatalf("refusal changed stored text: %+v %v", got, err)
+		}
+	}
+	draft.References = []application.FeatureReference{{ID: "collapsed", From: 500, To: 500, Quote: "removed", Reading: "plain"}}
+	if _, err := store.Save(draft); err != nil {
+		t.Fatalf("lost a collapsed stale annotation: %v", err)
+	}
+}
+
+func TestDraftMetadataIgnorePreservesAdopterFile(t *testing.T) {
+	for _, existing := range []string{"", "# owned by the adopting project\nprivate-*\n"} {
+		t.Run(map[bool]string{true: "existing", false: "new"}[existing != ""], func(t *testing.T) {
+			project := t.TempDir()
+			directory := filepath.Join(project, ".arclint", "studio", "features")
+			if existing != "" {
+				if err := os.MkdirAll(directory, 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(directory, ".gitignore"), []byte(existing), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			store := FeatureFiles{Project: project}
+			draft, err := store.Save(application.FeatureDraft{References: []application.FeatureReference{}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ignore, err := os.ReadFile(filepath.Join(directory, ".gitignore"))
+			want := existing
+			if want == "" {
+				want = ".lock\n.write-*\n"
+			}
+			if err != nil || string(ignore) != want {
+				t.Fatalf("ignore content: %q %v", ignore, err)
+			}
+			if existing != "" {
+				return
+			}
+			if err := os.WriteFile(filepath.Join(directory, ".write-crashed"), []byte("incomplete"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			for _, args := range [][]string{{"init", "-q", project}, {"-C", project, "ls-files", "--others", "--exclude-standard"}} {
+				output, err := exec.Command("git", args...).CombinedOutput()
+				if err != nil {
+					t.Fatalf("git %v: %s %v", args, output, err)
+				}
+				if len(args) > 3 && (!strings.Contains(string(output), draft.ID+".json") || strings.Contains(string(output), ".lock") || strings.Contains(string(output), ".write-")) {
+					t.Fatalf("version-control candidates include local metadata or omit the draft: %s", output)
+				}
+			}
+		})
 	}
 }
 

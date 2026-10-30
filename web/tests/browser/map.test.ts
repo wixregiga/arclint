@@ -1,6 +1,33 @@
 import { expect, test } from "@playwright/test";
 import { StudioPage } from "../support/studio-page";
 
+test("renders arrowheads for supplied mutual, separate and one-way relations", async ({ page }) => {
+  await page.route("**/boxoffice/api/overview", async (route) => {
+    const response = await route.fetch();
+    const overview = await response.json();
+    overview.relations = [
+      { from: "catalog", to: "ordering", kind: "partnership" },
+      { from: "ordering", to: "capacity", kind: "separate_ways" },
+      { from: "catalog", to: "capacity", kind: "conformist" },
+    ];
+    await route.fulfill({ response, json: overview });
+  });
+  await new StudioPage(page, "/boxoffice/").open();
+  await page.getByRole("tab", { name: "Map" }).click();
+  const relations = page.locator(".st-context-map__relation");
+  const mutual = relations.filter({ hasText: "partnership" }).locator("line");
+  await expect(mutual).toHaveAttribute("marker-start", "url(#st-arrow)");
+  await expect(mutual).toHaveAttribute("marker-end", "url(#st-arrow)");
+  const separate = relations.filter({ hasText: "separate ways" }).locator("line");
+  await expect(separate).not.toHaveAttribute("marker-start");
+  await expect(separate).not.toHaveAttribute("marker-end");
+  await expect(separate).toContainText("separate ways from");
+  const oneWay = relations.filter({ hasText: "conformist" }).locator("line");
+  await expect(oneWay).not.toHaveAttribute("marker-start");
+  await expect(oneWay).toHaveAttribute("marker-end", "url(#st-arrow)");
+  await expect(oneWay).toContainText("upstream of");
+});
+
 test.describe("the map over a second, unrelated recording", () => {
   test("draws the context map and a context's connections from the CML recording and opens the inspector", async ({ page }) => {
     const studio = new StudioPage(page, "/boxoffice/");

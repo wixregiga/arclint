@@ -13,7 +13,7 @@ One unit completes before the next starts:
 
 The parent coordinates integration and gates. Astra owns Go HTTP/CLI support for
 unit 1. Fable owns unit 1's web package. Their changes are integrated and verified
-before unit 2 begins. No push, PR, squash or BWrite change is part of this step.
+before unit 2 begins. These implementation units complete locally before the separate review and PR publication step. BWrite remains untouched.
 
 ## Existing extension points
 

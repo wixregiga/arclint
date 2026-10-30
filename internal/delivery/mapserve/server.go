@@ -2,7 +2,7 @@
 // the page that draws the recorded Ubiquitous Language, embedded at
 // build time, the overview as the JSON renderer spells it, the overview
 // the default branch records, and the define and remove use cases the
-// page publishes its drafts through.
+// page saves its language edits through. Feature documents use a separate store.
 package mapserve
 
 import (
@@ -35,8 +35,8 @@ const (
 	ProjectPath  = "/api/project"
 )
 
-// requestLimit bounds one edit's body; a recorded text is at most a few
-// hundred words.
+// requestLimit bounds each language edit or feature snapshot to 1 MiB.
+// The file adapter also bounds the encoded, versioned feature document.
 const requestLimit = 1 << 20
 
 // Reports writes the use cases' results as the JSON renderer spells
@@ -94,13 +94,10 @@ func (s Server) Serve(address string, listening func(url string) error) error {
 	return nil
 }
 
-// Handler answers GET / with the page, GET /studio.js with its script,
-// GET /api/overview with the overview the domain file records now, GET
-// /api/accepted with the one the default branch records, POST
-// /api/project, POST /api/define and POST /api/remove with one edit each through the
-// define and remove use cases, one edit at a time; any other request,
-// and any request addressed by another name or sent by another page, is
-// refused.
+// Handler serves the embedded Studio assets, the current and accepted language,
+// project and entry edits, and feature documents. Language edits use define and
+// remove under one edit lock; feature storage compares revisions independently.
+// Unknown routes and requests from another host or origin are refused.
 func (s Server) Handler() (http.Handler, error) {
 	switch {
 	case s.Reports.Overview == nil || s.Reports.Defined == nil || s.Reports.Removed == nil:

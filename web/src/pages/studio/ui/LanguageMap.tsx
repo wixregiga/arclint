@@ -8,6 +8,8 @@ import {
   layoutContext,
   layoutContextMap,
   readingOf,
+  relationInfluence,
+  relationLabel,
   relationWord,
   type Entry,
   type Standing,
@@ -72,9 +74,14 @@ export function LanguageMap({ entries, relations, context, selectedKey, standing
             </defs>
             {contextMap.lines.map((l) => (
               <g key={`${l.from}-${l.to}`} className="st-context-map__relation">
-                <line x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} markerEnd="url(#st-arrow)">
+                <line
+                  x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
+                  markerStart={relationInfluence(l.kind) === "mutual" ? "url(#st-arrow)" : undefined}
+                  markerEnd={relationInfluence(l.kind) !== "none" ? "url(#st-arrow)" : undefined}
+                  strokeDasharray={l.kind === "separate_ways" ? "5 4" : undefined}
+                >
                   <title>
-                    {l.from} is {relationWord(l.kind)} upstream of {l.to}
+                    {l.from}: {relationLabel(l.kind, "from")} {l.to}
                     {l.description ? `: ${l.description}` : ""}
                   </title>
                 </line>

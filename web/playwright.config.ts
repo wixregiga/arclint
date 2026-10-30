@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { defineConfig, devices } from "@playwright/test";
 
 // The browser suite runs the built Studio against real arclint map
-// servers over copies of real recordings; tests/support/studio-host.ts
-// builds the binary, prepares the projects and serves dist at several
+// servers over copies of real recordings; tests/support/serve-studio.ts
+// builds the binary, prepares the projects and proxies its embedded Studio at several
 // bases. Each agent running the suite picks its own port.
 const PORT = Number(process.env.STUDIO_E2E_PORT ?? 4421);
 const SCRATCH = path.join(realpathSync(tmpdir()), `arclint-studio-e2e-${PORT}`);

@@ -45,9 +45,9 @@ stub was removed. DDD placement and classification decisions are recorded in
 
 ## Verification
 
-- 69 Web unit tests cover recognition, aliases, ambiguity, annotations, undo,
+- 70 Web unit tests cover recognition, aliases, ambiguity, annotations, undo,
   transport, export, mounting/disposal, workspace persistence and pending saves.
-- 23 Chromium browser tests cover the embedded build at root and nested bases,
+- 27 Chromium browser tests cover the embedded build at root and nested bases,
   YAML and CML recordings, empty and absent recordings, actual file persistence,
   a new browser session, language edits, ticket copying and narrow screens.
 - Two compiled Studio processes verify competing saves and stale deletion over
@@ -66,8 +66,9 @@ the adopting project's usual workflow; unsaved text remains session-local.
 
 These checks establish the authoring behavior and integration. They do not
 measure whether agents produce better implementations; that remains a product
-hypothesis to evaluate with real adopting teams. No push or pull request is
-included in this work.
+hypothesis to evaluate with real adopting teams. The implementation completed
+locally before the separate review and PR publication step. See the
+[local PR review](studio-local-review.md) for findings and resolutions.
 
 ## Final gates
 
@@ -75,11 +76,10 @@ included in this work.
 The final CI output includes:
 
 ```text
-Tests  69 passed (69)
+Tests  70 passed (70)
 Embedded Studio matches the current Web build.
-23 passed (21.3s)
-9:29PM INF scanned ~11472680 bytes (11.47 MB) in 546ms
-9:29PM INF no leaks found
+27 passed
+INF no leaks found
 ```
 
 The generated Web bundle currently triggers Vite's advisory chunk-size warning;

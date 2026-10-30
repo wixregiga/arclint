@@ -31,32 +31,6 @@ type (
 	}
 )
 
-func validDraft(d application.FeatureDraft) error {
-	if d.References == nil {
-		return application.ErrFeatureInput
-	}
-	ids := make(map[string]bool, len(d.References))
-	for _, r := range d.References {
-		if r.ID == "" || ids[r.ID] {
-			return application.ErrFeatureInput
-		}
-		ids[r.ID] = true
-		switch r.Reading {
-		case "plain":
-			if r.Term != nil {
-				return application.ErrFeatureInput
-			}
-		case "names", "value", "rule":
-			if r.Term == nil || r.Term.Concept == "" || r.Term.Name == "" {
-				return application.ErrFeatureInput
-			}
-		default:
-			return application.ErrFeatureInput
-		}
-	}
-	return nil
-}
-
 // directory pins each directory while descending. Root operations confine even a
 // concurrent symlink replacement; no subsequent file access uses an absolute path.
 func (s FeatureFiles) directory(create bool) (*os.Root, error) {
@@ -163,7 +137,7 @@ func readFeature(root *os.Root, id string) (application.FeatureDraft, error) {
 	if stored.Version != 1 || stored.Feature.ID != id || stored.Feature.Revision != "" {
 		return stored.Feature, errors.New("invalid stored feature")
 	}
-	if err = validDraft(stored.Feature); err != nil {
+	if err = application.CheckFeatureDraft(stored.Feature); err != nil {
 		return stored.Feature, fmt.Errorf("stored feature: %w", err)
 	}
 	sum := sha256.Sum256(b)
@@ -222,8 +196,8 @@ func (s FeatureFiles) Get(id string) (application.FeatureDraft, error) {
 
 // Save replaces a complete snapshot only while its last-read revision is current.
 func (s FeatureFiles) Save(d application.FeatureDraft) (application.FeatureDraft, error) {
-	if err := validDraft(d); err != nil {
-		return d, err
+	if err := application.CheckFeatureDraft(d); err != nil {
+		return d, fmt.Errorf("check feature: %w", err)
 	}
 	if (d.ID == "" && d.Revision != "") || (d.ID != "" && !fileID.MatchString(d.ID)) {
 		return d, application.ErrFeatureInput
@@ -242,6 +216,9 @@ func (s FeatureFiles) Save(d application.FeatureDraft) (application.FeatureDraft
 		if len(b) > documentLimit {
 			return application.ErrFeatureInput
 		}
+		if err := ensureMetadataIgnored(root); err != nil {
+			return err
+		}
 		if err := replaceFeature(root, d.ID+".json", b); err != nil {
 			return err
 		}
@@ -253,6 +230,27 @@ func (s FeatureFiles) Save(d application.FeatureDraft) (application.FeatureDraft
 		err = application.ErrFeatureMissing
 	}
 	return d, err
+}
+
+// ensureMetadataIgnored leaves any adopter-authored ignore file intact.
+func ensureMetadataIgnored(root *os.Root) error {
+	f, err := root.OpenFile(".gitignore", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if errors.Is(err, os.ErrExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("create feature ignore file: %w", err)
+	}
+	if _, err = io.WriteString(f, ".lock\n.write-*\n"); err != nil {
+		_ = f.Close()
+		_ = root.Remove(".gitignore")
+		return fmt.Errorf("write feature ignore file: %w", err)
+	}
+	if err = f.Close(); err != nil {
+		_ = root.Remove(".gitignore")
+		return fmt.Errorf("close feature ignore file: %w", err)
+	}
+	return nil
 }
 
 func replaceFeature(root *os.Root, name string, body []byte) error {

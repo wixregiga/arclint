@@ -41,16 +41,22 @@ export function FeaturesView(props: FeaturesViewProps) {
   const loaded = selection?.kind === "saved" ? (features.loaded[selection.id] ?? null) : null;
   const document = loaded?.document ?? null;
 
-  const [saveState, setSaveState] = useState<FeatureSaveState>(IDLE_SAVE);
-  const [removeError, setRemoveError] = useState<string | null>(null);
+  const [saveStates, setSaveStates] = useState<Record<string, FeatureSaveState>>({});
+  const [removeErrors, setRemoveErrors] = useState<Record<string, string | null>>({});
+  const saveState = key ? (saveStates[key] ?? IDLE_SAVE) : IDLE_SAVE;
+  const removeError = key ? (removeErrors[key] ?? null) : null;
+  function setSaveState(next: FeatureSaveState) {
+    if (key) setSaveStates((states) => ({ ...states, [key]: next }));
+  }
+  function setRemoveError(next: string | null) {
+    if (key) setRemoveErrors((errors) => ({ ...errors, [key]: next }));
+  }
   const [busy, setBusy] = useState(false);
   const [reset, setReset] = useState(0);
   const [editorSelection, setEditorSelection] = useState<EditorSelection | null>(null);
   const editorRef = useRef<FeatureEditorHandle>(null);
 
   useEffect(() => {
-    setSaveState(IDLE_SAVE);
-    setRemoveError(null);
     setEditorSelection(null);
   }, [key]);
 
@@ -86,6 +92,7 @@ export function FeaturesView(props: FeaturesViewProps) {
   async function persist(request: { id?: string; revision?: string }) {
     if (!selection || !shown) return;
     setBusy(true);
+    setRemoveError(null);
     setSaveState({ kind: "saving" });
     const outcome = await features.save({ ...request, title: shown.title, body: shown.body, references: shown.references });
     setBusy(false);
@@ -129,6 +136,7 @@ export function FeaturesView(props: FeaturesViewProps) {
     if (!selection) return;
     dispatch({ type: "feature-discard", feature: selection });
     setSaveState(IDLE_SAVE);
+    setRemoveError(null);
     setReset((n) => n + 1);
     if (selection.kind === "saved") void features.load(selection.id);
   }
@@ -141,6 +149,7 @@ export function FeaturesView(props: FeaturesViewProps) {
     }
     dispatch({ type: "feature-discard", feature: selection });
     setSaveState(IDLE_SAVE);
+    setRemoveError(null);
     setReset((n) => n + 1);
   }
 
@@ -216,6 +225,7 @@ export function FeaturesView(props: FeaturesViewProps) {
   } else {
     main = (
       <FeaturePanel
+        key={editorKey}
         selection={selection}
         editorKey={editorKey}
         title={shown!.title}

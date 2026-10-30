@@ -86,7 +86,7 @@ elsewhere.
 
 | Rule | Evidence and limit |
 | --- | --- |
-| `web/launch-surfaces-present` | Temporarily disabled until Web exists. When enabled, checks exact presence of six specified files. Does not validate package scripts, the Vite build, HTML wiring, manifest semantics, or mounting behavior. |
+| `web/launch-surfaces-present` | Active. Checks exact presence of six specified files. Does not validate package scripts, the Vite build, HTML wiring, manifest semantics, or mounting behavior. |
 | `web/layers-point-downward` | Native layer check over resolved imports. |
 | `web/browser-dependencies` | Native import check: source may import itself and declared third-party packages, but no Node builtins or code outside the source Zone. A declared package is not thereby proven browser-compatible. |
 | `web/standalone-is-an-entrypoint` | Native importer restriction: no other source imports standalone startup. |

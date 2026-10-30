@@ -45,8 +45,9 @@ through the same validated operations, then Features shows its current meaning.
 
 Saved features live in `.arclint/studio/features/` under the adopting project.
 They reopen in another session or checkout when those JSON files are shared.
-The `.lock` file and `.write-*` scratch files are local adapter metadata and can
-be ignored by version control. Unsaved text survives mode switches and reloads
+On the first successful save, the adapter creates a `.gitignore` for local
+`.lock` and `.write-*` metadata if none exists there. An existing ignore file
+is preserved; its owner can add those patterns. Unsaved text survives mode switches and reloads
 in the current browser session. Stale saves offer an explicit choice while
 retaining typed text; no other editor's work is overwritten silently.
 

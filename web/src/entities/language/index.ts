@@ -33,7 +33,7 @@ export {
 export type { Entry, EntryAddress, EntryProperties, PropertyValue } from "./model/entry";
 export { differences, proposedKeys, relationDifferences, standingOf } from "./model/standing";
 export type { Difference, DifferenceKind, FieldDifference, RelationDifference, Standing } from "./model/standing";
-export { connectionsOf, relationWord } from "./model/connections";
+export { connectionsOf, relationInfluence, relationLabel, relationWord } from "./model/connections";
 export type { Connection, ConnectionKind } from "./model/connections";
 export { searchEntries } from "./lib/search";
 export type { MatchedBy, SearchHit } from "./lib/search";

@@ -58,6 +58,22 @@ func TestComposedFeatureHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	d := saved.Feature
+	for _, span := range [][2]int{{-5, 3}, {3, 2}} {
+		invalid := d
+		invalid.Body = "A refusal must not replace the draft"
+		invalid.References = []application.FeatureReference{{ID: "bad", From: span[0], To: span[1], Reading: "plain"}}
+		body, err := json.Marshal(invalid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		request("POST", "/api/feature", string(body), "", 400)
+		var retained struct {
+			Feature application.FeatureDraft `json:"feature"`
+		}
+		if err := json.Unmarshal(request("GET", "/api/feature?id="+d.ID, "", "", 200), &retained); err != nil || retained.Feature.Body != d.Body || retained.Feature.Revision != d.Revision {
+			t.Fatalf("refusal changed stored document: %+v %v", retained, err)
+		}
+	}
 	request("GET", "/api/feature?id="+d.ID, "", "", 200)
 	request("GET", "/api/features", "", "", 200)
 	d.Body += " edited"

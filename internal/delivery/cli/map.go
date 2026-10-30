@@ -16,7 +16,7 @@ const (
 )
 
 // MapServer shows the project's domain overview in a browser and
-// publishes the page's drafts into the domain file. Serve binds
+// saves language edits into the domain file and feature drafts separately. Serve binds
 // address, tells listening the URL a browser opens once the listener is
 // bound, and answers requests until the listener fails. Composition
 // selects the adapter that implements it and the use cases it serves.

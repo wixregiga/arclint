@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OverviewDocument } from "../../../shared/transport/index";
-import { connectionsOf } from "./connections";
+import { connectionsOf, relationInfluence } from "./connections";
 import { entriesOf, entryKey, membersOf, missingRequired, ownerOf, readingOf, topLevelOf } from "./entry";
 import { differences, proposedKeys, relationDifferences, standingOf } from "./standing";
 import { searchEntries } from "../lib/search";
@@ -96,6 +96,24 @@ describe("entriesOf", () => {
 });
 
 describe("connectionsOf", () => {
+  it("keeps mutual influence and separation distinct from upstream and downstream", () => {
+    const entries = entriesOf(shop);
+    const from = entries.find((entry) => entry.name === "sales")!;
+    const to = entries.find((entry) => entry.name === "shipping")!;
+    for (const kind of ["partnership", "shared_kernel", "separate_ways", "future_kind"]) {
+      const relations = [{ from: "sales", to: "shipping", kind }];
+      const suffix = kind === "separate_ways" ? "from" : "with";
+      expect(connectionsOf(entries, relations, from)[0].label).toBe(`${kind.replace(/_/g, " ")} ${suffix}`);
+      expect(connectionsOf(entries, relations, to)[0].label).toBe(`${kind.replace(/_/g, " ")} ${suffix}`);
+      expect(relationInfluence(kind)).toBe(kind === "partnership" || kind === "shared_kernel" ? "mutual" : "none");
+    }
+    for (const kind of ["customer_supplier", "conformist", "anticorruption_layer", "open_host_service", "published_language"]) {
+      const relations = [{ from: "sales", to: "shipping", kind }];
+      expect(connectionsOf(entries, relations, from)[0].label).toContain("upstream of");
+      expect(connectionsOf(entries, relations, to)[0].label).toContain("downstream of");
+      expect(relationInfluence(kind)).toBe("one-way");
+    }
+  });
   it("lists what the recording states: owner, members, raised-by, identity and relations", () => {
     const entries = entriesOf(shop);
     const by = (name: string) => entries.find((e) => e.name === name)!;

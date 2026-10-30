@@ -652,34 +652,6 @@ func TestServeRefusesAnAddressAlreadyInUse(t *testing.T) {
 	}
 }
 
-// TestStudioScriptUnderNode runs the page's model tests with node,
-// lending them the Go example's overview as the JSON renderer spells
-// it, so the script is proved against a real recording and against
-// the same document the server sends.
-func TestStudioScriptUnderNode(t *testing.T) {
-	node, err := exec.LookPath("node")
-	if err != nil {
-		t.Skip("node is not installed; the studio.js tests run where it is")
-	}
-	rec := get(t, handler(t, exampleRoot(t)), http.MethodGet, mapserve.OverviewPath)
-	overviewFile := filepath.Join(t.TempDir(), "overview.json")
-	if err := os.WriteFile(overviewFile, rec.Body.Bytes(), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command(node, "--test", "studio.test.js")
-	cmd.Dir = "static"
-	cmd.Env = append(os.Environ(), "ARCLINT_OVERVIEW_JSON="+overviewFile)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("node --test failed: %v\n%s", err, out)
-	}
-	for _, want := range []string{"fail 0", "skipped 0", "cancelled 0"} {
-		if !strings.Contains(string(out), want) {
-			t.Fatalf("node --test did not run every test (%q missing):\n%s", want, out)
-		}
-	}
-}
-
 func TestProjectEditsRecordingFormats(t *testing.T) {
 	for _, format := range []string{"yaml", "cml"} {
 		t.Run(format, func(t *testing.T) {
