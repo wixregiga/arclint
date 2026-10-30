@@ -58,9 +58,16 @@ No product decision remains awaiting an answer. Existing baseline findings,
 including overlong definitions outside the changed vocabulary definition, remain
 reported by ArcLint; no baseline or rule was weakened.
 
+## Follow-up review
+
+The automated review after the CI synchronization fix found that JSON property
+order made saved annotations appear unsaved. The page model compares annotation
+fields by value. A reducer regression and a real-store browser assertion failed
+before the fix and pass afterward; edits made during a save remain drafts.
+
 ## Validation limits
 
-The integrated checks cover 70 Web unit tests, 27 Chromium browser tests,
+The integrated checks cover 74 Web unit tests, 27 Chromium browser tests,
 compiled two-process persistence tests against real YAML and CML projects,
 architecture fixtures, embedded-asset freshness and the repository gates.
 The relation rendering test supplies response variants; persistence workflows

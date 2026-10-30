@@ -115,6 +115,8 @@ test.describe("writing a feature with the language at hand", () => {
     // Save through the store; the saved document carries UTF-16 positions and the quotes.
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("status")).toContainText("Saved feature “Invite a person into a tenant”");
+    await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Discard changes" })).toHaveCount(0);
     await expect(page.getByRole("navigation", { name: "Features" })).toContainText("Invite a person into a tenant");
     const allSaved = await listFeatures(request);
     expect(allSaved).toHaveLength(1);

@@ -30,7 +30,14 @@ export function draftFromDocument(document: FeatureDocument): FeatureDraft {
 }
 
 export function sameText(draft: FeatureDraft, document: FeatureDocument): boolean {
-  return draft.title === document.title && draft.body === document.body && JSON.stringify(draft.references) === JSON.stringify(document.references);
+  return draft.title === document.title && draft.body === document.body &&
+    draft.references.length === document.references.length && draft.references.every((reference, index) => {
+      const saved = document.references[index];
+      return reference.id === saved.id && reference.from === saved.from && reference.to === saved.to &&
+        reference.quote === saved.quote && reference.reading === saved.reading &&
+        reference.term?.concept === saved.term?.concept && reference.term?.context === saved.term?.context &&
+        reference.term?.owner === saved.term?.owner && reference.term?.name === saved.term?.name;
+    });
 }
 
 export function restoreFeatureSelection(raw: unknown): FeatureSelection | null {

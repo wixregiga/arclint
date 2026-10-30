@@ -45,7 +45,7 @@ stub was removed. DDD placement and classification decisions are recorded in
 
 ## Verification
 
-- 70 Web unit tests cover recognition, aliases, ambiguity, annotations, undo,
+- 74 Web unit tests cover recognition, aliases, ambiguity, annotations, undo,
   transport, export, mounting/disposal, workspace persistence and pending saves.
 - 27 Chromium browser tests cover the embedded build at root and nested bases,
   YAML and CML recordings, empty and absent recordings, actual file persistence,
@@ -76,7 +76,7 @@ locally before the separate review and PR publication step. See the
 The final CI output includes:
 
 ```text
-Tests  70 passed (70)
+Tests  74 passed (74)
 Embedded Studio matches the current Web build.
 27 passed
 INF no leaks found

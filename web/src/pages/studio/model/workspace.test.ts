@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { FeatureReferenceDocument } from "../../../shared/transport/index";
 import { featureDraftKey } from "./feature-drafts";
 import { draftKeyOf, initialWorkspace, reduceWorkspace, restoreWorkspace, serializeWorkspace, type Workspace } from "./workspace";
 
@@ -103,4 +104,38 @@ it("retains text typed during a save and stays on the feature now open", () => {
   const saved = reduceWorkspace(w, { type: "feature-saved", feature, document: { ...base, id: "saved-id", revision: "r1" } });
   expect(saved.feature).toEqual({ kind: "new", key: "another" });
   expect(saved.featureDrafts[featureDraftKey({ kind: "saved", id: "saved-id" })]).toMatchObject({ body: "Sent body and newer typing", revision: "r1" });
+});
+
+const sentReference: FeatureReferenceDocument = {
+  id: "term-use", reading: "names",
+  term: { concept: "aggregate", context: "sales", owner: "", name: "Order" },
+  from: 3, to: 8, quote: "Order",
+};
+const storedFeature = {
+  id: "saved-id", revision: "r2", title: "Place an order", body: "An Order is placed.",
+  references: [{ id: "term-use", from: 3, to: 8, quote: "Order", reading: "names" as const,
+    term: { name: "Order", owner: "", context: "sales", concept: "aggregate" } }],
+};
+
+it("clears the submitted annotation draft when the store changes only JSON property order", () => {
+  const feature = { kind: "new", key: "submitted" } as const;
+  const base = { ...storedFeature, references: [sentReference], revision: null };
+  let w = reduceWorkspace(initialWorkspace, { type: "open-feature", feature });
+  w = reduceWorkspace(w, { type: "feature-draft", feature, base, references: [sentReference] });
+  const saved = reduceWorkspace(w, { type: "feature-saved", feature, document: storedFeature });
+  expect(saved.featureDrafts).toEqual({});
+  expect(saved.feature).toEqual({ kind: "saved", id: storedFeature.id });
+});
+
+it.each([
+  { change: "moving an annotation", edit: (r: FeatureReferenceDocument): FeatureReferenceDocument => ({ ...r, from: 4, to: 9 }) },
+  { change: "marking a tied word plain", edit: (r: FeatureReferenceDocument): FeatureReferenceDocument => ({ ...r, reading: "plain", term: undefined }) },
+  { change: "tying a word to another context", edit: (r: FeatureReferenceDocument): FeatureReferenceDocument => ({ ...r, term: { ...r.term!, context: "fulfilment" } }) },
+])("keeps a newer draft after $change during a save", ({ edit }) => {
+  const feature = { kind: "saved", id: storedFeature.id } as const;
+  const newer = edit(sentReference);
+  let w = reduceWorkspace(initialWorkspace, { type: "open-feature", feature });
+  w = reduceWorkspace(w, { type: "feature-draft", feature, base: { ...storedFeature, revision: "r1" }, references: [newer] });
+  const saved = reduceWorkspace(w, { type: "feature-saved", feature, document: storedFeature });
+  expect(saved.featureDrafts[featureDraftKey(feature)]).toMatchObject({ references: [newer], revision: "r2" });
 });
