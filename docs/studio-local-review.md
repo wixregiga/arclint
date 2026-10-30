@@ -76,9 +76,14 @@ paint when no local draft is preserved. Real-store tests retain pending typing,
 synchronize prose and annotations, and verify subsequent saves preserve the other
 session's changes. Ordinary save acknowledgements retain undo history.
 
+Hosted CI also exposed a selection/search check that depended on mouse
+coordinates and visual-line wrapping. That interaction is now a separate real-
+store test using keyboard selection of exact prose, with explicit query and
+result assertions. It passed ten consecutive runs without retries.
+
 ## Validation limits
 
-The integrated checks cover 74 Web unit tests, 31 Chromium browser tests,
+The integrated checks cover 74 Web unit tests, 32 Chromium browser tests,
 compiled two-process persistence tests against real YAML and CML projects,
 architecture fixtures, embedded-asset freshness and the repository gates.
 The relation rendering test supplies response variants; persistence workflows

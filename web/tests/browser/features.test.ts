@@ -96,22 +96,6 @@ test.describe("writing a feature with the language at hand", () => {
     await expect(page.locator(".st-use--cue")).toHaveCount(3);
     await expect(atCursor).toContainText("Plain word");
 
-    // Selecting a phrase offers the language to tie it to, with each candidate's context.
-    await editor(page).dblclick({ position: { x: 10, y: 10 } });
-    await page.keyboard.press("End");
-    await page.keyboard.press("Shift+Home");
-    const selection = page.getByRole("region", { name: "Selection" });
-    await expect(selection).toBeVisible();
-    await selection.getByRole("searchbox").fill("password");
-    await expect(selection.getByRole("option").first()).toContainText("Password");
-    await selection.getByRole("option").first().focus();
-    await page.keyboard.press("End");
-    await page.keyboard.press("Home");
-    await page.keyboard.press("Enter");
-    await expect(selection.getByRole("button", { name: "Tie", exact: true })).toBeEnabled();
-    await shoot(page, "feature-02-selection-tie");
-    await page.keyboard.press("Escape");
-
     // Save through the store; the saved document carries UTF-16 positions and the quotes.
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("status")).toContainText("Saved feature “Invite a person into a tenant”");
@@ -494,3 +478,27 @@ for (const typing of [false, true]) {
     expect(saved.references).toEqual(changed.references);
   });
 }
+
+
+test("selection search filters the recorded language and supports keyboard picking", async ({ page, request }) => {
+  const body = "A Tenant invites a Person by their EmailAddress. The tenant owner sets a password for them.";
+  const stored = await saveFeature(request, { title: "Search a selection", body, references: [] });
+  await openFeatures(page);
+  await page.getByRole("navigation", { name: "Features" }).getByRole("button", { name: stored.title, exact: true }).click();
+  await expect(editor(page)).toContainText(body);
+  await editor(page).click();
+  await page.keyboard.press("ControlOrMeta+a");
+  const selection = page.getByRole("region", { name: "Selection" });
+  await expect(selection.getByText(`“${body}”`, { exact: true })).toBeVisible();
+  const query = selection.getByRole("searchbox");
+  await query.fill("password");
+  await expect(query).toHaveValue("password");
+  await expect(selection.getByRole("option").first()).toContainText("Password");
+  await selection.getByRole("option").first().focus();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Home");
+  await page.keyboard.press("Enter");
+  await expect(selection.getByRole("button", { name: "Tie", exact: true })).toBeEnabled();
+  await expect(query).toHaveValue("password");
+  expect((await listFeatures(request))[0]).toEqual(stored);
+});
