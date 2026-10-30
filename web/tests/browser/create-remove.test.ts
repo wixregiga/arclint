@@ -15,6 +15,7 @@ test.describe("beginning a language in an empty recording", () => {
     await expect(studio.card).toContainText("Still needed before it can be recorded: definition");
     await studio.field("Definition").fill("Lending books to members and getting them back.");
     await studio.card.getByRole("button", { name: "Record" }).click();
+    await expect(studio.card.getByRole("form")).toHaveCount(0);
     await expect(studio.card.getByRole("heading", { level: 1 })).toHaveText("lending");
     await expect(studio.navigator.getByRole("region", { name: "Context lending" })).toBeVisible();
 
@@ -27,6 +28,7 @@ test.describe("beginning a language in an empty recording", () => {
     await expect(studio.field("Definition")).toHaveValue("One member borrowing one book until it is returned.");
     await studio.field("Identity").fill("LoanID");
     await studio.card.getByRole("button", { name: "Record" }).click();
+    await expect(studio.card.getByRole("form")).toHaveCount(0);
     await expect(studio.card.getByRole("heading", { level: 1 })).toHaveText("Loan");
     await expect(studio.card).toContainText("LoanID");
 
@@ -34,6 +36,7 @@ test.describe("beginning a language in an empty recording", () => {
     await studio.field("Name").fill("Renewal");
     await studio.field("Definition").fill("One extension of a loan's due date.");
     await studio.card.getByRole("button", { name: "Record" }).click();
+    await expect(studio.card.getByRole("form")).toHaveCount(0);
     await expect(studio.card.getByRole("heading", { level: 1 })).toHaveText("Renewal");
     await expect(studio.card).toContainText("lending › Loan");
 
@@ -43,13 +46,33 @@ test.describe("beginning a language in an empty recording", () => {
     await studio.field("Key").fill("one-open-loan-per-copy");
     await studio.field("Statement").fill("A copy is on at most one open loan.");
     await studio.card.getByRole("button", { name: "Record" }).click();
+    await expect(studio.card.getByRole("form")).toHaveCount(0);
     await expect(studio.card.getByRole("heading", { level: 1 })).toHaveText("one-open-loan-per-copy");
 
     await studio.navigator.getByRole("button", { name: "Record in lending" }).click();
     await studio.navigator.getByRole("menuitem", { name: /Open question/ }).click();
     await studio.field("Key").fill("late-fees");
     await studio.field("Question").fill("Do we charge late fees at all?");
+    let releaseQuestion!: () => void;
+    let questionStarted!: () => void;
+    const questionHeld = new Promise<void>((done) => { releaseQuestion = done; });
+    const questionReached = new Promise<void>((done) => { questionStarted = done; });
+    await page.route("**/empty/api/define", async (route) => {
+      questionStarted();
+      await questionHeld;
+      await route.continue();
+    });
     await studio.card.getByRole("button", { name: "Record" }).click();
+    await questionReached;
+    try {
+      // The draft heading already names the question while its write is held.
+      await expect(studio.card.getByRole("heading", { level: 1 })).toHaveText("late-fees");
+      await expect(studio.card.getByRole("form", { name: "New Open question" })).toBeVisible();
+      expect((await studio.overview()).contexts![0].questions ?? []).toEqual([]);
+    } finally {
+      releaseQuestion();
+    }
+    await expect(studio.card.getByRole("form")).toHaveCount(0);
     await expect(studio.card.getByRole("heading", { level: 1 })).toHaveText("late-fees");
 
     let overview = await studio.overview();
@@ -116,6 +139,7 @@ test("begins a language with no domain file through the embedded Studio", async 
   await studio.field("Name").fill("lending");
   await studio.field("Definition").fill("Lending books to members.");
   await studio.card.getByRole("button", { name: "Record", exact: true }).click();
+  await expect(studio.card.getByRole("form")).toHaveCount(0);
   await expect(studio.card.getByRole("heading", { level: 1 })).toHaveText("lending");
   await page.reload();
   await expect(studio.card.getByRole("heading", { level: 1 })).toHaveText("lending");
