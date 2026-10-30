@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/wixregiga/arclint/internal/infrastructure/studio"
+
 	"github.com/charmbracelet/x/term"
 
 	"github.com/wixregiga/arclint/internal/application"
@@ -339,6 +341,7 @@ func composeStudio(root string, recording vocab.DomainRecording, overview applic
 		return mapserve.Server{}, fmt.Errorf("compose map server: %w", err)
 	}
 	studio := mapserve.Server{
+		Features: studio.FeatureFiles{Project: root},
 		Reports: mapserve.Reports{
 			Overview: func(w io.Writer, overview application.DomainOverview) error {
 				return jsonRenderer.Render(w, cli.DomainOverviewReport{Overview: overview})

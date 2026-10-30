@@ -60,6 +60,7 @@ type Accepted struct {
 
 // Server implements the CLI's MapServer port over HTTP.
 type Server struct {
+	Features application.FeatureDraftStore
 	Reports  Reports
 	Overview application.GetDomainOverview
 	Define   application.DefineDomainDefinition
@@ -118,6 +119,10 @@ func (s Server) Handler() (http.Handler, error) {
 	assets := serveWebAssets(files)
 	var edits sync.Mutex
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/features", s.features)
+	mux.HandleFunc("GET /api/feature", s.feature)
+	mux.HandleFunc("POST /api/feature", s.feature)
+	mux.HandleFunc("DELETE /api/feature", s.feature)
 	mux.HandleFunc("GET "+OverviewPath, s.overview)
 	mux.HandleFunc("GET "+AcceptedPath, s.accepted)
 	mux.HandleFunc("POST "+ProjectPath, oneAtATime(&edits, s.project))
