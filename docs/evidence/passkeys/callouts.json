@@ -1,0 +1,19 @@
+{
+  "feature": "54c300236da7b0fd98b111834c62b0d3",
+  "before": "before-raw.png",
+  "after": "after-raw.png",
+  "sketchImage": "passkeys.png",
+  "callouts": [
+    {"n": 1, "part": "current-login",
+     "before": {"x": 252, "y": 238, "w": 396, "h": 235},
+     "after":  {"x": 252, "y": 297, "w": 396, "h": 237},
+     "now": "Email + password is the only way in",
+     "target": "Still there, moved under 'Other ways to sign in'"},
+    {"n": 2, "part": "passkey-branch",
+     "after": {"x": 252, "y": 236, "w": 396, "h": 30},
+     "target": "New way in: phone or laptop unlocks with face or fingerprint"},
+    {"n": 3, "part": "passkey-prompt",
+     "after": {"x": 252, "y": 181, "w": 396, "h": 56},
+     "target": "'Sign in with passkey' button at the top"}
+  ]
+}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"strings"
 )
 
 // FeatureSketch names the Excalidraw drawing a feature carries. The drawing is a
@@ -116,6 +117,7 @@ func ParseSketch(data []byte) ([]SketchPart, error) {
 			label = labels[e.ID]
 		}
 		x, y := math.Min(e.X, e.X+e.Width), math.Min(e.Y, e.Y+e.Height)
+		label = strings.Join(strings.Fields(label), " ")
 		parts = append(parts, SketchPart{ID: id, Label: label, Links: e.CustomData.Links, Region: Region{
 			X: int(math.Round(x - minX)), Y: int(math.Round(y - minY)),
 			W: int(math.Round(math.Abs(e.Width))), H: int(math.Round(math.Abs(e.Height))),
