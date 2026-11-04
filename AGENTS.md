@@ -42,6 +42,7 @@ IMPORTANT: work in this order on every change.
 - `arclint agents hooks status`: show which configuration files list the workflow hooks and when a hook event last reached this project; Codex runs them after you trust them in /hooks
 - `arclint agents md --write`: refresh this block after changing rules.arclint.yaml or the vocabulary
 - `arclint agents skill`: write the domain-librarian skill to `.agents/skills/domain-librarian/` for Codex and `.claude/skills/domain-librarian/` for Claude Code when your harness lacks it
+- `arclint feature evidence <callouts.json>`: for a change a user sees: number it 1, 2, 3 on before and after screenshots, link each number to a named part of the feature's Excalidraw sketch, and paste the written evidence.md into the pull request (`feature sketch parts <id>` lists the parts; `feature skill` installs the feature-evidence skill)
 - `arclint baseline`: manage the committed baseline of adopted findings
 - `arclint patterns`: list the Patterns that resolve offline (embedded, vendored, authored); `patterns install <pattern>` extends rules.arclint.yaml with one, `patterns vendor` copies one under `.arclint/patterns`
 

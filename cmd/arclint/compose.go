@@ -8,6 +8,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/wixregiga/arclint/internal/infrastructure/annotate"
 	"io"
 	"io/fs"
 	"os"
@@ -316,6 +317,7 @@ func run(args []string) int {
 		cli.NewBaselineCommand(capture, refresh, renderer),
 		cli.NewPatternsCommand(patternCommands, renderer),
 		cli.NewSDKCommand(initializeSDK, renderer),
+		cli.NewFeatureCommand(composeFeature(root, artifactWriter)),
 	)
 	// Context, the full check and domain changes report themselves to the
 	// workflow hooks, which then need not guess from shell text.
@@ -839,4 +841,19 @@ func runsWithoutRuleset(rest []string) bool {
 	return fp == "" || fp == "help" || fp == "completion" ||
 		fp == "__complete" || fp == "__completeNoDesc" || fp == "patterns" ||
 		(len(rest) >= 2 && rest[0] == "agents" && rest[1] == "hooks")
+}
+
+// composeFeature wires the feature commands to the same feature files Studio
+// edits, the standard-library PNG annotator, and the artifact writer.
+func composeFeature(root string, writer application.ArtifactWriter) cli.FeatureUseCases {
+	files := studio.FeatureFiles{Project: root}
+	return cli.FeatureUseCases{
+		List:     application.ListFeatureDrafts{Store: files},
+		Get:      application.GetFeatureDraft{Store: files},
+		Save:     application.SaveFeatureDraft{Store: files},
+		Sketch:   application.AttachFeatureSketch{Store: files, Files: files},
+		Parts:    application.ReadSketchParts{Store: files, Files: files},
+		Evidence: application.BuildFeatureEvidence{Store: files, Files: files, Annotator: annotate.PNG{}, Writer: writer},
+		Skill:    application.PublishFeatureEvidenceSkill{Writer: writer},
+	}
 }
