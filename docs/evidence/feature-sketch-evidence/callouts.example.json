@@ -1,6 +1,6 @@
 {
- "before": "/workspace/arclint-studio-proto/shots/01-full-screen.png",
- "after": "/workspace/arclint-studio-proto/shots/02-tenant-selected.png",
+ "before": "before-raw.png",
+ "after": "after-raw.png",
  "sketchImage": "docs/evidence/feature-sketch-evidence/concept-details.png",
  "callouts": [
   {
