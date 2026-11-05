@@ -67,6 +67,7 @@ func AgentCommandSurface() []AgentCommandDoc {
 		{"agents hooks status", "agents hooks status", "show which configuration files list the workflow hooks and when a hook event last reached this project; Codex runs them after you trust them in /hooks"},
 		{"agents md", "agents md --write", "refresh this block after changing " + rule.RulesetFileName + " or the vocabulary"},
 		{"agents skill", "agents skill", "write the " + vocab.SkillName + " skill to `" + vocab.AgentsSkillDirectory + "/` for Codex and `" + vocab.ClaudeSkillDirectory + "/` for Claude Code when your harness lacks it"},
+		{"feature evidence", "feature evidence <callouts.json>", "for a change a user sees: number it 1, 2, 3 on before and after screenshots, link each number to a named part of the feature's Excalidraw sketch, and paste the written evidence.md into the pull request (`feature sketch parts <id>` lists the parts; `feature skill` installs the feature-evidence skill)"},
 		{"baseline", "baseline", "manage the committed baseline of adopted findings"},
 		{"patterns", "patterns", "list the Patterns that resolve offline (embedded, vendored, authored); `patterns install <pattern>` extends " + rule.RulesetFileName + " with one, `patterns vendor` copies one under `.arclint/patterns`"},
 	}

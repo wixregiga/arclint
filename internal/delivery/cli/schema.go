@@ -28,10 +28,10 @@ func newSchemaCommand(short, long, example string, publish schemaPublisher, rend
 		MaxArgs: 0,
 		Flags: []Flag{
 			{Name: "write", Bool: true, Doc: "write the schema under --dir instead of printing it"},
-			{Name: "dir", Default: application.SchemaDirectory, Doc: "directory --write puts the schema into"},
+			{Name: flagDir, Default: application.SchemaDirectory, Doc: "directory --write puts the schema into"},
 		},
 		Run: func(ctx Context) error {
-			dir := ctx.String("dir")
+			dir := ctx.String(flagDir)
 			if !ctx.Bool("write") {
 				if dir != application.SchemaDirectory {
 					return ConfigError(fmt.Errorf("--dir only applies with --write"))

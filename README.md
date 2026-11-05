@@ -331,6 +331,37 @@ or Context Mapper installation. `arclint domain convert domain.arclint.cml`
 moves a project to CML, and `arclint domain export` writes a copy. See
 [Domain files in CML](docs/site/content/docs/cml.md).
 
+### Feature sketches and before/after evidence
+
+A feature (`.arclint/studio/features/<id>.json`, the document Studio's Features
+view edits) can carry a sketch of the target: a standard `.excalidraw` file
+stored beside it as `<id>.sketch.excalidraw`, so the drawing, the feature text
+and the recorded domain stay in one place. A named part is any element whose
+`customData` holds `{"arclintId": "<short-id>"}`, with optional `label` and
+`links` to invariants or domain terms. Callouts address the `arclintId`, never
+the Excalidraw element id, which editors regenerate. A one-off sketch can
+stay outside any feature.
+
+```sh
+arclint feature new "Tenant switcher"
+arclint feature sketch add <id> tenant-switcher.excalidraw
+arclint feature sketch parts <id>            # or --file one-off.excalidraw
+arclint feature evidence callouts.json --out docs/evidence/my-branch \
+  --link-base https://raw.githubusercontent.com/<owner>/<repo>/my-branch/
+arclint feature skill                        # installs the feature-evidence skill
+```
+
+`feature evidence` reads a callouts file: the before (current) and after
+(target) screenshots, an optional PNG export of the sketch (`sketchImage`,
+padding 10, scale 1), and callouts numbered 1, 2, 3... that each name a sketch
+part and its box on each screenshot. It draws the same numbers on every image
+and writes `before.png`, `after.png`, `sketch.png` and `evidence.md`. The
+markdown is a pull request section whose table links each number to
+`<sketch>#<arclintId>`. It refuses numbers out of order and parts the sketch
+lacks. `arclint feature skill` writes the `feature-evidence` skill to
+`.agents/skills` and `.claude/skills`, so coding agents in T3 Code, VS Code,
+Codex or Claude Code attach the pack to their request and their pull request.
+
 ## Outcomes and exit codes
 
 A good linter answers some basic questions about its rules:
@@ -377,6 +408,7 @@ patterns            list the patterns that resolve offline: embedded, vendored, 
 patterns install    extend rules.arclint.yaml with one pattern; vendors it first when it came from the registry
 patterns vendor     copy one pattern under .arclint/patterns/<namespace>/<name>/ with its manifest
 patterns export     publish one pattern into a registry tree on disk (--dir)
+feature             features, their Excalidraw sketches (sketch add/parts), and before/after evidence packs for pull requests
 sdk init            write arclint.d.ts + tsconfig.json for extension authors
 init                draft a starter rules.arclint.yaml (--pattern bare|<reference> --languages go,ts,py --force)
 completion <shell>  shell completion with live rule ids and zone names (bash|zsh|fish|powershell)

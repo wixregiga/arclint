@@ -34,6 +34,7 @@ type FeatureDraft struct {
 	Title      string             `json:"title"`
 	Body       string             `json:"body"`
 	References []FeatureReference `json:"references"`
+	Sketch     *FeatureSketch     `json:"sketch,omitempty"`
 }
 
 // FeatureSummary identifies one saved document in the feature list.
@@ -54,7 +55,7 @@ type FeatureDraftStore interface {
 // CheckFeatureDraft checks the document shape without resolving its annotations.
 // Collapsed and out-of-body ranges remain available as unresolved references.
 func CheckFeatureDraft(d FeatureDraft) error {
-	if d.References == nil {
+	if d.References == nil || checkSketch(d.Sketch) != nil {
 		return ErrFeatureInput
 	}
 	ids := make(map[string]bool, len(d.References))

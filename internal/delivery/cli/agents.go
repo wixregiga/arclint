@@ -79,13 +79,13 @@ func newAgentsSkillCommand(
 		Short: "write domain-librarian skill artifacts (SKILL.md, VOCAB.yaml) and the domain schema for human YAML editors",
 		Flags: []Flag{
 			{
-				Name:   "dir",
+				Name:   flagDir,
 				Repeat: true,
 				Doc:    "directory to write skill artifacts into; repeatable; default " + strings.Join(application.SkillDirectories(nil), " and ") + "; the schema always lands under " + application.SchemaDirectory,
 			},
 		},
 		Run: func(ctx Context) error {
-			dirs := application.SkillDirectories(ctx.Strings("dir"))
+			dirs := application.SkillDirectories(ctx.Strings(flagDir))
 			writes := make([]ArtifactWrite, 0, 2*len(dirs)+1)
 
 			for _, dir := range dirs {

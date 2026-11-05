@@ -203,9 +203,12 @@ func (s FeatureFiles) Save(d application.FeatureDraft) (application.FeatureDraft
 		return d, application.ErrFeatureInput
 	}
 	err := s.withFiles(d.ID == "", func(root *os.Root) error {
-		id, err := featureAddress(root, d)
+		id, old, err := featureAddress(root, d)
 		if err != nil {
 			return err
+		}
+		if d.Sketch == nil {
+			d.Sketch = old.Sketch
 		}
 		d.ID = id
 		d.Revision = ""
@@ -293,6 +296,11 @@ func (s FeatureFiles) Delete(id, revision string) error {
 		if err := root.Remove(id + ".json"); err != nil {
 			return fmt.Errorf("delete feature: %w", err)
 		}
+		if old.Sketch != nil {
+			if err := root.Remove(old.Sketch.File); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("delete feature sketch: %w", err)
+			}
+		}
 		return nil
 	})
 	if errors.Is(err, os.ErrNotExist) {
@@ -301,29 +309,30 @@ func (s FeatureFiles) Delete(id, revision string) error {
 	return err
 }
 
-func featureAddress(root *os.Root, draft application.FeatureDraft) (string, error) {
+// featureAddress returns the id to save under and, for an existing feature, its stored document.
+func featureAddress(root *os.Root, draft application.FeatureDraft) (string, application.FeatureDraft, error) {
 	if draft.ID != "" {
 		old, err := readFeature(root, draft.ID)
 		if err != nil {
-			return "", err
+			return "", old, err
 		}
 		if old.Revision != draft.Revision {
-			return "", application.ErrFeatureConflict
+			return "", old, application.ErrFeatureConflict
 		}
-		return draft.ID, nil
+		return draft.ID, old, nil
 	}
 	for {
 		var random [16]byte
 		if _, err := rand.Read(random[:]); err != nil {
-			return "", fmt.Errorf("feature id: %w", err)
+			return "", application.FeatureDraft{}, fmt.Errorf("feature id: %w", err)
 		}
 		id := hex.EncodeToString(random[:])
 		_, err := root.Lstat(id + ".json")
 		if errors.Is(err, os.ErrNotExist) {
-			return id, nil
+			return id, application.FeatureDraft{}, nil
 		}
 		if err != nil {
-			return "", fmt.Errorf("feature id: %w", err)
+			return "", application.FeatureDraft{}, fmt.Errorf("feature id: %w", err)
 		}
 	}
 }

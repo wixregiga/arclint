@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/wixregiga/arclint/main/docs/schemas/rules.arclint.schema.json
+# ArcLint architecture contracts.
+# Grow this file zone by zone: declare real Zones under `zones`,
+# then state what each may import under `rules`.
+# Query commands: arclint rules [selector] · arclint context <path>
+
+runtime: [go]
+
+scan:
+  # error | warn | ignore for imports that classify neither stdlib,
+  # internal, nor declared in the dependency manifest.
+  unknown_imports: warn
+
+zones:
+  # A Zone is a name and the paths it owns: one glob, a list of globs,
+  # or {paths, description}. Split into real Zones as the architecture
+  # takes shape.
+  source: "**"
+
+rules:
+  # Every Rule has an id, the Zone(s) it judges under `on`, and exactly
+  # one constraint: imports, structure, naming, content, layers,
+  # imported_by, independent, acyclic, or uses.
+  source/dependencies:
+    rationale: "Source imports no other declared Zone."
+    on: source
+    imports:
+      # An allow-list of other declared Zones. Empty means this Zone
+      # may import no other declared Zone; with one Zone this is
+      # vacuously true and starts binding the moment you split Zones.
+      internal: []
