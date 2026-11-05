@@ -164,9 +164,9 @@ links every number to its sketch part.`,
 			},
 			{
 				Name: "skill", Short: "install the feature-evidence agent skill for coding agents",
-				Flags: []Flag{{Name: "dir", Repeat: true, Doc: "directory to write SKILL.md into; repeatable; default " + strings.Join(application.FeatureEvidenceSkillDirectories, " and ")}},
+				Flags: []Flag{{Name: flagDir, Repeat: true, Doc: "directory to write SKILL.md into; repeatable; default " + strings.Join(application.FeatureEvidenceSkillDirectories, " and ")}},
 				Run: func(ctx Context) error {
-					dirs := ctx.Strings("dir")
+					dirs := ctx.Strings(flagDir)
 					if len(dirs) == 0 {
 						dirs = application.FeatureEvidenceSkillDirectories
 					}
@@ -211,7 +211,7 @@ func printParts(w io.Writer, parts []application.SketchPart) error {
 
 func readEvidenceRequest(path string) (application.EvidenceRequest, error) {
 	var req application.EvidenceRequest
-	b, err := os.ReadFile(path) //nolint:gosec // the user names the callouts file
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return req, fmt.Errorf("read callouts: %w", err)
 	}

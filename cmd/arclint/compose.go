@@ -8,13 +8,13 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/wixregiga/arclint/internal/infrastructure/annotate"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/wixregiga/arclint/internal/infrastructure/annotate"
 	"github.com/wixregiga/arclint/internal/infrastructure/studio"
 
 	"github.com/charmbracelet/x/term"

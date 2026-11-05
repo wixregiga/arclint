@@ -191,7 +191,10 @@ func sketchSource(store FeatureDraftStore, files SketchFiles, featureID, path st
 			return nil, "", errors.New("name a feature or a sketch file")
 		}
 		data, err := files.Read(path)
-		return data, path, err
+		if err != nil {
+			return nil, "", fmt.Errorf("read sketch: %w", err)
+		}
+		return data, path, nil
 	}
 	draft, err := store.Get(featureID)
 	if err != nil {
@@ -201,5 +204,8 @@ func sketchSource(store FeatureDraftStore, files SketchFiles, featureID, path st
 		return nil, "", fmt.Errorf("feature %s has no sketch; attach one with `arclint feature sketch add`", draft.ID)
 	}
 	data, err := files.Sketch(draft.ID, draft.Sketch.File)
-	return data, FeatureFileDirectory + "/" + draft.Sketch.File, err
+	if err != nil {
+		return nil, "", fmt.Errorf("read sketch: %w", err)
+	}
+	return data, FeatureFileDirectory + "/" + draft.Sketch.File, nil
 }

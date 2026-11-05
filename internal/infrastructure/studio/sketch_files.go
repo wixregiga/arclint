@@ -11,7 +11,7 @@ const sketchLimit = 16 << 20
 
 // Read reads an input image named on the command line.
 func (FeatureFiles) Read(path string) ([]byte, error) {
-	b, err := os.ReadFile(path) //nolint:gosec // the user names the image to read
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read image: %w", err)
 	}
@@ -41,7 +41,10 @@ func (s FeatureFiles) Sketch(featureID, name string) ([]byte, error) {
 		}
 		defer func() { _ = f.Close() }()
 		b, err = io.ReadAll(io.LimitReader(f, sketchLimit))
-		return err
+		if err != nil {
+			return fmt.Errorf("read sketch: %w", err)
+		}
+		return nil
 	})
 	return b, err
 }

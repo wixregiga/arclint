@@ -139,11 +139,11 @@ func (u BuildFeatureEvidence) Execute(req EvidenceRequest) (EvidencePack, error)
 		if err != nil {
 			return fail(fmt.Errorf("%s: %w", in.name, err))
 		}
-		if _, p, err := u.Writer.Write(req.Out, in.name, out); err != nil {
+		_, p, err := u.Writer.Write(req.Out, in.name, out)
+		if err != nil {
 			return fail(err)
-		} else {
-			pack.Files = append(pack.Files, p)
 		}
+		pack.Files = append(pack.Files, p)
 	}
 	pack.Markdown = evidenceMarkdown(title, sketchLink, req, byID)
 	_, p, err := u.Writer.Write(req.Out, EvidenceMarkdown, []byte(pack.Markdown))
