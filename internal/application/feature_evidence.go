@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"path/filepath"
 	"strings"
 )
 
@@ -37,7 +38,7 @@ type EvidenceRequest struct {
 	// Out is the project-relative directory the pack is written into.
 	Out string `json:"-"`
 	// LinkBase prefixes every project-relative link in the markdown, e.g. a
-	// raw.githubusercontent.com URL at the pushed branch; empty keeps paths relative.
+	// raw.githubusercontent.com URL at the pushed branch; empty makes links relative to evidence.md.
 	LinkBase string `json:"-"`
 }
 
@@ -154,7 +155,18 @@ func (u BuildFeatureEvidence) Execute(req EvidenceRequest) (EvidencePack, error)
 }
 
 func evidenceMarkdown(title, sketchLink string, req EvidenceRequest, parts map[string]SketchPart) string {
-	link := func(p string) string { return req.LinkBase + path.Clean(p) }
+	// With a link base, links are project paths under it. Without one, they are
+	// relative to evidence.md, which lives in req.Out, so the committed file renders.
+	link := func(p string) string {
+		if req.LinkBase != "" {
+			return req.LinkBase + path.Clean(p)
+		}
+		rel, err := filepath.Rel(filepath.FromSlash(req.Out), filepath.FromSlash(p))
+		if err != nil {
+			return path.Clean(p)
+		}
+		return filepath.ToSlash(rel)
+	}
 	out := func(name string) string { return link(path.Join(req.Out, name)) }
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Before and after: %s\n\n", cell(title))

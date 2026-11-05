@@ -139,7 +139,7 @@ links every number to its sketch part.`,
     --link-base https://raw.githubusercontent.com/me/repo/my-branch/`,
 				Flags: []Flag{
 					{Name: "out", Default: "evidence", Doc: "directory, relative to the project root, to write the pack into"},
-					{Name: "link-base", Doc: "prefix for links in evidence.md, e.g. a raw URL at the pushed branch; default keeps them project-relative"},
+					{Name: "link-base", Doc: "prefix for links in evidence.md, e.g. a raw URL at the pushed branch; default makes them relative to evidence.md"},
 				},
 				Run: func(ctx Context) error {
 					if len(ctx.Args) != 1 {

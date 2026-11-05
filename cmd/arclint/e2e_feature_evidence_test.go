@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -135,6 +136,39 @@ func TestFeatureEvidenceSkillInstall(t *testing.T) {
 		b, err := os.ReadFile(filepath.Join(root, dir, "skills/feature-evidence/SKILL.md"))
 		if err != nil || !strings.HasPrefix(string(b), "---\nname: feature-evidence\n") {
 			t.Fatalf("%s skill: %v", dir, err)
+		}
+	}
+}
+
+// Without --link-base, every link in evidence.md resolves from the file itself,
+// so the pack renders when it is committed or opened where it was written.
+func TestFeatureEvidenceDefaultLinksResolveFromThePack(t *testing.T) {
+	root, id := evidenceProject(t)
+	if _, stderr, code := runBin(t, root, os.Environ(), "feature", "sketch", "add", id, "save.excalidraw"); code != 0 {
+		t.Fatalf("sketch add: %d %s", code, stderr)
+	}
+	callouts, _ := json.Marshal(map[string]any{
+		"feature": id, "before": "before-raw.png", "after": "after-raw.png",
+		"callouts": []map[string]any{{"n": 1, "part": "save-button",
+			"before": map[string]int{"x": 50, "y": 60, "w": 100, "h": 40},
+			"after":  map[string]int{"x": 200, "y": 160, "w": 100, "h": 40}}},
+	})
+	write(t, root, "callouts.json", string(callouts))
+	if _, stderr, code := runBin(t, root, os.Environ(), "feature", "evidence", "callouts.json", "--out", "docs/pack"); code != 0 {
+		t.Fatalf("evidence: %d %s", code, stderr)
+	}
+	pack := filepath.Join(root, "docs/pack")
+	md, err := os.ReadFile(filepath.Join(pack, "evidence.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	links := regexp.MustCompile(`\]\(([^)#]+)(#[^)]*)?\)`).FindAllStringSubmatch(string(md), -1)
+	if len(links) < 3 {
+		t.Fatalf("expected image and sketch links in:\n%s", md)
+	}
+	for _, l := range links {
+		if _, err := os.Stat(filepath.Join(pack, filepath.FromSlash(l[1]))); err != nil {
+			t.Errorf("link %q does not resolve from evidence.md: %v", l[1], err)
 		}
 	}
 }
