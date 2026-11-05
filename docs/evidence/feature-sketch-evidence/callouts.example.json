@@ -1,59 +1,29 @@
 {
- "before": "before-raw.png",
- "after": "after-raw.png",
+ "before": "docs/evidence/feature-sketch-evidence/before-raw.png",
+ "after": "docs/evidence/feature-sketch-evidence/after-raw.png",
  "sketchImage": "docs/evidence/feature-sketch-evidence/concept-details.png",
  "callouts": [
   {
    "n": 1,
    "part": "nav-selection",
-   "before": {
-    "x": 39,
-    "y": 107,
-    "w": 218,
-    "h": 25
-   },
-   "after": {
-    "x": 39,
-    "y": 255,
-    "w": 218,
-    "h": 27
-   },
+   "before": {"x": 39, "y": 107, "w": 218, "h": 25},
+   "after": {"x": 39, "y": 255, "w": 218, "h": 27},
    "now": "Role is selected",
    "target": "Tenant is selected"
   },
   {
    "n": 2,
    "part": "map-node",
-   "before": {
-    "x": 357,
-    "y": 374,
-    "w": 31,
-    "h": 31
-   },
-   "after": {
-    "x": 530,
-    "y": 374,
-    "w": 34,
-    "h": 31
-   },
+   "before": {"x": 357, "y": 374, "w": 31, "h": 31},
+   "after": {"x": 530, "y": 374, "w": 34, "h": 31},
    "now": "Role node highlighted",
    "target": "Tenant node highlighted"
   },
   {
    "n": 3,
    "part": "details-panel",
-   "before": {
-    "x": 1162,
-    "y": 87,
-    "w": 278,
-    "h": 267
-   },
-   "after": {
-    "x": 1162,
-    "y": 87,
-    "w": 278,
-    "h": 373
-   },
+   "before": {"x": 1162, "y": 87, "w": 278, "h": 267},
+   "after": {"x": 1162, "y": 87, "w": 278, "h": 373},
    "now": "Role's identity, meaning, events",
    "target": "Tenant's identity, meaning, holds and events"
   }
