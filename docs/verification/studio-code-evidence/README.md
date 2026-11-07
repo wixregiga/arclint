@@ -29,8 +29,10 @@ The source reads and the attribution are proved below the browser:
   another origin, and a tree digest showing nothing in the project changes.
 - `internal/application/read_source_excerpt_test.go`: bounds, text-only,
   the sensitive path and content policy, and one observation per assessment.
-- `internal/infrastructure/studio/source_files_test.go`: `os.Root`
-  confinement of links and the size limit.
+- `internal/infrastructure/studio/source_files_test.go` and
+  `source_files_unix_test.go`: links and folder links refused, a folder
+  swapped for a link or a pipe during reads never followed or waited on,
+  and the size limit.
 - `internal/domain/conformance/evidence_attribution_test.go`: the recorded
   invariants of EntryEvidence and EvidenceAttribution.
 

@@ -57,9 +57,12 @@ as it is on disk when it opens. The assessment keeps no copy of what it read, so
 the peek always says the lines may differ from the assessed code, and adds that
 the file changed when its size differs from the size the assessment observed. An
 edit that keeps the size is not detected, which is why the warning always shows. The server reads only
-source files the same assessment analyzed, plus the domain recording, through
-`os.Root` on the project. It never follows a link, even one inside the project,
-and refuses a pipe or device without waiting on it. A snapshot replaced by four
+source files the same assessment analyzed, plus the domain recording, walking
+the path one folder at a time from the project and continuing from each folder
+it holds open (`openat` with `O_NOFOLLOW` and `O_NONBLOCK` on Unix, `os.Root`
+with identity checks elsewhere). It never follows a link, even one inside the
+project or one swapped in during the walk, and refuses a pipe or device without
+waiting on it. A snapshot replaced by four
 newer assessments is answered as stale. A file is withheld
 whole when its name or content looks like it holds a secret, a file over 2 MiB
 or one that is not text is refused, and long lines are cut. Both routes answer only

@@ -24,7 +24,7 @@ func TestDraftLifecycle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(path, original, 0600); err != nil {
+			if err := os.WriteFile(path, original, 0o600); err != nil {
 				t.Fatal(err)
 			}
 			s := FeatureFiles{Project: root}
@@ -101,6 +101,7 @@ func TestDraftLifecycle(t *testing.T) {
 		})
 	}
 }
+
 func TestDraftRefusals(t *testing.T) {
 	root := t.TempDir()
 	s := FeatureFiles{Project: root}
@@ -112,7 +113,7 @@ func TestDraftRefusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(root, ".arclint", "studio", "features", d.ID+".json")
-	if err = os.WriteFile(path, []byte("{broken"), 0600); err != nil {
+	if err = os.WriteFile(path, []byte("{broken"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = s.Get(d.ID); err == nil {
@@ -125,7 +126,7 @@ func TestDraftRefusals(t *testing.T) {
 		t.Fatal(err)
 	}
 	outside := filepath.Join(t.TempDir(), "outside")
-	if err = os.WriteFile(outside, []byte("unchanged"), 0600); err != nil {
+	if err = os.WriteFile(outside, []byte("unchanged"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err = os.Symlink(outside, path); err != nil {
@@ -179,10 +180,10 @@ func TestDraftMetadataIgnorePreservesAdopterFile(t *testing.T) {
 			project := t.TempDir()
 			directory := filepath.Join(project, ".arclint", "studio", "features")
 			if existing != "" {
-				if err := os.MkdirAll(directory, 0700); err != nil {
+				if err := os.MkdirAll(directory, 0o700); err != nil {
 					t.Fatal(err)
 				}
-				if err := os.WriteFile(filepath.Join(directory, ".gitignore"), []byte(existing), 0600); err != nil {
+				if err := os.WriteFile(filepath.Join(directory, ".gitignore"), []byte(existing), 0o600); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -202,7 +203,7 @@ func TestDraftMetadataIgnorePreservesAdopterFile(t *testing.T) {
 			if existing != "" {
 				return
 			}
-			if err := os.WriteFile(filepath.Join(directory, ".write-crashed"), []byte("incomplete"), 0600); err != nil {
+			if err := os.WriteFile(filepath.Join(directory, ".write-crashed"), []byte("incomplete"), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			for _, args := range [][]string{{"init", "-q", project}, {"-C", project, "ls-files", "--others", "--exclude-standard"}} {
@@ -226,7 +227,7 @@ func TestDraftFilesRemainConfinedAndReadable(t *testing.T) {
 		t.Fatal(err)
 	}
 	directory := filepath.Join(project, ".arclint", "studio", "features")
-	if err := os.WriteFile(filepath.Join(directory, ".gitignore"), []byte(".lock\n.write-*\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, ".gitignore"), []byte(".lock\n.write-*\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if entries, err := store.List(); err != nil || len(entries) != 1 {
@@ -237,7 +238,7 @@ func TestDraftFilesRemainConfinedAndReadable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(outside, draft.ID+".json"), original, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(outside, draft.ID+".json"), original, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	held := directory + "-held"
@@ -268,7 +269,7 @@ func TestDraftFilesRemainConfinedAndReadable(t *testing.T) {
 		t.Fatal(err)
 	}
 	invalid := []byte(`{"version":1,"feature":{"id":"` + draft.ID + `","revision":"","references":[]}}`)
-	if err := os.WriteFile(filepath.Join(directory, draft.ID+".json"), invalid, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, draft.ID+".json"), invalid, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.Get(draft.ID); err == nil {

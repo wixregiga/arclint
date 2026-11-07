@@ -93,3 +93,58 @@ func TestSourceFilesNeverFollowAFolderSwappedForALink(t *testing.T) {
 		t.Skip("the folder could not be swapped here")
 	}
 }
+
+// A folder swapped again and again for a named pipe, while reads run,
+// never makes a read wait: every read answers, file or refusal, within
+// a bound.
+func TestSourceFilesNeverWaitOnAFolderSwappedForAPipe(t *testing.T) {
+	project := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(project, "src"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "src", "a.go"), []byte("package src\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	src, real := filepath.Join(project, "src"), filepath.Join(project, "src.real")
+	stop := make(chan struct{})
+	swapped := make(chan int)
+	go func() {
+		n := 0
+		defer func() { swapped <- n }()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			if os.Rename(src, real) != nil || syscall.Mkfifo(src, 0o600) != nil {
+				return
+			}
+			runtime.Gosched()
+			if os.Remove(src) != nil || os.Rename(real, src) != nil {
+				return
+			}
+			n++
+		}
+	}()
+	files := studio.SourceFiles{Project: project}
+	deadline := time.Now().Add(1500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_, _ = files.ReadSource("src/a.go", 1024)
+		}()
+		select {
+		case <-done:
+		case <-time.After(3 * time.Second):
+			close(stop)
+			<-swapped
+			t.Fatal("a read waited on a folder swapped for a pipe")
+		}
+	}
+	close(stop)
+	if n := <-swapped; n == 0 {
+		t.Skip("the folder could not be swapped here")
+	}
+}
