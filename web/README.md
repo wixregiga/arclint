@@ -68,10 +68,13 @@ site's page cannot send, and refuse a request a browser marks as cross-site.
 Requests that arrive while an assessment runs share its result, and a request
 already gone starts none. Assessing writes no
 source file and no recording; an extension may refresh its transpile cache
-under `.arclint/cache`. An assessment costs what `arclint check` costs, plus one
-pass that attributes its findings. One unbenchmarked measurement on one machine
-took about 2.6 s warm on this repository; it promises nothing about other
-machines or repositories.
+under `.arclint/cache`. An assessment runs the check `arclint check` runs, with
+one observation of the project, and adds work of its own: it extracts
+declarations when no configured rule already asks for them, locates the recorded
+entries in memory a second time, and attributes the findings. That overhead is
+not measured separately and is not claimed to be small. One unbenchmarked run on
+one machine took about 2.6 s warm on this repository; it promises nothing about
+other machines or repositories.
 
 Features provides freeform writing with inline language cues, aliases,
 definitions and connections. Authors can deliberately tie an occurrence to a
