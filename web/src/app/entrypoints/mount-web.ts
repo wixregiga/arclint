@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { App } from "../composition/App";
 import { inMemoryStudioMemory, type StudioMemory } from "../../shared/lib/studio-memory/index";
-import { createHttpFeatureStore, createHttpGateway, type FeatureStore, type StudioGateway } from "../../shared/transport/index";
+import { createHttpCodeEvidence, createHttpFeatureStore, createHttpGateway, type CodeEvidenceSource, type FeatureStore, type StudioGateway } from "../../shared/transport/index";
 import { studioStylesheet } from "../styles/studio-stylesheet";
 
 /**
@@ -11,7 +11,9 @@ import { studioStylesheet } from "../styles/studio-stylesheet";
  * edits, in-memory for the mount's lifetime when none is given; and a
  * feature store, separately. A host that lends a base gets a store under
  * the same base; a host that lends only a gateway and no store gets the
- * language alone, and the Features view says it cannot save.
+ * language alone, and the Features view says it cannot save. Code
+ * evidence follows the store: lent explicitly, or under the base, and
+ * none when the host lends only a gateway; the inspector then says so.
  */
 export interface StudioHostDependencies {
   gateway?: StudioGateway;
@@ -19,6 +21,7 @@ export interface StudioHostDependencies {
   memory?: StudioMemory;
   fetch?: typeof fetch;
   featureStore?: FeatureStore | null;
+  codeEvidence?: CodeEvidenceSource | null;
 }
 
 export interface StudioMount {
@@ -49,9 +52,10 @@ export function mountStudio(container: HTMLElement, dependencies: StudioHostDepe
   const base = new URL(dependencies.apiBase ?? "./", document.baseURI).toString();
   const gateway = dependencies.gateway ?? createHttpGateway({ base, fetch: dependencies.fetch });
   const featureStore = dependencies.featureStore !== undefined ? dependencies.featureStore : dependencies.gateway ? null : createHttpFeatureStore({ base, fetch: dependencies.fetch });
+  const codeEvidence = dependencies.codeEvidence !== undefined ? dependencies.codeEvidence : dependencies.gateway ? null : createHttpCodeEvidence({ base, fetch: dependencies.fetch });
   const memory = dependencies.memory ?? inMemoryStudioMemory();
   const reactRoot: Root = createRoot(root);
-  reactRoot.render(createElement(App, { gateway, memory, featureStore }));
+  reactRoot.render(createElement(App, { gateway, memory, featureStore, codeEvidence }));
 
   let disposed = false;
   return {

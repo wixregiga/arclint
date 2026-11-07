@@ -18,6 +18,7 @@ import {
   type Entry,
   type Standing,
 } from "../../../entities/language/index";
+import type { ReactNode } from "react";
 import { EntryForm, RemoveEntryButton, type DraftValues } from "../../../features/edit-entry/index";
 import type { RelationDocument } from "../../../shared/transport/index";
 import { Badge } from "../../../shared/ui/Badge";
@@ -43,6 +44,8 @@ export interface EntryPanelProps {
   onCancel(): void;
   onRemove(): void;
   onNew(concept: Concept, context: string, owner: string): void;
+  /** The entry's code evidence, shown below what the recording states; null where Studio shows none. */
+  evidence?: ReactNode;
 }
 
 /**
@@ -150,6 +153,8 @@ export function EntryPanel(props: EntryPanelProps) {
           ) : null}
 
           {entry.concept === "bounded_context" ? <ContextContents entry={entry} entries={entries} onSelect={onSelect} /> : null}
+
+          {props.evidence ?? null}
 
           <div className="st-card__actions">
             <button type="button" className="st-button st-button--primary" onClick={props.onEdit} disabled={busy}>

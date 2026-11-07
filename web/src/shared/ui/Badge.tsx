@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type BadgeTone = "accepted" | "proposed" | "draft" | "removed" | "muted";
+export type BadgeTone = "accepted" | "proposed" | "draft" | "removed" | "muted" | "finding" | "partial";
 
 /** A small pill naming a state in words, such as an entry's standing. */
 export function Badge({ tone, children, title }: { tone: BadgeTone; children: ReactNode; title?: string }) {

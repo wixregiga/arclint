@@ -117,6 +117,14 @@ drafts live under .arclint/studio/features in the selected project; they do
 not change the domain recording. Draft saves refuse a stale revision instead
 of overwriting another editor.
 
+Code evidence is optional and read-only. Asked for in the map's
+inspector, one assessment runs the check arclint check runs and shows,
+for the selected entry, where the code declares it, each contract's
+carrier or the missing one, and the findings tied to it, beside what
+the whole assessment could not decide. A location opens a few lines of
+the file the assessment analyzed. Assessing changes no source file and
+no domain file; an extension may refresh its cache under .arclint/cache.
+
 If the domain recording is missing, the page opens so you can begin the
 language. An existing malformed recording must be corrected before serving.
 

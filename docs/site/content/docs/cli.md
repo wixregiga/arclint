@@ -623,6 +623,20 @@ happens to the branch after that is git's, as the project does it:
 commit, push and propose. Without a remote default branch the page
 shows the recording alone and says why.
 
+Code evidence is optional and read-only. In the map's inspector, **Assess
+code** runs one complete check of the project, the one `arclint check` runs
+with the baseline applied. For the selected entry it shows where the domain
+file records it, where the code declares it, each contract's carrier or the
+missing one, and the findings tied to the entry through its contract, its
+recorded line, its bounded context or a file declaring it. Beside every entry
+the page lists what the whole assessment could not decide and the findings no
+entry can be given, so an entry never reads clean from a missing result. A
+location opens a few lines of the file below the map. The server reads only
+source the assessment analyzed and the domain file, inside the project, and
+withholds a file whose name or content looks like a secret. Assessing changes
+no source file and no domain file; an extension may refresh its cache under
+`.arclint/cache`.
+
 ```sh
 arclint map serve                       # the project found from the working directory
 arclint map serve docs/examples/go      # the project found upward from a path, as check [path]

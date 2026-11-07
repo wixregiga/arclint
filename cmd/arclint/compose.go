@@ -268,7 +268,7 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	studio, err := composeStudio(root, recording, mapOverview, defineDomainDefinition, removeDomainDefinition)
+	studio, err := composeStudio(root, recording, mapOverview, defineDomainDefinition, removeDomainDefinition, assess)
 	if err != nil {
 		return configError(err)
 	}
@@ -332,11 +332,23 @@ func run(args []string) int {
 // through the same define and remove the command line runs, reads the
 // overview the domain file records now, and reads the one the remote's
 // default branch records through git, when the project has one; without
-// one the page shows the recording alone and says why. Every document
-// is spelled by the JSON renderer, whatever renderer the command's own
-// report uses.
-func composeStudio(root string, recording vocab.DomainRecording, overview application.GetDomainOverview, define application.DefineDomainDefinition, remove application.RemoveDomainDefinition) (mapserve.Server, error) {
+// one the page shows the recording alone and says why. Every language
+// document is spelled by the JSON renderer, whatever renderer the
+// command's own report uses; the code evidence is spelled by the server.
+func composeStudio(root string, recording vocab.DomainRecording, overview application.GetDomainOverview, define application.DefineDomainDefinition, remove application.RemoveDomainDefinition, assess application.AssessConformance) (mapserve.Server, error) {
 	jsonRenderer, err := reportfactory.Select(cli.RendererJSON)
+	if err != nil {
+		return mapserve.Server{}, fmt.Errorf("compose map server: %w", err)
+	}
+	// The page asks for code evidence when its reader does: one complete
+	// check of the repository as `arclint check` runs it, attributed to
+	// the recorded entries, and excerpts read only from the source files
+	// that check analyzed.
+	evidence, err := application.NewAssessDomainEvidence(assess, nil)
+	if err != nil {
+		return mapserve.Server{}, fmt.Errorf("compose map server: %w", err)
+	}
+	excerpts, err := application.NewReadSourceExcerpt(studio.SourceFiles{Project: root})
 	if err != nil {
 		return mapserve.Server{}, fmt.Errorf("compose map server: %w", err)
 	}
@@ -357,6 +369,7 @@ func composeStudio(root string, recording vocab.DomainRecording, overview applic
 		Define:   define,
 		Remove:   remove,
 		Accepted: acceptedRecording(root, recording),
+		Evidence: &mapserve.Evidence{Assess: evidence, Excerpts: excerpts},
 	}
 	return server, nil
 }

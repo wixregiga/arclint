@@ -398,7 +398,7 @@ exclusion winning.
 
 Studio opens with `arclint map serve` in the adopting project. Its Language
 view writes the configured domain recording; Map shows the same concepts and
-connections. A project can start without a domain file. Installed binaries
+connections, and on request the read-only code evidence for the selected entry. A project can start without a domain file. Installed binaries
 include Studio and need no Node runtime.
 
 ```bash

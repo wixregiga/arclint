@@ -66,6 +66,9 @@ type Server struct {
 	Define   application.DefineDomainDefinition
 	Remove   application.RemoveDomainDefinition
 	Accepted Accepted
+	// Evidence is the code evidence the page may ask for; nil serves
+	// none, and the page says the evidence is unavailable.
+	Evidence *Evidence
 }
 
 // Serve binds address, tells listening the URL a browser opens, and
@@ -95,7 +98,8 @@ func (s Server) Serve(address string, listening func(url string) error) error {
 }
 
 // Handler serves the embedded Studio assets, the current and accepted language,
-// project and entry edits, and feature documents. Language edits use define and
+// project and entry edits, feature documents, and, when lent, the read-only code
+// evidence and its source excerpts. Language edits use define and
 // remove under one edit lock; feature storage compares revisions independently.
 // Unknown routes and requests from another host or origin are refused.
 func (s Server) Handler() (http.Handler, error) {
@@ -108,13 +112,17 @@ func (s Server) Handler() (http.Handler, error) {
 		return nil, errors.New("map server: not composed with the define and remove use cases")
 	case s.Accepted.Branch != "" && s.Accepted.Overview == (application.GetDomainOverview{}):
 		return nil, errors.New("map server: the accepted branch is named without its overview")
+	case s.Evidence != nil && !s.Evidence.Assess.Composed():
+		return nil, errors.New("map server: code evidence is lent without its assessment")
+	case s.Evidence != nil && !s.Evidence.Excerpts.Composed():
+		return nil, errors.New("map server: code evidence is lent without its excerpts")
 	}
 	files, err := studioFiles()
 	if err != nil {
 		return nil, fmt.Errorf("map server: embedded Studio: %w", err)
 	}
 	assets := serveWebAssets(files)
-	var edits sync.Mutex
+	var edits sync.RWMutex
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/features", s.features)
 	mux.HandleFunc("GET /api/feature", s.feature)
@@ -125,6 +133,11 @@ func (s Server) Handler() (http.Handler, error) {
 	mux.HandleFunc("POST "+ProjectPath, oneAtATime(&edits, s.project))
 	mux.HandleFunc("POST "+DefinePath, oneAtATime(&edits, s.define))
 	mux.HandleFunc("POST "+RemovePath, oneAtATime(&edits, s.remove))
+	if s.Evidence != nil {
+		evidence := &evidenceRoutes{evidence: s.Evidence, edits: &edits}
+		mux.HandleFunc("GET "+EvidencePath, fromThePageItself(evidence.assess))
+		mux.HandleFunc("GET "+SourcePath, fromThePageItself(evidence.source))
+	}
 	mux.HandleFunc("GET /{$}", assets)
 	mux.HandleFunc("GET /assets/", assets)
 	mux.HandleFunc("GET /manifest.webmanifest", assets)
@@ -135,7 +148,7 @@ func (s Server) Handler() (http.Handler, error) {
 // oneAtATime runs each edit alone. Define and remove each read the
 // domain file, change it and write it whole, so two edits at once would
 // both succeed and the later write would drop the earlier one.
-func oneAtATime(edits *sync.Mutex, next http.HandlerFunc) http.HandlerFunc {
+func oneAtATime(edits *sync.RWMutex, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		edits.Lock()
 		defer edits.Unlock()

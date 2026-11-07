@@ -13,6 +13,15 @@ Studio uses the project's actual configured domain recording through ArcLint's
 existing application operations. It does not keep a parallel canonical vocabulary.
 Rule creation and architecture-rule navigation remain developer tooling.
 
+Code evidence is optional and read-only. A reader who wants to see how the code
+stands against an entry asks for one assessment in the map's inspector. It shows
+where the entry is declared, what carries its contracts or that the carrier is
+missing, and the findings tied to it, from the same check `arclint check` runs.
+A located declaration is presence, not proof. Anything the assessment could not
+decide reads as partial, and findings that cannot be tied to any entry stay
+visible. Studio writes no rule, baseline, source file or recording from
+evidence, and nobody needs it in order to describe meaning.
+
 The visual starting point is BWrite's established light authoring workspace:
 quiet neutral surfaces, teal action color, readable prose, a navigator and a
 contextual language inspector. Absorb useful behavior into ArcLint's web package;
@@ -25,5 +34,6 @@ Features and their persistence follow only after that path passes its gates.
 
 Adopter domains supply the content. Exercise at least two unrelated recordings,
 an empty recording and unavailable host capabilities. Stakeholders should not
-need architecture paths, test metadata or a new handoff form to describe meaning.
+need architecture paths, test metadata or a new handoff form to describe meaning;
+the paths code evidence shows are there only for a reader who asks for them.
 

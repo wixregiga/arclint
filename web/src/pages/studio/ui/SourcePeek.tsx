@@ -1,0 +1,93 @@
+import { useEffect, useRef, type KeyboardEvent } from "react";
+import type { Peek } from "../model/use-source-peek";
+
+export interface SourcePeekProps {
+  peek: Peek;
+  onClose(): void;
+}
+
+const STATUS_TEXT: Record<Peek["status"], string> = {
+  loading: "Reading…",
+  ready: "",
+  stale: "A newer assessment replaced the evidence this location came from. Assess again to read it.",
+  withheld: "Withheld: this file's name or content says it may hold a secret, so no line of it is shown.",
+  gone: "This location is not part of the assessment shown; the file was not analyzed in it.",
+  failed: "The excerpt could not be read.",
+};
+
+/**
+ * A few lines around one evidence location, below the map. Read-only:
+ * the text is shown as text, never as markup, and nothing can be edited.
+ * It takes focus when opened, so Escape closes it from there.
+ */
+export function SourcePeek({ peek, onClose }: SourcePeekProps) {
+  const region = useRef<HTMLElement>(null);
+  const where = `${peek.path}:${peek.line}`;
+  const opened = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (opened.current === where) return;
+    opened.current = where;
+    region.current?.focus({ preventScroll: true });
+  }, [where]);
+
+  useEffect(() => {
+    if (peek.status !== "ready") return;
+    // Scroll the lines alone: scrollIntoView would also scroll the map
+    // and the page around them.
+    const code = region.current?.querySelector<HTMLElement>(".st-peek__code");
+    const target = code?.querySelector<HTMLElement>(".st-peek__line.is-target");
+    if (code && target) code.scrollTop = Math.max(0, target.offsetTop - (code.clientHeight - target.offsetHeight) / 2);
+  }, [peek.status, peek.excerpt]);
+
+  function onKeyDown(e: KeyboardEvent<HTMLElement>) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+    }
+  }
+
+  const excerpt = peek.excerpt;
+  return (
+    <section ref={region} className="st-peek" aria-label={`Source peek: ${where}`} tabIndex={-1} onKeyDown={onKeyDown} aria-busy={peek.status === "loading"}>
+      <header className="st-peek__head">
+        <span className="st-peek__path" title={peek.path}>
+          {peek.path}
+          <span className="st-peek__line-number">:{peek.line}</span>
+        </span>
+        <span className="st-evidence__readonly">read-only</span>
+        <span className="st-evidence__grow" />
+        {excerpt ? (
+          <span className="st-peek__range">
+            lines {excerpt.lines[0]?.number ?? peek.line}–{excerpt.lines[excerpt.lines.length - 1]?.number ?? peek.line} of {excerpt.totalLines}
+          </span>
+        ) : null}
+        <button type="button" className="st-button st-button--small" onClick={onClose} aria-label="Close the source peek">
+          Close
+        </button>
+      </header>
+      {peek.status !== "ready" ? (
+        <p className={peek.status === "loading" ? "st-note st-peek__status" : "st-peek__status st-evidence__stale"} role={peek.status === "loading" ? undefined : "status"}>
+          {STATUS_TEXT[peek.status]}
+          {peek.message && peek.status === "failed" ? ` ${peek.message}` : null}
+        </p>
+      ) : null}
+      {excerpt ? (
+        <div className="st-peek__code" role="group" aria-label={`Lines of ${peek.path}`}>
+          {excerpt.lines.map((l) => (
+            <div key={l.number} className={l.number === excerpt.line ? "st-peek__line is-target" : "st-peek__line"} aria-current={l.number === excerpt.line ? "true" : undefined}>
+              <span className="st-peek__number" aria-hidden="true">
+                {l.number}
+              </span>
+              <span className="st-peek__text">
+                {l.text}
+                {l.truncated ? <span className="st-peek__cut" title="The line continues; the excerpt shows its start"> …</span> : null}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}

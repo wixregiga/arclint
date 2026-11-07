@@ -16,23 +16,29 @@ import {
 import { projectRequestFrom, type ProjectValues } from "../../../features/describe-project/index";
 import { defineRequestFrom, draftOf, hasChanges, NAME, removeRequestFrom } from "../../../features/edit-entry/index";
 import type { StudioMemory } from "../../../shared/lib/studio-memory/index";
-import { isGatewayFailure, type FeatureStore, type StudioGateway } from "../../../shared/transport/index";
+import { isGatewayFailure, type CodeEvidenceSource, type EvidenceLocationDocument, type FeatureStore, type StudioGateway } from "../../../shared/transport/index";
 import { afterRemoval, whereBegun } from "../lib/addresses";
+import { useCodeEvidence } from "../model/use-code-evidence";
 import { failureText, useLanguage } from "../model/use-language";
+import { useSourcePeek } from "../model/use-source-peek";
 import { useWorkspace } from "../model/use-workspace";
 import { draftKeyOf, PROJECT_DRAFT, type Selection } from "../model/workspace";
+import { CodeEvidence } from "./CodeEvidence";
 import { EntryPanel } from "./EntryPanel";
 import { FeaturesView } from "./FeaturesView";
 import { LanguageMap } from "./LanguageMap";
 import { Navigator } from "./Navigator";
 import { NewEntryPanel } from "./NewEntryPanel";
 import { countsLine, ProjectPanel } from "./ProjectPanel";
+import { SourcePeek } from "./SourcePeek";
 import { TopBar } from "./TopBar";
 
 export interface StudioScreenProps {
   gateway: StudioGateway;
   memory: StudioMemory;
   featureStore: FeatureStore | null;
+  /** Read-only code evidence; null when the host lends none, and the inspector says so. */
+  codeEvidence: CodeEvidenceSource | null;
 }
 
 interface Failure {
@@ -48,8 +54,11 @@ interface Failure {
  * the features beside the language in features mode. Every write goes
  * through the gateway; the recording is read again after each.
  */
-export function StudioScreen({ gateway, memory, featureStore }: StudioScreenProps) {
+export function StudioScreen({ gateway, memory, featureStore, codeEvidence }: StudioScreenProps) {
   const { language, reload } = useLanguage(gateway);
+  const { evidence, assess, markStale } = useCodeEvidence(codeEvidence);
+  const { peek, open: openPeek, close: closePeek } = useSourcePeek(codeEvidence, evidence.document?.snapshot ?? null, markStale);
+  const peekInvoker = useRef<HTMLElement | null>(null);
   const [workspace, dispatch] = useWorkspace(memory);
   const [query, setQuery] = useState("");
   const [pending, setPending] = useState<string | null>(null);
@@ -129,6 +138,7 @@ export function StudioScreen({ gateway, memory, featureStore }: StudioScreenProp
       const said = await what();
       const refreshed = await reload();
       if (refreshed) dispatch({ type: "saved", key, then });
+      markStale("The recording changed after this assessment.");
       setNotice(said);
     } catch (error) {
       const retryable = isGatewayFailure(error) && error.kind !== "refused";
@@ -198,7 +208,10 @@ export function StudioScreen({ gateway, memory, featureStore }: StudioScreenProp
     setReloading(true);
     const ok = await reload();
     setReloading(false);
-    if (ok) setNotice("Read the domain file again.");
+    if (ok) {
+      markStale("The domain file was read again after this assessment; the code may have changed too.");
+      setNotice("Read the domain file again.");
+    }
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
@@ -207,6 +220,19 @@ export function StudioScreen({ gateway, memory, featureStore }: StudioScreenProp
       searchRef.current?.focus();
       searchRef.current?.select();
     }
+  }
+
+  function peekAt(location: EvidenceLocationDocument, invoker: HTMLElement) {
+    peekInvoker.current = invoker;
+    openPeek(location.path, location.line);
+  }
+
+  /** Closing the peek returns focus to the location that opened it, when it is still shown. */
+  function closeSourcePeek() {
+    closePeek();
+    const invoker = peekInvoker.current;
+    peekInvoker.current = null;
+    if (invoker && invoker.isConnected) invoker.focus();
   }
 
   const busy = pending !== null;
@@ -251,6 +277,7 @@ export function StudioScreen({ gateway, memory, featureStore }: StudioScreenProp
           onCancel={cancel}
           onRemove={removeSelected}
           onNew={beginNew}
+          evidence={workspace.mode === "map" ? <CodeEvidence entry={selected} state={evidence} onAssess={() => void assess()} onPeek={peekAt} /> : null}
         />
       );
     } else {
@@ -335,8 +362,9 @@ export function StudioScreen({ gateway, memory, featureStore }: StudioScreenProp
           )}
           {workspace.mode === "features" ? null : workspace.mode === "map" ? (
             <>
-              <main className="st-main st-main--map">
+              <main className={peek ? "st-main st-main--map st-main--peek" : "st-main st-main--map"}>
                 <LanguageMap entries={entries} relations={relations} context={activeContext} selectedKey={selection.kind === "entry" ? selection.key : null} standingOf={standingOf} onSelect={select} />
+                {peek ? <SourcePeek peek={peek} onClose={closeSourcePeek} /> : null}
               </main>
               <aside className="st-inspector" aria-label="Inspector">
                 {panel}

@@ -167,10 +167,12 @@ for current Web findings, and the repository finish gate `make check`.
 
 ## Current Studio integration
 
-App composition injects the language `StudioGateway` and the independent
-`FeatureStore` defined in Shared transport. An embedding host can provide the
-language without a draft store; the Features view loads its store only when
-opened. Standalone startup uses the page's API base for both. Mounting alone
+App composition injects the language `StudioGateway`, the independent
+`FeatureStore` and the read-only `CodeEvidenceSource` defined in Shared
+transport. An embedding host can provide the language without a draft store or
+code evidence; the Features view loads its store only when opened, and the
+map's inspector says when no evidence is lent. Evidence is assessed only when
+the reader asks. Standalone startup uses the page's API base for both. Mounting alone
 does not write storage or register a worker, and CodeMirror views are destroyed
 when their owner unmounts. Current verification uses Chromium and jsdom; no
 installed PWA, offline workflow or non-Chromium host behavior is claimed.

@@ -29,7 +29,7 @@ func TestComposedFeatureHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := composeStudio(root, recording, overview, define, remove)
+	server, err := composeStudio(root, recording, overview, define, remove, composedAssessment(t, root, repo))
 	if err != nil {
 		t.Fatal(err)
 	}
