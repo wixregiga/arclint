@@ -330,7 +330,7 @@ BoundedContext conformance {
       "EntryEvidence holds a finding only when the finding's contract, its anchor at the entry's recorded line, its bounded context subject, or a file declaring the entry ties it to the entry; message text never does."
       def void ensureAttributedThroughStructure() hint = "arclint.verified_by=internal/domain/conformance/evidence_attribution_test.go:TestEvidenceAttributionTiesFindingsThroughTheirStructure,arclint.verified_by=internal/domain/conformance/evidence_attribution_test.go:TestEntryEvidenceRefusesABasisTheFindingDoesNotShow";
       "EntryEvidence without an active finding reads as partial, never as free of findings, when its assessment is incomplete, a file failed to parse, or a check of its entry did not decide."
-      def void ensurePartialNeverReadsClean() hint = "arclint.verified_by=internal/domain/conformance/evidence_attribution_test.go:TestEntryEvidencePartialNeverReadsClean";
+      def void ensurePartialNeverReadsClean() hint = "arclint.verified_by=internal/domain/conformance/evidence_attribution_test.go:TestEntryEvidencePartialNeverReadsClean,arclint.verified_by=internal/domain/conformance/evidence_attribution_test.go:TestEntryEvidencePartialWhenAContractCheckWasNotPerformed";
     }
 
     "What one assessment shows about the whole recorded language: the EntryEvidence of every entry, and the findings and diagnostics no entry can be given, kept apart as unattributed."

@@ -599,6 +599,7 @@ contexts:
               to parse, or a check of its entry did not decide.
             verified_by:
               - internal/domain/conformance/evidence_attribution_test.go:TestEntryEvidencePartialNeverReadsClean
+              - internal/domain/conformance/evidence_attribution_test.go:TestEntryEvidencePartialWhenAContractCheckWasNotPerformed
       EvidenceAttribution:
         definition: >-
           What one assessment shows about the whole recorded language: the

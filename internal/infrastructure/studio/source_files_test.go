@@ -37,8 +37,17 @@ func TestSourceFilesStayInsideTheProject(t *testing.T) {
 	if got, err := files.ReadSource("catalog/event.go", 1024); err != nil || string(got) != "package catalog\n" {
 		t.Fatalf("a project file: %q %v", got, err)
 	}
-	if got, err := files.ReadSource("inside.go", 1024); err != nil || string(got) != "package catalog\n" {
-		t.Errorf("a link inside the project: %q %v", got, err)
+	// A link is never followed, not even to a file inside the project:
+	// a source file swapped for a link would otherwise be read under its
+	// name while it shows another file.
+	if got, err := files.ReadSource("inside.go", 1024); err == nil {
+		t.Errorf("a link inside the project was followed: %q", got)
+	}
+	if err := os.Symlink(filepath.Join(project, "catalog"), filepath.Join(project, "linked")); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := files.ReadSource("linked/event.go", 1024); err == nil {
+		t.Errorf("a folder link inside the project was followed: %q", got)
 	}
 	for _, path := range []string{"catalog/escape.go", "catalog/away/secret.go", "../" + filepath.Base(outside) + "/secret.go", filepath.Join(outside, "secret.go")} {
 		if got, err := files.ReadSource(path, 1024); err == nil || strings.Contains(string(got), "outside") {

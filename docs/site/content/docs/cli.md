@@ -632,8 +632,9 @@ recorded line, its bounded context or a file declaring it. Beside every entry
 the page lists what the whole assessment could not decide and the findings no
 entry can be given, so an entry never reads clean from a missing result. A
 location opens a few lines of the file below the map. The server reads only
-source the assessment analyzed and the domain file, inside the project, and
-withholds a file whose name or content looks like a secret. Assessing changes
+source the assessment analyzed and the domain file, inside the project and
+never through a link, and withholds a file whose name or content looks like a
+secret. Assessing changes
 no source file and no domain file; an extension may refresh its cache under
 `.arclint/cache`.
 

@@ -44,7 +44,7 @@ export type { FeatureStore } from "./feature-store";
 export { GatewayFailure, isGatewayFailure } from "./gateway";
 export type { GatewayFailureKind, StudioGateway } from "./gateway";
 export { apiUrl, normalizedBase } from "./http-call";
-export { createHttpCodeEvidence, EVIDENCE_API_PATHS } from "./http-code-evidence";
+export { createHttpCodeEvidence, EVIDENCE_API_PATHS, STUDIO_REQUEST_HEADER } from "./http-code-evidence";
 export type { HttpCodeEvidenceOptions } from "./http-code-evidence";
 export { createHttpFeatureStore, FEATURE_API_PATHS } from "./http-feature-store";
 export type { HttpFeatureStoreOptions } from "./http-feature-store";

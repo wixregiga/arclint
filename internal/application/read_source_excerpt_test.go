@@ -170,9 +170,14 @@ func TestExcerptWithholdsFilesThatMayHoldSecrets(t *testing.T) {
 		"aws key":      "var id = \"AKIAIOSFODNN7EXAMPLE\"\n",
 		"github token": "token := \"ghp_" + strings.Repeat("a1", 18) + "\"\n",
 		// Assembled here so no token literal sits in this file.
-		"jwt":        "const t = \"" + strings.Join([]string{"eyJ" + strings.Repeat("hb", 8), "eyJ" + strings.Repeat("zd", 8), strings.Repeat("Qx", 10)}, ".") + "\"\n",
-		"assignment": "var dbPassword = \"correct-horse-battery\"\n",
-		"yaml style": "api_key: 'abcdefghijklmnop'\n",
+		"jwt":             "const t = \"" + strings.Join([]string{"eyJ" + strings.Repeat("hb", 8), "eyJ" + strings.Repeat("zd", 8), strings.Repeat("Qx", 10)}, ".") + "\"\n",
+		"assignment":      "var dbPassword = \"correct-horse-battery\"\n",
+		"yaml style":      "api_key: 'abcdefghijklmnop'\n",
+		"go typed var":    "var dbPassword string = \"correct-horse-battery\"\n",
+		"go typed const":  "const apiToken string = \"correct-horse-battery\"\n",
+		"ts annotated":    "const clientSecret: string = 'correct-horse-battery';\n",
+		"py annotated":    "api_key: str = \"correct-horse-battery\"\n",
+		"go struct field": "cfg := Config{Password: \"correct-horse-battery\"}\n",
 	} {
 		_, _, err := readExcerpt(t, map[string]string{"catalog/config.go": content}, "catalog/config.go", 1)
 		if !errors.Is(err, application.ErrExcerptWithheld) {

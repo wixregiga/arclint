@@ -152,12 +152,34 @@ func (c ContractEvidence) CoverageStatus() string {
 	return c.Coverage.Status()
 }
 
+// decided reports whether every check of the contract ran and reached
+// a conclusion. The coverage status names the most severe outcome, so a
+// violation can hide a check that was not performed or did not decide;
+// each check and every unperformed one is read instead.
 func (c ContractEvidence) decided() bool {
-	switch c.CoverageStatus() {
-	case "structurally_checked", string(OutcomeViolates), string(OutcomeSuspectedViolation), string(OutcomeNotApplicable):
-		return true
+	if !c.Covered || len(c.Coverage.Checks()) == 0 || len(c.Coverage.Unperformed()) > 0 {
+		return false
 	}
-	return false
+	for _, e := range c.Coverage.Checks() {
+		switch e.Outcome() {
+		case OutcomeConforms, OutcomeViolates, OutcomeSuspectedViolation, OutcomeNotApplicable:
+		case OutcomeUndetermined, OutcomeUnsupported, OutcomeFailed:
+			return false
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// undecidedOutcome names why the contract is not decided: the coverage
+// status, or incomplete when a check was not performed beside others
+// that decided.
+func (c ContractEvidence) undecidedOutcome() string {
+	if c.Covered && len(c.Coverage.Unperformed()) > 0 {
+		return "incomplete"
+	}
+	return c.CoverageStatus()
 }
 
 // EntryEvidenceSpec is the input to EntryEvidence construction.
@@ -292,7 +314,7 @@ func coverageHolds(c ContractCoverage, v Violation) bool {
 func (e *EntryEvidence) ensurePartialNeverReadsClean() error {
 	for _, c := range e.contracts {
 		if !c.decided() && !e.hasPartial(PartialContractUndecided, c.Key) {
-			e.partial = append(e.partial, Partiality{Kind: PartialContractUndecided, Contract: c.Key, Outcome: c.CoverageStatus()})
+			e.partial = append(e.partial, Partiality{Kind: PartialContractUndecided, Contract: c.Key, Outcome: c.undecidedOutcome()})
 		}
 	}
 	if e.declarations == DeclarationNotObserved && !e.hasPartial(PartialNotObserved, "") {

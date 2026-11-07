@@ -246,3 +246,51 @@ func TestEntryEvidenceRefusesABasisTheFindingDoesNotShow(t *testing.T) {
 		}
 	}
 }
+
+// A contract whose coverage reads violates because one check found a
+// violation, while another of its checks was not performed, is not
+// decided: the evidence reads partial, never free of findings, when the
+// violation itself is baselined.
+func TestEntryEvidencePartialWhenAContractCheckWasNotPerformed(t *testing.T) {
+	knowledge := oneContext(t, vocab.BoundedContext{
+		Name: "catalog", Definition: "d", Line: 4,
+		Aggregates: []vocab.Aggregate{{Name: "Event", Definition: "d", Identity: "EventID", Line: 6,
+			Invariants: []vocab.Invariant{{Key: "one-open", Statement: "s", Line: 8}}}},
+	})
+	zones := []rule.Zone{mustZone(t, "catalog", "internal/catalog/**")}
+	_, a := attributionOver(t, []rule.Rule{builtInRule(t, "aggregate/invariants-enforced-by-root")}, zones, eventCode(), knowledge)
+	var check conformance.Evaluation
+	for _, e := range a.Evaluations() {
+		if e.Rule().Qualified() == "aggregate/invariants-enforced-by-root" && e.Outcome() == conformance.OutcomeViolates {
+			check = e
+		}
+	}
+	if check.Rule().IsZero() {
+		t.Fatal("the root without EnsureOneOpen did not violate invariants-enforced-by-root")
+	}
+	coverage, err := conformance.NewContractCoverage(conformance.ContractCoverageSpec{
+		Context: "catalog", Owner: "Event", Key: "one-open", Statement: "s", Kind: vocab.ConceptInvariant,
+		Path: "docs/model.arclint.yaml", Line: 8, Checks: []conformance.Evaluation{check},
+		Unperformed: []string{"invariant/enforced-at-every-mutation: the rule is disabled"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if coverage.Status() != string(conformance.OutcomeViolates) {
+		t.Fatalf("coverage status %s, want violates", coverage.Status())
+	}
+	e, err := conformance.NewEntryEvidence(conformance.EntryEvidenceSpec{
+		Entry:        conformance.EntryAddress{Concept: vocab.ConceptInvariant, Context: "catalog", Owner: "Event", Name: "one-open"},
+		Declarations: conformance.DeclarationNotApplicable,
+		Contracts:    []conformance.ContractEvidence{{Kind: vocab.ConceptInvariant, Owner: "Event", Key: "one-open", CodeRead: true, Coverage: coverage, Covered: true}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Reading() != conformance.ReadingPartial {
+		t.Fatalf("reading %s with partial %v, want partial", e.Reading(), e.Partial())
+	}
+	if p := e.Partial(); len(p) != 1 || p[0].Kind != conformance.PartialContractUndecided || p[0].Outcome != "incomplete" {
+		t.Errorf("partial %v, want the contract undecided as incomplete", p)
+	}
+}

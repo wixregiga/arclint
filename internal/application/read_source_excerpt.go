@@ -169,7 +169,9 @@ func sensitivePath(file string) bool {
 // secretContent matches content that holds a credential: private key
 // material, the token formats of the common hosts, and a string
 // literal of twelve or more characters assigned to a name that says it
-// is a secret. A file holding any of them is withheld whole, so no
+// is a secret, with or without a declared type between them (Go's
+// var name string = "...", TypeScript's name: string = "...", Python's
+// name: str = "..."). A file holding any of them is withheld whole, so no
 // excerpt of it shows part of a credential.
 var secretContent = []*regexp.Regexp{
 	regexp.MustCompile(`-----BEGIN[ A-Z0-9]*PRIVATE KEY( BLOCK)?-----`),
@@ -181,7 +183,7 @@ var secretContent = []*regexp.Regexp{
 	regexp.MustCompile(`\bsk-(ant-|proj-|live-|test-)?[A-Za-z0-9_-]{20,}\b`),
 	regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{35}\b`),
 	regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}`),
-	regexp.MustCompile(`(?i)(password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret)[A-Za-z0-9_]*["']?\s*(:=|=|:)\s*["'\x60][^"'\x60\s]{12,}["'\x60]`),
+	regexp.MustCompile(`(?i)(password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret)[A-Za-z0-9_]*["']?(\s*:\s*[A-Za-z_][\w.\[\]<>|*, ]{0,48}?|\s+[A-Za-z_*\[][\w.\[\]*]{0,48})?\s*(:=|=|:)\s*["'\x60][^"'\x60\s]{12,}["'\x60]`),
 }
 
 func secretInContent(content []byte) bool {

@@ -53,13 +53,16 @@ server without it, shows it as unavailable.
 
 A location opens a source peek below the map: a few lines around it, as text,
 read-only, with Escape returning focus to the location. The server reads only
-source files the same assessment analyzed, plus the domain recording, confined
-to the project by `os.Root`, so neither `..` nor a link leads out. A snapshot
-replaced by four newer assessments is answered as stale. A file is withheld
+source files the same assessment analyzed, plus the domain recording, through
+`os.Root` on the project. It never follows a link, even one inside the project,
+and refuses a pipe or device without waiting on it. A snapshot replaced by four
+newer assessments is answered as stale. A file is withheld
 whole when its name or content looks like it holds a secret, a file over 2 MiB
-or one that is not text is refused, and long lines are cut. Both routes refuse a
-request a browser marks as sent by another site, so another page cannot make the
-server assess the repository over and over. Assessing writes no
+or one that is not text is refused, and long lines are cut. Both routes answer only
+requests carrying the `X-ArcLint-Studio` header the page sends, which another
+site's page cannot send, and refuse a request a browser marks as cross-site.
+Requests that arrive while an assessment runs share its result, and a request
+already gone starts none. Assessing writes no
 source file and no recording; an extension may refresh its transpile cache
 under `.arclint/cache`. The cost is that of `arclint check`: about 2.6 s warm on
 this repository, measured once on one machine.

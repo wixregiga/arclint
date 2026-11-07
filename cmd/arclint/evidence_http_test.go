@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -15,8 +16,10 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/wixregiga/arclint/internal/application"
+	"github.com/wixregiga/arclint/internal/delivery/mapserve"
 	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
 	jsonbaseline "github.com/wixregiga/arclint/internal/infrastructure/baseline/json"
@@ -87,6 +90,8 @@ func evidenceStudio(t *testing.T) (string, http.Handler) {
 	write("identityaccess/tenant/secrets.go", "package tenant\n\nconst plain = 1\n")
 	write("identityaccess/tenant/vault.go", "package tenant\n\nconst pem = `\n-----BEGIN RSA PRIVATE KEY-----\nMIIBOgIBAAJBAK\n-----END RSA PRIVATE KEY-----\n`\n")
 	write("identityaccess/tenant/config.go", "package tenant\n\nvar apiKey = \"live-0123456789abcdefghij\"\n")
+	write("identityaccess/tenant/typed.go", "package tenant\n\nvar dbPassword string = \"correct-horse-battery\"\n")
+	write(".env", "DB_PASSWORD=correct-horse-battery\n")
 	outside := filepath.Join(t.TempDir(), "outside.go")
 	if err := os.WriteFile(outside, []byte("package tenant\n\nconst escaped = \"outside the project\"\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -121,9 +126,16 @@ func evidenceStudio(t *testing.T) (string, http.Handler) {
 	return root, h
 }
 
+// serve sends a request as the map's own page does, with the Studio
+// header; a header given empty is left out.
 func serve(h http.Handler, method, target, body string, headers map[string]string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, "http://localhost"+target, bytes.NewBufferString(body))
+	r.Header.Set(mapserve.StudioRequestHeader, "1")
 	for k, v := range headers {
+		if v == "" {
+			r.Header.Del(k)
+			continue
+		}
 		r.Header.Set(k, v)
 	}
 	w := httptest.NewRecorder()
@@ -253,6 +265,7 @@ func TestComposedExcerptsReadOnlyTheSnapshotsSafeSource(t *testing.T) {
 		{"secret by name", "identityaccess/tenant/secrets.go", 1, http.StatusForbidden},
 		{"key material", "identityaccess/tenant/vault.go", 1, http.StatusForbidden},
 		{"credential literal", "identityaccess/tenant/config.go", 1, http.StatusForbidden},
+		{"typed credential literal", "identityaccess/tenant/typed.go", 1, http.StatusForbidden},
 		{"beyond the end", "identityaccess/tenant/tenant.go", 100000, http.StatusUnprocessableEntity},
 		{"recording", "domain.arclint.yaml", 27, http.StatusOK},
 	}
@@ -272,6 +285,11 @@ func TestComposedExcerptsReadOnlyTheSnapshotsSafeSource(t *testing.T) {
 	}
 	if w := serve(h, "GET", "/api/source?snapshot="+doc.Snapshot+"&path=identityaccess/tenant/tenant.go&line=x", "", nil); w.Code != http.StatusBadRequest {
 		t.Errorf("line not a number: %d", w.Code)
+	}
+	for _, path := range []string{"/api/evidence", "/api/source?snapshot=" + doc.Snapshot + "&path=identityaccess/tenant/tenant.go&line=16"} {
+		if w := serve(h, "GET", path, "", map[string]string{mapserve.StudioRequestHeader: ""}); w.Code != http.StatusForbidden {
+			t.Errorf("GET %s without the Studio header, as an image of another site sends it: %d, want 403", path, w.Code)
+		}
 	}
 	if w := serve(h, "GET", "/api/evidence", "", map[string]string{"Origin": "http://evil.example"}); w.Code != http.StatusForbidden {
 		t.Errorf("another page's assessment: %d, want 403", w.Code)
@@ -325,4 +343,82 @@ func TestComposedSnapshotsAgeAndAssessmentsWaitForEdits(t *testing.T) {
 		}
 	}
 	t.Error("the assessment after the edit does not hold the new entry")
+}
+
+// A source file of an older snapshot swapped for a link to a file the
+// assessment never analyzed, or for a pipe, is not read: the link is
+// not followed and the pipe neither blocks nor answers.
+func TestComposedExcerptsRefuseFilesSwappedAfterTheAssessment(t *testing.T) {
+	root, h := evidenceStudio(t)
+	doc := assessed(t, h)
+	tenant := filepath.Join(root, "identityaccess/tenant/tenant.go")
+	if err := os.Remove(tenant); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("../../.env", tenant); err != nil {
+		t.Fatal(err)
+	}
+	w := excerpt(h, doc.Snapshot, "identityaccess/tenant/tenant.go", 1)
+	if w.Code == http.StatusOK || strings.Contains(w.Body.String(), "correct-horse-battery") {
+		t.Fatalf("a source file swapped for a link to .env: %d %s", w.Code, w.Body.String())
+	}
+	role := filepath.Join(root, "identityaccess/role/role.go")
+	if err := os.Remove(role); err != nil {
+		t.Fatal(err)
+	}
+	if err := mkfifo(role); err != nil {
+		t.Skipf("no named pipes here: %v", err)
+	}
+	answered := make(chan int, 1)
+	go func() { answered <- excerpt(h, doc.Snapshot, "identityaccess/role/role.go", 1).Code }()
+	select {
+	case code := <-answered:
+		if code == http.StatusOK {
+			t.Errorf("a source file swapped for a pipe answered 200")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("an excerpt of a source file swapped for a pipe blocked")
+	}
+}
+
+// A request that has already left starts no assessment, so it neither
+// costs a run nor pushes out a snapshot a page still reads.
+func TestComposedAssessmentsSkipRequestsAlreadyGone(t *testing.T) {
+	_, h := evidenceStudio(t)
+	first := assessed(t, h)
+	for range 6 {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		r := httptest.NewRequest("GET", "http://localhost/api/evidence", nil).WithContext(ctx)
+		r.Header.Set(mapserve.StudioRequestHeader, "1")
+		h.ServeHTTP(httptest.NewRecorder(), r)
+	}
+	if w := excerpt(h, first.Snapshot, "identityaccess/tenant/tenant.go", 16); w.Code != http.StatusOK {
+		t.Fatalf("after six requests that left at once, the first snapshot: %d %s", w.Code, w.Body.String())
+	}
+	// Requests arriving together share one run.
+	var wg sync.WaitGroup
+	snapshots := make([]string, 4)
+	for i := range snapshots {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			w := serve(h, "GET", "/api/evidence", "", nil)
+			var doc evidenceAnswer
+			if w.Code == http.StatusOK && json.Unmarshal(w.Body.Bytes(), &doc) == nil {
+				snapshots[i] = doc.Snapshot
+			}
+		}()
+	}
+	wg.Wait()
+	distinct := map[string]bool{}
+	for _, s := range snapshots {
+		if s == "" {
+			t.Fatalf("a request of the burst failed: %v", snapshots)
+		}
+		distinct[s] = true
+	}
+	if len(distinct) == len(snapshots) {
+		t.Errorf("four requests together ran four assessments: %v", snapshots)
+	}
 }

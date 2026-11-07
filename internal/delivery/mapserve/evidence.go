@@ -26,6 +26,13 @@ const (
 // has replaced more than this many times is told its evidence is stale.
 const keptSnapshots = 4
 
+// StudioRequestHeader is the header the page sends with every evidence
+// request. A page on another site cannot send it without the browser
+// first asking this server, which never allows it, so neither the
+// expensive assessment nor an excerpt answers another site's request,
+// whether or not the browser sends Fetch Metadata.
+const StudioRequestHeader = "X-ArcLint-Studio"
+
 // pathLimit bounds the path an excerpt request names.
 const pathLimit = 4096
 
@@ -44,15 +51,48 @@ type evidenceRoutes struct {
 	// edits is the server's edit lock: an assessment reads the domain
 	// recording while no edit is writing it.
 	edits *sync.RWMutex
-	// running lets one assessment run at a time; a second request waits.
-	running sync.Mutex
-	mu      sync.Mutex
-	kept    []application.DomainEvidence
+	mu    sync.Mutex
+	kept  []application.DomainEvidence
+	// running is the assessment under way, nil when none is: requests
+	// arriving while it runs share its result, so a burst of requests
+	// runs one assessment and keeps one snapshot.
+	running *assessment
 }
 
-func (r *evidenceRoutes) keep(e application.DomainEvidence) {
+// assessment is one run of the assessment that several requests wait on.
+type assessment struct {
+	done   chan struct{}
+	result application.DomainEvidence
+	err    error
+}
+
+// start returns the assessment under way, or starts one. The run does
+// not belong to any one request: a request that leaves stops waiting,
+// and the run completes for the requests still waiting.
+func (r *evidenceRoutes) start() *assessment {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.running != nil {
+		return r.running
+	}
+	run := &assessment{done: make(chan struct{})}
+	r.running = run
+	go func() {
+		r.edits.RLock()
+		run.result, run.err = r.evidence.Assess.Execute()
+		r.edits.RUnlock()
+		r.mu.Lock()
+		if run.err == nil {
+			r.keepLocked(run.result)
+		}
+		r.running = nil
+		r.mu.Unlock()
+		close(run.done)
+	}()
+	return run
+}
+
+func (r *evidenceRoutes) keepLocked(e application.DomainEvidence) {
 	r.kept = append(r.kept, e)
 	if len(r.kept) > keptSnapshots {
 		r.kept = r.kept[len(r.kept)-keptSnapshots:]
@@ -70,14 +110,19 @@ func (r *evidenceRoutes) snapshot(name string) (application.DomainEvidence, bool
 	return application.DomainEvidence{}, false
 }
 
-// fromThePageItself refuses a request a browser marks as sent by
-// another site. A cross-site page can make a browser send a GET without
-// an Origin, as an image or a no-cors fetch; it cannot read the answer,
-// but it could make the server assess the repository again and again.
-// Browsers send Sec-Fetch-Site on every request; a client that sends
-// none, such as curl, is not a page on another site.
+// fromThePageItself answers only the page's own evidence requests. A
+// cross-site page can make a browser send a GET without an Origin, as an
+// image or a no-cors fetch, and a browser may omit Fetch Metadata on a
+// plain-HTTP address; it cannot read the answer, but it could make the
+// server assess the repository again and again. The page sends
+// StudioRequestHeader, which such a request cannot carry; a request the
+// browser marks as cross-site is refused as well.
 func fromThePageItself(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get(StudioRequestHeader) == "" {
+			writeError(w, http.StatusForbidden, fmt.Errorf("an evidence request carries the %s header the map's own page sends", StudioRequestHeader))
+			return
+		}
 		switch site := r.Header.Get("Sec-Fetch-Site"); site {
 		case "", "same-origin", "none":
 			next(w, r)
@@ -87,18 +132,24 @@ func fromThePageItself(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// assess runs one assessment of the repository as it is now.
-func (r *evidenceRoutes) assess(w http.ResponseWriter, _ *http.Request) {
-	r.running.Lock()
-	defer r.running.Unlock()
-	r.edits.RLock()
-	result, err := r.evidence.Assess.Execute()
-	r.edits.RUnlock()
+// assess answers with an assessment of the repository: the one under
+// way when the request arrives, or a new one. A request already gone
+// starts nothing, and one that leaves stops waiting.
+func (r *evidenceRoutes) assess(w http.ResponseWriter, req *http.Request) {
+	if req.Context().Err() != nil {
+		return
+	}
+	run := r.start()
+	select {
+	case <-run.done:
+	case <-req.Context().Done():
+		return
+	}
+	result, err := run.result, run.err
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Errorf("assess code evidence: %w", err))
 		return
 	}
-	r.keep(result)
 	body, err := json.Marshal(evidenceDocumentOf(result))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Errorf("render code evidence: %w", err))

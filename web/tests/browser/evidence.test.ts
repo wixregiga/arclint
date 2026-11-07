@@ -172,22 +172,25 @@ test.describe("code evidence over the YAML recording", () => {
     await expect(evidence(page).getByRole("button", { name: "Assess code" })).toHaveCount(0);
   });
 
-  test("refuses excerpt requests the evidence does not name", async ({ page }) => {
-    await openMap(page, "/");
-    const answers = await page.evaluate(async () => {
-      const base = new URL("./", document.baseURI);
-      const evidence = await (await fetch(new URL("api/evidence", base), { cache: "no-store" })).json();
-      const ask = async (query: Record<string, string>) => (await fetch(new URL(`api/source?${new URLSearchParams(query)}`, base), { cache: "no-store" })).status;
-      const snapshot = evidence.snapshot as string;
-      return {
-        traversal: await ask({ snapshot, path: "../../../../etc/passwd", line: "1" }),
-        absolute: await ask({ snapshot, path: "/etc/passwd", line: "1" }),
-        manifest: await ask({ snapshot, path: "go.mod", line: "1" }),
-        unknown: await ask({ snapshot: "0".repeat(32), path: "identityaccess/tenant/tenant.go", line: "1" }),
-        source: await ask({ snapshot, path: "identityaccess/tenant/tenant.go", line: "16" }),
-      };
+  test("marks evidence stale when the recording changes while its assessment is still running", async ({ page }) => {
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route("**/api/evidence", async (route) => {
+      const response = await route.fetch();
+      await held;
+      await route.fulfill({ response });
     });
-    expect(answers).toEqual({ traversal: 400, absolute: 400, manifest: 404, unknown: 409, source: 200 });
+    await openMap(page, "/");
+    await selectOnMap(page, "identityaccess", "Aggregate Tenant");
+    await evidence(page).getByRole("button", { name: "Assess code" }).click();
+    await expect(evidence(page).getByRole("button", { name: "Assessing the code…" })).toBeVisible();
+    // The reader reloads the recording while the assessment is still on its way.
+    await page.getByRole("button", { name: "Reload" }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Read the domain file again." })).toBeVisible();
+    release();
+    await expect(evidence(page).getByText(/^Assessed /)).toBeVisible();
+    await expect(evidence(page).getByText("Stale", { exact: true })).toBeVisible();
+    await expect(evidence(page)).toContainText("The domain file was read again after this assessment");
   });
 });
 
@@ -213,7 +216,7 @@ test("answers an empty recording's failed check with its reason, never with an e
   // The empty fixture's ruleset names a key the rule loader refuses, so
   // `arclint check` fails there too; the evidence says why.
   const answered = await page.evaluate(async () => {
-    const r = await fetch(new URL("api/evidence", document.baseURI), { cache: "no-store" });
+    const r = await fetch(new URL("api/evidence", document.baseURI), { cache: "no-store", headers: { "X-ArcLint-Studio": "1" } });
     return { status: r.status, body: (await r.json()) as { entries?: unknown[]; error?: string } };
   });
   expect(answered.status).toBe(500);
