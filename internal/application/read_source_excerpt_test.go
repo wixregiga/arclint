@@ -54,7 +54,7 @@ func excerptEvidence(t *testing.T, analyzed ...string) application.DomainEvidenc
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 11, 7, 12, 0, 0, 0, time.UTC)
-	uc, err := application.NewAssessDomainEvidence(assess, func() time.Time { return at })
+	uc, err := application.NewAssessDomainEvidence(func() (application.AssessConformance, error) { return assess, nil }, func() time.Time { return at })
 	if err != nil {
 		t.Fatal(err)
 	}

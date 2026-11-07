@@ -15,65 +15,39 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/wixregiga/arclint/internal/application"
 	"github.com/wixregiga/arclint/internal/delivery/mapserve"
-	"github.com/wixregiga/arclint/internal/domain/rule"
 	"github.com/wixregiga/arclint/internal/domain/vocab"
-	jsonbaseline "github.com/wixregiga/arclint/internal/infrastructure/baseline/json"
-	sobekextension "github.com/wixregiga/arclint/internal/infrastructure/extension/sobek"
-	golangfacts "github.com/wixregiga/arclint/internal/infrastructure/language/golang"
-	pythonfacts "github.com/wixregiga/arclint/internal/infrastructure/language/python"
-	typescriptfacts "github.com/wixregiga/arclint/internal/infrastructure/language/typescript"
-	filesystemobservation "github.com/wixregiga/arclint/internal/infrastructure/observation/filesystem"
-	embeddedpattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/embedded"
-	filesystempattern "github.com/wixregiga/arclint/internal/infrastructure/pattern/filesystem"
-	yamlrule "github.com/wixregiga/arclint/internal/infrastructure/rule/yaml"
 )
 
-// composedAssessment composes the Conformance Check for root as run
-// composes it for `arclint check`.
-func composedAssessment(t *testing.T, root string, knowledge vocab.Repository) application.AssessConformance {
+// freshCheck composes the Conformance Check for root through the one
+// composition `arclint check` and Studio share.
+func freshCheck(t *testing.T, root string, knowledge vocab.Repository) func() (application.AssessConformance, error) {
 	t.Helper()
 	rulesPath := filepath.Join(root, "rules.arclint.yaml")
-	local, err := filesystempattern.NewSource(filepath.Join(root, ".arclint", "patterns"))
-	if err != nil {
+	if _, err := composeConformance(root, rulesPath, knowledge); err != nil {
 		t.Fatal(err)
 	}
-	repository, err := yamlrule.NewRepository(rulesPath, knowledge, embeddedpattern.NewSource(), local)
-	if err != nil {
-		t.Fatal(err)
+	return func() (application.AssessConformance, error) {
+		parts, err := composeConformance(root, rulesPath, knowledge)
+		return parts.assess, err
 	}
-	observations, err := filesystemobservation.NewSource(root, golangfacts.NewProducer(), typescriptfacts.NewProducer(), pythonfacts.NewProducer())
-	if err != nil {
-		t.Fatal(err)
-	}
-	extensions, err := sobekextension.NewEvaluator(root, func() ([]rule.ConfiguredExtension, error) {
-		cfg, err := repository.ConfiguredRules()
-		if err != nil {
-			return nil, err
-		}
-		return cfg.Extensions, nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	baselines, err := jsonbaseline.NewStore(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assess, err := application.NewAssessConformance(repository, observations, baselines, extensions, knowledge)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return assess
 }
 
 // evidenceStudio serves Studio over a copy of the Go example, composed
 // as `arclint map serve` composes it.
 func evidenceStudio(t *testing.T) (string, http.Handler) {
+	return evidenceStudioWith(t, nil)
+}
+
+// evidenceStudioWith is evidenceStudio with the composition of each
+// assessment wrapped, so a test can hold an assessment while it runs.
+func evidenceStudioWith(t *testing.T, wrap func(application.FreshCheck) application.FreshCheck) (string, http.Handler) {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.CopyFS(root, os.DirFS(filepath.Join("..", "..", "docs", "examples", "go"))); err != nil {
@@ -115,7 +89,11 @@ func evidenceStudio(t *testing.T) (string, http.Handler) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := composeStudio(root, recording, overview, define, remove, composedAssessment(t, root, repo))
+	check := application.FreshCheck(freshCheck(t, root, repo))
+	if wrap != nil {
+		check = wrap(check)
+	}
+	server, err := composeStudio(root, recording, overview, define, remove, check)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,29 +374,248 @@ func TestComposedAssessmentsSkipRequestsAlreadyGone(t *testing.T) {
 	if w := excerpt(h, first.Snapshot, "identityaccess/tenant/tenant.go", 16); w.Code != http.StatusOK {
 		t.Fatalf("after six requests that left at once, the first snapshot: %d %s", w.Code, w.Body.String())
 	}
-	// Requests arriving together share one run.
-	var wg sync.WaitGroup
-	snapshots := make([]string, 4)
-	for i := range snapshots {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			w := serve(h, "GET", "/api/evidence", "", nil)
-			var doc evidenceAnswer
-			if w.Code == http.StatusOK && json.Unmarshal(w.Body.Bytes(), &doc) == nil {
-				snapshots[i] = doc.Snapshot
+}
+
+// Requests that arrive while an assessment runs wait for it and share
+// its result. The server, the barrier and the release are all made
+// inside one synctest bubble, so every wait below is a wait the bubble
+// observes: the first request's composition signals that it started and
+// is held; the other requests join the run under way; synctest.Wait
+// returns once all of them are blocked; only then is the run released.
+func TestComposedAssessmentsShareTheRunUnderWay(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var composed atomic.Int32
+		started := make(chan struct{})
+		release := make(chan struct{})
+		_, h := evidenceStudioWith(t, func(check application.FreshCheck) application.FreshCheck {
+			return func() (application.AssessConformance, error) {
+				if composed.Add(1) == 1 {
+					close(started)
+				}
+				<-release
+				return check()
 			}
-		}()
-	}
-	wg.Wait()
-	distinct := map[string]bool{}
-	for _, s := range snapshots {
-		if s == "" {
-			t.Fatalf("a request of the burst failed: %v", snapshots)
+		})
+		snapshots := make([]string, 4)
+		var wg sync.WaitGroup
+		ask := func(i int) {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				w := serve(h, "GET", "/api/evidence", "", nil)
+				var doc evidenceAnswer
+				if w.Code == http.StatusOK && json.Unmarshal(w.Body.Bytes(), &doc) == nil {
+					snapshots[i] = doc.Snapshot
+				}
+			}()
 		}
-		distinct[s] = true
+		ask(0)
+		<-started
+		for i := 1; i < len(snapshots); i++ {
+			ask(i)
+		}
+		synctest.Wait()
+		if n := composed.Load(); n != 1 {
+			t.Fatalf("four overlapping requests composed %d assessments, want 1", n)
+		}
+		close(release)
+		wg.Wait()
+		for _, s := range snapshots {
+			if s == "" || s != snapshots[0] {
+				t.Fatalf("the requests did not share one snapshot: %v", snapshots)
+			}
+		}
+	})
+}
+
+// The peek reads the file on disk now. A change of size after the
+// assessment is reported; an edit that keeps the size is not, which is
+// why the page always says the lines may differ from the assessed code.
+func TestComposedExcerptsReportASizeChangeSinceTheAssessment(t *testing.T) {
+	root, h := evidenceStudio(t)
+	doc := assessed(t, h)
+	changed := func() bool {
+		t.Helper()
+		w := excerpt(h, doc.Snapshot, "identityaccess/tenant/tenant.go", 16)
+		if w.Code != http.StatusOK {
+			t.Fatalf("excerpt: %d %s", w.Code, w.Body.String())
+		}
+		var got struct {
+			Changed bool `json:"changedSinceAssessment"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		return got.Changed
 	}
-	if len(distinct) == len(snapshots) {
-		t.Errorf("four requests together ran four assessments: %v", snapshots)
+	if changed() {
+		t.Fatal("an untouched file reads as changed")
+	}
+	path := filepath.Join(root, "identityaccess/tenant/tenant.go")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sameSize := strings.Replace(string(content), "Tenant is", "TENANT is", 1)
+	if err := os.WriteFile(path, []byte(sameSize), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if changed() {
+		t.Error("an edit of the same size cannot be told from no change, and must not be claimed as one")
+	}
+	if err := os.WriteFile(path, append(content, []byte("// one more line\n")...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if !changed() {
+		t.Error("a file whose size changed since the assessment reads as unchanged")
+	}
+}
+
+// findingSet is every finding of an evidence document, attributed or
+// not, as rule, place and message.
+func findingSet(t *testing.T, body []byte) map[string]bool {
+	t.Helper()
+	type finding struct {
+		Rule     string `json:"rule"`
+		Message  string `json:"message"`
+		Location *struct {
+			Path string `json:"path"`
+			Line int    `json:"line"`
+		} `json:"location"`
+	}
+	var doc struct {
+		Entries []struct {
+			Findings []finding `json:"findings"`
+		} `json:"entries"`
+		Unattributed struct {
+			Findings []finding `json:"findings"`
+		} `json:"unattributed"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]bool{}
+	add := func(f finding) {
+		key := f.Rule + "|" + f.Message
+		if f.Location != nil {
+			key += fmt.Sprintf("|%s:%d", f.Location.Path, f.Location.Line)
+		}
+		out[key] = true
+	}
+	for _, e := range doc.Entries {
+		for _, f := range e.Findings {
+			add(f)
+		}
+	}
+	for _, f := range doc.Unattributed.Findings {
+		add(f)
+	}
+	return out
+}
+
+// An assessment after the ruleset, the recording and an Extension changed
+// on disk finds what `arclint check` composed afresh finds then: the
+// server keeps no rules, vocabulary or Extension from an earlier run.
+func TestComposedReassessmentReadsChangedRulesRecordingAndExtensions(t *testing.T) {
+	root, h := evidenceStudio(t)
+	before := serve(h, "GET", "/api/evidence", "", nil)
+	if before.Code != http.StatusOK {
+		t.Fatalf("first assessment: %d %s", before.Code, before.Body.String())
+	}
+	if strings.Contains(before.Body.String(), "marker one") {
+		t.Fatal("the marker extension reported before it existed")
+	}
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	marker := func(message string) string {
+		return `import { defineRule } from "arclint";
+export default defineRule({
+  type: "marker",
+  check(ctx) {
+    for (const f of ctx.files()) ctx.report({ path: f.path, line: 1, message: "` + message + `" });
+  },
+});
+`
+	}
+	// A new Rule using a new Extension, and a new aggregate the code does not declare.
+	write(".arclint/extensions/marker.ts", marker("marker one"))
+	rules, err := os.ReadFile(filepath.Join(root, "rules.arclint.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	write("rules.arclint.yaml", string(rules)+`
+  identityaccess/marker:
+    rationale: "Marks each file of the tenant package."
+    on: identityaccess
+    files: "identityaccess/tenant/tenant.go"
+    uses: marker
+`)
+	recording, err := os.ReadFile(filepath.Join(root, "domain.arclint.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	write("domain.arclint.yaml", strings.Replace(string(recording), "    aggregates:\n", "    aggregates:\n      Ledger:\n        definition: A record of every charge to a tenant.\n        identity: LedgerID\n", 1))
+
+	recordingRepo := func() vocab.Repository {
+		_, _, repo, err := composeKnowledge(root, filepath.Join(root, "rules.arclint.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return repo
+	}
+	cliFindings := func() map[string]bool {
+		t.Helper()
+		parts, err := composeConformance(root, filepath.Join(root, "rules.arclint.yaml"), recordingRepo())
+		if err != nil {
+			t.Fatal(err)
+		}
+		a, err := parts.assess.Execute(application.AssessConformanceRequest{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]bool{}
+		for _, v := range a.Violations() {
+			key := v.Rule().Qualified() + "|" + v.Message()
+			if v.Path() != "" {
+				key += fmt.Sprintf("|%s:%d", v.Path(), v.Line())
+			}
+			out[key] = true
+		}
+		return out
+	}
+	assertMatches := func(step string) []byte {
+		t.Helper()
+		w := serve(h, "GET", "/api/evidence", "", nil)
+		if w.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", step, w.Code, w.Body.String())
+		}
+		got, want := findingSet(t, w.Body.Bytes()), cliFindings()
+		for k := range want {
+			if !got[k] {
+				t.Errorf("%s: the check composed now finds %q; the evidence does not", step, k)
+			}
+		}
+		for k := range got {
+			if !want[k] {
+				t.Errorf("%s: the evidence holds %q; the check composed now does not", step, k)
+			}
+		}
+		return w.Body.Bytes()
+	}
+	after := assertMatches("after the ruleset, recording and extension changed")
+	if !strings.Contains(string(after), "marker one") || !strings.Contains(string(after), `"name":"Ledger"`) {
+		t.Fatalf("the reassessment missed the new Rule or the new entry")
+	}
+	write(".arclint/extensions/marker.ts", marker("marker two"))
+	again := assertMatches("after the extension changed again")
+	if strings.Contains(string(again), "marker one") || !strings.Contains(string(again), "marker two") {
+		t.Fatal("the reassessment kept the earlier extension")
 	}
 }

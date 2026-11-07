@@ -631,7 +631,9 @@ missing one, and the findings tied to the entry through its contract, its
 recorded line, its bounded context or a file declaring it. Beside every entry
 the page lists what the whole assessment could not decide and the findings no
 entry can be given, so an entry never reads clean from a missing result. A
-location opens a few lines of the file below the map. The server reads only
+location opens a few lines of the file as it is on disk now, below the map;
+the assessment keeps no copy, so the page says those lines may differ from the
+code it assessed. The server reads only
 source the assessment analyzed and the domain file, inside the project and
 never through a link, and withholds a file whose name or content looks like a
 secret. Assessing changes

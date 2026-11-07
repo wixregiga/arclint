@@ -31,13 +31,23 @@ type DomainEvidence struct {
 	// readable is every source file the assessment analyzed in a
 	// configured language, and the domain recording: the only files an
 	// excerpt of this snapshot may read.
-	readable map[string]bool
+	readable map[string]int64
 }
 
 // Readable reports whether an excerpt of this snapshot may read the
 // file: the assessment analyzed it as source, or it is the domain
 // recording.
-func (d DomainEvidence) Readable(path string) bool { return d.readable[path] }
+func (d DomainEvidence) Readable(path string) bool {
+	_, ok := d.readable[path]
+	return ok
+}
+
+// assessedSize is the size the assessment observed the file at; false
+// when it was not observed, as the domain recording is not.
+func (d DomainEvidence) assessedSize(path string) (int64, bool) {
+	size, ok := d.readable[path]
+	return size, ok && size >= 0
+}
 
 // ExpectedCarrier names the declaration the recording says carries the
 // contract, spelled as the project's languages spell a method, for a
@@ -56,27 +66,41 @@ func (d DomainEvidence) ExpectedCarrier(c conformance.ContractEvidence) string {
 // the same observations the check judged. It changes no source file and
 // no domain recording; an Extension may refresh its transpile cache.
 type AssessDomainEvidence struct {
-	assess AssessConformance
-	now    func() time.Time
+	check FreshCheck
+	now   func() time.Time
 }
 
-// NewAssessDomainEvidence composes the Conformance Check. now is the
-// clock the snapshot is stamped with; nil uses the wall clock.
-func NewAssessDomainEvidence(assess AssessConformance, now func() time.Time) (AssessDomainEvidence, error) {
-	if assess.rules == nil {
+// FreshCheck composes the Conformance Check over the project as its
+// files are now. A rule repository or an Extension host reads its files
+// once, so a server that assesses again and again composes the check
+// for every assessment, through the composition `arclint check` uses.
+type FreshCheck func() (AssessConformance, error)
+
+// NewAssessDomainEvidence takes the composition of the Conformance
+// Check. now is the clock the snapshot is stamped with; nil uses the
+// wall clock.
+func NewAssessDomainEvidence(check FreshCheck, now func() time.Time) (AssessDomainEvidence, error) {
+	if check == nil {
 		return AssessDomainEvidence{}, fmt.Errorf("assess domain evidence: missing conformance check")
 	}
 	if now == nil {
 		now = time.Now
 	}
-	return AssessDomainEvidence{assess: assess, now: now}, nil
+	return AssessDomainEvidence{check: check, now: now}, nil
 }
 
 // Execute assesses the repository as it is now and names the result
 // with a fresh snapshot.
 func (uc AssessDomainEvidence) Execute() (DomainEvidence, error) {
 	started := uc.now()
-	run, err := uc.assess.run(AssessConformanceRequest{}, []rule.Fact{rule.FactDeclarations})
+	assess, err := uc.check()
+	if err != nil {
+		return DomainEvidence{}, fmt.Errorf("compose the conformance check: %w", err)
+	}
+	if assess.rules == nil {
+		return DomainEvidence{}, fmt.Errorf("compose the conformance check: no rule repository")
+	}
+	run, err := assess.run(AssessConformanceRequest{}, []rule.Fact{rule.FactDeclarations})
 	if err != nil {
 		return DomainEvidence{}, err
 	}
@@ -88,7 +112,7 @@ func (uc AssessDomainEvidence) Execute() (DomainEvidence, error) {
 	if err != nil {
 		return DomainEvidence{}, fmt.Errorf("locate the recorded language: %w", err)
 	}
-	readable := map[string]bool{}
+	readable := map[string]int64{}
 	var failed []string
 	for _, f := range run.observations.Files() {
 		lf, ok := run.observations.FactsFor(f.Path)
@@ -98,14 +122,14 @@ func (uc AssessDomainEvidence) Execute() (DomainEvidence, error) {
 			// or a credentials file never is.
 			continue
 		}
-		readable[f.Path] = true
+		readable[f.Path] = f.Size
 		if lf.ParseFailure != "" {
 			failed = append(failed, f.Path)
 		}
 	}
 	recording := run.knowledge.Recording.Path()
 	if recording != "" {
-		readable[recording] = true
+		readable[recording] = -1
 	}
 	attribution, err := conformance.NewEvidenceAttribution(conformance.EvidenceAttributionSpec{
 		Knowledge: run.knowledge, Assessment: run.assessment, Carriers: carriers, ParseFailures: failed,
@@ -140,4 +164,4 @@ func snapshotName() (string, error) {
 }
 
 // Composed reports whether the use case was built by its constructor.
-func (uc AssessDomainEvidence) Composed() bool { return uc.assess.rules != nil && uc.now != nil }
+func (uc AssessDomainEvidence) Composed() bool { return uc.check != nil && uc.now != nil }

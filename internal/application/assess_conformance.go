@@ -130,12 +130,17 @@ func (uc AssessConformance) run(req AssessConformanceRequest, extra []rule.Fact)
 	// be read, whatever the scan leaves out; the Rules judging those
 	// tests decide which of them may be read.
 	facts := requiredFacts(rules)
+	added := false
 	for _, f := range extra {
 		if !slices.Contains(facts, f) {
 			facts = append(facts, f)
+			added = true
 		}
 	}
-	slices.Sort(facts)
+	if added {
+		// requiredFacts returns its classes sorted; keep them so.
+		slices.Sort(facts)
+	}
 	observations, err := uc.observations.Observe(cfg.Languages, cfg.Scan, facts, nil, conformance.NamedTestsToRead(rules, knowledge))
 	if err != nil {
 		return assessmentRun{}, fmt.Errorf("observe repository: %w", err)

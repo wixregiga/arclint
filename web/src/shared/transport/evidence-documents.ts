@@ -95,10 +95,17 @@ export interface ExcerptRequest {
   line: number;
 }
 
+/**
+ * A few lines of a file as it is on disk when the excerpt is read. The
+ * assessment kept no copy, so they may differ from the code it judged;
+ * `changedSinceAssessment` is true when the file's size differs from the
+ * size the assessment observed, and an equal size proves nothing.
+ */
 export interface ExcerptDocument {
   snapshot: string;
   path: string;
   line: number;
   totalLines: number;
   lines: { number: number; text: string; truncated?: boolean }[];
+  changedSinceAssessment: boolean;
 }

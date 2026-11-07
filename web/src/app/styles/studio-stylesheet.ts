@@ -1782,6 +1782,8 @@ export const studioStylesheet: string = String.raw`
 }
 
 .st-evidence__readonly {
+  flex: none;
+  white-space: nowrap;
   font-size: 11px;
   font-weight: 600;
   color: var(--ink-soft);
@@ -2069,7 +2071,18 @@ export const studioStylesheet: string = String.raw`
 }
 
 .st-peek__meta {
-  gap: 10px;
+  gap: 4px 10px;
+  flex-wrap: wrap;
+}
+
+.st-peek__disk {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.st-peek__disk.is-changed {
+  color: var(--proposed);
+  font-weight: 600;
 }
 
 .st-peek__range {
@@ -2192,6 +2205,7 @@ export const studioStylesheet: string = String.raw`
   .st-main--peek .st-map__legend { display: none; }
   .st-main--map.st-main--peek { grid-template-rows: minmax(110px, 1fr) minmax(0, 1fr); }
   .st-peek { max-height: none; }
+  .st-peek__range { display: none; }
   .st-peek__line { grid-template-columns: 40px minmax(0, 1fr); }
   .st-status { flex-wrap: wrap; }
   .st-status__counts { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

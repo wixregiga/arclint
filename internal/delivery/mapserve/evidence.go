@@ -193,7 +193,7 @@ func (r *evidenceRoutes) source(w http.ResponseWriter, req *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, err)
 		return
 	}
-	doc := excerptDocument{Snapshot: excerpt.Snapshot, Path: excerpt.Path, Line: excerpt.Line, TotalLines: excerpt.TotalLines, Lines: []excerptLineDocument{}}
+	doc := excerptDocument{Snapshot: excerpt.Snapshot, Path: excerpt.Path, Line: excerpt.Line, TotalLines: excerpt.TotalLines, Lines: []excerptLineDocument{}, ChangedSinceAssessment: excerpt.ChangedSinceAssessment}
 	for _, l := range excerpt.Lines {
 		doc.Lines = append(doc.Lines, excerptLineDocument{Number: l.Number, Text: l.Text, Truncated: l.Truncated})
 	}
@@ -294,6 +294,9 @@ type (
 		Line       int                   `json:"line"`
 		TotalLines int                   `json:"totalLines"`
 		Lines      []excerptLineDocument `json:"lines"`
+		// The lines are the file on disk now; changed is true when its
+		// size differs from the size the assessment observed.
+		ChangedSinceAssessment bool `json:"changedSinceAssessment"`
 	}
 	excerptLineDocument struct {
 		Number    int    `json:"number"`

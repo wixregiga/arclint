@@ -52,7 +52,11 @@ evidence Stale until it is assessed again. A host that lends no evidence, or a
 server without it, shows it as unavailable.
 
 A location opens a source peek below the map: a few lines around it, as text,
-read-only, with Escape returning focus to the location. The server reads only
+read-only, with Escape returning focus to the location. The peek shows the file
+as it is on disk when it opens. The assessment keeps no copy of what it read, so
+the peek always says the lines may differ from the assessed code, and adds that
+the file changed when its size differs from the size the assessment observed. An
+edit that keeps the size is not detected, which is why the warning always shows. The server reads only
 source files the same assessment analyzed, plus the domain recording, through
 `os.Root` on the project. It never follows a link, even one inside the project,
 and refuses a pipe or device without waiting on it. A snapshot replaced by four
@@ -64,8 +68,10 @@ site's page cannot send, and refuse a request a browser marks as cross-site.
 Requests that arrive while an assessment runs share its result, and a request
 already gone starts none. Assessing writes no
 source file and no recording; an extension may refresh its transpile cache
-under `.arclint/cache`. The cost is that of `arclint check`: about 2.6 s warm on
-this repository, measured once on one machine.
+under `.arclint/cache`. An assessment costs what `arclint check` costs, plus one
+pass that attributes its findings. One unbenchmarked measurement on one machine
+took about 2.6 s warm on this repository; it promises nothing about other
+machines or repositories.
 
 Features provides freeform writing with inline language cues, aliases,
 definitions and connections. Authors can deliberately tie an occurrence to a

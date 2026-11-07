@@ -122,7 +122,8 @@ inspector, one assessment runs the check arclint check runs and shows,
 for the selected entry, where the code declares it, each contract's
 carrier or the missing one, and the findings tied to it, beside what
 the whole assessment could not decide. A location opens a few lines of
-the file the assessment analyzed. Assessing changes no source file and
+the file the assessment analyzed, as it is on disk now; the page says
+they may differ from the code the assessment read. Assessing changes no source file and
 no domain file; an extension may refresh its cache under .arclint/cache.
 
 If the domain recording is missing, the page opens so you can begin the

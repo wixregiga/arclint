@@ -17,8 +17,11 @@ const STATUS_TEXT: Record<Peek["status"], string> = {
 };
 
 /**
- * A few lines around one evidence location, below the map. Read-only:
- * the text is shown as text, never as markup, and nothing can be edited.
+ * A few lines around one evidence location, below the map, as the file is
+ * on disk now: the assessment kept no copy, so the peek always says the
+ * lines may differ from the assessed code, an equal size included, and
+ * adds that the file changed when its size did. Read-only: the text is shown as text, never as
+ * markup, and nothing can be edited.
  * It takes focus when opened, so Escape closes it from there.
  */
 export function SourcePeek({ peek, onClose }: SourcePeekProps) {
@@ -57,15 +60,25 @@ export function SourcePeek({ peek, onClose }: SourcePeekProps) {
           <h2 className="st-peek__path" title={where}>
             <PathText path={peek.path} line={peek.line} />
           </h2>
+          <span className="st-evidence__readonly">read-only</span>
           <button type="button" className="st-button st-button--small" onClick={onClose} aria-label="Close the source peek">
             Close
           </button>
         </div>
         <div className="st-peek__row st-peek__meta">
-          <span className="st-evidence__readonly">read-only</span>
           {excerpt ? (
             <span className="st-peek__range">
               lines {excerpt.lines[0]?.number ?? peek.line}–{excerpt.lines[excerpt.lines.length - 1]?.number ?? peek.line} of {excerpt.totalLines}
+            </span>
+          ) : null}
+          {excerpt ? (
+            <span className="st-peek__disk" role="note">
+              Current file on disk; it may differ from the assessed code.
+            </span>
+          ) : null}
+          {excerpt?.changedSinceAssessment ? (
+            <span className="st-peek__disk is-changed" role="note">
+              Its size changed since the assessment.
             </span>
           ) : null}
         </div>

@@ -54,13 +54,19 @@ type ExcerptLine struct {
 	Truncated bool
 }
 
-// SourceExcerpt is a few lines of one file around one line, read-only.
+// SourceExcerpt is a few lines of one file around one line, read-only,
+// as the file is on disk when the excerpt is read: the assessment kept
+// no copy of the file, so the lines may differ from those it judged.
+// ChangedSinceAssessment is true when the file's size differs from the
+// size the assessment observed, which proves it changed; an equal size
+// proves nothing.
 type SourceExcerpt struct {
-	Snapshot   string
-	Path       string
-	Line       int
-	TotalLines int
-	Lines      []ExcerptLine
+	Snapshot               string
+	Path                   string
+	Line                   int
+	TotalLines             int
+	Lines                  []ExcerptLine
+	ChangedSinceAssessment bool
 }
 
 // ReadSourceExcerpt reads a few lines around a location the evidence
@@ -114,6 +120,9 @@ func (uc ReadSourceExcerpt) Execute(evidence DomainEvidence, file string, line i
 	first := max(1, line-ExcerptRadius)
 	last := min(len(lines), line+ExcerptRadius)
 	out := SourceExcerpt{Snapshot: evidence.Snapshot, Path: file, Line: line, TotalLines: len(lines)}
+	if size, ok := evidence.assessedSize(file); ok && size != int64(len(content)) {
+		out.ChangedSinceAssessment = true
+	}
 	for n := first; n <= last; n++ {
 		out.Lines = append(out.Lines, excerptLine(n, lines[n-1]))
 	}

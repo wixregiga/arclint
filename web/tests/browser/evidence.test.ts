@@ -1,3 +1,6 @@
+import { readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { StudioPage } from "../support/studio-page";
 
@@ -13,6 +16,9 @@ async function openMap(page: Page, base: string): Promise<StudioPage> {
   await page.getByRole("tab", { name: "Map" }).click();
   return studio;
 }
+
+/** The identity fixture project the suite's host serves at /, as tests/support/serve-studio.ts prepares it. */
+const IDENTITY = path.join(realpathSync(tmpdir()), `arclint-studio-e2e-${process.env.STUDIO_E2E_PORT ?? 4421}`, "projects", "identity");
 
 function inspector(page: Page) {
   return page.getByRole("complementary", { name: "Inspector" });
@@ -170,6 +176,38 @@ test.describe("code evidence over the YAML recording", () => {
     await expect(evidence(page)).toContainText("This map server serves no code evidence.");
     await expect(evidence(page)).not.toContainText("No attributed findings");
     await expect(evidence(page).getByRole("button", { name: "Assess code" })).toHaveCount(0);
+  });
+
+  test("says the peek shows the current file on disk, with an edit of the same size and a change of size", async ({ page }) => {
+    const file = path.join(IDENTITY, "identityaccess", "tenant", "tenant.go");
+    const original = readFileSync(file, "utf8");
+    try {
+      await openMap(page, "/");
+      await selectOnMap(page, "identityaccess", "Aggregate Tenant");
+      await assess(page);
+      const location = evidence(page).getByRole("button", { name: /^Peek at identityaccess\/tenant\/tenant\.go:\d+$/ }).first();
+      const peek = page.getByRole("region", { name: /^Source peek: / });
+      await location.click();
+      await expect(peek.getByRole("note").filter({ hasText: "Current file on disk; it may differ from the assessed code." })).toBeVisible();
+      await expect(peek).not.toContainText("Its size changed");
+
+      // The same size: nothing can tell it from no change, and the warning stands.
+      writeFileSync(file, original.replace("Tenant is", "TENANT is"));
+      await page.keyboard.press("Escape");
+      await location.click();
+      await expect(peek.locator(".st-peek__line").filter({ hasText: "TENANT is" })).toBeVisible();
+      await expect(peek.getByRole("note").filter({ hasText: "Current file on disk; it may differ from the assessed code." })).toBeVisible();
+      await expect(peek).not.toContainText("Its size changed");
+
+      // A change of size is said as well.
+      writeFileSync(file, `// added after the assessment\n${original}`);
+      await page.keyboard.press("Escape");
+      await location.click();
+      await expect(peek.getByRole("note").filter({ hasText: "Its size changed since the assessment." })).toBeVisible();
+      await expect(peek.getByRole("note").filter({ hasText: "Current file on disk; it may differ from the assessed code." })).toBeVisible();
+    } finally {
+      writeFileSync(file, original);
+    }
   });
 
   test("marks evidence stale when the recording changes while its assessment is still running", async ({ page }) => {
