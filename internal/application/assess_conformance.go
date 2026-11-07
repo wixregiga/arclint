@@ -2,6 +2,7 @@ package application
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/wixregiga/arclint/internal/domain/baseline"
@@ -82,14 +83,37 @@ func NewAssessConformance(rules rule.Repository, observations ObservationSource,
 // Baseline afterwards, surfacing stale Baseline entries as a coverage
 // Diagnostic.
 func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.Assessment, error) {
+	run, err := uc.run(req, nil)
+	if err != nil {
+		return conformance.Assessment{}, err
+	}
+	return run.assessment, nil
+}
+
+// assessmentRun is one Conformance Check with what it read: the
+// configured Rules, the recorded language and the observations, so a
+// use case composing the check reads the same repository state instead
+// of observing it again.
+type assessmentRun struct {
+	assessment conformance.Assessment
+	configured rule.Configured
+	knowledge  vocab.UbiquitousLanguage
+	// found is false when the project records no domain file yet.
+	found        bool
+	observations conformance.Observations
+}
+
+// run is one Conformance Check that also observes the extra fact
+// classes, and returns what the check read with the Assessment.
+func (uc AssessConformance) run(req AssessConformanceRequest, extra []rule.Fact) (assessmentRun, error) {
 	cfg, err := uc.rules.ConfiguredRules()
 	if err != nil {
-		return conformance.Assessment{}, fmt.Errorf("load configured rules: %w", err)
+		return assessmentRun{}, fmt.Errorf("load configured rules: %w", err)
 	}
 	rules := cfg.Rules
 	if len(req.Only) > 0 || len(req.Exclude) > 0 {
 		if rules, err = selectRules(rules, req.Only, req.Exclude); err != nil {
-			return conformance.Assessment{}, err
+			return assessmentRun{}, err
 		}
 	}
 	// Missing domain model is an empty Ubiquitous Language; load
@@ -97,7 +121,7 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 	// rules.arclint.yaml.
 	knowledge, found, err := uc.knowledge.RecordedLanguage()
 	if err != nil {
-		return conformance.Assessment{}, fmt.Errorf("load domain model: %w", err)
+		return assessmentRun{}, fmt.Errorf("load domain model: %w", err)
 	}
 	if !found {
 		knowledge = vocab.UbiquitousLanguage{Recording: uc.knowledge.Recording()}
@@ -105,10 +129,23 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 	// The language names the test files its verified_by entries ask to
 	// be read, whatever the scan leaves out; the Rules judging those
 	// tests decide which of them may be read.
-	observations, err := uc.observations.Observe(cfg.Languages, cfg.Scan, requiredFacts(rules), nil, conformance.NamedTestsToRead(rules, knowledge))
-	if err != nil {
-		return conformance.Assessment{}, fmt.Errorf("observe repository: %w", err)
+	facts := requiredFacts(rules)
+	added := false
+	for _, f := range extra {
+		if !slices.Contains(facts, f) {
+			facts = append(facts, f)
+			added = true
+		}
 	}
+	if added {
+		// requiredFacts returns its classes sorted; keep them so.
+		slices.Sort(facts)
+	}
+	observations, err := uc.observations.Observe(cfg.Languages, cfg.Scan, facts, nil, conformance.NamedTestsToRead(rules, knowledge))
+	if err != nil {
+		return assessmentRun{}, fmt.Errorf("observe repository: %w", err)
+	}
+	out := assessmentRun{configured: cfg, knowledge: knowledge, found: found, observations: observations}
 	assessment, err := conformance.Run(conformance.Request{
 		Rules:          rules,
 		Zones:          cfg.Zones,
@@ -118,35 +155,37 @@ func (uc AssessConformance) Execute(req AssessConformanceRequest) (conformance.A
 		Knowledge:      knowledge,
 	})
 	if err != nil {
-		return conformance.Assessment{}, fmt.Errorf("conformance check: %w", err)
+		return assessmentRun{}, fmt.Errorf("conformance check: %w", err)
 	}
+	out.assessment = assessment
 	if req.SkipBaseline {
-		return assessment, nil
+		return out, nil
 	}
 	snapshot, present, err := uc.baselines.Load()
 	if err != nil {
-		return conformance.Assessment{}, fmt.Errorf("load baseline: %w", err)
+		return assessmentRun{}, fmt.Errorf("load baseline: %w", err)
 	}
 	if !present {
-		return assessment, nil
+		return out, nil
 	}
 	covered, stale, err := snapshot.Apply(assessment)
 	if err != nil {
-		return conformance.Assessment{}, fmt.Errorf("apply baseline: %w", err)
+		return assessmentRun{}, fmt.Errorf("apply baseline: %w", err)
 	}
+	out.assessment = covered
 	if len(stale) > 0 {
 		note, err := conformance.NewCoverage("",
 			fmt.Sprintf("baseline: %d adopted finding(s) no longer occur; refresh the baseline", staleCount(stale)))
 		if err != nil {
-			return conformance.Assessment{}, fmt.Errorf("baseline coverage note: %w", err)
+			return assessmentRun{}, fmt.Errorf("baseline coverage note: %w", err)
 		}
 		noted, err := covered.WithDiagnostics(note)
 		if err != nil {
-			return conformance.Assessment{}, fmt.Errorf("baseline coverage note: %w", err)
+			return assessmentRun{}, fmt.Errorf("baseline coverage note: %w", err)
 		}
-		return noted, nil
+		out.assessment = noted
 	}
-	return covered, nil
+	return out, nil
 }
 
 // selectRules narrows the configured Rules by selectors (exact

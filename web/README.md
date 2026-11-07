@@ -36,6 +36,49 @@ browser session; the recording changes only on save. Context relations can be
 viewed but are edited through the existing CLI. Architecture rule authoring
 stays outside Studio.
 
+Code evidence is optional and read-only. In Map, the inspector's Code evidence
+section runs one assessment when asked, the same complete check as `arclint
+check` with the baseline applied. One assessment answers every selection, and
+selecting an entry never starts one. For the selected entry it shows the
+recorded line, where the code declares the entry (presence, not proof), each
+contract's carrier or the one that is missing, and the findings tied to it. A
+finding is tied through its contract, its recorded line, its bounded context or
+a file declaring the entry, never through its message. Every entry's evidence
+sits beside the whole assessment: rules an extension stopped, files that failed
+to parse, operational diagnostics, and findings no entry can be given. An entry
+reads as Partial whenever something it needed was not decided; it never reads
+clean from a missing result. Saving, Reload or a failed assessment marks shown
+evidence Stale until it is assessed again. A host that lends no evidence, or a
+server without it, shows it as unavailable.
+
+A location opens a source peek below the map: a few lines around it, as text,
+read-only, with Escape returning focus to the location. The peek shows the file
+as it is on disk when it opens. The assessment keeps no copy of what it read, so
+the peek always says the lines may differ from the assessed code, and adds that
+the file changed when its size differs from the size the assessment observed. An
+edit that keeps the size is not detected, which is why the warning always shows. The server reads only
+source files the same assessment analyzed, plus the domain recording, walking
+the path one folder at a time from the project and continuing from each folder
+it holds open (`openat` with `O_NOFOLLOW` and `O_NONBLOCK` on Unix, `os.Root`
+with identity checks elsewhere). It never follows a link, even one inside the
+project or one swapped in during the walk, and refuses a pipe or device without
+waiting on it. A snapshot replaced by four
+newer assessments is answered as stale. A file is withheld
+whole when its name or content looks like it holds a secret, a file over 2 MiB
+or one that is not text is refused, and long lines are cut. Both routes answer only
+requests carrying the `X-ArcLint-Studio` header the page sends, which another
+site's page cannot send, and refuse a request a browser marks as cross-site.
+Requests that arrive while an assessment runs share its result, and a request
+already gone starts none. Assessing writes no
+source file and no recording; an extension may refresh its transpile cache
+under `.arclint/cache`. An assessment runs the check `arclint check` runs, with
+one observation of the project, and adds work of its own: it extracts
+declarations when no configured rule already asks for them, locates the recorded
+entries in memory a second time, and attributes the findings. That overhead is
+not measured separately and is not claimed to be small. One unbenchmarked run on
+one machine took about 2.6 s warm on this repository; it promises nothing about
+other machines or repositories.
+
 Features provides freeform writing with inline language cues, aliases,
 definitions and connections. Authors can deliberately tie an occurrence to a
 recorded entry or mark it plain; ambiguous spellings remain unchosen. Missing

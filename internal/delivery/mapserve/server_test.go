@@ -563,6 +563,23 @@ func TestHandlerNeedsItsComposition(t *testing.T) {
 	}
 }
 
+// Code evidence is a capability a host lends: without it the routes do
+// not exist, so the page reads them as unavailable; lent half composed,
+// the server refuses to start.
+func TestEvidenceIsServedOnlyWhenLent(t *testing.T) {
+	h := handler(t, exampleRoot(t))
+	for _, path := range []string{mapserve.EvidencePath, mapserve.SourcePath + "?snapshot=x&path=a.go&line=1"} {
+		if rec := get(t, h, http.MethodGet, path); rec.Code != http.StatusNotFound {
+			t.Errorf("GET %s without evidence: %d, want 404", path, rec.Code)
+		}
+	}
+	server := composed(t, exampleRoot(t))
+	server.Evidence = &mapserve.Evidence{}
+	if _, err := server.Handler(); err == nil || !strings.Contains(err.Error(), "code evidence") {
+		t.Fatalf("err = %v, want the code evidence named", err)
+	}
+}
+
 func TestURLNamesTheBoundHost(t *testing.T) {
 	cases := []struct {
 		addr net.Addr

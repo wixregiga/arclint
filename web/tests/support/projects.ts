@@ -26,9 +26,10 @@ function git(dir: string, ...args: string[]): void {
  * Three real recordings in fresh folders under scratch, written again on
  * every run so the suite starts from the committed language:
  *
- * - identity: the Go example's YAML recording (Vernon's identity and
- *   access), committed upstream and cloned, so the clone has a remote
- *   default branch and every entry starts Accepted.
+ * - identity: the Go example (Vernon's identity and access): its YAML
+ *   recording, rules, baseline and Go code, committed upstream and
+ *   cloned, so the clone has a remote default branch, every entry
+ *   starts Accepted, and its code evidence has source to read.
  * - boxoffice: the proving ground's CML recording, with no remote, so
  *   the default branch is unavailable.
  * - empty: a project whose recording holds nothing yet, from `arclint
@@ -41,9 +42,10 @@ export function prepareProjects(scratch: string, arclint: string): Record<"ident
 
   const upstream = path.join(base, "identity-upstream");
   mkdirSync(upstream);
-  for (const name of ["domain.arclint.yaml", "rules.arclint.yaml", "go.mod"]) {
-    cpSync(path.join(REPO_ROOT, "docs/examples/go", name), path.join(upstream, name));
-  }
+  cpSync(path.join(REPO_ROOT, "docs/examples/go"), upstream, {
+    recursive: true,
+    filter: (source) => !source.includes(`${path.sep}.arclint${path.sep}cache`),
+  });
   git(upstream, "init", "-q", "-b", "main");
   git(upstream, "add", ".");
   git(upstream, "commit", "-q", "-m", "the accepted recording");

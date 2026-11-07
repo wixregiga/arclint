@@ -33,7 +33,7 @@ IMPORTANT: work in this order on every change.
 - `arclint domain show <name>`: when someone asks which rules enforce something: the invariants and assertions an entry records, the code enforcing each one, and its status from the current check (`--format json`)
 - `arclint domain define`: record a meaning through validated commands; ArcLint writes the recording's format
 - `arclint domain remove`: remove an entry through validated commands
-- `arclint map serve`: show the recorded ubiquitous language in a browser and edit it there: each entry stands Accepted, Proposed or Draft against the remote default branch; drafts publish through define and remove (`--addr host:port`)
+- `arclint map serve`: show the recorded ubiquitous language in a browser and edit it there: each entry stands Accepted, Proposed or Draft against the remote default branch; drafts publish through define and remove; the map's inspector shows read-only code evidence on request (`--addr host:port`)
 - `arclint rules [selector]`: every configured rule with its constraint and rationale; one match prints the complete rule
 - `arclint check .`: evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings
 - `arclint rules test`: run the rule fixtures under `.arclint/tests` after changing any rule
@@ -47,13 +47,13 @@ IMPORTANT: work in this order on every change.
 
 ### The recorded domain
 
-6 contexts, 1 aggregates, 46 value objects, 61 invariants.
+6 contexts, 1 aggregates, 48 value objects, 64 invariants.
 
 - **agent**: value objects Activity, Guidance, Progress; services WorkflowGuide
 - **vocabulary**: value objects DomainRecording, WordLimit, MetaModel
 - **rule**: aggregates Rule (Zone, Pattern); value objects RuleID, ZoneName, Rationale, Constraint, Scope, Severity, Language, PatternReference, Expansion, ExpansionSource, TermCase, CaseSpec, DomainFile, Assurance, RuleTest, TimeLimit, Project
 - **adoption**: value objects Binding, Override, Disablement, Exclusion, Suppression, Installation
-- **conformance**: value objects ContractCoverage, DependencyImport, Facts, Violation, ExtensionFailure, NearLimit, TermUse, UndeterminedUse
+- **conformance**: value objects ContractCoverage, DependencyImport, Facts, Violation, ExtensionFailure, NearLimit, TermUse, UndeterminedUse, EntryEvidence, EvidenceAttribution
 - **distribution**: value objects Catalog, Digest, Index, Manifest, PatternFile, PatternSource, Registry, Selection, VendoredPattern
 
 Relations: vocabulary → rule (conformist); vocabulary → conformance (conformist); rule → conformance (conformist); rule → adoption (conformist); rule → distribution (conformist); distribution → adoption (conformist); adoption → conformance (conformist); rule → agent (conformist). Full text: `arclint domain`.

@@ -110,39 +110,13 @@ func run(args []string) int {
 			fmt.Fprintln(os.Stderr, warning)
 		}
 	}
-	// Patterns a ruleset may extend come from the binary and from the
-	// repository's own .arclint/patterns; the rule repository resolves
-	// extends through both.
-	builtinPatterns := embeddedpattern.NewSource()
-	localPatterns, err := filesystempattern.NewSource(filepath.Join(root, ".arclint", "patterns"))
+	checking, err := composeConformance(root, absRulesPath, knowledge)
 	if err != nil {
 		return configError(err)
 	}
-	repository, err := yamlrule.NewRepository(absRulesPath, knowledge, builtinPatterns, localPatterns)
-	if err != nil {
-		return configError(err)
-	}
-	observations, err := filesystemobservation.NewSource(root,
-		golangfacts.NewProducer(), typescriptfacts.NewProducer(), pythonfacts.NewProducer())
-	if err != nil {
-		return configError(err)
-	}
-	// Extension sources the extended Patterns distribute reach the host
-	// from the loaded ruleset, never from a copy on disk.
-	extensions, err := sobekextension.NewEvaluator(root, func() ([]rule.ConfiguredExtension, error) {
-		cfg, err := repository.ConfiguredRules()
-		if err != nil {
-			return nil, fmt.Errorf("pattern extensions: %w", err)
-		}
-		return cfg.Extensions, nil
-	})
-	if err != nil {
-		return configError(err)
-	}
-	baselines, err := jsonbaseline.NewStore(root)
-	if err != nil {
-		return configError(err)
-	}
+	builtinPatterns, localPatterns := checking.builtinPatterns, checking.localPatterns
+	repository, observations := checking.repository, checking.observations
+	extensions, baselines := checking.extensions, checking.baselines
 
 	listRules, err := application.NewListRules(repository)
 	if err != nil {
@@ -152,10 +126,7 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	assess, err := application.NewAssessConformance(repository, observations, baselines, extensions, knowledge)
-	if err != nil {
-		return configError(err)
-	}
+	assess := checking.assess
 	capture, err := application.NewCaptureBaseline(assess, baselines)
 	if err != nil {
 		return configError(err)
@@ -268,7 +239,14 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	studio, err := composeStudio(root, recording, mapOverview, defineDomainDefinition, removeDomainDefinition)
+	// Each assessment Studio's reader asks for composes the check afresh,
+	// so a ruleset, recording or extension changed while the server runs
+	// is read as `arclint check` would read it now.
+	freshCheck := func() (application.AssessConformance, error) {
+		parts, err := composeConformance(root, absRulesPath, knowledge)
+		return parts.assess, err
+	}
+	studio, err := composeStudio(root, recording, mapOverview, defineDomainDefinition, removeDomainDefinition, freshCheck)
 	if err != nil {
 		return configError(err)
 	}
@@ -328,15 +306,82 @@ func run(args []string) int {
 	return outcome.ExitCode
 }
 
+// conformanceParts is the Conformance Check and the adapters it reads
+// the project through.
+type conformanceParts struct {
+	builtinPatterns embeddedpattern.Source
+	localPatterns   filesystempattern.Source
+	repository      *yamlrule.Repository
+	observations    filesystemobservation.Source
+	extensions      *sobekextension.Evaluator
+	baselines       jsonbaseline.Store
+	assess          application.AssessConformance
+}
+
+// composeConformance composes the Conformance Check `arclint check`
+// runs: the ruleset with the Patterns it extends, the observation of
+// the project's files, the Extensions and the committed Baseline. The
+// rule repository and the Extension host each read their files once,
+// on first use, so a long-running server composes the check again for
+// every assessment instead of keeping one.
+func composeConformance(root, absRulesPath string, knowledge vocab.Repository) (conformanceParts, error) {
+	// Patterns a ruleset may extend come from the binary and from the
+	// repository's own .arclint/patterns; the rule repository resolves
+	// extends through both.
+	parts := conformanceParts{builtinPatterns: embeddedpattern.NewSource()}
+	var err error
+	if parts.localPatterns, err = filesystempattern.NewSource(filepath.Join(root, ".arclint", "patterns")); err != nil {
+		return conformanceParts{}, fmt.Errorf("compose the check: local patterns: %w", err)
+	}
+	if parts.repository, err = yamlrule.NewRepository(absRulesPath, knowledge, parts.builtinPatterns, parts.localPatterns); err != nil {
+		return conformanceParts{}, fmt.Errorf("compose the check: ruleset: %w", err)
+	}
+	if parts.observations, err = filesystemobservation.NewSource(root,
+		golangfacts.NewProducer(), typescriptfacts.NewProducer(), pythonfacts.NewProducer()); err != nil {
+		return conformanceParts{}, fmt.Errorf("compose the check: observation: %w", err)
+	}
+	// Extension sources the extended Patterns distribute reach the host
+	// from the loaded ruleset, never from a copy on disk.
+	repository := parts.repository
+	if parts.extensions, err = sobekextension.NewEvaluator(root, func() ([]rule.ConfiguredExtension, error) {
+		cfg, err := repository.ConfiguredRules()
+		if err != nil {
+			return nil, fmt.Errorf("pattern extensions: %w", err)
+		}
+		return cfg.Extensions, nil
+	}); err != nil {
+		return conformanceParts{}, fmt.Errorf("compose the check: extensions: %w", err)
+	}
+	if parts.baselines, err = jsonbaseline.NewStore(root); err != nil {
+		return conformanceParts{}, fmt.Errorf("compose the check: baseline: %w", err)
+	}
+	if parts.assess, err = application.NewAssessConformance(parts.repository, parts.observations, parts.baselines, parts.extensions, knowledge); err != nil {
+		return conformanceParts{}, fmt.Errorf("compose the check: conformance check: %w", err)
+	}
+	return parts, nil
+}
+
 // composeStudio wires the map server: the page saves its language edits
 // through the same define and remove the command line runs, reads the
 // overview the domain file records now, and reads the one the remote's
 // default branch records through git, when the project has one; without
-// one the page shows the recording alone and says why. Every document
-// is spelled by the JSON renderer, whatever renderer the command's own
-// report uses.
-func composeStudio(root string, recording vocab.DomainRecording, overview application.GetDomainOverview, define application.DefineDomainDefinition, remove application.RemoveDomainDefinition) (mapserve.Server, error) {
+// one the page shows the recording alone and says why. Every language
+// document is spelled by the JSON renderer, whatever renderer the
+// command's own report uses; the code evidence is spelled by the server.
+func composeStudio(root string, recording vocab.DomainRecording, overview application.GetDomainOverview, define application.DefineDomainDefinition, remove application.RemoveDomainDefinition, freshCheck func() (application.AssessConformance, error)) (mapserve.Server, error) {
 	jsonRenderer, err := reportfactory.Select(cli.RendererJSON)
+	if err != nil {
+		return mapserve.Server{}, fmt.Errorf("compose map server: %w", err)
+	}
+	// The page asks for code evidence when its reader does: one complete
+	// check of the repository as `arclint check` runs it, attributed to
+	// the recorded entries, and excerpts read only from the source files
+	// that check analyzed.
+	evidence, err := application.NewAssessDomainEvidence(freshCheck, nil)
+	if err != nil {
+		return mapserve.Server{}, fmt.Errorf("compose map server: %w", err)
+	}
+	excerpts, err := application.NewReadSourceExcerpt(studio.SourceFiles{Project: root})
 	if err != nil {
 		return mapserve.Server{}, fmt.Errorf("compose map server: %w", err)
 	}
@@ -357,6 +402,7 @@ func composeStudio(root string, recording vocab.DomainRecording, overview applic
 		Define:   define,
 		Remove:   remove,
 		Accepted: acceptedRecording(root, recording),
+		Evidence: &mapserve.Evidence{Assess: evidence, Excerpts: excerpts},
 	}
 	return server, nil
 }

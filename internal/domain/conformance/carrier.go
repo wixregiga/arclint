@@ -82,6 +82,34 @@ func (c Carriers) TypeFiles(ctx, term string) []string {
 	return out
 }
 
+// Declarations lists where the term is declared in the context's code,
+// read as TypeFiles reads it but with the line of each declaration:
+// one when the term is located, several when nothing tells which is
+// the model's, none when nothing spells it.
+func (c Carriers) Declarations(ctx, term string) []Carrier {
+	cc, ok := c.contexts[ctx]
+	if !ok {
+		return nil
+	}
+	candidates := cc.terms[term].candidates
+	if ac, isAggregate := cc.aggregates[term]; isAggregate {
+		candidates = ac.candidates
+	}
+	out := make([]Carrier, 0, len(candidates))
+	for _, d := range candidates {
+		out = append(out, carrierOf(d))
+	}
+	return out
+}
+
+// ReadsCode reports whether any file of the context's code was analyzed
+// in a language ArcLint reads, so a term no declaration spells is told
+// apart from a term in code ArcLint could not look at.
+func (c Carriers) ReadsCode(ctx string) bool {
+	cc, ok := c.contexts[ctx]
+	return ok && cc.scopeAnalysisFiles > 0
+}
+
 // Constructor locates the door a value object's invariants are
 // enforced at: the first constructor of the type spelling the term in
 // its unit. A term no type spells has no constructor.

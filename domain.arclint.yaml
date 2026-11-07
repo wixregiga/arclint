@@ -576,6 +576,43 @@ contexts:
           states-its-reason: >-
             An UndeterminedUse always states why resolution cannot confirm
             whether its reference reaches a recorded term.
+      EntryEvidence:
+        definition: >-
+          What one assessment shows about one recorded entry: the declarations
+          located for it or missing, the coverage of its contracts, and the
+          findings attributed to it. A located declaration is presence, never
+          proof the code honours the entry.
+        invariants:
+          attributed-through-structure:
+            statement: >-
+              EntryEvidence holds a finding only when the finding's contract,
+              its anchor at the entry's recorded line, its bounded context
+              subject, or a file declaring the entry ties it to the entry;
+              message text never does.
+            verified_by:
+              - internal/domain/conformance/evidence_attribution_test.go:TestEvidenceAttributionTiesFindingsThroughTheirStructure
+              - internal/domain/conformance/evidence_attribution_test.go:TestEntryEvidenceRefusesABasisTheFindingDoesNotShow
+          partial-never-reads-clean:
+            statement: >-
+              EntryEvidence without an active finding reads as partial, never as
+              free of findings, when its assessment is incomplete, a file failed
+              to parse, or a check of its entry did not decide.
+            verified_by:
+              - internal/domain/conformance/evidence_attribution_test.go:TestEntryEvidencePartialNeverReadsClean
+              - internal/domain/conformance/evidence_attribution_test.go:TestEntryEvidencePartialWhenAContractCheckWasNotPerformed
+      EvidenceAttribution:
+        definition: >-
+          What one assessment shows about the whole recorded language: the
+          EntryEvidence of every entry, and the findings and diagnostics no
+          entry can be given, kept apart as unattributed.
+        invariants:
+          accounts-for-every-finding:
+            statement: >-
+              EvidenceAttribution gives every finding of its assessment to the
+              EntryEvidence of an entry or lists it as unattributed; it drops
+              none.
+            verified_by:
+              - internal/domain/conformance/evidence_attribution_test.go:TestEvidenceAttributionAccountsForEveryFinding
   distribution:
     definition: >-
       Moving published Patterns between repositories without changing them: what
