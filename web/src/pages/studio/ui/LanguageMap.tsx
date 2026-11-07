@@ -59,6 +59,24 @@ export function LanguageMap({ entries, relations, context, selectedKey, standing
   const scale = layout && viewport.width > 0 ? Math.max(READABLE, fit(layout, viewport)) * zoom : zoom;
   const byKey = useMemo(() => new Map(entries.map((e) => [e.key, e])), [entries]);
 
+  // Keep the selected entry in view when the stage is smaller than the
+  // map, as on a narrow screen or beside an open source peek. Only the
+  // stage scrolls; the page and the panes around it stay where they are.
+  useEffect(() => {
+    const el = stage.current;
+    const node = layout?.nodes.find((n) => n.key === selectedKey);
+    if (!el || !node) return;
+    // The stage pads the map by 16px across and 8px down.
+    const x = node.x * scale + 16;
+    const y = node.y * scale + 8;
+    // Outside the middle half of the stage, bring the entry to its centre
+    // across and near its top, so what it holds shows below it.
+    const left = el.scrollLeft;
+    const top = el.scrollTop;
+    if (x < left + el.clientWidth / 4 || x > left + (el.clientWidth * 3) / 4) el.scrollLeft = Math.max(0, x - el.clientWidth / 2);
+    if (y < top + el.clientHeight / 4 || y > top + (el.clientHeight * 3) / 4) el.scrollTop = Math.max(0, y - el.clientHeight / 5);
+  }, [layout, selectedKey, scale, viewport]);
+
   return (
     <div className="st-map" aria-label="Map">
       <section className="st-map__contexts" aria-label="Context map">

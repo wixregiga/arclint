@@ -65,6 +65,9 @@ export function StudioScreen({ gateway, memory, featureStore, codeEvidence }: St
   const [failure, setFailure] = useState<Failure | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [reloading, setReloading] = useState(false);
+  // On a narrow screen the map folds the navigator behind a toggle, so the
+  // map, the source peek and the inspector share the height.
+  const [navigatorShown, setNavigatorShown] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const overview = language.overview;
@@ -344,7 +347,12 @@ export function StudioScreen({ gateway, memory, featureStore, codeEvidence }: St
           <p className="st-note">Reading the recording…</p>
         </main>
       ) : (
-        <div className={workspace.mode === "map" ? "st-body st-body--map" : workspace.mode === "features" ? "st-body st-body--features" : "st-body"}>
+        <div className={workspace.mode === "map" ? (navigatorShown ? "st-body st-body--map" : "st-body st-body--map is-navigator-folded") : workspace.mode === "features" ? "st-body st-body--features" : "st-body"}>
+          {workspace.mode === "map" ? (
+            <button type="button" className="st-navigator-toggle" aria-expanded={navigatorShown} aria-controls="st-navigator" onClick={() => setNavigatorShown((v) => !v)}>
+              {navigatorShown ? "Hide the language list" : `Show the language list (${entries.length})`}
+            </button>
+          ) : null}
           {workspace.mode === "features" ? (
             <FeaturesView
               store={featureStore}
@@ -358,7 +366,7 @@ export function StudioScreen({ gateway, memory, featureStore, codeEvidence }: St
               onNotice={setNotice}
             />
           ) : (
-            <Navigator entries={entries} selection={selection} standingOf={standingOf} draftKeys={draftKeys} onSelect={select} onNew={beginNew} />
+            <Navigator id="st-navigator" entries={entries} selection={selection} standingOf={standingOf} draftKeys={draftKeys} onSelect={select} onNew={beginNew} />
           )}
           {workspace.mode === "features" ? null : workspace.mode === "map" ? (
             <>

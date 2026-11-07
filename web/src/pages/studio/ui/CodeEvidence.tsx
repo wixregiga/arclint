@@ -306,14 +306,31 @@ function Location({ location, onPeek }: { location: EvidenceLocationDocument; on
   const text = location.line > 0 ? `${location.path}:${location.line}` : location.path;
   if (!location.readable || location.line <= 0) {
     return (
-      <span className="st-evidence__location st-evidence__location--plain" title="No excerpt of this location can be read">
-        {text}
+      <span className="st-evidence__location st-evidence__location--plain" title={`${text}: no excerpt of this location can be read`}>
+        <PathText path={location.path} line={location.line} />
       </span>
     );
   }
   return (
-    <button type="button" className="st-evidence__location" aria-label={`Peek at ${text}`} onClick={(e) => onPeek(location, e.currentTarget)}>
-      {text}
+    <button type="button" className="st-evidence__location" aria-label={`Peek at ${text}`} title={text} onClick={(e) => onPeek(location, e.currentTarget)}>
+      <PathText path={location.path} line={location.line} />
     </button>
+  );
+}
+
+/**
+ * A path whose folder may wrap or shorten while the file name and line
+ * stay whole, so tenant.go:16 never splits.
+ */
+export function PathText({ path, line }: { path: string; line: number }) {
+  const cut = path.lastIndexOf("/") + 1;
+  return (
+    <>
+      {cut > 0 ? <span className="st-path__folder">{path.slice(0, cut)}</span> : null}
+      <span className="st-path__file">
+        {path.slice(cut)}
+        {line > 0 ? `:${line}` : ""}
+      </span>
+    </>
   );
 }

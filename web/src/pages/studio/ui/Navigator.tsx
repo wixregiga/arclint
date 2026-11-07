@@ -22,6 +22,8 @@ export interface NavigatorProps {
   draftKeys: ReadonlySet<string>;
   onSelect(entry: Entry): void;
   onNew(concept: Concept, context: string, owner: string): void;
+  /** The element id a toggle that shows and hides the navigator controls. */
+  id?: string;
 }
 
 /**
@@ -29,7 +31,7 @@ export interface NavigatorProps {
  * each nested entry under the one it is recorded under. An owner's
  * members fold away until opened or selected.
  */
-export function Navigator({ entries, selection, standingOf, draftKeys, onSelect, onNew }: NavigatorProps) {
+export function Navigator({ entries, selection, standingOf, draftKeys, onSelect, onNew, id }: NavigatorProps) {
   const contexts = contextNames(entries);
   const selectedKey = selection.kind === "entry" ? selection.key : null;
   const [open, setOpen] = useState<Set<string>>(() => new Set());
@@ -82,7 +84,7 @@ export function Navigator({ entries, selection, standingOf, draftKeys, onSelect,
   }
 
   return (
-    <nav className="st-navigator" aria-label="The recorded language">
+    <nav className="st-navigator" id={id} aria-label="The recorded language">
       <div className="st-navigator__head">
         <h2 className="st-navigator__heading">Language</h2>
         <button type="button" className="st-button st-button--small" onClick={() => onNew("bounded_context", "", "")} title={CONCEPT_MEANING.bounded_context}>

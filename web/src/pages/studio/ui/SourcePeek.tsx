@@ -1,5 +1,6 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import type { Peek } from "../model/use-source-peek";
+import { PathText } from "./CodeEvidence";
 
 export interface SourcePeekProps {
   peek: Peek;
@@ -52,20 +53,22 @@ export function SourcePeek({ peek, onClose }: SourcePeekProps) {
   return (
     <section ref={region} className="st-peek" aria-label={`Source peek: ${where}`} tabIndex={-1} onKeyDown={onKeyDown} aria-busy={peek.status === "loading"}>
       <header className="st-peek__head">
-        <span className="st-peek__path" title={peek.path}>
-          {peek.path}
-          <span className="st-peek__line-number">:{peek.line}</span>
-        </span>
-        <span className="st-evidence__readonly">read-only</span>
-        <span className="st-evidence__grow" />
-        {excerpt ? (
-          <span className="st-peek__range">
-            lines {excerpt.lines[0]?.number ?? peek.line}–{excerpt.lines[excerpt.lines.length - 1]?.number ?? peek.line} of {excerpt.totalLines}
-          </span>
-        ) : null}
-        <button type="button" className="st-button st-button--small" onClick={onClose} aria-label="Close the source peek">
-          Close
-        </button>
+        <div className="st-peek__row">
+          <h2 className="st-peek__path" title={where}>
+            <PathText path={peek.path} line={peek.line} />
+          </h2>
+          <button type="button" className="st-button st-button--small" onClick={onClose} aria-label="Close the source peek">
+            Close
+          </button>
+        </div>
+        <div className="st-peek__row st-peek__meta">
+          <span className="st-evidence__readonly">read-only</span>
+          {excerpt ? (
+            <span className="st-peek__range">
+              lines {excerpt.lines[0]?.number ?? peek.line}–{excerpt.lines[excerpt.lines.length - 1]?.number ?? peek.line} of {excerpt.totalLines}
+            </span>
+          ) : null}
+        </div>
       </header>
       {peek.status !== "ready" ? (
         <p className={peek.status === "loading" ? "st-note st-peek__status" : "st-peek__status st-evidence__stale"} role={peek.status === "loading" ? undefined : "status"}>

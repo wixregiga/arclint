@@ -221,21 +221,59 @@ test("answers an empty recording's failed check with its reason, never with an e
   expect(answered.body.error).toContain("load configured rules");
 });
 
-test("keeps the peek inside the map region on a narrow screen", async ({ page }) => {
+test("keeps the selected entry, its relationships and the source line in view together on a narrow screen", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openMap(page, "/");
+  // The map folds the navigator behind a labelled toggle.
+  const toggle = page.getByRole("button", { name: /^Show the language list \(\d+\)$/ });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("navigation", { name: "The recorded language" })).toBeHidden();
+  await toggle.click();
+  await expect(page.getByRole("button", { name: "Hide the language list" })).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("navigation", { name: "The recorded language" })).toBeVisible();
+  await page.getByRole("button", { name: "Hide the language list" }).click();
+
   await selectOnMap(page, "identityaccess", "Aggregate Tenant");
   await assess(page);
   await evidence(page).getByRole("button", { name: /^Peek at identityaccess\/tenant\/tenant\.go:\d+$/ }).first().click();
   await expect(page.locator(".st-peek__line.is-target")).toBeVisible();
   const layout = await page.locator("#studio").evaluate((host) => {
-    const box = (s: string) => host.shadowRoot!.querySelector(s)!.getBoundingClientRect();
-    const root = host.shadowRoot!.querySelector(".st-root")!;
-    return { nav: box(".st-navigator"), main: box(".st-main--map"), map: box(".st-map"), peek: box(".st-peek"), overflow: root.scrollWidth > root.clientWidth };
+    const root = host.shadowRoot!;
+    const box = (el: Element) => el.getBoundingClientRect();
+    const stage = box(root.querySelector(".st-map__stage")!);
+    const node = box(root.querySelector(".st-concept-map__node.is-selected circle")!);
+    const code = box(root.querySelector(".st-peek__code")!);
+    const target = box(root.querySelector(".st-peek__line.is-target")!);
+    const path = root.querySelector(".st-peek__path")!;
+    const file = box(path.querySelector(".st-path__file")!);
+    const lines = [...root.querySelectorAll(".st-concept-map__line")].map(box).filter((l) => l.right > stage.left && l.left < stage.right && l.bottom > stage.top && l.top < stage.bottom).length;
+    const html = root.querySelector(".st-root")!;
+    return { stage, node, code, target, file, lines, head: box(root.querySelector(".st-peek__head")!), main: box(root.querySelector(".st-main--map")!), peek: box(root.querySelector(".st-peek")!), overflow: html.scrollWidth > html.clientWidth };
   });
   expect(layout.overflow).toBe(false);
-  expect(layout.nav.bottom).toBeLessThanOrEqual(layout.map.top + 0.5);
-  expect(layout.peek.top).toBeGreaterThanOrEqual(layout.map.bottom - 0.5);
+  // The selected entry and some of its relationships are inside the visible stage.
+  expect(layout.node.left).toBeGreaterThanOrEqual(layout.stage.left);
+  expect(layout.node.right).toBeLessThanOrEqual(layout.stage.right);
+  expect(layout.node.top).toBeGreaterThanOrEqual(layout.stage.top);
+  expect(layout.node.bottom).toBeLessThanOrEqual(layout.stage.bottom);
+  expect(layout.lines).toBeGreaterThan(0);
+  // The highlighted line is inside the visible code at the same time.
+  expect(layout.target.top).toBeGreaterThanOrEqual(layout.code.top - 0.5);
+  expect(layout.target.bottom).toBeLessThanOrEqual(layout.code.bottom + 0.5);
+  // The peek fits its region; its header is two compact rows, and the file name and line are one unbroken line.
   expect(layout.peek.bottom).toBeLessThanOrEqual(layout.main.bottom + 0.5);
-  expect(layout.peek.right).toBeLessThanOrEqual(391);
+  expect(layout.head.height).toBeLessThanOrEqual(76);
+  expect(layout.file.height).toBeLessThanOrEqual(28);
+  await expect(page.getByRole("region", { name: /^Source peek: identityaccess\/tenant\/tenant\.go:16$/ })).toBeVisible();
+});
+
+test("keeps a location's file name and line whole on the desktop inspector", async ({ page }) => {
+  await openMap(page, "/");
+  await selectOnMap(page, "identityaccess", "Aggregate Tenant");
+  await assess(page);
+  const location = evidence(page).getByRole("button", { name: /^Peek at identityaccess\/tenant\/tenant\.go:\d+$/ }).first();
+  const file = location.locator(".st-path__file");
+  await expect(file).toHaveText(/^tenant\.go:\d+$/);
+  const box = await file.boundingBox();
+  expect(box!.height).toBeLessThanOrEqual(28);
 });
