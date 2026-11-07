@@ -110,6 +110,16 @@ test.describe("code evidence over the YAML recording", () => {
     await expect(peek).toHaveCount(0);
     expect(await focusedLabel(page)).toBe(label);
 
+    // Opening the same location again, while its peek is open, focuses
+    // the peek again, so Escape still closes it.
+    await declared.click();
+    await expect(peek).toBeVisible();
+    await declared.click();
+    expect(await focusedLabel(page)).toMatch(/^Source peek: /);
+    await page.keyboard.press("Escape");
+    await expect(peek).toHaveCount(0);
+    expect(await focusedLabel(page)).toBe(label);
+
     // Selecting on the map keeps focus where the reader is, keeps an open
     // peek, and keeps the map mounted.
     await declared.click();
@@ -210,6 +220,19 @@ test.describe("code evidence over the YAML recording", () => {
     }
   });
 
+  test("marks evidence stale when a reload fails", async ({ page }) => {
+    await openMap(page, "/");
+    await selectOnMap(page, "identityaccess", "Aggregate Tenant");
+    await assess(page);
+    await expect(evidence(page).getByText("Stale", { exact: true })).toHaveCount(0);
+    await page.route("**/api/overview", (route) => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "load domain model: the domain file vanished" }) }));
+    await page.getByRole("button", { name: "Reload" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "the domain file vanished" })).toBeVisible();
+    await expect(evidence(page).getByText("Stale", { exact: true })).toBeVisible();
+    await expect(evidence(page)).toContainText("Reload was asked for after this assessment");
+    await page.unroute("**/api/overview");
+  });
+
   test("marks evidence stale when the recording changes while its assessment is still running", async ({ page }) => {
     let release: () => void = () => {};
     const held = new Promise<void>((resolve) => (release = resolve));
@@ -228,7 +251,7 @@ test.describe("code evidence over the YAML recording", () => {
     release();
     await expect(evidence(page).getByText(/^Assessed /)).toBeVisible();
     await expect(evidence(page).getByText("Stale", { exact: true })).toBeVisible();
-    await expect(evidence(page)).toContainText("The domain file was read again after this assessment");
+    await expect(evidence(page)).toContainText("Reload was asked for after this assessment");
   });
 });
 

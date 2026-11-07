@@ -208,13 +208,14 @@ export function StudioScreen({ gateway, memory, featureStore, codeEvidence }: St
   }
 
   async function reloadNow() {
+    // Asking for a reload says the recording or the code may have
+    // changed; the evidence is stale from then on, whether or not the
+    // reload succeeds.
+    markStale("Reload was asked for after this assessment; the recording or the code may have changed.");
     setReloading(true);
     const ok = await reload();
     setReloading(false);
-    if (ok) {
-      markStale("The domain file was read again after this assessment; the code may have changed too.");
-      setNotice("Read the domain file again.");
-    }
+    if (ok) setNotice("Read the domain file again.");
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {

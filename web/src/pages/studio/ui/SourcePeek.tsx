@@ -27,13 +27,13 @@ const STATUS_TEXT: Record<Peek["status"], string> = {
 export function SourcePeek({ peek, onClose }: SourcePeekProps) {
   const region = useRef<HTMLElement>(null);
   const where = `${peek.path}:${peek.line}`;
-  const opened = useRef<string | null>(null);
 
+  // Every open by the reader focuses the peek, the same location again
+  // included; a reading against a newer snapshot keeps the request and
+  // does not move focus.
   useEffect(() => {
-    if (opened.current === where) return;
-    opened.current = where;
     region.current?.focus({ preventScroll: true });
-  }, [where]);
+  }, [peek.request]);
 
   useEffect(() => {
     if (peek.status !== "ready") return;

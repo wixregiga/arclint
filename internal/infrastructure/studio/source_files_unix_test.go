@@ -3,7 +3,10 @@
 package studio_test
 
 import (
+	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -29,5 +32,64 @@ func TestSourceFilesRefuseAPipeWithoutWaiting(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("reading a pipe blocked")
+	}
+}
+
+// A folder swapped again and again for a link to another folder of the
+// project, while reads run, never makes a read return the other
+// folder's file: the walk holds each folder it opened and checks it is
+// the folder it saw.
+func TestSourceFilesNeverFollowAFolderSwappedForALink(t *testing.T) {
+	project := t.TempDir()
+	write := func(rel, content string) {
+		t.Helper()
+		full := filepath.Join(project, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("src/config.go", "package src\n")
+	write(".aws/config.go", "aws_secret_access_key = SWAPPED-CREDENTIAL\n")
+	src, real := filepath.Join(project, "src"), filepath.Join(project, "src.real")
+
+	stop := make(chan struct{})
+	swapped := make(chan int)
+	go func() {
+		n := 0
+		defer func() { swapped <- n }()
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			if os.Rename(src, real) != nil || os.Symlink(".aws", src) != nil {
+				return
+			}
+			runtime.Gosched()
+			if os.Remove(src) != nil || os.Rename(real, src) != nil {
+				return
+			}
+			n++
+		}
+	}()
+	files := studio.SourceFiles{Project: project}
+	deadline := time.Now().Add(1500 * time.Millisecond)
+	reads := 0
+	for time.Now().Before(deadline) {
+		got, err := files.ReadSource("src/config.go", 1024)
+		if err == nil && strings.Contains(string(got), "SWAPPED-CREDENTIAL") {
+			close(stop)
+			<-swapped
+			t.Fatalf("read %d returned the linked folder's file: %q", reads, got)
+		}
+		reads++
+	}
+	close(stop)
+	if n := <-swapped; n == 0 {
+		t.Skip("the folder could not be swapped here")
 	}
 }

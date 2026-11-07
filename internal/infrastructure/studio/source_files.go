@@ -7,32 +7,63 @@ import (
 	"io/fs"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 )
 
 // SourceFiles reads repository files for Studio's read-only source
-// excerpts. Every read goes through an os.Root opened on the project,
-// so nothing outside the project is reached. Inside it, a link is never
-// followed: a path whose file or any folder is a link is refused, so a
-// source file swapped for a link to another file of the project, such
-// as an environment file, is not read under the source file's name.
+// excerpts. A read walks the path one folder at a time from an os.Root
+// opened on the project, holding each folder open and continuing from
+// it, so nothing outside the project is reached and a link is never
+// followed in any part of the path: a folder or file that is a link is
+// refused, and one swapped for a link while the walk runs is refused
+// too, because each folder held is checked to be the folder the walk
+// saw before it was opened.
 type SourceFiles struct{ Project string }
 
 // ReadSource reads one regular file of at most limit bytes. It opens
 // the file read-only, without following a final link and without
-// waiting on a pipe or device, checks the path held no link before and
-// after the open, and writes nothing.
+// waiting on a pipe or device, and writes nothing.
 func (s SourceFiles) ReadSource(name string, limit int64) ([]byte, error) {
 	root, err := os.OpenRoot(s.Project)
 	if err != nil {
 		return nil, fmt.Errorf("source project: %w", err)
 	}
-	defer func() { _ = root.Close() }()
-	if err := withoutLinks(root, name); err != nil {
-		return nil, err
+	held := []*os.Root{root}
+	defer func() {
+		for _, r := range held {
+			_ = r.Close()
+		}
+	}()
+	parts := strings.Split(path.Clean(name), "/")
+	dir := root
+	for _, part := range parts[:len(parts)-1] {
+		seen, err := dir.Lstat(part)
+		if err != nil {
+			return nil, fmt.Errorf("stat %s: %w", name, err)
+		}
+		if seen.Mode()&fs.ModeSymlink != 0 || !seen.IsDir() {
+			return nil, fmt.Errorf("%s passes through %s, which is not a folder; a link is not followed", name, part)
+		}
+		next, err := dir.OpenRoot(part)
+		if err != nil {
+			return nil, fmt.Errorf("open %s: %w", name, err)
+		}
+		held = append(held, next)
+		opened, err := next.Stat(".")
+		if err != nil || !os.SameFile(seen, opened) {
+			return nil, fmt.Errorf("%s changed while it was opened", name)
+		}
+		dir = next
 	}
-	file, err := root.OpenFile(filepath.FromSlash(name), openSourceFlags, 0)
+	base := parts[len(parts)-1]
+	seen, err := dir.Lstat(base)
+	if err != nil {
+		return nil, fmt.Errorf("stat %s: %w", name, err)
+	}
+	if seen.Mode()&fs.ModeSymlink != 0 {
+		return nil, fmt.Errorf("%s is a link; a link is not followed", name)
+	}
+	file, err := dir.OpenFile(base, openSourceFlags, 0)
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", name, err)
 	}
@@ -44,12 +75,7 @@ func (s SourceFiles) ReadSource(name string, limit int64) ([]byte, error) {
 	if !info.Mode().IsRegular() {
 		return nil, fmt.Errorf("%s is not a regular file", name)
 	}
-	// The file opened is the one the path names now, through no link.
-	if err := withoutLinks(root, name); err != nil {
-		return nil, err
-	}
-	named, err := root.Lstat(filepath.FromSlash(name))
-	if err != nil || !os.SameFile(info, named) {
+	if !os.SameFile(seen, info) {
 		return nil, fmt.Errorf("%s changed while it was opened", name)
 	}
 	if info.Size() > limit {
@@ -63,21 +89,4 @@ func (s SourceFiles) ReadSource(name string, limit int64) ([]byte, error) {
 		return nil, errors.New(name + " grew past the excerpt limit while it was read")
 	}
 	return content, nil
-}
-
-// withoutLinks refuses a path any of whose folders, or the file itself,
-// is a link.
-func withoutLinks(root *os.Root, name string) error {
-	parts := strings.Split(path.Clean(name), "/")
-	for i := range parts {
-		prefix := filepath.FromSlash(strings.Join(parts[:i+1], "/"))
-		info, err := root.Lstat(prefix)
-		if err != nil {
-			return fmt.Errorf("stat %s: %w", name, err)
-		}
-		if info.Mode()&fs.ModeSymlink != 0 {
-			return fmt.Errorf("%s passes through a link; a link is not followed", name)
-		}
-	}
-	return nil
 }

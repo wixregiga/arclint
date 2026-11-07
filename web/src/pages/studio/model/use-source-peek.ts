@@ -10,6 +10,12 @@ export interface Peek {
   status: "loading" | "ready" | "stale" | "withheld" | "gone" | "failed";
   excerpt: ExcerptDocument | null;
   message: string | null;
+  /**
+   * Counts the reader's opens. The peek takes focus when it changes, so
+   * opening the same location again focuses it again, while a reading
+   * against a newer snapshot keeps the number and leaves focus alone.
+   */
+  request: number;
 }
 
 /**
@@ -22,16 +28,17 @@ export interface Peek {
 export function useSourcePeek(source: CodeEvidenceSource | null, snapshot: string | null, onStale: (reason: string) => void) {
   const [peek, setPeek] = useState<Peek | null>(null);
   const generation = useRef(0);
+  const requests = useRef(0);
 
   const read = useCallback(
-    async (path: string, line: number, at: string) => {
+    async (path: string, line: number, at: string, request: number) => {
       if (!source) return;
       const mine = ++generation.current;
-      setPeek((p) => ({ path, line, snapshot: at, status: "loading", excerpt: p && p.path === path && p.line === line ? p.excerpt : null, message: null }));
+      setPeek((p) => ({ path, line, snapshot: at, status: "loading", excerpt: p && p.path === path && p.line === line ? p.excerpt : null, message: null, request }));
       try {
         const excerpt = await source.excerpt({ snapshot: at, path, line });
         if (mine !== generation.current) return;
-        setPeek({ path, line, snapshot: at, status: "ready", excerpt, message: null });
+        setPeek({ path, line, snapshot: at, status: "ready", excerpt, message: null, request });
       } catch (error) {
         if (mine !== generation.current) return;
         const message = failureText(error);
@@ -44,14 +51,14 @@ export function useSourcePeek(source: CodeEvidenceSource | null, snapshot: strin
         } else if (isGatewayFailure(error) && error.kind === "refused" && error.status === NOT_IN_SNAPSHOT_STATUS) {
           status = "gone";
         }
-        setPeek({ path, line, snapshot: at, status, excerpt: null, message });
+        setPeek({ path, line, snapshot: at, status, excerpt: null, message, request });
       }
     },
     [source, onStale],
   );
 
   const open = useCallback((path: string, line: number) => {
-    if (snapshot) void read(path, line, snapshot);
+    if (snapshot) void read(path, line, snapshot, ++requests.current);
   }, [read, snapshot]);
 
   const close = useCallback(() => {
@@ -63,7 +70,7 @@ export function useSourcePeek(source: CodeEvidenceSource | null, snapshot: strin
   const shown = peek ? `${peek.path}\u001f${peek.line}\u001f${peek.snapshot}` : null;
   useEffect(() => {
     if (!peek || !snapshot || peek.snapshot === snapshot) return;
-    void read(peek.path, peek.line, snapshot);
+    void read(peek.path, peek.line, snapshot, peek.request);
     // Only a new snapshot reads again; the open location is in `shown`.
   }, [snapshot, shown]);
 
