@@ -63,7 +63,7 @@ func AgentCommandSurface() []AgentCommandDoc {
 		{"check", "check .", "evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings"},
 		{"rules test", "rules test", "run the rule fixtures under `.arclint/tests` after changing any rule"},
 		{"sdk init", "sdk init", "regenerate the extension SDK artifacts under `.arclint/extensions`"},
-		{"agents hooks install", "agents hooks install", "write the workflow hooks into Claude Code and Codex user configuration, for every project and worktree (`--project` for this project only); they advise when work skips context, domain recording or the check, and never block"},
+		{"agents hooks install", "agents hooks install", "write the workflow hooks into Claude Code, Codex and Antigravity user configuration, for every project and worktree (`--project` for this project only); they advise when work skips context, domain recording or the check, and never block"},
 		{"agents hooks status", "agents hooks status", "show which configuration files list the workflow hooks and when a hook event last reached this project; Codex runs them after you trust them in /hooks"},
 		{"agents md", "agents md --write", "refresh this block after changing " + rule.RulesetFileName + " or the vocabulary"},
 		{"agents skill", "agents skill", "write the " + vocab.SkillName + " skill to `" + vocab.AgentsSkillDirectory + "/` for Codex and `" + vocab.ClaudeSkillDirectory + "/` for Claude Code when your harness lacks it"},

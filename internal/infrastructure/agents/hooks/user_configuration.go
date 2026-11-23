@@ -31,13 +31,20 @@ type UserConfiguration struct {
 func NativeUserConfiguration(home string, getenv func(string) string) UserConfiguration {
 	directories := map[string]string{}
 	for _, host := range hookHosts {
-		directory := getenv(host.homeVariable)
-		if directory == "" {
-			directory = filepath.Join(home, host.homeDirectory)
+		directory := filepath.Join(home, filepath.FromSlash(host.homeDirectory))
+		if override := host.homeOverride(getenv); override != "" {
+			directory = override
 		}
 		directories[host.name] = directory
 	}
 	return UserConfiguration{Directories: directories}
+}
+
+func (host hookHost) homeOverride(getenv func(string) string) string {
+	if host.homeVariable == "" {
+		return ""
+	}
+	return getenv(host.homeVariable)
 }
 
 // UserConfigurations returns the user configurations an install writes:
@@ -92,9 +99,9 @@ func windowsUserConfiguration() (UserConfiguration, error) {
 	}
 	directories := map[string]string{}
 	for _, host := range hookHosts {
-		directory := variables[strings.ToUpper(host.homeVariable)]
-		if directory == "" {
-			directory = profile + `\` + host.homeDirectory
+		directory := profile + `\` + strings.ReplaceAll(host.homeDirectory, "/", `\`)
+		if override := host.homeOverride(func(name string) string { return variables[strings.ToUpper(name)] }); override != "" {
+			directory = override
 		}
 		mapped, err := exec.CommandContext(ctx, "wslpath", "-u", directory).Output()
 		if err != nil {

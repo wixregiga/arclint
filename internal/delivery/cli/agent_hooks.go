@@ -9,11 +9,12 @@ import (
 )
 
 const (
-	agentHostFlag       = "host"
-	agentHostClaude     = "claude"
-	agentHostCodex      = "codex"
-	agentInstallCommand = "install"
-	hooksProjectFlag    = "project"
+	agentHostFlag        = "host"
+	agentHostClaude      = "claude"
+	agentHostCodex       = "codex"
+	agentHostAntigravity = "antigravity"
+	agentInstallCommand  = "install"
+	hooksProjectFlag     = "project"
 )
 
 // Hooks is the CLI-owned boundary for writing and inspecting the
@@ -32,15 +33,16 @@ type HookEvents interface {
 // HooksActivation tells the user what each host needs after installation.
 const HooksActivation = "Claude Code runs the hooks in sessions that start after installation. " +
 	"Codex runs them only after you trust them: open /hooks in Codex, trust the ArcLint hooks, and start a new session. " +
+	"Antigravity runs them in new conversations (turn-end check reminders arrive at the next turn). " +
 	"`arclint agents hooks status` shows when a hook event last reached this project."
 
 // NewHooksCommand is the workflow hook surface: install and status
 // manage host configuration, event answers the hosts.
 func NewHooksCommand(hooks Hooks, events HookEvents, render Renderer) Command {
 	return Command{Name: "hooks", Short: "advise coding agents through the domain workflow with native hooks", Subcommands: []Command{
-		{Name: agentInstallCommand, Short: "write the workflow hooks into Claude Code and Codex user configuration, for every project", Flags: []Flag{
-			{Name: agentHostFlag, Repeat: true, Options: []string{agentHostClaude, agentHostCodex}, Doc: "agent host to install for (claude, codex); repeatable; default both"},
-			{Name: hooksProjectFlag, Bool: true, Doc: "write this project's personal hook files instead, for this project only"},
+		{Name: agentInstallCommand, Short: "write the workflow hooks into Claude Code, Codex and Antigravity user configuration", Flags: []Flag{
+			{Name: agentHostFlag, Repeat: true, Options: []string{agentHostClaude, agentHostCodex, agentHostAntigravity}, Doc: "hosts to install for (claude, codex, antigravity), repeatable, defaults to all"},
+			{Name: hooksProjectFlag, Bool: true, Doc: "write hook files for this project only"},
 		}, Run: func(ctx Context) error {
 			hosts := ctx.Strings(agentHostFlag)
 			installation, err := hooks.Install(hosts, ctx.Bool(hooksProjectFlag))
@@ -56,7 +58,7 @@ func NewHooksCommand(hooks Hooks, events HookEvents, render Renderer) Command {
 			}
 			return render.Render(ctx.Stdout, HooksStatusReport{Status: status})
 		}},
-		{Name: "event", Short: "answer one Claude Code or Codex hook event read from stdin", Run: func(ctx Context) error {
+		{Name: "event", Short: "answer a Claude Code, Codex or Antigravity hook event read from stdin", Run: func(ctx Context) error {
 			input, err := io.ReadAll(ctx.Stdin)
 			if err != nil {
 				return ConfigError(fmt.Errorf("read workflow event: %w", err))
@@ -75,7 +77,7 @@ func NewHooksCommand(hooks Hooks, events HookEvents, render Renderer) Command {
 
 func hostList(hosts []string) string {
 	if len(hosts) == 0 {
-		hosts = []string{agentHostClaude, agentHostCodex}
+		hosts = []string{agentHostClaude, agentHostCodex, agentHostAntigravity}
 	}
 	return strings.Join(hosts, ", ")
 }

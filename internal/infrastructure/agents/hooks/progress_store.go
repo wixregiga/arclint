@@ -31,6 +31,9 @@ const (
 type sessionRecord struct {
 	Progress agent.Progress
 	Cursor   *int64
+	// PendingGuidance waits for an Antigravity event that can inject it.
+	PendingGuidance      []agent.Guidance `json:",omitempty"`
+	LastAntigravityEvent string           `json:",omitempty"`
 	// Snapshot is the checkout at the session's last update, when Observed;
 	// a project outside a git work tree has none.
 	Snapshot snapshot `json:",omitempty"`
@@ -128,6 +131,123 @@ func (store *ProgressStore) Update(session string, change func(agent.Progress, [
 	})
 }
 
+// antigravityStep describes how one Antigravity hook event advances turn
+// boundaries and whether it can inject queued Guidance.
+type antigravityStep struct {
+	closeIdle  bool
+	startTurn  bool
+	finishTurn bool
+	deliver    bool
+}
+
+// updateAntigravity commits Progress, the delivery digest and any queued
+// Guidance in one write. Before draining, PendingGuidance is reconciled
+// against Progress so reminders already satisfied by arclint check, context
+// or domain commands are not delivered.
+func (store *ProgressStore) updateAntigravity(
+	session, digest string,
+	step antigravityStep,
+	evaluate func(agent.Progress, []agent.Activity) (agent.Progress, []agent.Guidance),
+	ownersOf func(path string) []string,
+) (guidance []agent.Guidance, first bool, err error) {
+	err = store.locked(session, func(project *os.Root, name string) error {
+		record, started, err := store.current(project, name)
+		if err != nil || record.LastAntigravityEvent == digest {
+			return err
+		}
+		if step.closeIdle {
+			if err := store.closeIdle(&record); err != nil {
+				return err
+			}
+			if step.startTurn {
+				record.BetweenTurns = false
+			}
+		}
+		recorded, err := store.observe(project, &record, started)
+		if err != nil {
+			return err
+		}
+		var given []agent.Guidance
+		record.Progress, given = evaluate(record.Progress, recorded)
+		record.PendingGuidance = reconcilePendingGuidance(append(record.PendingGuidance, given...), record.Progress, ownersOf)
+		if step.finishTurn {
+			if err := store.openIdle(&record); err != nil {
+				return err
+			}
+		}
+		if step.deliver {
+			guidance, record.PendingGuidance = record.PendingGuidance, nil
+		}
+		record.LastAntigravityEvent = digest
+		first = true
+		return writeRecord(project, name, record)
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	return guidance, first, nil
+}
+
+// reconcilePendingGuidance drops or trims queued Guidance already satisfied by
+// progress before Antigravity injects it.
+func reconcilePendingGuidance(pending []agent.Guidance, progress agent.Progress, ownersOf func(path string) []string) []agent.Guidance {
+	if len(pending) == 0 {
+		return nil
+	}
+	kept := make([]agent.Guidance, 0, len(pending))
+	for _, item := range pending {
+		switch item.Step {
+		case agent.CheckStep:
+			if paths := filterPaths(item.Paths, func(path string) bool { return slices.Contains(progress.Unverified, path) }); len(paths) > 0 {
+				kept = append(kept, agent.Guidance{Step: item.Step, Paths: paths})
+			}
+		case agent.DomainStep:
+			if !progress.DomainRecorded {
+				kept = append(kept, item)
+			}
+		case agent.ContextStep:
+			if progress.AllZones {
+				continue
+			}
+			if len(progress.Zones) == 0 || ownersOf == nil {
+				kept = append(kept, item)
+				continue
+			}
+			if paths := filterPaths(item.Paths, func(path string) bool { return !pathContextSatisfied(progress.Zones, ownersOf(path)) }); len(paths) > 0 {
+				kept = append(kept, agent.Guidance{Step: item.Step, Paths: paths})
+			}
+		default:
+			kept = append(kept, item)
+		}
+	}
+	if len(kept) == 0 {
+		return nil
+	}
+	return kept
+}
+
+func pathContextSatisfied(shown, pathOwners []string) bool {
+	if len(pathOwners) == 0 {
+		return false
+	}
+	for _, zone := range pathOwners {
+		if !slices.Contains(shown, zone) {
+			return false
+		}
+	}
+	return true
+}
+
+func filterPaths(paths []string, keep func(string) bool) []string {
+	var kept []string
+	for _, path := range paths {
+		if keep(path) {
+			kept = append(kept, path)
+		}
+	}
+	return kept
+}
+
 // StartSession notes that the session started or resumed. A session
 // starts between turns: files that changed while it was between turns, as
 // before it resumes, are not the agent's work, and the next update sees the
@@ -139,12 +259,8 @@ func (store *ProgressStore) StartSession(session string) error {
 		if err != nil {
 			return err
 		}
-		if record.BetweenTurns {
-			now, err := store.clock()
-			if err != nil {
-				return err
-			}
-			record.close(now)
+		if err := store.closeIdle(&record); err != nil {
+			return err
 		}
 		return writeRecord(project, name, record)
 	})
@@ -162,12 +278,8 @@ func (store *ProgressStore) StartTurn(session string) error {
 		if err != nil {
 			return err
 		}
-		if record.BetweenTurns {
-			now, err := store.clock()
-			if err != nil {
-				return err
-			}
-			record.close(now)
+		if err := store.closeIdle(&record); err != nil {
+			return err
 		}
 		record.BetweenTurns = false
 		return writeRecord(project, name, record)
@@ -181,14 +293,32 @@ func (store *ProgressStore) FinishTurn(session string) error {
 		if err != nil {
 			return err
 		}
+		if err := store.openIdle(&record); err != nil {
+			return err
+		}
+		return writeRecord(project, name, record)
+	})
+}
+
+func (store *ProgressStore) closeIdle(record *sessionRecord) error {
+	if record.BetweenTurns {
 		now, err := store.clock()
 		if err != nil {
 			return err
 		}
-		record.open(now)
-		record.BetweenTurns = true
-		return writeRecord(project, name, record)
-	})
+		record.close(now)
+	}
+	return nil
+}
+
+func (store *ProgressStore) openIdle(record *sessionRecord) error {
+	now, err := store.clock()
+	if err != nil {
+		return err
+	}
+	record.open(now)
+	record.BetweenTurns = true
+	return nil
 }
 
 // current reads the session's record, or starts one and reports so: it

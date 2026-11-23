@@ -311,7 +311,7 @@ func (c domainFileCase) testAgents(t *testing.T) {
 	}
 
 	home := t.TempDir()
-	env := append(os.Environ(), "WSL_DISTRO_NAME=", "HOME="+home, "CLAUDE_CONFIG_DIR=", "CODEX_HOME=")
+	env := append(os.Environ(), "WSL_DISTRO_NAME=", "HOME="+home, "USERPROFILE="+home, "CLAUDE_CONFIG_DIR=", "CODEX_HOME=")
 	installed, stderr, code := runBin(t, root, env, "agents", "hooks", "install", "--format", "json")
 	var report struct{ Orientation string }
 	if err := json.Unmarshal([]byte(installed), &report); err != nil || code != 0 || stderr != "" {

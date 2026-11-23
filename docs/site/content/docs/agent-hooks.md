@@ -1,7 +1,7 @@
 ---
 title: Agent hooks
 weight: 8
-description: Advise Claude Code and Codex when observed work skips a step of the domain workflow.
+description: Advise Claude Code, Codex and Antigravity when observed work skips a step of the domain workflow.
 ---
 
 Coding agents often change code before they look up the architecture or
@@ -50,10 +50,12 @@ the hooks run in every project and worktree the host opens:
 |---|---|---|
 | Claude Code | `~/.claude/settings.json`, or under `CLAUDE_CONFIG_DIR` | `SessionStart`; `UserPromptSubmit`; `PostToolUse` for Edit, Write, MultiEdit, NotebookEdit and Bash; `Stop` |
 | Codex | `~/.codex/hooks.json`, or under `CODEX_HOME` | `SessionStart`; `UserPromptSubmit`; `PostToolUse` for apply_patch; `Stop` |
+| Antigravity | `~/.gemini/config/hooks.json` | `SessionStart`; `PreInvocation`; `PostToolUse` for edit tools; `Stop` |
 
 In Claude Code the hook also runs after each Bash command, so files a shell
-command changes are found right after it. In Codex they are found at the
-events above. Both are described under [how the hooks observe work](#how-the-hooks-observe-work).
+command changes are found right after it. In Codex and Antigravity they are
+found at the events above; see [what the agent receives](#what-the-agent-receives)
+and [how the hooks observe work](#how-the-hooks-observe-work).
 
 The command runs the `arclint` that installed it, by its absolute path, with
 `agents hooks event`. It does not depend on the hosts' `PATH` or on shell
@@ -61,26 +63,25 @@ startup files, and an upgrade that replaces the binary at that path takes
 effect at the next event. The path may hold only letters, digits and `._/+-`,
 so every host shell runs it unquoted; install refuses any other path.
 
-In a project without `rules.arclint.yaml` the hooks answer nothing and write
-nothing, so one user install serves every repository.
+In a project without `rules.arclint.yaml` the hooks provide no advice and
+record no progress, so one user install serves every repository.
 
-`--project` writes the project's files instead, for that project only:
-`.claude/settings.local.json` and `.codex/hooks.json`. Neither should be
-committed with the hooks in it, because the command names a path on your
-machine. A project install is refused while a user configuration already lists
-the hooks. A user install removes them from `.claude/settings.local.json`,
-which belongs to one user; it leaves `.codex/hooks.json`, which a repository
-may share, and status reports that duplicate. When two files list the hooks,
-the host runs each event twice and ArcLint answers the first.
+`--project` writes `.claude/settings.local.json`, `.codex/hooks.json` and
+`.agents/hooks.json` for this project only; keep them out of version control
+because the commands name a path on your machine. A project install is refused
+while a user configuration lists the hooks. A user install cleans
+`.claude/settings.local.json` (personal) and leaves `.codex/hooks.json` and
+`.agents/hooks.json` (shareable), which status reports as duplicates; when two
+files deliver the same event, ArcLint answers the first.
 
-`--host claude` or `--host codex` installs for one host. Installing again is
-safe: it replaces the workflow hook and keeps every other setting and hook. A
-hook counts as the workflow hook only when its command is one install writes,
-for any binary path and distribution; a hook that merely mentions the same
-words is kept. A
-user configuration linked from elsewhere stays linked. Install prints the
-workflow steps, so the session that ran it can follow them before the hooks
-reach it.
+`--host claude|codex|antigravity` selects hosts (repeatable; default all).
+Reinstalling replaces the workflow hooks and keeps unrelated configuration:
+in Claude Code and Codex, ArcLint matches only the commands install writes (hooks
+merely mentioning the words are kept); in Antigravity, it owns the top-level
+`arclint` entry and preserves its `enabled` setting (remove the entry to
+uninstall, or set `"enabled": false` to turn it off). A user configuration
+linked from elsewhere stays linked. Install prints the workflow steps, so the
+session that ran it can follow them before the hooks reach it.
 
 `arclint agents hooks status` lists every file that can hold the hooks for
 the project, the binary install would pin, and what is wrong in each file: a
@@ -120,12 +121,14 @@ because it cannot write the Windows files it promises.
   ArcLint hooks, and start a new session. Codex trusts each hook definition by
   its content, so a hook that install adds or changes, such as
   `UserPromptSubmit`, needs trusting again.
+- Antigravity runs the hooks in new conversations started after installation.
 
 ### WSL projects opened from Windows
 
 When you install from inside WSL, the install also writes the Windows profile's
-`.claude\settings.json` and `.codex\hooks.json`, which the Windows desktop apps
-read when they open the project through `\\wsl.localhost`. ArcLint finds the
+`.claude\settings.json`, `.codex\hooks.json` and `.gemini\config\hooks.json`,
+which the Windows desktop apps read when they open the project through
+`\\wsl.localhost`. ArcLint finds the
 profile, and `CLAUDE_CONFIG_DIR` or `CODEX_HOME` when Windows sets them,
 through `cmd.exe`. Those files run
 `wsl.exe -d <distribution> -e <path> agents hooks event`. Claude Code runs
@@ -134,7 +137,9 @@ like paths, so its command sets `MSYS_NO_PATHCONV=1`. That command needs Git
 Bash; Claude Code falls back to PowerShell only when Git Bash is missing. Each
 host app reads only its own side's file, so a session receives each event once.
 A `--project` install from WSL writes a command that runs the binary when it
-exists on the reader's side and `wsl.exe` otherwise. The hook maps
+exists on the reader's side and `wsl.exe` otherwise for Claude Code and Codex.
+The Antigravity project file uses the `wsl.exe` bridge from both sides, so
+the distribution's host needs WSL interop and `wsl.exe` on its path. The hook maps
 `\\wsl.localhost\<distribution>\...` and `\\wsl$\<distribution>\...` paths to
 paths inside the distribution.
 
@@ -145,13 +150,19 @@ paths inside the distribution.
 | A session starts | The workflow order above. When the project's `AGENTS.md` block states a different workflow, a note names the `arclint` the hooks run: that binary and the one that generated the block are different releases. |
 | A file changes before context showed every Zone that owns it | Run `arclint context <path>`. Each path is named once per session. Context shows the Zones that own the paths it names, the Zones named with `--zone`, or every Zone when it names neither. Context for a directory shows the Zones that own the directory, not narrower Zones nested inside it. A file no Zone owns needs no context. |
 | A file that bears domain meaning changes before the recording changed in the session | Record a new or changed meaning first; otherwise continue. Given once per session. A file bears domain meaning when it is not a test and lies in a Zone that holds a bounded context's code, the Zone named for the context. While a recorded context has no Zone named for it, or no context is recorded yet, every file other than a test qualifies, as `arclint check` reads the model's code. Tests and files outside the model's code receive no reminder and do not use it up. |
-| A turn finishes with changes no `arclint check` has verified | Run `arclint check .` and the tests. Given again only when a file no reminder has named changes. The user sees it as a system message. |
+| A turn finishes with changes no `arclint check` has verified | Run `arclint check .` and the tests. Given again only when a file no reminder has named changes. Claude Code and Codex show it as a system message. Antigravity delivers it on the next invocation if there is one. |
 
 Guidance during work arrives as hook additional context, which the agent reads
 with the tool result or with the user's prompt. When a host delivers the same event twice in a session,
 as it does when two configuration files list the hooks, only the first
 delivery is answered. Domain decisions live in the recorded `WorkflowGuide`
 domain service; the hook adapter only reports what happened.
+
+In Antigravity, ArcLint locates the project from the event's working directory
+(or sole workspace path) and delivers queued tool and turn-end reminders at the
+next model invocation, letting `Stop` finish without forcing another turn (so a
+conversation that ends there gets no check reminder) while keeping attribution
+across canceled turns or background work.
 
 ## How the hooks observe work
 
@@ -166,8 +177,9 @@ domain service; the hook adapter only reports what happened.
   unchanged record nothing. ArcLint records only where the hooks
   created that directory, so projects without the hooks, and CI, gain no
   files.
-- The hosts report edits. The file paths of Edit, Write, MultiEdit and
-  NotebookEdit, and the file headers of an apply_patch, are changes. A change
+- The hosts report edits. ArcLint reads file paths from Edit, Write,
+  MultiEdit, NotebookEdit and Antigravity edit tools, and reads the file
+  headers of an apply_patch. A change
   to the project's domain file (the file `rules.arclint.yaml` names under
   `domain.file`, else the first of `domain.arclint.yaml`, `domain.arclint.yml`
   and `domain.arclint.cml` that exists) changes the domain recording.
@@ -215,6 +227,7 @@ events each, wall time:
 | linux | 96080 | 30 ms | 450 ms |
 
 In Claude Code every Bash command is also an event, so each one adds a run.
+In Antigravity every `PreInvocation` observes shell changes.
 The time grows with the number of files git examines. Right after a clone or
 checkout, git may read every file again until a git command of your own
 refreshes the index.

@@ -98,6 +98,54 @@ func TestAShellChangeIsAdvisedAtTheNextEditOnce(t *testing.T) {
 	}
 }
 
+func TestAntigravityTracksShellChangesAcrossInvocationsAndTurns(t *testing.T) {
+	events, root := newGitEvents(t)
+	send := func(name string, fields map[string]any) string {
+		t.Helper()
+		input := antigravityInput(name, root)
+		for key, value := range fields {
+			input[key] = value
+		}
+		return antigravityOutput(t, events, input)
+	}
+	send("SessionStart", nil)
+	firstInvocation := map[string]any{"invocationNum": 0}
+	send("PreInvocation", firstInvocation)
+	pause(t)
+	writeFile(t, root, "internal/from_shell.go", "package a\n")
+	pause(t)
+	writeFile(t, root, "internal/during_turn.go", "package a\n")
+	text := injectedGuidance(t, send("PreInvocation", map[string]any{"invocationNum": 1}))
+	if !strings.Contains(text, "internal/from_shell.go changed before") || !strings.Contains(text, "internal/during_turn.go changed before") {
+		t.Fatal(text)
+	}
+	pause(t)
+	record(t, root, agent.Activity{Kind: agent.CheckRan})
+	send("Stop", map[string]any{"terminationReason": "NO_TOOL_CALL", "fullyIdle": true})
+	pause(t)
+	writeFile(t, root, "internal/between_turns.go", "package a\n")
+	pause(t)
+	if output := send("PreInvocation", firstInvocation); output != "{}" {
+		t.Fatalf("idle change attributed to the agent, or verified changes advised: %s", output)
+	}
+	send("Stop", map[string]any{"terminationReason": "USER_CANCELED", "fullyIdle": true})
+	pause(t)
+	writeFile(t, root, "internal/interrupted.go", "package a\n")
+	pause(t)
+	text = injectedGuidance(t, send("PreInvocation", firstInvocation))
+	if !strings.Contains(text, "internal/interrupted.go changed before") || strings.Contains(text, "since the last") {
+		t.Fatal(text)
+	}
+	send("Stop", map[string]any{"terminationReason": "NO_TOOL_CALL", "fullyIdle": false})
+	pause(t)
+	writeFile(t, root, "internal/background.go", "package a\n")
+	pause(t)
+	text = injectedGuidance(t, send("PreInvocation", firstInvocation))
+	if !strings.Contains(text, "internal/background.go changed before") || strings.Contains(text, "since the last") {
+		t.Fatal(text)
+	}
+}
+
 // A file a Bash command changed is advised right after that command, once;
 // a later command that changed nothing prints nothing.
 func TestABashCommandIsAdvisedRightAfterItOnce(t *testing.T) {

@@ -277,7 +277,7 @@ undetermined, never proof of conformance.
 
 ## Working with agents
 
-Install the workflow hooks for Claude Code and Codex in a project using ArcLint:
+Install the workflow hooks for Claude Code, Codex and Antigravity in a project using ArcLint:
 
 ```sh
 arclint agents hooks install
@@ -290,8 +290,8 @@ the domain file before implementing it, and `arclint check .` before
 finishing. Each reminder is given once, and the hooks never block a tool call.
 In a git work tree, files changed through the shell get the same advice right
 after the command in Claude Code, and at the next prompt, edit or turn end in
-Codex. Installation writes one command, which runs the installing `arclint` by its
-path, into the Claude Code and Codex user configuration, so the hooks run in
+Codex. Antigravity delivers advice at the next model invocation. Installation writes one
+command, which runs the installing `arclint` by its path, into each host's user configuration, so the hooks run in
 every project and worktree, and keeps every other setting. Codex runs it after
 you trust it in `/hooks`. See
 [agent hooks](docs/site/content/docs/agent-hooks.md).
@@ -369,7 +369,7 @@ rules schema        print the JSON Schema for rules.arclint.yaml; --write puts i
 rules test [name]   run the rule tests under .arclint/tests; failures exit 1
 context [paths...]  the architecture, or everything binding the given paths (--zone)
 domain              inspect and maintain the project's ubiquitous language (init/overview/list/show/explain/define/remove/schema)
-agents hooks        install/status the Claude Code and Codex workflow hooks; event answers a host
+agents hooks        install/status the Claude Code, Codex and Antigravity workflow hooks; event answers a host
 agents md           architecture block; --write installs it in AGENTS.md
 agents skill        domain-librarian skill for Codex and Claude Code, and the domain schema
 baseline capture    adopt current findings   ·  baseline refresh: drop stale entries

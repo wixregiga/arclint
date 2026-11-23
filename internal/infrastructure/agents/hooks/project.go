@@ -1,7 +1,7 @@
 // Package hooks connects Agent Host hooks to workflow Guidance: it reads
 // the hosts' native events, keeps each session's Progress in the project's
 // ArcLint cache together with the activities ArcLint's own commands record,
-// and writes the hook configuration Codex and Claude Code read.
+// and writes the hook configuration Claude Code, Codex and Antigravity read.
 package hooks
 
 import (

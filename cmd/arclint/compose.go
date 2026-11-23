@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -68,7 +69,20 @@ func run(args []string) int {
 	if firstPositional(args) == "init" {
 		return runInit(args, renderer, configError)
 	}
-	rulesPath, err := discoverRulesPath(args)
+	var stdin io.Reader = os.Stdin
+	start := repositoryPath(args)
+	wslDistro := os.Getenv("WSL_DISTRO_NAME")
+	if len(args) == 3 && hookEvent(args) {
+		input, err := io.ReadAll(stdin)
+		if err != nil {
+			return configError(fmt.Errorf("read workflow event: %w", err))
+		}
+		stdin = bytes.NewReader(input)
+		if directory, ok := agenthooks.AntigravityDirectory(input, wslDistro); ok && directory != "" {
+			start = directory
+		}
+	}
+	rulesPath, err := discoverRulesPath(args, start)
 	if err != nil {
 		return configError(err)
 	}
@@ -292,7 +306,6 @@ func run(args []string) int {
 	}
 	// A Windows Agent Host reaches a WSL project through wsl.exe and
 	// reports its paths through the \\wsl.localhost share.
-	wslDistro := os.Getenv("WSL_DISTRO_NAME")
 	// The hooks run this binary by its path; one that cannot be located
 	// fails install and status with the reason, not every other command.
 	binary, err := agenthooks.InvokedBinary(os.Args[0])
@@ -324,7 +337,7 @@ func run(args []string) int {
 	if err != nil {
 		return configError(err)
 	}
-	outcome := adapter.Run(rootCommand, cli.Invocation{Args: args, Stdin: os.Stdin, Stdout: os.Stdout, Stderr: os.Stderr})
+	outcome := adapter.Run(rootCommand, cli.Invocation{Args: args, Stdin: stdin, Stdout: os.Stdout, Stderr: os.Stderr})
 	return outcome.ExitCode
 }
 
@@ -758,8 +771,7 @@ func runInit(args []string, renderer cli.Renderer, configError func(error) int) 
 // upward from the working directory; `check [path]` and `map serve
 // [path]` select the repository by path, and discovery walks upward
 // from it.
-func discoverRulesPath(args []string) (string, error) {
-	start := repositoryPath(args)
+func discoverRulesPath(args []string, start string) (string, error) {
 	discovered, err := yamlrule.DiscoverPath(start, rule.RulesetFileName)
 	if err != nil {
 		// No subcommand means --version or --help: neither needs a
@@ -771,7 +783,7 @@ func discoverRulesPath(args []string) (string, error) {
 		// and export without a ruleset, and install drafts one where
 		// none exists, so they compose against the working directory.
 		if runsWithoutRuleset(args) {
-			fallback, absErr := filepath.Abs(rule.RulesetFileName)
+			fallback, absErr := filepath.Abs(filepath.Join(start, rule.RulesetFileName))
 			if absErr != nil {
 				return "", fmt.Errorf("rules path: %w", absErr)
 			}
@@ -828,15 +840,15 @@ func positionalAmong(rest []string, valueFlags ...string) string {
 // runsWithoutRuleset reports the commands that answer without a usable
 // ruleset: no subcommand (the version or help), help, completion, the
 // patterns commands, and the workflow hooks.
-// hookEvent reports `arclint agents hooks event`, the command a host's
-// workflow hook runs.
-func hookEvent(rest []string) bool {
-	return len(rest) >= 3 && rest[0] == "agents" && rest[1] == "hooks" && rest[2] == "event"
-}
-
 func runsWithoutRuleset(rest []string) bool {
 	fp := firstPositional(rest)
 	return fp == "" || fp == "help" || fp == "completion" ||
 		fp == "__complete" || fp == "__completeNoDesc" || fp == "patterns" ||
 		(len(rest) >= 2 && rest[0] == "agents" && rest[1] == "hooks")
+}
+
+// hookEvent reports `arclint agents hooks event`, the command a host's
+// workflow hook runs.
+func hookEvent(rest []string) bool {
+	return len(rest) >= 3 && rest[0] == "agents" && rest[1] == "hooks" && rest[2] == "event"
 }
