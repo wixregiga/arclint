@@ -70,7 +70,7 @@ func TestPatternsListsEmbeddedAndLocalCopies(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("patterns: exit %d\nstderr: %s", code, stderr)
 	}
-	for _, want := range []string{"arclint/hexagonal@0.1.0", "arclint/vertical@0.1.0", "acme/layers@1.0.0", "authored", "embedded"} {
+	for _, want := range []string{"arclint/hexagonal@0.1.0-beta.2", "arclint/vertical@0.1.0", "acme/layers@1.0.0", "authored", "embedded"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("patterns listing misses %q:\n%s", want, stdout)
 		}
