@@ -11,7 +11,12 @@ the agent does and advise when it skips a step of the project's workflow:
 1. Run `arclint context <paths>` on the files you will read or change,
    before opening them.
 2. Before editing, state what the change does, who owns its decisions,
-   what the caller uses and which existing behavior must remain intact.
+   what the caller uses, which existing behavior must remain intact and
+   which properties the change newly promises, each with the test that
+   proves it. For a component that reads and writes a format, the promises
+   are: one encoder for fresh and edited output; print, then parse, then
+   print gives the same bytes; an edit changes only its own lines; a
+   repeated edit changes nothing; the author's optional tokens survive.
 3. If the change introduces or changes a meaning, record it in
    the project's domain recording through `arclint domain define` before
    writing code, using the domain-librarian skill. If it does not, say so.
