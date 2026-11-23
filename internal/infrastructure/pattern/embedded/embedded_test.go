@@ -1,7 +1,6 @@
 package embeddedpattern_test
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -39,7 +38,7 @@ func TestBuiltInPatternsAreAvailableWithDigests(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Available: %v", err)
 	}
-	want := []string{"arclint/hexagonal@0.1.0", "arclint/vertical@0.1.0"}
+	want := []string{"arclint/hexagonal@0.1.0-beta.2", "arclint/vertical@0.1.0"}
 	if len(available) != len(want) {
 		t.Fatalf("available = %d, want %d", len(available), len(want))
 	}
@@ -165,14 +164,14 @@ func TestVerticalPatternCarriesExtensions(t *testing.T) {
 	}
 }
 
-// TestHexagonalPatternLoads pins the shape of arclint/hexagonal: six
-// zones around an isolated core, and seven built-in imports rules, one
-// per zone boundary plus the domain's and the application's library
-// policy, with no extension.
+// hexagonalTestFiles are test files skipped by every non-structure
+// hexagonal rule.
+var hexagonalTestFiles = []string{"internal/domain/order_test.go", "src/domain/order.test.ts", "src/routes/orders.spec.tsx", "app/domain/test_order.py"}
+
 func TestHexagonalPatternLoads(t *testing.T) {
 	p := builtIn(t, "hexagonal")
-	if p.Reference().String() != "arclint/hexagonal@0.1.0" {
-		t.Errorf("reference = %q, want arclint/hexagonal@0.1.0", p.Reference())
+	if p.Reference().String() != "arclint/hexagonal@0.1.0-beta.2" {
+		t.Errorf("reference = %q, want arclint/hexagonal@0.1.0-beta.2", p.Reference())
 	}
 	var coverage []string
 	for _, l := range p.Coverage() {
@@ -184,7 +183,7 @@ func TestHexagonalPatternLoads(t *testing.T) {
 	if strings.TrimSpace(p.Documentation()) == "" {
 		t.Errorf("the hexagonal pattern must document itself")
 	}
-	wantZones := []string{"domain", "application", "driving", "driven", "shared", "composition"}
+	wantZones := []string{"domain", "application", "inbound", "outbound", "shared", "composition"}
 	zones := p.Zones()
 	if len(zones) != len(wantZones) {
 		t.Fatalf("zones = %d, want %d", len(zones), len(wantZones))
@@ -197,80 +196,79 @@ func TestHexagonalPatternLoads(t *testing.T) {
 			t.Errorf("zone %s must carry a description and suggested paths", m.Name())
 		}
 	}
-	want := map[string]bool{
-		"arclint/hexagonal:domain/depends-on-nothing-outside": true,
-		"arclint/hexagonal:application/through-ports":         true,
-		"arclint/hexagonal:application/core-libraries-only":   true,
-		"arclint/hexagonal:driving/calls-the-application":     true,
-		"arclint/hexagonal:driven/implements-ports":           true,
-		"arclint/hexagonal:shared/product-free":               true,
+
+	wantTypes := map[string]rule.Type{
+		"arclint/hexagonal:domain/depends-on-nothing-outside": rule.TypeConsumes,
+		"arclint/hexagonal:application/through-ports":         rule.TypeConsumes,
+		"arclint/hexagonal:application/core-libraries-only":   rule.TypeConsumes,
+		"arclint/hexagonal:core/performs-no-io":               rule.TypeExtension,
+		"arclint/hexagonal:domain/no-wire-format":             rule.TypeExtension,
+		"arclint/hexagonal:core/concept-named-files":          rule.TypeStructure,
+		"arclint/hexagonal:inbound/calls-the-application":     rule.TypeConsumes,
+		"arclint/hexagonal:outbound/implements-ports":         rule.TypeConsumes,
+		"arclint/hexagonal:shared/product-free":               rule.TypeConsumes,
+		"arclint/hexagonal:dependencies/acyclic":              rule.TypeAcyclic,
 	}
-	if len(p.Rules()) != len(want) {
-		t.Errorf("rules = %d, want %d", len(p.Rules()), len(want))
+	if len(p.Rules()) != len(wantTypes) {
+		t.Errorf("rules = %d, want %d", len(p.Rules()), len(wantTypes))
 	}
-	importRules := map[string]int{}
+	byID := map[string]rule.Rule{}
 	for _, r := range p.Rules() {
 		id := r.ID().Qualified()
-		if !want[id] {
-			t.Errorf("unexpected rule %s", id)
-			continue
-		}
-		delete(want, id)
+		byID[id] = r
 		if r.Rationale().String() == "" {
-			t.Errorf("%s: a distributed Rule must carry a rationale", id)
+			t.Errorf("%s: missing rationale", id)
 		}
-		if ref, ok := r.Provenance(); !ok || ref.String() != "arclint/hexagonal@0.1.0" {
+		if ref, ok := r.Provenance(); !ok || ref.String() != "arclint/hexagonal@0.1.0-beta.2" {
 			t.Errorf("%s provenance = %v %v", id, ref, ok)
 		}
-		for _, test := range []string{"internal/domain/order_test.go", "src/domain/order.test.ts", "src/routes/orders.spec.tsx", "app/domain/test_order.py"} {
-			if !r.Scope().ExcludedFile(test) {
-				t.Errorf("%s judges the test file %s; tests wire fakes across zones", id, test)
+		if want, ok := wantTypes[id]; !ok {
+			t.Errorf("unexpected rule %s", id)
+		} else if r.Type() != want {
+			t.Errorf("%s type = %q, want %q", id, r.Type(), want)
+		}
+		if r.Type() != rule.TypeStructure {
+			for _, test := range hexagonalTestFiles {
+				if !r.Scope().ExcludedFile(test) {
+					t.Errorf("%s judges test file %s", id, test)
+				}
 			}
 		}
 		if r.Scope().ExcludedFile("internal/domain/order.go") {
 			t.Errorf("%s must judge production files", id)
 		}
-		if id == "arclint/hexagonal:application/core-libraries-only" {
-			params, ok := r.Params().(rule.ExtensionParams)
-			if r.Type() != rule.TypeExtension || !ok {
-				t.Errorf("%s = %q, want an extension rule", id, r.Type())
-				continue
-			}
-			if params.Uses != "hexagonal/allowed-packages" || fmt.Sprint(params.With["packages"]) != "[effect]" {
-				t.Errorf("%s uses %q with %v, want hexagonal/allowed-packages with packages [effect]", id, params.Uses, params.With)
-			}
-			continue
+	}
+	for id := range wantTypes {
+		if _, ok := byID[id]; !ok {
+			t.Errorf("missing rule %s", id)
 		}
+	}
+	// application/core-libraries-only forbids third-party imports natively
+	// without constraining internal zones, so opting in disables only it.
+	if r, ok := byID["arclint/hexagonal:application/core-libraries-only"]; ok {
 		params, ok := r.Params().(rule.ConsumesParams)
-		if r.Type() != rule.TypeConsumes || !ok {
-			t.Errorf("%s = %q, want a built-in imports rule", id, r.Type())
-			continue
-		}
-		for _, z := range r.Scope().Zones() {
-			importRules[z.String()]++
-		}
-		if params.Internal == nil {
-			t.Errorf("%s must restrict internal imports", id)
-		}
-		wantExternal := rule.ImportAllow
-		if id == "arclint/hexagonal:domain/depends-on-nothing-outside" {
-			wantExternal = rule.ImportForbid
-		}
-		if params.External != wantExternal {
-			t.Errorf("%s external = %q, want %q", id, params.External, wantExternal)
+		if !ok || params.Internal != nil || params.External != rule.ImportForbid {
+			t.Errorf("application/core-libraries-only params = %+v, want internal=nil external=forbid", r.Params())
 		}
 	}
-	// The Pattern gives every zone it constrains exactly one imports rule.
-	for zone, n := range importRules {
-		if n != 1 {
-			t.Errorf("zone %s carries %d imports rules, want 1", zone, n)
+	if r, ok := byID["arclint/hexagonal:inbound/calls-the-application"]; ok {
+		params, ok := r.Params().(rule.ConsumesParams)
+		if !ok || params.Internal == nil {
+			t.Fatalf("inbound/calls-the-application params = %+v, want non-nil Internal", r.Params())
+		}
+		zones := params.Internal.Zones()
+		if len(zones) != 3 || zones[0] != "application" || zones[1] != "domain" || zones[2] != "shared" {
+			t.Errorf("inbound/calls-the-application internal = %v, want [application domain shared]", zones)
 		}
 	}
-	if len(want) != 0 {
-		t.Errorf("missing rules: %v", want)
-	}
+
 	exts := p.Extensions()
-	if len(exts) != 1 || exts[0].FileName() != "hexagonal_allowed_packages.ts" {
-		t.Errorf("extensions = %v, want hexagonal_allowed_packages.ts", exts)
+	if len(exts) != 1 || exts[0].FileName() != "hexagonal.ts" {
+		t.Fatalf("extensions = %v, want [hexagonal.ts]", exts)
+	}
+	for _, ruleType := range []string{"hexagonal/allowed-packages", "hexagonal/forbidden-modules", "hexagonal/wire-format"} {
+		if !strings.Contains(exts[0].Source(), `type: "`+ruleType+`"`) {
+			t.Errorf("hexagonal.ts misses %s", ruleType)
+		}
 	}
 }

@@ -49,9 +49,9 @@ arclint patterns
 ```
 
 ```
-arclint/hexagonal@0.1.0  embedded            6 rule(s)  1 extension(s)  coverage [go, ts, py]  cea59c71c72d
-arclint/vertical@0.1.0   embedded, vendored 16 rule(s)  5 extension(s)  coverage [go]          ddf0767e51f9
-acme/layers@1.0.0        authored            1 rule(s)  0 extension(s)  coverage [go]          3fb2cbda1af6
+arclint/hexagonal@0.1.0-beta.2  embedded            10 rule(s)  1 extension(s)  coverage [go, ts, py]  21ff05a03039
+arclint/vertical@0.1.0          embedded, vendored  16 rule(s)  5 extension(s)  coverage [go]          ddf0767e51f9
+acme/layers@1.0.0               authored             1 rule(s)  0 extension(s)  coverage [go]          3fb2cbda1af6
 ```
 
 The second column says where a Pattern resolves from and what the
@@ -73,91 +73,98 @@ is fetched.
 
 ### arclint/hexagonal
 
-Ports and adapters around an isolated core (Alistair Cockburn's
-hexagonal architecture), for Go, TypeScript, and Python. The core is
-the domain and the application. Adapters sit around it: driving
-adapters call the application, driven adapters do the work its ports
-ask for, and composition wires them together.
+Ports and adapters around an isolated core (domain and application), for Go, TypeScript, and Python. Inbound (driving) adapters call the application, outbound (driven) adapters implement ports, shared serves adapters, and composition sits outermost to wire everything together.
 
-| Zone | Holds | May import |
+| Zone | Holds | Boundary (rule) |
 |---|---|---|
-| `domain` | the business model: entities, value objects, domain services | `shared` and the standard library; no third-party package |
-| `application` | use cases and the ports they call | `domain`, `shared`, the standard library, and `effect` |
-| `driving` | HTTP handlers, CLI commands, route files, consumers | `application`, `domain`, `shared`, `composition` |
-| `driven` | databases, clients, brokers that implement the ports | `application`, `domain`, `shared` |
-| `shared` | errors, logging, generated contracts | no other zone |
-| `composition` | entry points and the module that wires the adapters | any zone |
+| `domain` | aggregates, entities, value objects, domain services, aggregate repository interfaces | stdlib only, no other zone or third-party package (`domain/depends-on-nothing-outside`) |
+| `application` | use cases and non-domain outbound ports they call | `domain` only (`application/through-ports`); no third-party package (`application/core-libraries-only`) |
+| `inbound` | front doors calling the app (Cockburn: primary / driving): HTTP handlers, CLI commands, route files, consumers | `application`, `domain`, `shared`; never `outbound` or `composition` (`inbound/calls-the-application`) |
+| `outbound` | back-end tools called by the app (Cockburn: secondary / driven): databases, clients, brokers | `application`, `domain`, `shared`; never `inbound` or `composition` (`outbound/implements-ports`) |
+| `shared` | logging, tracing, generated contracts for adapters | no other zone (`shared/product-free`) |
+| `composition` | entry points (Composition Root / Configurator) | any zone |
 
-Each zone it constrains has one built-in [`imports` rule](/docs/rules/#imports):
-which zones it may import, with `external: forbid` for the domain and
-`external: allow` everywhere else. The domain is plain code: it uses no
-third-party package. The application's packages are filtered by one
-more rule, `application/core-libraries-only`, which uses the Pattern's
-extension `hexagonal/allowed-packages` with `packages: [effect]`: the
-application may use `effect`, the root module of Effect v4, which
-declares a port on TypeScript (`Context.Service`), and nothing else
-outside. Every `effect/<module>` path, such as `effect/http` or
-`effect/sql`, is technology Effect marks unstable, so it belongs in an
-adapter. A listed package is matched exactly as written, so
-`effect/Effect` is not `effect`; import from `"effect"`. A package counts as third-party when
-the project declares it: in `go.mod`, `package.json`, or
-`pyproject.toml`. A Go module path starts with a domain name, so no Go
-package is spelled `effect` and a Go application is standard library
-only. Python has an unrelated PyPI package named `effect`; a Python
-project that declares it may use it in the application. Every rule skips test
-files (`*_test.go`, `*.test.ts`, `*.spec.ts`, `test_*.py`, `*_test.py`),
-because tests wire fakes and adapters across zones.
+Four additional rules guard the core and overall graph:
 
-`arclint init --pattern hexagonal` binds a Go layout: `internal/domain`,
-`internal/application`, `internal/adapters/driving`,
-`internal/adapters/driven`, `internal/shared`, and `cmd`. A zone bound to
-a folder that does not exist yet passes;
-`arclint context --dependencies --format json` lists the files each zone
-holds. For a
-TypeScript app on Effect v4 with a file-based router, bind the router's
-folder as `driving` and the runtime module as `composition`:
+- `core/performs-no-io` (`hexagonal/forbidden-modules`): `domain` and `application` import no standard-library module for files, processes, networks, or databases. Lists are per language and cover submodules (`os` forbids `os/exec`; TypeScript's `node:` prefix is stripped). Go's `net/url`, `net/netip`, `net/mail`, and `io` stay allowed; globals such as `fetch` are not imports and are not judged.
+- `domain/no-wire-format` (`hexagonal/wire-format`): `domain` imports no standard-library encoder and declares no Go struct field tag such as `json:"id"`.
+- `core/concept-named-files`: no `domain` or `application` file is named `util`, `utils`, `helper`, `helpers`, `common`, or `misc` (`.go`, `.ts`, `.tsx`, `.py`).
+- `dependencies/acyclic`: no import cycle among the six zones.
+
+**Sources and conventions.** The inside/outside split and actor-direction rule come from Alistair Cockburn's *"The Hexagonal (Ports & Adapters) Architecture"* (2005, `https://alistair.cockburn.us/hexagonal-architecture/`): *"code pertaining to the inside part should not leak into the outside part"*, where primary/driving (`inbound`) actors trigger the application and secondary/driven (`outbound`) actors are triggered by the application. Keeping `composition` outermost as the startup configurator follows Composition Root (Robert C. Martin, *Clean Architecture*; Juan Manuel Garrido de Paz, *"Ports and Adapters Pattern"*). Splitting the inside into `domain` and `application` and placing Aggregate Repository interfaces in `domain` (so both Domain Services and Application use cases can depend on them while `outbound` implements them) comes from Domain-Driven Design (Eric Evans, *DDD Reference*, 2015, pp. 10, 17; Vaughn Vernon, *IDDD*, 2013), so the core agrees with ArcLint's built-in `domain_isolation` and `repository/*` rules. The `shared` zone and the language-specific checks (`core/performs-no-io`, `domain/no-wire-format`, `core/concept-named-files`, and test exclusions) are ArcLint enforcement conventions.
+
+Every rule except `core/concept-named-files` skips test files (`*_test.go`, `*.test.ts`, `*.test.tsx`, `*.spec.ts`, `*.spec.tsx`, `test_*.py`, `*_test.py`), because tests wire fakes and adapters across zones. `arclint init --pattern hexagonal` drafts bindings for a Go layout; bound missing folders pass as empty, and `arclint context --dependencies --format json` shows each zone's matched files.
+
+#### Opting in to application packages and framework exceptions
+
+To let `application` use specific third-party packages (such as Effect v4's root `effect` module for `Context.Service` ports, `sqlalchemy.orm`, or `github.com/pkg/errors`), disable `application/core-libraries-only` with a reason and add a local rule using the Pattern's shipped `hexagonal/allowed-packages` extension; `application/through-ports` stays untouched. Likewise, if a file-based router (such as Next.js or TanStack Start) requires route modules in `inbound` to import a runtime module in `composition`, opt in explicitly by overriding `inbound/calls-the-application` (keeping `composition` free of re-exported `outbound` adapters):
 
 ```yaml
 runtime: [ts]
 extends:
-  - pattern: arclint/hexagonal@0.1.0
+  - pattern: arclint/hexagonal@0.1.0-beta.2
     bind:
       domain: src/domain/**
       application: src/application/**
-      driving: src/routes/**
-      driven: src/adapters/**
+      inbound: src/routes/**
+      outbound: src/adapters/**
       shared: src/shared/**
       composition: src/app/**
-```
-
-A port is a `Context.Service` in the application, an adapter is a
-`Layer` in `driven`, and composition merges the Layers into a
-`ManagedRuntime`. The router loads each route file itself, and the
-route runs its use case through that runtime; that is why `driving` may
-import `composition`. Driving and driven adapters never import each
-other.
-
-Imports written with a tsconfig alias such as `@/domain/order` are
-judged like relative ones (see [Import classes](/docs/concepts/#import-classes)).
-
-To let the application use other packages, disable the Pattern's
-package filter with a reason and add your own rule that uses the same
-extension with your list; the zone's `imports` rule stays as it is.
-
-```yaml
 rules:
   arclint/hexagonal:application/core-libraries-only:
-    disable: "We allow pkg/errors in the application; core/application-packages replaces this rule."
-  core/application-packages:
-    rationale: "The application uses pkg/errors and no other third-party package."
+    disable: "The application declares its ports with Effect v4; application/effect-core replaces this rule."
+  application/effect-core:
+    rationale: "The application uses Effect's root module and no other third-party package."
     on: application
+    exclude:
+      paths: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"]
+      reason: "Tests wire fakes and adapters across zones."
     uses: hexagonal/allowed-packages
     with:
-      packages: [github.com/pkg/errors]
+      packages: [effect]
+  arclint/hexagonal:inbound/calls-the-application:
+    disable: "File-based route modules invoke the application through src/app/runtime.ts."
+  inbound/file-routes:
+    rationale: "Route modules import application, domain, shared, and the runtime module, never outbound."
+    on: inbound
+    exclude:
+      paths: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"]
+      reason: "Tests wire fakes and adapters across zones."
+    imports:
+      internal: [application, domain, shared, composition]
+      external: allow
 ```
 
-To change which zones a zone may import, disable its `imports` rule
-with a reason and write your own, complete, under a new ID.
+Listed packages match exactly as written (`effect` admits `"effect"` and not `effect/http`; Python dotted imports such as `sqlalchemy.orm` and Go package paths match the same way). TypeScript tsconfig aliases such as `@/domain/order` are judged like relative imports (see [Import classes](/docs/concepts/#import-classes)). To change which zones a zone may import, disable its `imports` rule with a reason and write your own under a new ID.
+
+#### Several bounded contexts
+
+Bind one hexagon per context with a wildcard and declare a Zone named for each context over its **core** (`domain` and `application`):
+
+```yaml
+extends:
+  - pattern: arclint/hexagonal@0.1.0-beta.2
+    bind:
+      domain: "internal/*/domain/**"
+      application: "internal/*/app/**"
+      inbound: "internal/*/inbound/**"
+      outbound: "internal/*/outbound/**"
+      shared: "internal/shared/**"
+      composition: "cmd/**"
+zones:
+  ordering:
+    paths:
+      - "internal/ordering/domain/**"
+      - "internal/ordering/app/**"
+    description: "The ordering context's core."
+  billing:
+    paths:
+      - "internal/billing/domain/**"
+      - "internal/billing/app/**"
+    description: "The billing context's core."
+```
+
+Naming a Zone for each context lets the built-in `bounded_context/isolated` and `context_relation/imports-follow-influence` rules govern cross-context core imports from your domain recording, while keeping `inbound` and `outbound` adapters outside those context Zones so adapters can freely import `shared` without conflicting with `domain_isolation/model-imports-nothing-outside-itself`. Repositories with unrelated contexts that also want adapter-level slice isolation can add a local `independent: ["internal/*"]` rule (which automatically skips Zone-owned folders like `shared`).
 
 ### arclint/vertical
 

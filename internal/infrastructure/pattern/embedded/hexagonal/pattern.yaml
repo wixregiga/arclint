@@ -1,108 +1,146 @@
 # arclint/hexagonal: ports and adapters around an isolated core.
 #
-# The core (domain and application) depends on nothing outside itself.
-# Driving adapters (HTTP handlers, CLI commands, route files, consumers)
-# call the application; driven adapters (databases, clients, brokers)
-# implement the ports the application declares; composition wires them.
-# Adopt it from rules.arclint.yaml:
+# Adopt from rules.arclint.yaml:
 #
 #   extends:
-#     - pattern: arclint/hexagonal@0.1.0
+#     - pattern: arclint/hexagonal@0.1.0-beta.2
 #       bind:
 #         domain: internal/domain/**
 #         ...
 #
-# Every zone below must be bound; the paths here are Go suggestions the
-# `arclint init --pattern hexagonal` starter copies into bind. Bind a zone
-# to a folder that does not exist yet and it is reported empty, not failed.
+# Bind every zone below; missing folders pass as empty.
 
 pattern:
   namespace: arclint
   name: hexagonal
-  version: 0.1.0
+  version: 0.1.0-beta.2
   coverage: [go, ts, py]
   documentation: |
-    Ports and adapters (Alistair Cockburn's hexagonal architecture).
-    The domain is plain code: it imports only the language's standard
-    library and shared code, never a third-party package. The application
-    imports the domain and shared code, and on TypeScript the Effect v4
-    core, the root module effect, where Context.Service declares a port;
-    every effect/<module> path (effect/http, effect/sql, and the others
-    Effect marks unstable) is technology and belongs in an adapter. A
-    listed package is matched exactly as written, so effect allows effect
-    and not effect/Effect. Driven adapters implement the ports (on
-    TypeScript, a Layer); composition merges the adapters and builds the
-    program or runtime (on TypeScript, a ManagedRuntime). Driving adapters
-    call the application and may import composition, so a route file
-    loaded by a file-based router reaches the application through the
-    runtime. Driving and driven adapters never import each other. Test
-    files are not judged, because tests wire fakes and adapters across
-    zones.
+    Ports and adapters around an isolated core (domain and application).
+    The core imports no other zone, no third-party package, no I/O, and
+    no wire format; inbound (driving) adapters call application, outbound
+    (driven) adapters implement ports, shared serves adapters, composition
+    is outermost, and zone imports stay acyclic. Test files are skipped.
 
 zones:
   domain:
-    description: "The business model: entities, value objects, domain services."
+    description: "The business model: aggregates, entities, value objects, domain services, and aggregate repository interfaces."
     paths: internal/domain/**
   application:
-    description: "Use cases and the ports they call."
+    description: "Use cases and non-domain outbound ports they call."
     paths: internal/application/**
-  driving:
-    description: "Adapters that call the application: HTTP handlers, CLI commands, route files, consumers."
-    paths: internal/adapters/driving/**
-  driven:
-    description: "Adapters that implement the application's ports: databases, clients, brokers."
-    paths: internal/adapters/driven/**
+  inbound:
+    description: "Inbound (Cockburn: primary / driving) adapters that call the application: HTTP handlers, CLI commands, route files, consumers."
+    paths: internal/adapters/inbound/**
+  outbound:
+    description: "Outbound (Cockburn: secondary / driven) adapters that implement ports: databases, clients, brokers."
+    paths: internal/adapters/outbound/**
   shared:
-    description: "Cross-cutting code with no product meaning: errors, logging, generated contracts."
+    description: "Cross-cutting adapter code with no product meaning: logging, tracing, generated contracts."
     paths: internal/shared/**
   composition:
-    description: "Wiring: entry points and the module that merges the adapters."
+    description: "Wiring (Composition Root / Configurator): entry points that assemble outbound adapters, application, and inbound adapters."
     paths: cmd/**
 
 rules:
   domain/depends-on-nothing-outside:
-    rationale: "The domain imports no other zone except shared code, and no third-party package: only the language's standard library."
+    rationale: "Domain imports no other zone and no third-party package."
     on: domain
     exclude:
       paths: ["**/*_test.go", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py"]
       reason: "Tests wire fakes and adapters across zones."
     imports:
-      internal: [shared]
+      internal: []
       external: forbid
 
   application/through-ports:
-    rationale: "The application imports only the domain and shared code; adapters reach it through its ports."
+    rationale: "Application imports only the domain; external capabilities enter through ports."
     on: application
     exclude:
       paths: ["**/*_test.go", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py"]
       reason: "Tests wire fakes and adapters across zones."
     imports:
-      internal: [domain, shared]
+      internal: [domain]
       external: allow
 
   application/core-libraries-only:
-    rationale: "The application uses no third-party package except the Effect core, effect, whose Context.Service declares its ports on TypeScript; every effect/<module> path is technology and belongs in an adapter."
+    rationale: "Application uses no third-party package; opt in by replacing this rule."
     on: application
     exclude:
       paths: ["**/*_test.go", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py"]
       reason: "Tests wire fakes and adapters across zones."
-    uses: hexagonal/allowed-packages
-    with:
-      packages: [effect]
+    imports:
+      external: forbid
 
-  driving/calls-the-application:
-    rationale: "Driving adapters import the application, the domain, shared code, and composition, never a driven adapter."
-    on: driving
+  core/performs-no-io:
+    rationale: "Core performs no I/O; move files, processes, networks, and databases behind a port."
+    on: [domain, application]
+    exclude:
+      paths: ["**/*_test.go", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py"]
+      reason: "Test fixtures may use I/O."
+    uses: hexagonal/forbidden-modules
+    with:
+      go: [crypto/tls, database/sql, io/ioutil, log/syslog, net, os, plugin, syscall]
+      typescript: [child_process, cluster, dgram, dns, fs, http, http2, https, net, os, process, readline, sqlite, tls, tty, worker_threads]
+      python: [dbm, fcntl, fileinput, ftplib, glob, http.client, http.server, imaplib, multiprocessing, os, pathlib, poplib, shelve, shutil, smtplib, socket, socketserver, sqlite3, ssl, subprocess, syslog, tempfile, urllib.request, wsgiref, xmlrpc]
+      allow:
+        go: [net/mail, net/netip, net/url]
+
+  domain/no-wire-format:
+    rationale: "Domain values carry no wire format; map payloads and rows in an adapter."
+    on: domain
+    exclude:
+      paths: ["**/*_test.go", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py"]
+      reason: "Tests may encode values to compare them."
+    uses: hexagonal/wire-format
+    with:
+      go: [encoding/csv, encoding/gob, encoding/json, encoding/xml]
+      python: [csv, json, marshal, pickle, tomllib, xml]
+      tags: [bson, csv, db, form, gorm, json, mapstructure, msgpack, protobuf, toml, xml, yaml]
+
+  core/concept-named-files:
+    rationale: "Core files are named for a concept, use case, or port, never a generic container."
+    on: [domain, application]
+    structure:
+      forbid:
+        - "**/util.go"
+        - "**/utils.go"
+        - "**/helper.go"
+        - "**/helpers.go"
+        - "**/common.go"
+        - "**/misc.go"
+        - "**/util.ts"
+        - "**/utils.ts"
+        - "**/helper.ts"
+        - "**/helpers.ts"
+        - "**/common.ts"
+        - "**/misc.ts"
+        - "**/util.tsx"
+        - "**/utils.tsx"
+        - "**/helper.tsx"
+        - "**/helpers.tsx"
+        - "**/common.tsx"
+        - "**/misc.tsx"
+        - "**/util.py"
+        - "**/utils.py"
+        - "**/helper.py"
+        - "**/helpers.py"
+        - "**/common.py"
+        - "**/misc.py"
+
+  inbound/calls-the-application:
+    rationale: "Inbound adapters import application, domain, and shared, never outbound or composition."
+    on: inbound
     exclude:
       paths: ["**/*_test.go", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py"]
       reason: "Tests wire fakes and adapters across zones."
     imports:
-      internal: [application, domain, shared, composition]
+      internal: [application, domain, shared]
       external: allow
 
-  driven/implements-ports:
-    rationale: "Driven adapters import the application's ports, the domain, and shared code, never a driving adapter."
-    on: driven
+  outbound/implements-ports:
+    rationale: "Outbound adapters import application, domain, and shared, never inbound or composition."
+    on: outbound
     exclude:
       paths: ["**/*_test.go", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py"]
       reason: "Tests wire fakes and adapters across zones."
@@ -119,3 +157,10 @@ rules:
     imports:
       internal: []
       external: allow
+
+  dependencies/acyclic:
+    rationale: "Zone dependencies contain no import cycle."
+    exclude:
+      paths: ["**/*_test.go", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx", "**/test_*.py", "**/*_test.py"]
+      reason: "Tests wire fakes and adapters across zones."
+    acyclic: {}

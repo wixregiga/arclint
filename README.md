@@ -145,7 +145,7 @@ scope. When no Rationale is supplied, none is invented.
 
 Or adopt a pattern by reference and bind its zones to your tree. Two
 are built in: `arclint/hexagonal`, ports and adapters for Go,
-TypeScript on Effect v4, and Python, and `arclint/vertical`, feature
+TypeScript (Effect v4 opts in), and Python, and `arclint/vertical`, feature
 slices for Go. `arclint patterns install vertical` writes this for
 you; its rules load under its namespace, and you override them in
 place:
