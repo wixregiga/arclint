@@ -29,7 +29,7 @@ rules:
 	// The install writes the user configuration, so it must land in a home
 	// of this test's own.
 	home := t.TempDir()
-	env := append(os.Environ(), "WSL_DISTRO_NAME=", "HOME="+home, "CLAUDE_CONFIG_DIR=", "CODEX_HOME=")
+	env := append(os.Environ(), "WSL_DISTRO_NAME=", "HOME="+home, "USERPROFILE="+home, "CLAUDE_CONFIG_DIR=", "CODEX_HOME=")
 
 	stdout, stderr, code := runBin(t, root, env, "agents", "hooks", "install", "--format", "json")
 	if code != 0 || stderr != "" {
@@ -39,8 +39,8 @@ rules:
 		Operation, Host, Orientation string
 		Paths                        []string
 	}
-	userFiles := []string{filepath.Join(home, ".claude", "settings.json"), filepath.Join(home, ".codex", "hooks.json")}
-	if err := json.Unmarshal([]byte(stdout), &install); err != nil || install.Operation != "hooks" || install.Host != "claude, codex" || !slices.Equal(install.Paths, userFiles) || !strings.HasPrefix(install.Orientation, "Work in this order:\n1. Run `arclint context <paths>`") {
+	userFiles := []string{filepath.Join(home, ".claude", "settings.json"), filepath.Join(home, ".codex", "hooks.json"), filepath.Join(home, ".gemini", "config", "hooks.json")}
+	if err := json.Unmarshal([]byte(stdout), &install); err != nil || install.Operation != "hooks" || install.Host != "claude, codex, antigravity" || !slices.Equal(install.Paths, userFiles) || !strings.HasPrefix(install.Orientation, "Work in this order:\n1. Run `arclint context <paths>`") {
 		t.Fatalf("install report: %v %s", err, stdout)
 	}
 	settings, err := os.ReadFile(userFiles[0])
@@ -58,15 +58,16 @@ rules:
 			Problems        []string
 		}
 	}
-	if err := json.Unmarshal([]byte(stdout), &status); err != nil || code != 0 || status.Binary != binPath || status.LastEvent != "" || len(status.Files) != 4 {
+	if err := json.Unmarshal([]byte(stdout), &status); err != nil || code != 0 || status.Binary != binPath || status.LastEvent != "" || len(status.Files) != 6 {
 		t.Fatalf("status: %d %v %s", code, err, stdout)
 	}
 	for _, entry := range status.Files {
 		want, listed := "absent", 0
+		events := 4
 		if entry.Scope == "user" {
-			want, listed = "complete", 4
+			want, listed = "complete", events
 		}
-		if entry.Installed != want || len(entry.Listed) != listed || len(entry.Missing) != 4-listed || len(entry.Problems) != 0 {
+		if entry.Installed != want || len(entry.Listed) != listed || len(entry.Missing) != events-listed || len(entry.Problems) != 0 {
 			t.Fatalf("status entry: %+v", entry)
 		}
 	}
@@ -155,5 +156,79 @@ rules:
 	out := payload("second", edit("internal/app/app.go"))
 	if !strings.Contains(out, "internal/app/app.go changed before `arclint context` showed every Zone that owns it") || !strings.Contains(out, "changed before the project's domain recording changed") {
 		t.Fatalf("a no-op domain init or context of . was credited: %s", out)
+	}
+}
+
+func TestAntigravityHooksFindTheAgentProjectFromTheConfigDirectory(t *testing.T) {
+	root, home := t.TempDir(), t.TempDir()
+	write(t, root, "rules.arclint.yaml", "zones:\n  app: internal/**\n")
+	write(t, root, "internal/app.go", "package app\n")
+	env := append(os.Environ(), "WSL_DISTRO_NAME=", "HOME="+home, "USERPROFILE="+home)
+	stdout, stderr, code := runBin(t, root, env, "agents", "hooks", "install", "--host", "antigravity", "--format", "json")
+	configDir := filepath.Join(home, ".gemini", "config")
+	configFile := filepath.Join(configDir, "hooks.json")
+	var report struct{ Paths []string }
+	if err := json.Unmarshal([]byte(stdout), &report); err != nil || code != 0 || stderr != "" || !slices.Equal(report.Paths, []string{configFile}) {
+		t.Fatalf("Antigravity install: %d %v %s %s", code, err, stdout, stderr)
+	}
+	data, err := os.ReadFile(configFile)
+	var config map[string]struct {
+		SessionStart []struct{ Command string }
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &config); err != nil || len(config["arclint"].SessionStart) != 1 || config["arclint"].SessionStart[0].Command != binPath+" agents hooks event" {
+		t.Fatalf("Antigravity configuration: %v %s", err, data)
+	}
+	event := func(cwd, name string, fields map[string]any) string {
+		t.Helper()
+		input := map[string]any{"hookEventName": name, "conversationId": "test", "cwd": cwd}
+		for key, value := range fields {
+			input[key] = value
+		}
+		raw, err := json.Marshal(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stdout, stderr, code := runBinStdin(t, configDir, env, string(raw), "agents", "hooks", "event")
+		if code != 0 || stderr != "" {
+			t.Fatalf("%s: %d %s %s", name, code, stdout, stderr)
+		}
+		return strings.TrimSpace(stdout)
+	}
+	if out := event("", "SessionStart", map[string]any{"workspacePaths": []string{root}}); !strings.Contains(out, `"injectSteps":[{"systemMessage":{"systemMessage":"ArcLint workflow hooks run`) {
+		t.Fatal(out)
+	}
+	if out := event(root, "PreInvocation", map[string]any{"invocationNum": 0}); out != "{}" {
+		t.Fatal(out)
+	}
+	tool := map[string]any{"id": "write", "name": "code_action", "args": map[string]string{"TargetFile": filepath.Join(root, "internal", "app.go")}}
+	if out := event(root, "PostToolUse", map[string]any{"toolCall": tool}); out != "{}" {
+		t.Fatal(out)
+	}
+	if out := event(root, "PreInvocation", map[string]any{"invocationNum": 1}); !strings.Contains(out, "internal/app.go changed before") {
+		t.Fatal(out)
+	}
+	if out := event(root, "Stop", map[string]any{"terminationReason": "NO_TOOL_CALL", "fullyIdle": true}); out != `{"decision":"allow"}` {
+		t.Fatal(out)
+	}
+	if out := event(root, "PreInvocation", map[string]any{"invocationNum": 0}); !strings.Contains(out, "internal/app.go changed since the last") {
+		t.Fatal(out)
+	}
+	outside := t.TempDir()
+	if out := event(outside, "SessionStart", nil); out != "{}" {
+		t.Fatal(out)
+	}
+	if out := event(outside, "Stop", nil); out != `{"decision":"allow"}` {
+		t.Fatal(out)
+	}
+	if _, err := os.Stat(filepath.Join(configDir, ".arclint")); !os.IsNotExist(err) {
+		t.Fatalf("workflow progress landed in the config directory: %v", err)
+	}
+	stdout, stderr, code = runBin(t, root, env, "agents", "hooks", "status", "--format", "json")
+	var status struct{ LastEvent string }
+	if err := json.Unmarshal([]byte(stdout), &status); err != nil || code != 0 || stderr != "" || status.LastEvent == "" {
+		t.Fatalf("Antigravity status: %d %v %s %s", code, err, stdout, stderr)
 	}
 }

@@ -61,22 +61,7 @@ type Events struct {
 	recording string
 	binary    string
 	guide     application.GuideWorkflow
-	sessions  Sessions
-}
-
-// Sessions tells a session's first delivery of an event from a repeat, and
-// keeps where the agent's turns begin and end, so that files changed
-// between turns are not taken for the agent's work.
-type Sessions interface {
-	// Deliver reports whether event, a digest of one host event, differs
-	// from the event the session last received.
-	Deliver(session, event string) (bool, error)
-	// StartSession notes that the session started or resumed.
-	StartSession(session string) error
-	// StartTurn notes that the user's prompt started a turn.
-	StartTurn(session string) error
-	// FinishTurn notes that the agent's turn finished.
-	FinishTurn(session string) error
+	sessions  *ProgressStore
 }
 
 // NewEvents connects hook events for the project at root to guide. ruleset
@@ -84,7 +69,7 @@ type Sessions interface {
 // path relative to root; distro names the WSL distribution this process
 // runs in, empty outside WSL; binary is this arclint's path, which a
 // workflow note names.
-func NewEvents(root, ruleset, recording, distro, binary string, guide application.GuideWorkflow, sessions Sessions) (*Events, error) {
+func NewEvents(root, ruleset, recording, distro, binary string, guide application.GuideWorkflow, sessions *ProgressStore) (*Events, error) {
 	p, err := newProject(root, distro)
 	if err != nil {
 		return nil, err
@@ -98,6 +83,9 @@ func NewEvents(root, ruleset, recording, distro, binary string, guide applicatio
 // directory with no ruleset is not an ArcLint project: a user install runs
 // the hooks there too, and they answer nothing and write nothing.
 func (events *Events) Handle(input []byte) ([]byte, error) {
+	if event, ok := decodeAntigravity(input); ok {
+		return events.handleAntigravity(input, event)
+	}
 	if _, err := os.Stat(events.ruleset); err != nil {
 		return nativeOutput(map[string]any{})
 	}

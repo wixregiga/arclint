@@ -52,22 +52,38 @@ func NewGuideWorkflow(progress SessionProgress, rules rule.Repository, knowledge
 // session's Progress so the same reminder is not given twice. Executing
 // with no observed activities starts or resumes the session.
 func (uc GuideWorkflow) Execute(session string, observed []agent.Activity) ([]agent.Guidance, error) {
-	zones := uc.zones()
-	model := uc.model(zones)
 	var given []agent.Guidance
 	err := uc.progress.Update(session, func(progress agent.Progress, recorded []agent.Activity) agent.Progress {
-		given = nil
-		for _, activity := range owned(append(slices.Clone(recorded), observed...), zones, model, uc.tests) {
-			var advice []agent.Guidance
-			progress, advice = agent.WorkflowGuide{}.Advise(progress, activity)
-			given = append(given, advice...)
-		}
+		progress, given = uc.Evaluate(progress, append(slices.Clone(recorded), observed...))
 		return progress
 	})
 	if err != nil {
 		return nil, fmt.Errorf("guide workflow: %w", err)
 	}
 	return given, nil
+}
+
+// Evaluate applies the workflow to ordered activities. An adapter that
+// defers delivery can commit the resulting Progress and Guidance together.
+func (uc GuideWorkflow) Evaluate(progress agent.Progress, activities []agent.Activity) (agent.Progress, []agent.Guidance) {
+	zones := uc.zones()
+	model := uc.model(zones)
+	var given []agent.Guidance
+	for _, activity := range owned(activities, zones, model, uc.tests) {
+		var advice []agent.Guidance
+		progress, advice = agent.WorkflowGuide{}.Advise(progress, activity)
+		given = append(given, advice...)
+	}
+	return progress, given
+}
+
+// PathOwners returns a lookup for the Zones owning a path, reading the
+// ruleset on first use.
+func (uc GuideWorkflow) PathOwners() func(path string) []string {
+	zones := uc.zones()
+	return func(path string) []string {
+		return owners(zones(), path)
+	}
 }
 
 // zones returns a function that reads the declared Zones on first use. When

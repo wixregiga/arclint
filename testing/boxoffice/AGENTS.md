@@ -41,11 +41,12 @@ IMPORTANT: work in this order on every change.
 - `arclint domain show <name>`: when someone asks which rules enforce something: the invariants and assertions an entry records, the code enforcing each one, and its status from the current check (`--format json`)
 - `arclint domain define`: record a meaning through validated commands; ArcLint writes the recording's format
 - `arclint domain remove`: remove an entry through validated commands
+- `arclint map serve`: show the recorded ubiquitous language in a browser and edit it there: each entry stands Accepted, Proposed or Draft against the remote default branch; drafts publish through define and remove (`--addr host:port`)
 - `arclint rules [selector]`: every configured rule with its constraint and rationale; one match prints the complete rule
 - `arclint check .`: evaluate every rule; the findings are your to-do list; exit 1 on error-severity findings
 - `arclint rules test`: run the rule fixtures under `.arclint/tests` after changing any rule
 - `arclint sdk init`: regenerate the extension SDK artifacts under `.arclint/extensions`
-- `arclint agents hooks install`: write the workflow hooks into Claude Code and Codex user configuration, for every project and worktree (`--project` for this project only); they advise when work skips context, domain recording or the check, and never block
+- `arclint agents hooks install`: write the workflow hooks into Claude Code, Codex and Antigravity user configuration, for every project and worktree (`--project` for this project only); they advise when work skips context, domain recording or the check, and never block
 - `arclint agents hooks status`: show which configuration files list the workflow hooks and when a hook event last reached this project; Codex runs them after you trust them in /hooks
 - `arclint agents md --write`: refresh this block after changing rules.arclint.yaml or the vocabulary
 - `arclint agents skill`: write the domain-librarian skill to `.agents/skills/domain-librarian/` for Codex and `.claude/skills/domain-librarian/` for Claude Code when your harness lacks it

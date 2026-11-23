@@ -71,7 +71,7 @@ func newHomes(t *testing.T) homes {
 	t.Helper()
 	base := t.TempDir()
 	directories := func(side string) map[string]string {
-		return map[string]string{"claude": filepath.Join(base, side, ".claude"), "codex": filepath.Join(base, side, ".codex")}
+		return NativeUserConfiguration(filepath.Join(base, side), func(string) string { return "" }).Directories
 	}
 	return homes{native: UserConfiguration{Directories: directories("linux")}, windows: UserConfiguration{Windows: true, Directories: directories("windows")}}
 }
@@ -106,25 +106,25 @@ func TestUserInstallWritesEachHostsUserConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{h.file(false, "claude"), h.file(false, "codex")}
+	want := []string{h.file(false, "claude"), h.file(false, "codex"), h.file(false, "antigravity")}
 	if !reflect.DeepEqual(installation.Written, want) || len(installation.Removed) != 0 {
 		t.Fatalf("installation %+v, want written %v", installation, want)
 	}
 	// Claude Code runs the hooks after each Bash command as well, so a
 	// shell change is seen right after the command that made it.
 	tools := map[string]string{"claude": "Edit|Write|MultiEdit|NotebookEdit|Bash", "codex": "apply_patch"}
-	for _, host := range hookHosts {
-		document := readTestConfiguration(t, h.file(false, host.name))
+	for host, matcher := range tools {
+		document := readTestConfiguration(t, h.file(false, host))
 		if len(document.Hooks) != len(hookEvents) {
-			t.Fatalf("%s events: %v", host.name, document.Hooks)
+			t.Fatalf("%s events: %v", host, document.Hooks)
 		}
 		for _, event := range hookEvents {
 			groups := document.Hooks[event]
 			if len(groups) != 1 || len(groups[0].Hooks) != 1 || groups[0].Hooks[0].Command != binary+" "+eventArgs || groups[0].Hooks[0].CommandWindows != "" {
-				t.Fatalf("%s %s: %+v", host.name, event, groups)
+				t.Fatalf("%s %s: %+v", host, event, groups)
 			}
-			if wantMatcher := map[bool]string{true: tools[host.name]}[event == postToolUseEvent]; groups[0].Matcher != wantMatcher {
-				t.Fatalf("%s %s matcher %q, want %q", host.name, event, groups[0].Matcher, wantMatcher)
+			if wantMatcher := map[bool]string{true: matcher}[event == postToolUseEvent]; groups[0].Matcher != wantMatcher {
+				t.Fatalf("%s %s matcher %q, want %q", host, event, groups[0].Matcher, wantMatcher)
 			}
 		}
 	}
@@ -135,7 +135,7 @@ func TestUserInstallWritesEachHostsUserConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status.Binary != binary || !status.LastEvent.IsZero() || len(status.Files) != 4 {
+	if status.Binary != binary || !status.LastEvent.IsZero() || len(status.Files) != 6 {
 		t.Fatalf("status: %+v", status)
 	}
 	for _, entry := range status.Files {
@@ -155,7 +155,7 @@ func TestWSLUserInstallWritesTheWindowsProfileForWindowsApps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(installation.Written) != 4 {
+	if len(installation.Written) != 6 {
 		t.Fatalf("written: %v", installation.Written)
 	}
 	windows := "wsl.exe -d Ubuntu -e " + binary + " " + eventArgs
@@ -237,7 +237,7 @@ func TestProjectInstallWritesThePersonalFilesForBothSides(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{filepath.Join(root, ".claude/settings.local.json"), filepath.Join(root, ".codex/hooks.json")}
+	want := []string{filepath.Join(root, ".claude/settings.local.json"), filepath.Join(root, ".codex/hooks.json"), filepath.Join(root, ".agents/hooks.json")}
 	if !reflect.DeepEqual(installation.Written, want) {
 		t.Fatalf("written %v, want %v", installation.Written, want)
 	}
@@ -281,6 +281,103 @@ func TestProjectInstallWritesThePersonalFilesForBothSides(t *testing.T) {
 	}
 }
 
+func TestAntigravityInstallOwnsOneNamedHook(t *testing.T) {
+	root, h := t.TempDir(), newHomes(t)
+	binary := testBinary(t, t.TempDir(), "native")
+	installer := NewInstaller(root, "Ubuntu", binary, h.users("Ubuntu"))
+	path := h.file(false, "antigravity")
+	other := map[string]any{"enabled": false, "Stop": []any{map[string]any{"command": "other"}}}
+	writeTestFile(t, path, `{"other":{"enabled":false,"Stop":[{"command":"other"}]},"arclint":{"enabled":false,"SessionStart":[{"command":"/old/bin/arclint agents hooks event"}]}}`)
+	entry := statusOf(t, installer)["antigravity user"]
+	if entry.Installation != application.HooksPartial || !strings.Contains(strings.Join(entry.Problems, "\n"), "enabled to false") ||
+		!slices.Equal(entry.Listed, []string{"SessionStart"}) {
+		t.Fatalf("disabled partial configuration: %+v", entry)
+	}
+	install := func(project bool) application.HooksInstallation {
+		t.Helper()
+		result, err := installer.Install([]string{"antigravity"}, project)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	check := func(path, command string, disabled bool) map[string]any {
+		t.Helper()
+		document, _, err := readConfiguration(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		named, ok := document["arclint"].(map[string]any)
+		count := 4
+		if disabled {
+			count++
+		}
+		if !ok || document["hooks"] != nil || len(named) != count || (disabled && named["enabled"] != false) {
+			t.Fatalf("incorrect named configuration: %v", document)
+		}
+		handler := map[string]any{"command": command, "type": "command", "timeout": json.Number("30")}
+		for _, event := range []string{"SessionStart", "PreInvocation", "Stop"} {
+			if !reflect.DeepEqual(named[event], []any{handler}) {
+				t.Fatalf("%s needs flat handlers: %v", event, named[event])
+			}
+		}
+		matcher := "edit_file|write_file|write_to_file|replace_file_content|multi_replace_file_content|code_action"
+		if !reflect.DeepEqual(named["PostToolUse"], []any{map[string]any{"matcher": matcher, "hooks": []any{handler}}}) {
+			t.Fatalf("PostToolUse group: %v", named["PostToolUse"])
+		}
+		return document
+	}
+	if _, err := installer.Install([]string{"antigravity"}, true); err == nil || !strings.Contains(err.Error(), "already defines the named arclint hook") || !strings.Contains(err.Error(), "would shadow it") {
+		t.Fatalf("project install with existing user hook: %v", err)
+	}
+	homeOnly := install(false)
+	if !slices.Equal(homeOnly.Written, []string{path, h.file(true, "antigravity")}) {
+		t.Fatalf("global configuration files: %v", homeOnly.Written)
+	}
+	wsl := "wsl.exe -d Ubuntu -e " + binary + " " + eventArgs
+	if native := check(path, binary+" "+eventArgs, true); !reflect.DeepEqual(native["other"], other) {
+		t.Fatalf("unrelated named hook changed: %v", native)
+	}
+	check(h.file(true, "antigravity"), wsl, false)
+	// A complete Antigravity install with enabled: false still explains the silence.
+	status, err := installer.Status()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if silence := strings.Join(status.Silence, "\n"); !strings.Contains(silence, "disables the arclint hook") {
+		t.Fatalf("silence missed disabled Antigravity hook:\n%s", silence)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	install(false)
+	after, err := os.ReadFile(path)
+	if err != nil || string(after) != string(before) {
+		t.Fatalf("reinstall changed configuration: %v\n%s", err, after)
+	}
+
+	// Removing the named entry leaves the rest of the user configuration.
+	writeTestFile(t, path, `{"other":{"enabled":false,"Stop":[{"command":"other"}]}}`)
+	if err := os.Remove(h.file(true, "antigravity")); err != nil {
+		t.Fatal(err)
+	}
+	local := filepath.Join(root, ".agents", "hooks.json")
+	install(true)
+	check(local, wsl, false)
+	if status, err := installer.Status(); err != nil || strings.Contains(strings.Join(status.Silence, "\n"), "disables the arclint hook") {
+		t.Fatalf("unrelated disabled hook triggered silence: %v %v", status.Silence, err)
+	}
+	if result := install(false); len(result.Removed) != 0 {
+		t.Fatalf("removed shared project file: %v", result.Removed)
+	}
+	check(local, wsl, false)
+	entry = statusOf(t, installer)["antigravity project"]
+	if entry.Installation != application.HooksComplete || len(entry.Listed) != 4 || !strings.Contains(strings.Join(entry.Problems, "\n"), "already lists the hooks") {
+		t.Fatalf("shared project configuration: %+v", entry)
+	}
+}
+
 func TestProjectInstallRefusesWhileTheUserConfigurationRunsTheHooks(t *testing.T) {
 	root, h := t.TempDir(), newHomes(t)
 	installer := NewInstaller(root, "", testBinary(t, t.TempDir(), "native"), h.users(""))
@@ -301,7 +398,7 @@ func TestProjectInstallRefusesWhileTheUserConfigurationRunsTheHooks(t *testing.T
 func TestNativeUserConfigurationFollowsTheHostsVariables(t *testing.T) {
 	variables := map[string]string{"CODEX_HOME": "/srv/codex"}
 	configuration := NativeUserConfiguration("/home/me", func(name string) string { return variables[name] })
-	if !reflect.DeepEqual(configuration.Directories, map[string]string{"claude": "/home/me/.claude", "codex": "/srv/codex"}) || configuration.Windows {
+	if !reflect.DeepEqual(configuration.Directories, map[string]string{"claude": "/home/me/.claude", "codex": "/srv/codex", "antigravity": "/home/me/.gemini/config"}) || configuration.Windows {
 		t.Fatalf("configuration: %+v", configuration)
 	}
 }
@@ -861,7 +958,7 @@ func TestAnUnreachableWindowsProfileIsAProblemOfItsFilesOnly(t *testing.T) {
 	}
 	installer := NewInstaller(root, "Ubuntu", binary, users)
 	entries := statusOf(t, installer)
-	for _, host := range []string{"claude", "codex"} {
+	for _, host := range []string{"claude", "codex", "antigravity"} {
 		if native := entries[host+" user"]; native.Installation != application.HooksComplete || len(native.Problems) != 0 {
 			t.Fatalf("%s native file: %+v", host, native)
 		}

@@ -28,14 +28,17 @@ const eventArgs = "agents hooks event"
 const handlerCommand = "command"
 
 const (
-	scopeUser    = "user"
-	scopeProject = "project"
-	claudeHost   = "claude"
+	scopeUser       = "user"
+	scopeProject    = "project"
+	claudeHost      = "claude"
+	antigravityHost = "antigravity"
 )
 
 // hookHost is one Agent Host's hook configuration.
 type hookHost struct {
 	name string
+	// events are the hook events install writes for the host.
+	events []string
 	// tools selects the PostToolUse calls that may change files. ArcLint's own
 	// commands record context, the check and domain changes themselves.
 	tools string
@@ -46,8 +49,7 @@ type hookHost struct {
 	// project the file a project install writes.
 	user, project string
 	// personal marks a project file that belongs to one user, which a user
-	// install may clean. Codex has no such file: its project hooks file can
-	// be committed and shared.
+	// install may clean. Codex and Antigravity have shareable project files.
 	personal bool
 	// shared is a project file the host also reads hooks from; install
 	// never writes it, because it is meant to be committed.
@@ -55,12 +57,19 @@ type hookHost struct {
 	// disable is the setting that turns off every hook the host reads,
 	// empty when the host has none.
 	disable string
+	// namedHook is the top-level hook entry ArcLint owns when the host
+	// groups hooks by name rather than under a shared "hooks" object.
+	namedHook string
 }
 
-var hookHosts = []hookHost{
-	{name: claudeHost, tools: "Edit|Write|MultiEdit|NotebookEdit|Bash", homeVariable: "CLAUDE_CONFIG_DIR", homeDirectory: ".claude", user: "settings.json", project: ".claude/settings.local.json", personal: true, shared: ".claude/settings.json", disable: "disableAllHooks"},
-	{name: "codex", tools: "apply_patch", homeVariable: "CODEX_HOME", homeDirectory: ".codex", user: "hooks.json", project: ".codex/hooks.json"},
-}
+var (
+	hookEvents = []string{sessionStartEvent, promptEvent, postToolUseEvent, stopEvent}
+	hookHosts  = []hookHost{
+		{name: claudeHost, events: hookEvents, tools: "Edit|Write|MultiEdit|NotebookEdit|Bash", homeVariable: "CLAUDE_CONFIG_DIR", homeDirectory: ".claude", user: "settings.json", project: ".claude/settings.local.json", personal: true, shared: ".claude/settings.json", disable: "disableAllHooks"},
+		{name: "codex", events: hookEvents, tools: "apply_patch", homeVariable: "CODEX_HOME", homeDirectory: ".codex", user: "hooks.json", project: ".codex/hooks.json"},
+		{name: antigravityHost, events: []string{sessionStartEvent, preInvocationEvent, postToolUseEvent, stopEvent}, tools: strings.Join(antigravityEditTools, "|"), homeDirectory: ".gemini/config", user: "hooks.json", project: ".agents/hooks.json", namedHook: "arclint"},
+	}
+)
 
 // commandForm is how the reader of a configuration file reaches arclint.
 type commandForm int
@@ -86,7 +95,6 @@ type target struct {
 }
 
 var (
-	hookEvents = []string{sessionStartEvent, promptEvent, postToolUseEvent, stopEvent}
 	distroName = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 	// pinnable is a binary path every host shell runs unquoted.
 	pinnable = regexp.MustCompile(`^(/|[A-Za-z]:/)[A-Za-z0-9._/+-]+$`)
@@ -141,6 +149,9 @@ func (installer *Installer) handler(file target) map[string]any {
 	binary := filepath.ToSlash(installer.binary)
 	handler := map[string]any{"type": "command", handlerCommand: nativeCommand(binary), "timeout": 30}
 	switch {
+	case file.host.name == antigravityHost && file.form != nativeForm:
+		// Both sh and cmd.exe can invoke the same WSL command.
+		handler[handlerCommand] = windowsCommand(binary, installer.distro)
 	case file.form == windowsForm && file.host.name == claudeHost:
 		handler[handlerCommand] = gitBashCommand(binary, installer.distro)
 	case file.form == windowsForm:
@@ -181,7 +192,11 @@ func sharedCommand(binary, distro string) string {
 func (installer *Installer) groups(file target) map[string]any {
 	handler := installer.handler(file)
 	groups := map[string]any{}
-	for _, event := range hookEvents {
+	for _, event := range file.host.events {
+		if file.host.isFlatEvent(event) {
+			groups[event] = handler
+			continue
+		}
 		group := map[string]any{"hooks": []any{handler}}
 		if event == postToolUseEvent {
 			group["matcher"] = file.host.tools
@@ -266,11 +281,14 @@ func (installer *Installer) Install(hosts []string, project bool) (installation 
 		files := users
 		if project {
 			for _, user := range users {
-				listed, err := listsArclintHooks(user.path)
+				listed, err := listsArclintHooks(user.path, host)
 				if err != nil {
 					return installation, fmt.Errorf("install workflow hooks: %s: %w", user.path, err)
 				}
 				if listed {
+					if host.namedHook != "" {
+						return installation, fmt.Errorf("install workflow hooks: %s already defines the named %s hook for every project; a project install would shadow it, so remove it there first", user.path, host.namedHook)
+					}
 					return installation, fmt.Errorf("install workflow hooks: %s already runs them in every project; a project install would run each event twice, so remove them there first", user.path)
 				}
 			}
@@ -307,7 +325,21 @@ func (installer *Installer) write(file target) error {
 	if err != nil {
 		return err
 	}
-	if err := placeGroups(document, installer.groups(file)); err != nil {
+	groups := installer.groups(file)
+	if file.host.namedHook != "" {
+		existing, err := file.host.configuredEvents(document)
+		if err != nil {
+			return err
+		}
+		named := make(map[string]any, len(groups)+1)
+		for event, handler := range groups {
+			named[event] = []any{handler}
+		}
+		if enabled, ok := existing["enabled"].(bool); ok {
+			named["enabled"] = enabled
+		}
+		document[file.host.namedHook] = named
+	} else if err := placeGroups(document, groups); err != nil {
 		return err
 	}
 	after, err := encodeConfiguration(document)
@@ -401,25 +433,31 @@ func (installer *Installer) Status() (status application.HooksStatus, err error)
 		}
 		entries := make([]application.HookFileStatus, 0, len(users)+1)
 		for _, file := range append(slices.Clone(users), local) {
-			entry, runs := installer.inspect(file, readers(file) != hooksOn)
+			entry, runs, fileDisabled := installer.inspect(file, readers(file) != hooksOn)
 			if sets, _ := disablesHooks(host, file.path); sets {
 				entry.Problems = append(entry.Problems, "This file sets "+host.disable+", so the host runs none of the hooks it reads where this file applies; remove the setting to run them.")
 			}
 			entries = append(entries, entry)
 			running = running || runs
+			disabled = disabled || fileDisabled
 		}
 		localEntry := &entries[len(entries)-1]
 		// A workflow hook either file lists runs beside the other's, even
 		// when a file lists only some events.
-		localListed, _ := listsArclintHooks(local.path)
+		localListed, _ := listsArclintHooks(local.path, host)
 		for index, user := range users {
 			entry := &entries[index]
 			// A Windows host app reads this project's file only when it was
 			// written for both sides.
 			sees := user.form == nativeForm || local.form == sharedForm
-			userListed, _ := listsArclintHooks(user.path)
+			userListed, _ := listsArclintHooks(user.path, host)
 			if userListed && localListed && sees {
-				localEntry.Problems = append(localEntry.Problems, duplicateProblem(user.path+" already lists the hooks for every project; with both, the host", reader(user.form)))
+				subject := user.path + " already lists the hooks for every project"
+				if host.namedHook != "" {
+					localEntry.Problems = append(localEntry.Problems, subject+"; both files define the named "+host.namedHook+" hook.")
+				} else {
+					localEntry.Problems = append(localEntry.Problems, duplicateProblem(subject+"; with both, the host", reader(user.form)))
+				}
 			}
 			if entry.Installation == application.HooksAbsent && (localEntry.Installation != application.HooksComplete || !sees) {
 				entry.Problems = append(entry.Problems, "Workflow hooks are not installed.")
@@ -458,7 +496,7 @@ func unreadableFiles(host hookHost, configurations []UserConfiguration) []applic
 			Host:         host.name,
 			Scope:        scopeUser,
 			Windows:      configuration.Windows,
-			Path:         `%USERPROFILE%\` + host.homeDirectory + `\` + host.user,
+			Path:         `%USERPROFILE%\` + strings.ReplaceAll(host.homeDirectory, "/", `\`) + `\` + host.user,
 			Installation: application.HooksUnknown,
 			Problems:     []string{"The Windows profile's configuration cannot be located, so whether it lists the hooks is unknown: " + configuration.Unreadable + ". Windows host apps that open this project read this file; install from a shell that can run cmd.exe to write it."},
 		})
@@ -468,7 +506,8 @@ func unreadableFiles(host hookHost, configurations []UserConfiguration) []applic
 
 // silence says why no hook event has reached the project, in the order a
 // user can rule the causes out. running reports a file with a hook that
-// runs, and disabled a file that turns off every hook of its host.
+// runs, and disabled a file that turns off every hook of its host or
+// disables a named workflow hook.
 func (installer *Installer) silence(files []application.HookFileStatus, running, disabled bool) []string {
 	var reasons []string
 	installed := func(installation application.HookInstallation) bool {
@@ -486,7 +525,7 @@ func (installer *Installer) silence(files []application.HookFileStatus, running,
 		reasons = append(reasons, "No configuration file lists the workflow hooks, so no host runs them here; run `arclint agents hooks install`.")
 	}
 	if disabled {
-		reasons = append(reasons, "A configuration file turns off every hook its host reads; the file below that sets it names the setting.")
+		reasons = append(reasons, "A configuration file turns off every hook its host reads, or disables the arclint hook; the file below names the setting.")
 	}
 	ruleset := filepath.Join(installer.root, rule.RulesetFileName)
 	if info, err := os.Stat(ruleset); err != nil {
@@ -501,27 +540,39 @@ func (installer *Installer) silence(files []application.HookFileStatus, running,
 }
 
 // inspect reports what a target lists against what install writes there,
-// and whether a hook it lists runs: one install wrote for this file runs
-// the running arclint, while a differing one may name a binary that no
-// longer exists or a matcher that selects nothing. While off, a setting
-// turns off every hook of the host, and none runs.
-func (installer *Installer) inspect(file target, off bool) (application.HookFileStatus, bool) {
+// whether a hook it lists runs, and whether the file itself disables a
+// named workflow hook: one install wrote for this file runs the running
+// arclint, while a differing one may name a binary that no longer exists
+// or a matcher that selects nothing. While off, a setting turns off every
+// hook of the host, and none runs.
+func (installer *Installer) inspect(file target, off bool) (application.HookFileStatus, bool, bool) {
 	entry := application.HookFileStatus{Host: file.host.name, Scope: file.scope, Windows: file.form == windowsForm, Path: file.path, Installation: application.HooksUnknown}
 	document, _, err := readConfiguration(file.path)
 	if err != nil {
 		entry.Problems = append(entry.Problems, "Configuration is unreadable: "+err.Error())
-		return entry, false
+		return entry, false, false
 	}
-	hooks, _ := document["hooks"].(map[string]any)
+	hooks, err := file.host.configuredEvents(document)
+	if err != nil {
+		entry.Problems = append(entry.Problems, "Configuration is unreadable: "+err.Error())
+		return entry, false, false
+	}
+	fileDisabled := false
+	if enabled, set := hooks["enabled"].(bool); file.host.namedHook != "" && set && !enabled {
+		entry.Problems = append(entry.Problems, "The "+file.host.namedHook+" hook sets enabled to false in this file. Enable it to run these workflow hooks.")
+		off = true
+		fileDisabled = true
+	}
 	want := installer.groups(file)
 	// A hook install wrote runs the arclint running now, unless it was
 	// removed since.
 	runs := !off && binaryProblem(installer.binary) == ""
 	var running, differing []string
 	binaries := map[string]bool{}
-	for _, event := range hookEvents {
+	for _, event := range file.host.events {
 		listed, _ := hooks[event].([]any)
-		for _, binary := range arclintBinaries(listed) {
+		handlers := file.host.handlers(event, listed)
+		for _, binary := range arclintBinaries(handlers) {
 			binaries[binary] = true
 		}
 		switch {
@@ -530,7 +581,7 @@ func (installer *Installer) inspect(file target, off bool) (application.HookFile
 			if runs {
 				running = append(running, event)
 			}
-		case slices.ContainsFunc(listed, holdsArclintHandler):
+		case slices.ContainsFunc(handlers, isArclintHandler):
 			entry.Listed = append(entry.Listed, event)
 			differing = append(differing, event)
 		default:
@@ -540,7 +591,7 @@ func (installer *Installer) inspect(file target, off bool) (application.HookFile
 	switch {
 	case len(entry.Listed) == 0:
 		entry.Installation = application.HooksAbsent
-		return entry, false
+		return entry, false, fileDisabled
 	case len(entry.Missing) == 0:
 		entry.Installation = application.HooksComplete
 	default:
@@ -557,7 +608,7 @@ func (installer *Installer) inspect(file target, off bool) (application.HookFile
 			entry.Problems = append(entry.Problems, problem)
 		}
 	}
-	return entry, len(running) > 0
+	return entry, len(running) > 0, fileDisabled
 }
 
 // partialProblem names the hooks a file lists, those of them that still
@@ -602,7 +653,7 @@ func sharedProblems(host hookHost, shared string, state hooksState) []string {
 	if sets, _ := disablesHooks(host, shared); sets {
 		problems = append(problems, host.shared+" sets "+host.disable+", so the host runs no hooks in this project; remove the setting to run them.")
 	}
-	if listed, err := listsArclintHooks(shared); err == nil && listed {
+	if listed, err := listsArclintHooks(shared, host); err == nil && listed {
 		when := map[hooksState]string{hooksOn: "", hooksOff: "once hooks are turned back on, ", hooksUnknown: "whenever the host runs hooks here, "}[state]
 		problems = append(problems, host.shared+" also lists the workflow hooks; "+when+"every file that lists them runs each event.")
 	}
@@ -649,22 +700,18 @@ func disablesHooks(host hookHost, path string) (sets, known bool) {
 	return sets, true
 }
 
-// arclintBinaries names the binaries the workflow handlers in groups run.
-func arclintBinaries(groups []any) []string {
+// arclintBinaries names the binaries the workflow handlers run.
+func arclintBinaries(handlers []any) []string {
 	var binaries []string
-	for _, group := range groups {
-		object, _ := group.(map[string]any)
-		handlers, _ := object["hooks"].([]any)
-		for _, handler := range handlers {
-			if !isArclintHandler(handler) {
-				continue
-			}
-			fields, _ := handler.(map[string]any)
-			for _, field := range []string{handlerCommand, "commandWindows"} {
-				command, _ := fields[field].(string)
-				for _, match := range pinned.FindAllStringSubmatch(command, -1) {
-					binaries = append(binaries, match[1])
-				}
+	for _, handler := range handlers {
+		if !isArclintHandler(handler) {
+			continue
+		}
+		fields, _ := handler.(map[string]any)
+		for _, field := range []string{handlerCommand, "commandWindows"} {
+			command, _ := fields[field].(string)
+			for _, match := range pinned.FindAllStringSubmatch(command, -1) {
+				binaries = append(binaries, match[1])
 			}
 		}
 	}
@@ -717,19 +764,51 @@ func lastEvent(root string) (time.Time, error) {
 
 // listsArclintHooks reports whether a configuration file lists a workflow
 // handler for any event.
-func listsArclintHooks(path string) (bool, error) {
+func listsArclintHooks(path string, host hookHost) (bool, error) {
 	document, _, err := readConfiguration(path)
 	if err != nil {
 		return false, err
 	}
-	hooks, _ := document["hooks"].(map[string]any)
-	for _, value := range hooks {
+	hooks, err := host.configuredEvents(document)
+	if err != nil {
+		return false, err
+	}
+	for event, value := range hooks {
 		groups, _ := value.([]any)
-		if slices.ContainsFunc(groups, holdsArclintHandler) {
+		if slices.ContainsFunc(host.handlers(event, groups), isArclintHandler) {
 			return true, nil
 		}
 	}
 	return false, nil
+}
+
+func (host hookHost) configuredEvents(document map[string]any) (map[string]any, error) {
+	if host.namedHook != "" {
+		named, ok := document[host.namedHook].(map[string]any)
+		if !ok && document[host.namedHook] != nil {
+			return nil, fmt.Errorf("%s: %w", host.namedHook, errNotObject)
+		}
+		return named, nil
+	}
+	hooks, _ := document["hooks"].(map[string]any)
+	return hooks, nil
+}
+
+func (host hookHost) isFlatEvent(event string) bool {
+	return host.namedHook != "" && event != postToolUseEvent
+}
+
+func (host hookHost) handlers(event string, listed []any) []any {
+	if host.isFlatEvent(event) {
+		return listed
+	}
+	var flattened []any
+	for _, group := range listed {
+		object, _ := group.(map[string]any)
+		handlers, _ := object["hooks"].([]any)
+		flattened = append(flattened, handlers...)
+	}
+	return flattened
 }
 
 // removeArclintHooks removes every workflow handler from a configuration

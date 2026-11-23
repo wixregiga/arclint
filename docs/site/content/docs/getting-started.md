@@ -280,7 +280,7 @@ which has no JSON Schema (see [Domain files in CML](/docs/cml/)).
 
 To keep a coding agent on the domain workflow, run
 `arclint agents hooks install` in your project. The
-[agent hooks](../agent-hooks/) advise Claude Code and Codex when observed
+[agent hooks](../agent-hooks/) advise Claude Code, Codex and Antigravity when observed
 work skips `arclint context`, the domain recording or `arclint check`. The
 guide explains host trust, WSL projects and what the hooks observe. ArcLint
 uses this same feature for its own development.

@@ -127,6 +127,140 @@ func handle(t *testing.T, events *Events, event map[string]any) hostOutput {
 	return decoded
 }
 
+func antigravityInput(name, cwd string) map[string]any {
+	return map[string]any{"hookEventName": name, "cwd": cwd, "conversationId": "agy", "lastUserInput": "continue"}
+}
+
+func antigravityOutput(t *testing.T, events *Events, event map[string]any) string {
+	t.Helper()
+	input, err := json.Marshal(event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := events.Handle(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(string(output))
+}
+
+func injectedGuidance(t *testing.T, output string) string {
+	t.Helper()
+	var decoded struct {
+		Steps []map[string]map[string]string `json:"injectSteps"`
+	}
+	if err := json.Unmarshal([]byte(output), &decoded); err != nil || len(decoded.Steps) != 1 {
+		t.Fatalf("expected one injected step: %s (%v)", output, err)
+	}
+	if text := decoded.Steps[0]["systemMessage"]["systemMessage"]; text != "" {
+		return text
+	}
+	t.Fatalf("expected nested system message: %s", output)
+	return ""
+}
+
+func TestAntigravityQueuesToolAndStopGuidanceForInvocation(t *testing.T) {
+	events, root := newTestEvents(t, "")
+	start := antigravityInput("SessionStart", "")
+	start["workspacePaths"] = []string{root}
+	if text := injectedGuidance(t, antigravityOutput(t, events, start)); !strings.Contains(text, "Work in this order") {
+		t.Fatal(text)
+	}
+	invocation := antigravityInput("PreInvocation", root)
+	invocation["invocationNum"] = 0
+	tool := antigravityInput("PostToolUse", root)
+	tool["toolCall"] = map[string]any{"id": "123", "name": "edit_file", "args": map[string]any{"Path": "internal/edited.go"}}
+	for _, event := range []map[string]any{invocation, tool, tool} {
+		if output := antigravityOutput(t, events, event); output != "{}" {
+			t.Fatalf("%v: %s", event, output)
+		}
+	}
+	next := antigravityInput("PreInvocation", root)
+	next["invocationNum"] = 1
+	text := injectedGuidance(t, antigravityOutput(t, events, next))
+	if !strings.Contains(text, "internal/edited.go changed before `arclint context`") ||
+		!strings.Contains(text, "changed before the project's domain recording changed") ||
+		strings.Contains(text, "changed since the last") {
+		t.Fatal(text)
+	}
+	if output := antigravityOutput(t, events, next); output != "{}" {
+		t.Fatalf("repeated PreInvocation: %s", output)
+	}
+	stop := antigravityInput("Stop", root)
+	stop["terminationReason"], stop["fullyIdle"] = "NO_TOOL_CALL", true
+	if output := antigravityOutput(t, events, stop); output != `{"decision":"allow"}` {
+		t.Fatalf("Stop: %s", output)
+	}
+	// The same prompt and invocation number can recur in another turn.
+	text = injectedGuidance(t, antigravityOutput(t, events, invocation))
+	if !strings.Contains(text, "internal/edited.go changed since the last `arclint check`") || strings.Contains(text, "changed before") {
+		t.Fatal(text)
+	}
+	if output := antigravityOutput(t, events, next); output != "{}" {
+		t.Fatalf("repeated check advice: %s", output)
+	}
+}
+
+func TestAntigravityPrunesPendingGuidanceSatisfiedBeforePreInvocation(t *testing.T) {
+	events, root := newTestEvents(t, "")
+	send := func(conversation, name string, fields map[string]any) string {
+		t.Helper()
+		input := antigravityInput(name, root)
+		input["conversationId"] = conversation
+		for key, value := range fields {
+			input[key] = value
+		}
+		return antigravityOutput(t, events, input)
+	}
+	// Context runs before PreInvocation; only the still-unsatisfied domain reminder arrives.
+	send("partial", "SessionStart", nil)
+	send("partial", "PostToolUse", map[string]any{"toolCall": map[string]any{"id": "1", "name": "edit_file", "args": map[string]any{"Path": "internal/a.go"}}})
+	record(t, root, agent.Activity{Kind: agent.ContextObtained, Paths: []string{"internal/a.go"}})
+	text := injectedGuidance(t, send("partial", "PreInvocation", map[string]any{"invocationNum": 1}))
+	if strings.Contains(text, "arclint context") || !strings.Contains(text, "domain recording") {
+		t.Fatalf("expected only domain guidance after context ran:\n%s", text)
+	}
+
+	// Context, domain, and check each prune their queued reminder before the next PreInvocation.
+	send("full", "SessionStart", nil)
+	send("full", "PostToolUse", map[string]any{"toolCall": map[string]any{"id": "1", "name": "edit_file", "args": map[string]any{"Path": "internal/a.go"}}})
+	record(t, root, agent.Activity{Kind: agent.ContextObtained, Paths: []string{"internal/a.go"}})
+	record(t, root, agent.Activity{Kind: agent.DomainChanged, Paths: []string{recording}})
+	if output := send("full", "PreInvocation", map[string]any{"invocationNum": 1}); output != "{}" {
+		t.Fatalf("satisfied context/domain guidance was not pruned: %s", output)
+	}
+	if output := send("full", "Stop", map[string]any{"terminationReason": "NO_TOOL_CALL", "fullyIdle": true}); output != `{"decision":"allow"}` {
+		t.Fatalf("Stop: %s", output)
+	}
+	record(t, root, agent.Activity{Kind: agent.CheckRan})
+	if output := send("full", "PreInvocation", map[string]any{"invocationNum": 0}); output != "{}" {
+		t.Fatalf("stale check guidance delivered after arclint check ran: %s", output)
+	}
+}
+
+func TestAntigravityIDEEditsUseToolArgumentsAndExcludeFailedEdits(t *testing.T) {
+	events, root := newTestEvents(t, "Ubuntu")
+	hostCwd := `\\wsl.localhost\Ubuntu` + strings.ReplaceAll(root, "/", `\`)
+	for _, edit := range []struct{ tool, key, path, err string }{
+		{"write_to_file", "TargetFile", "internal/direct.go", ""},
+		{"code_action", "TargetFile", hostCwd + `\internal\action.go`, ""},
+		{"replace_file_content", "TargetFile", "internal/failed.go", "edit failed"},
+		{"multi_replace_file_content", "TargetFile", "../outside.go", ""},
+	} {
+		input := antigravityInput("PostToolUse", hostCwd)
+		input["toolCall"] = map[string]any{"id": edit.tool, "name": edit.tool, "args": map[string]string{edit.key: edit.path}}
+		input["error"] = edit.err
+		if output := antigravityOutput(t, events, input); output != "{}" {
+			t.Fatal(output)
+		}
+	}
+	text := injectedGuidance(t, antigravityOutput(t, events, antigravityInput("PreInvocation", hostCwd)))
+	if !strings.Contains(text, "internal/direct.go") || !strings.Contains(text, "internal/action.go") ||
+		strings.Contains(text, "failed.go") || strings.Contains(text, "outside.go") {
+		t.Fatal(text)
+	}
+}
+
 func sessionStart(session, cwd string) map[string]any {
 	return map[string]any{"hook_event_name": "SessionStart", "session_id": session, "cwd": cwd, "source": "startup"}
 }

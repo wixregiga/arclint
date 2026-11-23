@@ -1,6 +1,7 @@
 package hooks
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,98 @@ import (
 
 	"github.com/wixregiga/arclint/internal/domain/agent"
 )
+
+func TestAntigravityProgressAndPendingGuidanceSurviveSeparateEvents(t *testing.T) {
+	root := t.TempDir()
+	expected := agent.Guidance{Step: agent.ContextStep, Paths: []string{"changed.go"}}
+	evaluate := func(progress agent.Progress, _ []agent.Activity) (agent.Progress, []agent.Guidance) {
+		progress.ContextAdvised = []string{"changed.go"}
+		return progress, []agent.Guidance{expected}
+	}
+	noop := func(progress agent.Progress, _ []agent.Activity) (agent.Progress, []agent.Guidance) {
+		return progress, nil
+	}
+	preInvocation := antigravityStep{closeIdle: true, startTurn: true, deliver: true}
+	store := NewProgressStore(root, recording)
+	if guidance, first, err := store.updateAntigravity("agy", "one", antigravityStep{}, evaluate, nil); err != nil || !first || len(guidance) != 0 {
+		t.Fatalf("queued guidance: %v %v %v", guidance, first, err)
+	}
+	store = NewProgressStore(root, recording)
+	if seen := observe(t, store, "agy"); !reflect.DeepEqual(seen.progress.ContextAdvised, expected.Paths) {
+		t.Fatalf("progress was not persisted: %+v", seen)
+	}
+	if guidance, first, err := store.updateAntigravity("agy", "one", antigravityStep{}, noop, nil); err != nil || first || len(guidance) != 0 {
+		t.Fatalf("duplicate event: %v %v %v", guidance, first, err)
+	}
+	// A failed PreInvocation cannot discard advice or claim its digest.
+	store.clock = func() (time.Time, error) { return time.Time{}, errors.New("clock failed") }
+	if guidance, first, err := store.updateAntigravity("agy", "two", preInvocation, noop, nil); err == nil || first || len(guidance) != 0 {
+		t.Fatalf("failed invocation: %v %v %v", guidance, first, err)
+	}
+	store = NewProgressStore(root, recording)
+	if guidance, first, err := store.updateAntigravity("agy", "two", preInvocation, noop, nil); err != nil || !first || !reflect.DeepEqual(guidance, []agent.Guidance{expected}) {
+		t.Fatalf("drained guidance: %v %v %v", guidance, first, err)
+	}
+	if guidance, _, err := store.updateAntigravity("agy", "three", preInvocation, noop, nil); err != nil || len(guidance) != 0 {
+		t.Fatalf("repeated advice: %v %v", guidance, err)
+	}
+}
+
+func TestAntigravityReconcilesSatisfiedPendingGuidanceBeforeDraining(t *testing.T) {
+	store := NewProgressStore(t.TempDir(), recording)
+	preInvocation := antigravityStep{closeIdle: true, startTurn: true, deliver: true}
+	ownersOf := func(path string) []string {
+		switch path {
+		case "internal/a.go":
+			return []string{"app"}
+		case "internal/c.go":
+			return []string{"app", "extra"}
+		default:
+			return nil
+		}
+	}
+	queue := func(progress agent.Progress, _ []agent.Activity) (agent.Progress, []agent.Guidance) {
+		progress.Unverified = []string{"internal/a.go", "internal/b.go"}
+		return progress, []agent.Guidance{
+			{Step: agent.ContextStep, Paths: []string{"internal/a.go", "internal/c.go"}},
+			{Step: agent.DomainStep, Paths: []string{"internal/a.go"}},
+			{Step: agent.CheckStep, Paths: []string{"internal/a.go", "internal/b.go"}},
+		}
+	}
+	if guidance, _, err := store.updateAntigravity("agy", "queue-1", antigravityStep{}, queue, ownersOf); err != nil || len(guidance) != 0 {
+		t.Fatalf("queue: %v %v", guidance, err)
+	}
+	satisfySome := func(progress agent.Progress, _ []agent.Activity) (agent.Progress, []agent.Guidance) {
+		progress.Zones = []string{"app"}
+		progress.DomainRecorded = true
+		progress.Unverified = []string{"internal/b.go"}
+		return progress, nil
+	}
+	want := []agent.Guidance{
+		{Step: agent.ContextStep, Paths: []string{"internal/c.go"}},
+		{Step: agent.CheckStep, Paths: []string{"internal/b.go"}},
+	}
+	if guidance, _, err := store.updateAntigravity("agy", "drain-1", preInvocation, satisfySome, ownersOf); err != nil || !reflect.DeepEqual(guidance, want) {
+		t.Fatalf("partially reconciled guidance = %+v, want %+v (err=%v)", guidance, want, err)
+	}
+	queueAgain := func(progress agent.Progress, _ []agent.Activity) (agent.Progress, []agent.Guidance) {
+		return progress, []agent.Guidance{
+			{Step: agent.ContextStep, Paths: []string{"internal/c.go"}},
+			{Step: agent.CheckStep, Paths: []string{"internal/b.go"}},
+		}
+	}
+	if _, _, err := store.updateAntigravity("agy", "queue-2", antigravityStep{}, queueAgain, ownersOf); err != nil {
+		t.Fatal(err)
+	}
+	satisfyAll := func(progress agent.Progress, _ []agent.Activity) (agent.Progress, []agent.Guidance) {
+		progress.AllZones = true
+		progress.Unverified = nil
+		return progress, nil
+	}
+	if guidance, _, err := store.updateAntigravity("agy", "drain-2", preInvocation, satisfyAll, ownersOf); err != nil || len(guidance) != 0 {
+		t.Fatalf("fully satisfied guidance was not pruned: %+v (err=%v)", guidance, err)
+	}
+}
 
 type observation struct {
 	progress agent.Progress
